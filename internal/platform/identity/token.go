@@ -1,0 +1,127 @@
+package identity
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"os"
+	"strings"
+	"time"
+)
+
+type TokenManager struct {
+	secret []byte
+	issuer string
+	now    func() time.Time
+}
+
+type TokenClaims struct {
+	Subject          string `json:"sub"`
+	SessionID        string `json:"session_id,omitempty"`
+	ServicePrincipal string `json:"service_principal_id,omitempty"`
+	Kind             string `json:"kind"`
+	IssuedAt         int64  `json:"iat"`
+	ExpiresAt        int64  `json:"exp"`
+	Issuer           string `json:"iss"`
+}
+
+func NewTokenManagerFromEnv() *TokenManager {
+	issuer := os.Getenv("APP_JWT_ISSUER")
+	if issuer == "" {
+		issuer = "clinic"
+	}
+	return &TokenManager{
+		secret: []byte(os.Getenv("APP_JWT_SECRET")),
+		issuer: issuer,
+		now:    func() time.Time { return time.Now().UTC() },
+	}
+}
+
+func (m *TokenManager) IssueSessionToken(session Session) (string, error) {
+	if session.ID == "" || session.UserID == "" {
+		return "", errors.New("invalid session token subject")
+	}
+	return m.issue(TokenClaims{
+		Subject:   session.UserID,
+		SessionID: session.ID,
+		Kind:      "session",
+		IssuedAt:  m.now().Unix(),
+		ExpiresAt: session.ExpiresAt.Unix(),
+		Issuer:    m.issuer,
+	})
+}
+
+func (m *TokenManager) IssueServicePrincipalToken(principal ServicePrincipal, ttl time.Duration) (string, error) {
+	if principal.ID == "" {
+		return "", errors.New("invalid service principal token subject")
+	}
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	now := m.now()
+	return m.issue(TokenClaims{
+		Subject:          principal.ID,
+		ServicePrincipal: principal.ID,
+		Kind:             "service",
+		IssuedAt:         now.Unix(),
+		ExpiresAt:        now.Add(ttl).Unix(),
+		Issuer:           m.issuer,
+	})
+}
+
+func (m *TokenManager) Parse(token string) (TokenClaims, error) {
+	if len(m.secret) == 0 {
+		return TokenClaims{}, errors.New("jwt secret is not configured")
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return TokenClaims{}, errors.New("invalid token format")
+	}
+	signingInput := parts[0] + "." + parts[1]
+	expected := signHS256([]byte(signingInput), m.secret)
+	if !hmac.Equal([]byte(expected), []byte(parts[2])) {
+		return TokenClaims{}, errors.New("invalid token signature")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return TokenClaims{}, err
+	}
+	var claims TokenClaims
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return TokenClaims{}, err
+	}
+	if claims.Issuer != m.issuer {
+		return TokenClaims{}, errors.New("invalid token issuer")
+	}
+	if claims.ExpiresAt > 0 && m.now().Unix() > claims.ExpiresAt {
+		return TokenClaims{}, errors.New("token expired")
+	}
+	return claims, nil
+}
+
+func (m *TokenManager) issue(claims TokenClaims) (string, error) {
+	if len(m.secret) == 0 {
+		return "", errors.New("jwt secret is not configured")
+	}
+	headerJSON, err := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
+	if err != nil {
+		return "", err
+	}
+	payloadJSON, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	header := base64.RawURLEncoding.EncodeToString(headerJSON)
+	payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	signingInput := header + "." + payload
+	signature := signHS256([]byte(signingInput), m.secret)
+	return signingInput + "." + signature, nil
+}
+
+func signHS256(payload, secret []byte) string {
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}

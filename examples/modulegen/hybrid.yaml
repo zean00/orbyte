@@ -1,0 +1,50 @@
+module:
+  key: inventory
+  name: Inventory
+  version: 1.0.0
+  domain_family: supply_chain
+  kind: hybrid
+
+features:
+  search: true
+  ui: true
+  custom_ui: true
+  tests: true
+  policy: true
+  observability: true
+  reporting: true
+
+scaffold:
+  observability_helper: true
+  reporting_helper: true
+  manifest_test: true
+  registration_test: true
+
+manifest:
+  model_stub: true
+  dataset_stub: true
+  search_index_stub: true
+  role_template_stub: true
+  policy_hook_stub: true
+  observability_stub: true
+  generic_ui_stub: true
+  custom_ui_stub: true
+
+dependency_requirements:
+  - module_key: platform.core
+    version_range: ">=1.0.0,<2.0.0"
+    kind: required
+  - module_key: identity
+    version_range: ">=1.0.0,<2.0.0"
+    kind: required
+  - module_key: documents
+    version_range: ">=1.0.0,<2.0.0"
+    kind: required
+
+document:
+  type: inventory_request
+  display_name: Inventory Request
+
+model:
+  key: inventory_item
+  display_name: Inventory Item

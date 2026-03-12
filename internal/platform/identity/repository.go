@@ -1,0 +1,31 @@
+package identity
+
+import "time"
+
+type Repository interface {
+	Users() []User
+	Roles() []Role
+	Permissions() []Permission
+	RoleBindings() []RoleBinding
+	RolePermissions() []RolePermission
+	Credentials() []Credential
+	Sessions() []Session
+	ServicePrincipals() []ServicePrincipal
+	SaveUser(user User) error
+	SaveRole(role Role) error
+	SavePermission(permission Permission) error
+	SaveRoleBinding(binding RoleBinding) error
+	SaveRolePermission(grant RolePermission) error
+	SaveServicePrincipal(principal ServicePrincipal) error
+	FindUser(id string) (User, bool)
+	FindUserByUsername(username string) (User, bool)
+	FindCredentialByUserID(userID string) (Credential, bool)
+	FindSession(id string) (Session, bool)
+	FindServicePrincipal(id string) (ServicePrincipal, bool)
+	CountRecentLoginFailures(key string, since time.Time) int
+	RecordLoginFailure(key string, attemptedAt time.Time) error
+	ClearLoginFailures(key string) error
+	CleanupLoginFailures(before time.Time) error
+	SaveCredential(credential Credential) error
+	SaveSession(session Session) error
+}

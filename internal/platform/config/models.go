@@ -1,0 +1,47 @@
+package config
+
+import "time"
+
+type Entry struct {
+	Key         string         `json:"key"`
+	ModuleKey   string         `json:"module_key,omitempty"`
+	Category    string         `json:"category"`
+	Scope       string         `json:"scope"`
+	ScopeID     string         `json:"scope_id,omitempty"`
+	Value       map[string]any `json:"value"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	UpdatedBy   string         `json:"updated_by"`
+	Description string         `json:"description,omitempty"`
+}
+
+type Definition struct {
+	Key           string            `json:"key"`
+	ModuleKey     string            `json:"module_key"`
+	Category      string            `json:"category"`
+	DisplayName   string            `json:"display_name"`
+	Description   string            `json:"description,omitempty"`
+	AllowedScopes []string          `json:"allowed_scopes"`
+	DefaultValue  map[string]any    `json:"default_value"`
+	Fields        []FieldDefinition `json:"fields"`
+}
+
+type FieldDefinition struct {
+	Key         string   `json:"key"`
+	Label       string   `json:"label"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Description string   `json:"description,omitempty"`
+	Enum        []string `json:"enum,omitempty"`
+	Sensitive   bool     `json:"sensitive,omitempty"`
+}
+
+type EffectiveValue struct {
+	Key           string         `json:"key"`
+	ModuleKey     string         `json:"module_key"`
+	Scope         string         `json:"scope"`
+	ScopeID       string         `json:"scope_id,omitempty"`
+	Value         map[string]any `json:"value"`
+	SourceScope   string         `json:"source_scope"`
+	SourceScopeID string         `json:"source_scope_id,omitempty"`
+	ResolvedAt    time.Time      `json:"resolved_at"`
+}
