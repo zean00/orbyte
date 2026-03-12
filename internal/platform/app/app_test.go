@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -18,6 +19,9 @@ import (
 )
 
 func TestNewAppBootstrap(t *testing.T) {
+	t.Setenv("APP_JWT_SECRET", "")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
 	app := New()
 	if app.Address() == "" {
 		t.Fatal("expected address")
@@ -34,6 +38,63 @@ func TestNewAppBootstrap(t *testing.T) {
 	app.StartBackground(context.Background())
 	if err := app.Close(); err != nil {
 		t.Fatalf("unexpected close error: %v", err)
+	}
+}
+
+func TestNewAppFailsWhenDatabaseConfiguredButUnavailable(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://bad:bad@127.0.0.1:1/clinic?sslmode=disable")
+	t.Setenv("APP_JWT_SECRET", "test-secret")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected startup panic when DATABASE_URL is configured but unavailable")
+		}
+	}()
+	_ = New()
+}
+
+func TestNewAppFailsWhenJWTSecretMissingInDatabaseMode(t *testing.T) {
+	originalOpen := os.Getenv("DATABASE_URL")
+	t.Setenv("DATABASE_URL", "postgres://user:pass@127.0.0.1:5432/clinic?sslmode=disable")
+	t.Setenv("APP_JWT_SECRET", "")
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	defer func() {
+		_ = os.Setenv("DATABASE_URL", originalOpen)
+		if r := recover(); r == nil {
+			t.Fatal("expected startup panic when APP_JWT_SECRET is missing in database mode")
+		}
+	}()
+	ensureJWTSecret(true)
+}
+
+func TestNewAppFailsWhenJWTSecretMissingWithoutExplicitDevMode(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("APP_JWT_SECRET", "")
+	t.Setenv("APP_AUTH_DEV_MODE", "")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected startup panic without jwt secret outside explicit dev mode")
+		}
+	}()
+	ensureJWTSecret(false)
+}
+
+func TestNewAppSeedsRandomDevelopmentJWTSecretWithExplicitDevMode(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("APP_JWT_SECRET", "")
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	ensureJWTSecret(false)
+	first := os.Getenv("APP_JWT_SECRET")
+	if first == "" {
+		t.Fatal("expected development jwt secret to be seeded")
+	}
+	t.Setenv("APP_JWT_SECRET", "")
+	ensureJWTSecret(false)
+	second := os.Getenv("APP_JWT_SECRET")
+	if second == "" {
+		t.Fatal("expected second development jwt secret to be seeded")
+	}
+	if first == second {
+		t.Fatal("expected random per-process development jwt secret")
 	}
 }
 

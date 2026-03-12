@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -66,10 +68,15 @@ type App struct {
 }
 
 func New() *App {
+	databaseURLConfigured := strings.TrimSpace(os.Getenv("DATABASE_URL")) != ""
 	postgres, err := store.OpenFromEnv()
 	if err != nil {
+		if databaseURLConfigured {
+			panic(fmt.Sprintf("postgres unavailable while DATABASE_URL is configured: %v", err))
+		}
 		log.Printf("postgres unavailable, using memory repositories: %v", err)
 	}
+	ensureJWTSecret(databaseURLConfigured)
 
 	configSvc := config.NewService()
 	organizationSvc := organization.NewService()
@@ -197,6 +204,38 @@ func New() *App {
 		DocActions:         documentActions,
 		ModelActions:       modelActions,
 		Dispatcher:         dispatcher,
+	}
+}
+
+func ensureJWTSecret(databaseURLConfigured bool) {
+	if strings.TrimSpace(os.Getenv("APP_JWT_SECRET")) != "" {
+		return
+	}
+	if databaseURLConfigured || !boolFromEnv("APP_AUTH_DEV_MODE") {
+		panic("APP_JWT_SECRET is required unless APP_AUTH_DEV_MODE=true")
+	}
+	secret, err := generateDevelopmentJWTSecret()
+	if err != nil {
+		panic(fmt.Sprintf("generate development jwt secret: %v", err))
+	}
+	_ = os.Setenv("APP_JWT_SECRET", secret)
+	log.Printf("APP_AUTH_DEV_MODE enabled; seeded ephemeral JWT secret for this process")
+}
+
+func generateDevelopmentJWTSecret() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func boolFromEnv(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 

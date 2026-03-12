@@ -53,6 +53,9 @@ DATABASE_URL="postgres://user:pass@localhost:5432/clinic?sslmode=disable" go run
 ```
 
 If `DATABASE_URL` is not set, the app falls back to in-memory repositories.
+By default startup also requires `APP_JWT_SECRET`.
+For local development without `DATABASE_URL`, set `APP_AUTH_DEV_MODE=true` to seed an ephemeral per-process JWT secret automatically.
+When `DATABASE_URL` is set, startup requires `APP_JWT_SECRET` and fails fast if PostgreSQL cannot be reached.
 
 The server exposes:
 
