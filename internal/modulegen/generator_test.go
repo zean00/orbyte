@@ -21,9 +21,12 @@ func writeGeneratorBootstrap(t *testing.T, root string) {
 	}
 	if err := os.WriteFile(filepath.Join(root, "internal", "modules", "registry.go"), []byte(`package modules
 
-import platformmodule "clinic/internal/platform/module"
+import (
+	platformmodule "clinic/internal/platform/module"
+	// modulegen:imports
+)
 
-func Manifests() []platformmodule.Manifest {
+func allManifests() []platformmodule.Manifest {
 	return []platformmodule.Manifest{
 		// modulegen:manifests
 	}

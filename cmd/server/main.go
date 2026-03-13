@@ -9,11 +9,21 @@ import (
 	"syscall"
 	"time"
 
+	"clinic/internal/modules"
 	"clinic/internal/platform/app"
 )
 
 func main() {
-	application, err := app.New()
+	profile := os.Getenv("APP_DOMAIN_PROFILE")
+	manifests, err := modules.ForProfile(profile)
+	if err != nil {
+		log.Printf("app startup error: %v", err)
+		os.Exit(1)
+	}
+	application, err := app.New(app.Options{
+		Profile:           profile,
+		BusinessManifests: manifests,
+	})
 	if err != nil {
 		log.Printf("app startup error: %v", err)
 		os.Exit(1)
@@ -42,7 +52,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("core platform server listening on %s", application.Address())
+	log.Printf("core platform server listening on %s profile=%s business_modules=%v", application.Address(), application.Profile(), application.BusinessModuleKeys())
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("server error: %v", err)
 		os.Exit(1)

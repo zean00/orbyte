@@ -1,18 +1,6 @@
 package app
 
 import (
-	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"errors"
-	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"strings"
-	"time"
-
-	generatedmodules "clinic/internal/modules"
 	"clinic/internal/platform/activity"
 	"clinic/internal/platform/analytics"
 	application "clinic/internal/platform/application"
@@ -37,6 +25,17 @@ import (
 	"clinic/internal/platform/shared"
 	"clinic/internal/platform/store"
 	"clinic/internal/platform/workflow"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
+	"time"
 )
 
 type App struct {
@@ -44,6 +43,8 @@ type App struct {
 	handler            http.Handler
 	postgres           *store.Postgres
 	closers            []func() error
+	profile            string
+	businessModuleKeys []string
 	Config             *config.Service
 	Organization       *organization.Service
 	Identity           *identity.Service
@@ -69,7 +70,12 @@ type App struct {
 	Dispatcher         *eventing.Dispatcher
 }
 
-func New() (*App, error) {
+type Options struct {
+	Profile           string
+	BusinessManifests []module.Manifest
+}
+
+func New(opts Options) (*App, error) {
 	databaseURLConfigured := strings.TrimSpace(os.Getenv("DATABASE_URL")) != ""
 	postgres, err := store.OpenFromEnv()
 	if err != nil {
@@ -137,7 +143,15 @@ func New() (*App, error) {
 		submitStore = application.NewPostgresSubmitStore(postgres.DB)
 		modelActions = application.NewPostgresModelActions(postgres.DB, modelSvc, activitySvc, auditSvc, eventingSvc)
 	}
-	if err := seedPlatformKernel(configSvc, identitySvc, moduleSvc, modelSvc, reportingSvc, searchSvc, documentSvc, workflowSvc, policySvc, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
+	profile := strings.TrimSpace(opts.Profile)
+	if profile == "" {
+		profile = "all"
+	}
+	businessManifests := append([]module.Manifest(nil), opts.BusinessManifests...)
+	if err := validateBusinessManifests(builtInModuleManifests(), businessManifests); err != nil {
+		return nil, err
+	}
+	if err := seedPlatformKernel(configSvc, identitySvc, moduleSvc, modelSvc, reportingSvc, searchSvc, documentSvc, workflowSvc, policySvc, businessManifests, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
 		return nil, err
 	}
 	if err := policySvc.ValidateConfiguredModules(); err != nil {
@@ -196,6 +210,8 @@ func New() (*App, error) {
 		handler:            router,
 		postgres:           postgres,
 		closers:            closers,
+		profile:            profile,
+		businessModuleKeys: manifestKeys(businessManifests),
 		Config:             configSvc,
 		Organization:       organizationSvc,
 		Identity:           identitySvc,
@@ -263,8 +279,8 @@ func ignoreConflict(err error) error {
 	return err
 }
 
-func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, bootstrapPassword string) error {
-	manifests := append(builtInModuleManifests(), generatedmodules.Manifests()...)
+func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, businessManifests []module.Manifest, bootstrapPassword string) error {
+	manifests := append(builtInModuleManifests(), businessManifests...)
 	for _, def := range config.BuiltInDefinitions() {
 		if err := configSvc.RegisterDefinition(def); err != nil {
 			return err
@@ -370,6 +386,42 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 		return err
 	}
 	return nil
+}
+
+func validateBusinessManifests(builtIn []module.Manifest, business []module.Manifest) error {
+	known := make(map[string]module.Manifest, len(builtIn)+len(business))
+	for _, manifest := range builtIn {
+		known[manifest.Key] = manifest
+	}
+	for _, manifest := range business {
+		if strings.TrimSpace(manifest.Key) == "" {
+			return fmt.Errorf("business manifest key is required")
+		}
+		if _, exists := known[manifest.Key]; exists {
+			return fmt.Errorf("duplicate module key %q in selected manifests", manifest.Key)
+		}
+		known[manifest.Key] = manifest
+	}
+	for _, manifest := range business {
+		for _, requirement := range manifest.DependencyRequirements {
+			if requirement.Kind == module.DependencyKindOptional || requirement.Kind == module.DependencyKindUIExtension {
+				continue
+			}
+			if _, ok := known[requirement.ModuleKey]; !ok {
+				return fmt.Errorf("module %q requires %q but it is not included in the selected profile", manifest.Key, requirement.ModuleKey)
+			}
+		}
+	}
+	return nil
+}
+
+func manifestKeys(manifests []module.Manifest) []string {
+	keys := make([]string, 0, len(manifests))
+	for _, manifest := range manifests {
+		keys = append(keys, manifest.Key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func datasetDimensions(input []module.DatasetDimension) []reporting.DimensionDefinition {
@@ -1425,6 +1477,14 @@ func builtInModuleManifests() []module.Manifest {
 
 func (a *App) Address() string {
 	return a.address
+}
+
+func (a *App) Profile() string {
+	return a.profile
+}
+
+func (a *App) BusinessModuleKeys() []string {
+	return append([]string(nil), a.businessModuleKeys...)
 }
 
 func (a *App) Handler() http.Handler {

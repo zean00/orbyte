@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"clinic/internal/modules"
 	"clinic/internal/platform/config"
 	"clinic/internal/platform/document"
 	"clinic/internal/platform/identity"
@@ -22,7 +23,7 @@ func TestNewAppBootstrap(t *testing.T) {
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("APP_AUTH_DEV_MODE", "true")
-	app, err := New()
+	app, err := New(Options{Profile: modules.ProfileAll})
 	if err != nil {
 		t.Fatalf("unexpected startup error: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestNewAppBootstrap(t *testing.T) {
 func TestNewAppFailsWhenDatabaseConfiguredButUnavailable(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://bad:bad@127.0.0.1:1/clinic?sslmode=disable")
 	t.Setenv("APP_JWT_SECRET", "test-secret")
-	if _, err := New(); err == nil {
+	if _, err := New(Options{Profile: modules.ProfileAll}); err == nil {
 		t.Fatal("expected startup error when DATABASE_URL is configured but unavailable")
 	}
 }
@@ -110,7 +111,7 @@ func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("seed platform kernel failed: %v", err)
 	}
 
@@ -156,11 +157,31 @@ func TestSeedPlatformKernelIsIdempotentForRestart(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("first seed failed: %v", err)
 	}
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("second seed failed: %v", err)
+	}
+}
+
+func TestValidateBusinessManifestsRejectsDuplicateKeys(t *testing.T) {
+	builtIn := []module.Manifest{{Key: "platform.core"}}
+	if err := validateBusinessManifests(builtIn, []module.Manifest{{Key: "platform.core"}}); err == nil {
+		t.Fatal("expected duplicate key error")
+	}
+}
+
+func TestValidateBusinessManifestsRejectsMissingDependencies(t *testing.T) {
+	builtIn := []module.Manifest{{Key: "platform.core"}}
+	if err := validateBusinessManifests(builtIn, []module.Manifest{{
+		Key: "clinic",
+		DependencyRequirements: []module.DependencyRequirement{{
+			ModuleKey: "documents",
+			Kind:      module.DependencyKindRequired,
+		}},
+	}}); err == nil {
+		t.Fatal("expected missing dependency error")
 	}
 }
 

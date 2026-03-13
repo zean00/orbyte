@@ -258,6 +258,9 @@ func ValidateSpec(root string, spec Spec) error {
 		if strings.Contains(string(content), `internal/modules/`+spec.Module.Key+`"`) {
 			return fmt.Errorf("module key %q already exists in module registry", spec.Module.Key)
 		}
+		if !strings.Contains(string(content), "// modulegen:manifests") {
+			return fmt.Errorf("module registry missing // modulegen:manifests marker")
+		}
 	}
 	if spec.Module.Kind == KindDocument || spec.Module.Kind == KindHybrid {
 		if strings.TrimSpace(spec.Document.Type) == "" {
