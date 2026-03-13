@@ -68,6 +68,36 @@ func TestServiceRetriesFailedHandlers(t *testing.T) {
 	}
 }
 
+func TestServiceReportsFailureWhenHandlersFail(t *testing.T) {
+	svc := NewService()
+	var successes atomic.Int32
+	var failures atomic.Int32
+	svc.SetHealthHooks(func() {
+		successes.Add(1)
+	}, func(error) {
+		failures.Add(1)
+	})
+	svc.RegisterHandler("analytics.recompute.current_state", func(_ context.Context, _ map[string]any) (map[string]any, error) {
+		return nil, errors.New("boom")
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	svc.Start(ctx)
+	defer svc.Stop()
+
+	job, err := svc.Enqueue("analytics.recompute.current_state", nil)
+	if err != nil {
+		t.Fatalf("enqueue failed: %v", err)
+	}
+	waitForStatus(t, svc, job.ID, StatusDeadLetter)
+	if failures.Load() == 0 {
+		t.Fatal("expected failure health hook to run")
+	}
+	if successes.Load() != 0 {
+		t.Fatalf("expected no success health hook, got %d", successes.Load())
+	}
+}
+
 func TestEnqueueUniqueReturnsExistingJob(t *testing.T) {
 	svc := NewService()
 	first, err := svc.EnqueueUnique("analytics.capture_snapshot", nil, "bucket:1")

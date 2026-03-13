@@ -14,12 +14,13 @@ import (
 	"clinic/internal/platform/jobs"
 	"clinic/internal/platform/monitoring"
 	"clinic/internal/platform/observability"
+	"clinic/internal/platform/runtimehealth"
 	"clinic/internal/platform/search"
 	"clinic/internal/platform/shared"
 	"clinic/internal/platform/workflow"
 )
 
-func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, documentSvc *document.Service, searchSvc *search.Service, workflowSvc *workflow.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obs *observability.Service, jobSvc *jobs.Service) {
+func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, documentSvc *document.Service, searchSvc *search.Service, workflowSvc *workflow.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obs *observability.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker) {
 	mux.HandleFunc("GET /ops/audit-events", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "audit.read", "", "audit.read"); !ok {
 			return
@@ -71,7 +72,21 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, obs.Snapshot())
+		payload := map[string]any{"observability": obs.Snapshot()}
+		if health != nil {
+			payload["runtime_health"] = health.Snapshot(r.Context())
+		}
+		if jobSvc != nil {
+			payload["jobs"] = map[string]any{
+				"summary": jobSvc.Summary(),
+				"items":   jobSvc.List(),
+			}
+		}
+		payload["outbox"] = map[string]any{
+			"items":      eventingSvc.ListOutbox(),
+			"deliveries": eventingSvc.ListDeliveries(),
+		}
+		respondJSON(w, http.StatusOK, payload)
 	})
 
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +94,11 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		_, _ = w.Write([]byte(obs.RenderPrometheus()))
+		body := obs.RenderPrometheus()
+		if health != nil {
+			body += renderDBStatsMetrics(health.Snapshot(r.Context()))
+		}
+		_, _ = w.Write([]byte(body))
 	})
 
 	mux.HandleFunc("GET /ops/dashboard", func(w http.ResponseWriter, r *http.Request) {
@@ -534,6 +553,24 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListApprovals()})
 	})
+}
+
+func renderDBStatsMetrics(snapshot runtimehealth.Snapshot) string {
+	if snapshot.Database == nil {
+		return ""
+	}
+	db := snapshot.Database
+	return strings.Join([]string{
+		"db_pool_max_open_connections " + strconv.Itoa(db.MaxOpenConnections),
+		"db_pool_open_connections " + strconv.Itoa(db.OpenConnections),
+		"db_pool_in_use_connections " + strconv.Itoa(db.InUse),
+		"db_pool_idle_connections " + strconv.Itoa(db.Idle),
+		"db_pool_wait_count " + strconv.FormatInt(db.WaitCount, 10),
+		"db_pool_wait_duration_millis " + strconv.FormatInt(db.WaitDurationMillis, 10),
+		"db_pool_max_idle_closed " + strconv.FormatInt(db.MaxIdleClosed, 10),
+		"db_pool_max_idle_time_closed " + strconv.FormatInt(db.MaxIdleTimeClosed, 10),
+		"db_pool_max_lifetime_closed " + strconv.FormatInt(db.MaxLifetimeClosed, 10),
+	}, "\n") + "\n"
 }
 
 func reportArtifactIDFromPath(path string) string {

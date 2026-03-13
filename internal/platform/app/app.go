@@ -20,6 +20,7 @@ import (
 	"clinic/internal/platform/organization"
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
+	"clinic/internal/platform/runtimehealth"
 	"clinic/internal/platform/search"
 	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
@@ -57,6 +58,7 @@ type App struct {
 	Analytics          *analytics.Service
 	AnalyticsScheduler *analytics.Scheduler
 	Monitoring         *monitoring.Service
+	RuntimeHealth      *runtimehealth.Tracker
 	Modules            *module.Service
 	Models             *model.Service
 	Activities         *activity.Service
@@ -100,6 +102,7 @@ func New(opts Options) (*App, error) {
 	auditSvc := audit.NewService()
 	loggerSvc := logging.NewService()
 	obsSvc := observability.NewService()
+	healthTracker := runtimehealth.NewTracker()
 	policySvc := policy.NewServiceWithConfig(configSvc)
 	fieldSecuritySvc := securityfields.NewService(policySvc)
 	reportingSvc.AttachFieldSecurity(fieldSecuritySvc)
@@ -140,8 +143,29 @@ func New(opts Options) (*App, error) {
 		analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
 		integrationSvc = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), obsSvc, loggerSvc)
 		integrationSvc.AttachPolicy(policySvc)
+		integrationSvc.AttachJobs(jobSvc)
 		submitStore = application.NewPostgresSubmitStore(postgres.DB)
 		modelActions = application.NewPostgresModelActions(postgres.DB, modelSvc, activitySvc, auditSvc, eventingSvc)
+	}
+	integrationSvc.AttachJobs(jobSvc)
+	if postgres != nil && postgres.DB != nil {
+		healthTracker.SetChecker(func(ctx context.Context) error {
+			return postgres.DB.PingContext(ctx)
+		})
+		healthTracker.SetDBStatsProvider(func() *runtimehealth.DBStats {
+			stats := postgres.DB.Stats()
+			return &runtimehealth.DBStats{
+				MaxOpenConnections: stats.MaxOpenConnections,
+				OpenConnections:    stats.OpenConnections,
+				InUse:              stats.InUse,
+				Idle:               stats.Idle,
+				WaitCount:          stats.WaitCount,
+				WaitDurationMillis: stats.WaitDuration.Milliseconds(),
+				MaxIdleClosed:      stats.MaxIdleClosed,
+				MaxIdleTimeClosed:  stats.MaxIdleTimeClosed,
+				MaxLifetimeClosed:  stats.MaxLifetimeClosed,
+			}
+		})
 	}
 	profile := strings.TrimSpace(opts.Profile)
 	if profile == "" {
@@ -154,6 +178,7 @@ func New(opts Options) (*App, error) {
 	if err := seedPlatformKernel(configSvc, identitySvc, moduleSvc, modelSvc, reportingSvc, searchSvc, documentSvc, workflowSvc, policySvc, businessManifests, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
 		return nil, err
 	}
+	healthTracker.SetBootstrapped(true)
 	if err := policySvc.ValidateConfiguredModules(); err != nil {
 		return nil, err
 	}
@@ -182,6 +207,9 @@ func New(opts Options) (*App, error) {
 	analyticsScheduler := analytics.NewScheduler(analyticsSvc, time.Minute, 30*24*time.Hour)
 	monitoringSvc := monitoring.NewService(documentSvc, eventingSvc, workflowSvc, searchSvc, obsSvc)
 	dispatcher := eventing.NewDispatcher(eventingSvc, time.Second, 50)
+	jobSvc.SetHealthHooks(func() { healthTracker.MarkSuccess("jobs") }, func(err error) { healthTracker.MarkFailure("jobs", err) })
+	dispatcher.SetHealthHooks(func() { healthTracker.MarkSuccess("dispatcher") }, func(err error) { healthTracker.MarkFailure("dispatcher", err) })
+	analyticsScheduler.SetHealthHooks(func() { healthTracker.MarkSuccess("scheduler") }, func(err error) { healthTracker.MarkFailure("scheduler", err) })
 	bootstrapRuntimeModuleContracts(moduleSvc, obsSvc, analyticsSvc)
 	closers := []func() error{}
 	if natsCfg := configSvc.NATSPolicy(); natsCfg.Enabled && natsCfg.URL != "" {
@@ -198,7 +226,7 @@ func New(opts Options) (*App, error) {
 		}
 	}
 
-	router := httpx.NewRouter(configSvc, organizationSvc, identitySvc, moduleSvc, modelSvc, activitySvc, reportingSvc, documentSvc, workflowSvc, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, documentActions, modelActions)
+	router := httpx.NewRouter(configSvc, organizationSvc, identitySvc, moduleSvc, modelSvc, activitySvc, reportingSvc, documentSvc, workflowSvc, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, healthTracker, documentActions, modelActions)
 
 	addr := os.Getenv("APP_ADDRESS")
 	if addr == "" {
@@ -224,6 +252,7 @@ func New(opts Options) (*App, error) {
 		Analytics:          analyticsSvc,
 		AnalyticsScheduler: analyticsScheduler,
 		Monitoring:         monitoringSvc,
+		RuntimeHealth:      healthTracker,
 		Modules:            moduleSvc,
 		Models:             modelSvc,
 		Activities:         activitySvc,
@@ -1465,6 +1494,9 @@ func builtInModuleManifests() []module.Manifest {
 					{Key: "integration.submissions.queued.total", Type: "counter", Description: "Queued integration submissions"},
 					{Key: "integration.submissions.succeeded.total", Type: "counter", Description: "Succeeded integration submissions"},
 					{Key: "integration.submissions.failed.total", Type: "counter", Description: "Failed integration submissions"},
+					{Key: "analytics.scheduler.enqueued.total", Type: "counter", Description: "Scheduled analytics jobs enqueued"},
+					{Key: "analytics.scheduler.already_claimed.total", Type: "counter", Description: "Scheduled analytics work already claimed through shared job deduplication"},
+					{Key: "analytics.scheduler.enqueue_failed.total", Type: "counter", Description: "Scheduled analytics enqueue failures"},
 				},
 				LogEvents: []module.LogEventDefinition{
 					{Key: "integration.submission.succeeded", Category: "integration", Severity: "info", RequiredFields: []string{"submission_id", "system_key", "operation", "status"}},
@@ -1492,6 +1524,10 @@ func (a *App) Handler() http.Handler {
 }
 
 func (a *App) StartBackground(ctx context.Context) {
+	if a.RuntimeHealth != nil {
+		a.RuntimeHealth.SetBackgroundStarted(true)
+		a.RuntimeHealth.SetShuttingDown(false)
+	}
 	if a.Jobs != nil {
 		a.Jobs.Start(ctx)
 	}
@@ -1503,7 +1539,15 @@ func (a *App) StartBackground(ctx context.Context) {
 	}
 }
 
+func (a *App) PrepareShutdown() {
+	if a.RuntimeHealth != nil {
+		a.RuntimeHealth.SetShuttingDown(true)
+		a.RuntimeHealth.SetBackgroundStarted(false)
+	}
+}
+
 func (a *App) Close() error {
+	a.PrepareShutdown()
 	if a.AnalyticsScheduler != nil {
 		a.AnalyticsScheduler.Stop()
 	}

@@ -60,3 +60,22 @@ func TestPostgresRepositoryRenewLease(t *testing.T) {
 		t.Fatalf("renew lease failed: %v", err)
 	}
 }
+
+func TestPostgresRepositoryList(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewPostgresRepository(db)
+	now := time.Now().UTC()
+	rows := sqlmock.NewRows([]string{"job_id", "job_name", "dedup_key", "status", "attempt_count", "last_error", "payload_json", "result_json", "created_at", "started_at", "ended_at", "lease_expires_at"}).
+		AddRow("job-1", "analytics.capture_snapshot", "bucket:1", StatusQueued, 0, "", []byte(`{}`), []byte(`{}`), now, nil, nil, nil)
+	mock.ExpectQuery("SELECT job_id, job_name").WillReturnRows(rows)
+
+	items := repo.List()
+	if len(items) != 1 || items[0].ID != "job-1" {
+		t.Fatalf("expected listed job, got %+v", items)
+	}
+}

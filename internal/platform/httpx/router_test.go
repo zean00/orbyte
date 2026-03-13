@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"clinic/internal/platform/organization"
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
+	"clinic/internal/platform/runtimehealth"
 	"clinic/internal/platform/search"
 	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/workflow"
@@ -77,6 +79,9 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	monitoringSvc := monitoring.NewService(docs, eventingSvc, flows, searchSvc, obsSvc)
 	integrationSvc := integration.NewService(obsSvc, loggerSvc)
 	jobSvc := jobs.NewService()
+	health := runtimehealth.NewTracker()
+	health.SetBootstrapped(true)
+	health.SetBackgroundStarted(true)
 	searchSvc.AttachJobs(jobSvc)
 	searchSvc.AttachFieldSecurity(fieldSecuritySvc)
 	analyticsSvc.AttachJobs(jobSvc)
@@ -87,6 +92,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		jobSvc.Stop()
 	})
 	integrationSvc.AttachPolicy(policySvc)
+	integrationSvc.AttachJobs(jobSvc)
 	for _, eventType := range []string{
 		"document.updated",
 		"document.submitted",
@@ -264,7 +270,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router: NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, actions, modelActions),
+		router: NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, actions, modelActions),
 		cookie: &http.Cookie{Name: sessionCookieName, Value: token},
 		csrf:   csrfCookie,
 		ident:  ident,
@@ -1082,6 +1088,16 @@ func TestHealthzAndContext(t *testing.T) {
 	if rr.Header().Get("X-Correlation-ID") == "" {
 		t.Fatal("expected correlation header for /healthz")
 	}
+	rr = h.request(http.MethodGet, "/readyz", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /readyz, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	req := httptest.NewRequest(http.MethodGet, "/documents", nil)
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	metricRR := httptest.NewRecorder()
+	h.router.ServeHTTP(metricRR, req)
 
 	rr = h.request(http.MethodGet, "/platform/context", nil, true)
 	if rr.Code != http.StatusOK {
@@ -1094,6 +1110,108 @@ func TestHealthzAndContext(t *testing.T) {
 	}
 	if _, ok := payload["service_principals"]; ok {
 		t.Fatal("expected redacted platform context without service principals")
+	}
+	statsRR := h.request(http.MethodGet, "/ops/stats", nil, true)
+	if statsRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /ops/stats, got %d body=%s", statsRR.Code, statsRR.Body.String())
+	}
+	var statsPayload map[string]any
+	_ = json.Unmarshal(statsRR.Body.Bytes(), &statsPayload)
+	if _, ok := statsPayload["jobs"]; !ok {
+		t.Fatal("expected job stats in ops payload")
+	}
+	metricsRR := h.request(http.MethodGet, "/metrics", nil, true)
+	if metricsRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /metrics, got %d body=%s", metricsRR.Code, metricsRR.Body.String())
+	}
+	body := metricsRR.Body.String()
+	if !strings.Contains(body, "http_route_family_documents_requests_total") {
+		t.Fatalf("expected route-family metrics in /metrics, got %s", body)
+	}
+}
+
+func TestReadyzReturnsUnavailableWhenRuntimeHealthIsDegraded(t *testing.T) {
+	t.Setenv("APP_JWT_SECRET", "test-secret")
+	cfg := config.NewService()
+	org := organization.NewService()
+	ident := identity.NewService(org)
+	models := model.NewService()
+	docs := document.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	searchSvc := search.NewService()
+	loggerSvc := logging.NewServiceWithWriter(nil)
+	obsSvc := observability.NewService()
+	policySvc := policy.NewServiceWithConfig(cfg)
+	reportingSvc := reporting.NewService(models)
+	monitoringSvc := monitoring.NewService(docs, eventingSvc, flows, searchSvc, obsSvc)
+	analyticsSvc := analytics.NewService(docs, flows, eventingSvc, searchSvc, auditSvc, obsSvc)
+	integrationSvc := integration.NewService(obsSvc, loggerSvc)
+	jobSvc := jobs.NewService()
+	health := runtimehealth.NewTracker()
+	health.SetBootstrapped(true)
+	health.SetBackgroundStarted(true)
+	health.MarkFailure("jobs", errors.New("boom"))
+	health.MarkFailure("jobs", errors.New("boom"))
+	health.MarkFailure("jobs", errors.New("boom"))
+	router := NewRouter(cfg, org, ident, module.NewService(), models, activity.NewService(), reportingSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for degraded readyz, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestQueuedIntegrationActionsStillRecordAuditEvents(t *testing.T) {
+	h := newTestHarness(t)
+
+	createBody, _ := json.Marshal(map[string]any{
+		"system_key":     "fake_erp",
+		"operation_type": "sync_customer",
+		"document_id":    "doc-1",
+		"correlation_id": "corr-1",
+		"payload":        map[string]any{"customer_id": "cust-1"},
+	})
+	rr := h.request(http.MethodPost, "/admin/api/integrations/submissions", createBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected submission create to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var created map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	record := created["record"].(map[string]any)
+	id := record["id"].(string)
+
+	rr = h.request(http.MethodPost, "/admin/api/integrations/submissions/"+id+"/actions/process", nil, true)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected queued process action, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = h.request(http.MethodPost, "/admin/api/integrations/submissions/"+id+"/actions/retry", nil, true)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected queued retry action, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var processAudit bool
+	var retryAudit bool
+	for _, event := range h.audit.List() {
+		switch event.Action {
+		case "integration.submission.process":
+			if event.TargetID == id {
+				processAudit = true
+			}
+		case "integration.submission.retry":
+			if event.TargetID == id {
+				retryAudit = true
+			}
+		}
+	}
+	if !processAudit {
+		t.Fatal("expected audit event for queued process action")
+	}
+	if !retryAudit {
+		t.Fatal("expected audit event for queued retry action")
 	}
 }
 

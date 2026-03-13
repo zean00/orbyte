@@ -62,6 +62,27 @@ func (r *PostgresRepository) Get(id string) (Job, bool) {
 	return scanJob(r.db.QueryRowContext(context.Background(), query, id))
 }
 
+func (r *PostgresRepository) List() []Job {
+	const query = `
+		SELECT job_id, job_name, COALESCE(dedup_key,''), status, attempt_count, COALESCE(last_error,''),
+			COALESCE(payload_json,'{}'::jsonb), COALESCE(result_json,'{}'::jsonb),
+			created_at, started_at, ended_at, lease_expires_at
+		FROM job_records
+		ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	items := make([]Job, 0)
+	for rows.Next() {
+		if job, ok := scanJobFromRows(rows); ok {
+			items = append(items, job)
+		}
+	}
+	return items
+}
+
 func (r *PostgresRepository) ClaimPending(now time.Time, lease time.Duration, limit int) []Job {
 	if limit <= 0 {
 		limit = 20

@@ -39,7 +39,13 @@ func TestNewAppBootstrap(t *testing.T) {
 	if len(app.Analytics.ListReportDefinitions()) == 0 {
 		t.Fatal("expected bootstrapped analytics report definitions")
 	}
+	if snapshot := app.RuntimeHealth.Snapshot(context.Background()); snapshot.Ready {
+		t.Fatal("expected app to remain unready before background services start")
+	}
 	app.StartBackground(context.Background())
+	if snapshot := app.RuntimeHealth.Snapshot(context.Background()); !snapshot.Ready {
+		t.Fatalf("expected app to become ready after background start, got %+v", snapshot)
+	}
 	if err := app.Close(); err != nil {
 		t.Fatalf("unexpected close error: %v", err)
 	}

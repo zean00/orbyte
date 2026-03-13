@@ -251,15 +251,22 @@ type Service struct {
 	jobs      *jobs.Service
 }
 
+func (s *Service) observeCounter(key string) {
+	if s == nil || s.obs == nil {
+		return
+	}
+	s.obs.Inc(key)
+}
+
 type ConsistencyReport struct {
-	GeneratedAt        time.Time               `json:"generated_at"`
-	DocumentCount      int                     `json:"document_count"`
-	ProjectionCount    int                     `json:"projection_count"`
-	SnapshotCount      int                     `json:"snapshot_count"`
-	FactDocumentCount  int                     `json:"fact_document_count"`
-	LatestSnapshotAt   time.Time               `json:"latest_snapshot_at,omitempty"`
-	ProjectionCoverage float64                 `json:"projection_coverage"`
-	Observations       map[string]any          `json:"observations,omitempty"`
+	GeneratedAt        time.Time      `json:"generated_at"`
+	DocumentCount      int            `json:"document_count"`
+	ProjectionCount    int            `json:"projection_count"`
+	SnapshotCount      int            `json:"snapshot_count"`
+	FactDocumentCount  int            `json:"fact_document_count"`
+	LatestSnapshotAt   time.Time      `json:"latest_snapshot_at,omitempty"`
+	ProjectionCoverage float64        `json:"projection_coverage"`
+	Observations       map[string]any `json:"observations,omitempty"`
 }
 
 func NewService(documents *document.Service, workflowSvc *workflow.Service, eventingSvc *eventing.Service, searchSvc *search.Service, auditSvc *audit.Service, obs *observability.Service) *Service {
@@ -499,11 +506,11 @@ func (s *Service) RecomputeCurrentState() (Snapshot, error) {
 
 func (s *Service) Consistency() ConsistencyReport {
 	report := ConsistencyReport{
-		GeneratedAt:   time.Now().UTC(),
-		DocumentCount: len(s.documents.List()),
+		GeneratedAt:     time.Now().UTC(),
+		DocumentCount:   len(s.documents.List()),
 		ProjectionCount: len(s.search.ListDocuments()),
-		SnapshotCount: len(s.ListSnapshots()),
-		Observations:  map[string]any{},
+		SnapshotCount:   len(s.ListSnapshots()),
+		Observations:    map[string]any{},
 	}
 	if report.DocumentCount > 0 {
 		report.ProjectionCoverage = float64(report.ProjectionCount) / float64(report.DocumentCount)

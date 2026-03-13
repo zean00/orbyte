@@ -1,11 +1,15 @@
 package integration
 
 import (
+	"context"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"clinic/internal/platform/jobs"
 	"clinic/internal/platform/logging"
 	"clinic/internal/platform/observability"
 	"clinic/internal/platform/policy"
@@ -149,6 +153,54 @@ func TestHTTPAdapterExecuteSuccessAndFailure(t *testing.T) {
 	}, SubmissionRecord{ID: "sub-2", Payload: map[string]any{"foo": "bar"}}); err == nil {
 		t.Fatal("expected http adapter status failure")
 	}
+}
+
+func TestDefaultHTTPClientUsesConfiguredTimeout(t *testing.T) {
+	old := os.Getenv("APP_INTEGRATION_HTTP_TIMEOUT_SECONDS")
+	defer os.Setenv("APP_INTEGRATION_HTTP_TIMEOUT_SECONDS", old)
+	t.Setenv("APP_INTEGRATION_HTTP_TIMEOUT_SECONDS", "3")
+	client := defaultHTTPClient()
+	if client.Timeout != 3*time.Second {
+		t.Fatalf("expected configured timeout, got %s", client.Timeout)
+	}
+}
+
+func TestAttachJobsQueuesSubmissionProcessing(t *testing.T) {
+	obs := observability.NewService()
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.queued.total", Type: "counter"})
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.succeeded.total", Type: "counter"})
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.failed.total", Type: "counter"})
+	obs.RegisterLogEventDefinition(observability.LogEventDefinition{Key: "integration.submission.succeeded", RequiredFields: []string{"submission_id", "system_key", "operation", "status"}})
+	obs.RegisterLogEventDefinition(observability.LogEventDefinition{Key: "integration.submission.failed", RequiredFields: []string{"submission_id", "system_key", "operation", "status"}})
+	svc := NewService(obs, logging.NewService())
+	jobSvc := jobs.NewService()
+	svc.AttachJobs(jobSvc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	jobSvc.Start(ctx)
+	defer jobSvc.Stop()
+
+	record, err := svc.CreateSubmission("fake_erp", "submit_document", "doc-1", "corr-1", map[string]any{"foo": "bar"})
+	if err != nil {
+		t.Fatalf("create submission failed: %v", err)
+	}
+	job, err := svc.EnqueueProcessSubmission(record.ID)
+	if err != nil {
+		t.Fatalf("enqueue process submission failed: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		stored, ok := svc.GetSubmission(record.ID)
+		if ok && stored.Status == "succeeded" {
+			return
+		}
+		if queued, ok := jobSvc.Get(job.ID); ok && queued.Status == jobs.StatusDeadLetter {
+			t.Fatalf("expected queued integration job to succeed, got %+v", queued)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	stored, _ := svc.GetSubmission(record.ID)
+	t.Fatalf("expected async integration processing to succeed, got %+v", stored)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

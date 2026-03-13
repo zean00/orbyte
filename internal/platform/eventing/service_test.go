@@ -3,6 +3,7 @@ package eventing
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -166,6 +167,34 @@ func TestDispatchPendingRetriesThenDeadLetters(t *testing.T) {
 	}
 	if items := svc.ListDeadLetters(); len(items) == 0 || items[0].SinkName != "local" {
 		t.Fatalf("expected local sink dead letter, got %+v", items)
+	}
+}
+
+func TestDispatcherReportsFailureWhenDeliveriesFail(t *testing.T) {
+	svc := NewService()
+	svc.RegisterHandler("document.updated", failingHandler{})
+	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: "d1", OccurredAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("record failed: %v", err)
+	}
+	dispatcher := NewDispatcher(svc, 10*time.Millisecond, 10)
+	var successes atomic.Int32
+	var failures atomic.Int32
+	dispatcher.SetHealthHooks(func() {
+		successes.Add(1)
+	}, func(error) {
+		failures.Add(1)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	dispatcher.Start(ctx)
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+	dispatcher.Stop()
+
+	if failures.Load() == 0 {
+		t.Fatal("expected dispatcher failure hook to run")
+	}
+	if successes.Load() != 0 {
+		t.Fatalf("expected no success health hook, got %d", successes.Load())
 	}
 }
 

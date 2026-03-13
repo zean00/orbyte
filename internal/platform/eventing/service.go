@@ -19,6 +19,14 @@ type Service struct {
 	observability *observability.Service
 }
 
+type DispatchResult struct {
+	Attempted    int
+	Dispatched   int
+	Failed       int
+	DeadLettered int
+	Retried      int
+}
+
 type Handler interface {
 	Handle(ctx context.Context, event Event) error
 }
@@ -123,25 +131,45 @@ func (s *Service) ListDeadLetters() []DeadLetterRecord {
 }
 
 func (s *Service) DispatchPending(limit int) (int, error) {
+	result, err := s.DispatchPendingDetailed(limit)
+	return result.Dispatched, err
+}
+
+func (s *Service) DispatchPendingDetailed(limit int) (DispatchResult, error) {
+	result := DispatchResult{}
 	if err := s.ensureDeliveries(); err != nil {
-		return 0, err
+		return result, err
 	}
 	items := s.repo.ClaimPendingDeliveries(limit)
-	dispatched := 0
+	result.Attempted = len(items)
 	for _, item := range items {
 		s.logger.Info("outbox dispatch started", map[string]any{"outbox_id": item.OutboxID, "event_id": item.EventID, "sink": item.SinkName, "attempt_count": item.AttemptCount})
 		event, ok := s.repo.GetEvent(item.EventID)
 		if !ok {
 			s.observability.Inc("outbox.dispatch.missing_event.total")
-			if err := s.failOrDeadLetter(item, "missing event"); err != nil {
-				return dispatched, err
+			status, err := s.failOrDeadLetter(item, "missing event")
+			if err != nil {
+				return result, err
+			}
+			result.Failed++
+			if status == "dead_letter" {
+				result.DeadLettered++
+			} else {
+				result.Retried++
 			}
 			continue
 		}
 		sink, ok := s.sinks[item.SinkName]
 		if !ok {
-			if err := s.failOrDeadLetter(item, "missing sink"); err != nil {
-				return dispatched, err
+			status, err := s.failOrDeadLetter(item, "missing sink")
+			if err != nil {
+				return result, err
+			}
+			result.Failed++
+			if status == "dead_letter" {
+				result.DeadLettered++
+			} else {
+				result.Retried++
 			}
 			continue
 		}
@@ -150,23 +178,30 @@ func (s *Service) DispatchPending(limit int) (int, error) {
 			s.observability.Inc("outbox.dispatch.handler_failed.total")
 			s.observability.Observe("outbox.dispatch.handler.duration", time.Since(started))
 			s.logger.Error("outbox sink failed", map[string]any{"outbox_id": item.OutboxID, "event_id": event.ID, "event_type": event.Type, "sink": item.SinkName, "error": err.Error(), "attempt_count": item.AttemptCount})
-			if dlErr := s.failOrDeadLetter(item, err.Error()); dlErr != nil {
-				return dispatched, dlErr
+			status, dlErr := s.failOrDeadLetter(item, err.Error())
+			if dlErr != nil {
+				return result, dlErr
+			}
+			result.Failed++
+			if status == "dead_letter" {
+				result.DeadLettered++
+			} else {
+				result.Retried++
 			}
 			continue
 		}
 		s.observability.Observe("outbox.dispatch.handler.duration", time.Since(started))
 		if err := s.repo.MarkDeliveryDispatched(item.ID, OutboxDeliveryRecord{Status: "dispatched", DispatchedAt: time.Now().UTC()}); err != nil {
-			return dispatched, err
+			return result, err
 		}
 		if err := s.refreshOutboxStatus(item.OutboxID); err != nil {
-			return dispatched, err
+			return result, err
 		}
 		s.observability.Inc("outbox.dispatch.success.total")
 		s.logger.Info("outbox dispatch completed", map[string]any{"outbox_id": item.OutboxID, "event_id": item.EventID, "event_type": item.EventType, "sink": item.SinkName})
-		dispatched++
+		result.Dispatched++
 	}
-	return dispatched, nil
+	return result, nil
 }
 
 func (s *Service) ensureDeliveries() error {
@@ -204,17 +239,17 @@ func (s *Service) ensureDeliveries() error {
 	return nil
 }
 
-func (s *Service) failOrDeadLetter(item OutboxDeliveryRecord, reason string) error {
+func (s *Service) failOrDeadLetter(item OutboxDeliveryRecord, reason string) (string, error) {
 	if item.AttemptCount >= maxAttempts {
 		s.observability.Inc("outbox.dead_letter.total")
 		s.logger.Error("outbox moved to dead letter", map[string]any{"outbox_id": item.OutboxID, "event_id": item.EventID, "sink": item.SinkName, "reason": reason, "attempt_count": item.AttemptCount})
 		if err := s.repo.MarkDeliveryFailed(item.ID, OutboxDeliveryRecord{Status: "dead_letter", LastError: reason, AttemptCount: item.AttemptCount}); err != nil {
-			return err
+			return "", err
 		}
 		if err := s.refreshOutboxStatus(item.OutboxID); err != nil {
-			return err
+			return "", err
 		}
-		return s.repo.SaveDeadLetter(DeadLetterRecord{
+		if err := s.repo.SaveDeadLetter(DeadLetterRecord{
 			ID:           fmt.Sprintf("dead:%s:%s:%d", item.OutboxID, item.SinkName, item.AttemptCount),
 			OutboxID:     item.OutboxID,
 			EventID:      item.EventID,
@@ -223,14 +258,17 @@ func (s *Service) failOrDeadLetter(item OutboxDeliveryRecord, reason string) err
 			Reason:       reason,
 			AttemptCount: item.AttemptCount,
 			CreatedAt:    time.Now().UTC(),
-		})
+		}); err != nil {
+			return "", err
+		}
+		return "dead_letter", nil
 	}
 	s.observability.Inc("outbox.dispatch.retry.total")
 	s.logger.Error("outbox dispatch scheduled for retry", map[string]any{"outbox_id": item.OutboxID, "event_id": item.EventID, "sink": item.SinkName, "reason": reason, "attempt_count": item.AttemptCount})
 	if err := s.repo.MarkDeliveryFailed(item.ID, OutboxDeliveryRecord{Status: "pending", LastError: reason, AttemptCount: item.AttemptCount}); err != nil {
-		return err
+		return "", err
 	}
-	return s.refreshOutboxStatus(item.OutboxID)
+	return "pending", s.refreshOutboxStatus(item.OutboxID)
 }
 
 func (s *Service) refreshOutboxStatus(outboxID string) error {
@@ -286,10 +324,12 @@ func (s *Service) refreshOutboxStatus(outboxID string) error {
 }
 
 type Dispatcher struct {
-	service  *Service
-	interval time.Duration
-	limit    int
-	cancel   context.CancelFunc
+	service   *Service
+	interval  time.Duration
+	limit     int
+	cancel    context.CancelFunc
+	onSuccess func()
+	onFailure func(error)
 }
 
 func NewDispatcher(service *Service, interval time.Duration, limit int) *Dispatcher {
@@ -300,6 +340,14 @@ func NewDispatcher(service *Service, interval time.Duration, limit int) *Dispatc
 		limit = 50
 	}
 	return &Dispatcher{service: service, interval: interval, limit: limit}
+}
+
+func (d *Dispatcher) SetHealthHooks(onSuccess func(), onFailure func(error)) {
+	if d == nil {
+		return
+	}
+	d.onSuccess = onSuccess
+	d.onFailure = onFailure
 }
 
 func (d *Dispatcher) Start(parent context.Context) {
@@ -313,7 +361,22 @@ func (d *Dispatcher) Start(parent context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_, _ = d.service.DispatchPending(d.limit)
+				result, err := d.service.DispatchPendingDetailed(d.limit)
+				if err != nil {
+					if d.onFailure != nil {
+						d.onFailure(err)
+					}
+					continue
+				}
+				if result.Failed > 0 {
+					if d.onFailure != nil {
+						d.onFailure(fmt.Errorf("%d outbox delivery failure(s)", result.Failed))
+					}
+					continue
+				}
+				if result.Dispatched > 0 && d.onSuccess != nil {
+					d.onSuccess()
+				}
 			}
 		}
 	}()

@@ -39,10 +39,26 @@ type Service struct {
 	lease        time.Duration
 	limit        int
 
-	mu       sync.RWMutex
-	handlers map[string]Handler
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	mu        sync.RWMutex
+	handlers  map[string]Handler
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	onSuccess func()
+	onFailure func(error)
+}
+
+type Summary struct {
+	Queued     int `json:"queued"`
+	Running    int `json:"running"`
+	Succeeded  int `json:"succeeded"`
+	Failed     int `json:"failed"`
+	DeadLetter int `json:"dead_letter"`
+}
+
+type processResult struct {
+	Claimed   int
+	Succeeded int
+	Failed    int
 }
 
 func NewService() *Service {
@@ -71,11 +87,26 @@ func (s *Service) RegisterHandler(name string, handler Handler) {
 	s.handlers[name] = handler
 }
 
+func (s *Service) SetHealthHooks(onSuccess func(), onFailure func(error)) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onSuccess = onSuccess
+	s.onFailure = onFailure
+}
+
 func (s *Service) Enqueue(name string, payload map[string]any) (Job, error) {
 	return s.EnqueueUnique(name, payload, "")
 }
 
 func (s *Service) EnqueueUnique(name string, payload map[string]any, dedupKey string) (Job, error) {
+	job, _, err := s.EnqueueUniqueDetailed(name, payload, dedupKey)
+	return job, err
+}
+
+func (s *Service) EnqueueUniqueDetailed(name string, payload map[string]any, dedupKey string) (Job, bool, error) {
 	now := time.Now().UTC()
 	job := Job{
 		ID:        fmt.Sprintf("job:%d", now.UnixNano()),
@@ -85,12 +116,37 @@ func (s *Service) EnqueueUnique(name string, payload map[string]any, dedupKey st
 		CreatedAt: now,
 		Payload:   cloneMap(payload),
 	}
-	stored, _, err := s.repo.Enqueue(job)
-	return stored, err
+	return s.repo.Enqueue(job)
 }
 
 func (s *Service) Get(id string) (Job, bool) {
 	return s.repo.Get(id)
+}
+
+func (s *Service) List() []Job {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	return s.repo.List()
+}
+
+func (s *Service) Summary() Summary {
+	summary := Summary{}
+	for _, job := range s.List() {
+		switch job.Status {
+		case StatusQueued:
+			summary.Queued++
+		case StatusRunning:
+			summary.Running++
+		case StatusSucceeded:
+			summary.Succeeded++
+		case StatusFailed:
+			summary.Failed++
+		case StatusDeadLetter:
+			summary.DeadLetter++
+		}
+	}
+	return summary
 }
 
 func (s *Service) Start(parent context.Context) {
@@ -128,12 +184,18 @@ func (s *Service) loop(ctx context.Context) {
 	ticker := time.NewTicker(s.pollInterval)
 	defer ticker.Stop()
 	for {
-		if err := s.processOnce(ctx); err != nil {
+		result, err := s.processOnce(ctx)
+		if err != nil {
+			s.reportFailure(err)
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(minDuration(s.pollInterval, 250*time.Millisecond)):
 			}
+		} else if result.Failed > 0 {
+			s.reportFailure(fmt.Errorf("%d job handler(s) failed", result.Failed))
+		} else if result.Succeeded > 0 {
+			s.reportSuccess()
 		}
 		select {
 		case <-ctx.Done():
@@ -143,18 +205,37 @@ func (s *Service) loop(ctx context.Context) {
 	}
 }
 
-func (s *Service) processOnce(ctx context.Context) error {
+func (s *Service) reportSuccess() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.onSuccess != nil {
+		s.onSuccess()
+	}
+}
+
+func (s *Service) reportFailure(err error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.onFailure != nil {
+		s.onFailure(err)
+	}
+}
+
+func (s *Service) processOnce(ctx context.Context) (processResult, error) {
+	outcome := processResult{}
 	items := s.repo.ClaimPending(time.Now().UTC(), s.lease, s.limit)
+	outcome.Claimed = len(items)
 	for _, job := range items {
 		handler := s.handler(job.Name)
 		if handler == nil {
 			if err := s.repo.MarkFailed(job.ID, StatusDeadLetter, "job handler is not registered", time.Now().UTC()); err != nil {
-				return err
+				return outcome, err
 			}
+			outcome.Failed++
 			continue
 		}
 		jobCtx, stopRenew := s.startLeaseHeartbeat(ctx, job.ID)
-		result, err := handler(jobCtx, cloneMap(job.Payload))
+		handlerResult, err := handler(jobCtx, cloneMap(job.Payload))
 		renewErr := stopRenew()
 		if err == nil && renewErr != nil {
 			err = renewErr
@@ -167,15 +248,17 @@ func (s *Service) processOnce(ctx context.Context) error {
 				status = StatusQueued
 			}
 			if markErr := s.repo.MarkFailed(job.ID, status, err.Error(), time.Now().UTC()); markErr != nil {
-				return markErr
+				return outcome, markErr
 			}
+			outcome.Failed++
 			continue
 		}
-		if err := s.repo.MarkSucceeded(job.ID, result, time.Now().UTC()); err != nil {
-			return err
+		if err := s.repo.MarkSucceeded(job.ID, handlerResult, time.Now().UTC()); err != nil {
+			return outcome, err
 		}
+		outcome.Succeeded++
 	}
-	return nil
+	return outcome, nil
 }
 
 func (s *Service) startLeaseHeartbeat(parent context.Context, jobID string) (context.Context, func() error) {

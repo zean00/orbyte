@@ -291,11 +291,19 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			respondError(w, err)
 			return
 		}
+		status := http.StatusOK
+		response := map[string]any{"record": record}
 		if req.ProcessNow {
-			record, err = integrationSvc.ProcessSubmission(record.ID)
-			if err != nil {
-				respondError(w, err)
-				return
+			if job, queueErr := integrationSvc.EnqueueProcessSubmission(record.ID); queueErr == nil {
+				status = http.StatusAccepted
+				response["job"] = job
+			} else {
+				record, err = integrationSvc.ProcessSubmission(record.ID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				response["record"] = record
 			}
 		}
 		recordAudit(auditSvc, audit.Event{
@@ -307,7 +315,7 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			OccurredAt:    time.Now().UTC(),
 			CorrelationID: "integration:create:" + record.ID,
 		})
-		respondJSON(w, http.StatusOK, record)
+		respondJSON(w, status, response)
 	})
 
 	mux.HandleFunc("POST /admin/api/integrations/submissions/", func(w http.ResponseWriter, r *http.Request) {
@@ -326,8 +334,36 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 		)
 		switch action {
 		case "process":
+			if job, queueErr := integrationSvc.EnqueueProcessSubmission(submissionID); queueErr == nil {
+				record, _ = integrationSvc.GetSubmission(submissionID)
+				recordAudit(auditSvc, audit.Event{
+					ID:            "audit:integration:" + action + ":" + submissionID,
+					Action:        "integration.submission." + action,
+					TargetType:    "integration_submission",
+					TargetID:      submissionID,
+					ActorID:       principalActorID(p),
+					OccurredAt:    time.Now().UTC(),
+					CorrelationID: "integration:" + action + ":" + submissionID,
+				})
+				respondJSON(w, http.StatusAccepted, map[string]any{"record": record, "job": job})
+				return
+			}
 			record, err = integrationSvc.ProcessSubmission(submissionID)
 		case "retry":
+			if job, queueErr := integrationSvc.EnqueueRetrySubmission(submissionID); queueErr == nil {
+				record, _ = integrationSvc.GetSubmission(submissionID)
+				recordAudit(auditSvc, audit.Event{
+					ID:            "audit:integration:" + action + ":" + submissionID,
+					Action:        "integration.submission." + action,
+					TargetType:    "integration_submission",
+					TargetID:      submissionID,
+					ActorID:       principalActorID(p),
+					OccurredAt:    time.Now().UTC(),
+					CorrelationID: "integration:" + action + ":" + submissionID,
+				})
+				respondJSON(w, http.StatusAccepted, map[string]any{"record": record, "job": job})
+				return
+			}
 			record, err = integrationSvc.RetrySubmission(submissionID)
 		default:
 			respondError(w, shared.NotFound("integration action not found"))

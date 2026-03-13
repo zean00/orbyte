@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -25,13 +26,14 @@ import (
 	"clinic/internal/platform/organization"
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
+	"clinic/internal/platform/runtimehealth"
 	"clinic/internal/platform/search"
 	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 	"clinic/internal/platform/workflow"
 )
 
-func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
+func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
 	mux := http.NewServeMux()
 	fieldSecurity := securityfields.NewService(policySvc)
 	reportingSvc.AttachFieldSecurity(fieldSecurity)
@@ -41,6 +43,20 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			"status": "ok",
 			"time":   time.Now().UTC(),
 		})
+	})
+
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		snapshot := runtimehealth.Snapshot{Live: true, Ready: true, DependencyOK: true}
+		if health != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
+			defer cancel()
+			snapshot = health.Snapshot(ctx)
+		}
+		status := http.StatusOK
+		if !snapshot.Ready {
+			status = http.StatusServiceUnavailable
+		}
+		respondJSON(w, status, snapshot)
 	})
 
 	mux.HandleFunc("GET /platform/context", func(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +75,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 	registerAuthRoutes(mux, cfg, ident, auditSvc)
 	registerModelRoutes(mux, ident, models, activities, policySvc, fieldSecurity, modelActions)
 	registerDocumentRoutes(mux, ident, modules, docs, docActions, policySvc, fieldSecurity, obsSvc)
-	registerOpsRoutes(mux, ident, auditSvc, eventingSvc, docs, searchSvc, flows, analyticsSvc, monitoringSvc, obsSvc, jobSvc)
+	registerOpsRoutes(mux, ident, auditSvc, eventingSvc, docs, searchSvc, flows, analyticsSvc, monitoringSvc, obsSvc, jobSvc, health)
 	registerSearchRoutes(mux, ident, searchSvc, jobSvc)
 	registerAdminRoutes(mux, cfg, org, ident, modules, auditSvc, policySvc, obsSvc, integrationSvc)
 	registerUIRoutes(mux, ident, modules, models, activities, reportingSvc, docs, searchSvc, analyticsSvc, monitoringSvc, policySvc, fieldSecurity)
@@ -122,8 +138,13 @@ func withObservability(next http.Handler, logger *logging.Service, obs *observab
 		obs.Inc("http.requests.total")
 		obs.Inc("http.requests." + r.Method + ".total")
 		obs.Inc("http.responses." + strconv.Itoa(rw.status) + ".total")
+		routeFamily := routeFamilyForPath(r.URL.Path)
+		statusFamily := strconv.Itoa(rw.status / 100)
+		obs.Inc("http.route_family." + routeFamily + ".requests.total")
+		obs.Inc("http.route_family." + routeFamily + ".responses." + statusFamily + "xx.total")
 		duration := time.Since(started)
 		obs.Observe("http.request.duration", duration)
+		obs.Observe("http.route_family."+routeFamily+".request.duration", duration)
 		_ = obs.ObserveMetric("http.request.duration", map[string]string{}, duration)
 		_ = obs.EmitLogEvent("http.request.completed", map[string]any{
 			"correlation_id": correlationID,
@@ -141,6 +162,33 @@ func withObservability(next http.Handler, logger *logging.Service, obs *observab
 			})
 		}
 	})
+}
+
+func routeFamilyForPath(path string) string {
+	switch {
+	case path == "/healthz" || path == "/readyz":
+		return "health"
+	case path == "/platform/context":
+		return "platform"
+	case path == "/metrics":
+		return "metrics"
+	case len(path) >= 6 && path[:6] == "/auth/":
+		return "auth"
+	case len(path) >= 6 && path[:6] == "/admin/":
+		return "admin"
+	case len(path) >= 5 && path[:5] == "/ops/":
+		return "ops"
+	case len(path) >= 11 && path[:11] == "/documents/" || path == "/documents":
+		return "documents"
+	case len(path) >= 8 && path[:8] == "/models/" || path == "/models":
+		return "models"
+	case len(path) >= 8 && path[:8] == "/search/" || path == "/search":
+		return "search"
+	case len(path) >= 4 && path[:4] == "/ui/":
+		return "ui"
+	default:
+		return "other"
+	}
 }
 
 type statusWriter struct {

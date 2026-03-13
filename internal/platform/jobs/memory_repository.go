@@ -43,6 +43,17 @@ func (r *MemoryRepository) Get(id string) (Job, bool) {
 	return cloneJob(job), ok
 }
 
+func (r *MemoryRepository) List() []Job {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]Job, 0, len(r.jobs))
+	for _, job := range r.jobs {
+		items = append(items, cloneJob(job))
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.Before(items[j].CreatedAt) })
+	return items
+}
+
 func (r *MemoryRepository) ClaimPending(now time.Time, lease time.Duration, limit int) []Job {
 	r.mu.Lock()
 	defer r.mu.Unlock()

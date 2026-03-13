@@ -450,6 +450,8 @@ func (failingJobRepository) Enqueue(job jobs.Job) (jobs.Job, bool, error) {
 
 func (failingJobRepository) Get(string) (jobs.Job, bool) { return jobs.Job{}, false }
 
+func (failingJobRepository) List() []jobs.Job { return nil }
+
 func (failingJobRepository) ClaimPending(time.Time, time.Duration, int) []jobs.Job { return nil }
 
 func (failingJobRepository) RenewLease(string, time.Time, time.Duration) error { return nil }

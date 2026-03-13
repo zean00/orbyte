@@ -2,13 +2,17 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"clinic/internal/platform/jobs"
 	"clinic/internal/platform/logging"
 	"clinic/internal/platform/observability"
 	"clinic/internal/platform/policy"
@@ -21,7 +25,13 @@ type Service struct {
 	obs      *observability.Service
 	logger   *logging.Service
 	policy   *policy.Service
+	jobs     *jobs.Service
 }
+
+const (
+	JobProcessSubmission = "integration.process_submission"
+	JobRetrySubmission   = "integration.retry_submission"
+)
 
 func NewService(obs *observability.Service, logger *logging.Service) *Service {
 	return NewServiceWithRepository(NewMemoryRepository(), obs, logger)
@@ -35,7 +45,7 @@ func NewServiceWithRepository(repo Repository, obs *observability.Service, logge
 		logger:   logger,
 	}
 	svc.RegisterAdapter("fake", FakeAdapter{})
-	svc.RegisterAdapter("http", HTTPAdapter{Client: http.DefaultClient})
+	svc.RegisterAdapter("http", HTTPAdapter{Client: defaultHTTPClient()})
 	now := time.Now().UTC()
 	_ = svc.RegisterSystem(ExternalSystem{
 		Key:         "fake_erp",
@@ -59,8 +69,49 @@ func NewServiceWithRepository(repo Repository, obs *observability.Service, logge
 	return svc
 }
 
+func defaultHTTPClient() *http.Client {
+	return &http.Client{Timeout: envDurationSeconds("APP_INTEGRATION_HTTP_TIMEOUT_SECONDS", 15*time.Second)}
+}
+
 func (s *Service) AttachPolicy(policySvc *policy.Service) {
 	s.policy = policySvc
+}
+
+func (s *Service) AttachJobs(jobSvc *jobs.Service) {
+	s.jobs = jobSvc
+	if jobSvc == nil {
+		return
+	}
+	jobSvc.RegisterHandler(JobProcessSubmission, func(_ context.Context, payload map[string]any) (map[string]any, error) {
+		id, _ := payload["submission_id"].(string)
+		record, err := s.ProcessSubmission(id)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"submission_id": record.ID, "status": record.Status}, nil
+	})
+	jobSvc.RegisterHandler(JobRetrySubmission, func(_ context.Context, payload map[string]any) (map[string]any, error) {
+		id, _ := payload["submission_id"].(string)
+		record, err := s.RetrySubmission(id)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"submission_id": record.ID, "status": record.Status}, nil
+	})
+}
+
+func (s *Service) EnqueueProcessSubmission(id string) (jobs.Job, error) {
+	if s == nil || s.jobs == nil {
+		return jobs.Job{}, fmt.Errorf("integration jobs are not configured")
+	}
+	return s.jobs.EnqueueUnique(JobProcessSubmission, map[string]any{"submission_id": strings.TrimSpace(id)}, JobProcessSubmission+":"+strings.TrimSpace(id))
+}
+
+func (s *Service) EnqueueRetrySubmission(id string) (jobs.Job, error) {
+	if s == nil || s.jobs == nil {
+		return jobs.Job{}, fmt.Errorf("integration jobs are not configured")
+	}
+	return s.jobs.EnqueueUnique(JobRetrySubmission, map[string]any{"submission_id": strings.TrimSpace(id)}, JobRetrySubmission+":"+strings.TrimSpace(id))
 }
 
 func (s *Service) RegisterAdapter(key string, adapter Adapter) {
@@ -263,7 +314,7 @@ type HTTPAdapter struct {
 
 func (a HTTPAdapter) Execute(system ExternalSystem, submission SubmissionRecord) (AdapterResult, error) {
 	if a.Client == nil {
-		a.Client = http.DefaultClient
+		a.Client = defaultHTTPClient()
 	}
 	target, _ := system.Settings["url"].(string)
 	target = strings.TrimSpace(target)
@@ -314,4 +365,16 @@ func firstNonEmptyString(value any, fallback string) string {
 		return strings.TrimSpace(text)
 	}
 	return fallback
+}
+
+func envDurationSeconds(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < 0 {
+		return fallback
+	}
+	return time.Duration(parsed) * time.Second
 }
