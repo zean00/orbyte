@@ -3,13 +3,13 @@ package monitoring
 import (
 	"testing"
 
-	application "clinic/internal/platform/application"
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/workflow"
+	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/workflow"
 )
 
 func TestSummary(t *testing.T) {

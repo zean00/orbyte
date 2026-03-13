@@ -3,9 +3,9 @@ package module
 import (
 	"time"
 
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/search"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/search"
 )
 
 type Manifest struct {

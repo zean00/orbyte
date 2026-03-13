@@ -3,7 +3,7 @@ package modules
 import (
 	"fmt"
 
-	platformmodule "clinic/internal/platform/module"
+	platformmodule "orbyte/internal/platform/module"
 	// modulegen:imports
 )
 

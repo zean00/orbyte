@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/organization"
+	"orbyte/internal/platform/organization"
 )
 
 func TestServiceDecide(t *testing.T) {

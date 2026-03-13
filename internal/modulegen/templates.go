@@ -239,12 +239,12 @@ import (
 	{{- if .HasCustomUIStub }}
 	_ "embed"
 	{{- end }}
-	"clinic/internal/platform/module"
+	"orbyte/internal/platform/module"
 	{{- if .HasModelStub }}
-	"clinic/internal/platform/model"
+	"orbyte/internal/platform/model"
 	{{- end }}
 	{{- if .HasSearchIndexStub }}
-	"clinic/internal/platform/search"
+	"orbyte/internal/platform/search"
 	{{- end }}
 )
 
@@ -501,7 +501,7 @@ func NewService() *{{.ServiceName}} {
 
 const observabilityTemplate = `package {{.PackageName}}
 
-import "clinic/internal/platform/observability"
+import "orbyte/internal/platform/observability"
 
 func RegisterObservability(obs *observability.Service) {
 	if obs == nil {
@@ -541,8 +541,8 @@ func RegisterObservability(obs *observability.Service) {
 const reportingTemplate = `package {{.PackageName}}
 
 import (
-	"clinic/internal/platform/module"
-	"clinic/internal/platform/reporting"
+	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/reporting"
 )
 
 func RegisterReporting(svc *reporting.Service) error {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/module"
+	"orbyte/internal/platform/module"
 )
 
 func TestPolicyAndHelperConversions(t *testing.T) {

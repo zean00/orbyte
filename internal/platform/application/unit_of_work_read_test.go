@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/shared"
-	"clinic/internal/platform/workflow"
 	"github.com/DATA-DOG/go-sqlmock"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/workflow"
 )
 
 func TestMemoryTransactionManagerUnitOfWorkSupportsReadCreateAndNoopOutbox(t *testing.T) {

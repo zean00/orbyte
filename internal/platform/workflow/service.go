@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/shared"
 )
 
 type Service struct {

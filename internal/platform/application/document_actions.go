@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"time"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/shared"
-	"clinic/internal/platform/workflow"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/workflow"
 )
 
 type SubmitStore interface {

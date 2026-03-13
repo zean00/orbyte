@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/shared"
-	"clinic/internal/platform/store"
-	"clinic/internal/platform/workflow"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/store"
+	"orbyte/internal/platform/workflow"
 )
 
 type UnitOfWork interface {

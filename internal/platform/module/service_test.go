@@ -3,7 +3,7 @@ package module
 import (
 	"testing"
 
-	"clinic/internal/platform/config"
+	"orbyte/internal/platform/config"
 )
 
 func TestRegisterValidatesFrontendContracts(t *testing.T) {

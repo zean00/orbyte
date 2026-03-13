@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/logging"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/shared"
 )
 
 type loginRequest struct {

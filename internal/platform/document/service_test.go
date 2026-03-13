@@ -3,7 +3,7 @@ package document
 import (
 	"testing"
 
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/shared"
 )
 
 func TestCreateDocument(t *testing.T) {

@@ -3,14 +3,14 @@ package integration
 import "time"
 
 type ExternalSystem struct {
-	Key         string    `json:"key"`
-	Name        string    `json:"name"`
-	Status      string    `json:"status"`
-	Adapter     string    `json:"adapter"`
-	Description string    `json:"description,omitempty"`
+	Key         string         `json:"key"`
+	Name        string         `json:"name"`
+	Status      string         `json:"status"`
+	Adapter     string         `json:"adapter"`
+	Description string         `json:"description,omitempty"`
 	Settings    map[string]any `json:"settings,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 type SubmissionRecord struct {

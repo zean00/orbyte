@@ -112,15 +112,15 @@ func patchRegistry(root string, data templateData) (string, error) {
 		return "", err
 	}
 	text := string(content)
-	importLine := data.ImportAlias + ` "clinic/internal/modules/` + data.Spec.Module.Key + `"`
+	importLine := data.ImportAlias + ` "orbyte/internal/modules/` + data.Spec.Module.Key + `"`
 	if strings.Contains(text, importLine) {
 		return "", fmt.Errorf("module %s already registered", data.Spec.Module.Key)
 	}
 	if !strings.Contains(text, "// modulegen:manifests") {
 		return "", fmt.Errorf("registry marker not found in %s", path)
 	}
-	if strings.Contains(text, `import platformmodule "clinic/internal/platform/module"`) && !strings.Contains(text, "import (\n") {
-		text = strings.Replace(text, `import platformmodule "clinic/internal/platform/module"`, "import (\n\tplatformmodule \"clinic/internal/platform/module\"\n\t// modulegen:imports\n)", 1)
+	if strings.Contains(text, `import platformmodule "orbyte/internal/platform/module"`) && !strings.Contains(text, "import (\n") {
+		text = strings.Replace(text, `import platformmodule "orbyte/internal/platform/module"`, "import (\n\tplatformmodule \"orbyte/internal/platform/module\"\n\t// modulegen:imports\n)", 1)
 	}
 	if !strings.Contains(text, "// modulegen:imports") {
 		return "", fmt.Errorf("registry import marker not found in %s", path)

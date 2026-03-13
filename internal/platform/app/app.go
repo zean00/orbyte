@@ -1,31 +1,6 @@
 package app
 
 import (
-	"clinic/internal/platform/activity"
-	"clinic/internal/platform/analytics"
-	application "clinic/internal/platform/application"
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/httpx"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/integration"
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/logging"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/module"
-	"clinic/internal/platform/monitoring"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/organization"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/reporting"
-	"clinic/internal/platform/runtimehealth"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
-	"clinic/internal/platform/store"
-	"clinic/internal/platform/workflow"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -33,6 +8,31 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"orbyte/internal/platform/activity"
+	"orbyte/internal/platform/analytics"
+	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/httpx"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/integration"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/monitoring"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/runtimehealth"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/store"
+	"orbyte/internal/platform/workflow"
 	"os"
 	"sort"
 	"strings"
@@ -790,7 +790,7 @@ func defaultPolicyRule(hookKey string) map[string]any {
 func defaultPolicyModule(hookKey string) string {
 	switch hookKey {
 	case "documents.search.visibility":
-		return `package clinic.policy.documents.search.visibility
+		return `package orbyte.policy.documents.search.visibility
 
 import rego.v1
 
@@ -807,7 +807,7 @@ decision := {"allowed": false, "code": "status_hidden", "reason": "document stat
 	not input.inputs.location_id in object.get(input.rule, "location_allowlist", [])
 }`
 	case "documents.workflow.transition":
-		return `package clinic.policy.documents.workflow.transition
+		return `package orbyte.policy.documents.workflow.transition
 
 import rego.v1
 
@@ -831,7 +831,7 @@ decision := {"allowed": false, "code": "missing_action", "reason": "action is re
 	trim_space(object.get(input.inputs, "number", "")) == ""
 }`
 	case "integration.submission.preflight":
-		return `package clinic.policy.integration.submission.preflight
+		return `package orbyte.policy.integration.submission.preflight
 
 import rego.v1
 

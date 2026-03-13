@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"clinic/internal/platform/module"
+	"orbyte/internal/platform/module"
 
 	"go.yaml.in/yaml/v3"
 )

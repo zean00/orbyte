@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/integration"
-	"clinic/internal/platform/module"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/organization"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/integration"
+	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/shared"
 )
 
 type configUpdateRequest struct {
@@ -679,7 +679,7 @@ const adminConsoleHTML = `<!doctype html>
       }).join('') + '</tbody></table>';
       document.querySelectorAll('#modules button[data-key]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const csrf = getCookie('clinic_csrf');
+          const csrf = getCookie('orbyte_csrf');
           await getJSON('/admin/api/modules/' + btn.dataset.key + '/actions/' + btn.dataset.action, {method:'POST', headers:{'X-CSRF-Token': csrf}});
           boot();
         });
@@ -711,7 +711,7 @@ const adminConsoleHTML = `<!doctype html>
         const scope = document.getElementById('config-scope').value;
         const scopeID = scope === 'deployment' ? '' : (scope === 'organization' ? document.getElementById('organization-id').value : document.getElementById('location-id').value);
         const value = JSON.parse(document.getElementById('config-value').value || '{}');
-        const csrf = getCookie('clinic_csrf');
+        const csrf = getCookie('orbyte_csrf');
         await getJSON('/admin/api/config/entries/' + key + '/value', {
           method:'PUT',
           headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},

@@ -3,11 +3,11 @@ package httpx
 import (
 	"strings"
 
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/reporting"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 func modelAccessProfile(fieldSecurity *securityfields.Service, ident *identity.Service, p principal, def model.Definition, channel string) securityfields.AccessProfile {
@@ -15,11 +15,11 @@ func modelAccessProfile(fieldSecurity *securityfields.Service, ident *identity.S
 		return securityfields.AccessProfile{ResourceKind: "model", ResourceKey: def.Key, Fields: map[string]securityfields.FieldAccess{}}
 	}
 	return fieldSecurity.ModelProfile(securityfields.AccessContext{
-		ActorID:        principalActorID(p),
-		SessionID:      p.sessionID,
-		LocationID:     p.currentLocationID,
-		ScopeID:        p.currentLocationID,
-		Channel:        channel,
+		ActorID:    principalActorID(p),
+		SessionID:  p.sessionID,
+		LocationID: p.currentLocationID,
+		ScopeID:    p.currentLocationID,
+		Channel:    channel,
 		PermissionChecker: func(permissionKey string) bool {
 			if strings.TrimSpace(permissionKey) == "" {
 				return true

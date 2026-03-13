@@ -22,7 +22,7 @@ func writeGeneratorBootstrap(t *testing.T, root string) {
 	if err := os.WriteFile(filepath.Join(root, "internal", "modules", "registry.go"), []byte(`package modules
 
 import (
-	platformmodule "clinic/internal/platform/module"
+	platformmodule "orbyte/internal/platform/module"
 	// modulegen:imports
 )
 
@@ -288,7 +288,7 @@ func TestPlanModuleCreatesFilesAndPatchesRegistry(t *testing.T) {
 			foundRegistrationTest = true
 		case strings.HasSuffix(file.Path, filepath.Join("internal", "modules", "registry.go")):
 			foundRegistry = true
-			if !strings.Contains(file.Content, `salesmodule "clinic/internal/modules/sales"`) {
+			if !strings.Contains(file.Content, `salesmodule "orbyte/internal/modules/sales"`) {
 				t.Fatalf("expected registry import patch, got %s", file.Content)
 			}
 			if !strings.Contains(file.Content, "salesmodule.Manifest()") {

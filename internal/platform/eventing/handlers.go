@@ -3,9 +3,9 @@ package eventing
 import (
 	"context"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/search"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/search"
 )
 
 type DocumentProjectionHandler struct {

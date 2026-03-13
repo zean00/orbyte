@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 const (

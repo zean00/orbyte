@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/logging"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/policy"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/policy"
 )
 
 func TestCreateAndProcessSubmission(t *testing.T) {

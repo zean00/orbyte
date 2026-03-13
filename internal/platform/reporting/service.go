@@ -5,11 +5,11 @@ import (
 	"sort"
 	"strings"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 type DatasetDefinition struct {

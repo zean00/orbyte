@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/organization"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/shared"
 )
 
 type Service struct {

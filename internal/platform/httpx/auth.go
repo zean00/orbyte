@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/shared"
 )
 
-const sessionCookieName = "clinic_session"
-const csrfCookieName = "clinic_csrf"
+const sessionCookieName = "orbyte_session"
+const csrfCookieName = "orbyte_csrf"
 
 type principalKind string
 

@@ -3,11 +3,11 @@ package httpx
 import (
 	"strings"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/reporting"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 func documentAccessProfile(fieldSecurity *securityfields.Service, ident *identity.Service, p principal, record document.Record, channel string) securityfields.DocumentProfile {

@@ -1,4 +1,4 @@
-module clinic
+module orbyte
 
 go 1.25.0
 

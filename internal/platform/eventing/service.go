@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"clinic/internal/platform/logging"
-	"clinic/internal/platform/observability"
+	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/observability"
 )
 
 const maxAttempts = 3

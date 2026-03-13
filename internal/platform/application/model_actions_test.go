@@ -3,10 +3,10 @@ package application
 import (
 	"testing"
 
-	"clinic/internal/platform/activity"
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/model"
+	"orbyte/internal/platform/activity"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/model"
 )
 
 func TestMemoryModelActionsCreateUpdateAndPatchRelation(t *testing.T) {

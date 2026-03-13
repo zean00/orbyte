@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"clinic/internal/platform/config"
+	"orbyte/internal/platform/config"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 )
@@ -123,7 +123,7 @@ func TestEvaluateRegoHookUsesDefaultModule(t *testing.T) {
 		DefaultRule:       map[string]any{"hidden_statuses": []string{"cancelled"}},
 		Engine:            EngineRego,
 		RegoPackage:       "clinic.policy.documents.search.visibility",
-		RegoQuery:         "data.clinic.policy.documents.search.visibility.decision",
+		RegoQuery:         "data.orbyte.policy.documents.search.visibility.decision",
 		DefaultRegoSource: validSearchVisibilityModule(),
 	}); err != nil {
 		t.Fatalf("register hook failed: %v", err)
@@ -151,7 +151,7 @@ func TestUpsertModuleRejectsInvalidRego(t *testing.T) {
 		DefaultRule:       map[string]any{"blocked_operation_types": []string{}},
 		Engine:            EngineRego,
 		RegoPackage:       "clinic.policy.integration.submission.preflight",
-		RegoQuery:         "data.clinic.policy.integration.submission.preflight.decision",
+		RegoQuery:         "data.orbyte.policy.integration.submission.preflight.decision",
 		DefaultRegoSource: validPreflightModule(),
 	}); err != nil {
 		t.Fatalf("register hook failed: %v", err)
@@ -222,11 +222,11 @@ func TestEvaluateRegoFailsClosedOnInvalidResult(t *testing.T) {
 		DefaultRule:   map[string]any{"blocked_operation_types": []string{}},
 		Engine:        EngineRego,
 		RegoPackage:   "clinic.policy.integration.submission.preflight",
-		RegoQuery:     "data.clinic.policy.integration.submission.preflight.decision",
+		RegoQuery:     "data.orbyte.policy.integration.submission.preflight.decision",
 	}); err != nil {
 		t.Fatalf("register hook failed: %v", err)
 	}
-	if err := svc.UpsertModule("integration.submission.preflight", "deployment", "", "tester", `package clinic.policy.integration.submission.preflight
+	if err := svc.UpsertModule("integration.submission.preflight", "deployment", "", "tester", `package orbyte.policy.integration.submission.preflight
 
 import rego.v1
 
@@ -253,7 +253,7 @@ func TestRuntimeIncludesCompileStatus(t *testing.T) {
 		DefaultRule:       map[string]any{"blocked_operation_types": []string{}},
 		Engine:            EngineRego,
 		RegoPackage:       "clinic.policy.integration.submission.preflight",
-		RegoQuery:         "data.clinic.policy.integration.submission.preflight.decision",
+		RegoQuery:         "data.orbyte.policy.integration.submission.preflight.decision",
 		DefaultRegoSource: validPreflightModule(),
 	}); err != nil {
 		t.Fatalf("register hook failed: %v", err)
@@ -322,7 +322,7 @@ func TestValidateConfiguredModulesRejectsBrokenStoredSource(t *testing.T) {
 		DefaultRule:       map[string]any{"blocked_operation_types": []string{}},
 		Engine:            EngineRego,
 		RegoPackage:       "clinic.policy.integration.submission.preflight",
-		RegoQuery:         "data.clinic.policy.integration.submission.preflight.decision",
+		RegoQuery:         "data.orbyte.policy.integration.submission.preflight.decision",
 		DefaultRegoSource: validPreflightModule(),
 	}); err != nil {
 		t.Fatalf("register hook failed: %v", err)
@@ -352,7 +352,7 @@ func TestValidateConfiguredModulesCoversScopedAndNonConfigPaths(t *testing.T) {
 		Target:            "document_search",
 		Engine:            EngineRego,
 		RegoPackage:       "clinic.policy.documents.search.visibility",
-		RegoQuery:         "data.clinic.policy.documents.search.visibility.decision",
+		RegoQuery:         "data.orbyte.policy.documents.search.visibility.decision",
 		DefaultRegoSource: validSearchVisibilityModule(),
 	}
 	if err := svc.ValidateConfiguredModules(); err != nil {
@@ -489,7 +489,7 @@ func TestPrepareCachesCompiledModule(t *testing.T) {
 		Kind:      "search",
 		Target:    "document_search",
 		Engine:    EngineRego,
-		RegoQuery: "data.clinic.policy.documents.search.visibility.decision",
+		RegoQuery: "data.orbyte.policy.documents.search.visibility.decision",
 	}
 	first, err := svc.prepare(def, validSearchVisibilityModule())
 	if err != nil {
@@ -508,7 +508,7 @@ func TestPrepareCachesCompiledModule(t *testing.T) {
 }
 
 func validSearchVisibilityModule() string {
-	return `package clinic.policy.documents.search.visibility
+	return `package orbyte.policy.documents.search.visibility
 
 import rego.v1
 
@@ -521,7 +521,7 @@ decision := {"allowed": false, "code": "status_hidden", "reason": "document stat
 }
 
 func validPreflightModule() string {
-	return `package clinic.policy.integration.submission.preflight
+	return `package orbyte.policy.integration.submission.preflight
 
 import rego.v1
 

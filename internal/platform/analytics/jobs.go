@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/shared"
 )
 
 const (

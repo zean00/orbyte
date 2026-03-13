@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"clinic/internal/platform/activity"
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/store"
+	"orbyte/internal/platform/activity"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/store"
 )
 
 type ModelActions struct {

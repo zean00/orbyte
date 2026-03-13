@@ -44,13 +44,13 @@ type DomainEventDefinition struct {
 }
 
 type ContractStatus struct {
-	Key        string    `json:"key"`
-	ModuleKey  string    `json:"module_key,omitempty"`
-	Registered bool      `json:"registered"`
-	Observed   int64     `json:"observed"`
-	LastSeenAt time.Time `json:"last_seen_at,omitempty"`
-	ValidationFailures int64 `json:"validation_failures,omitempty"`
-	LastError          string `json:"last_error,omitempty"`
+	Key                string    `json:"key"`
+	ModuleKey          string    `json:"module_key,omitempty"`
+	Registered         bool      `json:"registered"`
+	Observed           int64     `json:"observed"`
+	LastSeenAt         time.Time `json:"last_seen_at,omitempty"`
+	ValidationFailures int64     `json:"validation_failures,omitempty"`
+	LastError          string    `json:"last_error,omitempty"`
 }
 
 type Service struct {

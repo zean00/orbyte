@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"clinic/internal/modulegen"
+	"orbyte/internal/modulegen"
 
 	"go.yaml.in/yaml/v3"
 )

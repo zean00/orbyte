@@ -30,7 +30,7 @@ type TokenClaims struct {
 func NewTokenManagerFromEnv() *TokenManager {
 	issuer := os.Getenv("APP_JWT_ISSUER")
 	if issuer == "" {
-		issuer = "clinic"
+		issuer = "orbyte"
 	}
 	return &TokenManager{
 		secret: []byte(os.Getenv("APP_JWT_SECRET")),

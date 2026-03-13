@@ -3,7 +3,7 @@ package httpx
 import (
 	"time"
 
-	"clinic/internal/platform/identity"
+	"orbyte/internal/platform/identity"
 )
 
 type loginRateLimiter struct {

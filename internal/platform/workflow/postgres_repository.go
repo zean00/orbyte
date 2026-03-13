@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/shared"
 )
 
 type PostgresRepository struct {

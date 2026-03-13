@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/shared"
 	"github.com/DATA-DOG/go-sqlmock"
+	"orbyte/internal/platform/shared"
 )
 
 func TestPostgresRepositoryDefinitionLifecycle(t *testing.T) {

@@ -1,6 +1,6 @@
 package application
 
-import "clinic/internal/platform/model"
+import "orbyte/internal/platform/model"
 
 type modelUnitOfWorkRepository struct {
 	uow      UnitOfWork

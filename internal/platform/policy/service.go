@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/shared"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 )

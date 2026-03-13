@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/shared"
 )
 
 func registerSearchRoutes(mux *http.ServeMux, ident *identity.Service, searchSvc *search.Service, jobSvc *jobs.Service) {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/search"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/search"
 )
 
 type failingHandler struct{}

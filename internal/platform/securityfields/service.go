@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/shared"
 )
 
 type PermissionChecker func(permissionKey string) bool

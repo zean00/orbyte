@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/shared"
 	"github.com/DATA-DOG/go-sqlmock"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/shared"
 )
 
 func TestPostgresTransactionManagerWithinTxCoordinatesMultipleDocumentWrites(t *testing.T) {

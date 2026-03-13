@@ -3,8 +3,8 @@ package search
 import (
 	"context"
 
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/shared"
 )
 
 const (

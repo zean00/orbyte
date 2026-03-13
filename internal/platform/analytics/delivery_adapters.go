@@ -130,7 +130,7 @@ func (a EmailAdapter) Deliver(artifact ReportArtifact, recipient string) error {
 func (a EmailAdapter) writeEmailOutbox(artifact ReportArtifact, recipient string) error {
 	outboxDir := a.OutboxDir
 	if outboxDir == "" {
-		tempDir, err := os.MkdirTemp("", "clinic-report-emails-*")
+		tempDir, err := os.MkdirTemp("", "orbyte-report-emails-*")
 		if err != nil {
 			return err
 		}
@@ -140,7 +140,7 @@ func (a EmailAdapter) writeEmailOutbox(artifact ReportArtifact, recipient string
 			return err
 		}
 	}
-	message, err := buildEmailMessage(firstNonEmpty(a.From, "reports@clinic.local"), recipient, artifact)
+	message, err := buildEmailMessage(firstNonEmpty(a.From, "reports@orbyte.local"), recipient, artifact)
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func (a ObjectStoreAdapter) clientOrFallback() (ObjectStoreClient, error) {
 func (a ObjectStoreAdapter) writeLocalObject(artifact ReportArtifact, recipient string) error {
 	root := a.RootDir
 	if root == "" {
-		tempDir, err := os.MkdirTemp("", "clinic-object-store-*")
+		tempDir, err := os.MkdirTemp("", "orbyte-object-store-*")
 		if err != nil {
 			return err
 		}

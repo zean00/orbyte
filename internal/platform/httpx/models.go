@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"clinic/internal/platform/activity"
-	application "clinic/internal/platform/application"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/activity"
+	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *model.Service, activities *activity.Service, _ *policy.Service, fieldSecurity *securityfields.Service, modelActions *application.ModelActions) {

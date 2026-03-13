@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"clinic/internal/modules"
-	"clinic/internal/platform/app"
+	"orbyte/internal/modules"
+	"orbyte/internal/platform/app"
 )
 
 func main() {
@@ -57,7 +57,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("core platform server listening on %s profile=%s business_modules=%v", application.Address(), application.Profile(), application.BusinessModuleKeys())
+	log.Printf("orbyte server listening on %s profile=%s business_modules=%v", application.Address(), application.Profile(), application.BusinessModuleKeys())
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("server error: %v", err)
 		os.Exit(1)

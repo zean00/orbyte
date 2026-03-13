@@ -3,7 +3,7 @@ package document
 import (
 	"time"
 
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/shared"
 )
 
 type Definition struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/shared"
 )
 
 func NormalizeQuery(def Definition, query Query) (Query, error) {

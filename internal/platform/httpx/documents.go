@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"strings"
 
-	application "clinic/internal/platform/application"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/module"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 type createDocumentRequest struct {
@@ -313,12 +313,12 @@ func filterDocumentExtensionsForPrincipal(record document.Record, modules *modul
 				LocationID:     record.Header.LocationID,
 				ScopeID:        record.Header.LocationID,
 				Inputs: map[string]any{
-					"module_key":       moduleKey,
-					"document_type":    record.Header.Type,
-					"document_id":      record.Header.ID,
-					"document_status":  record.Header.Status,
-					"organization_id":  record.Header.OrganizationID,
-					"location_id":      record.Header.LocationID,
+					"module_key":      moduleKey,
+					"document_type":   record.Header.Type,
+					"document_id":     record.Header.ID,
+					"document_status": record.Header.Status,
+					"organization_id": record.Header.OrganizationID,
+					"location_id":     record.Header.LocationID,
 				},
 			})
 			if !decision.Allowed {

@@ -3,11 +3,11 @@ package monitoring
 import (
 	"time"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/workflow"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/workflow"
 )
 
 type Summary struct {

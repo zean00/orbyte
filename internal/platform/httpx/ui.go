@@ -6,18 +6,18 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/activity"
-	"clinic/internal/platform/analytics"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/module"
-	"clinic/internal/platform/monitoring"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/reporting"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/securityfields"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/activity"
+	"orbyte/internal/platform/analytics"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/monitoring"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/shared"
 )
 
 func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
@@ -950,7 +950,7 @@ const uiShellHTML = `<!doctype html>
               const section = button.closest('section');
               const values = {};
               section.querySelectorAll('[data-path]').forEach((input) => assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input)));
-              const csrf = readCookie('clinic_csrf');
+              const csrf = readCookie('orbyte_csrf');
               try {
                 await api('/models/' + encodeURIComponent(view.model_key) + '/' + encodeURIComponent(record.id) + '/relations/' + encodeURIComponent(sourceKey), {
                   method: 'POST',
@@ -1036,7 +1036,7 @@ const uiShellHTML = `<!doctype html>
                 assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input));
               });
               const relations = collectRelationMutations(root);
-              const csrf = readCookie('clinic_csrf');
+              const csrf = readCookie('orbyte_csrf');
               try {
                 const created = await api('/models/' + encodeURIComponent(view.model_key) + (documentID ? '/' + encodeURIComponent(documentID) : ''), {
                   method: documentID ? 'PUT' : 'POST',
@@ -1070,7 +1070,7 @@ const uiShellHTML = `<!doctype html>
           button.addEventListener('click', async () => {
             const payload = {};
             root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\\.payload\\./, ''), readFieldValue(input)));
-            const csrf = readCookie('clinic_csrf');
+            const csrf = readCookie('orbyte_csrf');
             try {
               await api('/documents/' + encodeURIComponent(documentID), {
                 method: 'PUT',
@@ -1116,7 +1116,7 @@ const uiShellHTML = `<!doctype html>
     }
 
     async function invokeDocumentAction(documentID, action, expectedVersion, expectedETag) {
-      const csrf = readCookie('clinic_csrf');
+      const csrf = readCookie('orbyte_csrf');
       return api('/documents/' + encodeURIComponent(documentID) + '/actions', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},

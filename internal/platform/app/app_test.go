@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"clinic/internal/modules"
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/identity"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/module"
-	"clinic/internal/platform/organization"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/reporting"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/workflow"
+	"orbyte/internal/modules"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/workflow"
 )
 
 func TestNewAppBootstrap(t *testing.T) {

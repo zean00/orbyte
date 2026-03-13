@@ -1,6 +1,6 @@
-# Clinic Platform
+# Orbyte Platform
 
-Core platform implementation for the clinic system architecture.
+Core platform implementation for the Orbyte architecture.
 
 ## Run
 

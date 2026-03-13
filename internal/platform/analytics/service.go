@@ -5,13 +5,13 @@ import (
 	"sort"
 	"time"
 
-	"clinic/internal/platform/audit"
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/eventing"
-	"clinic/internal/platform/jobs"
-	"clinic/internal/platform/observability"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/workflow"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/workflow"
 )
 
 type Snapshot struct {

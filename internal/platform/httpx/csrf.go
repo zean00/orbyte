@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/config"
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/shared"
 )
 
 func withCSRFProtection(next http.Handler, cfg *config.Service) http.Handler {

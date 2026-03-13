@@ -3,11 +3,11 @@ package reporting
 import (
 	"testing"
 
-	"clinic/internal/platform/document"
-	"clinic/internal/platform/model"
-	"clinic/internal/platform/policy"
-	"clinic/internal/platform/search"
-	"clinic/internal/platform/securityfields"
+	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
 )
 
 func TestExecuteModelDataset(t *testing.T) {

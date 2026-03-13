@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"clinic/internal/platform/shared"
+	"orbyte/internal/platform/shared"
 )
 
 type Message struct {
@@ -49,15 +49,15 @@ type TimelineEntry struct {
 }
 
 type Service struct {
-	messages  []Message
-	followers []Follower
+	messages   []Message
+	followers  []Follower
 	activities []Activity
 }
 
 func NewService() *Service {
 	return &Service{
-		messages:  []Message{},
-		followers: []Follower{},
+		messages:   []Message{},
+		followers:  []Follower{},
 		activities: []Activity{},
 	}
 }
