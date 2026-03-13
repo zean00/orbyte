@@ -45,3 +45,15 @@ type EffectiveValue struct {
 	SourceScopeID string         `json:"source_scope_id,omitempty"`
 	ResolvedAt    time.Time      `json:"resolved_at"`
 }
+
+type ValidationIssue struct {
+	Key      string `json:"key"`
+	Severity string `json:"severity"`
+	Field    string `json:"field,omitempty"`
+	Message  string `json:"message"`
+}
+
+type ValidationReport struct {
+	Valid  bool              `json:"valid"`
+	Issues []ValidationIssue `json:"issues,omitempty"`
+}

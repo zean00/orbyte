@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS locations (
 CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
+    authentication_subject TEXT NULL UNIQUE,
     status TEXT NOT NULL,
     default_location_id TEXT NULL REFERENCES locations (location_id),
     created_at TIMESTAMPTZ NOT NULL,

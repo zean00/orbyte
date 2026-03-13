@@ -3,10 +3,17 @@ package httpx
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +40,8 @@ import (
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/workflow"
+
+	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
 type testHarness struct {
@@ -533,6 +542,532 @@ func TestLoginLogoutAndSessionRevocation(t *testing.T) {
 	}
 }
 
+func TestGoogleLogin(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate key failed: %v", err)
+	}
+	pubKey, err := jwk.PublicKeyOf(key)
+	if err != nil {
+		t.Fatalf("public jwk failed: %v", err)
+	}
+	if err := pubKey.Set(jwk.KeyIDKey, "kid-1"); err != nil {
+		t.Fatalf("set key id failed: %v", err)
+	}
+	set := jwk.NewSet()
+	if err := set.AddKey(pubKey); err != nil {
+		t.Fatalf("add key failed: %v", err)
+	}
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(set)
+	}))
+	defer jwksServer.Close()
+
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "https://app.example.com/auth/google/callback",
+			"google_auth_url":                 "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                "https://oauth2.googleapis.com/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 jwksServer.URL,
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+	if _, err := h.ident.CreateUser("user@example.com", "user-pass-123", "loc_hq", "role_admin", "deployment", ""); err != nil {
+		t.Fatalf("create google-mapped user failed: %v", err)
+	}
+	token := signGoogleTestToken(t, key, "kid-1", map[string]any{
+		"iss":            "https://accounts.google.com",
+		"sub":            "sub-123",
+		"aud":            "client-123",
+		"email":          "user@example.com",
+		"email_verified": true,
+		"exp":            time.Now().UTC().Add(time.Hour).Unix(),
+		"iat":            time.Now().UTC().Unix(),
+	})
+	body, _ := json.Marshal(map[string]any{"id_token": token, "location_id": "loc_hq"})
+	rr := h.request(http.MethodPost, "/auth/google", body, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for google login, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	linked, ok := h.ident.FindUserByUsername("user@example.com")
+	if !ok || linked.AuthenticationSubject != "google:sub-123" {
+		t.Fatalf("expected google subject linkage, got %+v", linked)
+	}
+}
+
+func TestGoogleLoginAutoProvisionsUser(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate key failed: %v", err)
+	}
+	pubKey, err := jwk.PublicKeyOf(key)
+	if err != nil {
+		t.Fatalf("public jwk failed: %v", err)
+	}
+	if err := pubKey.Set(jwk.KeyIDKey, "kid-1"); err != nil {
+		t.Fatalf("set key id failed: %v", err)
+	}
+	set := jwk.NewSet()
+	if err := set.AddKey(pubKey); err != nil {
+		t.Fatalf("add key failed: %v", err)
+	}
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(set)
+	}))
+	defer jwksServer.Close()
+
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":                       8,
+			"session_ttl_minutes":                       60,
+			"session_refresh_window_minutes":            10,
+			"login_rate_limit_attempts":                 5,
+			"login_rate_limit_window_seconds":           60,
+			"trusted_origins":                           []string{},
+			"password_enabled":                          true,
+			"google_enabled":                            true,
+			"google_auto_provision_enabled":             true,
+			"google_auto_provision_allowed_domains":     []string{"example.com"},
+			"google_auto_provision_role_id":             "role_admin",
+			"google_auto_provision_scope_type":          "deployment",
+			"google_auto_provision_scope_id":            "",
+			"google_auto_provision_default_location_id": "loc_hq",
+			"google_client_id":                          "client-123",
+			"google_client_secret":                      "secret-123",
+			"google_redirect_url":                       "https://app.example.com/auth/google/callback",
+			"google_auth_url":                           "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                          "https://oauth2.googleapis.com/token",
+			"google_issuer":                             "https://accounts.google.com",
+			"google_jwks_url":                           jwksServer.URL,
+			"google_hosted_domain":                      "",
+			"google_timeout_seconds":                    5,
+		},
+	}})
+	token := signGoogleTestToken(t, key, "kid-1", map[string]any{
+		"iss":            "https://accounts.google.com",
+		"sub":            "sub-auto-123",
+		"aud":            "client-123",
+		"email":          "autoprovision@example.com",
+		"email_verified": true,
+		"exp":            time.Now().UTC().Add(time.Hour).Unix(),
+		"iat":            time.Now().UTC().Unix(),
+	})
+	body, _ := json.Marshal(map[string]any{"id_token": token})
+	rr := h.request(http.MethodPost, "/auth/google", body, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for auto provisioned google login, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	user, ok := h.ident.FindUserByUsername("autoprovision@example.com")
+	if !ok {
+		t.Fatal("expected auto provisioned user")
+	}
+	if user.AuthenticationSubject != "google:sub-auto-123" || user.DefaultLocationID != "loc_hq" {
+		t.Fatalf("unexpected auto provisioned user: %+v", user)
+	}
+}
+
+func TestGoogleOAuthBrowserFlow(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate key failed: %v", err)
+	}
+	pubKey, err := jwk.PublicKeyOf(key)
+	if err != nil {
+		t.Fatalf("public jwk failed: %v", err)
+	}
+	if err := pubKey.Set(jwk.KeyIDKey, "kid-1"); err != nil {
+		t.Fatalf("set key id failed: %v", err)
+	}
+	set := jwk.NewSet()
+	if err := set.AddKey(pubKey); err != nil {
+		t.Fatalf("add key failed: %v", err)
+	}
+	var oauthServer *httptest.Server
+	oauthServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/jwks":
+			_ = json.NewEncoder(w).Encode(set)
+		case "/token":
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("parse form failed: %v", err)
+			}
+			if got := r.Form.Get("code"); got != "good-code" {
+				t.Fatalf("expected auth code, got %q", got)
+			}
+			if got := r.Form.Get("client_id"); got != "client-123" {
+				t.Fatalf("expected client id, got %q", got)
+			}
+			if got := r.Form.Get("client_secret"); got != "secret-123" {
+				t.Fatalf("expected client secret, got %q", got)
+			}
+			if got := r.Form.Get("redirect_uri"); got != "http://app.example.com/auth/google/callback" {
+				t.Fatalf("expected redirect uri, got %q", got)
+			}
+			idToken := signGoogleTestToken(t, key, "kid-1", map[string]any{
+				"iss":            "https://accounts.google.com",
+				"sub":            "sub-456",
+				"aud":            "client-123",
+				"email":          "user@example.com",
+				"email_verified": true,
+				"exp":            time.Now().UTC().Add(time.Hour).Unix(),
+				"iat":            time.Now().UTC().Unix(),
+			})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id_token": idToken})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer oauthServer.Close()
+
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 oauthServer.URL + "/auth",
+			"google_token_url":                oauthServer.URL + "/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 oauthServer.URL + "/jwks",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+	if _, err := h.ident.CreateUser("user@example.com", "user-pass-123", "loc_hq", "role_admin", "deployment", ""); err != nil {
+		t.Fatalf("create google-mapped user failed: %v", err)
+	}
+
+	startReq := httptest.NewRequest(http.MethodGet, "/auth/google/start?next="+url.QueryEscape("/ui#/orders"), nil)
+	startRR := httptest.NewRecorder()
+	h.router.ServeHTTP(startRR, startReq)
+	if startRR.Code != http.StatusFound {
+		t.Fatalf("expected redirect for google oauth start, got %d", startRR.Code)
+	}
+	location := startRR.Result().Header.Get("Location")
+	if !strings.HasPrefix(location, oauthServer.URL+"/auth?") {
+		t.Fatalf("expected google auth redirect, got %s", location)
+	}
+	stateCookie := findCookieByName(startRR.Result().Cookies(), googleOAuthStateCookieName)
+	if stateCookie == nil || stateCookie.Value == "" {
+		t.Fatal("expected google oauth state cookie")
+	}
+	nextCookie := findCookieByName(startRR.Result().Cookies(), googleOAuthNextCookieName)
+	if nextCookie == nil || nextCookie.Value != "/ui#/orders" {
+		t.Fatalf("expected next cookie, got %+v", nextCookie)
+	}
+
+	callbackReq := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=good-code&state="+url.QueryEscape(stateCookie.Value), nil)
+	callbackReq.AddCookie(stateCookie)
+	callbackReq.AddCookie(nextCookie)
+	callbackReq.RemoteAddr = "192.0.2.10:1234"
+	callbackRR := httptest.NewRecorder()
+	h.router.ServeHTTP(callbackRR, callbackReq)
+	if callbackRR.Code != http.StatusFound {
+		t.Fatalf("expected redirect for google oauth callback, got %d body=%s", callbackRR.Code, callbackRR.Body.String())
+	}
+	if got := callbackRR.Result().Header.Get("Location"); got != "/ui#/orders" {
+		t.Fatalf("expected redirect to next path, got %s", got)
+	}
+	sessionCookie := findCookieByName(callbackRR.Result().Cookies(), sessionCookieName)
+	if sessionCookie == nil || sessionCookie.Value == "" {
+		t.Fatal("expected session cookie from callback")
+	}
+	linked, ok := h.ident.FindUserByUsername("user@example.com")
+	if !ok || linked.AuthenticationSubject != "google:sub-456" {
+		t.Fatalf("expected google subject linkage, got %+v", linked)
+	}
+}
+
+func TestGoogleOAuthCallbackRejectsInvalidState(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                "https://oauth2.googleapis.com/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 "https://www.googleapis.com/oauth2/v3/certs",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=good-code&state=wrong-state", nil)
+	req.AddCookie(&http.Cookie{Name: googleOAuthStateCookieName, Value: "expected-state"})
+	req.AddCookie(&http.Cookie{Name: googleOAuthNextCookieName, Value: "/ui#/reports"})
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("expected redirect on invalid state, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Result().Header.Get("Location"); got != "/ui?auth_error=google_login_failed" {
+		t.Fatalf("expected auth error redirect, got %s", got)
+	}
+}
+
+func TestGoogleOAuthCallbackRedirectsOnTokenExchangeFailure(t *testing.T) {
+	oauthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			http.Error(w, "exchange failed", http.StatusBadRequest)
+		case "/jwks":
+			_, _ = w.Write([]byte(`{"keys":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer oauthServer.Close()
+
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 oauthServer.URL + "/auth",
+			"google_token_url":                oauthServer.URL + "/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 oauthServer.URL + "/jwks",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=bad-code&state=expected-state", nil)
+	req.AddCookie(&http.Cookie{Name: googleOAuthStateCookieName, Value: "expected-state"})
+	req.AddCookie(&http.Cookie{Name: googleOAuthNextCookieName, Value: "/ui#/reports"})
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("expected redirect on token exchange failure, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Result().Header.Get("Location"); got != "/ui?auth_error=google_login_failed" {
+		t.Fatalf("expected auth error redirect, got %s", got)
+	}
+}
+
+func TestAuthOptionsReflectGoogleConfiguration(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"password_enabled":                false,
+			"login_title":                     "Welcome to Orbyte",
+			"login_subtitle":                  "Use your company account.",
+			"google_button_label":             "Sign in with Google Workspace",
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                "https://oauth2.googleapis.com/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 "https://www.googleapis.com/oauth2/v3/certs",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+
+	rr := h.request(http.MethodGet, "/auth/options", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected auth options to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if payload["google_enabled"] != true {
+		t.Fatalf("expected google_enabled=true, got %+v", payload)
+	}
+	if payload["password_enabled"] != false {
+		t.Fatalf("expected password_enabled=false, got %+v", payload)
+	}
+	if payload["login_title"] != "Welcome to Orbyte" || payload["login_subtitle"] != "Use your company account." || payload["google_button_label"] != "Sign in with Google Workspace" {
+		t.Fatalf("expected branded auth options, got %+v", payload)
+	}
+}
+
+func TestUIShellAccessibleWithoutAuthentication(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/ui", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected unauthenticated ui shell to load, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "Platform Access") && !strings.Contains(rr.Body.String(), "Continue with Google") {
+		t.Fatalf("expected login-capable ui shell, got %s", rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/bootstrap", nil, false)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthenticated ui bootstrap to be rejected, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPasswordLoginDisabledByConfiguration(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"password_enabled":                false,
+			"login_title":                     "SSO Only",
+			"login_subtitle":                  "Use your identity provider.",
+			"google_button_label":             "Continue with Google",
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                "https://oauth2.googleapis.com/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 "https://www.googleapis.com/oauth2/v3/certs",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+
+	body, _ := json.Marshal(map[string]any{"username": "admin", "password": "admin123!", "location_id": "loc_hq"})
+	rr := h.request(http.MethodPost, "/auth/login", body, false)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected password login to be forbidden, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "password authentication is disabled") {
+		t.Fatalf("expected disabled password message, got %s", rr.Body.String())
+	}
+}
+
+func TestRuntimeAuthSettingsUpdateTakesEffectImmediately(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_enabled":                true,
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                "https://oauth2.googleapis.com/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 "https://www.googleapis.com/oauth2/v3/certs",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	}})
+
+	updateBody, _ := json.Marshal(map[string]any{
+		"scope": "deployment",
+		"value": map[string]any{
+			"password_enabled":                false,
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  10,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 60,
+			"trusted_origins":                 []string{},
+			"google_enabled":                  true,
+			"google_client_id":                "client-123",
+			"google_client_secret":            "secret-123",
+			"google_redirect_url":             "http://app.example.com/auth/google/callback",
+			"google_auth_url":                 "https://accounts.example.test/o/oauth2/v2/auth",
+			"google_token_url":                "https://oauth2.googleapis.com/token",
+			"google_issuer":                   "https://accounts.google.com",
+			"google_jwks_url":                 "https://www.googleapis.com/oauth2/v3/certs",
+			"google_hosted_domain":            "",
+			"google_timeout_seconds":          5,
+		},
+	})
+	rr := h.request(http.MethodPut, "/admin/api/auth/settings", updateBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected auth settings update to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	loginBody, _ := json.Marshal(map[string]any{"username": "admin", "password": "admin123!", "location_id": "loc_hq"})
+	rr = h.request(http.MethodPost, "/auth/login", loginBody, false)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected password login to reflect updated policy, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	startReq := httptest.NewRequest(http.MethodGet, "/auth/google/start?next="+url.QueryEscape("/ui#/reports"), nil)
+	startRR := httptest.NewRecorder()
+	h.router.ServeHTTP(startRR, startReq)
+	if startRR.Code != http.StatusFound {
+		t.Fatalf("expected google oauth start redirect, got %d body=%s", startRR.Code, startRR.Body.String())
+	}
+	if got := startRR.Result().Header.Get("Location"); !strings.HasPrefix(got, "https://accounts.example.test/o/oauth2/v2/auth?") {
+		t.Fatalf("expected updated google auth url, got %s", got)
+	}
+	nextCookie := findCookieByName(startRR.Result().Cookies(), googleOAuthNextCookieName)
+	if nextCookie == nil || nextCookie.Value != "/ui#/reports" {
+		t.Fatalf("expected deep-link ui route to be preserved, got %+v", nextCookie)
+	}
+}
+
 func TestLastSeenUpdatedOnAuthenticatedRequest(t *testing.T) {
 	h := newTestHarness(t)
 	before, ok := h.ident.FindSession("sess_admin")
@@ -943,6 +1478,91 @@ func TestCookieMutationsRequireCSRFFromBrowserSessions(t *testing.T) {
 	}
 }
 
+func TestSessionRefreshRejectsOutsideRefreshWindow(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "identity",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_min_length":             8,
+			"session_ttl_minutes":             60,
+			"session_refresh_window_minutes":  1,
+			"login_rate_limit_attempts":       5,
+			"login_rate_limit_window_seconds": 300,
+			"trusted_origins":                 []any{},
+		},
+	}})
+
+	loginBody, _ := json.Marshal(map[string]any{"username": "admin", "password": "admin123!", "location_id": "loc_hq"})
+	rr := h.request(http.MethodPost, "/auth/login", loginBody, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected login to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	refreshReq := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+	refreshReq.RemoteAddr = "192.0.2.10:1234"
+	sessionCookie := findCookieByName(rr.Result().Cookies(), sessionCookieName)
+	csrfCookie := findCookieByName(rr.Result().Cookies(), csrfCookieName)
+	if sessionCookie == nil || csrfCookie == nil {
+		t.Fatal("expected auth cookies on login")
+	}
+	refreshReq.AddCookie(sessionCookie)
+	refreshReq.AddCookie(csrfCookie)
+	refreshReq.Header.Set("X-CSRF-Token", csrfCookie.Value)
+	refreshRR := httptest.NewRecorder()
+	h.router.ServeHTTP(refreshRR, refreshReq)
+	if refreshRR.Code != http.StatusConflict {
+		t.Fatalf("expected refresh outside window to be rejected, got %d body=%s", refreshRR.Code, refreshRR.Body.String())
+	}
+}
+
+func TestSessionRefreshRejectsRevokedSession(t *testing.T) {
+	h := newTestHarness(t)
+
+	loginBody, _ := json.Marshal(map[string]any{"username": "admin", "password": "admin123!", "location_id": "loc_hq"})
+	rr := h.request(http.MethodPost, "/auth/login", loginBody, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected login to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var loginResp map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &loginResp)
+	sessionID := loginResp["session"].(map[string]any)["id"].(string)
+	if _, err := h.ident.RevokeSession(sessionID, time.Now().UTC()); err != nil {
+		t.Fatalf("revoke session failed: %v", err)
+	}
+
+	refreshReq := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+	refreshReq.RemoteAddr = "192.0.2.10:1234"
+	sessionCookie := findCookieByName(rr.Result().Cookies(), sessionCookieName)
+	csrfCookie := findCookieByName(rr.Result().Cookies(), csrfCookieName)
+	if sessionCookie == nil || csrfCookie == nil {
+		t.Fatal("expected auth cookies on login")
+	}
+	refreshReq.AddCookie(sessionCookie)
+	refreshReq.AddCookie(csrfCookie)
+	refreshReq.Header.Set("X-CSRF-Token", csrfCookie.Value)
+	refreshRR := httptest.NewRecorder()
+	h.router.ServeHTTP(refreshRR, refreshReq)
+	if refreshRR.Code != http.StatusUnauthorized {
+		t.Fatalf("expected revoked session refresh to be unauthorized, got %d body=%s", refreshRR.Code, refreshRR.Body.String())
+	}
+	if !strings.Contains(refreshRR.Body.String(), "session not active") {
+		t.Fatalf("expected revoked session rejection reason, got %s", refreshRR.Body.String())
+	}
+}
+
+func TestAdminAuthSettingsRequireCSRFFromBrowserSessions(t *testing.T) {
+	h := newTestHarness(t)
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/auth/settings", bytes.NewReader([]byte(`{"scope":"deployment","value":{"password_enabled":true}}`)))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected missing csrf token to be forbidden for admin auth settings, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestTrustedOriginProtectionForBrowserMutations(t *testing.T) {
 	h := newTestHarnessWithConfig(t, []config.Entry{
 		{
@@ -1218,7 +1838,17 @@ func TestQueuedIntegrationActionsStillRecordAuditEvents(t *testing.T) {
 func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	h := newTestHarness(t)
 
-	rr := h.request(http.MethodGet, "/admin/api/modules", nil, true)
+	rr := h.request(http.MethodGet, "/admin/api/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin bootstrap, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var bootstrapPayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &bootstrapPayload)
+	if len(bootstrapPayload["roles"].([]any)) == 0 {
+		t.Fatal("expected roles in admin bootstrap payload")
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/modules", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for admin modules, got %d body=%s", rr.Code, rr.Body.String())
 	}
@@ -1231,6 +1861,10 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	rr = h.request(http.MethodGet, "/admin/api/config/definitions", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for config definitions, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = h.request(http.MethodGet, "/admin/api/auth/settings", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for auth settings, got %d body=%s", rr.Code, rr.Body.String())
 	}
 	rr = h.request(http.MethodGet, "/admin/api/config/effective?organization_id=org_default&location_id=loc_hq", nil, true)
 	if rr.Code != http.StatusOK {
@@ -1264,6 +1898,213 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	rr = h.request(http.MethodGet, "/admin/api/observability/contracts", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected observability contracts endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAdminAuthSettingsPreserveRedactedSecret(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:      "identity.auth",
+		Category: "security",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"password_enabled":                          false,
+			"login_title":                               "SSO Access",
+			"login_subtitle":                            "Use your company account.",
+			"google_button_label":                       "Continue with Google",
+			"google_enabled":                            true,
+			"google_auto_provision_enabled":             true,
+			"google_auto_provision_allowed_domains":     []string{"example.com"},
+			"google_auto_provision_role_id":             "role_admin",
+			"google_auto_provision_scope_type":          "deployment",
+			"google_auto_provision_default_location_id": "loc_hq",
+			"google_client_id":                          "client-123",
+			"google_client_secret":                      "secret-123",
+			"google_redirect_url":                       "https://app.example.com/auth/google/callback",
+			"google_auth_url":                           "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                          "https://oauth2.googleapis.com/token",
+			"google_jwks_url":                           "https://www.googleapis.com/oauth2/v3/certs",
+			"google_issuer":                             "https://accounts.google.com",
+			"google_timeout_seconds":                    5,
+		},
+	}})
+
+	rr := h.request(http.MethodGet, "/admin/api/auth/settings", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for auth settings, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var authPayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &authPayload)
+	entry := authPayload["entry"].(map[string]any)
+	value := entry["value"].(map[string]any)
+	if value["google_client_secret"] != "[redacted]" {
+		t.Fatalf("expected redacted secret in auth settings response, got %+v", value)
+	}
+
+	updateBody, _ := json.Marshal(map[string]any{
+		"scope": "deployment",
+		"value": map[string]any{
+			"password_enabled":                          false,
+			"login_title":                               "Updated SSO Access",
+			"login_subtitle":                            "Use Google Workspace.",
+			"google_button_label":                       "Sign in with Google",
+			"google_enabled":                            true,
+			"google_auto_provision_enabled":             true,
+			"google_auto_provision_allowed_domains":     []string{"example.com"},
+			"google_auto_provision_role_id":             "role_admin",
+			"google_auto_provision_scope_type":          "deployment",
+			"google_auto_provision_scope_id":            "",
+			"google_auto_provision_default_location_id": "loc_hq",
+			"google_client_id":                          "client-123",
+			"google_client_secret":                      "[redacted]",
+			"google_redirect_url":                       "https://app.example.com/auth/google/callback",
+			"google_auth_url":                           "https://accounts.google.com/o/oauth2/v2/auth",
+			"google_token_url":                          "https://oauth2.googleapis.com/token",
+			"google_jwks_url":                           "https://www.googleapis.com/oauth2/v3/certs",
+			"google_issuer":                             "https://accounts.google.com",
+			"google_hosted_domain":                      "",
+			"google_timeout_seconds":                    10,
+		},
+	})
+	rr = h.request(http.MethodPut, "/admin/api/auth/settings", updateBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for auth settings update, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	effective, ok := h.cfg.Resolve("identity.auth", "", "")
+	if !ok {
+		t.Fatal("expected effective auth config")
+	}
+	if effective.Value["google_client_secret"] != "secret-123" {
+		t.Fatalf("expected secret to be preserved, got %+v", effective.Value["google_client_secret"])
+	}
+	if effective.Value["login_title"] != "Updated SSO Access" {
+		t.Fatalf("expected updated title, got %+v", effective.Value["login_title"])
+	}
+}
+
+func TestAdminAuthSettingsRejectInvalidConfigValue(t *testing.T) {
+	h := newTestHarness(t)
+
+	updateBody := []byte(`{"scope":"deployment","value":{"google_timeout_seconds":"bad"}}`)
+	rr := h.request(http.MethodPut, "/admin/api/auth/settings", updateBody, true)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid auth settings update to fail, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "google_timeout_seconds must be an integer") {
+		t.Fatalf("expected validation error, got %s", rr.Body.String())
+	}
+}
+
+func TestAdminRoutesHandleFailureCases(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/modules/does-not-exist", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected missing module lookup to return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodPost, "/admin/api/modules/analytics/actions/unknown", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected unknown module action to return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/auth/settings", bytes.NewReader([]byte(`{"scope":"deployment",`)))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	rr = httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid auth settings JSON to return 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	disableReq := httptest.NewRequest(http.MethodPost, "/admin/api/modules/identity/actions/disable", nil)
+	disableReq.RemoteAddr = "192.0.2.10:1234"
+	disableReq.AddCookie(h.cookie)
+	disableReq.AddCookie(h.csrf)
+	disableReq.Header.Set("X-CSRF-Token", h.csrf.Value)
+	disableRR := httptest.NewRecorder()
+	h.router.ServeHTTP(disableRR, disableReq)
+	if disableRR.Code != http.StatusConflict {
+		t.Fatalf("expected identity module disable conflict, got %d body=%s", disableRR.Code, disableRR.Body.String())
+	}
+	if !strings.Contains(disableRR.Body.String(), "enabled dependents") {
+		t.Fatalf("expected dependent-module conflict, got %s", disableRR.Body.String())
+	}
+}
+
+func TestAdminPolicyHookFailureCases(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/security/policy-hooks/does-not-exist", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected missing policy hook to return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/security/policy-hooks/documents.workflow.transition", bytes.NewReader([]byte(`{"scope":"deployment",`)))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	rr = httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid policy hook update JSON to return 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/admin/api/security/policy-hooks/documents.workflow.transition/rego", bytes.NewReader([]byte(`{"scope":"deployment",`)))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	rr = httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid rego update JSON to return 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	regoBody := []byte(`{"scope":"deployment","source":"package bad\n default decision = "}`)
+	rr = h.request(http.MethodPut, "/admin/api/security/policy-hooks/documents.workflow.transition/rego", regoBody, true)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected non-rego-backed policy hook update to fail, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "not Rego-backed") {
+		t.Fatalf("expected non-rego-backed error, got %s", rr.Body.String())
+	}
+}
+
+func TestAdminIntegrationFailureCases(t *testing.T) {
+	h := newTestHarness(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/integrations/submissions", bytes.NewReader([]byte(`{"system_key":"fake_erp",`)))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid integration submission JSON to return 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	createBody, _ := json.Marshal(map[string]any{
+		"system_key":     "fake_erp",
+		"operation_type": "",
+		"document_id":    "doc-1",
+		"correlation_id": "corr-1",
+		"payload":        map[string]any{"customer_id": "cust-1"},
+	})
+	rr = h.request(http.MethodPost, "/admin/api/integrations/submissions", createBody, true)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing operation type to return 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "operation_type is required") {
+		t.Fatalf("expected missing operation type error, got %s", rr.Body.String())
+	}
+
+	rr = h.request(http.MethodPost, "/admin/api/integrations/submissions/sub-missing/actions/unknown", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected unknown integration action to return 404, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -2277,4 +3118,63 @@ func TestUnsupportedDocumentAction(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
+}
+
+func TestAdminConfigValidationEndpointAndJobRequeue(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/config/validate", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for config validation, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var validation struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &validation); err != nil {
+		t.Fatalf("decode config validation failed: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected valid config report, got body=%s", rr.Body.String())
+	}
+
+	rr = h.request(http.MethodPost, "/ops/search/indexes/documents.requests.search/rebuild", nil, true)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for enqueue rebuild, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var enqueued jobs.Job
+	if err := json.Unmarshal(rr.Body.Bytes(), &enqueued); err != nil {
+		t.Fatalf("decode enqueued job failed: %v", err)
+	}
+	rr = h.request(http.MethodPost, "/ops/jobs/"+enqueued.ID+"/requeue", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for job requeue, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var queued jobs.Job
+	if err := json.Unmarshal(rr.Body.Bytes(), &queued); err != nil {
+		t.Fatalf("decode queued job failed: %v", err)
+	}
+	if queued.Status != jobs.StatusQueued {
+		t.Fatalf("expected queued job after requeue, got %+v", queued)
+	}
+}
+
+func signGoogleTestToken(t *testing.T, key *rsa.PrivateKey, kid string, claims map[string]any) string {
+	t.Helper()
+	headerJSON, err := json.Marshal(map[string]any{"alg": "RS256", "typ": "JWT", "kid": kid})
+	if err != nil {
+		t.Fatalf("marshal header failed: %v", err)
+	}
+	payloadJSON, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("marshal payload failed: %v", err)
+	}
+	header := base64.RawURLEncoding.EncodeToString(headerJSON)
+	payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	signingInput := header + "." + payload
+	sum := sha256.Sum256([]byte(signingInput))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	if err != nil {
+		t.Fatalf("sign token failed: %v", err)
+	}
+	return fmt.Sprintf("%s.%s", signingInput, base64.RawURLEncoding.EncodeToString(signature))
 }

@@ -17,7 +17,7 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 
 func (r *PostgresRepository) Users() []User {
 	const query = `
-		SELECT user_id, username, status, COALESCE(default_location_id, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at
 		FROM users
 		ORDER BY created_at ASC`
 
@@ -30,7 +30,7 @@ func (r *PostgresRepository) Users() []User {
 	items := make([]User, 0)
 	for rows.Next() {
 		var item User
-		if err := rows.Scan(&item.ID, &item.Username, &item.Status, &item.DefaultLocationID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Username, &item.AuthenticationSubject, &item.Status, &item.DefaultLocationID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			continue
 		}
 		items = append(items, item)
@@ -161,7 +161,7 @@ func (r *PostgresRepository) Credentials() []Credential {
 
 func (r *PostgresRepository) FindUser(id string) (User, bool) {
 	const query = `
-		SELECT user_id, username, status, COALESCE(default_location_id, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at
 		FROM users
 		WHERE user_id = $1`
 
@@ -169,6 +169,7 @@ func (r *PostgresRepository) FindUser(id string) (User, bool) {
 	err := r.db.QueryRowContext(context.Background(), query, id).Scan(
 		&item.ID,
 		&item.Username,
+		&item.AuthenticationSubject,
 		&item.Status,
 		&item.DefaultLocationID,
 		&item.CreatedAt,
@@ -182,7 +183,7 @@ func (r *PostgresRepository) FindUser(id string) (User, bool) {
 
 func (r *PostgresRepository) FindUserByUsername(username string) (User, bool) {
 	const query = `
-		SELECT user_id, username, status, COALESCE(default_location_id, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at
 		FROM users
 		WHERE username = $1`
 
@@ -190,6 +191,29 @@ func (r *PostgresRepository) FindUserByUsername(username string) (User, bool) {
 	err := r.db.QueryRowContext(context.Background(), query, username).Scan(
 		&item.ID,
 		&item.Username,
+		&item.AuthenticationSubject,
+		&item.Status,
+		&item.DefaultLocationID,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return User{}, false
+	}
+	return item, true
+}
+
+func (r *PostgresRepository) FindUserByAuthenticationSubject(subject string) (User, bool) {
+	const query = `
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at
+		FROM users
+		WHERE authentication_subject = $1`
+
+	var item User
+	err := r.db.QueryRowContext(context.Background(), query, subject).Scan(
+		&item.ID,
+		&item.Username,
+		&item.AuthenticationSubject,
 		&item.Status,
 		&item.DefaultLocationID,
 		&item.CreatedAt,
@@ -291,10 +315,11 @@ func (r *PostgresRepository) ServicePrincipals() []ServicePrincipal {
 func (r *PostgresRepository) SaveUser(user User) error {
 	const query = `
 		INSERT INTO users (
-			user_id, username, status, default_location_id, created_at, updated_at
-		) VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6)
+			user_id, username, authentication_subject, status, default_location_id, created_at, updated_at
+		) VALUES ($1, $2, NULLIF($3, ''), $4, NULLIF($5, ''), $6, $7)
 		ON CONFLICT (user_id) DO UPDATE SET
 			username = EXCLUDED.username,
+			authentication_subject = EXCLUDED.authentication_subject,
 			status = EXCLUDED.status,
 			default_location_id = EXCLUDED.default_location_id,
 			updated_at = EXCLUDED.updated_at`
@@ -303,6 +328,7 @@ func (r *PostgresRepository) SaveUser(user User) error {
 		query,
 		user.ID,
 		user.Username,
+		user.AuthenticationSubject,
 		user.Status,
 		user.DefaultLocationID,
 		user.CreatedAt,

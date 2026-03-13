@@ -6,8 +6,8 @@ type Repository interface {
 	ListDefinitions() []Definition
 	SaveTask(task Task) error
 	ListTasks() []Task
-	UpdateTaskStatus(taskID, status string) error
+	UpdateTaskStatus(update TaskStatusUpdate) error
 	SaveApproval(approval Approval) error
 	ListApprovals() []Approval
-	UpdateApprovalStatus(approvalID, status string) error
+	UpdateApprovalStatus(update ApprovalStatusUpdate) error
 }

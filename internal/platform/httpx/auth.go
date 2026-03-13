@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"orbyte/internal/platform/authz"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/shared"
 )
@@ -28,6 +29,7 @@ type principal struct {
 	currentLocationID string
 	serviceID         string
 	authMethod        string
+	stepUpVerified    bool
 }
 
 type authContextKey string
@@ -66,13 +68,14 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 		if userID := strings.TrimSpace(r.Header.Get("X-Dev-User-ID")); userID != "" {
 			for _, session := range ident.Sessions() {
 				if session.UserID == userID && session.Status == "active" {
-					return &principal{
-						kind:              userPrincipal,
-						userID:            userID,
-						sessionID:         session.ID,
-						currentLocationID: session.CurrentLocationID,
-						authMethod:        "dev_bypass",
-					}, nil
+			return &principal{
+				kind:              userPrincipal,
+				userID:            userID,
+				sessionID:         session.ID,
+				currentLocationID: session.CurrentLocationID,
+				authMethod:        "dev_bypass",
+				stepUpVerified:    true,
+			}, nil
 				}
 			}
 			return nil, shared.Unauthorized("development user has no active session")
@@ -100,6 +103,7 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 			sessionID:         session.ID,
 			currentLocationID: session.CurrentLocationID,
 			authMethod:        "cookie",
+			stepUpVerified:    stepUpVerified(r),
 		}, nil
 	}
 
@@ -128,6 +132,7 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 				sessionID:         session.ID,
 				currentLocationID: session.CurrentLocationID,
 				authMethod:        "bearer",
+				stepUpVerified:    stepUpVerified(r),
 			}, nil
 		case "service":
 			if claims.ServicePrincipal == "" {
@@ -184,6 +189,21 @@ func authError(r *http.Request) error {
 }
 
 func requireAuthorization(w http.ResponseWriter, r *http.Request, ident *identity.Service, userPermission, locationID, serviceOperation string) (principal, bool) {
+	return requireAuthorizationWithOptions(w, r, ident, authorizationOptions{
+		UserPermission:    userPermission,
+		LocationID:        locationID,
+		ServiceOperation:  serviceOperation,
+	})
+}
+
+type authorizationOptions struct {
+	UserPermission   string
+	LocationID       string
+	ServiceOperation string
+	RequireStepUp    bool
+}
+
+func requireAuthorizationWithOptions(w http.ResponseWriter, r *http.Request, ident *identity.Service, opts authorizationOptions) (principal, bool) {
 	if err := authError(r); err != nil {
 		respondError(w, err)
 		return principal{}, false
@@ -193,27 +213,41 @@ func requireAuthorization(w http.ResponseWriter, r *http.Request, ident *identit
 		respondError(w, shared.Unauthorized("authentication required"))
 		return principal{}, false
 	}
+	subject := authz.Subject{
+		CurrentLocationID: p.currentLocationID,
+		AuthMethod:        p.authMethod,
+		StepUpVerified:    p.stepUpVerified,
+	}
 	switch p.kind {
 	case userPrincipal:
-		decision := ident.DecideSession(p.sessionID, userPermission, locationID)
-		if !decision.Allowed {
-			respondError(w, shared.Forbidden(decision.Reason))
-			return principal{}, false
-		}
-		return p, true
+		subject.Kind = authz.SubjectUser
+		subject.UserID = p.userID
+		subject.SessionID = p.sessionID
 	case servicePrincipal:
-		if serviceOperation == "" {
-			respondError(w, shared.Forbidden("service principal access is not allowed for this route"))
-			return principal{}, false
-		}
-		decision := ident.DecideServicePrincipal(p.serviceID, serviceOperation)
-		if !decision.Allowed {
-			respondError(w, shared.Forbidden(decision.Reason))
-			return principal{}, false
-		}
-		return p, true
+		subject.Kind = authz.SubjectService
+		subject.ServiceID = p.serviceID
 	default:
 		respondError(w, shared.Unauthorized("authentication required"))
 		return principal{}, false
 	}
+	decision := authz.NewService(ident).Decide(authz.Request{
+		Subject:          subject,
+		PermissionKey:    opts.UserPermission,
+		ServiceOperation: opts.ServiceOperation,
+		LocationID:       opts.LocationID,
+		RequireStepUp:    opts.RequireStepUp,
+	})
+	if !decision.Allowed {
+		if decision.RequireStepUp {
+			respondError(w, shared.Forbidden(decision.Reason))
+			return principal{}, false
+		}
+		respondError(w, shared.Forbidden(decision.Reason))
+		return principal{}, false
+	}
+	return p, true
+}
+
+func stepUpVerified(r *http.Request) bool {
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Step-Up-Verified")), "true")
 }

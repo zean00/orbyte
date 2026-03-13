@@ -131,3 +131,21 @@ func (r *MemoryRepository) MarkFailed(id string, status string, lastError string
 	r.jobs[id] = job
 	return nil
 }
+
+func (r *MemoryRepository) Requeue(id string, queuedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	job, ok := r.jobs[id]
+	if !ok {
+		return nil
+	}
+	job.Status = StatusQueued
+	job.Error = ""
+	job.EndedAt = time.Time{}
+	job.LeaseExpiresAt = time.Time{}
+	if job.CreatedAt.IsZero() {
+		job.CreatedAt = queuedAt
+	}
+	r.jobs[id] = job
+	return nil
+}

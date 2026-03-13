@@ -13,13 +13,16 @@ type Manifest struct {
 	Name                   string                   `json:"name"`
 	Version                string                   `json:"version"`
 	DomainFamily           string                   `json:"domain_family"`
+	Category               string                   `json:"category,omitempty"`
 	Dependencies           []string                 `json:"dependencies,omitempty"`
 	DependencyRequirements []DependencyRequirement  `json:"dependency_requirements,omitempty"`
 	OwnedDocumentTypes     []string                 `json:"owned_document_types,omitempty"`
+	OwnedEntityTypes       []string                 `json:"owned_entity_types,omitempty"`
 	DocumentExtensions     []DocumentExtension      `json:"document_extensions,omitempty"`
 	OwnedWorkflowKeys      []string                 `json:"owned_workflow_keys,omitempty"`
 	OwnedPermissionKeys    []string                 `json:"owned_permission_keys,omitempty"`
 	OwnedProjectionKeys    []string                 `json:"owned_projection_keys,omitempty"`
+	OwnedTemplateKeys      []string                 `json:"owned_template_keys,omitempty"`
 	FeatureFlags           []string                 `json:"feature_flags,omitempty"`
 	ConfigDefinitions      []config.Definition      `json:"config_definitions,omitempty"`
 	Models                 []model.Definition       `json:"models,omitempty"`

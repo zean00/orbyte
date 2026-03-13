@@ -10,4 +10,5 @@ type Repository interface {
 	RenewLease(id string, now time.Time, lease time.Duration) error
 	MarkSucceeded(id string, result map[string]any, endedAt time.Time) error
 	MarkFailed(id string, status string, lastError string, endedAt time.Time) error
+	Requeue(id string, queuedAt time.Time) error
 }

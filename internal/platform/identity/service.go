@@ -539,11 +539,127 @@ func (s *Service) AuthenticatePassword(username, password, locationID string, cl
 	return s.StartSession(username, locationID, "password", clientMetadata, ttl)
 }
 
+type GoogleProvisioningPolicy struct {
+	Enabled           bool
+	AllowedDomains    []string
+	RoleID            string
+	ScopeType         string
+	ScopeID           string
+	DefaultLocationID string
+}
+
 func (s *Service) StartSession(username, locationID, authenticationMethod string, clientMetadata map[string]any, ttl time.Duration) (Session, error) {
 	user, ok := s.repo.FindUserByUsername(username)
 	if !ok {
 		return Session{}, shared.Unauthorized("invalid credentials")
 	}
+	return s.startSessionForUser(user, locationID, authenticationMethod, clientMetadata, ttl)
+}
+
+func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string, clientMetadata map[string]any, ttl time.Duration, provisioning GoogleProvisioningPolicy) (Session, error) {
+	subject := "google:" + strings.TrimSpace(identity.Subject)
+	if subject == "google:" {
+		return Session{}, shared.Validation("google subject is required")
+	}
+	user, ok := s.repo.FindUserByAuthenticationSubject(subject)
+	if !ok {
+		user, ok = s.repo.FindUserByUsername(strings.ToLower(strings.TrimSpace(identity.Email)))
+		if !ok {
+			provisioned, err := s.provisionGoogleUser(identity, subject, provisioning)
+			if err != nil {
+				return Session{}, err
+			}
+			user = provisioned
+			ok = true
+		}
+	}
+	if user.AuthenticationSubject == "" {
+		user.AuthenticationSubject = subject
+		user.UpdatedAt = time.Now().UTC()
+		if err := s.repo.SaveUser(user); err != nil {
+			return Session{}, err
+		}
+	} else if user.AuthenticationSubject != subject {
+		return Session{}, shared.Forbidden("google account does not match linked platform user")
+	}
+	metadata := cloneMetadata(clientMetadata)
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadata["google_subject"] = identity.Subject
+	metadata["google_email"] = identity.Email
+	if identity.HostedDomain != "" {
+		metadata["google_hosted_domain"] = identity.HostedDomain
+	}
+	if identity.Name != "" {
+		metadata["google_name"] = identity.Name
+	}
+	return s.startSessionForUser(user, locationID, "google", metadata, ttl)
+}
+
+func (s *Service) provisionGoogleUser(identity GoogleIdentity, subject string, provisioning GoogleProvisioningPolicy) (User, error) {
+	if !provisioning.Enabled {
+		return User{}, shared.Forbidden("google account is not linked to a platform user")
+	}
+	email := strings.ToLower(strings.TrimSpace(identity.Email))
+	if email == "" {
+		return User{}, shared.Forbidden("google account email is required")
+	}
+	if len(provisioning.AllowedDomains) > 0 {
+		domainAllowed := false
+		parts := strings.SplitN(email, "@", 2)
+		if len(parts) == 2 {
+			emailDomain := strings.ToLower(strings.TrimSpace(parts[1]))
+			for _, allowed := range provisioning.AllowedDomains {
+				if strings.EqualFold(strings.TrimSpace(allowed), emailDomain) {
+					domainAllowed = true
+					break
+				}
+			}
+		}
+		if !domainAllowed {
+			return User{}, shared.Forbidden("google account domain is not allowed for auto provisioning")
+		}
+	}
+	roleID := strings.TrimSpace(provisioning.RoleID)
+	if roleID == "" {
+		return User{}, shared.Validation("google auto provision role id is required")
+	}
+	if !s.roleExists(roleID) {
+		return User{}, shared.Validation("google auto provision role id is invalid")
+	}
+	scopeType := strings.TrimSpace(provisioning.ScopeType)
+	if scopeType == "" {
+		scopeType = "deployment"
+	}
+	now := time.Now().UTC()
+	user := User{
+		ID:                    fmt.Sprintf("user:%d", now.UnixNano()),
+		Username:              email,
+		AuthenticationSubject: subject,
+		Status:                "active",
+		DefaultLocationID:     strings.TrimSpace(provisioning.DefaultLocationID),
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	if err := s.repo.SaveUser(user); err != nil {
+		return User{}, err
+	}
+	if err := s.repo.SaveRoleBinding(RoleBinding{
+		ID:            fmt.Sprintf("rb:%d", now.UnixNano()),
+		UserID:        user.ID,
+		RoleID:        roleID,
+		ScopeType:     scopeType,
+		ScopeID:       strings.TrimSpace(provisioning.ScopeID),
+		EffectiveFrom: now,
+		Status:        "active",
+	}); err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+func (s *Service) startSessionForUser(user User, locationID, authenticationMethod string, clientMetadata map[string]any, ttl time.Duration) (Session, error) {
 	if user.Status != "active" {
 		return Session{}, shared.Forbidden("user not active")
 	}

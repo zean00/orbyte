@@ -51,10 +51,22 @@ func (r *MemoryRepository) ListTasks() []Task {
 	return items
 }
 
-func (r *MemoryRepository) UpdateTaskStatus(taskID, status string) error {
+func (r *MemoryRepository) UpdateTaskStatus(update TaskStatusUpdate) error {
 	for i := range r.tasks {
-		if r.tasks[i].ID == taskID {
-			r.tasks[i].Status = status
+		if r.tasks[i].ID == update.ID {
+			r.tasks[i].Status = update.Status
+			if !update.ResolvedAt.IsZero() {
+				if r.tasks[i].Metadata == nil {
+					r.tasks[i].Metadata = map[string]any{}
+				}
+				r.tasks[i].Metadata["resolved_at"] = update.ResolvedAt
+			}
+			if update.ResolvedBy != "" {
+				if r.tasks[i].Metadata == nil {
+					r.tasks[i].Metadata = map[string]any{}
+				}
+				r.tasks[i].Metadata["resolved_by"] = update.ResolvedBy
+			}
 			return nil
 		}
 	}
@@ -72,10 +84,14 @@ func (r *MemoryRepository) ListApprovals() []Approval {
 	return items
 }
 
-func (r *MemoryRepository) UpdateApprovalStatus(approvalID, status string) error {
+func (r *MemoryRepository) UpdateApprovalStatus(update ApprovalStatusUpdate) error {
 	for i := range r.approvals {
-		if r.approvals[i].ID == approvalID {
-			r.approvals[i].Status = status
+		if r.approvals[i].ID == update.ID {
+			r.approvals[i].Status = update.Status
+			r.approvals[i].ResolvedBy = update.ResolvedBy
+			if !update.ResolvedAt.IsZero() {
+				r.approvals[i].ResolvedAt = update.ResolvedAt
+			}
 			return nil
 		}
 	}

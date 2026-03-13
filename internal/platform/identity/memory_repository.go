@@ -133,6 +133,15 @@ func (r *MemoryRepository) FindUserByUsername(username string) (User, bool) {
 	return User{}, false
 }
 
+func (r *MemoryRepository) FindUserByAuthenticationSubject(subject string) (User, bool) {
+	for _, user := range r.users {
+		if user.AuthenticationSubject == subject {
+			return user, true
+		}
+	}
+	return User{}, false
+}
+
 func (r *MemoryRepository) FindSession(id string) (Session, bool) {
 	for _, session := range r.sessions {
 		if session.ID == id {

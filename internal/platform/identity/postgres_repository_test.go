@@ -13,8 +13,8 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	defer db.Close()
 	repo := NewPostgresRepository(db)
 	now := time.Now().UTC()
-	userRows := sqlmock.NewRows([]string{"user_id", "username", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "active", "loc1", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, status, COALESCE(default_location_id, ''), created_at, updated_at")).WillReturnRows(userRows)
+	userRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at")).WillReturnRows(userRows)
 	if len(repo.Users()) != 1 {
 		t.Fatal("expected users")
 	}
@@ -57,7 +57,7 @@ func TestPostgresIdentityRepository(t *testing.T) {
 		t.Fatal("expected service principals")
 	}
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO users (")).
-		WithArgs("u2", "clerk", "active", "loc1", now, now).
+		WithArgs("u2", "clerk", "", "active", "loc1", now, now).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	if err := repo.SaveUser(User{ID: "u2", Username: "clerk", Status: "active", DefaultLocationID: "loc1", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatalf("expected save user: %v", err)
@@ -68,15 +68,20 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if err := repo.SaveRoleBinding(RoleBinding{ID: "rb2", UserID: "u2", RoleID: "r1", ScopeType: "deployment", EffectiveFrom: now, Status: "active"}); err != nil {
 		t.Fatalf("expected save role binding: %v", err)
 	}
-	findRows := sqlmock.NewRows([]string{"user_id", "username", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "active", "loc1", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, status, COALESCE(default_location_id, ''), created_at, updated_at")).WithArgs("u1").WillReturnRows(findRows)
+	findRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at")).WithArgs("u1").WillReturnRows(findRows)
 	if _, ok := repo.FindUser("u1"); !ok {
 		t.Fatal("expected find user")
 	}
-	findUserByNameRows := sqlmock.NewRows([]string{"user_id", "username", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "active", "loc1", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, status, COALESCE(default_location_id, ''), created_at, updated_at")).WithArgs("admin").WillReturnRows(findUserByNameRows)
+	findUserByNameRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at")).WithArgs("admin").WillReturnRows(findUserByNameRows)
 	if _, ok := repo.FindUserByUsername("admin"); !ok {
 		t.Fatal("expected find user by username")
+	}
+	findUserBySubjectRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "created_at", "updated_at"}).AddRow("u1", "admin", "google:sub-1", "active", "loc1", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), created_at, updated_at")).WithArgs("google:sub-1").WillReturnRows(findUserBySubjectRows)
+	if _, ok := repo.FindUserByAuthenticationSubject("google:sub-1"); !ok {
+		t.Fatal("expected find user by authentication subject")
 	}
 	findCredentialRows := sqlmock.NewRows([]string{"user_id", "password_hash", "password_changed_at", "failed_attempt_count", "locked_until", "updated_at"}).
 		AddRow("u1", "$argon2id$example", now, 0, nil, now)

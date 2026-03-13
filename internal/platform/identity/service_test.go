@@ -179,6 +179,87 @@ func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	}
 }
 
+func TestAuthenticateGoogleLinksExistingUserByEmail(t *testing.T) {
+	svc := NewService(organization.NewService())
+	user, err := svc.CreateUser("user@example.com", "example-pass-123", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+	session, err := svc.AuthenticateGoogle(GoogleIdentity{
+		Subject:       "sub-123",
+		Email:         "user@example.com",
+		EmailVerified: true,
+		Name:          "Example User",
+	}, "loc_hq", map[string]any{"source": "test"}, time.Hour, GoogleProvisioningPolicy{})
+	if err != nil {
+		t.Fatalf("google auth failed: %v", err)
+	}
+	if session.AuthenticationMethod != "google" {
+		t.Fatalf("expected google session, got %+v", session)
+	}
+	linked, ok := svc.FindUser(user.ID)
+	if !ok || linked.AuthenticationSubject != "google:sub-123" {
+		t.Fatalf("expected user to be linked to google subject, got %+v", linked)
+	}
+}
+
+func TestAuthenticateGoogleAutoProvisionsUser(t *testing.T) {
+	svc := NewService(organization.NewService())
+	session, err := svc.AuthenticateGoogle(GoogleIdentity{
+		Subject:       "sub-456",
+		Email:         "newuser@example.com",
+		EmailVerified: true,
+		Name:          "New User",
+	}, "", map[string]any{"source": "test"}, time.Hour, GoogleProvisioningPolicy{
+		Enabled:           true,
+		AllowedDomains:    []string{"example.com"},
+		RoleID:            "role_admin",
+		ScopeType:         "deployment",
+		DefaultLocationID: "loc_hq",
+	})
+	if err != nil {
+		t.Fatalf("expected google auto provisioning to succeed: %v", err)
+	}
+	if session.AuthenticationMethod != "google" || session.CurrentLocationID != "loc_hq" {
+		t.Fatalf("unexpected provisioned session: %+v", session)
+	}
+	user, ok := svc.FindUserByUsername("newuser@example.com")
+	if !ok {
+		t.Fatal("expected auto provisioned user")
+	}
+	if user.AuthenticationSubject != "google:sub-456" || user.DefaultLocationID != "loc_hq" {
+		t.Fatalf("unexpected auto provisioned user: %+v", user)
+	}
+	foundBinding := false
+	for _, binding := range svc.Bindings() {
+		if binding.UserID == user.ID && binding.RoleID == "role_admin" {
+			foundBinding = true
+			break
+		}
+	}
+	if !foundBinding {
+		t.Fatal("expected role binding for auto provisioned user")
+	}
+}
+
+func TestAuthenticateGoogleAutoProvisionRejectsDisallowedDomain(t *testing.T) {
+	svc := NewService(organization.NewService())
+	_, err := svc.AuthenticateGoogle(GoogleIdentity{
+		Subject:       "sub-789",
+		Email:         "newuser@blocked.example",
+		EmailVerified: true,
+		Name:          "Blocked User",
+	}, "", nil, time.Hour, GoogleProvisioningPolicy{
+		Enabled:        true,
+		AllowedDomains: []string{"example.com"},
+		RoleID:         "role_admin",
+		ScopeType:      "deployment",
+	})
+	if err == nil {
+		t.Fatal("expected disallowed domain to fail auto provisioning")
+	}
+}
+
 func TestAuthenticatePasswordLocksAfterRepeatedFailures(t *testing.T) {
 	svc := NewService(organization.NewService())
 	for range 5 {

@@ -179,6 +179,9 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	healthTracker.SetBootstrapped(true)
+	if report := configSvc.ValidateAll("", ""); !report.Valid {
+		return nil, fmt.Errorf("configuration validation failed: %v", report.Issues)
+	}
 	if err := policySvc.ValidateConfiguredModules(); err != nil {
 		return nil, err
 	}

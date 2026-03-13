@@ -1,0 +1,18 @@
+ALTER TABLE workflow_tasks
+    ADD COLUMN IF NOT EXISTS assignment_mode TEXT NULL,
+    ADD COLUMN IF NOT EXISTS assignee_user_id TEXT NULL,
+    ADD COLUMN IF NOT EXISTS assignee_role_key TEXT NULL,
+    ADD COLUMN IF NOT EXISTS candidate_role_keys_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS created_by TEXT NULL,
+    ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ NULL,
+    ADD COLUMN IF NOT EXISTS escalate_at TIMESTAMPTZ NULL,
+    ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE workflow_approvals
+    ADD COLUMN IF NOT EXISTS stage_key TEXT NULL,
+    ADD COLUMN IF NOT EXISTS requested_by TEXT NULL,
+    ADD COLUMN IF NOT EXISTS resolved_by TEXT NULL,
+    ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ NULL,
+    ADD COLUMN IF NOT EXISTS candidate_role_keys_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ NULL,
+    ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;

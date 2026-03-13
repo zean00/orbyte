@@ -29,6 +29,11 @@ type regoUpdateRequest struct {
 	Source  string `json:"source"`
 }
 
+type authSettingsResponse struct {
+	Definition config.Definition     `json:"definition"`
+	Entry      config.EffectiveValue `json:"entry"`
+}
+
 func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service) {
 	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
@@ -45,7 +50,16 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 		respondJSON(w, http.StatusOK, map[string]any{
 			"organization": org.Root(),
 			"locations":    org.Locations(),
+			"roles":        ident.Roles(),
 		})
+	})
+
+	mux.HandleFunc("GET /admin/api/config/validate", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		report := cfg.ValidateAll(strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")))
+		respondJSON(w, http.StatusOK, report)
 	})
 
 	mux.HandleFunc("GET /admin/api/modules", func(w http.ResponseWriter, r *http.Request) {
@@ -422,6 +436,49 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("GET /admin/api/auth/settings", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		def, ok := cfg.Definition("identity.auth")
+		if !ok {
+			respondError(w, shared.NotFound("authentication configuration definition not found"))
+			return
+		}
+		orgID := strings.TrimSpace(r.URL.Query().Get("organization_id"))
+		locationID := strings.TrimSpace(r.URL.Query().Get("location_id"))
+		value, ok := cfg.Resolve("identity.auth", orgID, locationID)
+		if !ok {
+			respondError(w, shared.NotFound("authentication configuration not found"))
+			return
+		}
+		value.Value = redactValue(def, value.Value)
+		respondJSON(w, http.StatusOK, authSettingsResponse{Definition: def, Entry: value})
+	})
+
+	mux.HandleFunc("PUT /admin/api/auth/settings", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		def, ok := cfg.Definition("identity.auth")
+		if !ok {
+			respondError(w, shared.NotFound("authentication configuration definition not found"))
+			return
+		}
+		var req configUpdateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid request body"))
+			return
+		}
+		entry, err := saveConfigEntry(cfg, modules, auditSvc, def, req, principalActorID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, authSettingsResponse{Definition: def, Entry: entry})
+	})
+
 	mux.HandleFunc("PUT /admin/api/config/entries/", func(w http.ResponseWriter, r *http.Request) {
 		key, ok := adminConfigKeyPath(r.URL.Path)
 		if !ok {
@@ -446,47 +503,11 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			respondError(w, shared.Validation("invalid request body"))
 			return
 		}
-		entry := config.Entry{
-			Key:         key,
-			ModuleKey:   def.ModuleKey,
-			Category:    def.Category,
-			Scope:       strings.TrimSpace(req.Scope),
-			ScopeID:     strings.TrimSpace(req.ScopeID),
-			Value:       req.Value,
-			UpdatedAt:   time.Now().UTC(),
-			UpdatedBy:   principalActorID(p),
-			Description: def.Description,
-		}
-		if entry.Scope == "" {
-			entry.Scope = "deployment"
-		}
-		if err := cfg.Save(entry); err != nil {
+		entry, err := saveConfigEntry(cfg, modules, auditSvc, def, req, principalActorID(p))
+		if err != nil {
 			respondError(w, err)
-			recordAudit(auditSvc, audit.Event{
-				ID:            "audit:config:reject:" + key + ":" + time.Now().UTC().Format("20060102150405.000000000"),
-				Action:        "configuration.reject",
-				TargetType:    "configuration",
-				TargetID:      key,
-				ActorID:       principalActorID(p),
-				OccurredAt:    time.Now().UTC(),
-				CorrelationID: "configuration:reject:" + key,
-			})
 			return
 		}
-		recordAudit(auditSvc, audit.Event{
-			ID:            "audit:config:update:" + key + ":" + time.Now().UTC().Format("20060102150405.000000000"),
-			Action:        "configuration.update",
-			TargetType:    "configuration",
-			TargetID:      key,
-			ActorID:       principalActorID(p),
-			OccurredAt:    time.Now().UTC(),
-			CorrelationID: "configuration:update:" + key,
-			Metadata: map[string]any{
-				"scope":    entry.Scope,
-				"scope_id": entry.ScopeID,
-			},
-		})
-		entry.Value = redactValue(def, entry.Value)
 		respondJSON(w, http.StatusOK, entry)
 	})
 }
@@ -569,6 +590,111 @@ func redactValue(def config.Definition, value map[string]any) map[string]any {
 	return redacted
 }
 
+func preserveSensitiveValues(def config.Definition, incoming, existing map[string]any) map[string]any {
+	preserved := map[string]any{}
+	for key, value := range incoming {
+		preserved[key] = value
+	}
+	for _, field := range def.Fields {
+		if !field.Sensitive {
+			continue
+		}
+		current, ok := preserved[field.Key]
+		if !ok {
+			continue
+		}
+		text, ok := current.(string)
+		if !ok || text != "[redacted]" {
+			continue
+		}
+		if existingValue, ok := existing[field.Key]; ok {
+			preserved[field.Key] = existingValue
+		} else {
+			preserved[field.Key] = ""
+		}
+	}
+	return preserved
+}
+
+func saveConfigEntry(cfg *config.Service, modules *module.Service, auditSvc *audit.Service, def config.Definition, req configUpdateRequest, actorID string) (config.EffectiveValue, error) {
+	scope := strings.TrimSpace(req.Scope)
+	scopeID := strings.TrimSpace(req.ScopeID)
+	if scope == "" {
+		scope = "deployment"
+	}
+	if detail, ok := modules.Get(def.ModuleKey); ok && !detail.Installed.Enabled {
+		return config.EffectiveValue{}, shared.Conflict("module is disabled")
+	}
+	var existing map[string]any
+	if current, ok := cfg.Resolve(def.Key, scopeIDIfOrganization(scope, scopeID), scopeIDIfLocation(scope, scopeID)); ok {
+		existing = current.Value
+	}
+	entry := config.Entry{
+		Key:         def.Key,
+		ModuleKey:   def.ModuleKey,
+		Category:    def.Category,
+		Scope:       scope,
+		ScopeID:     scopeID,
+		Value:       preserveSensitiveValues(def, req.Value, existing),
+		UpdatedAt:   time.Now().UTC(),
+		UpdatedBy:   actorID,
+		Description: def.Description,
+	}
+	if err := cfg.Save(entry); err != nil {
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:config:reject:" + def.Key + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "configuration.reject",
+			TargetType:    "configuration",
+			TargetID:      def.Key,
+			ActorID:       actorID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: "configuration:reject:" + def.Key,
+		})
+		return config.EffectiveValue{}, err
+	}
+	recordAudit(auditSvc, audit.Event{
+		ID:            "audit:config:update:" + def.Key + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+		Action:        "configuration.update",
+		TargetType:    "configuration",
+		TargetID:      def.Key,
+		ActorID:       actorID,
+		OccurredAt:    time.Now().UTC(),
+		CorrelationID: "configuration:update:" + def.Key,
+		Metadata: map[string]any{
+			"scope":    entry.Scope,
+			"scope_id": entry.ScopeID,
+		},
+	})
+	orgID := ""
+	locationID := ""
+	if scope == "organization" {
+		orgID = scopeID
+	}
+	if scope == "location" {
+		locationID = scopeID
+	}
+	effective, ok := cfg.Resolve(def.Key, orgID, locationID)
+	if !ok {
+		return config.EffectiveValue{}, shared.NotFound("configuration entry not found")
+	}
+	effective.Value = redactValue(def, effective.Value)
+	return effective, nil
+}
+
+func scopeIDIfOrganization(scope, scopeID string) string {
+	if scope == "organization" {
+		return scopeID
+	}
+	return ""
+}
+
+func scopeIDIfLocation(scope, scopeID string) string {
+	if scope == "location" {
+		return scopeID
+	}
+	return ""
+}
+
 const adminConsoleHTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -609,6 +735,55 @@ const adminConsoleHTML = `<!doctype html>
         <div id="modules"></div>
       </section>
       <section class="card">
+        <h2>Authentication Settings</h2>
+        <div class="row">
+          <label class="field"><span>Password Login</span><select id="auth-password-enabled"><option value="true">enabled</option><option value="false">disabled</option></select></label>
+          <label class="field"><span>Google Login</span><select id="auth-google-enabled"><option value="true">enabled</option><option value="false">disabled</option></select></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Login Title</span><input id="auth-login-title"></label>
+          <label class="field"><span>Google Button Label</span><input id="auth-google-button-label"></label>
+        </div>
+        <label class="field"><span>Login Subtitle</span><input id="auth-login-subtitle"></label>
+        <div class="row">
+          <label class="field"><span>Google Client ID</span><input id="auth-google-client-id"></label>
+          <label class="field"><span>Google Client Secret</span><input id="auth-google-client-secret" placeholder="[redacted]"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Google Redirect URL</span><input id="auth-google-redirect-url"></label>
+          <label class="field"><span>Google Hosted Domain</span><input id="auth-google-hosted-domain"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Google Auth URL</span><input id="auth-google-auth-url"></label>
+          <label class="field"><span>Google Token URL</span><input id="auth-google-token-url"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Google JWKS URL</span><input id="auth-google-jwks-url"></label>
+          <label class="field"><span>Google Issuer</span><input id="auth-google-issuer"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Google Timeout Seconds</span><input id="auth-google-timeout-seconds" type="number"></label>
+          <label class="field"><span>Provision New Users</span><select id="auth-google-auto-provision-enabled"><option value="true">enabled</option><option value="false">disabled</option></select></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Provision Role</span><select id="auth-google-auto-provision-role-id"></select></label>
+          <label class="field"><span>Provision Default Location</span><select id="auth-google-auto-provision-default-location-id"></select></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Provision Scope Type</span><select id="auth-google-auto-provision-scope-type"><option value="deployment">deployment</option><option value="organization">organization</option><option value="location">location</option></select></label>
+          <label class="field"><span>Provision Scope ID</span><select id="auth-google-auto-provision-scope-id"></select></label>
+        </div>
+        <label class="field"><span>Provision Allowed Domains</span><input id="auth-google-auto-provision-allowed-domains" placeholder="example.com, example.org"></label>
+        <div class="actions">
+          <button id="load-auth-settings" class="secondary">Load Auth Settings</button>
+          <button id="save-auth-settings">Save Auth Settings</button>
+        </div>
+        <p id="auth-settings-status" class="muted"></p>
+        <pre id="auth-settings-validation"></pre>
+      </section>
+    </div>
+    <div class="grid">
+      <section class="card">
         <h2>Config Editor</h2>
         <div class="row">
           <div class="field"><label>Config Key</label><select id="config-key"></select></div>
@@ -646,6 +821,7 @@ const adminConsoleHTML = `<!doctype html>
     </section>
   </main>
   <script>
+    const adminState = { bootstrap: null };
     async function getJSON(url, options) {
       const resp = await fetch(url, Object.assign({credentials:'include'}, options || {}));
       if (!resp.ok) {
@@ -655,21 +831,178 @@ const adminConsoleHTML = `<!doctype html>
       return resp.json();
     }
     async function boot() {
-      const [bootstrap, modules, definitions, roleTemplates, policyHooks, observability] = await Promise.all([
+      const [bootstrap, modules, definitions, roleTemplates, policyHooks, observability, authSettings] = await Promise.all([
         getJSON('/admin/api/bootstrap'),
         getJSON('/admin/api/modules'),
         getJSON('/admin/api/config/definitions'),
         getJSON('/admin/api/security/role-templates'),
         getJSON('/admin/api/security/policy-hooks'),
-        getJSON('/admin/api/observability/contracts')
+        getJSON('/admin/api/observability/contracts'),
+        getJSON('/admin/api/auth/settings')
       ]);
+      adminState.bootstrap = bootstrap;
       document.getElementById('organization-id').innerHTML = '<option value="">default</option><option value="' + bootstrap.organization.id + '">' + bootstrap.organization.name + '</option>';
       document.getElementById('location-id').innerHTML = '<option value="">default</option>' + bootstrap.locations.map(loc => '<option value="' + loc.id + '">' + loc.name + '</option>').join('');
       renderModules(modules.items);
       renderDefinitions(definitions.items);
+      renderAuthSettings(authSettings.entry.value);
       document.getElementById('role-templates').textContent = JSON.stringify(roleTemplates.items, null, 2);
       document.getElementById('policy-hooks').textContent = JSON.stringify(policyHooks.items, null, 2);
       document.getElementById('observability-contracts').textContent = JSON.stringify(observability, null, 2);
+    }
+    function boolValue(id) {
+      return document.getElementById(id).value === 'true';
+    }
+    function csvValue(id) {
+      return (document.getElementById(id).value || '').split(',').map(item => item.trim()).filter(Boolean);
+    }
+    function selectedScopeID(scope) {
+      if (scope === 'deployment') return '';
+      if (scope === 'organization') return document.getElementById('organization-id').value;
+      return document.getElementById('location-id').value;
+    }
+    function renderProvisionScopeOptions(scopeType, selectedValue) {
+      const target = document.getElementById('auth-google-auto-provision-scope-id');
+      if (scopeType === 'deployment') {
+        target.innerHTML = '<option value="">Deployment default</option>';
+        target.value = '';
+        target.disabled = true;
+        return;
+      }
+      if (scopeType === 'organization') {
+        const org = adminState.bootstrap && adminState.bootstrap.organization;
+        target.innerHTML = '<option value="">Select organization</option>' + (org ? '<option value="' + org.id + '">' + org.name + ' (' + org.id + ')</option>' : '');
+        target.disabled = false;
+        target.value = selectedValue || '';
+        return;
+      }
+      const locations = (adminState.bootstrap && adminState.bootstrap.locations) || [];
+      target.innerHTML = '<option value="">Select location</option>' + locations.map(loc => '<option value="' + loc.id + '">' + loc.name + ' (' + loc.id + ')</option>').join('');
+      target.disabled = false;
+      target.value = selectedValue || '';
+    }
+    function setDisabled(ids, disabled) {
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+      });
+    }
+    function syncAuthSettingsState() {
+      const googleEnabled = boolValue('auth-google-enabled');
+      const autoProvisionEnabled = googleEnabled && boolValue('auth-google-auto-provision-enabled');
+      setDisabled([
+        'auth-google-button-label',
+        'auth-google-client-id',
+        'auth-google-client-secret',
+        'auth-google-redirect-url',
+        'auth-google-hosted-domain',
+        'auth-google-auth-url',
+        'auth-google-token-url',
+        'auth-google-jwks-url',
+        'auth-google-issuer',
+        'auth-google-timeout-seconds',
+        'auth-google-auto-provision-enabled'
+      ], !googleEnabled);
+      setDisabled([
+        'auth-google-auto-provision-role-id',
+        'auth-google-auto-provision-default-location-id',
+        'auth-google-auto-provision-scope-type',
+        'auth-google-auto-provision-allowed-domains'
+      ], !autoProvisionEnabled);
+      if (!autoProvisionEnabled) {
+        document.getElementById('auth-google-auto-provision-scope-id').disabled = true;
+      } else {
+        renderProvisionScopeOptions(document.getElementById('auth-google-auto-provision-scope-type').value, document.getElementById('auth-google-auto-provision-scope-id').value);
+      }
+    }
+    async function loadAuthSettingsValidation() {
+      const orgID = document.getElementById('organization-id').value;
+      const locationID = document.getElementById('location-id').value;
+      const payload = await getJSON('/admin/api/config/validate?organization_id=' + encodeURIComponent(orgID) + '&location_id=' + encodeURIComponent(locationID));
+      const issues = (payload.issues || []).filter((issue) => issue.key === 'identity.auth');
+      document.getElementById('auth-settings-validation').textContent = issues.length
+        ? JSON.stringify(issues, null, 2)
+        : 'No authentication validation issues.';
+    }
+    function renderAuthSettings(value) {
+      value = value || {};
+      const roles = (adminState.bootstrap && adminState.bootstrap.roles) || [];
+      const locations = (adminState.bootstrap && adminState.bootstrap.locations) || [];
+      document.getElementById('auth-google-auto-provision-role-id').innerHTML = '<option value="">Select role</option>' + roles.map(role => '<option value="' + role.id + '">' + role.name + ' (' + role.id + ')</option>').join('');
+      document.getElementById('auth-google-auto-provision-default-location-id').innerHTML = '<option value="">Default location</option>' + locations.map(loc => '<option value="' + loc.id + '">' + loc.name + ' (' + loc.id + ')</option>').join('');
+      document.getElementById('auth-password-enabled').value = String(value.password_enabled !== false);
+      document.getElementById('auth-google-enabled').value = String(!!value.google_enabled);
+      document.getElementById('auth-login-title').value = value.login_title || '';
+      document.getElementById('auth-login-subtitle').value = value.login_subtitle || '';
+      document.getElementById('auth-google-button-label').value = value.google_button_label || '';
+      document.getElementById('auth-google-client-id').value = value.google_client_id || '';
+      document.getElementById('auth-google-client-secret').value = value.google_client_secret || '';
+      document.getElementById('auth-google-redirect-url').value = value.google_redirect_url || '';
+      document.getElementById('auth-google-hosted-domain').value = value.google_hosted_domain || '';
+      document.getElementById('auth-google-auth-url').value = value.google_auth_url || '';
+      document.getElementById('auth-google-token-url').value = value.google_token_url || '';
+      document.getElementById('auth-google-jwks-url').value = value.google_jwks_url || '';
+      document.getElementById('auth-google-issuer').value = value.google_issuer || '';
+      document.getElementById('auth-google-timeout-seconds').value = value.google_timeout_seconds || 5;
+      document.getElementById('auth-google-auto-provision-enabled').value = String(!!value.google_auto_provision_enabled);
+      document.getElementById('auth-google-auto-provision-role-id').value = value.google_auto_provision_role_id || '';
+      document.getElementById('auth-google-auto-provision-default-location-id').value = value.google_auto_provision_default_location_id || '';
+      document.getElementById('auth-google-auto-provision-scope-type').value = value.google_auto_provision_scope_type || 'deployment';
+      renderProvisionScopeOptions(value.google_auto_provision_scope_type || 'deployment', value.google_auto_provision_scope_id || '');
+      document.getElementById('auth-google-auto-provision-allowed-domains').value = (value.google_auto_provision_allowed_domains || []).join(', ');
+      document.getElementById('load-auth-settings').onclick = loadAuthSettings;
+      document.getElementById('save-auth-settings').onclick = saveAuthSettings;
+      document.getElementById('auth-google-enabled').onchange = syncAuthSettingsState;
+      document.getElementById('auth-google-auto-provision-enabled').onchange = syncAuthSettingsState;
+      document.getElementById('auth-google-auto-provision-scope-type').onchange = () => {
+        renderProvisionScopeOptions(document.getElementById('auth-google-auto-provision-scope-type').value, '');
+        syncAuthSettingsState();
+      };
+      syncAuthSettingsState();
+      void loadAuthSettingsValidation();
+    }
+    async function loadAuthSettings() {
+      const orgID = document.getElementById('organization-id').value;
+      const locationID = document.getElementById('location-id').value;
+      const payload = await getJSON('/admin/api/auth/settings?organization_id=' + encodeURIComponent(orgID) + '&location_id=' + encodeURIComponent(locationID));
+      renderAuthSettings(payload.entry.value);
+      document.getElementById('auth-settings-status').textContent = 'Loaded authentication settings from ' + payload.entry.source_scope + (payload.entry.source_scope_id ? ':' + payload.entry.source_scope_id : '');
+      await loadAuthSettingsValidation();
+    }
+    async function saveAuthSettings() {
+      const scope = document.getElementById('config-scope').value;
+      const scopeID = selectedScopeID(scope);
+      const value = {
+        password_enabled: boolValue('auth-password-enabled'),
+        login_title: document.getElementById('auth-login-title').value,
+        login_subtitle: document.getElementById('auth-login-subtitle').value,
+        google_button_label: document.getElementById('auth-google-button-label').value,
+        google_enabled: boolValue('auth-google-enabled'),
+        google_auto_provision_enabled: boolValue('auth-google-auto-provision-enabled'),
+        google_auto_provision_allowed_domains: csvValue('auth-google-auto-provision-allowed-domains'),
+        google_auto_provision_role_id: document.getElementById('auth-google-auto-provision-role-id').value,
+        google_auto_provision_scope_type: document.getElementById('auth-google-auto-provision-scope-type').value,
+        google_auto_provision_scope_id: document.getElementById('auth-google-auto-provision-scope-id').value,
+        google_auto_provision_default_location_id: document.getElementById('auth-google-auto-provision-default-location-id').value,
+        google_client_id: document.getElementById('auth-google-client-id').value,
+        google_client_secret: document.getElementById('auth-google-client-secret').value,
+        google_redirect_url: document.getElementById('auth-google-redirect-url').value,
+        google_auth_url: document.getElementById('auth-google-auth-url').value,
+        google_token_url: document.getElementById('auth-google-token-url').value,
+        google_jwks_url: document.getElementById('auth-google-jwks-url').value,
+        google_issuer: document.getElementById('auth-google-issuer').value,
+        google_hosted_domain: document.getElementById('auth-google-hosted-domain').value,
+        google_timeout_seconds: parseInt(document.getElementById('auth-google-timeout-seconds').value || '5', 10)
+      };
+      const csrf = getCookie('orbyte_csrf');
+      const payload = await getJSON('/admin/api/auth/settings', {
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+        body: JSON.stringify({scope: scope, scope_id: scopeID, value: value})
+      });
+      renderAuthSettings(payload.entry.value);
+      document.getElementById('auth-settings-status').textContent = 'Saved authentication settings at ' + scope + (scopeID ? ':' + scopeID : '');
+      await loadAuthSettingsValidation();
     }
     function renderModules(items) {
       document.getElementById('modules').innerHTML = '<table><thead><tr><th>Module</th><th>Status</th><th>Dependencies</th><th></th></tr></thead><tbody>' + items.map(item => {

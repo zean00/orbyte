@@ -123,6 +123,24 @@ func (s *Service) Get(id string) (Job, bool) {
 	return s.repo.Get(id)
 }
 
+func (s *Service) Requeue(id string) (Job, error) {
+	job, ok := s.Get(id)
+	if !ok {
+		return Job{}, fmt.Errorf("job not found")
+	}
+	switch job.Status {
+	case StatusRunning:
+		return Job{}, fmt.Errorf("running jobs cannot be requeued")
+	case StatusQueued:
+		return job, nil
+	}
+	if err := s.repo.Requeue(id, time.Now().UTC()); err != nil {
+		return Job{}, err
+	}
+	job, _ = s.Get(id)
+	return job, nil
+}
+
 func (s *Service) List() []Job {
 	if s == nil || s.repo == nil {
 		return nil

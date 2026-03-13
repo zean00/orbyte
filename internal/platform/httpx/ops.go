@@ -54,6 +54,50 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		respondJSON(w, http.StatusOK, map[string]any{"dispatched": count})
 	})
 
+	mux.HandleFunc("POST /ops/outbox/", func(w http.ResponseWriter, r *http.Request) {
+		outboxID, action, ok := opsOutboxActionPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("outbox action not found"))
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "outbox.dispatch", "", "outbox.dispatch"); !ok {
+			return
+		}
+		switch action {
+		case "retry":
+			item, err := eventingSvc.RetryOutbox(outboxID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+		default:
+			respondError(w, shared.NotFound("outbox action not found"))
+		}
+	})
+
+	mux.HandleFunc("POST /ops/outbox/deliveries/", func(w http.ResponseWriter, r *http.Request) {
+		deliveryID, action, ok := opsOutboxDeliveryActionPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("outbox delivery action not found"))
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "outbox.dispatch", "", "outbox.dispatch"); !ok {
+			return
+		}
+		switch action {
+		case "retry":
+			item, err := eventingSvc.RetryDelivery(deliveryID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+		default:
+			respondError(w, shared.NotFound("outbox delivery action not found"))
+		}
+	})
+
 	mux.HandleFunc("GET /ops/domain-events", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "event.read", "", "event.read"); !ok {
 			return
@@ -87,6 +131,32 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			"deliveries": eventingSvc.ListDeliveries(),
 		}
 		respondJSON(w, http.StatusOK, payload)
+	})
+
+	mux.HandleFunc("POST /ops/jobs/", func(w http.ResponseWriter, r *http.Request) {
+		jobID, action, ok := opsJobActionPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("job action not found"))
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		if jobSvc == nil {
+			respondError(w, shared.Conflict("jobs are not configured"))
+			return
+		}
+		switch action {
+		case "requeue":
+			item, err := jobSvc.Requeue(jobID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+		default:
+			respondError(w, shared.NotFound("job action not found"))
+		}
 	})
 
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
@@ -553,6 +623,33 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListApprovals()})
 	})
+}
+
+func opsOutboxActionPath(path string) (string, string, bool) {
+	trimmed := strings.TrimPrefix(path, "/ops/outbox/")
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[0] == "deliveries" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func opsOutboxDeliveryActionPath(path string) (string, string, bool) {
+	trimmed := strings.TrimPrefix(path, "/ops/outbox/deliveries/")
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func opsJobActionPath(path string) (string, string, bool) {
+	trimmed := strings.TrimPrefix(path, "/ops/jobs/")
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 func renderDBStatsMetrics(snapshot runtimehealth.Snapshot) string {

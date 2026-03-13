@@ -45,6 +45,12 @@ func TestCreateSideEffects(t *testing.T) {
 	if len(svc.ListApprovals()) != 1 {
 		t.Fatal("expected workflow approval")
 	}
+	if svc.ListTasks()[0].AssigneeRoleKey != "approver" {
+		t.Fatalf("expected default assignee role, got %+v", svc.ListTasks()[0])
+	}
+	if svc.ListApprovals()[0].StageKey != "review" {
+		t.Fatalf("expected approval stage metadata, got %+v", svc.ListApprovals()[0])
+	}
 	if err := svc.ResolveApproval("doc1"); err != nil {
 		t.Fatalf("resolve approval failed: %v", err)
 	}

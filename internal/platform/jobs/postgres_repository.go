@@ -154,6 +154,15 @@ func (r *PostgresRepository) MarkFailed(id string, status string, lastError stri
 	return err
 }
 
+func (r *PostgresRepository) Requeue(id string, queuedAt time.Time) error {
+	const query = `
+		UPDATE job_records
+		SET status = $1, last_error = NULL, ended_at = NULL, lease_expires_at = NULL
+		WHERE job_id = $2`
+	_, err := r.db.ExecContext(context.Background(), query, StatusQueued, id)
+	return err
+}
+
 type jobScanner interface {
 	Scan(dest ...any) error
 }

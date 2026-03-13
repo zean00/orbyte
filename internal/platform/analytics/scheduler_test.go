@@ -87,6 +87,8 @@ func (failingSchedulerJobRepo) MarkSucceeded(string, map[string]any, time.Time) 
 
 func (failingSchedulerJobRepo) MarkFailed(string, string, string, time.Time) error { return nil }
 
+func (failingSchedulerJobRepo) Requeue(string, time.Time) error { return nil }
+
 func TestSchedulerUsesSharedJobDedupAcrossInstances(t *testing.T) {
 	repo := NewMemoryRepository()
 	jobRepo := jobs.NewMemoryRepository()

@@ -113,7 +113,7 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 		Status:    "pending",
 		CreatedAt: now,
 	}
-	workflowMutation := a.workflows.PlanCreateSideEffects(transition, "document", record.Header.ID, now)
+	workflowMutation := a.workflows.PlanCreateSideEffects(transition, "document", record.Header.ID, actorID, now)
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
@@ -328,7 +328,7 @@ func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion in
 		Status:    "pending",
 		CreatedAt: now,
 	}
-	workflowMutation := a.workflows.PlanResolveArtifacts(record.Header.ID, "approved", "completed")
+	workflowMutation := a.workflows.PlanResolveArtifacts(record.Header.ID, "approved", "completed", actorID, now)
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
@@ -354,18 +354,18 @@ func (a *DocumentActions) persistDocument(previousVersion int, record document.R
 }
 
 func (a *DocumentActions) Reject(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "reject", "document.reject", a.workflows.PlanResolveArtifacts(documentID, "rejected", "cancelled"))
+	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "reject", "document.reject")
 }
 
 func (a *DocumentActions) Reopen(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "reopen", "document.reopened", workflow.Mutation{})
+	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "reopen", "document.reopened")
 }
 
 func (a *DocumentActions) Cancel(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "cancel", "document.cancelled", a.workflows.PlanResolveArtifacts(documentID, "cancelled", "cancelled"))
+	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "cancel", "document.cancelled")
 }
 
-func (a *DocumentActions) transitionDocument(documentID, actorID string, expectedVersion int, expectedETag, action, eventType string, workflowMutation workflow.Mutation) (document.Record, error) {
+func (a *DocumentActions) transitionDocument(documentID, actorID string, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
 	record, err := a.documents.Get(documentID)
 	if err != nil {
 		return document.Record{}, err
@@ -389,6 +389,10 @@ func (a *DocumentActions) transitionDocument(documentID, actorID string, expecte
 	}
 	previousVersion := record.Header.Version
 	now := time.Now().UTC()
+	workflowMutation := workflow.Mutation{}
+	if action == "reject" || action == "cancel" {
+		workflowMutation = a.workflows.PlanResolveArtifacts(documentID, transition.ToState, "cancelled", actorID, now)
+	}
 	record.Header.Status = transition.ToState
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
@@ -426,6 +430,18 @@ func (a *DocumentActions) transitionDocument(documentID, actorID string, expecte
 }
 
 func (a *DocumentActions) ensureTransitionAllowed(record document.Record, actorID, action string) error {
+	if a.workflows != nil {
+		def, err := a.documents.Definition(record.Header.Type)
+		if err == nil && def.WorkflowKey != "" {
+			if transition, err := a.workflows.Execute(def.WorkflowKey, record.Header.Status, action); err == nil && transition.RequiresDifferentActor {
+				for _, approval := range a.workflows.ListApprovals() {
+					if approval.TargetID == record.Header.ID && approval.Status == "pending" && approval.RequestedBy != "" && approval.RequestedBy == actorID {
+						return shared.Forbidden("workflow transition requires a different actor than the requester")
+					}
+				}
+			}
+		}
+	}
 	if a.policy == nil {
 		return nil
 	}

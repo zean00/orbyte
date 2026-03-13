@@ -1,9 +1,14 @@
 package httpx
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +25,29 @@ type loginRequest struct {
 	Password   string `json:"password"`
 	LocationID string `json:"location_id"`
 }
+
+type googleLoginRequest struct {
+	IDToken    string `json:"id_token"`
+	LocationID string `json:"location_id"`
+}
+
+type googleTokenResponse struct {
+	IDToken string `json:"id_token"`
+}
+
+type authOptionsResponse struct {
+	PasswordEnabled   bool   `json:"password_enabled"`
+	GoogleEnabled     bool   `json:"google_enabled"`
+	LoginTitle        string `json:"login_title"`
+	LoginSubtitle     string `json:"login_subtitle"`
+	GoogleButtonLabel string `json:"google_button_label"`
+}
+
+const (
+	googleOAuthStateCookieName = "orbyte_google_state"
+	googleOAuthNextCookieName  = "orbyte_google_next"
+	googleOAuthCookieTTL       = 10 * time.Minute
+)
 
 type changePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -44,9 +72,6 @@ type userStatusRequest struct {
 }
 
 func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, auditSvc *audit.Service) {
-	policy := cfg.AuthPolicy()
-	limiter := newLoginRateLimiter(ident, policy.LoginRateLimitAttempts, policy.LoginRateLimitWindow)
-
 	mux.HandleFunc("GET /users", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
 			return
@@ -113,7 +138,24 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("GET /auth/options", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
+		respondJSON(w, http.StatusOK, authOptionsResponse{
+			PasswordEnabled:   policy.PasswordEnabled,
+			GoogleEnabled:     policy.GoogleEnabled,
+			LoginTitle:        policy.LoginTitle,
+			LoginSubtitle:     policy.LoginSubtitle,
+			GoogleButtonLabel: policy.GoogleButtonLabel,
+		})
+	})
+
 	mux.HandleFunc("POST /auth/login", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
+		if !policy.PasswordEnabled {
+			respondError(w, shared.Forbidden("password authentication is disabled"))
+			return
+		}
+		limiter := newLoginRateLimiter(ident, policy.LoginRateLimitAttempts, policy.LoginRateLimitWindow)
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, shared.Validation("invalid login payload"))
@@ -193,7 +235,209 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		})
 	})
 
+	mux.HandleFunc("POST /auth/google", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
+		googleVerifier := googleVerifierForPolicy(policy)
+		var req googleLoginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid google login payload"))
+			return
+		}
+		verified, err := googleVerifier.VerifyIDToken(r.Context(), strings.TrimSpace(req.IDToken), identity.GoogleAuthSettings{
+			Enabled:      policy.GoogleEnabled,
+			ClientID:     policy.GoogleClientID,
+			Issuer:       policy.GoogleIssuer,
+			JWKSURL:      policy.GoogleJWKSURL,
+			HostedDomain: policy.GoogleHostedDomain,
+			Timeout:      policy.GoogleTimeout,
+		})
+		if err != nil {
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:auth:google:failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+				Action:        "auth.google.failed",
+				TargetType:    "session",
+				ActorID:       verified.Email,
+				OccurredAt:    time.Now().UTC(),
+				Metadata:      map[string]any{"reason": err.Error()},
+				CorrelationID: logging.CorrelationID(r.Context()),
+			})
+			respondError(w, err)
+			return
+		}
+		session, err := ident.AuthenticateGoogle(verified, strings.TrimSpace(req.LocationID), clientMetadataFromRequest(r), policy.SessionTTL, googleProvisioningPolicy(policy))
+		if err != nil {
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:auth:google:failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+				Action:        "auth.google.failed",
+				TargetType:    "session",
+				ActorID:       verified.Email,
+				OccurredAt:    time.Now().UTC(),
+				Metadata:      map[string]any{"email": verified.Email, "reason": err.Error()},
+				CorrelationID: logging.CorrelationID(r.Context()),
+			})
+			respondError(w, err)
+			return
+		}
+		tokenManager := identity.NewTokenManagerFromEnv()
+		token, err := tokenManager.IssueSessionToken(session)
+		if err != nil {
+			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
+			respondError(w, err)
+			return
+		}
+		csrfCookie, err := buildCSRFCookie(session.ID)
+		if err != nil {
+			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
+			respondError(w, err)
+			return
+		}
+		http.SetCookie(w, buildSessionCookie(token, session.ExpiresAt))
+		http.SetCookie(w, csrfCookie)
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:auth:google:" + session.ID,
+			Action:        "auth.google",
+			TargetType:    "session",
+			TargetID:      session.ID,
+			ActorID:       session.UserID,
+			OccurredAt:    time.Now().UTC(),
+			Metadata:      map[string]any{"authentication_method": session.AuthenticationMethod, "location_id": session.CurrentLocationID},
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"session": map[string]any{
+			"id":                  session.ID,
+			"user_id":             session.UserID,
+			"status":              session.Status,
+			"issued_at":           session.IssuedAt,
+			"expires_at":          session.ExpiresAt,
+			"last_seen_at":        session.LastSeenAt,
+			"current_location_id": session.CurrentLocationID,
+		}})
+	})
+
+	mux.HandleFunc("GET /auth/google/start", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
+		if err := validateGoogleOAuthPolicy(policy); err != nil {
+			respondError(w, err)
+			return
+		}
+		state, err := randomOAuthToken(32)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		nextPath := sanitizeRelativeRedirectPath(r.URL.Query().Get("next"))
+		expiresAt := time.Now().UTC().Add(googleOAuthCookieTTL)
+		http.SetCookie(w, buildGoogleOAuthCookie(googleOAuthStateCookieName, state, expiresAt))
+		http.SetCookie(w, buildGoogleOAuthCookie(googleOAuthNextCookieName, nextPath, expiresAt))
+		redirectURL, err := buildGoogleAuthorizationURL(policy, state)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+	})
+
+	mux.HandleFunc("GET /auth/google/callback", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
+		googleVerifier := googleVerifierForPolicy(policy)
+		fallbackPath := "/ui?auth_error=google_login_failed"
+		nextPath := sanitizeRelativeRedirectPath(cookieValue(r, googleOAuthNextCookieName))
+		if nextPath == "" {
+			nextPath = "/ui"
+		}
+		clearGoogleOAuthCookies(w)
+		if err := validateGoogleOAuthPolicy(policy); err != nil {
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		if strings.TrimSpace(r.URL.Query().Get("error")) != "" {
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		state := strings.TrimSpace(r.URL.Query().Get("state"))
+		code := strings.TrimSpace(r.URL.Query().Get("code"))
+		if state == "" || code == "" || state != cookieValue(r, googleOAuthStateCookieName) {
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		idToken, err := exchangeGoogleAuthorizationCode(r.Context(), policy, code)
+		if err != nil {
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:auth:google:callback_failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+				Action:        "auth.google.callback.failed",
+				TargetType:    "session",
+				OccurredAt:    time.Now().UTC(),
+				Metadata:      map[string]any{"reason": err.Error()},
+				CorrelationID: logging.CorrelationID(r.Context()),
+			})
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		verified, err := googleVerifier.VerifyIDToken(r.Context(), idToken, identity.GoogleAuthSettings{
+			Enabled:      policy.GoogleEnabled,
+			ClientID:     policy.GoogleClientID,
+			Issuer:       policy.GoogleIssuer,
+			JWKSURL:      policy.GoogleJWKSURL,
+			HostedDomain: policy.GoogleHostedDomain,
+			Timeout:      policy.GoogleTimeout,
+		})
+		if err != nil {
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:auth:google:callback_failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+				Action:        "auth.google.callback.failed",
+				TargetType:    "session",
+				ActorID:       verified.Email,
+				OccurredAt:    time.Now().UTC(),
+				Metadata:      map[string]any{"reason": err.Error()},
+				CorrelationID: logging.CorrelationID(r.Context()),
+			})
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		session, err := ident.AuthenticateGoogle(verified, "", clientMetadataFromRequest(r), policy.SessionTTL, googleProvisioningPolicy(policy))
+		if err != nil {
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:auth:google:callback_failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+				Action:        "auth.google.callback.failed",
+				TargetType:    "session",
+				ActorID:       verified.Email,
+				OccurredAt:    time.Now().UTC(),
+				Metadata:      map[string]any{"email": verified.Email, "reason": err.Error()},
+				CorrelationID: logging.CorrelationID(r.Context()),
+			})
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		tokenManager := identity.NewTokenManagerFromEnv()
+		token, err := tokenManager.IssueSessionToken(session)
+		if err != nil {
+			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		csrfCookie, err := buildCSRFCookie(session.ID)
+		if err != nil {
+			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
+		http.SetCookie(w, buildSessionCookie(token, session.ExpiresAt))
+		http.SetCookie(w, csrfCookie)
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:auth:google:callback:" + session.ID,
+			Action:        "auth.google.callback",
+			TargetType:    "session",
+			TargetID:      session.ID,
+			ActorID:       session.UserID,
+			OccurredAt:    time.Now().UTC(),
+			Metadata:      map[string]any{"authentication_method": session.AuthenticationMethod, "location_id": session.CurrentLocationID},
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		http.Redirect(w, r, nextPath, http.StatusFound)
+	})
+
 	mux.HandleFunc("POST /auth/password/change", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
 		if err := authError(r); err != nil {
 			respondError(w, err)
 			return
@@ -225,6 +469,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 	})
 
 	mux.HandleFunc("POST /auth/refresh", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
 		if err := authError(r); err != nil {
 			respondError(w, err)
 			return
@@ -303,6 +548,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 	})
 
 	mux.HandleFunc("POST /users", func(w http.ResponseWriter, r *http.Request) {
+		policy := cfg.AuthPolicy()
 		p, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users")
 		if !ok {
 			return
@@ -391,6 +637,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			http.NotFound(w, r)
 			return
 		}
+		policy := cfg.AuthPolicy()
 		p, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users")
 		if !ok {
 			return
@@ -433,6 +680,149 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		review, _ := ident.ReviewSession(sessionID)
 		respondJSON(w, http.StatusOK, map[string]any{"session": session, "review": review})
 	})
+}
+
+func validateGoogleOAuthPolicy(policy config.AuthPolicy) error {
+	if !policy.GoogleEnabled {
+		return shared.Forbidden("google authentication is not enabled")
+	}
+	if strings.TrimSpace(policy.GoogleClientID) == "" {
+		return shared.Validation("google client id is not configured")
+	}
+	if strings.TrimSpace(policy.GoogleClientSecret) == "" {
+		return shared.Validation("google client secret is not configured")
+	}
+	if strings.TrimSpace(policy.GoogleRedirectURL) == "" {
+		return shared.Validation("google redirect url is not configured")
+	}
+	if strings.TrimSpace(policy.GoogleAuthURL) == "" {
+		return shared.Validation("google auth url is not configured")
+	}
+	if strings.TrimSpace(policy.GoogleTokenURL) == "" {
+		return shared.Validation("google token url is not configured")
+	}
+	if strings.TrimSpace(policy.GoogleJWKSURL) == "" {
+		return shared.Validation("google jwks url is not configured")
+	}
+	return nil
+}
+
+func googleVerifierForPolicy(policy config.AuthPolicy) identity.GoogleVerifier {
+	return identity.OIDCGoogleVerifier{HTTPClient: &http.Client{Timeout: policy.GoogleTimeout}}
+}
+
+func googleProvisioningPolicy(policy config.AuthPolicy) identity.GoogleProvisioningPolicy {
+	return identity.GoogleProvisioningPolicy{
+		Enabled:           policy.GoogleAutoProvisionEnabled,
+		AllowedDomains:    policy.GoogleAutoProvisionAllowedDomains,
+		RoleID:            policy.GoogleAutoProvisionRoleID,
+		ScopeType:         policy.GoogleAutoProvisionScopeType,
+		ScopeID:           policy.GoogleAutoProvisionScopeID,
+		DefaultLocationID: policy.GoogleAutoProvisionDefaultLocationID,
+	}
+}
+
+func buildGoogleAuthorizationURL(policy config.AuthPolicy, state string) (string, error) {
+	authURL, err := url.Parse(policy.GoogleAuthURL)
+	if err != nil {
+		return "", shared.Validation("google auth url is invalid")
+	}
+	query := authURL.Query()
+	query.Set("client_id", policy.GoogleClientID)
+	query.Set("redirect_uri", policy.GoogleRedirectURL)
+	query.Set("response_type", "code")
+	query.Set("scope", "openid email profile")
+	query.Set("state", state)
+	query.Set("access_type", "offline")
+	query.Set("prompt", "select_account")
+	if strings.TrimSpace(policy.GoogleHostedDomain) != "" {
+		query.Set("hd", policy.GoogleHostedDomain)
+	}
+	authURL.RawQuery = query.Encode()
+	return authURL.String(), nil
+}
+
+func exchangeGoogleAuthorizationCode(ctx context.Context, policy config.AuthPolicy, code string) (string, error) {
+	form := url.Values{}
+	form.Set("code", code)
+	form.Set("client_id", policy.GoogleClientID)
+	form.Set("client_secret", policy.GoogleClientSecret)
+	form.Set("redirect_uri", policy.GoogleRedirectURL)
+	form.Set("grant_type", "authorization_code")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, policy.GoogleTokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	client := &http.Client{Timeout: policy.GoogleTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return "", shared.Unauthorized("google token exchange failed: " + strings.TrimSpace(string(body)))
+	}
+	var payload googleTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(payload.IDToken) == "" {
+		return "", shared.Unauthorized("google token exchange did not return an id token")
+	}
+	return payload.IDToken, nil
+}
+
+func randomOAuthToken(size int) (string, error) {
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func buildGoogleOAuthCookie(name, value string, expiresAt time.Time) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false,
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
+	}
+}
+
+func clearGoogleOAuthCookies(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: googleOAuthStateCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: googleOAuthNextCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
+}
+
+func cookieValue(r *http.Request, name string) string {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
+}
+
+func sanitizeRelativeRedirectPath(next string) string {
+	next = strings.TrimSpace(next)
+	if next == "" {
+		return "/ui"
+	}
+	parsed, err := url.Parse(next)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return "/ui"
+	}
+	return next
+}
+
+func redirectGoogleOAuthError(w http.ResponseWriter, r *http.Request, location string) {
+	clearGoogleOAuthCookies(w)
+	http.Redirect(w, r, location, http.StatusFound)
 }
 
 func buildSessionCookie(token string, expiresAt time.Time) *http.Cookie {

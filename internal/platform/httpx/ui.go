@@ -22,9 +22,6 @@ import (
 
 func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := requireInteractivePrincipal(w, r); !ok {
-			return
-		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(uiShellHTML))
 	})
@@ -738,11 +735,19 @@ const uiShellHTML = `<!doctype html>
     .meta { color:var(--muted); font-size:13px; }
     button { border:0; border-radius:999px; background:var(--accent); color:#fff; padding:10px 16px; cursor:pointer; font:inherit; }
     button.secondary { background:#e5ece8; color:var(--ink); }
+    button.google { background:#ffffff; color:var(--ink); border:1px solid var(--line); }
     button.warn { background:var(--warn); }
     .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
     pre { margin:0; white-space:pre-wrap; word-break:break-word; background:#f6f1e7; padding:14px; border-radius:12px; border:1px solid var(--line); }
     .kv { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
     .kv .card strong { display:block; font-size:24px; margin-top:4px; }
+    .login-shell { max-width:460px; margin:8vh auto 0; }
+    .login-shell .panel { background:rgba(255,253,248,.94); }
+    .field { display:grid; gap:8px; margin:0 0 14px; }
+    .field input { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:14px; font:inherit; background:#fffefa; }
+    .divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; margin:18px 0; }
+    .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--line); }
+    .hidden { display:none !important; }
     @media (max-width: 900px) {
       .shell { grid-template-columns:1fr; }
       .sidebar { border-right:0; border-bottom:1px solid var(--line); }
@@ -765,7 +770,7 @@ const uiShellHTML = `<!doctype html>
     </main>
   </div>
   <script>
-    const state = { bootstrap: null, route: null, bundles: {} };
+    const state = { bootstrap: null, route: null, bundles: {}, authOptions: null };
 
     async function api(path, options) {
       const response = await fetch(path, Object.assign({credentials: 'same-origin'}, options || {}));
@@ -797,6 +802,82 @@ const uiShellHTML = `<!doctype html>
 
     function setStatus(text) {
       document.getElementById('route-status').textContent = text;
+    }
+
+    function authErrorFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('auth_error') || '';
+    }
+
+    function loginTitle() {
+      return (state.authOptions && state.authOptions.login_title) || 'Platform Access';
+    }
+
+    function loginSubtitle() {
+      return (state.authOptions && state.authOptions.login_subtitle) || 'Sign in to continue.';
+    }
+
+    function googleButtonLabel() {
+      return (state.authOptions && state.authOptions.google_button_label) || 'Continue with Google';
+    }
+
+    function requestedUIRoute() {
+      return currentPath();
+    }
+
+    function requestedUIHref() {
+      const path = requestedUIRoute();
+      if (!path) return '/ui';
+      const params = currentParams().toString();
+      return '/ui#' + path + (params ? '?' + params : '');
+    }
+
+    function renderLogin(message) {
+      const root = document.getElementById('view-root');
+      const passwordEnabled = !state.authOptions || !!state.authOptions.password_enabled;
+      const googleEnabled = !!(state.authOptions && state.authOptions.google_enabled);
+      const statusMessage = message || (authErrorFromQuery() === 'google_login_failed' ? 'Google sign-in failed. Try again or use a local account.' : loginSubtitle());
+      document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(loginTitle()) + '</h2>';
+      setStatus(statusMessage);
+      document.getElementById('menu').innerHTML = '';
+      const passwordForm = passwordEnabled
+        ? '<form id="login-form"><label class="field"><span class="meta">Username</span><input id="login-username" name="username" autocomplete="username"></label><label class="field"><span class="meta">Password</span><input id="login-password" name="password" type="password" autocomplete="current-password"></label><div class="actions"><button type="submit">Sign in</button></div></form>'
+        : '';
+      const emptyState = !passwordEnabled && !googleEnabled
+        ? '<p class="status">No interactive sign-in method is enabled for this deployment.</p>'
+        : '';
+      const divider = passwordEnabled && googleEnabled ? '<div class="divider">or</div>' : '';
+      const googleAction = googleEnabled ? '<div class="actions"><button type="button" id="google-login" class="google">' + escapeHTML(googleButtonLabel()) + '</button></div>' : '';
+      root.innerHTML = '<section class="login-shell"><div class="panel"><h3>' + escapeHTML(loginTitle()) + '</h3><p class="status">' + escapeHTML(statusMessage) + '</p>' + passwordForm + divider + googleAction + emptyState + '</div></section>';
+      const form = document.getElementById('login-form');
+      if (form) {
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const username = document.getElementById('login-username').value.trim();
+          const password = document.getElementById('login-password').value;
+          try {
+            await api('/auth/login', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({username, password})
+            });
+            state.bootstrap = await api('/ui/bootstrap');
+            if (!window.location.hash && state.bootstrap.default_path) {
+              window.location.hash = '#' + state.bootstrap.default_path;
+            }
+            await renderRoute();
+          } catch (err) {
+            renderLogin(err.message);
+          }
+        });
+      }
+      const googleButton = document.getElementById('google-login');
+      if (googleButton) {
+        googleButton.addEventListener('click', () => {
+          const target = requestedUIHref();
+          window.location.assign('/auth/google/start?next=' + encodeURIComponent(target));
+        });
+      }
     }
 
     function renderMenus() {
@@ -1422,12 +1503,17 @@ const uiShellHTML = `<!doctype html>
 
     async function bootstrap() {
       try {
+        state.authOptions = await api('/auth/options');
         state.bootstrap = await api('/ui/bootstrap');
         if (!window.location.hash && state.bootstrap.default_path) {
           window.location.hash = '#' + state.bootstrap.default_path;
         }
         await renderRoute();
       } catch (err) {
+        if (err.message === 'authentication required' || err.message === 'session not found' || err.message === 'session not active' || err.message === 'session revoked' || err.message === 'session expired') {
+          renderLogin('');
+          return;
+        }
         document.getElementById('view-root').innerHTML = '<section class="panel"><h3>UI bootstrap failed</h3><p class="status">' + err.message + '</p></section>';
         setStatus('Failed to bootstrap module UI.');
       }

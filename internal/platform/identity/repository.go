@@ -19,6 +19,7 @@ type Repository interface {
 	SaveServicePrincipal(principal ServicePrincipal) error
 	FindUser(id string) (User, bool)
 	FindUserByUsername(username string) (User, bool)
+	FindUserByAuthenticationSubject(subject string) (User, bool)
 	FindCredentialByUserID(userID string) (Credential, bool)
 	FindSession(id string) (Session, bool)
 	FindServicePrincipal(id string) (ServicePrincipal, bool)

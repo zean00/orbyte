@@ -5,6 +5,7 @@ import "time"
 type User struct {
 	ID                string    `json:"id"`
 	Username          string    `json:"username"`
+	AuthenticationSubject string `json:"authentication_subject,omitempty"`
 	Status            string    `json:"status"`
 	DefaultLocationID string    `json:"default_location_id,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`

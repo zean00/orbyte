@@ -459,3 +459,5 @@ func (failingJobRepository) RenewLease(string, time.Time, time.Duration) error {
 func (failingJobRepository) MarkSucceeded(string, map[string]any, time.Time) error { return nil }
 
 func (failingJobRepository) MarkFailed(string, string, string, time.Time) error { return nil }
+
+func (failingJobRepository) Requeue(string, time.Time) error { return nil }

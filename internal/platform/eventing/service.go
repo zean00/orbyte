@@ -130,6 +130,52 @@ func (s *Service) ListDeadLetters() []DeadLetterRecord {
 	return s.repo.ListDeadLetters()
 }
 
+func (s *Service) RetryDelivery(deliveryID string) (OutboxDeliveryRecord, error) {
+	for _, item := range s.repo.ListDeliveries() {
+		if item.ID != deliveryID {
+			continue
+		}
+		if err := s.repo.MarkDeliveryFailed(item.ID, OutboxDeliveryRecord{Status: "pending", AttemptCount: item.AttemptCount, LastError: ""}); err != nil {
+			return OutboxDeliveryRecord{}, err
+		}
+		if err := s.refreshOutboxStatus(item.OutboxID); err != nil {
+			return OutboxDeliveryRecord{}, err
+		}
+		for _, updated := range s.repo.ListDeliveries() {
+			if updated.ID == deliveryID {
+				return updated, nil
+			}
+		}
+		return item, nil
+	}
+	return OutboxDeliveryRecord{}, fmt.Errorf("outbox delivery not found")
+}
+
+func (s *Service) RetryOutbox(outboxID string) (OutboxRecord, error) {
+	found := false
+	for _, delivery := range s.repo.ListDeliveriesByOutbox(outboxID) {
+		found = true
+		if delivery.Status == "dispatched" {
+			continue
+		}
+		if err := s.repo.MarkDeliveryFailed(delivery.ID, OutboxDeliveryRecord{Status: "pending", AttemptCount: delivery.AttemptCount, LastError: ""}); err != nil {
+			return OutboxRecord{}, err
+		}
+	}
+	if !found {
+		return OutboxRecord{}, fmt.Errorf("outbox not found")
+	}
+	if err := s.refreshOutboxStatus(outboxID); err != nil {
+		return OutboxRecord{}, err
+	}
+	for _, item := range s.repo.ListOutbox() {
+		if item.ID == outboxID {
+			return item, nil
+		}
+	}
+	return OutboxRecord{}, fmt.Errorf("outbox not found")
+}
+
 func (s *Service) DispatchPending(limit int) (int, error) {
 	result, err := s.DispatchPendingDetailed(limit)
 	return result.Dispatched, err
