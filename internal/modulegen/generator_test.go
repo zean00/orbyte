@@ -56,6 +56,9 @@ func TestResolveSpecAppliesKindDefaults(t *testing.T) {
 	if spec.Document.Type == "" || spec.Model.Key == "" {
 		t.Fatalf("expected derived defaults for hybrid module, got %+v", spec)
 	}
+	if len(spec.Model.Fields) < 2 || spec.Model.Fields[0].Key != "name" || spec.Model.Fields[1].Key != "status" {
+		t.Fatalf("expected default model fields, got %+v", spec.Model.Fields)
+	}
 	if !spec.Features.Search || !spec.Features.UI || !spec.Features.CustomUI || !spec.Features.Tests {
 		t.Fatalf("expected default features enabled, got %+v", spec.Features)
 	}
@@ -292,6 +295,60 @@ func TestPlanModuleCreatesFilesAndPatchesRegistry(t *testing.T) {
 	}
 	if !foundManifest || !foundRegistry || !foundObservability || !foundReporting || !foundManifestTest || !foundRegistrationTest {
 		t.Fatalf("expected manifest, registry, helper, and test outputs; got manifest=%v registry=%v observability=%v reporting=%v manifest_test=%v registration_test=%v", foundManifest, foundRegistry, foundObservability, foundReporting, foundManifestTest, foundRegistrationTest)
+	}
+}
+
+func TestPlanModuleRendersSecurityFieldMetadata(t *testing.T) {
+	root := t.TempDir()
+	writeGeneratorBootstrap(t, root)
+
+	spec, err := ResolveSpec(Spec{
+		Module: ModuleIdentity{
+			Key:          "patients",
+			Name:         "Patients",
+			Kind:         KindModel,
+			DomainFamily: "healthcare",
+		},
+		Model: ModelOptions{
+			Key:         "patient",
+			DisplayName: "Patient",
+			Fields: []ModelFieldOptions{
+				{Key: "full_name", Label: "Full Name", Type: "string", Required: true},
+				{Key: "patient_ssn", Label: "Patient SSN", Type: "string", Sensitive: true, DefaultMask: "last4", ReadPermissionKey: "patients.ssn.read", WritePermissionKey: "patients.ssn.write", SearchVisible: boolPtr(false), ExportVisible: boolPtr(false)},
+			},
+		},
+	}, Options{Root: root})
+	if err != nil {
+		t.Fatalf("resolve spec failed: %v", err)
+	}
+	plan, err := PlanModule(root, spec)
+	if err != nil {
+		t.Fatalf("plan module failed: %v", err)
+	}
+	var manifest string
+	for _, file := range plan.Files {
+		if strings.HasSuffix(file.Path, "manifest.go") {
+			manifest = file.Content
+			break
+		}
+	}
+	if manifest == "" {
+		t.Fatal("expected manifest.go in plan output")
+	}
+	for _, needle := range []string{
+		`Key: "patient_ssn"`,
+		`Sensitive: true`,
+		`DefaultMask: "last4"`,
+		`ReadPermissionKey: "patients.ssn.read"`,
+		`WritePermissionKey: "patients.ssn.write"`,
+		`SearchVisible: boolPtr(false)`,
+		`ExportVisible: boolPtr(false)`,
+		`DefaultSort:         "full_name"`,
+		`Path: "full_name"`,
+	} {
+		if !strings.Contains(manifest, needle) {
+			t.Fatalf("expected manifest to contain %q, got:\n%s", needle, manifest)
+		}
 	}
 }
 

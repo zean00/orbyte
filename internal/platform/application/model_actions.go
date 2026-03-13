@@ -162,7 +162,7 @@ type createModelCommand struct {
 }
 
 func (c createModelCommand) Run(_ context.Context, uow UnitOfWork) (modelCommandResult, error) {
-	svc := c.models.WithRepository(newModelUnitOfWorkRepository(uow))
+	svc := c.models.WithRepository(newModelUnitOfWorkRepository(uow, c.models.Repository()))
 	record, related, err := svc.CreateComposite(c.modelKey, c.actorID, c.mutation)
 	if err != nil {
 		return modelCommandResult{}, err
@@ -189,7 +189,7 @@ type updateModelCommand struct {
 }
 
 func (c updateModelCommand) Run(_ context.Context, uow UnitOfWork) (modelCommandResult, error) {
-	svc := c.models.WithRepository(newModelUnitOfWorkRepository(uow))
+	svc := c.models.WithRepository(newModelUnitOfWorkRepository(uow, c.models.Repository()))
 	record, related, err := svc.UpdateComposite(c.modelKey, c.recordID, c.actorID, c.mutation)
 	if err != nil {
 		return modelCommandResult{}, err

@@ -23,6 +23,13 @@ type FieldDefinition struct {
 	Required           bool     `json:"required,omitempty"`
 	ReadOnly           bool     `json:"read_only,omitempty"`
 	Indexed            bool     `json:"indexed,omitempty"`
+	Sensitive          bool     `json:"sensitive,omitempty"`
+	SecurityClass      string   `json:"security_class,omitempty"`
+	DefaultMask        string   `json:"default_mask,omitempty"`
+	SearchVisible      *bool    `json:"search_visible,omitempty"`
+	ExportVisible      *bool    `json:"export_visible,omitempty"`
+	ReadPermissionKey  string   `json:"read_permission_key,omitempty"`
+	WritePermissionKey string   `json:"write_permission_key,omitempty"`
 	DefaultValue       any      `json:"default_value,omitempty"`
 	DefaultRuleKey     string   `json:"default_rule_key,omitempty"`
 	ComputeRuleKey     string   `json:"compute_rule_key,omitempty"`

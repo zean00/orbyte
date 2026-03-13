@@ -3,19 +3,26 @@ package application
 import "clinic/internal/platform/model"
 
 type modelUnitOfWorkRepository struct {
-	uow UnitOfWork
+	uow      UnitOfWork
+	fallback model.Repository
 }
 
-func newModelUnitOfWorkRepository(uow UnitOfWork) model.Repository {
-	return &modelUnitOfWorkRepository{uow: uow}
+func newModelUnitOfWorkRepository(uow UnitOfWork, fallback model.Repository) model.Repository {
+	return &modelUnitOfWorkRepository{uow: uow, fallback: fallback}
 }
 
 func (r *modelUnitOfWorkRepository) SaveDefinition(def model.Definition) error {
-	return nil
+	if r.fallback == nil {
+		return nil
+	}
+	return r.fallback.SaveDefinition(def)
 }
 
 func (r *modelUnitOfWorkRepository) ListDefinitions() []model.Definition {
-	return nil
+	if r.fallback == nil {
+		return nil
+	}
+	return r.fallback.ListDefinitions()
 }
 
 func (r *modelUnitOfWorkRepository) GetDefinition(key string) (model.Definition, bool) {

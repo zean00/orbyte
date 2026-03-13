@@ -9,6 +9,12 @@ go test ./...
 go run ./cmd/server
 ```
 
+To regenerate coverage locally:
+
+```bash
+./scripts/coverage.sh
+```
+
 If `DATABASE_URL` is set, PostgreSQL-backed repositories are used. Otherwise the app falls back to in-memory repositories.
 Startup now requires `APP_JWT_SECRET` by default.
 For local development without `DATABASE_URL`, you can set `APP_AUTH_DEV_MODE=true` to have the server seed an ephemeral per-process JWT secret automatically so `/auth/login` works out of the box.

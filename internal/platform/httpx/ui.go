@@ -16,10 +16,11 @@ import (
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
 	"clinic/internal/platform/search"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 )
 
-func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service) {
+func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireInteractivePrincipal(w, r); !ok {
 			return
@@ -253,8 +254,11 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Forbidden("document is not visible"))
 			return
 		}
+		rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+		rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
+		rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "ui")
 		respondJSON(w, http.StatusOK, map[string]any{
-			"record":       docs.Render(record, document.ViewExpanded, modules.EnabledMap()),
+			"record":       rendered,
 			"lines":        record.Lines,
 			"links":        record.Links,
 			"attachments":  record.Attachments,
@@ -332,7 +336,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Forbidden("model list is not allowed"))
 			return
 		}
-		items, total, err := models.List(modelKey, model.Query{
+		query := model.Query{
 			Filters: map[string]string{
 				"name":   strings.TrimSpace(r.URL.Query().Get("name")),
 				"status": strings.TrimSpace(r.URL.Query().Get("status")),
@@ -340,11 +344,17 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			SortKey:  strings.TrimSpace(r.URL.Query().Get("sort")),
 			Page:     intQuery(r, "page", 1),
 			PageSize: intQuery(r, "page_size", 20),
-		})
+		}
+		if err := validateModelQueryAccess(fieldSecurity, ident, p, def, query, "ui"); err != nil {
+			respondError(w, err)
+			return
+		}
+		items, total, err := models.List(modelKey, query)
 		if err != nil {
 			respondError(w, err)
 			return
 		}
+		items = sanitizeModelRecords(fieldSecurity, ident, p, def, items, "ui")
 		respondJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "definition": def})
 	})
 
@@ -372,6 +382,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, err)
 			return
 		}
+		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, "ui")
 		payload := map[string]any{"record": record, "definition": def, "timeline": activities.Timeline("model:"+modelKey, recordID), "model_definitions": allModelDefinitions(models)}
 		relatedDefs := map[string]model.Definition{}
 		for _, relation := range def.Relations {
@@ -379,7 +390,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			if err == nil {
 				graphItems := make([]map[string]any, 0, len(items))
 				for _, item := range items {
-					graphItems = append(graphItems, modelGraphNode(models, relation.TargetModelKey, item, map[string]bool{def.Key: true}))
+					graphItems = append(graphItems, modelGraphNode(models, fieldSecurity, ident, p, relation.TargetModelKey, item, map[string]bool{def.Key: true}, "ui"))
 				}
 				payload[relation.Key] = graphItems
 			}
@@ -405,10 +416,48 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.NotFound("dataset not found"))
 			return
 		}
+		dimensions := splitCSV(r.URL.Query().Get("dimensions"))
+		measures := splitCSV(r.URL.Query().Get("measures"))
+		groupBy := splitCSV(r.URL.Query().Get("group_by"))
+		if datasetDef, ok := reportingSvc.Definition(datasetKey); ok && datasetDef.SourceKind == "model" {
+			modelDef, found := models.Definition(datasetDef.ModelKey)
+			if !found {
+				respondError(w, shared.NotFound("model definition not found"))
+				return
+			}
+			var err error
+			dimensions, measures, groupBy, err = reportingSelectionsForDataset(fieldSecurity, ident, p, datasetDef, modelDef, dimensions, measures, groupBy)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+		} else if datasetDef, ok := reportingSvc.Definition(datasetKey); ok && datasetDef.SourceKind == "documents" {
+			items := docs.List()
+			if len(items) > 0 {
+				profile := documentAccessProfile(fieldSecurity, ident, p, items[0], "report")
+				filtered := filterDocumentReportingDataset(datasetDef, profile)
+				var err error
+				dimensions, measures, groupBy, err = validateDocumentReportingSelections(fieldSecurity, ident, p, items[0], dimensions, measures, groupBy)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				if len(dimensions) == 0 {
+					for _, item := range filtered.Dimensions {
+						dimensions = append(dimensions, item.Key)
+					}
+				}
+				if len(measures) == 0 {
+					for _, item := range filtered.Measures {
+						measures = append(measures, item.Key)
+					}
+				}
+			}
+		}
 		payload, err := reportingSvc.ExecuteView(datasetKey, relationQuery(r), reporting.QueryRequest{
-			Dimensions: splitCSV(r.URL.Query().Get("dimensions")),
-			Measures:   splitCSV(r.URL.Query().Get("measures")),
-			GroupBy:    splitCSV(r.URL.Query().Get("group_by")),
+			Dimensions: dimensions,
+			Measures:   measures,
+			GroupBy:    groupBy,
 			SortBy:     strings.TrimSpace(r.URL.Query().Get("sort_by")),
 			Desc:       strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("desc")), "true"),
 			Limit:      intQuery(r, "limit", 0),
@@ -434,11 +483,21 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.NotFound("model not found"))
 			return
 		}
+		def, found := models.Definition(modelKey)
+		if !found {
+			respondError(w, shared.NotFound("model definition not found"))
+			return
+		}
+		dimensions, measures, groupBy, err := reportingSelectionsForModel(fieldSecurity, ident, p, def, splitCSV(r.URL.Query().Get("dimensions")), splitCSV(r.URL.Query().Get("measures")), splitCSV(r.URL.Query().Get("group_by")))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
 		payload, err := reportingSvc.ExecuteAdHocModel(relationQuery(r), reporting.QueryRequest{
 			ModelKey:   modelKey,
-			Dimensions: splitCSV(r.URL.Query().Get("dimensions")),
-			Measures:   splitCSV(r.URL.Query().Get("measures")),
-			GroupBy:    splitCSV(r.URL.Query().Get("group_by")),
+			Dimensions: dimensions,
+			Measures:   measures,
+			GroupBy:    groupBy,
 			SortBy:     strings.TrimSpace(r.URL.Query().Get("sort_by")),
 			Desc:       strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("desc")), "true"),
 			Limit:      intQuery(r, "limit", 0),
@@ -464,11 +523,38 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Validation("source is required"))
 			return
 		}
+		dimensions := splitCSV(r.URL.Query().Get("dimensions"))
+		measures := splitCSV(r.URL.Query().Get("measures"))
+		groupBy := splitCSV(r.URL.Query().Get("group_by"))
+		if strings.HasPrefix(source, "models/") {
+			modelKey := strings.TrimSpace(strings.TrimPrefix(source, "models/"))
+			def, found := models.Definition(modelKey)
+			if !found {
+				respondError(w, shared.NotFound("model definition not found"))
+				return
+			}
+			var err error
+			dimensions, measures, groupBy, err = reportingSelectionsForModel(fieldSecurity, ident, p, def, dimensions, measures, groupBy)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+		} else if source == "documents" {
+			items := docs.List()
+			if len(items) > 0 {
+				var err error
+				dimensions, measures, groupBy, err = validateDocumentReportingSelections(fieldSecurity, ident, p, items[0], dimensions, measures, groupBy)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+			}
+		}
 		payload, err := reportingSvc.ExecuteAdHocSource(source, relationQuery(r), reporting.QueryRequest{
 			ModelKey:   strings.TrimSpace(r.URL.Query().Get("model_key")),
-			Dimensions: splitCSV(r.URL.Query().Get("dimensions")),
-			Measures:   splitCSV(r.URL.Query().Get("measures")),
-			GroupBy:    splitCSV(r.URL.Query().Get("group_by")),
+			Dimensions: dimensions,
+			Measures:   measures,
+			GroupBy:    groupBy,
 			SortBy:     strings.TrimSpace(r.URL.Query().Get("sort_by")),
 			Desc:       strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("desc")), "true"),
 			Limit:      intQuery(r, "limit", 0),

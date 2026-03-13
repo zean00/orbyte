@@ -126,9 +126,11 @@ func registerSearchRoutes(mux *http.ServeMux, ident *identity.Service, searchSvc
 			respondJSON(w, http.StatusOK, result)
 			return
 		}
-		job := jobSvc.Enqueue("search.rebuild."+indexKey, func() (map[string]any, error) {
-			return searchSvc.RebuildIndex(indexKey)
-		})
+		job, err := jobSvc.Enqueue(search.JobRebuildIndex, map[string]any{"index_key": indexKey})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
 		respondJSON(w, http.StatusAccepted, job)
 	})
 }

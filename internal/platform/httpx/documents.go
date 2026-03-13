@@ -12,6 +12,7 @@ import (
 	"clinic/internal/platform/module"
 	"clinic/internal/platform/observability"
 	"clinic/internal/platform/policy"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 )
 
@@ -40,7 +41,7 @@ type updateDocumentExtensionRequest struct {
 	Payload         map[string]any `json:"payload"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, policySvc *policy.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, policySvc *policy.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
 		if !ok {
@@ -55,7 +56,8 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			filtered := make([]document.Record, 0, len(items))
 			for _, item := range items {
 				if item.Header.LocationID == locationID && searchVisible(item.Header, p, policySvc) {
-					filtered = append(filtered, docs.Render(item, document.ViewNormal, modules.EnabledMap()))
+					rendered := docs.Render(item, document.ViewNormal, modules.EnabledMap())
+					filtered = append(filtered, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
 				}
 			}
 			items = filtered
@@ -65,7 +67,8 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 				if !searchVisible(items[i].Header, p, policySvc) {
 					continue
 				}
-				filtered = append(filtered, docs.Render(items[i], document.ViewNormal, modules.EnabledMap()))
+				rendered := docs.Render(items[i], document.ViewNormal, modules.EnabledMap())
+				filtered = append(filtered, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
 			}
 			items = filtered
 		}
@@ -90,6 +93,19 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		if locationID == "" && p.kind == userPrincipal {
 			locationID = p.currentLocationID
 		}
+		candidate := document.Record{
+			Header: document.Header{
+				Type:           req.Type,
+				Status:         "draft",
+				OrganizationID: req.OrganizationID,
+				LocationID:     locationID,
+			},
+			Body: document.Body{Payload: req.Payload},
+		}
+		if err := validateDocumentWrite(fieldSecurity, ident, p, candidate, req.Payload, "", "api"); err != nil {
+			respondError(w, err)
+			return
+		}
 		record, err := docs.Create(req.Type, req.OrganizationID, locationID, p.userID, req.Payload)
 		if err != nil {
 			incActionMetric(obs, "create", "error")
@@ -97,7 +113,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			return
 		}
 		incActionMetric(obs, "create", "success")
-		respondJSON(w, http.StatusCreated, record)
+		respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api"))
 	})
 
 	mux.HandleFunc("GET /documents/", func(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +127,8 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, err)
 			return
 		}
-		if _, ok := requireAuthorization(w, r, ident, "document.read", record.Header.LocationID, ""); !ok {
+		p, ok := requireAuthorization(w, r, ident, "document.read", record.Header.LocationID, "")
+		if !ok {
 			return
 		}
 		viewMode := documentViewMode(r)
@@ -122,9 +139,9 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		}
 		rendered := docs.Render(record, viewMode, modules.EnabledMap())
 		if viewMode == document.ViewExpanded || viewMode == document.ViewRaw {
-			p, _ := currentPrincipal(r)
 			rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
 		}
+		rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api")
 		respondJSON(w, http.StatusOK, rendered)
 	})
 
@@ -152,6 +169,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 				respondError(w, shared.Validation("invalid document extension payload"))
 				return
 			}
+			if err := validateDocumentWrite(fieldSecurity, ident, p, current, req.Payload, "extensions."+moduleKey, "api"); err != nil {
+				respondError(w, err)
+				return
+			}
 			record, err := docActions.UpdateExtension(documentID, moduleKey, p.userID, req.Payload, req.ExpectedVersion, req.ExpectedETag)
 			if err != nil {
 				incActionMetric(obs, "update_extension", "error")
@@ -159,7 +180,8 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 				return
 			}
 			incActionMetric(obs, "update_extension", "success")
-			respondJSON(w, http.StatusOK, filterDocumentExtensionsForPrincipal(docs.Render(record, document.ViewExpanded, modules.EnabledMap()), modules, ident, policySvc, p))
+			rendered := filterDocumentExtensionsForPrincipal(docs.Render(record, document.ViewExpanded, modules.EnabledMap()), modules, ident, policySvc, p)
+			respondJSON(w, http.StatusOK, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
 			return
 		}
 		documentID, ok := documentIDFromPath(r.URL.Path)
@@ -181,6 +203,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, shared.Validation("invalid document update payload"))
 			return
 		}
+		if err := validateDocumentWrite(fieldSecurity, ident, p, current, req.Payload, "", "api"); err != nil {
+			respondError(w, err)
+			return
+		}
 		record, err := docActions.UpdateDraft(documentID, p.userID, req.Payload, req.ExpectedVersion, req.ExpectedETag)
 		if err != nil {
 			incActionMetric(obs, "update", "error")
@@ -188,7 +214,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			return
 		}
 		incActionMetric(obs, "update", "success")
-		respondJSON(w, http.StatusOK, docs.Render(record, document.ViewExpanded, modules.EnabledMap()))
+		respondJSON(w, http.StatusOK, sanitizeDocumentRecord(fieldSecurity, ident, p, docs.Render(record, document.ViewExpanded, modules.EnabledMap()), "api"))
 	})
 
 	mux.HandleFunc("POST /documents/", func(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +274,9 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			return
 		}
 		incActionMetric(obs, req.Action, "success")
-		respondJSON(w, http.StatusOK, docs.Render(record, document.ViewExpanded, modules.EnabledMap()))
+		rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+		rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
+		respondJSON(w, http.StatusOK, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
 	})
 }
 

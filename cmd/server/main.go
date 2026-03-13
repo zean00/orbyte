@@ -13,7 +13,11 @@ import (
 )
 
 func main() {
-	application := app.New()
+	application, err := app.New()
+	if err != nil {
+		log.Printf("app startup error: %v", err)
+		os.Exit(1)
+	}
 	defer func() {
 		if err := application.Close(); err != nil {
 			log.Printf("app close error: %v", err)

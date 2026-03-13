@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +29,7 @@ import (
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
 	"clinic/internal/platform/search"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/workflow"
 )
 
@@ -38,6 +40,7 @@ type testHarness struct {
 	ident  *identity.Service
 	audit  *audit.Service
 	cfg    *config.Service
+	search *search.Service
 }
 
 func newTestHarness(t *testing.T) testHarness {
@@ -69,11 +72,20 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	loggerSvc := logging.NewServiceWithWriter(nil)
 	obsSvc := observability.NewService()
 	policySvc := policy.NewServiceWithConfig(cfg)
+	fieldSecuritySvc := securityfields.NewService(policySvc)
 	analyticsSvc := analytics.NewService(docs, flows, eventingSvc, searchSvc, auditSvc, obsSvc)
 	monitoringSvc := monitoring.NewService(docs, eventingSvc, flows, searchSvc, obsSvc)
 	integrationSvc := integration.NewService(obsSvc, loggerSvc)
 	jobSvc := jobs.NewService()
 	searchSvc.AttachJobs(jobSvc)
+	searchSvc.AttachFieldSecurity(fieldSecuritySvc)
+	analyticsSvc.AttachJobs(jobSvc)
+	jobCtx, cancelJobs := context.WithCancel(context.Background())
+	jobSvc.Start(jobCtx)
+	t.Cleanup(func() {
+		cancelJobs()
+		jobSvc.Stop()
+	})
 	integrationSvc.AttachPolicy(policySvc)
 	for _, eventType := range []string{
 		"document.updated",
@@ -126,9 +138,11 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		{Key: "documents.extension.write", Kind: "access", Target: "document_extension_write", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"allowed_modules": []string{}, "denied_statuses": []string{"cancelled"}}},
 		{Key: "documents.workflow.transition", Kind: "workflow", Target: "document_transition", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"blocked_actions": []string{}, "allowed_actions": []string{}, "allowed_statuses": []string{}}},
 		{Key: "documents.search.visibility", Kind: "search", Target: "document_search", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"hidden_statuses": []string{}, "allowed_types": []string{}}},
+		{Key: "documents.fields.profile", Kind: "security", Target: "document_fields", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"fields": map[string]any{}}},
 		{Key: "documents.numbering.assign", Kind: "numbering", Target: "document_numbering", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"prefix": "", "include_location": true, "include_date": true}},
 		{Key: "documents.action.render", Kind: "ui", Target: "document_action_render", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"hidden_actions": []string{}, "primary_actions": []string{"submit", "approve"}}},
 		{Key: "integration.submission.preflight", Kind: "integration", Target: "integration_submission", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"blocked_operation_types": []string{}, "required_system_status": "active"}},
+		{Key: "models.fields.profile", Kind: "security", Target: "model_fields", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"fields": map[string]any{}}},
 	} {
 		if err := policySvc.Register(hook); err != nil {
 			t.Fatalf("register policy hook failed: %v", err)
@@ -144,6 +158,20 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("set policy evaluator failed: %v", err)
 	}
 	if err := policySvc.SetEvaluator("documents.search.visibility", func(req policy.Request) policy.Decision { return policy.Decision{Allowed: true} }); err != nil {
+		t.Fatalf("set policy evaluator failed: %v", err)
+	}
+	if err := policySvc.SetEvaluator("documents.fields.profile", func(req policy.Request) policy.Decision {
+		fields := map[string]any{}
+		channel, _ := req.Inputs["channel"].(string)
+		switch channel {
+		case "api", "ui", "search", "report":
+			fields["patient_ssn"] = map[string]any{"visible": false, "editable": true, "export_visible": false, "search_visible": false}
+			fields["extensions.analytics.secret_score"] = map[string]any{"visible": false, "editable": true, "export_visible": false, "search_visible": false}
+			fields["locked_internal_note"] = map[string]any{"visible": false, "editable": false, "export_visible": false, "search_visible": false}
+			fields["extensions.analytics.locked_secret"] = map[string]any{"visible": false, "editable": false, "export_visible": false, "search_visible": false}
+		}
+		return policy.Decision{Allowed: true, Output: map[string]any{"fields": fields}}
+	}); err != nil {
 		t.Fatalf("set policy evaluator failed: %v", err)
 	}
 	if err := policySvc.SetEvaluator("documents.numbering.assign", func(req policy.Request) policy.Decision {
@@ -165,6 +193,11 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	}); err != nil {
 		t.Fatalf("set policy evaluator failed: %v", err)
 	}
+	if err := policySvc.SetEvaluator("models.fields.profile", func(req policy.Request) policy.Decision {
+		return policy.Decision{Allowed: true}
+	}); err != nil {
+		t.Fatalf("set policy evaluator failed: %v", err)
+	}
 	if err := models.Register(model.Definition{
 		Key:                 "party",
 		DisplayName:         "Party",
@@ -176,7 +209,8 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		DefaultSort:         "name",
 		Fields: []model.FieldDefinition{
 			{Key: "name", Type: "string", Required: true},
-			{Key: "email", Type: "string"},
+			{Key: "email", Type: "string", Sensitive: true, DefaultMask: "partial_email", ReadPermissionKey: "party.email.read"},
+			{Key: "internal_note", Type: "string", Sensitive: true, WritePermissionKey: "party.note.write"},
 			{Key: "status", Type: "string", DefaultValue: "active"},
 		},
 		Relations: []model.RelationDefinition{
@@ -236,7 +270,15 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		ident:  ident,
 		audit:  auditSvc,
 		cfg:    cfg,
+		search: searchSvc,
 	}
+}
+
+func (h testHarness) registerSearchIndex(def search.IndexDefinition) error {
+	if h.search == nil {
+		return nil
+	}
+	return h.search.RegisterIndex(def)
 }
 
 func builtInTestModuleManifests() []module.Manifest {
@@ -1250,6 +1292,156 @@ func TestUIReportingQueryAndModelDetailData(t *testing.T) {
 	if _, ok := payload["model_definitions"].(map[string]any); !ok {
 		t.Fatalf("expected model definitions in model detail payload, got %+v", payload)
 	}
+	record := payload["record"].(map[string]any)
+	values := record["values"].(map[string]any)
+	if _, ok := values["email"]; ok {
+		t.Fatalf("expected sensitive email to be hidden from ui detail payload, got %+v", values)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/reporting/query?source=models/party&dimensions=email&measures=count&group_by=email", nil, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected sensitive reporting dimension to be blocked, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/reporting/query?source=documents&dimensions=body.payload.patient_ssn&measures=count&group_by=body.payload.patient_ssn", nil, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected sensitive document reporting dimension to be blocked, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/reporting/query?source=documents&dimensions=body.payload.title&measures=sum:body.payload.patient_ssn&group_by=body.payload.title", nil, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected sensitive document reporting measure to be blocked, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDocumentFieldSecurityHidesPayloadAndExtensionFields(t *testing.T) {
+	h := newTestHarness(t)
+
+	createBody, _ := json.Marshal(map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload": map[string]any{
+			"title":       "Sensitive Visit",
+			"patient_ssn": "999-11-2222",
+		},
+	})
+	created := h.request(http.MethodPost, "/documents", createBody, true)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected document create to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+	var record document.Record
+	if err := json.Unmarshal(created.Body.Bytes(), &record); err != nil {
+		t.Fatalf("unmarshal document create failed: %v", err)
+	}
+	if _, ok := record.Body.Payload["patient_ssn"]; ok {
+		t.Fatalf("expected sensitive payload field to be hidden from create response, got %+v", record.Body.Payload)
+	}
+
+	extBody, _ := json.Marshal(map[string]any{
+		"payload": map[string]any{
+			"score":        9,
+			"secret_score": 99,
+		},
+		"expected_version": record.Header.Version,
+		"expected_etag":    record.Header.ETag,
+	})
+	updated := h.request(http.MethodPut, "/documents/"+record.Header.ID+"/extensions/analytics", extBody, true)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("expected extension update to succeed, got %d body=%s", updated.Code, updated.Body.String())
+	}
+	var updatedRecord document.Record
+	if err := json.Unmarshal(updated.Body.Bytes(), &updatedRecord); err != nil {
+		t.Fatalf("unmarshal extension update failed: %v", err)
+	}
+	ext := document.ExtensionPayload(updatedRecord.Body.Payload, "analytics")
+	if _, ok := ext["secret_score"]; ok {
+		t.Fatalf("expected sensitive extension field to be hidden, got %+v", ext)
+	}
+	if ext["score"] != float64(9) {
+		t.Fatalf("expected non-sensitive extension field to remain visible, got %+v", ext)
+	}
+
+	detail := h.request(http.MethodGet, "/ui/data/documents/"+record.Header.ID, nil, true)
+	if detail.Code != http.StatusOK {
+		t.Fatalf("expected ui document detail to succeed, got %d body=%s", detail.Code, detail.Body.String())
+	}
+	if strings.Contains(detail.Body.String(), "patient_ssn") || strings.Contains(detail.Body.String(), "secret_score") {
+		t.Fatalf("expected ui document detail to hide sensitive fields, got %s", detail.Body.String())
+	}
+}
+
+func TestDocumentFieldSecurityRejectsProtectedWritesAndSearchExcludesFields(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload": map[string]any{
+			"title":                "Blocked Visit",
+			"locked_internal_note": "blocked",
+		},
+	})
+	rr := h.request(http.MethodPost, "/documents", body, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected protected document field write to be blocked, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	searchBody, _ := json.Marshal(map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload": map[string]any{
+			"title":       "Searchable Title",
+			"patient_ssn": "123-45-6789",
+		},
+	})
+	created := h.request(http.MethodPost, "/documents", searchBody, true)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected document create with hidden field to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+
+	index := search.IndexDefinition{
+		Key:          "documents.secure.search",
+		Title:        "Secure Documents",
+		SourceKind:   "document",
+		DocumentType: "generic_request",
+		Modes:        []string{"keyword"},
+		Fields: []search.IndexFieldDefinition{
+			{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true},
+			{Key: "patient_ssn", Path: "body.payload.patient_ssn", Type: "string", Searchable: true},
+		},
+	}
+	if err := h.registerSearchIndex(index); err != nil {
+		t.Fatalf("register secure search index failed: %v", err)
+	}
+
+	okBody, _ := json.Marshal(map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload": map[string]any{
+			"title": "Only Title Visible",
+		},
+	})
+	created = h.request(http.MethodPost, "/documents", okBody, true)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected safe document create to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+
+	if _, err := h.search.RebuildIndex("documents.secure.search"); err != nil {
+		t.Fatalf("expected secure search rebuild to succeed, got %v", err)
+	}
+
+	queryBody, _ := json.Marshal(map[string]any{"query": "123-45-6789"})
+	result := h.request(http.MethodPost, "/search/indexes/documents.secure.search/query", queryBody, true)
+	if result.Code != http.StatusOK {
+		t.Fatalf("expected secure search query to succeed, got %d body=%s", result.Code, result.Body.String())
+	}
+	if strings.Contains(result.Body.String(), "patient_ssn") {
+		t.Fatalf("expected secure search results to exclude sensitive field, got %s", result.Body.String())
+	}
 }
 
 func TestSearchIndexRoutes(t *testing.T) {
@@ -1700,6 +1892,25 @@ func TestModelRoutes(t *testing.T) {
 	rr = h.request(http.MethodPost, "/models/party", body, true)
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected model create to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Record model.Record `json:"record"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal model create failed: %v", err)
+	}
+	if _, ok := payload.Record.Values["email"]; ok {
+		t.Fatalf("expected sensitive email to be hidden from model create response, got %+v", payload.Record.Values)
+	}
+}
+
+func TestModelFieldSecurityRejectsProtectedWrites(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{"values": map[string]any{"name": "Acme Clinic", "internal_note": "private"}})
+	rr := h.request(http.MethodPost, "/models/party", body, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected protected field write to be blocked, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

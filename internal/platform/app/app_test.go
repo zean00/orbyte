@@ -22,7 +22,10 @@ func TestNewAppBootstrap(t *testing.T) {
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("APP_AUTH_DEV_MODE", "true")
-	app := New()
+	app, err := New()
+	if err != nil {
+		t.Fatalf("unexpected startup error: %v", err)
+	}
 	if app.Address() == "" {
 		t.Fatal("expected address")
 	}
@@ -44,12 +47,9 @@ func TestNewAppBootstrap(t *testing.T) {
 func TestNewAppFailsWhenDatabaseConfiguredButUnavailable(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://bad:bad@127.0.0.1:1/clinic?sslmode=disable")
 	t.Setenv("APP_JWT_SECRET", "test-secret")
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected startup panic when DATABASE_URL is configured but unavailable")
-		}
-	}()
-	_ = New()
+	if _, err := New(); err == nil {
+		t.Fatal("expected startup error when DATABASE_URL is configured but unavailable")
+	}
 }
 
 func TestNewAppFailsWhenJWTSecretMissingInDatabaseMode(t *testing.T) {
@@ -59,36 +59,36 @@ func TestNewAppFailsWhenJWTSecretMissingInDatabaseMode(t *testing.T) {
 	t.Setenv("APP_AUTH_DEV_MODE", "true")
 	defer func() {
 		_ = os.Setenv("DATABASE_URL", originalOpen)
-		if r := recover(); r == nil {
-			t.Fatal("expected startup panic when APP_JWT_SECRET is missing in database mode")
-		}
 	}()
-	ensureJWTSecret(true)
+	if err := ensureJWTSecret(true); err == nil {
+		t.Fatal("expected startup error when APP_JWT_SECRET is missing in database mode")
+	}
 }
 
 func TestNewAppFailsWhenJWTSecretMissingWithoutExplicitDevMode(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("APP_AUTH_DEV_MODE", "")
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected startup panic without jwt secret outside explicit dev mode")
-		}
-	}()
-	ensureJWTSecret(false)
+	if err := ensureJWTSecret(false); err == nil {
+		t.Fatal("expected startup error without jwt secret outside explicit dev mode")
+	}
 }
 
 func TestNewAppSeedsRandomDevelopmentJWTSecretWithExplicitDevMode(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("APP_AUTH_DEV_MODE", "true")
-	ensureJWTSecret(false)
+	if err := ensureJWTSecret(false); err != nil {
+		t.Fatalf("unexpected ensure jwt secret error: %v", err)
+	}
 	first := os.Getenv("APP_JWT_SECRET")
 	if first == "" {
 		t.Fatal("expected development jwt secret to be seeded")
 	}
 	t.Setenv("APP_JWT_SECRET", "")
-	ensureJWTSecret(false)
+	if err := ensureJWTSecret(false); err != nil {
+		t.Fatalf("unexpected ensure jwt secret error: %v", err)
+	}
 	second := os.Getenv("APP_JWT_SECRET")
 	if second == "" {
 		t.Fatal("expected second development jwt secret to be seeded")
@@ -110,7 +110,9 @@ func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!")
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!"); err != nil {
+		t.Fatalf("seed platform kernel failed: %v", err)
+	}
 
 	if _, ok := ident.FindUserByUsername("admin"); !ok {
 		t.Fatal("expected bootstrap admin user")
@@ -139,6 +141,26 @@ func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	}
 	if len(searchSvc.IndexDefinitions()) == 0 {
 		t.Fatal("expected seeded search indexes")
+	}
+}
+
+func TestSeedPlatformKernelIsIdempotentForRestart(t *testing.T) {
+	org := organization.NewService()
+	cfg := config.NewService()
+	ident := identity.NewServiceWithRepository(org, identity.NewMemoryRepository(nil, nil, nil, nil, nil, nil, nil, nil))
+	modules := module.NewService()
+	models := model.NewService()
+	reportingSvc := reporting.NewService(models)
+	searchSvc := search.NewService()
+	docs := document.NewServiceWithRepository(document.NewMemoryRepository())
+	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
+	policies := policy.NewService()
+
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!"); err != nil {
+		t.Fatalf("first seed failed: %v", err)
+	}
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, searchSvc, docs, flows, policies, "bootstrap-123!"); err != nil {
+		t.Fatalf("second seed failed: %v", err)
 	}
 }
 

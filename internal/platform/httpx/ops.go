@@ -473,19 +473,11 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			return
 		}
 		documentID := r.URL.Query().Get("document_id")
-		job := jobSvc.Enqueue("projection.rebuild.document_summary", func() (map[string]any, error) {
-			if documentID != "" {
-				record, err := documentSvc.Get(documentID)
-				if err != nil {
-					return nil, err
-				}
-				searchSvc.RebuildDocument(record)
-				return map[string]any{"rebuilt_document_id": documentID}, nil
-			}
-			records := documentSvc.List()
-			searchSvc.RebuildAll(records)
-			return map[string]any{"rebuilt": "document_summary", "count": len(records)}, nil
-		})
+		job, err := jobSvc.Enqueue(search.JobRebuildSummary, map[string]any{"document_id": documentID})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
 		respondJSON(w, http.StatusAccepted, job)
 	})
 
@@ -504,13 +496,11 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			respondError(w, shared.Validation("job service is not configured"))
 			return
 		}
-		job := jobSvc.Enqueue("analytics.recompute.current_state", func() (map[string]any, error) {
-			snapshot, err := analyticsSvc.RecomputeCurrentState()
-			if err != nil {
-				return nil, err
-			}
-			return map[string]any{"snapshot": snapshot}, nil
-		})
+		job, err := jobSvc.Enqueue(analytics.JobRecomputeState, nil)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
 		respondJSON(w, http.StatusAccepted, job)
 	})
 

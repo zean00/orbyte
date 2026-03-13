@@ -26,12 +26,15 @@ import (
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
 	"clinic/internal/platform/search"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 	"clinic/internal/platform/workflow"
 )
 
 func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
 	mux := http.NewServeMux()
+	fieldSecurity := securityfields.NewService(policySvc)
+	reportingSvc.AttachFieldSecurity(fieldSecurity)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]any{
@@ -54,12 +57,12 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 	})
 
 	registerAuthRoutes(mux, cfg, ident, auditSvc)
-	registerModelRoutes(mux, ident, models, activities, modelActions)
-	registerDocumentRoutes(mux, ident, modules, docs, docActions, policySvc, obsSvc)
+	registerModelRoutes(mux, ident, models, activities, policySvc, fieldSecurity, modelActions)
+	registerDocumentRoutes(mux, ident, modules, docs, docActions, policySvc, fieldSecurity, obsSvc)
 	registerOpsRoutes(mux, ident, auditSvc, eventingSvc, docs, searchSvc, flows, analyticsSvc, monitoringSvc, obsSvc, jobSvc)
 	registerSearchRoutes(mux, ident, searchSvc, jobSvc)
 	registerAdminRoutes(mux, cfg, org, ident, modules, auditSvc, policySvc, obsSvc, integrationSvc)
-	registerUIRoutes(mux, ident, modules, models, activities, reportingSvc, docs, searchSvc, analyticsSvc, monitoringSvc, policySvc)
+	registerUIRoutes(mux, ident, modules, models, activities, reportingSvc, docs, searchSvc, analyticsSvc, monitoringSvc, policySvc, fieldSecurity)
 
 	return withObservability(withAuthentication(withCSRFProtection(mux, cfg), ident), loggerSvc, obsSvc)
 }

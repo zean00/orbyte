@@ -5,7 +5,9 @@ import (
 
 	"clinic/internal/platform/document"
 	"clinic/internal/platform/model"
+	"clinic/internal/platform/policy"
 	"clinic/internal/platform/search"
+	"clinic/internal/platform/securityfields"
 )
 
 func TestExecuteModelDataset(t *testing.T) {
@@ -93,6 +95,62 @@ func TestExecuteAdHocSourceSupportsDocumentsAndProjections(t *testing.T) {
 	}
 	if projResult["total"].(int) != 2 {
 		t.Fatalf("expected 2 projected rows, got %+v", projResult)
+	}
+}
+
+func TestExecuteAdHocSourceSanitizesDocumentPayloadForReporting(t *testing.T) {
+	models := model.NewService()
+	docs := document.NewService()
+	record, err := docs.Create("generic_request", "org_default", "loc_hq", "u1", map[string]any{
+		"title":       "Visible Title",
+		"patient_ssn": "999-11-2222",
+	})
+	if err != nil {
+		t.Fatalf("create document failed: %v", err)
+	}
+	searchSvc := search.NewService()
+	searchSvc.RefreshDocument(record)
+	policySvc := policy.NewService()
+	if err := policySvc.Register(policy.HookDefinition{
+		Key:           "documents.fields.profile",
+		Kind:          "security",
+		Target:        "document_fields",
+		AllowedScopes: []string{"deployment"},
+		DefaultRule:   map[string]any{"fields": map[string]any{}},
+	}); err != nil {
+		t.Fatalf("register policy hook failed: %v", err)
+	}
+	if err := policySvc.SetEvaluator("documents.fields.profile", func(req policy.Request) policy.Decision {
+		return policy.Decision{Allowed: true, Output: map[string]any{
+			"fields": map[string]any{
+				"patient_ssn": map[string]any{"visible": false, "export_visible": false},
+			},
+		}}
+	}); err != nil {
+		t.Fatalf("set evaluator failed: %v", err)
+	}
+
+	svc := NewService(models)
+	svc.AttachDocumentSources(docs, searchSvc)
+	svc.AttachFieldSecurity(securityfields.NewService(policySvc))
+
+	result, err := svc.ExecuteAdHocSource("documents", model.Query{Page: 1, PageSize: 100}, QueryRequest{
+		Dimensions: []string{"body.payload.title", "body.payload.patient_ssn"},
+		GroupBy:    []string{"body.payload.title"},
+		Measures:   []string{"count"},
+	})
+	if err != nil {
+		t.Fatalf("execute ad hoc documents failed: %v", err)
+	}
+	rows := result["rows"].([]map[string]any)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 reporting row, got %+v", result)
+	}
+	if rows[0]["body.payload.title"] != "Visible Title" {
+		t.Fatalf("expected visible title in reporting rows, got %+v", rows[0])
+	}
+	if rows[0]["body.payload.patient_ssn"] != nil {
+		t.Fatalf("expected hidden patient_ssn to be removed from reporting rows, got %+v", rows[0])
 	}
 }
 

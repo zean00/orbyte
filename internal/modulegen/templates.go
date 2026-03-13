@@ -2,7 +2,9 @@ package modulegen
 
 import (
 	"bytes"
+	"fmt"
 	"go/format"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -36,11 +38,18 @@ type templateData struct {
 	DocumentPermissionBase string
 	ModelPermissionBase    string
 	RouteBase              string
+	ModelFieldLiterals     []string
+	ModelPrimaryFieldKey   string
+	ModelStatusFieldKey    string
+	HasModelStatusField    bool
 }
 
 func buildTemplateData(spec Spec) templateData {
 	pkg := spec.Module.Key
 	routeBase := "/" + strings.ReplaceAll(spec.Module.Key, "_", "-")
+	modelFields := renderModelFieldLiterals(spec.Model.Fields)
+	primaryField := firstModelFieldKey(spec.Model.Fields, "name")
+	statusField := firstModelFieldKey(spec.Model.Fields, "status")
 	return templateData{
 		Spec:                   spec,
 		PackageName:            pkg,
@@ -70,7 +79,113 @@ func buildTemplateData(spec Spec) templateData {
 		DocumentPermissionBase: spec.Module.Key + ".document",
 		ModelPermissionBase:    spec.Module.Key,
 		RouteBase:              routeBase,
+		ModelFieldLiterals:     modelFields,
+		ModelPrimaryFieldKey:   primaryField,
+		ModelStatusFieldKey:    statusField,
+		HasModelStatusField:    statusField != "",
 	}
+}
+
+func renderModelFieldLiterals(fields []ModelFieldOptions) []string {
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts := []string{
+			`Key: ` + strconv.Quote(field.Key),
+			`Label: ` + strconv.Quote(firstNonEmpty(field.Label, exportedName(field.Key))),
+			`Type: ` + strconv.Quote(field.Type),
+		}
+		if field.Required {
+			parts = append(parts, "Required: true")
+		}
+		if field.ReadOnly {
+			parts = append(parts, "ReadOnly: true")
+		}
+		if field.Indexed {
+			parts = append(parts, "Indexed: true")
+		}
+		if field.Sensitive {
+			parts = append(parts, "Sensitive: true")
+		}
+		if strings.TrimSpace(field.SecurityClass) != "" {
+			parts = append(parts, `SecurityClass: `+strconv.Quote(strings.TrimSpace(field.SecurityClass)))
+		}
+		if strings.TrimSpace(field.DefaultMask) != "" {
+			parts = append(parts, `DefaultMask: `+strconv.Quote(strings.TrimSpace(field.DefaultMask)))
+		}
+		if field.SearchVisible != nil {
+			parts = append(parts, fmt.Sprintf("SearchVisible: boolPtr(%t)", *field.SearchVisible))
+		}
+		if field.ExportVisible != nil {
+			parts = append(parts, fmt.Sprintf("ExportVisible: boolPtr(%t)", *field.ExportVisible))
+		}
+		if strings.TrimSpace(field.ReadPermissionKey) != "" {
+			parts = append(parts, `ReadPermissionKey: `+strconv.Quote(strings.TrimSpace(field.ReadPermissionKey)))
+		}
+		if strings.TrimSpace(field.WritePermissionKey) != "" {
+			parts = append(parts, `WritePermissionKey: `+strconv.Quote(strings.TrimSpace(field.WritePermissionKey)))
+		}
+		if field.DefaultValue != nil {
+			parts = append(parts, "DefaultValue: "+renderLiteral(field.DefaultValue))
+		}
+		if strings.TrimSpace(field.DefaultRuleKey) != "" {
+			parts = append(parts, `DefaultRuleKey: `+strconv.Quote(strings.TrimSpace(field.DefaultRuleKey)))
+		}
+		if strings.TrimSpace(field.ComputeRuleKey) != "" {
+			parts = append(parts, `ComputeRuleKey: `+strconv.Quote(strings.TrimSpace(field.ComputeRuleKey)))
+		}
+		if len(field.ConstraintRuleKeys) > 0 {
+			keys := make([]string, 0, len(field.ConstraintRuleKeys))
+			for _, key := range field.ConstraintRuleKeys {
+				keys = append(keys, strconv.Quote(strings.TrimSpace(key)))
+			}
+			parts = append(parts, "ConstraintRuleKeys: []string{"+strings.Join(keys, ", ")+"}")
+		}
+		out = append(out, "{"+strings.Join(parts, ", ")+"}")
+	}
+	return out
+}
+
+func firstModelFieldKey(fields []ModelFieldOptions, preferred string) string {
+	for _, field := range fields {
+		if field.Key == preferred {
+			return field.Key
+		}
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0].Key
+}
+
+func renderLiteral(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strconv.Quote(typed)
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	case int:
+		return strconv.Itoa(typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
+	default:
+		return strconv.Quote(fmt.Sprintf("%v", typed))
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func exportedName(value string) string {
@@ -113,7 +228,9 @@ func renderGoTemplate(source string, data templateData) (string, error) {
 }
 
 func parseTextTemplate(source string) (*template.Template, error) {
-	return template.New("text").Parse(source)
+	return template.New("text").Funcs(template.FuncMap{
+		"exportedName": exportedName,
+	}).Parse(source)
 }
 
 const manifestTemplate = `package {{.PackageName}}
@@ -161,10 +278,11 @@ func Manifest() module.Manifest {
 				ListPermissionKey:   "{{.ModelPermissionBase}}.list",
 				ReadPermissionKey:   "{{.ModelPermissionBase}}.read",
 				UpdatePermissionKey: "{{.ModelPermissionBase}}.update",
-				DefaultSort:         "name",
+				DefaultSort:         "{{.ModelPrimaryFieldKey}}",
 				Fields: []model.FieldDefinition{
-					{Key: "name", Label: "Name", Type: "string", Required: true},
-					{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
+					{{- range .ModelFieldLiterals }}
+					{{.}},
+					{{- end }}
 				},
 			},
 		},
@@ -176,7 +294,7 @@ func Manifest() module.Manifest {
 				SourceKind: "model",
 				ModelKey:   "{{.Spec.Model.Key}}",
 				Dimensions: []module.DatasetDimension{
-					{Key: "by_status", Label: "By Status", Path: "status"},
+					{Key: "{{if .HasModelStatusField}}by_{{.ModelStatusFieldKey}}{{else}}by_{{.ModelPrimaryFieldKey}}{{end}}", Label: "{{if .HasModelStatusField}}By Status{{else}}By {{exportedName .ModelPrimaryFieldKey}}{{end}}", Path: "{{if .HasModelStatusField}}{{.ModelStatusFieldKey}}{{else}}{{.ModelPrimaryFieldKey}}{{end}}"},
 				},
 				Measures: []module.DatasetMeasure{
 					{Key: "total", Label: "Total", Kind: "count"},
@@ -200,15 +318,15 @@ func Manifest() module.Manifest {
 				Modes:               []string{"keyword", "vector", "hybrid"},
 				OrganizationSplit:   true,
 				RequiredPermissions: []string{"{{if .HasModel}}{{.ModelPermissionBase}}.list{{else}}{{.DocumentPermissionBase}}.list{{end}}"},
-				QueryFilterFields:   []string{"status"},
-				QuerySortFields:     []string{"name", "updated_at"},
+				QueryFilterFields:   []string{"{{if .HasModelStatusField}}{{.ModelStatusFieldKey}}{{else}}{{.ModelPrimaryFieldKey}}{{end}}"},
+				QuerySortFields:     []string{"{{if .HasModel}}{{.ModelPrimaryFieldKey}}{{else}}name{{end}}", "updated_at"},
 				Fields: []search.IndexFieldDefinition{
-					{Key: "name", Path: "{{if .HasModel}}name{{else}}body.payload.title{{end}}", Type: "string", Searchable: true, Sort: true},
-					{Key: "status", Path: "{{if .HasModel}}status{{else}}header.status{{end}}", Type: "string", Facet: true, Sort: true},
+					{Key: "name", Path: "{{if .HasModel}}{{.ModelPrimaryFieldKey}}{{else}}body.payload.title{{end}}", Type: "string", Searchable: true, Sort: true},
+					{Key: "{{if .HasModelStatusField}}{{.ModelStatusFieldKey}}{{else}}status{{end}}", Path: "{{if .HasModel}}{{if .HasModelStatusField}}{{.ModelStatusFieldKey}}{{else}}{{.ModelPrimaryFieldKey}}{{end}}{{else}}header.status{{end}}", Type: "string", Facet: true, Sort: true},
 				},
 				VectorFields: []search.VectorFieldDefinition{
 					{
-						Key: "semantic", SourcePaths: []string{"{{if .HasModel}}name{{else}}body.payload.title{{end}}"}, EmbeddingMode: "external", Dimensions: 8, DistanceMetric: "cosine",
+						Key: "semantic", SourcePaths: []string{"{{if .HasModel}}{{.ModelPrimaryFieldKey}}{{else}}body.payload.title{{end}}"}, EmbeddingMode: "external", Dimensions: 8, DistanceMetric: "cosine",
 					},
 				},
 			},
@@ -365,6 +483,10 @@ func Manifest() module.Manifest {
 		},
 		{{- end }}
 	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 `
 

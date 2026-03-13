@@ -9,10 +9,12 @@ import (
 	application "clinic/internal/platform/application"
 	"clinic/internal/platform/identity"
 	"clinic/internal/platform/model"
+	"clinic/internal/platform/policy"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 )
 
-func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *model.Service, activities *activity.Service, modelActions *application.ModelActions) {
+func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *model.Service, activities *activity.Service, _ *policy.Service, fieldSecurity *securityfields.Service, modelActions *application.ModelActions) {
 	mux.HandleFunc("POST /models/", func(w http.ResponseWriter, r *http.Request) {
 		if modelKey, recordID, relationKey, ok := modelRelationPath(r.URL.Path); ok && recordID != "" && relationKey != "" {
 			def, found := models.Definition(modelKey)
@@ -41,6 +43,12 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 				respondError(w, shared.Validation("invalid model relation payload"))
 				return
 			}
+			if targetDef, ok := relatedDefinition(models, def, relationKey); ok {
+				if err := validateModelWriteAccess(fieldSecurity, ident, p, targetDef, req.Values, "api"); err != nil {
+					respondError(w, err)
+					return
+				}
+			}
 			var (
 				record model.Record
 				err    error
@@ -60,6 +68,9 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			}
 			if modelActions == nil {
 				_, _ = activities.AddMessage("model:"+modelKey, recordID, p.userID, "Related record created", map[string]any{"model_key": modelKey, "relation_key": relationKey, "related_record_id": record.ID})
+			}
+			if targetDef, ok := relatedDefinition(models, def, relationKey); ok {
+				record = sanitizeModelRecord(fieldSecurity, ident, p, targetDef, record, "api")
 			}
 			respondJSON(w, http.StatusCreated, record)
 			return
@@ -84,6 +95,10 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			respondError(w, shared.Validation("invalid model payload"))
 			return
 		}
+		if err := validateModelWriteAccess(fieldSecurity, ident, p, def, req.Values, "api"); err != nil {
+			respondError(w, err)
+			return
+		}
 		var (
 			record  model.Record
 			related map[string][]model.Record
@@ -101,6 +116,8 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 		if modelActions == nil {
 			_, _ = activities.AddMessage("model:"+modelKey, record.ID, p.userID, "Record created", map[string]any{"model_key": modelKey})
 		}
+		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, "api")
+		related = sanitizeRelatedRecords(fieldSecurity, ident, p, models, def, related, "api")
 		respondJSON(w, http.StatusCreated, map[string]any{"record": record, "related": related})
 	})
 
@@ -111,14 +128,22 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 				respondError(w, shared.NotFound("model definition not found"))
 				return
 			}
-			if _, ok := requireAuthorization(w, r, ident, def.ReadPermissionKey, "", ""); !ok {
+			p, ok := requireAuthorization(w, r, ident, def.ReadPermissionKey, "", "")
+			if !ok {
 				return
 			}
-			items, total, err := models.Related(modelKey, recordID, relationKey, relationQuery(r))
+			query := relationQuery(r)
+			targetDef, _ := relatedDefinition(models, def, relationKey)
+			if err := validateModelQueryAccess(fieldSecurity, ident, p, targetDef, query, "api"); err != nil {
+				respondError(w, err)
+				return
+			}
+			items, total, err := models.Related(modelKey, recordID, relationKey, query)
 			if err != nil {
 				respondError(w, err)
 				return
 			}
+			items = sanitizeModelRecords(fieldSecurity, ident, p, targetDef, items, "api")
 			respondJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "relation_key": relationKey})
 			return
 		}
@@ -133,19 +158,27 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			return
 		}
 		if recordID == "" {
-			if _, ok := requireAuthorization(w, r, ident, def.ListPermissionKey, "", ""); !ok {
+			p, ok := requireAuthorization(w, r, ident, def.ListPermissionKey, "", "")
+			if !ok {
 				return
 			}
-			items, total, err := models.List(modelKey, relationQuery(r))
+			query := relationQuery(r)
+			if err := validateModelQueryAccess(fieldSecurity, ident, p, def, query, "api"); err != nil {
+				respondError(w, err)
+				return
+			}
+			items, total, err := models.List(modelKey, query)
 			if err != nil {
 				respondError(w, err)
 				return
 			}
-			_, relatedDefs := relatedModelPayload(models, def, "")
+			items = sanitizeModelRecords(fieldSecurity, ident, p, def, items, "api")
+			_, relatedDefs := relatedModelPayload(models, fieldSecurity, ident, p, def, "", "api")
 			respondJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "definition": def, "related_definitions": relatedDefs})
 			return
 		}
-		if _, ok := requireAuthorization(w, r, ident, def.ReadPermissionKey, "", ""); !ok {
+		p, ok := requireAuthorization(w, r, ident, def.ReadPermissionKey, "", "")
+		if !ok {
 			return
 		}
 		record, err := models.Get(modelKey, recordID)
@@ -153,7 +186,8 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			respondError(w, err)
 			return
 		}
-		related, relatedDefs := relatedModelPayload(models, def, record.ID)
+		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, "api")
+		related, relatedDefs := relatedModelPayload(models, fieldSecurity, ident, p, def, record.ID, "api")
 		respondJSON(w, http.StatusOK, map[string]any{
 			"record":              record,
 			"definition":          def,
@@ -184,6 +218,10 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			respondError(w, shared.Validation("invalid model payload"))
 			return
 		}
+		if err := validateModelWriteAccess(fieldSecurity, ident, p, def, req.Values, "api"); err != nil {
+			respondError(w, err)
+			return
+		}
 		var (
 			record  model.Record
 			related map[string][]model.Record
@@ -201,6 +239,8 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 		if modelActions == nil {
 			_, _ = activities.AddMessage("model:"+modelKey, record.ID, p.userID, "Record updated", map[string]any{"model_key": modelKey})
 		}
+		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, "api")
+		related = sanitizeRelatedRecords(fieldSecurity, ident, p, models, def, related, "api")
 		respondJSON(w, http.StatusOK, map[string]any{"record": record, "related": related})
 	})
 
@@ -218,7 +258,7 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 	})
 }
 
-func relatedModelPayload(models *model.Service, def model.Definition, recordID string) (map[string]any, map[string]model.Definition) {
+func relatedModelPayload(models *model.Service, fieldSecurity *securityfields.Service, ident *identity.Service, p principal, def model.Definition, recordID, channel string) (map[string]any, map[string]model.Definition) {
 	items := map[string]any{}
 	defs := map[string]model.Definition{}
 	for _, relation := range def.Relations {
@@ -235,14 +275,17 @@ func relatedModelPayload(models *model.Service, def model.Definition, recordID s
 		}
 		graphItems := make([]map[string]any, 0, len(records))
 		for _, item := range records {
-			graphItems = append(graphItems, modelGraphNode(models, relation.TargetModelKey, item, map[string]bool{def.Key: true}))
+			graphItems = append(graphItems, modelGraphNode(models, fieldSecurity, ident, p, relation.TargetModelKey, item, map[string]bool{def.Key: true}, channel))
 		}
 		items[relation.Key] = graphItems
 	}
 	return items, defs
 }
 
-func modelGraphNode(models *model.Service, modelKey string, record model.Record, visited map[string]bool) map[string]any {
+func modelGraphNode(models *model.Service, fieldSecurity *securityfields.Service, ident *identity.Service, p principal, modelKey string, record model.Record, visited map[string]bool, channel string) map[string]any {
+	if def, ok := models.Definition(modelKey); ok {
+		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, channel)
+	}
 	node := map[string]any{"record": record}
 	if visited[modelKey] {
 		return node
@@ -264,12 +307,38 @@ func modelGraphNode(models *model.Service, modelKey string, record model.Record,
 		}
 		children := make([]map[string]any, 0, len(items))
 		for _, item := range items {
-			children = append(children, modelGraphNode(models, relation.TargetModelKey, item, nextVisited))
+			children = append(children, modelGraphNode(models, fieldSecurity, ident, p, relation.TargetModelKey, item, nextVisited, channel))
 		}
 		related[relation.Key] = children
 	}
 	node["related"] = related
 	return node
+}
+
+func relatedDefinition(models *model.Service, def model.Definition, relationKey string) (model.Definition, bool) {
+	for _, relation := range def.Relations {
+		if relation.Key != relationKey {
+			continue
+		}
+		return models.Definition(relation.TargetModelKey)
+	}
+	return model.Definition{}, false
+}
+
+func sanitizeRelatedRecords(fieldSecurity *securityfields.Service, ident *identity.Service, p principal, models *model.Service, def model.Definition, related map[string][]model.Record, channel string) map[string][]model.Record {
+	if len(related) == 0 {
+		return related
+	}
+	out := make(map[string][]model.Record, len(related))
+	for relationKey, items := range related {
+		targetDef, ok := relatedDefinition(models, def, relationKey)
+		if !ok {
+			out[relationKey] = items
+			continue
+		}
+		out[relationKey] = sanitizeModelRecords(fieldSecurity, ident, p, targetDef, items, channel)
+	}
+	return out
 }
 
 func allModelDefinitions(models *model.Service) map[string]model.Definition {

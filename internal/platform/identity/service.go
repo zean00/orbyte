@@ -190,15 +190,14 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 	credentials := []Credential(nil)
 	if bootstrapPassword != "" {
 		adminPasswordHash, err := HashPassword(bootstrapPassword)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			credentials = append(credentials, Credential{
+				UserID:            "user_admin",
+				PasswordHash:      adminPasswordHash,
+				PasswordChangedAt: now,
+				UpdatedAt:         now,
+			})
 		}
-		credentials = append(credentials, Credential{
-			UserID:            "user_admin",
-			PasswordHash:      adminPasswordHash,
-			PasswordChangedAt: now,
-			UpdatedAt:         now,
-		})
 	}
 	sessions := []Session{{
 		ID:                   "sess_admin",

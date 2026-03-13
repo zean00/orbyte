@@ -93,8 +93,29 @@ type DocumentOptions struct {
 }
 
 type ModelOptions struct {
-	Key         string `yaml:"key"`
-	DisplayName string `yaml:"display_name"`
+	Key         string              `yaml:"key"`
+	DisplayName string              `yaml:"display_name"`
+	Fields      []ModelFieldOptions `yaml:"fields,omitempty"`
+}
+
+type ModelFieldOptions struct {
+	Key                string   `yaml:"key"`
+	Label              string   `yaml:"label,omitempty"`
+	Type               string   `yaml:"type"`
+	Required           bool     `yaml:"required,omitempty"`
+	ReadOnly           bool     `yaml:"read_only,omitempty"`
+	Indexed            bool     `yaml:"indexed,omitempty"`
+	Sensitive          bool     `yaml:"sensitive,omitempty"`
+	SecurityClass      string   `yaml:"security_class,omitempty"`
+	DefaultMask        string   `yaml:"default_mask,omitempty"`
+	SearchVisible      *bool    `yaml:"search_visible,omitempty"`
+	ExportVisible      *bool    `yaml:"export_visible,omitempty"`
+	ReadPermissionKey  string   `yaml:"read_permission_key,omitempty"`
+	WritePermissionKey string   `yaml:"write_permission_key,omitempty"`
+	DefaultValue       any      `yaml:"default_value,omitempty"`
+	DefaultRuleKey     string   `yaml:"default_rule_key,omitempty"`
+	ComputeRuleKey     string   `yaml:"compute_rule_key,omitempty"`
+	ConstraintRuleKeys []string `yaml:"constraint_rule_keys,omitempty"`
 }
 
 type Spec struct {
@@ -247,6 +268,22 @@ func ValidateSpec(root string, spec Spec) error {
 		if strings.TrimSpace(spec.Model.Key) == "" {
 			return fmt.Errorf("model.key is required for %s modules", spec.Module.Kind)
 		}
+		if len(spec.Model.Fields) == 0 {
+			return fmt.Errorf("model.fields is required for %s modules", spec.Module.Kind)
+		}
+		seen := map[string]bool{}
+		for _, field := range spec.Model.Fields {
+			if strings.TrimSpace(field.Key) == "" {
+				return fmt.Errorf("model.fields.key is required")
+			}
+			if strings.TrimSpace(field.Type) == "" {
+				return fmt.Errorf("model.fields[%s].type is required", field.Key)
+			}
+			if seen[field.Key] {
+				return fmt.Errorf("model field %q is duplicated", field.Key)
+			}
+			seen[field.Key] = true
+		}
 	}
 	return nil
 }
@@ -298,6 +335,12 @@ func fillDerivedDefaults(spec *Spec) {
 	}
 	if spec.Model.DisplayName == "" && spec.Model.Key != "" {
 		spec.Model.DisplayName = spec.Module.Name
+	}
+	if len(spec.Model.Fields) == 0 && (spec.Module.Kind == KindModel || spec.Module.Kind == KindHybrid) {
+		spec.Model.Fields = []ModelFieldOptions{
+			{Key: "name", Label: "Name", Type: "string", Required: true},
+			{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
+		}
 	}
 }
 

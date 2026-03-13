@@ -1,12 +1,16 @@
 package search
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"clinic/internal/platform/document"
 	"clinic/internal/platform/jobs"
 	"clinic/internal/platform/model"
+	"clinic/internal/platform/policy"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 )
 
@@ -115,6 +119,73 @@ func TestRegisterIndexAndQueryDocumentSearch(t *testing.T) {
 	}
 }
 
+func TestDocumentSearchHonorsSearchVisibleWithoutHidingAPIField(t *testing.T) {
+	svc := NewService()
+	policies := policy.NewService()
+	if err := policies.Register(policy.HookDefinition{Key: "documents.fields.profile", Kind: "security", Target: "document_fields", AllowedScopes: []string{"deployment"}, DefaultRule: map[string]any{"fields": map[string]any{}}}); err != nil {
+		t.Fatalf("register policy hook failed: %v", err)
+	}
+	if err := policies.SetEvaluator("documents.fields.profile", func(req policy.Request) policy.Decision {
+		return policy.Decision{Allowed: true, Output: map[string]any{
+			"fields": map[string]any{
+				"patient_code": map[string]any{"visible": true, "search_visible": false},
+			},
+		}}
+	}); err != nil {
+		t.Fatalf("set evaluator failed: %v", err)
+	}
+	svc.AttachFieldSecurity(securityfields.NewService(policies))
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "documents.requests.secure",
+		Title:             "Requests Secure",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"title"},
+		Fields: []IndexFieldDefinition{
+			{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true},
+			{Key: "patient_code", Path: "body.payload.patient_code", Type: "string", Searchable: true},
+		},
+	}); err != nil {
+		t.Fatalf("register index failed: %v", err)
+	}
+	record := document.Record{
+		Header: document.Header{
+			ID:             "d-secure",
+			Type:           "generic_request",
+			Status:         "submitted",
+			Version:        1,
+			ETag:           "d-secure:1",
+			OrganizationID: "org_default",
+			UpdatedAt:      time.Now().UTC(),
+			TotalAmount:    shared.Money{Currency: "IDR"},
+		},
+		Body: document.Body{Payload: map[string]any{
+			"title":        "visible title",
+			"patient_code": "PC-777",
+		}},
+	}
+	svc.RefreshDocument(record)
+	result, err := svc.Query("documents.requests.secure", "org_default", "", QueryRequest{Query: "PC-777"})
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if result.Total != 0 {
+		t.Fatalf("expected search_visible=false field to stay out of search index, got %+v", result)
+	}
+	titleResult, err := svc.Query("documents.requests.secure", "org_default", "", QueryRequest{Query: "visible"})
+	if err != nil {
+		t.Fatalf("title query failed: %v", err)
+	}
+	if titleResult.Total != 1 {
+		t.Fatalf("expected title field to remain searchable, got %+v", titleResult)
+	}
+	if _, ok := titleResult.Hits[0].Fields["patient_code"]; ok {
+		t.Fatalf("expected search hit to omit patient_code, got %+v", titleResult.Hits[0].Fields)
+	}
+}
+
 func TestRefreshModelIndexesModelSearch(t *testing.T) {
 	models := model.NewService()
 	if err := models.Register(model.Definition{
@@ -154,6 +225,65 @@ func TestRefreshModelIndexesModelSearch(t *testing.T) {
 	}
 	if result.Total != 1 {
 		t.Fatalf("expected one model hit, got %+v", result)
+	}
+}
+
+func TestRefreshModelSearchAppliesFieldSecurity(t *testing.T) {
+	models := model.NewService()
+	if err := models.Register(model.Definition{
+		Key:         "party",
+		DisplayName: "Party",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string"},
+			{Key: "email", Type: "string", Sensitive: true, DefaultMask: "partial_email"},
+			{Key: "organization_id", Type: "string"},
+		},
+	}); err != nil {
+		t.Fatalf("register model failed: %v", err)
+	}
+	record, err := models.Create("party", "user_admin", map[string]any{
+		"name":            "PT Secure",
+		"email":           "secure@example.com",
+		"organization_id": "org_default",
+	})
+	if err != nil {
+		t.Fatalf("create model failed: %v", err)
+	}
+	policies := policy.NewService()
+	if err := policies.Register(policy.HookDefinition{Key: "models.fields.profile", Kind: "security", Target: "model_fields", AllowedScopes: []string{"deployment"}, DefaultRule: map[string]any{"fields": map[string]any{}}}); err != nil {
+		t.Fatalf("register policy hook failed: %v", err)
+	}
+	fieldSecurity := securityfields.NewService(policies)
+
+	svc := NewService()
+	svc.AttachSources(nil, models)
+	svc.AttachFieldSecurity(fieldSecurity)
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "masterdata.party.secure",
+		Title:             "Party Secure Search",
+		SourceKind:        "model",
+		ModelKey:          "party",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"name"},
+		Fields: []IndexFieldDefinition{
+			{Key: "name", Path: "name", Type: "string", Searchable: true, Sort: true},
+			{Key: "email", Path: "email", Type: "string", Searchable: true},
+		},
+	}); err != nil {
+		t.Fatalf("register model index failed: %v", err)
+	}
+
+	svc.RefreshModel(record)
+	result, err := svc.Query("masterdata.party.secure", "org_default", "", QueryRequest{Query: "secure"})
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected one secured model hit, got %+v", result)
+	}
+	if _, ok := result.Hits[0].Fields["email"]; ok {
+		t.Fatalf("expected sensitive email to be excluded from search hit, got %+v", result.Hits[0].Fields)
 	}
 }
 
@@ -245,6 +375,12 @@ func TestServiceSettersAndAsyncEnqueue(t *testing.T) {
 	svc.SetEmbedder(NewHashEmbedder())
 	jobSvc := jobs.NewService()
 	svc.AttachJobs(jobSvc)
+	ctx, cancel := context.WithCancel(context.Background())
+	jobSvc.Start(ctx)
+	defer func() {
+		cancel()
+		jobSvc.Stop()
+	}()
 	if err := svc.RegisterIndex(IndexDefinition{
 		Key:               "documents.async.search",
 		Title:             "Async",
@@ -275,3 +411,49 @@ func TestServiceSettersAndAsyncEnqueue(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestRefreshDocumentFallsBackWhenJobEnqueueFails(t *testing.T) {
+	svc := NewService()
+	svc.AttachSources(document.NewService(), nil)
+	svc.SetBackend(NewMemoryBackend())
+	svc.AttachJobs(jobs.NewServiceWithRepository(failingJobRepository{}))
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "documents.sync-fallback.search",
+		Title:             "SyncFallback",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"title"},
+		Fields:            []IndexFieldDefinition{{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true}},
+	}); err != nil {
+		t.Fatalf("register index failed: %v", err)
+	}
+	svc.RefreshDocument(document.Record{
+		Header: document.Header{ID: "d-fallback", Type: "generic_request", Status: "draft", Version: 1, ETag: "d-fallback:1", OrganizationID: "org_default", UpdatedAt: time.Now().UTC()},
+		Body:   document.Body{Payload: map[string]any{"title": "fallback path"}},
+	})
+	result, err := svc.Query("documents.sync-fallback.search", "org_default", "", QueryRequest{Query: "fallback"})
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected fallback indexing to complete, got %+v", result)
+	}
+}
+
+type failingJobRepository struct{}
+
+func (failingJobRepository) Enqueue(job jobs.Job) (jobs.Job, bool, error) {
+	return jobs.Job{}, false, errors.New("enqueue failed")
+}
+
+func (failingJobRepository) Get(string) (jobs.Job, bool) { return jobs.Job{}, false }
+
+func (failingJobRepository) ClaimPending(time.Time, time.Duration, int) []jobs.Job { return nil }
+
+func (failingJobRepository) RenewLease(string, time.Time, time.Duration) error { return nil }
+
+func (failingJobRepository) MarkSucceeded(string, map[string]any, time.Time) error { return nil }
+
+func (failingJobRepository) MarkFailed(string, string, string, time.Time) error { return nil }

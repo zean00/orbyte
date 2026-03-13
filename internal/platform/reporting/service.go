@@ -8,6 +8,7 @@ import (
 	"clinic/internal/platform/document"
 	"clinic/internal/platform/model"
 	"clinic/internal/platform/search"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 )
 
@@ -53,6 +54,7 @@ type Service struct {
 	models    *model.Service
 	documents *document.Service
 	search    *search.Service
+	fields    *securityfields.Service
 	datasets  map[string]DatasetDefinition
 }
 
@@ -63,6 +65,10 @@ func NewService(models *model.Service) *Service {
 func (s *Service) AttachDocumentSources(documents *document.Service, searchSvc *search.Service) {
 	s.documents = documents
 	s.search = searchSvc
+}
+
+func (s *Service) AttachFieldSecurity(fields *securityfields.Service) {
+	s.fields = fields
 }
 
 func (s *Service) Register(def DatasetDefinition) error {
@@ -83,6 +89,11 @@ func (s *Service) Definitions() []DatasetDefinition {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
+}
+
+func (s *Service) Definition(key string) (DatasetDefinition, bool) {
+	item, ok := s.datasets[strings.TrimSpace(key)]
+	return item, ok
 }
 
 func (s *Service) Execute(key string) (map[string]any, error) {
@@ -195,7 +206,7 @@ func (s *Service) ExecuteAdHocSource(source string, query model.Query, view Quer
 		if s.documents == nil {
 			return nil, shared.Validation("document source is not configured")
 		}
-		rows := documentRows(s.documents.List(), query)
+		rows := documentRows(s.documents.List(), query, s.fields)
 		definition := DatasetDefinition{
 			Key:        "adhoc:documents",
 			Title:      "Ad Hoc Documents",
@@ -461,11 +472,21 @@ func modelRows(items []model.Record) []map[string]any {
 	return rows
 }
 
-func documentRows(items []document.Record, query model.Query) []map[string]any {
+func documentRows(items []document.Record, query model.Query, fields *securityfields.Service) []map[string]any {
 	rows := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		if !matchesDocumentQuery(item, query) {
 			continue
+		}
+		payload := item.Body.Payload
+		if fields != nil {
+			payload = fields.SanitizeDocumentPayload(fields.DocumentProfile(securityfields.AccessContext{
+				OrganizationID: item.Header.OrganizationID,
+				LocationID:     item.Header.LocationID,
+				ScopeID:        item.Header.LocationID,
+				Channel:        "report",
+				State:          item.Header.Status,
+			}, item), payload)
 		}
 		rows = append(rows, map[string]any{
 			"id": item.Header.ID,
@@ -482,7 +503,7 @@ func documentRows(items []document.Record, query model.Query) []map[string]any {
 			},
 			"body": map[string]any{
 				"schema_version": item.Body.SchemaVersion,
-				"payload":        item.Body.Payload,
+				"payload":        payload,
 			},
 		})
 	}

@@ -10,6 +10,7 @@ import (
 	"clinic/internal/platform/document"
 	"clinic/internal/platform/jobs"
 	"clinic/internal/platform/model"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 )
 
@@ -47,6 +48,7 @@ type Service struct {
 	documents *document.Service
 	models    *model.Service
 	jobs      *jobs.Service
+	fields    *securityfields.Service
 
 	mu      sync.RWMutex
 	indexes map[string]IndexDefinition
@@ -86,6 +88,13 @@ func (s *Service) AttachSources(documents *document.Service, models *model.Servi
 
 func (s *Service) AttachJobs(jobSvc *jobs.Service) {
 	s.jobs = jobSvc
+	if jobSvc != nil {
+		s.registerJobHandlers(jobSvc)
+	}
+}
+
+func (s *Service) AttachFieldSecurity(fieldSecurity *securityfields.Service) {
+	s.fields = fieldSecurity
 }
 
 func (s *Service) RegisterIndex(def IndexDefinition) error {
@@ -194,45 +203,11 @@ func (s *Service) RefreshDocument(record document.Record) {
 		LocationID:     record.Header.LocationID,
 		UpdatedAt:      record.Header.UpdatedAt,
 	})
-	for _, def := range s.matchingDocumentIndexes(record.Header.Type) {
-		s.enqueue("search.index."+def.Key, func() (map[string]any, error) {
-			if err := s.indexDocument(def, record); err != nil {
-				return nil, err
-			}
-			return map[string]any{"index_key": def.Key, "source_id": record.Header.ID}, nil
-		})
-	}
-	for _, def := range s.matchingProjectionIndexes("document_summary") {
-		summary := DocumentSummary{
-			DocumentID:     record.Header.ID,
-			DocumentType:   record.Header.Type,
-			Status:         record.Header.Status,
-			Version:        record.Header.Version,
-			ETag:           record.Header.ETag,
-			OrganizationID: record.Header.OrganizationID,
-			LocationID:     record.Header.LocationID,
-			UpdatedAt:      record.Header.UpdatedAt,
-		}
-		s.enqueue("search.index."+def.Key, func() (map[string]any, error) {
-			if err := s.indexProjectionSummary(def, summary); err != nil {
-				return nil, err
-			}
-			return map[string]any{"index_key": def.Key, "source_id": summary.DocumentID}, nil
-		})
-	}
+	s.enqueueDocumentRefresh(record)
 }
 
 func (s *Service) RefreshModel(record model.Record) {
-	for _, def := range s.matchingModelIndexes(record.ModelKey) {
-		def := def
-		record := record
-		s.enqueue("search.index."+def.Key, func() (map[string]any, error) {
-			if err := s.indexModel(def, record); err != nil {
-				return nil, err
-			}
-			return map[string]any{"index_key": def.Key, "source_id": record.ID}, nil
-		})
-	}
+	s.enqueueModelRefresh(record)
 }
 
 func (s *Service) RefreshModelByID(modelKey, recordID string) error {
@@ -376,12 +351,76 @@ func (s *Service) Consistency(records []document.Record) ProjectionConsistency {
 	return report
 }
 
-func (s *Service) enqueue(name string, fn func() (map[string]any, error)) {
+func (s *Service) enqueue(name string, payload map[string]any, fn func() error) {
 	if s.jobs == nil {
-		_, _ = fn()
+		if fn != nil {
+			_ = fn()
+		}
 		return
 	}
-	s.jobs.Enqueue(name, fn)
+	if _, err := s.jobs.Enqueue(name, payload); err != nil && fn != nil {
+		_ = fn()
+	}
+}
+
+func (s *Service) enqueueDocumentRefresh(record document.Record) {
+	if s.jobs == nil || s.documents == nil {
+		_ = s.indexDocumentAndProjection(record)
+		return
+	}
+	payload := map[string]any{
+		"document_id": record.Header.ID,
+	}
+	s.enqueue(JobRefreshDocument, payload, func() error {
+		return s.indexDocumentAndProjection(record)
+	})
+}
+
+func (s *Service) enqueueModelRefresh(record model.Record) {
+	if s.jobs == nil || s.models == nil {
+		_ = s.indexModelByRecord(record)
+		return
+	}
+	payload := map[string]any{
+		"model_key": record.ModelKey,
+		"record_id": record.ID,
+	}
+	s.enqueue(JobRefreshModel, payload, func() error {
+		return s.indexModelByRecord(record)
+	})
+}
+
+func (s *Service) indexDocumentAndProjection(record document.Record) error {
+	for _, def := range s.matchingDocumentIndexes(record.Header.Type) {
+		if err := s.indexDocument(def, record); err != nil {
+			return err
+		}
+	}
+	summary := DocumentSummary{
+		DocumentID:     record.Header.ID,
+		DocumentType:   record.Header.Type,
+		Status:         record.Header.Status,
+		Version:        record.Header.Version,
+		ETag:           record.Header.ETag,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:     record.Header.LocationID,
+		UpdatedAt:      record.Header.UpdatedAt,
+	}
+	for _, def := range s.matchingProjectionIndexes("document_summary") {
+		if err := s.indexProjectionSummary(def, summary); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) indexModelByRecord(record model.Record) error {
+	for _, def := range s.matchingModelIndexes(record.ModelKey) {
+		if err := s.indexModel(def, record); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) matchingDocumentIndexes(documentType string) []IndexDefinition {
@@ -457,6 +496,24 @@ func (s *Service) indexProjectionSummary(def IndexDefinition, summary DocumentSu
 }
 
 func (s *Service) documentRecord(def IndexDefinition, record document.Record) (IndexedRecord, error) {
+	payload := record.Body.Payload
+	if s.fields != nil {
+		profile := s.fields.DocumentProfile(securityfields.AccessContext{
+			OrganizationID: record.Header.OrganizationID,
+			LocationID:     record.Header.LocationID,
+			ScopeID:        record.Header.LocationID,
+			Channel:        "search",
+			State:          record.Header.Status,
+		}, record)
+		for key, access := range profile.Fields {
+			if !access.SearchVisible {
+				access.Visible = false
+				access.Mask = ""
+				profile.Fields[key] = access
+			}
+		}
+		payload = s.fields.SanitizeDocumentPayload(profile, payload)
+	}
 	envelope := map[string]any{
 		"header": map[string]any{
 			"id":              record.Header.ID,
@@ -471,7 +528,7 @@ func (s *Service) documentRecord(def IndexDefinition, record document.Record) (I
 			"updated_at":      record.Header.UpdatedAt,
 		},
 		"body": map[string]any{
-			"payload": record.Body.Payload,
+			"payload": payload,
 		},
 	}
 	fields, vectors, err := s.extractIndexPayload(def, envelope)
@@ -492,7 +549,27 @@ func (s *Service) documentRecord(def IndexDefinition, record document.Record) (I
 }
 
 func (s *Service) modelRecord(def IndexDefinition, record model.Record) (IndexedRecord, error) {
-	envelope := cloneAnyMap(record.Values)
+	values := cloneAnyMap(record.Values)
+	if s.fields != nil && s.models != nil {
+		if modelDef, ok := s.models.Definition(def.ModelKey); ok {
+			profile := s.fields.ModelProfile(securityfields.AccessContext{
+				OrganizationID: stringValue(record.Values["organization_id"]),
+				LocationID:     stringValue(record.Values["location_id"]),
+				ScopeID:        stringValue(record.Values["location_id"]),
+				Channel:        "search",
+			}, modelDef)
+			for key, access := range profile.Fields {
+				if !access.SearchVisible {
+					access.Visible = false
+					access.Mask = ""
+					profile.Fields[key] = access
+				}
+			}
+			record = s.fields.SanitizeModelRecord(profile, record)
+			values = cloneAnyMap(record.Values)
+		}
+	}
+	envelope := values
 	envelope["id"] = record.ID
 	envelope["created_at"] = record.CreatedAt
 	envelope["updated_at"] = record.UpdatedAt
@@ -504,8 +581,8 @@ func (s *Service) modelRecord(def IndexDefinition, record model.Record) (Indexed
 		ID:             record.ID,
 		SourceID:       record.ID,
 		SourceKind:     "model",
-		OrganizationID: stringValue(record.Values["organization_id"]),
-		LocationID:     stringValue(record.Values["location_id"]),
+		OrganizationID: stringValue(values["organization_id"]),
+		LocationID:     stringValue(values["location_id"]),
 		Version:        record.Version,
 		UpdatedAt:      record.UpdatedAt,
 		Fields:         fields,
@@ -545,7 +622,11 @@ func (s *Service) projectionRecord(def IndexDefinition, summary DocumentSummary)
 func (s *Service) extractIndexPayload(def IndexDefinition, envelope map[string]any) (map[string]any, map[string][]float32, error) {
 	fields := map[string]any{}
 	for _, field := range def.Fields {
-		fields[field.Key] = resolvePath(envelope, field.Path)
+		value := resolvePath(envelope, field.Path)
+		if value == nil {
+			continue
+		}
+		fields[field.Key] = value
 	}
 	vectors := map[string][]float32{}
 	for _, field := range def.VectorFields {

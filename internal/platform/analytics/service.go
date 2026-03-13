@@ -8,6 +8,7 @@ import (
 	"clinic/internal/platform/audit"
 	"clinic/internal/platform/document"
 	"clinic/internal/platform/eventing"
+	"clinic/internal/platform/jobs"
 	"clinic/internal/platform/observability"
 	"clinic/internal/platform/search"
 	"clinic/internal/platform/workflow"
@@ -247,6 +248,7 @@ type Service struct {
 	audit     *audit.Service
 	obs       *observability.Service
 	repo      Repository
+	jobs      *jobs.Service
 }
 
 type ConsistencyReport struct {

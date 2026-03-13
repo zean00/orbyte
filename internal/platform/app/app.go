@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"clinic/internal/platform/policy"
 	"clinic/internal/platform/reporting"
 	"clinic/internal/platform/search"
+	"clinic/internal/platform/securityfields"
 	"clinic/internal/platform/shared"
 	"clinic/internal/platform/store"
 	"clinic/internal/platform/workflow"
@@ -67,16 +69,18 @@ type App struct {
 	Dispatcher         *eventing.Dispatcher
 }
 
-func New() *App {
+func New() (*App, error) {
 	databaseURLConfigured := strings.TrimSpace(os.Getenv("DATABASE_URL")) != ""
 	postgres, err := store.OpenFromEnv()
 	if err != nil {
 		if databaseURLConfigured {
-			panic(fmt.Sprintf("postgres unavailable while DATABASE_URL is configured: %v", err))
+			return nil, fmt.Errorf("postgres unavailable while DATABASE_URL is configured: %w", err)
 		}
 		log.Printf("postgres unavailable, using memory repositories: %v", err)
 	}
-	ensureJWTSecret(databaseURLConfigured)
+	if err := ensureJWTSecret(databaseURLConfigured); err != nil {
+		return nil, err
+	}
 
 	configSvc := config.NewService()
 	organizationSvc := organization.NewService()
@@ -91,6 +95,8 @@ func New() *App {
 	loggerSvc := logging.NewService()
 	obsSvc := observability.NewService()
 	policySvc := policy.NewServiceWithConfig(configSvc)
+	fieldSecuritySvc := securityfields.NewService(policySvc)
+	reportingSvc.AttachFieldSecurity(fieldSecuritySvc)
 	integrationSvc := integration.NewService(obsSvc, loggerSvc)
 	jobSvc := jobs.NewService()
 	integrationSvc.AttachPolicy(policySvc)
@@ -98,6 +104,7 @@ func New() *App {
 	searchSvc := search.NewService()
 	searchSvc.AttachSources(documentSvc, modelSvc)
 	searchSvc.AttachJobs(jobSvc)
+	searchSvc.AttachFieldSecurity(fieldSecuritySvc)
 	reportingSvc.AttachDocumentSources(documentSvc, searchSvc)
 	var submitStore application.SubmitStore
 	submitStore = application.NewMemorySubmitStore(documentSvc, workflowSvc, auditSvc, eventingSvc)
@@ -106,19 +113,23 @@ func New() *App {
 	if postgres != nil {
 		configSvc = config.NewServiceWithRepository(config.NewPostgresRepository(postgres.DB))
 		policySvc = policy.NewServiceWithConfig(configSvc)
+		fieldSecuritySvc = securityfields.NewService(policySvc)
 		organizationSvc = organization.NewServiceWithRepository(organization.NewPostgresRepository(postgres.DB))
 		identitySvc = identity.NewServiceWithRepository(organizationSvc, identity.NewPostgresRepository(postgres.DB))
 		moduleSvc = module.NewServiceWithRepository(module.NewPostgresRepository(postgres.DB))
 		modelSvc = model.NewServiceWithRepository(model.NewPostgresRepository(postgres.DB))
 		activitySvc = activity.NewService()
 		reportingSvc = reporting.NewService(modelSvc)
+		reportingSvc.AttachFieldSecurity(fieldSecuritySvc)
 		documentSvc = document.NewServiceWithRepository(document.NewPostgresRepository(postgres.DB))
 		workflowSvc = workflow.NewServiceWithRepository(workflow.NewPostgresRepository(postgres.DB))
 		auditSvc = audit.NewServiceWithRepository(audit.NewPostgresRepository(postgres.DB))
 		eventingSvc = eventing.NewServiceWithRepository(eventing.NewPostgresRepository(postgres.DB), obsSvc, loggerSvc)
+		jobSvc = jobs.NewServiceWithRepository(jobs.NewPostgresRepository(postgres.DB))
 		searchSvc = search.NewServiceWithRepository(search.NewPostgresRepository(postgres.DB))
 		searchSvc.AttachSources(documentSvc, modelSvc)
 		searchSvc.AttachJobs(jobSvc)
+		searchSvc.AttachFieldSecurity(fieldSecuritySvc)
 		reportingSvc.AttachDocumentSources(documentSvc, searchSvc)
 		analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
 		integrationSvc = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), obsSvc, loggerSvc)
@@ -126,12 +137,15 @@ func New() *App {
 		submitStore = application.NewPostgresSubmitStore(postgres.DB)
 		modelActions = application.NewPostgresModelActions(postgres.DB, modelSvc, activitySvc, auditSvc, eventingSvc)
 	}
-	seedPlatformKernel(configSvc, identitySvc, moduleSvc, modelSvc, reportingSvc, searchSvc, documentSvc, workflowSvc, policySvc, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD")))
+	if err := seedPlatformKernel(configSvc, identitySvc, moduleSvc, modelSvc, reportingSvc, searchSvc, documentSvc, workflowSvc, policySvc, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
+		return nil, err
+	}
 	if err := policySvc.ValidateConfiguredModules(); err != nil {
-		panic(err)
+		return nil, err
 	}
 	searchSvc.AttachSources(documentSvc, modelSvc)
 	searchSvc.AttachJobs(jobSvc)
+	searchSvc.AttachFieldSecurity(fieldSecuritySvc)
 	if typesenseCfg := configSvc.TypesensePolicy(); typesenseCfg.Enabled && typesenseCfg.Endpoint != "" && typesenseCfg.APIKey != "" {
 		searchSvc.SetBackend(search.NewTypesenseBackend(typesenseCfg.Endpoint, typesenseCfg.APIKey, time.Duration(typesenseCfg.TimeoutSeconds)*time.Second))
 	}
@@ -150,6 +164,7 @@ func New() *App {
 		eventingSvc.RegisterHandler(eventType, eventing.NewModelSearchIndexHandler(modelSvc, searchSvc))
 	}
 	analyticsSvc := analytics.NewServiceWithRepository(documentSvc, workflowSvc, eventingSvc, searchSvc, auditSvc, obsSvc, analyticsRepo)
+	analyticsSvc.AttachJobs(jobSvc)
 	analyticsScheduler := analytics.NewScheduler(analyticsSvc, time.Minute, 30*24*time.Hour)
 	monitoringSvc := monitoring.NewService(documentSvc, eventingSvc, workflowSvc, searchSvc, obsSvc)
 	dispatcher := eventing.NewDispatcher(eventingSvc, time.Second, 50)
@@ -204,22 +219,23 @@ func New() *App {
 		DocActions:         documentActions,
 		ModelActions:       modelActions,
 		Dispatcher:         dispatcher,
-	}
+	}, nil
 }
 
-func ensureJWTSecret(databaseURLConfigured bool) {
+func ensureJWTSecret(databaseURLConfigured bool) error {
 	if strings.TrimSpace(os.Getenv("APP_JWT_SECRET")) != "" {
-		return
+		return nil
 	}
 	if databaseURLConfigured || !boolFromEnv("APP_AUTH_DEV_MODE") {
-		panic("APP_JWT_SECRET is required unless APP_AUTH_DEV_MODE=true")
+		return fmt.Errorf("APP_JWT_SECRET is required unless APP_AUTH_DEV_MODE=true")
 	}
 	secret, err := generateDevelopmentJWTSecret()
 	if err != nil {
-		panic(fmt.Sprintf("generate development jwt secret: %v", err))
+		return fmt.Errorf("generate development jwt secret: %w", err)
 	}
 	_ = os.Setenv("APP_JWT_SECRET", secret)
 	log.Printf("APP_AUTH_DEV_MODE enabled; seeded ephemeral JWT secret for this process")
+	return nil
 }
 
 func generateDevelopmentJWTSecret() (string, error) {
@@ -239,46 +255,74 @@ func boolFromEnv(key string) bool {
 	}
 }
 
-func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, bootstrapPassword string) {
+func ignoreConflict(err error) error {
+	var platformErr shared.Error
+	if errors.As(err, &platformErr) && platformErr.Kind == shared.KindConflict {
+		return nil
+	}
+	return err
+}
+
+func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, bootstrapPassword string) error {
 	manifests := append(builtInModuleManifests(), generatedmodules.Manifests()...)
 	for _, def := range config.BuiltInDefinitions() {
-		_ = configSvc.RegisterDefinition(def)
+		if err := configSvc.RegisterDefinition(def); err != nil {
+			return err
+		}
 	}
 	for _, manifest := range manifests {
-		_ = moduleSvc.Register(manifest, "system")
+		if err := moduleSvc.Register(manifest, "system"); err != nil {
+			return err
+		}
 		for _, def := range manifest.ConfigDefinitions {
-			_ = configSvc.RegisterDefinition(def)
+			if err := configSvc.RegisterDefinition(def); err != nil {
+				return err
+			}
 		}
 	}
 	for _, entry := range config.BuiltInEntries(time.Now().UTC()) {
 		if _, ok := configSvc.Get(entry.Key); !ok {
-			_ = configSvc.Save(entry)
+			if err := configSvc.Save(entry); err != nil {
+				return err
+			}
 		}
 	}
 	for _, manifest := range manifests {
 		for _, def := range manifest.Models {
-			_ = modelSvc.Register(def)
+			if err := ignoreConflict(modelSvc.Register(def)); err != nil {
+				return err
+			}
 		}
 		for _, index := range manifest.SearchIndexes {
-			_ = searchSvc.RegisterIndex(index)
+			if err := ignoreConflict(searchSvc.RegisterIndex(index)); err != nil {
+				return err
+			}
 		}
 		for _, dataset := range manifest.Datasets {
-			_ = reportingSvc.Register(reporting.DatasetDefinition{
+			if err := ignoreConflict(reportingSvc.Register(reporting.DatasetDefinition{
 				Key:        dataset.Key,
 				Title:      dataset.Title,
 				SourceKind: dataset.SourceKind,
 				ModelKey:   dataset.ModelKey,
 				Dimensions: datasetDimensions(dataset.Dimensions),
 				Measures:   datasetMeasures(dataset.Measures),
-			})
+			})); err != nil {
+				return err
+			}
 		}
 	}
-	_ = identitySvc.SeedBootstrapData(bootstrapPassword)
-	_ = identitySvc.EnsureBootstrapAdminCredential(bootstrapPassword)
-	seedModuleContracts(identitySvc, policySvc, manifests)
+	if err := identitySvc.SeedBootstrapData(bootstrapPassword); err != nil {
+		return err
+	}
+	if err := identitySvc.EnsureBootstrapAdminCredential(bootstrapPassword); err != nil {
+		return err
+	}
+	if err := seedModuleContracts(identitySvc, policySvc, manifests); err != nil {
+		return err
+	}
 	seedModelRules(modelSvc)
 	seedModelData(modelSvc)
-	_ = documentSvc.Register(document.Definition{
+	if err := ignoreConflict(documentSvc.Register(document.Definition{
 		Type:                   "generic_request",
 		DisplayName:            "Generic Request",
 		SchemaVersion:          "v1",
@@ -287,20 +331,24 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 		OwnerModuleKey:         "documents",
 		AllowedLinkTypes:       []string{"related_to", "amends"},
 		AllowedAttachmentTypes: []string{"note", "image", "document"},
-	})
+	})); err != nil {
+		return err
+	}
 	for _, manifest := range manifests {
 		for _, extension := range manifest.DocumentExtensions {
-			_ = documentSvc.RegisterExtension(document.ExtensionDefinition{
+			if err := ignoreConflict(documentSvc.RegisterExtension(document.ExtensionDefinition{
 				DocumentType:       extension.DocumentType,
 				ModuleKey:          manifest.Key,
 				DisplayName:        extension.DisplayName,
 				SchemaVersion:      extension.SchemaVersion,
 				ReadPermissionKey:  extension.ReadPermissionKey,
 				WritePermissionKey: extension.WritePermissionKey,
-			})
+			})); err != nil {
+				return err
+			}
 		}
 	}
-	_ = workflowSvc.Register(workflow.Definition{
+	if err := ignoreConflict(workflowSvc.Register(workflow.Definition{
 		Key:    "generic_request_flow",
 		States: []string{"draft", "submitted", "approved", "rejected"},
 		Actions: []workflow.ActionRule{{
@@ -318,7 +366,10 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 		}, {
 			Action: "cancel", FromState: "submitted", ToState: "cancelled", PermissionKey: "document.cancel",
 		}},
-	})
+	})); err != nil {
+		return err
+	}
+	return nil
 }
 
 func datasetDimensions(input []module.DatasetDimension) []reporting.DimensionDefinition {
@@ -337,32 +388,40 @@ func datasetMeasures(input []module.DatasetMeasure) []reporting.MeasureDefinitio
 	return items
 }
 
-func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Service, manifests []module.Manifest) {
+func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Service, manifests []module.Manifest) error {
 	for _, manifest := range manifests {
 		for _, permission := range manifest.Security.Permissions {
-			_ = identitySvc.UpsertPermission(identity.Permission{
+			if err := identitySvc.UpsertPermission(identity.Permission{
 				Key:         permission.Key,
 				Module:      manifest.Key,
 				Action:      permission.Action,
 				Resource:    permission.Resource,
 				Description: permission.Description,
-			})
-			_ = identitySvc.GrantRolePermission(identity.RolePermission{RoleID: "role_admin", PermissionKey: permission.Key})
+			}); err != nil {
+				return err
+			}
+			if err := identitySvc.GrantRolePermission(identity.RolePermission{RoleID: "role_admin", PermissionKey: permission.Key}); err != nil {
+				return err
+			}
 		}
 		for _, roleTemplate := range manifest.Security.RoleTemplates {
 			roleID := "role:" + manifest.Key + ":" + roleTemplate.Key
-			_ = identitySvc.UpsertRole(identity.Role{
+			if err := identitySvc.UpsertRole(identity.Role{
 				ID:        roleID,
 				Key:       roleTemplate.Key,
 				Name:      roleTemplate.Name,
 				ScopeType: firstScope(roleTemplate.AllowedScopes),
-			})
+			}); err != nil {
+				return err
+			}
 			for _, permissionKey := range roleTemplate.PermissionKeys {
-				_ = identitySvc.GrantRolePermission(identity.RolePermission{RoleID: roleID, PermissionKey: permissionKey})
+				if err := identitySvc.GrantRolePermission(identity.RolePermission{RoleID: roleID, PermissionKey: permissionKey}); err != nil {
+					return err
+				}
 			}
 		}
 		for _, hook := range manifest.Security.PolicyHooks {
-			_ = policySvc.Register(policy.HookDefinition{
+			if err := policySvc.Register(policy.HookDefinition{
 				Key:               hook.Key,
 				Kind:              hook.Kind,
 				Target:            hook.Target,
@@ -375,10 +434,12 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 				DefaultRegoSource: defaultPolicyModule(hook.Key),
 				AllowedScopes:     []string{"deployment", "organization", "location"},
 				DefaultRule:       defaultPolicyRule(hook.Key),
-			})
+			}); err != nil {
+				return err
+			}
 		}
 	}
-	_ = policySvc.SetEvaluator("documents.extension.view", func(req policy.Request) policy.Decision {
+	if err := policySvc.SetEvaluator("documents.extension.view", func(req policy.Request) policy.Decision {
 		moduleKey, _ := req.Inputs["module_key"].(string)
 		if strings.TrimSpace(moduleKey) == "" {
 			return policy.Decision{Allowed: false, Code: "missing_module", Reason: "module key is required"}
@@ -393,8 +454,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 			return policy.Decision{Allowed: true, Code: "allowed_with_permissions", Output: map[string]any{"required_permissions": required}}
 		}
 		return policy.Decision{Allowed: true}
-	})
-	_ = policySvc.SetEvaluator("documents.extension.write", func(req policy.Request) policy.Decision {
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("documents.extension.write", func(req policy.Request) policy.Decision {
 		moduleKey, _ := req.Inputs["module_key"].(string)
 		if strings.TrimSpace(moduleKey) == "" {
 			return policy.Decision{Allowed: false, Code: "missing_module", Reason: "module key is required"}
@@ -409,8 +472,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 			return policy.Decision{Allowed: true, Code: "allowed_with_permissions", Output: map[string]any{"required_permissions": required}}
 		}
 		return policy.Decision{Allowed: true}
-	})
-	_ = policySvc.SetEvaluator("documents.workflow.transition", func(req policy.Request) policy.Decision {
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("documents.workflow.transition", func(req policy.Request) policy.Decision {
 		action, _ := req.Inputs["action"].(string)
 		if strings.TrimSpace(action) == "" {
 			return policy.Decision{Allowed: false, Code: "missing_action", Reason: "action is required"}
@@ -431,8 +496,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 			return policy.Decision{Allowed: false, Code: "number_required", Reason: "document number is required by policy"}
 		}
 		return policy.Decision{Allowed: true}
-	})
-	_ = policySvc.SetEvaluator("documents.search.visibility", func(req policy.Request) policy.Decision {
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("documents.search.visibility", func(req policy.Request) policy.Decision {
 		if hidden := stringSliceRule(req.Rule, "hidden_statuses"); containsValue(hidden, stringValue(req.Inputs["status"])) {
 			return policy.Decision{Allowed: false, Code: "status_hidden", Reason: "document status hidden by policy"}
 		}
@@ -443,8 +510,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 			return policy.Decision{Allowed: false, Code: "location_hidden", Reason: "document location hidden by policy"}
 		}
 		return policy.Decision{Allowed: true}
-	})
-	_ = policySvc.SetEvaluator("documents.numbering.assign", func(req policy.Request) policy.Decision {
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("documents.numbering.assign", func(req policy.Request) policy.Decision {
 		numberingKey, _ := req.Inputs["numbering_key"].(string)
 		documentType, _ := req.Inputs["document_type"].(string)
 		locationID, _ := req.Inputs["location_id"].(string)
@@ -473,8 +542,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 				"number": number + "-" + sequence,
 			},
 		}
-	})
-	_ = policySvc.SetEvaluator("documents.action.render", func(req policy.Request) policy.Decision {
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("documents.action.render", func(req policy.Request) policy.Decision {
 		action := stringValue(req.Inputs["action"])
 		if containsValue(stringSliceRule(req.Rule, "hidden_actions"), action) {
 			return policy.Decision{Allowed: false, Code: "action_hidden", Reason: "action hidden by policy"}
@@ -483,8 +554,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 			return policy.Decision{Allowed: true, Code: "primary", Output: map[string]any{"placement": "primary"}}
 		}
 		return policy.Decision{Allowed: true, Code: "secondary", Output: map[string]any{"placement": "secondary"}}
-	})
-	_ = policySvc.SetEvaluator("integration.submission.preflight", func(req policy.Request) policy.Decision {
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("integration.submission.preflight", func(req policy.Request) policy.Decision {
 		if blocked := stringSliceRule(req.Rule, "blocked_operation_types"); containsValue(blocked, stringValue(req.Inputs["operation_type"])) {
 			return policy.Decision{Allowed: false, Code: "operation_blocked", Reason: "integration operation blocked by policy"}
 		}
@@ -493,7 +566,10 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 			return policy.Decision{Allowed: false, Code: "system_status_blocked", Reason: "integration system status does not satisfy policy"}
 		}
 		return policy.Decision{Allowed: true}
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func firstScope(scopes []string) string {
@@ -1356,6 +1432,9 @@ func (a *App) Handler() http.Handler {
 }
 
 func (a *App) StartBackground(ctx context.Context) {
+	if a.Jobs != nil {
+		a.Jobs.Start(ctx)
+	}
 	if a.Dispatcher != nil {
 		a.Dispatcher.Start(ctx)
 	}
@@ -1370,6 +1449,9 @@ func (a *App) Close() error {
 	}
 	if a.Dispatcher != nil {
 		a.Dispatcher.Stop()
+	}
+	if a.Jobs != nil {
+		a.Jobs.Stop()
 	}
 	for _, closeFn := range a.closers {
 		if closeFn == nil {
