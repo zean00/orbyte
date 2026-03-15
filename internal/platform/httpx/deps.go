@@ -14,6 +14,7 @@ import (
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/mcp"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
@@ -36,6 +37,7 @@ type RouterDeps struct {
 	Ops          OpsDeps
 	Search       SearchDeps
 	Admin        AdminDeps
+	MCP          MCPDeps
 	UI           UIDeps
 	CrossCutting CrossCuttingDeps
 }
@@ -120,6 +122,14 @@ type UIDeps struct {
 	FieldSecurity *securityfields.Service
 }
 
+type MCPDeps struct {
+	Identity        *identity.Service
+	Server          *mcp.Server
+	Analytics       *analytics.Service
+	AnalyticsStream *mcp.AnalyticsStream
+	StreamPath      string
+}
+
 type CrossCuttingDeps struct {
 	Config        *config.Service
 	Identity      *identity.Service
@@ -154,6 +164,10 @@ func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
 
 func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
 	registerAdminRoutes(mux, deps.Config, deps.Organization, deps.Identity, deps.Modules, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference)
+}
+
+func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
+	registerMCPRoutes(mux, deps.Identity, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath)
 }
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {

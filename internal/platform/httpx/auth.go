@@ -68,14 +68,14 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 		if userID := strings.TrimSpace(r.Header.Get("X-Dev-User-ID")); userID != "" {
 			for _, session := range ident.Sessions() {
 				if session.UserID == userID && session.Status == "active" {
-			return &principal{
-				kind:              userPrincipal,
-				userID:            userID,
-				sessionID:         session.ID,
-				currentLocationID: session.CurrentLocationID,
-				authMethod:        "dev_bypass",
-				stepUpVerified:    true,
-			}, nil
+					return &principal{
+						kind:              userPrincipal,
+						userID:            userID,
+						sessionID:         session.ID,
+						currentLocationID: session.CurrentLocationID,
+						authMethod:        "dev_bypass",
+						stepUpVerified:    true,
+					}, nil
 				}
 			}
 			return nil, shared.Unauthorized("development user has no active session")
@@ -190,9 +190,9 @@ func authError(r *http.Request) error {
 
 func requireAuthorization(w http.ResponseWriter, r *http.Request, ident *identity.Service, userPermission, locationID, serviceOperation string) (principal, bool) {
 	return requireAuthorizationWithOptions(w, r, ident, authorizationOptions{
-		UserPermission:    userPermission,
-		LocationID:        locationID,
-		ServiceOperation:  serviceOperation,
+		UserPermission:   userPermission,
+		LocationID:       locationID,
+		ServiceOperation: serviceOperation,
 	})
 }
 

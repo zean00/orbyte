@@ -38,6 +38,7 @@ type Manifest struct {
 	Security               SecurityDefinition         `json:"security,omitempty"`
 	Observability          ObservabilityDefinition    `json:"observability,omitempty"`
 	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
+	MCP                    MCPDefinition              `json:"mcp,omitempty"`
 	Bundles                []BundleDefinition         `json:"-"`
 }
 
@@ -210,6 +211,44 @@ type FrontendDefinition struct {
 	Actions       []ActionDefinition      `json:"actions,omitempty"`
 	Views         []ViewDefinition        `json:"views,omitempty"`
 	CustomEntries []CustomEntryDefinition `json:"custom_entries,omitempty"`
+}
+
+type MCPDefinition struct {
+	Tools     []MCPToolDefinition     `json:"tools,omitempty"`
+	Resources []MCPResourceDefinition `json:"resources,omitempty"`
+	Apps      []MCPAppDefinition      `json:"apps,omitempty"`
+}
+
+type MCPToolDefinition struct {
+	Key                 string         `json:"key"`
+	Title               string         `json:"title"`
+	Description         string         `json:"description,omitempty"`
+	Operation           string         `json:"operation"`
+	RequiredPermissions []string       `json:"required_permissions,omitempty"`
+	InputSchema         map[string]any `json:"input_schema,omitempty"`
+	OutputSchema        map[string]any `json:"output_schema,omitempty"`
+	AppKey              string         `json:"app_key,omitempty"`
+}
+
+type MCPResourceDefinition struct {
+	Key                 string   `json:"key"`
+	Title               string   `json:"title"`
+	Description         string   `json:"description,omitempty"`
+	URI                 string   `json:"uri"`
+	MIMEType            string   `json:"mime_type,omitempty"`
+	Provider            string   `json:"provider,omitempty"`
+	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	AppKey              string   `json:"app_key,omitempty"`
+}
+
+type MCPAppDefinition struct {
+	Key                 string   `json:"key"`
+	Title               string   `json:"title"`
+	Description         string   `json:"description,omitempty"`
+	ResourceKey         string   `json:"resource_key"`
+	ViewKey             string   `json:"view_key,omitempty"`
+	CustomEntryKey      string   `json:"custom_entry_key,omitempty"`
+	RequiredPermissions []string `json:"required_permissions,omitempty"`
 }
 
 type MenuDefinition struct {

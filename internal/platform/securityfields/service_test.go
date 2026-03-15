@@ -272,6 +272,28 @@ func TestDocumentProfileCacheKeyIncludesDocumentID(t *testing.T) {
 	}
 }
 
+func TestModelProfilePassesMCPChannelToPolicy(t *testing.T) {
+	policies := policy.NewService()
+	if err := policies.Register(policy.HookDefinition{Key: "models.fields.profile", Kind: "security", Target: "model_fields", AllowedScopes: []string{"deployment"}}); err != nil {
+		t.Fatalf("register hook failed: %v", err)
+	}
+	seenChannel := ""
+	if err := policies.SetEvaluator("models.fields.profile", func(req policy.Request) policy.Decision {
+		seenChannel, _ = req.Inputs["channel"].(string)
+		return policy.Decision{Allowed: true}
+	}); err != nil {
+		t.Fatalf("set evaluator failed: %v", err)
+	}
+	svc := NewService(policies)
+	_ = svc.ModelProfile(AccessContext{ActorID: "u1", Channel: "mcp"}, model.Definition{
+		Key:    "party",
+		Fields: []model.FieldDefinition{{Key: "name", Type: "string"}},
+	})
+	if seenChannel != "mcp" {
+		t.Fatalf("expected mcp channel to reach policy, got %q", seenChannel)
+	}
+}
+
 func TestNilServiceAndMasks(t *testing.T) {
 	var svc *Service
 	def := model.Definition{Key: "party", Fields: []model.FieldDefinition{{Key: "email", Type: "string", Sensitive: true}}}

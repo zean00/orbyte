@@ -19,6 +19,7 @@ import (
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/mcp"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
@@ -34,8 +35,14 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
+const analyticsMCPStreamPath = "/mcp/events/analytics/snapshot"
+
 func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
+	analyticsStream := mcp.NewAnalyticsStream()
+	if analyticsSvc != nil {
+		analyticsSvc.SetCaptureHook(analyticsStream.Publish)
+	}
 	return BuildRouter(RouterDeps{
 		Platform: PlatformDeps{
 			Config:       cfg,
@@ -88,6 +95,13 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			Integration:   integrationSvc,
 			Reference:     referenceSvc,
 		},
+		MCP: MCPDeps{
+			Identity:        ident,
+			Server:          mcp.NewServer(modules, analyticsSvc, analyticsMCPStreamPath),
+			Analytics:       analyticsSvc,
+			AnalyticsStream: analyticsStream,
+			StreamPath:      analyticsMCPStreamPath,
+		},
 		UI: UIDeps{
 			Identity:      ident,
 			Modules:       modules,
@@ -129,6 +143,7 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerOpsRoutesWithDeps(mux, deps.Ops)
 	registerSearchRoutesWithDeps(mux, deps.Search)
 	registerAdminRoutesWithDeps(mux, deps.Admin)
+	registerMCPRoutesWithDeps(mux, deps.MCP)
 	registerUIRoutesWithDeps(mux, deps.UI)
 
 	return withObservability(withAuthentication(withCSRFProtection(mux, deps.CrossCutting.Config), deps.CrossCutting.Identity), deps.CrossCutting.Logger, deps.CrossCutting.Observability)
@@ -280,6 +295,10 @@ func routeFamilyForPath(path string) string {
 		return "models"
 	case len(path) >= 8 && path[:8] == "/search/" || path == "/search":
 		return "search"
+	case len(path) >= 5 && path[:5] == "/mcp/":
+		return "mcp"
+	case path == "/mcp":
+		return "mcp"
 	case len(path) >= 4 && path[:4] == "/ui/":
 		return "ui"
 	default:
@@ -295,4 +314,12 @@ type statusWriter struct {
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusWriter) Flush() {
+	flusher, ok := w.ResponseWriter.(http.Flusher)
+	if !ok {
+		return
+	}
+	flusher.Flush()
 }

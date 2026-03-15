@@ -193,6 +193,81 @@ func (s *Service) Bundle(key string) (BundleDefinition, bool) {
 	return BundleDefinition{}, false
 }
 
+func (s *Service) MCPTools() []MCPToolDefinition {
+	items := make([]MCPToolDefinition, 0)
+	for _, manifest := range s.manifests {
+		items = append(items, manifest.MCP.Tools...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) MCPResources() []MCPResourceDefinition {
+	items := make([]MCPResourceDefinition, 0)
+	for _, manifest := range s.manifests {
+		items = append(items, manifest.MCP.Resources...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) MCPApps() []MCPAppDefinition {
+	items := make([]MCPAppDefinition, 0)
+	for _, manifest := range s.manifests {
+		items = append(items, manifest.MCP.Apps...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) MCPTool(key string) (MCPToolDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.MCP.Tools {
+			if item.Key == key {
+				return item, true
+			}
+		}
+	}
+	return MCPToolDefinition{}, false
+}
+
+func (s *Service) MCPResourceByKey(key string) (MCPResourceDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.MCP.Resources {
+			if item.Key == key {
+				return item, true
+			}
+		}
+	}
+	return MCPResourceDefinition{}, false
+}
+
+func (s *Service) MCPResourceByURI(uri string) (MCPResourceDefinition, bool) {
+	trimmed := strings.TrimSpace(uri)
+	if trimmed == "" {
+		return MCPResourceDefinition{}, false
+	}
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.MCP.Resources {
+			if item.URI == trimmed {
+				return item, true
+			}
+		}
+	}
+	return MCPResourceDefinition{}, false
+}
+
+func (s *Service) MCPApp(key string) (MCPAppDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.MCP.Apps {
+			if item.Key == key {
+				return item, true
+			}
+		}
+	}
+	return MCPAppDefinition{}, false
+}
+
 func (s *Service) ResolveRoute(path string) (RouteResolution, bool) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
@@ -356,6 +431,10 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	customEntries := map[string]string{}
 	bundles := map[string]string{}
 	menus := map[string]string{}
+	mcpTools := map[string]string{}
+	mcpResources := map[string]string{}
+	mcpURIs := map[string]string{}
+	mcpApps := map[string]string{}
 	permissions := map[string]string{}
 	roleTemplates := map[string]string{}
 	policyHooks := map[string]string{}
@@ -371,6 +450,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 
 	for moduleKey, current := range existing {
 		indexFrontendContracts(moduleKey, current, actions, views, customEntries, bundles, menus)
+		indexMCPContracts(moduleKey, current, mcpTools, mcpResources, mcpURIs, mcpApps)
 		indexSecurityContracts(moduleKey, current, permissions, roleTemplates, policyHooks)
 		indexObservabilityContracts(moduleKey, current, projections, dashboards, reports, datasets, metrics, logEvents, domainEvents)
 		indexModelContracts(moduleKey, current, models)
@@ -617,6 +697,78 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		bundles[bundle.Key] = manifest.Key
 	}
+	resourceKeys := map[string]struct{}{}
+	for _, item := range manifest.MCP.Resources {
+		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.URI) == "" {
+			return shared.Validation("mcp resource key, title, and uri are required")
+		}
+		if owner, ok := mcpResources[item.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("mcp resource key already registered")
+		}
+		if owner, ok := mcpURIs[item.URI]; ok && owner != manifest.Key {
+			return shared.Conflict("mcp resource uri already registered")
+		}
+		mcpResources[item.Key] = manifest.Key
+		mcpURIs[item.URI] = manifest.Key
+		resourceKeys[item.Key] = struct{}{}
+	}
+	appKeys := map[string]struct{}{}
+	for _, item := range manifest.MCP.Apps {
+		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.ResourceKey) == "" {
+			return shared.Validation("mcp app key, title, and resource_key are required")
+		}
+		if owner, ok := mcpApps[item.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("mcp app key already registered")
+		}
+		if strings.TrimSpace(item.ViewKey) == "" && strings.TrimSpace(item.CustomEntryKey) == "" {
+			return shared.Validation("mcp app requires view_key or custom_entry_key")
+		}
+		if strings.TrimSpace(item.ViewKey) != "" && strings.TrimSpace(item.CustomEntryKey) != "" {
+			return shared.Validation("mcp app must not declare both view_key and custom_entry_key")
+		}
+		if strings.TrimSpace(item.ViewKey) != "" {
+			if _, ok := views[item.ViewKey]; !ok {
+				return shared.Validation("mcp app view_key is not registered")
+			}
+		}
+		if strings.TrimSpace(item.CustomEntryKey) != "" {
+			if _, ok := customEntries[item.CustomEntryKey]; !ok {
+				return shared.Validation("mcp app custom_entry_key is not registered")
+			}
+		}
+		if _, ok := mcpResources[item.ResourceKey]; !ok {
+			if _, ok := resourceKeys[item.ResourceKey]; !ok {
+				return shared.Validation("mcp app resource_key is not registered")
+			}
+		}
+		mcpApps[item.Key] = manifest.Key
+		appKeys[item.Key] = struct{}{}
+	}
+	for _, item := range manifest.MCP.Tools {
+		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.Operation) == "" {
+			return shared.Validation("mcp tool key, title, and operation are required")
+		}
+		if owner, ok := mcpTools[item.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("mcp tool key already registered")
+		}
+		if strings.TrimSpace(item.AppKey) != "" {
+			if _, ok := mcpApps[item.AppKey]; !ok {
+				if _, ok := appKeys[item.AppKey]; !ok {
+					return shared.Validation("mcp tool app_key is not registered")
+				}
+			}
+		}
+		mcpTools[item.Key] = manifest.Key
+	}
+	for _, item := range manifest.MCP.Resources {
+		if strings.TrimSpace(item.AppKey) != "" {
+			if _, ok := mcpApps[item.AppKey]; !ok {
+				if _, ok := appKeys[item.AppKey]; !ok {
+					return shared.Validation("mcp resource app_key is not registered")
+				}
+			}
+		}
+	}
 	routePaths := map[string]string{}
 	for moduleKey, current := range existing {
 		for _, action := range current.Frontend.Actions {
@@ -707,6 +859,19 @@ func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views,
 	}
 	for _, bundle := range manifest.Bundles {
 		bundles[bundle.Key] = moduleKey
+	}
+}
+
+func indexMCPContracts(moduleKey string, manifest Manifest, tools, resources, uris, apps map[string]string) {
+	for _, item := range manifest.MCP.Tools {
+		tools[item.Key] = moduleKey
+	}
+	for _, item := range manifest.MCP.Resources {
+		resources[item.Key] = moduleKey
+		uris[item.URI] = moduleKey
+	}
+	for _, item := range manifest.MCP.Apps {
+		apps[item.Key] = moduleKey
 	}
 }
 

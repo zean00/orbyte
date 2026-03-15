@@ -249,6 +249,7 @@ type Service struct {
 	obs       *observability.Service
 	repo      Repository
 	jobs      *jobs.Service
+	onCapture func(Snapshot)
 }
 
 func (s *Service) observeCounter(key string) {
@@ -275,6 +276,13 @@ func NewService(documents *document.Service, workflowSvc *workflow.Service, even
 
 func NewServiceWithRepository(documents *document.Service, workflowSvc *workflow.Service, eventingSvc *eventing.Service, searchSvc *search.Service, auditSvc *audit.Service, obs *observability.Service, repo Repository) *Service {
 	return &Service{documents: documents, workflow: workflowSvc, eventing: eventingSvc, search: searchSvc, audit: auditSvc, obs: obs, repo: repo}
+}
+
+func (s *Service) SetCaptureHook(fn func(Snapshot)) {
+	if s == nil {
+		return
+	}
+	s.onCapture = fn
 }
 
 func (s *Service) Snapshot() Snapshot {
@@ -400,6 +408,9 @@ func (s *Service) CaptureSnapshot() (Snapshot, error) {
 		if err := s.RefreshRollups(); err != nil {
 			return Snapshot{}, err
 		}
+	}
+	if s.onCapture != nil {
+		s.onCapture(snapshot)
 	}
 	return snapshot, nil
 }

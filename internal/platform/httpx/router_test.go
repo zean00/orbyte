@@ -46,13 +46,14 @@ import (
 )
 
 type testHarness struct {
-	router http.Handler
-	cookie *http.Cookie
-	csrf   *http.Cookie
-	ident  *identity.Service
-	audit  *audit.Service
-	cfg    *config.Service
-	search *search.Service
+	router    http.Handler
+	cookie    *http.Cookie
+	csrf      *http.Cookie
+	ident     *identity.Service
+	audit     *audit.Service
+	cfg       *config.Service
+	search    *search.Service
+	analytics *analytics.Service
 }
 
 func newTestHarness(t *testing.T) testHarness {
@@ -281,13 +282,14 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router: NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, actions, modelActions),
-		cookie: &http.Cookie{Name: sessionCookieName, Value: token},
-		csrf:   csrfCookie,
-		ident:  ident,
-		audit:  auditSvc,
-		cfg:    cfg,
-		search: searchSvc,
+		router:    NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, actions, modelActions),
+		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
+		csrf:      csrfCookie,
+		ident:     ident,
+		audit:     auditSvc,
+		cfg:       cfg,
+		search:    searchSvc,
+		analytics: analyticsSvc,
 	}
 }
 
@@ -432,6 +434,26 @@ func builtInTestModuleManifests() []module.Manifest {
 					RoutePath:           "/analytics/cockpit",
 					BundleKey:           "analytics-cockpit",
 					ComponentExport:     "render",
+					RequiredPermissions: []string{"analytics.read"},
+				}},
+			},
+			MCP: module.MCPDefinition{
+				Tools: []module.MCPToolDefinition{{
+					Key:                 "analytics.snapshot.get",
+					Title:               "Get Analytics Snapshot",
+					Operation:           "analytics.snapshot.get",
+					RequiredPermissions: []string{"analytics.read"},
+					AppKey:              "analytics.cockpit",
+				}},
+				Resources: []module.MCPResourceDefinition{
+					{Key: "analytics.snapshot.current", Title: "Current Analytics Snapshot", URI: "orbyte://analytics/snapshot/current", MIMEType: "application/json", Provider: "analytics.snapshot.current", RequiredPermissions: []string{"analytics.read"}},
+					{Key: "analytics.cockpit.app", Title: "Analytics Cockpit App", URI: "orbyte://apps/analytics.cockpit", MIMEType: "text/html", Provider: "mcp.app", RequiredPermissions: []string{"analytics.read"}, AppKey: "analytics.cockpit"},
+				},
+				Apps: []module.MCPAppDefinition{{
+					Key:                 "analytics.cockpit",
+					Title:               "Analytics Cockpit",
+					ResourceKey:         "analytics.cockpit.app",
+					CustomEntryKey:      "analytics.cockpit",
 					RequiredPermissions: []string{"analytics.read"},
 				}},
 			},

@@ -254,3 +254,55 @@ func TestRegisterRejectsUnknownRoleTemplatePermissionAndInvalidDependencyRange(t
 		t.Fatal("expected invalid dependency version range to fail")
 	}
 }
+
+func TestRegisterValidatesMCPContracts(t *testing.T) {
+	svc := NewService()
+	err := svc.Register(Manifest{
+		Key: "analytics",
+		Frontend: FrontendDefinition{
+			CustomEntries: []CustomEntryDefinition{{
+				Key: "analytics.cockpit", RoutePath: "/analytics/cockpit", BundleKey: "analytics-bundle", ComponentExport: "render",
+			}},
+		},
+		Bundles: []BundleDefinition{{Key: "analytics-bundle", Script: "console.log('bundle');"}},
+		MCP: MCPDefinition{
+			Resources: []MCPResourceDefinition{{
+				Key: "analytics.cockpit.app", Title: "Analytics App", URI: "orbyte://apps/analytics.cockpit",
+			}},
+			Apps: []MCPAppDefinition{{
+				Key: "analytics.cockpit", Title: "Analytics Cockpit", ResourceKey: "analytics.cockpit.app", CustomEntryKey: "analytics.cockpit",
+			}},
+			Tools: []MCPToolDefinition{{
+				Key: "analytics.snapshot.get", Title: "Get Snapshot", Operation: "analytics.snapshot.get", AppKey: "analytics.cockpit",
+			}},
+		},
+	}, "system")
+	if err != nil {
+		t.Fatalf("register valid mcp manifest failed: %v", err)
+	}
+
+	if _, ok := svc.MCPTool("analytics.snapshot.get"); !ok {
+		t.Fatal("expected mcp tool lookup")
+	}
+	if _, ok := svc.MCPResourceByURI("orbyte://apps/analytics.cockpit"); !ok {
+		t.Fatal("expected mcp resource lookup by uri")
+	}
+	if _, ok := svc.MCPApp("analytics.cockpit"); !ok {
+		t.Fatal("expected mcp app lookup")
+	}
+}
+
+func TestRegisterRejectsMCPToolWithUnknownApp(t *testing.T) {
+	svc := NewService()
+	err := svc.Register(Manifest{
+		Key: "analytics",
+		MCP: MCPDefinition{
+			Tools: []MCPToolDefinition{{
+				Key: "analytics.snapshot.get", Title: "Get Snapshot", Operation: "analytics.snapshot.get", AppKey: "missing.app",
+			}},
+		},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected unknown mcp app reference to fail")
+	}
+}

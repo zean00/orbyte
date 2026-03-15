@@ -68,6 +68,36 @@ func TestCaptureSnapshotPersists(t *testing.T) {
 	}
 }
 
+func TestCaptureSnapshotPublishesHookAfterPersist(t *testing.T) {
+	docs := document.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	obs := observability.NewService()
+	events := eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), obs, nil)
+	searchSvc := search.NewService()
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(docs, flows, events, searchSvc, auditSvc, obs, repo)
+
+	captured := make(chan Snapshot, 1)
+	svc.SetCaptureHook(func(snapshot Snapshot) {
+		captured <- snapshot
+	})
+
+	snapshot, err := svc.CaptureSnapshot()
+	if err != nil {
+		t.Fatalf("capture snapshot failed: %v", err)
+	}
+
+	select {
+	case published := <-captured:
+		if published.ID != snapshot.ID {
+			t.Fatalf("expected published snapshot %s, got %s", snapshot.ID, published.ID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected capture hook to publish snapshot")
+	}
+}
+
 func TestQuerySnapshotsAndBreakdown(t *testing.T) {
 	docs := document.NewService()
 	flows := workflow.NewService()
