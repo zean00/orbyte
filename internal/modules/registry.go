@@ -32,13 +32,14 @@ func ForProfile(profile string) ([]platformmodule.Manifest, error) {
 
 func allManifests() []platformmodule.Manifest {
 	items := []platformmodule.Manifest{
+		clinicRegistrationManifest(),
 		// modulegen:manifests
 	}
 	return cloneManifests(items)
 }
 
 func clinicManifests() []platformmodule.Manifest {
-	return []platformmodule.Manifest{}
+	return []platformmodule.Manifest{clinicRegistrationManifest()}
 }
 
 func omsManifests() []platformmodule.Manifest {

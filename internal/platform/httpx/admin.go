@@ -14,6 +14,7 @@ import (
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/shared"
 )
 
@@ -34,7 +35,7 @@ type authSettingsResponse struct {
 	Entry      config.EffectiveValue `json:"entry"`
 }
 
-func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service) {
+func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service) {
 	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
 			return
@@ -116,6 +117,42 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissions()})
+	})
+
+	mux.HandleFunc("GET /admin/api/references/types", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": referenceSvc.Types()})
+	})
+
+	mux.HandleFunc("GET /admin/api/references/values", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		typeKey := strings.TrimSpace(r.URL.Query().Get("type"))
+		if typeKey == "" {
+			respondError(w, shared.Validation("type is required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": referenceSvc.Records(typeKey)})
+	})
+
+	mux.HandleFunc("GET /admin/api/references/resolve", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		typeKey := strings.TrimSpace(r.URL.Query().Get("type"))
+		if typeKey == "" {
+			respondError(w, shared.Validation("type is required"))
+			return
+		}
+		result, err := referenceSvc.Resolve(typeKey, strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")), time.Time{})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, result)
 	})
 
 	mux.HandleFunc("GET /admin/api/modules/", func(w http.ResponseWriter, r *http.Request) {

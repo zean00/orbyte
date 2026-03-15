@@ -26,10 +26,10 @@ import (
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
-	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/workflow"
@@ -63,6 +63,7 @@ type App struct {
 	Models             *model.Service
 	Activities         *activity.Service
 	Reporting          *reporting.Service
+	Reference          *reference.Service
 	Observability      *observability.Service
 	Policy             *policy.Service
 	Integration        *integration.Service
@@ -90,83 +91,6 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 
-	configSvc := config.NewService()
-	organizationSvc := organization.NewService()
-	identitySvc := identity.NewService(organizationSvc)
-	moduleSvc := module.NewService()
-	modelSvc := model.NewService()
-	activitySvc := activity.NewService()
-	reportingSvc := reporting.NewService(modelSvc)
-	documentSvc := document.NewService()
-	workflowSvc := workflow.NewService()
-	auditSvc := audit.NewService()
-	loggerSvc := logging.NewService()
-	obsSvc := observability.NewService()
-	healthTracker := runtimehealth.NewTracker()
-	policySvc := policy.NewServiceWithConfig(configSvc)
-	fieldSecuritySvc := securityfields.NewService(policySvc)
-	reportingSvc.AttachFieldSecurity(fieldSecuritySvc)
-	integrationSvc := integration.NewService(obsSvc, loggerSvc)
-	jobSvc := jobs.NewService()
-	integrationSvc.AttachPolicy(policySvc)
-	eventingSvc := eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), obsSvc, loggerSvc)
-	searchSvc := search.NewService()
-	searchSvc.AttachSources(documentSvc, modelSvc)
-	searchSvc.AttachJobs(jobSvc)
-	searchSvc.AttachFieldSecurity(fieldSecuritySvc)
-	reportingSvc.AttachDocumentSources(documentSvc, searchSvc)
-	var submitStore application.SubmitStore
-	submitStore = application.NewMemorySubmitStore(documentSvc, workflowSvc, auditSvc, eventingSvc)
-	modelActions := application.NewMemoryModelActions(modelSvc, activitySvc, auditSvc, eventingSvc)
-	analyticsRepo := analytics.Repository(analytics.NewMemoryRepository())
-	if postgres != nil {
-		configSvc = config.NewServiceWithRepository(config.NewPostgresRepository(postgres.DB))
-		policySvc = policy.NewServiceWithConfig(configSvc)
-		fieldSecuritySvc = securityfields.NewService(policySvc)
-		organizationSvc = organization.NewServiceWithRepository(organization.NewPostgresRepository(postgres.DB))
-		identitySvc = identity.NewServiceWithRepository(organizationSvc, identity.NewPostgresRepository(postgres.DB))
-		moduleSvc = module.NewServiceWithRepository(module.NewPostgresRepository(postgres.DB))
-		modelSvc = model.NewServiceWithRepository(model.NewPostgresRepository(postgres.DB))
-		activitySvc = activity.NewService()
-		reportingSvc = reporting.NewService(modelSvc)
-		reportingSvc.AttachFieldSecurity(fieldSecuritySvc)
-		documentSvc = document.NewServiceWithRepository(document.NewPostgresRepository(postgres.DB))
-		workflowSvc = workflow.NewServiceWithRepository(workflow.NewPostgresRepository(postgres.DB))
-		auditSvc = audit.NewServiceWithRepository(audit.NewPostgresRepository(postgres.DB))
-		eventingSvc = eventing.NewServiceWithRepository(eventing.NewPostgresRepository(postgres.DB), obsSvc, loggerSvc)
-		jobSvc = jobs.NewServiceWithRepository(jobs.NewPostgresRepository(postgres.DB))
-		searchSvc = search.NewServiceWithRepository(search.NewPostgresRepository(postgres.DB))
-		searchSvc.AttachSources(documentSvc, modelSvc)
-		searchSvc.AttachJobs(jobSvc)
-		searchSvc.AttachFieldSecurity(fieldSecuritySvc)
-		reportingSvc.AttachDocumentSources(documentSvc, searchSvc)
-		analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
-		integrationSvc = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), obsSvc, loggerSvc)
-		integrationSvc.AttachPolicy(policySvc)
-		integrationSvc.AttachJobs(jobSvc)
-		submitStore = application.NewPostgresSubmitStore(postgres.DB)
-		modelActions = application.NewPostgresModelActions(postgres.DB, modelSvc, activitySvc, auditSvc, eventingSvc)
-	}
-	integrationSvc.AttachJobs(jobSvc)
-	if postgres != nil && postgres.DB != nil {
-		healthTracker.SetChecker(func(ctx context.Context) error {
-			return postgres.DB.PingContext(ctx)
-		})
-		healthTracker.SetDBStatsProvider(func() *runtimehealth.DBStats {
-			stats := postgres.DB.Stats()
-			return &runtimehealth.DBStats{
-				MaxOpenConnections: stats.MaxOpenConnections,
-				OpenConnections:    stats.OpenConnections,
-				InUse:              stats.InUse,
-				Idle:               stats.Idle,
-				WaitCount:          stats.WaitCount,
-				WaitDurationMillis: stats.WaitDuration.Milliseconds(),
-				MaxIdleClosed:      stats.MaxIdleClosed,
-				MaxIdleTimeClosed:  stats.MaxIdleTimeClosed,
-				MaxLifetimeClosed:  stats.MaxLifetimeClosed,
-			}
-		})
-	}
 	profile := strings.TrimSpace(opts.Profile)
 	if profile == "" {
 		profile = "all"
@@ -175,61 +99,23 @@ func New(opts Options) (*App, error) {
 	if err := validateBusinessManifests(builtInModuleManifests(), businessManifests); err != nil {
 		return nil, err
 	}
-	if err := seedPlatformKernel(configSvc, identitySvc, moduleSvc, modelSvc, reportingSvc, searchSvc, documentSvc, workflowSvc, policySvc, businessManifests, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
+	graph := constructServiceGraph(postgres, businessManifests)
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
 		return nil, err
 	}
-	healthTracker.SetBootstrapped(true)
-	if report := configSvc.ValidateAll("", ""); !report.Valid {
+	graph.runtimeHealth.SetBootstrapped(true)
+	if report := graph.config.ValidateAll("", ""); !report.Valid {
 		return nil, fmt.Errorf("configuration validation failed: %v", report.Issues)
 	}
-	if err := policySvc.ValidateConfiguredModules(); err != nil {
+	if err := graph.policy.ValidateConfiguredModules(); err != nil {
 		return nil, err
 	}
-	searchSvc.AttachSources(documentSvc, modelSvc)
-	searchSvc.AttachJobs(jobSvc)
-	searchSvc.AttachFieldSecurity(fieldSecuritySvc)
-	if typesenseCfg := configSvc.TypesensePolicy(); typesenseCfg.Enabled && typesenseCfg.Endpoint != "" && typesenseCfg.APIKey != "" {
-		searchSvc.SetBackend(search.NewTypesenseBackend(typesenseCfg.Endpoint, typesenseCfg.APIKey, time.Duration(typesenseCfg.TimeoutSeconds)*time.Second))
+	if typesenseCfg := graph.config.TypesensePolicy(); typesenseCfg.Enabled && typesenseCfg.Endpoint != "" && typesenseCfg.APIKey != "" {
+		graph.search.SetBackend(search.NewTypesenseBackend(typesenseCfg.Endpoint, typesenseCfg.APIKey, time.Duration(typesenseCfg.TimeoutSeconds)*time.Second))
 	}
-	documentActions := application.NewDocumentActions(documentSvc, workflowSvc, policySvc, submitStore)
-	for _, eventType := range []string{
-		"document.updated",
-		"document.submitted",
-		"document.approved",
-		"document.reject",
-		"document.reopened",
-		"document.cancelled",
-	} {
-		eventingSvc.RegisterHandler(eventType, eventing.NewDocumentProjectionHandler(documentSvc, searchSvc))
-	}
-	for _, eventType := range []string{"model.record.created", "model.record.updated"} {
-		eventingSvc.RegisterHandler(eventType, eventing.NewModelSearchIndexHandler(modelSvc, searchSvc))
-	}
-	analyticsSvc := analytics.NewServiceWithRepository(documentSvc, workflowSvc, eventingSvc, searchSvc, auditSvc, obsSvc, analyticsRepo)
-	analyticsSvc.AttachJobs(jobSvc)
-	analyticsScheduler := analytics.NewScheduler(analyticsSvc, time.Minute, 30*24*time.Hour)
-	monitoringSvc := monitoring.NewService(documentSvc, eventingSvc, workflowSvc, searchSvc, obsSvc)
-	dispatcher := eventing.NewDispatcher(eventingSvc, time.Second, 50)
-	jobSvc.SetHealthHooks(func() { healthTracker.MarkSuccess("jobs") }, func(err error) { healthTracker.MarkFailure("jobs", err) })
-	dispatcher.SetHealthHooks(func() { healthTracker.MarkSuccess("dispatcher") }, func(err error) { healthTracker.MarkFailure("dispatcher", err) })
-	analyticsScheduler.SetHealthHooks(func() { healthTracker.MarkSuccess("scheduler") }, func(err error) { healthTracker.MarkFailure("scheduler", err) })
-	bootstrapRuntimeModuleContracts(moduleSvc, obsSvc, analyticsSvc)
-	closers := []func() error{}
-	if natsCfg := configSvc.NATSPolicy(); natsCfg.Enabled && natsCfg.URL != "" {
-		routes := externalBrokerRoutes(moduleSvc, natsCfg.SubjectPrefix)
-		if len(routes) > 0 {
-			publisher, err := eventing.NewNATSPublisher(natsCfg.URL, time.Duration(natsCfg.TimeoutSeconds)*time.Second)
-			if err != nil {
-				loggerSvc.Error("nats publisher unavailable", map[string]any{"error": err.Error(), "url": natsCfg.URL})
-			} else {
-				sinkName := firstValue(strings.TrimSpace(natsCfg.SinkName), "nats")
-				eventingSvc.RegisterBrokerSink(sinkName, publisher, routes)
-				closers = append(closers, publisher.Close)
-			}
-		}
-	}
-
-	router := httpx.NewRouter(configSvc, organizationSvc, identitySvc, moduleSvc, modelSvc, activitySvc, reportingSvc, documentSvc, workflowSvc, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, healthTracker, documentActions, modelActions)
+	runtime := configureRuntime(graph)
+	closers := configureAdapters(graph)
+	router := httpx.BuildRouter(routerDeps(graph))
 
 	addr := os.Getenv("APP_ADDRESS")
 	if addr == "" {
@@ -243,30 +129,31 @@ func New(opts Options) (*App, error) {
 		closers:            closers,
 		profile:            profile,
 		businessModuleKeys: manifestKeys(businessManifests),
-		Config:             configSvc,
-		Organization:       organizationSvc,
-		Identity:           identitySvc,
-		Documents:          documentSvc,
-		Workflows:          workflowSvc,
-		Audit:              auditSvc,
-		Eventing:           eventingSvc,
-		Search:             searchSvc,
-		Logger:             loggerSvc,
-		Analytics:          analyticsSvc,
-		AnalyticsScheduler: analyticsScheduler,
-		Monitoring:         monitoringSvc,
-		RuntimeHealth:      healthTracker,
-		Modules:            moduleSvc,
-		Models:             modelSvc,
-		Activities:         activitySvc,
-		Reporting:          reportingSvc,
-		Observability:      obsSvc,
-		Policy:             policySvc,
-		Integration:        integrationSvc,
-		Jobs:               jobSvc,
-		DocActions:         documentActions,
-		ModelActions:       modelActions,
-		Dispatcher:         dispatcher,
+		Config:             graph.config,
+		Organization:       graph.organization,
+		Identity:           graph.identity,
+		Documents:          graph.documents,
+		Workflows:          graph.workflows,
+		Audit:              graph.audit,
+		Eventing:           graph.eventing,
+		Search:             graph.search,
+		Logger:             graph.logger,
+		Analytics:          graph.analytics,
+		AnalyticsScheduler: runtime.analyticsScheduler,
+		Monitoring:         graph.monitoring,
+		RuntimeHealth:      graph.runtimeHealth,
+		Modules:            graph.modules,
+		Models:             graph.models,
+		Activities:         graph.activities,
+		Reporting:          graph.reporting,
+		Reference:          graph.reference,
+		Observability:      graph.observability,
+		Policy:             graph.policy,
+		Integration:        graph.integration,
+		Jobs:               graph.jobs,
+		DocActions:         graph.docActions,
+		ModelActions:       graph.modelActions,
+		Dispatcher:         runtime.dispatcher,
 	}, nil
 }
 
@@ -311,7 +198,7 @@ func ignoreConflict(err error) error {
 	return err
 }
 
-func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, businessManifests []module.Manifest, bootstrapPassword string) error {
+func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, businessManifests []module.Manifest, bootstrapPassword string) error {
 	manifests := append(builtInModuleManifests(), businessManifests...)
 	for _, def := range config.BuiltInDefinitions() {
 		if err := configSvc.RegisterDefinition(def); err != nil {
@@ -336,8 +223,28 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 		}
 	}
 	for _, manifest := range manifests {
+		for _, def := range manifest.ReferenceTypes {
+			if err := ignoreConflict(referenceSvc.RegisterType(def)); err != nil {
+				return err
+			}
+		}
+		for _, record := range manifest.ReferenceRecords {
+			if err := ignoreConflict(referenceSvc.UpsertRecord(record)); err != nil {
+				return err
+			}
+		}
 		for _, def := range manifest.Models {
 			if err := ignoreConflict(modelSvc.Register(def)); err != nil {
+				return err
+			}
+		}
+		for _, def := range manifest.Documents {
+			if err := ignoreConflict(documentSvc.Register(def)); err != nil {
+				return err
+			}
+		}
+		for _, def := range manifest.Workflows {
+			if err := ignoreConflict(workflowSvc.Register(def)); err != nil {
 				return err
 			}
 		}
@@ -370,18 +277,6 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 	}
 	seedModelRules(modelSvc)
 	seedModelData(modelSvc)
-	if err := ignoreConflict(documentSvc.Register(document.Definition{
-		Type:                   "generic_request",
-		DisplayName:            "Generic Request",
-		SchemaVersion:          "v1",
-		WorkflowKey:            "generic_request_flow",
-		NumberingKey:           "generic_request_number",
-		OwnerModuleKey:         "documents",
-		AllowedLinkTypes:       []string{"related_to", "amends"},
-		AllowedAttachmentTypes: []string{"note", "image", "document"},
-	})); err != nil {
-		return err
-	}
 	for _, manifest := range manifests {
 		for _, extension := range manifest.DocumentExtensions {
 			if err := ignoreConflict(documentSvc.RegisterExtension(document.ExtensionDefinition{
@@ -395,27 +290,6 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 				return err
 			}
 		}
-	}
-	if err := ignoreConflict(workflowSvc.Register(workflow.Definition{
-		Key:    "generic_request_flow",
-		States: []string{"draft", "submitted", "approved", "rejected"},
-		Actions: []workflow.ActionRule{{
-			Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true,
-		}, {
-			Action: "approve", FromState: "submitted", ToState: "approved", PermissionKey: "document.approve",
-		}, {
-			Action: "reject", FromState: "submitted", ToState: "rejected", PermissionKey: "document.reject",
-		}, {
-			Action: "reopen", FromState: "rejected", ToState: "draft", PermissionKey: "document.reopen",
-		}, {
-			Action: "reopen", FromState: "approved", ToState: "draft", PermissionKey: "document.reopen",
-		}, {
-			Action: "cancel", FromState: "draft", ToState: "cancelled", PermissionKey: "document.cancel",
-		}, {
-			Action: "cancel", FromState: "submitted", ToState: "cancelled", PermissionKey: "document.cancel",
-		}},
-	})); err != nil {
-		return err
 	}
 	return nil
 }
@@ -947,7 +821,49 @@ func firstValue(values ...string) string {
 func builtInModuleManifests() []module.Manifest {
 	authDefinition, _ := config.NewService().Definition("identity.auth")
 	httpDefinition, _ := config.NewService().Definition("platform.http")
+	seededAt := time.Now().UTC()
 	return []module.Manifest{
+		{
+			Key:          "reference_masterdata",
+			Name:         "Reference Master Data",
+			Version:      "1.0.0",
+			DomainFamily: "platform",
+			DependencyRequirements: []module.DependencyRequirement{
+				{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+			},
+			ReferenceTypes: []reference.TypeDefinition{
+				{Key: "currency", DisplayName: "Currency", OwnerModuleKey: "reference_masterdata"},
+				{Key: "uom", DisplayName: "Unit of Measure", OwnerModuleKey: "reference_masterdata"},
+				{Key: "party_type", DisplayName: "Party Type", OwnerModuleKey: "reference_masterdata"},
+				{Key: "location_type", DisplayName: "Location Type", OwnerModuleKey: "reference_masterdata"},
+				{Key: "document_reason", DisplayName: "Document Reason", OwnerModuleKey: "reference_masterdata"},
+				{Key: "appointment_type", DisplayName: "Appointment Type", OwnerModuleKey: "reference_masterdata"},
+				{Key: "patient_identifier_type", DisplayName: "Patient Identifier Type", OwnerModuleKey: "reference_masterdata"},
+				{Key: "practitioner_type", DisplayName: "Practitioner Type", OwnerModuleKey: "reference_masterdata"},
+				{Key: "payer_type", DisplayName: "Payer Type", OwnerModuleKey: "reference_masterdata"},
+				{Key: "visit_priority", DisplayName: "Visit Priority", OwnerModuleKey: "reference_masterdata"},
+				{Key: "shipment_method", DisplayName: "Shipment Method", OwnerModuleKey: "reference_masterdata"},
+				{Key: "item_category", DisplayName: "Item Category", OwnerModuleKey: "reference_masterdata"},
+			},
+			ReferenceRecords: []reference.Record{
+				{TypeKey: "currency", Key: "IDR", DisplayName: "Indonesian Rupiah", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"currency_code": "IDR", "minor_unit_scale": 2, "display_symbol": "Rp"}},
+				{TypeKey: "uom", Key: "ea", DisplayName: "Each", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"uom_code": "ea", "dimension": "count", "precision_scale": 0}},
+				{TypeKey: "party_type", Key: "patient", DisplayName: "Patient", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
+				{TypeKey: "party_type", Key: "payer", DisplayName: "Payer", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
+				{TypeKey: "party_type", Key: "practitioner", DisplayName: "Practitioner", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
+				{TypeKey: "location_type", Key: "clinic", DisplayName: "Clinic", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "location_type"}},
+				{TypeKey: "document_reason", Key: "walk_in", DisplayName: "Walk-In Visit", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "document_reason"}},
+				{TypeKey: "document_reason", Key: "follow_up", DisplayName: "Follow Up", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "document_reason"}},
+				{TypeKey: "appointment_type", Key: "consultation", DisplayName: "Consultation", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "appointment_type"}},
+				{TypeKey: "patient_identifier_type", Key: "mrn", DisplayName: "Medical Record Number", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "patient_identifier_type"}},
+				{TypeKey: "practitioner_type", Key: "doctor", DisplayName: "Doctor", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "practitioner_type"}},
+				{TypeKey: "practitioner_type", Key: "nurse", DisplayName: "Nurse", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "practitioner_type"}},
+				{TypeKey: "payer_type", Key: "self_pay", DisplayName: "Self Pay", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "payer_type"}},
+				{TypeKey: "payer_type", Key: "insurance", DisplayName: "Insurance", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "payer_type"}},
+				{TypeKey: "visit_priority", Key: "routine", DisplayName: "Routine", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
+				{TypeKey: "visit_priority", Key: "urgent", DisplayName: "Urgent", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
+			},
+		},
 		{
 			Key:          "masterdata",
 			Name:         "Master Data",
@@ -955,6 +871,7 @@ func builtInModuleManifests() []module.Manifest {
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{
 				{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+				{ModuleKey: "reference_masterdata", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
 			},
 			Models: []model.Definition{{
 				Key:                 "party",
@@ -1150,6 +1067,29 @@ func builtInModuleManifests() []module.Manifest {
 			},
 			OwnedDocumentTypes: []string{"generic_request"},
 			OwnedWorkflowKeys:  []string{"generic_request_flow"},
+			Documents: []document.Definition{{
+				Type:                   "generic_request",
+				DisplayName:            "Generic Request",
+				SchemaVersion:          "v1",
+				WorkflowKey:            "generic_request_flow",
+				NumberingKey:           "generic_request_number",
+				OwnerModuleKey:         "documents",
+				AllowedLinkTypes:       []string{"related_to", "amends"},
+				AllowedAttachmentTypes: []string{"note", "image", "document"},
+			}},
+			Workflows: []workflow.Definition{{
+				Key:    "generic_request_flow",
+				States: []string{"draft", "submitted", "approved", "rejected", "cancelled"},
+				Actions: []workflow.ActionRule{
+					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true},
+					{Action: "approve", FromState: "submitted", ToState: "approved", PermissionKey: "document.approve"},
+					{Action: "reject", FromState: "submitted", ToState: "rejected", PermissionKey: "document.reject"},
+					{Action: "reopen", FromState: "rejected", ToState: "draft", PermissionKey: "document.reopen"},
+					{Action: "reopen", FromState: "approved", ToState: "draft", PermissionKey: "document.reopen"},
+					{Action: "cancel", FromState: "draft", ToState: "cancelled", PermissionKey: "document.cancel"},
+					{Action: "cancel", FromState: "submitted", ToState: "cancelled", PermissionKey: "document.cancel"},
+				},
+			}},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
 					{Key: "document.create", Action: "create", Resource: "document", DisplayName: "Create Documents"},

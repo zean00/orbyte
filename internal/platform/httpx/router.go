@@ -25,6 +25,7 @@ import (
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
@@ -33,11 +34,115 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
-	mux := http.NewServeMux()
-	fieldSecurity := securityfields.NewService(policySvc)
-	reportingSvc.AttachFieldSecurity(fieldSecurity)
+func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
+	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
+	return BuildRouter(RouterDeps{
+		Platform: PlatformDeps{
+			Config:       cfg,
+			Organization: org,
+			Identity:     ident,
+			Reference:    referenceSvc,
+			Documents:    docs,
+			Workflows:    flows,
+		},
+		Auth: AuthDeps{Config: cfg, Identity: ident, Audit: auditSvc},
+		Models: ModelDeps{
+			Identity:      ident,
+			Models:        models,
+			Activities:    activities,
+			Policy:        policySvc,
+			FieldSecurity: fieldSecurity,
+			Actions:       modelActions,
+		},
+		Documents: DocumentDeps{
+			Identity:      ident,
+			Modules:       modules,
+			Documents:     docs,
+			Actions:       docActions,
+			Policy:        policySvc,
+			FieldSecurity: fieldSecurity,
+			Observability: obsSvc,
+		},
+		Ops: OpsDeps{
+			Identity:      ident,
+			Audit:         auditSvc,
+			Eventing:      eventingSvc,
+			Documents:     docs,
+			Search:        searchSvc,
+			Workflows:     flows,
+			Analytics:     analyticsSvc,
+			Monitoring:    monitoringSvc,
+			Observability: obsSvc,
+			Jobs:          jobSvc,
+			Health:        health,
+		},
+		Search: SearchDeps{Identity: ident, Search: searchSvc, Jobs: jobSvc},
+		Admin: AdminDeps{
+			Config:        cfg,
+			Organization:  org,
+			Identity:      ident,
+			Modules:       modules,
+			Audit:         auditSvc,
+			Policy:        policySvc,
+			Observability: obsSvc,
+			Integration:   integrationSvc,
+			Reference:     referenceSvc,
+		},
+		UI: UIDeps{
+			Identity:      ident,
+			Modules:       modules,
+			Models:        models,
+			Activities:    activities,
+			Reporting:     reportingSvc,
+			Documents:     docs,
+			Search:        searchSvc,
+			Analytics:     analyticsSvc,
+			Monitoring:    monitoringSvc,
+			Policy:        policySvc,
+			FieldSecurity: fieldSecurity,
+		},
+		CrossCutting: CrossCuttingDeps{
+			Config:        cfg,
+			Identity:      ident,
+			Logger:        loggerSvc,
+			Observability: obsSvc,
+			Health:        health,
+		},
+	})
+}
 
+func BuildRouter(deps RouterDeps) http.Handler {
+	mux := http.NewServeMux()
+	if deps.UI.FieldSecurity == nil {
+		deps.UI.FieldSecurity = newFieldSecurity(deps.UI.Policy, deps.UI.Reporting)
+	}
+	if deps.Models.FieldSecurity == nil {
+		deps.Models.FieldSecurity = deps.UI.FieldSecurity
+	}
+	if deps.Documents.FieldSecurity == nil {
+		deps.Documents.FieldSecurity = deps.UI.FieldSecurity
+	}
+	registerPlatformRoutes(mux, deps.Platform, deps.CrossCutting.Health)
+	registerAuthRoutesWithDeps(mux, deps.Auth)
+	registerModelRoutesWithDeps(mux, deps.Models)
+	registerDocumentRoutesWithDeps(mux, deps.Documents)
+	registerOpsRoutesWithDeps(mux, deps.Ops)
+	registerSearchRoutesWithDeps(mux, deps.Search)
+	registerAdminRoutesWithDeps(mux, deps.Admin)
+	registerUIRoutesWithDeps(mux, deps.UI)
+
+	return withObservability(withAuthentication(withCSRFProtection(mux, deps.CrossCutting.Config), deps.CrossCutting.Identity), deps.CrossCutting.Logger, deps.CrossCutting.Observability)
+}
+
+func newFieldSecurity(policySvc *policy.Service, reportingSvc *reporting.Service) *securityfields.Service {
+	fieldSecurity := securityfields.NewService(policySvc)
+	if reportingSvc != nil {
+		reportingSvc.AttachFieldSecurity(fieldSecurity)
+	}
+	return fieldSecurity
+}
+
+func registerCorePlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runtimehealth.Tracker) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]any{
 			"status": "ok",
@@ -60,27 +165,18 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 	})
 
 	mux.HandleFunc("GET /platform/context", func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := requireAuthorization(w, r, ident, "platform.context.read", "", "platform.context.read"); !ok {
+		if _, ok := requireAuthorization(w, r, deps.Identity, "platform.context.read", "", "platform.context.read"); !ok {
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{
-			"organization":   org.Root(),
-			"config_keys":    cfg.Keys(),
-			"roles":          ident.Roles(),
-			"document_types": docs.DocumentTypes(),
-			"workflows":      flows.ListKeys(),
+			"organization":    deps.Organization.Root(),
+			"config_keys":     deps.Config.Keys(),
+			"reference_types": deps.Reference.Types(),
+			"roles":           deps.Identity.Roles(),
+			"document_types":  deps.Documents.DocumentTypes(),
+			"workflows":       deps.Workflows.ListKeys(),
 		})
 	})
-
-	registerAuthRoutes(mux, cfg, ident, auditSvc)
-	registerModelRoutes(mux, ident, models, activities, policySvc, fieldSecurity, modelActions)
-	registerDocumentRoutes(mux, ident, modules, docs, docActions, policySvc, fieldSecurity, obsSvc)
-	registerOpsRoutes(mux, ident, auditSvc, eventingSvc, docs, searchSvc, flows, analyticsSvc, monitoringSvc, obsSvc, jobSvc, health)
-	registerSearchRoutes(mux, ident, searchSvc, jobSvc)
-	registerAdminRoutes(mux, cfg, org, ident, modules, auditSvc, policySvc, obsSvc, integrationSvc)
-	registerUIRoutes(mux, ident, modules, models, activities, reportingSvc, docs, searchSvc, analyticsSvc, monitoringSvc, policySvc, fieldSecurity)
-
-	return withObservability(withAuthentication(withCSRFProtection(mux, cfg), ident), loggerSvc, obsSvc)
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {

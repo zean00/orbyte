@@ -20,10 +20,15 @@ func TestForProfileReturnsKnownProfiles(t *testing.T) {
 	}
 }
 
-func TestForProfileRejectsUnconfiguredBusinessProfiles(t *testing.T) {
-	for _, profile := range []string{ProfileClinic, ProfileOMS} {
-		if _, err := ForProfile(profile); err == nil {
-			t.Fatalf("expected unconfigured profile %q to fail", profile)
-		}
+func TestForProfileLoadsClinicAndRejectsUnconfiguredOMS(t *testing.T) {
+	manifests, err := ForProfile(ProfileClinic)
+	if err != nil {
+		t.Fatalf("expected clinic profile to load: %v", err)
+	}
+	if len(manifests) == 0 {
+		t.Fatal("expected clinic profile manifests")
+	}
+	if _, err := ForProfile(ProfileOMS); err == nil {
+		t.Fatal("expected unconfigured oms profile to fail")
 	}
 }

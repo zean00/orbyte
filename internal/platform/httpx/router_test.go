@@ -35,6 +35,7 @@ import (
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
@@ -73,6 +74,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	models := model.NewService()
 	activities := activity.NewService()
 	reportingSvc := reporting.NewService(models)
+	referenceSvc := reference.NewService()
 	docs := document.NewService()
 	flows := workflow.NewService()
 	auditSvc := audit.NewService()
@@ -279,7 +281,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router: NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, actions, modelActions),
+		router: NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, actions, modelActions),
 		cookie: &http.Cookie{Name: sessionCookieName, Value: token},
 		csrf:   csrfCookie,
 		ident:  ident,
@@ -1775,7 +1777,7 @@ func TestReadyzReturnsUnavailableWhenRuntimeHealthIsDegraded(t *testing.T) {
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
-	router := NewRouter(cfg, org, ident, module.NewService(), models, activity.NewService(), reportingSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
+	router := NewRouter(cfg, org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

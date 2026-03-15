@@ -4,34 +4,41 @@ import (
 	"time"
 
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/workflow"
 )
 
 type Manifest struct {
-	Key                    string                   `json:"key"`
-	Name                   string                   `json:"name"`
-	Version                string                   `json:"version"`
-	DomainFamily           string                   `json:"domain_family"`
-	Category               string                   `json:"category,omitempty"`
-	Dependencies           []string                 `json:"dependencies,omitempty"`
-	DependencyRequirements []DependencyRequirement  `json:"dependency_requirements,omitempty"`
-	OwnedDocumentTypes     []string                 `json:"owned_document_types,omitempty"`
-	OwnedEntityTypes       []string                 `json:"owned_entity_types,omitempty"`
-	DocumentExtensions     []DocumentExtension      `json:"document_extensions,omitempty"`
-	OwnedWorkflowKeys      []string                 `json:"owned_workflow_keys,omitempty"`
-	OwnedPermissionKeys    []string                 `json:"owned_permission_keys,omitempty"`
-	OwnedProjectionKeys    []string                 `json:"owned_projection_keys,omitempty"`
-	OwnedTemplateKeys      []string                 `json:"owned_template_keys,omitempty"`
-	FeatureFlags           []string                 `json:"feature_flags,omitempty"`
-	ConfigDefinitions      []config.Definition      `json:"config_definitions,omitempty"`
-	Models                 []model.Definition       `json:"models,omitempty"`
-	Datasets               []DatasetDefinition      `json:"datasets,omitempty"`
-	SearchIndexes          []search.IndexDefinition `json:"search_indexes,omitempty"`
-	Security               SecurityDefinition       `json:"security,omitempty"`
-	Observability          ObservabilityDefinition  `json:"observability,omitempty"`
-	Frontend               FrontendDefinition       `json:"frontend,omitempty"`
-	Bundles                []BundleDefinition       `json:"-"`
+	Key                    string                     `json:"key"`
+	Name                   string                     `json:"name"`
+	Version                string                     `json:"version"`
+	DomainFamily           string                     `json:"domain_family"`
+	Category               string                     `json:"category,omitempty"`
+	Dependencies           []string                   `json:"dependencies,omitempty"`
+	DependencyRequirements []DependencyRequirement    `json:"dependency_requirements,omitempty"`
+	OwnedDocumentTypes     []string                   `json:"owned_document_types,omitempty"`
+	OwnedEntityTypes       []string                   `json:"owned_entity_types,omitempty"`
+	DocumentExtensions     []DocumentExtension        `json:"document_extensions,omitempty"`
+	OwnedWorkflowKeys      []string                   `json:"owned_workflow_keys,omitempty"`
+	OwnedPermissionKeys    []string                   `json:"owned_permission_keys,omitempty"`
+	OwnedProjectionKeys    []string                   `json:"owned_projection_keys,omitempty"`
+	OwnedTemplateKeys      []string                   `json:"owned_template_keys,omitempty"`
+	FeatureFlags           []string                   `json:"feature_flags,omitempty"`
+	ConfigDefinitions      []config.Definition        `json:"config_definitions,omitempty"`
+	ReferenceTypes         []reference.TypeDefinition `json:"reference_types,omitempty"`
+	ReferenceRecords       []reference.Record         `json:"reference_records,omitempty"`
+	Models                 []model.Definition         `json:"models,omitempty"`
+	Documents              []document.Definition      `json:"documents,omitempty"`
+	Workflows              []workflow.Definition      `json:"workflows,omitempty"`
+	Datasets               []DatasetDefinition        `json:"datasets,omitempty"`
+	SearchIndexes          []search.IndexDefinition   `json:"search_indexes,omitempty"`
+	Security               SecurityDefinition         `json:"security,omitempty"`
+	Observability          ObservabilityDefinition    `json:"observability,omitempty"`
+	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
+	Bundles                []BundleDefinition         `json:"-"`
 }
 
 type DocumentExtension struct {
