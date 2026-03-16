@@ -75,6 +75,16 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Analytics:       graph.analytics,
 			StreamPath:      analyticsMCPStreamPath,
 		},
+		Offline: httpx.OfflineDeps{
+			Identity:        graph.identity,
+			Modules:         graph.modules,
+			Offline:         graph.offline,
+			Documents:       graph.documents,
+			DocumentActions: graph.docActions,
+			Models:          graph.models,
+			ModelActions:    graph.modelActions,
+			FieldSecurity:   graph.fieldSecurity,
+		},
 		UI: httpx.UIDeps{
 			Identity:      graph.identity,
 			Modules:       graph.modules,

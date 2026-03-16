@@ -268,6 +268,110 @@ func (s *Service) MCPApp(key string) (MCPAppDefinition, bool) {
 	return MCPAppDefinition{}, false
 }
 
+func (s *Service) OfflineReferences() []OfflineReferenceDefinition {
+	items := make([]OfflineReferenceDefinition, 0)
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		items = append(items, manifest.Offline.References...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].TypeKey < items[j].TypeKey })
+	return items
+}
+
+func (s *Service) OfflineProjections() []OfflineProjectionDefinition {
+	items := make([]OfflineProjectionDefinition, 0)
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		items = append(items, manifest.Offline.Projections...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].IndexKey < items[j].IndexKey })
+	return items
+}
+
+func (s *Service) OfflineDocuments() []OfflineDocumentDefinition {
+	items := make([]OfflineDocumentDefinition, 0)
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		items = append(items, manifest.Offline.Documents...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Type < items[j].Type })
+	return items
+}
+
+func (s *Service) OfflineModels() []OfflineModelDefinition {
+	items := make([]OfflineModelDefinition, 0)
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		items = append(items, manifest.Offline.Models...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ModelKey < items[j].ModelKey })
+	return items
+}
+
+func (s *Service) OfflineReference(typeKey string) (OfflineReferenceDefinition, bool) {
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		for _, item := range manifest.Offline.References {
+			if item.TypeKey == typeKey {
+				return item, true
+			}
+		}
+	}
+	return OfflineReferenceDefinition{}, false
+}
+
+func (s *Service) OfflineProjection(indexKey string) (OfflineProjectionDefinition, bool) {
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		for _, item := range manifest.Offline.Projections {
+			if item.IndexKey == indexKey {
+				return item, true
+			}
+		}
+	}
+	return OfflineProjectionDefinition{}, false
+}
+
+func (s *Service) OfflineDocument(documentType string) (OfflineDocumentDefinition, bool) {
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		for _, item := range manifest.Offline.Documents {
+			if item.Type == documentType {
+				return item, true
+			}
+		}
+	}
+	return OfflineDocumentDefinition{}, false
+}
+
+func (s *Service) OfflineModel(modelKey string) (OfflineModelDefinition, bool) {
+	for _, manifest := range s.manifests {
+		if !s.IsEnabled(manifest.Key) {
+			continue
+		}
+		for _, item := range manifest.Offline.Models {
+			if item.ModelKey == modelKey {
+				return item, true
+			}
+		}
+	}
+	return OfflineModelDefinition{}, false
+}
+
 func (s *Service) ResolveRoute(path string) (RouteResolution, bool) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
@@ -447,6 +551,8 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	domainEvents := map[string]string{}
 	models := map[string]string{}
 	searchIndexes := map[string]string{}
+	referenceTypes := map[string]string{}
+	documentTypes := map[string]string{}
 
 	for moduleKey, current := range existing {
 		indexFrontendContracts(moduleKey, current, actions, views, customEntries, bundles, menus)
@@ -455,6 +561,8 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		indexObservabilityContracts(moduleKey, current, projections, dashboards, reports, datasets, metrics, logEvents, domainEvents)
 		indexModelContracts(moduleKey, current, models)
 		indexSearchContracts(moduleKey, current, searchIndexes)
+		indexReferenceContracts(moduleKey, current, referenceTypes)
+		indexDocumentContracts(moduleKey, current, documentTypes)
 	}
 	for _, dependency := range manifestDependencies(manifest) {
 		if strings.TrimSpace(dependency.ModuleKey) == "" {
@@ -468,6 +576,30 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 				return shared.Validation("dependency version_range is invalid")
 			}
 		}
+	}
+	for _, refType := range manifest.ReferenceTypes {
+		if strings.TrimSpace(refType.Key) == "" || strings.TrimSpace(refType.DisplayName) == "" {
+			return shared.Validation("reference type key and display_name are required")
+		}
+		if owner, ok := referenceTypes[refType.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("reference type key already registered")
+		}
+		referenceTypes[refType.Key] = manifest.Key
+	}
+	for _, documentType := range manifest.OwnedDocumentTypes {
+		if strings.TrimSpace(documentType) == "" {
+			return shared.Validation("owned document type is required")
+		}
+		documentTypes[documentType] = manifest.Key
+	}
+	for _, def := range manifest.Documents {
+		if strings.TrimSpace(def.Type) == "" || strings.TrimSpace(def.DisplayName) == "" || strings.TrimSpace(def.SchemaVersion) == "" {
+			return shared.Validation("document type, display_name, and schema_version are required")
+		}
+		if owner, ok := documentTypes[def.Type]; ok && owner != manifest.Key {
+			return shared.Conflict("document type already registered")
+		}
+		documentTypes[def.Type] = manifest.Key
 	}
 	for _, permission := range manifest.Security.Permissions {
 		if strings.TrimSpace(permission.Key) == "" || strings.TrimSpace(permission.Action) == "" || strings.TrimSpace(permission.Resource) == "" {
@@ -609,6 +741,38 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 			return shared.Validation("search index source_kind is invalid")
 		}
 		searchIndexes[index.Key] = manifest.Key
+	}
+	for _, item := range manifest.Offline.References {
+		if strings.TrimSpace(item.TypeKey) == "" || strings.TrimSpace(item.Title) == "" {
+			return shared.Validation("offline reference type_key and title are required")
+		}
+		if _, ok := referenceTypes[item.TypeKey]; !ok {
+			return shared.Validation("offline reference type_key is not registered")
+		}
+	}
+	for _, item := range manifest.Offline.Projections {
+		if strings.TrimSpace(item.IndexKey) == "" || strings.TrimSpace(item.Title) == "" {
+			return shared.Validation("offline projection index_key and title are required")
+		}
+		if _, ok := searchIndexes[item.IndexKey]; !ok {
+			return shared.Validation("offline projection index_key is not registered")
+		}
+	}
+	for _, item := range manifest.Offline.Documents {
+		if strings.TrimSpace(item.Type) == "" || strings.TrimSpace(item.Title) == "" {
+			return shared.Validation("offline document type and title are required")
+		}
+		if _, ok := documentTypes[item.Type]; !ok {
+			return shared.Validation("offline document type is not registered")
+		}
+	}
+	for _, item := range manifest.Offline.Models {
+		if strings.TrimSpace(item.ModelKey) == "" || strings.TrimSpace(item.Title) == "" {
+			return shared.Validation("offline model model_key and title are required")
+		}
+		if _, ok := models[item.ModelKey]; !ok {
+			return shared.Validation("offline model model_key is not registered")
+		}
 	}
 
 	for _, menu := range manifest.Frontend.Menus {
@@ -914,6 +1078,21 @@ func indexObservabilityContracts(moduleKey string, manifest Manifest, projection
 func indexModelContracts(moduleKey string, manifest Manifest, models map[string]string) {
 	for _, def := range manifest.Models {
 		models[def.Key] = moduleKey
+	}
+}
+
+func indexReferenceContracts(moduleKey string, manifest Manifest, referenceTypes map[string]string) {
+	for _, def := range manifest.ReferenceTypes {
+		referenceTypes[def.Key] = moduleKey
+	}
+}
+
+func indexDocumentContracts(moduleKey string, manifest Manifest, documentTypes map[string]string) {
+	for _, item := range manifest.OwnedDocumentTypes {
+		documentTypes[item] = moduleKey
+	}
+	for _, def := range manifest.Documents {
+		documentTypes[def.Type] = moduleKey
 	}
 }
 

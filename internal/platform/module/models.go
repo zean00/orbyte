@@ -38,6 +38,7 @@ type Manifest struct {
 	Security               SecurityDefinition         `json:"security,omitempty"`
 	Observability          ObservabilityDefinition    `json:"observability,omitempty"`
 	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
+	Offline                OfflineDefinition          `json:"offline,omitempty"`
 	MCP                    MCPDefinition              `json:"mcp,omitempty"`
 	Bundles                []BundleDefinition         `json:"-"`
 }
@@ -211,6 +212,43 @@ type FrontendDefinition struct {
 	Actions       []ActionDefinition      `json:"actions,omitempty"`
 	Views         []ViewDefinition        `json:"views,omitempty"`
 	CustomEntries []CustomEntryDefinition `json:"custom_entries,omitempty"`
+}
+
+type OfflineDefinition struct {
+	References  []OfflineReferenceDefinition  `json:"references,omitempty"`
+	Projections []OfflineProjectionDefinition `json:"projections,omitempty"`
+	Documents   []OfflineDocumentDefinition   `json:"documents,omitempty"`
+	Models      []OfflineModelDefinition      `json:"models,omitempty"`
+}
+
+type OfflineReferenceDefinition struct {
+	TypeKey             string   `json:"type_key"`
+	Title               string   `json:"title"`
+	RequiredPermissions []string `json:"required_permissions,omitempty"`
+}
+
+type OfflineProjectionDefinition struct {
+	IndexKey             string   `json:"index_key"`
+	Title                string   `json:"title"`
+	RequiredPermissions  []string `json:"required_permissions,omitempty"`
+	DefaultFilters       []string `json:"default_filters,omitempty"`
+	DefaultIncludeFields []string `json:"default_include_fields,omitempty"`
+}
+
+type OfflineDocumentDefinition struct {
+	Type                string   `json:"type"`
+	Title               string   `json:"title"`
+	CreatePermissionKey string   `json:"create_permission_key,omitempty"`
+	UpdatePermissionKey string   `json:"update_permission_key,omitempty"`
+	RequiredPermissions []string `json:"required_permissions,omitempty"`
+}
+
+type OfflineModelDefinition struct {
+	ModelKey            string   `json:"model_key"`
+	Title               string   `json:"title"`
+	CreatePermissionKey string   `json:"create_permission_key,omitempty"`
+	UpdatePermissionKey string   `json:"update_permission_key,omitempty"`
+	RequiredPermissions []string `json:"required_permissions,omitempty"`
 }
 
 type MCPDefinition struct {

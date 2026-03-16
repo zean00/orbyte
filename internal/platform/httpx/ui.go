@@ -26,6 +26,24 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		_, _ = w.Write([]byte(uiShellHTML))
 	})
 
+	mux.HandleFunc("GET /ui/manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusOK, map[string]any{
+			"name":             "Orbyte Platform UI",
+			"short_name":       "Orbyte UI",
+			"start_url":        "/ui",
+			"display":          "standalone",
+			"background_color": "#f3efe7",
+			"theme_color":      "#1f6f5f",
+			"description":      "Manifest-driven offline-capable platform shell.",
+		})
+	})
+
+	mux.HandleFunc("GET /ui/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write([]byte(uiServiceWorkerJS))
+	})
+
 	mux.HandleFunc("GET /ui/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {
@@ -714,6 +732,8 @@ const uiShellHTML = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f6f5f">
+  <link rel="manifest" href="/ui/manifest.webmanifest">
   <title>Clinic UI</title>
   <style>
     :root { --bg:#f3efe7; --panel:#fffdf8; --ink:#16221b; --muted:#5f6c62; --line:#d8d0c2; --accent:#1f6f5f; --accent-soft:#d7ece5; --warn:#8f2d1f; }
@@ -738,6 +758,9 @@ const uiShellHTML = `<!doctype html>
     button.google { background:#ffffff; color:var(--ink); border:1px solid var(--line); }
     button.warn { background:var(--warn); }
     .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .status-bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .badge { display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border:1px solid var(--line); border-radius:999px; background:#fffefa; color:var(--muted); font-size:13px; }
+    .badge strong { color:var(--ink); }
     pre { margin:0; white-space:pre-wrap; word-break:break-word; background:#f6f1e7; padding:14px; border-radius:12px; border:1px solid var(--line); }
     .kv { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
     .kv .card strong { display:block; font-size:24px; margin-top:4px; }
@@ -765,26 +788,151 @@ const uiShellHTML = `<!doctype html>
       <div class="panel">
         <div id="route-title"><h2>Loading…</h2></div>
         <p class="status" id="route-status">Resolving module UI registry.</p>
+        <div class="status-bar">
+          <span class="badge"><strong id="network-status">online</strong></span>
+          <span class="badge">sync <strong id="sync-status">0 pending</strong></span>
+          <span class="badge">cache <strong id="cache-status">cold</strong></span>
+        </div>
       </div>
       <div id="view-root"></div>
     </main>
   </div>
   <script>
-    const state = { bootstrap: null, route: null, bundles: {}, authOptions: null };
+    const offlineDBName = 'orbyte_ui_offline_v1';
+    const offlineDBVersion = 1;
+    const state = {
+      bootstrap: null,
+      route: null,
+      bundles: {},
+      authOptions: null,
+      offlineBootstrap: null,
+      syncStats: {pending: 0, conflict: 0, failed: 0},
+      cacheWarm: false
+    };
+
+    async function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        await navigator.serviceWorker.register('/ui/sw.js', {scope: '/'});
+      } catch (_) {}
+    }
+
+    function openOfflineDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(offlineDBName, offlineDBVersion);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          ['app_meta', 'contracts', 'reference_packages', 'projection_packages', 'drafts', 'sync_queue', 'sync_results', 'records'].forEach((storeName) => {
+            if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName);
+          });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('indexeddb unavailable'));
+      });
+    }
+
+    async function idbPut(storeName, key, value) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).put(value, key);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error || new Error('indexeddb write failed')); };
+      });
+    }
+
+    async function idbGet(storeName, key) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const req = tx.objectStore(storeName).get(key);
+        req.onsuccess = () => { db.close(); resolve(req.result || null); };
+        req.onerror = () => { db.close(); reject(req.error || new Error('indexeddb read failed')); };
+      });
+    }
+
+    async function idbDelete(storeName, key) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).delete(key);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error || new Error('indexeddb delete failed')); };
+      });
+    }
+
+    async function idbEntries(storeName) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const req = tx.objectStore(storeName).getAll();
+        req.onsuccess = () => { db.close(); resolve(req.result || []); };
+        req.onerror = () => { db.close(); reject(req.error || new Error('indexeddb list failed')); };
+      });
+    }
+
+    function cachedResponseKey(path) {
+      return 'response:' + path;
+    }
+
+    function shouldCacheResponse(path, options) {
+      const method = ((options && options.method) || 'GET').toUpperCase();
+      if (method !== 'GET') return false;
+      return path === '/auth/options' ||
+        path === '/ui/bootstrap' ||
+        path.indexOf('/ui/routes/resolve') === 0 ||
+        path.indexOf('/ui/views/') === 0 ||
+        path.indexOf('/ui/data/') === 0;
+    }
+
+    function isNetworkError(err) {
+      const message = String((err && err.message) || err || '').toLowerCase();
+      return !message || message.indexOf('failed to fetch') >= 0 || message.indexOf('network') >= 0 || message.indexOf('load failed') >= 0;
+    }
+
+    async function rememberResponse(path, payload, kind) {
+      await idbPut('contracts', cachedResponseKey(path), {
+        payload,
+        kind,
+        updated_at: new Date().toISOString()
+      });
+      state.cacheWarm = true;
+      refreshOfflineStatus();
+    }
+
+    async function loadCachedResponse(path) {
+      const cached = await idbGet('contracts', cachedResponseKey(path));
+      return cached ? cached.payload : null;
+    }
 
     async function api(path, options) {
-      const response = await fetch(path, Object.assign({credentials: 'same-origin'}, options || {}));
-      if (!response.ok) {
-        let message = response.statusText;
-        try {
-          const payload = await response.json();
-          message = payload.error && payload.error.message ? payload.error.message : message;
-        } catch (_) {}
-        throw new Error(message);
+      const requestOptions = Object.assign({credentials: 'same-origin'}, options || {});
+      try {
+        const response = await fetch(path, requestOptions);
+        if (!response.ok) {
+          let message = response.statusText;
+          try {
+            const payload = await response.json();
+            message = payload.error && payload.error.message ? payload.error.message : message;
+          } catch (_) {}
+          throw new Error(message);
+        }
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+        if (shouldCacheResponse(path, requestOptions)) {
+          await rememberResponse(path, payload, contentType.includes('application/json') ? 'json' : 'text');
+        }
+        return payload;
+      } catch (err) {
+        if (shouldCacheResponse(path, requestOptions) && (isNetworkError(err) || !navigator.onLine)) {
+          const cached = await loadCachedResponse(path);
+          if (cached != null) {
+            setStatus('Using cached data for ' + path + '.');
+            return cached;
+          }
+        }
+        throw err;
       }
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) return response.json();
-      return response.text();
     }
 
     function currentPath() {
@@ -802,6 +950,15 @@ const uiShellHTML = `<!doctype html>
 
     function setStatus(text) {
       document.getElementById('route-status').textContent = text;
+    }
+
+    function refreshOfflineStatus() {
+      const networkNode = document.getElementById('network-status');
+      const syncNode = document.getElementById('sync-status');
+      const cacheNode = document.getElementById('cache-status');
+      if (networkNode) networkNode.textContent = navigator.onLine ? 'online' : 'offline';
+      if (syncNode) syncNode.textContent = state.syncStats.pending + ' pending / ' + state.syncStats.conflict + ' conflict';
+      if (cacheNode) cacheNode.textContent = state.cacheWarm ? 'warm' : 'cold';
     }
 
     function authErrorFromQuery() {
@@ -830,6 +987,186 @@ const uiShellHTML = `<!doctype html>
       if (!path) return '/ui';
       const params = currentParams().toString();
       return '/ui#' + path + (params ? '?' + params : '');
+    }
+
+    function offlineDocumentCapability(documentType) {
+      return (state.offlineBootstrap && state.offlineBootstrap.documents || []).find((item) => item.type === documentType) || null;
+    }
+
+    function offlineModelCapability(modelKey) {
+      return (state.offlineBootstrap && state.offlineBootstrap.models || []).find((item) => item.model_key === modelKey) || null;
+    }
+
+    function offlineProjectionCapabilityForView(view) {
+      if (!state.offlineBootstrap || !state.offlineBootstrap.projections) return null;
+      if (view.projection_key) {
+        return state.offlineBootstrap.projections.find((item) => item.index_key.indexOf('documents.') === 0) || null;
+      }
+      if (view.model_key) {
+        return state.offlineBootstrap.projections.find((item) => item.index_key.indexOf(view.model_key) >= 0 || item.title.toLowerCase().indexOf(view.model_key) >= 0) || null;
+      }
+      return null;
+    }
+
+    function draftKey(kind, targetKey, targetID) {
+      return [kind, targetKey, targetID || 'new'].join(':');
+    }
+
+    async function loadDraft(kind, targetKey, targetID) {
+      return idbGet('drafts', draftKey(kind, targetKey, targetID));
+    }
+
+    async function saveDraft(kind, targetKey, targetID, draft) {
+      const key = draftKey(kind, targetKey, targetID);
+      await idbPut('drafts', key, Object.assign({draft_key: key, updated_at: new Date().toISOString()}, draft));
+      return key;
+    }
+
+    function queueKey(idempotencyKey) {
+      return 'queue:' + idempotencyKey;
+    }
+
+    async function queueSyncItem(item) {
+      const idempotencyKey = item.idempotency_key || ('sync-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      item.idempotency_key = idempotencyKey;
+      await idbPut('sync_queue', queueKey(idempotencyKey), Object.assign({queued_at: new Date().toISOString()}, item));
+      await refreshSyncStats();
+      return item;
+    }
+
+    async function refreshSyncStats() {
+      const queued = await idbEntries('sync_queue');
+      const drafts = await idbEntries('drafts');
+      state.syncStats.pending = queued.length;
+      state.syncStats.conflict = drafts.filter((item) => item && item.status === 'conflict').length;
+      state.syncStats.failed = drafts.filter((item) => item && item.status === 'failed').length;
+      refreshOfflineStatus();
+    }
+
+    async function rememberProjectionPackage(pkg) {
+      await idbPut('projection_packages', pkg.package_key, pkg);
+    }
+
+    async function rememberReferencePackage(pkg) {
+      await idbPut('reference_packages', pkg.package_key, pkg);
+    }
+
+    async function prefetchOfflinePackages() {
+      if (!state.offlineBootstrap) return;
+      for (const item of (state.offlineBootstrap.references || [])) {
+        try {
+          const pkg = await api('/offline/packages/references', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({type_key: item.type_key})
+          });
+          await rememberReferencePackage(pkg);
+        } catch (_) {}
+      }
+      for (const item of (state.offlineBootstrap.projections || [])) {
+        try {
+          const pkg = await api('/offline/packages/projections', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({index_key: item.index_key, query: {page: 1, page_size: 100, include_fields: item.default_include_fields || []}})
+          });
+          await rememberProjectionPackage(pkg);
+        } catch (_) {}
+      }
+    }
+
+    async function loadOfflineBootstrap() {
+      try {
+        state.offlineBootstrap = await api('/offline/bootstrap');
+        await idbPut('app_meta', 'offline_bootstrap', state.offlineBootstrap);
+        await prefetchOfflinePackages();
+      } catch (err) {
+        state.offlineBootstrap = await idbGet('app_meta', 'offline_bootstrap');
+      }
+      return state.offlineBootstrap;
+    }
+
+    async function projectionFallback(view) {
+      const capability = offlineProjectionCapabilityForView(view);
+      if (!capability) return null;
+      const pkg = await idbGet('projection_packages', 'projection:' + capability.index_key);
+      if (!pkg || !pkg.result || !Array.isArray(pkg.result.hits)) return null;
+      if (view.model_key) {
+        return {
+          items: pkg.result.hits.map((hit) => ({
+            id: hit.source_id,
+            model_key: view.model_key,
+            values: Object.assign({}, hit.fields || {})
+          })),
+          total: pkg.result.total || pkg.result.hits.length
+        };
+      }
+      return {
+        items: pkg.result.hits.map((hit) => ({
+          header: {
+            id: hit.fields && (hit.fields.document_id || hit.source_id) || hit.source_id,
+            type: hit.fields && hit.fields.document_type || view.document_type || '',
+            status: hit.fields && hit.fields.status || '',
+            updated_at: hit.fields && hit.fields.updated_at || '',
+            etag: hit.fields && hit.fields.etag || '',
+            version: hit.fields && hit.fields.version || 0
+          },
+          body: {payload: hit.fields || {}}
+        })),
+        total: pkg.result.total || pkg.result.hits.length
+      };
+    }
+
+    async function processSyncQueue() {
+      if (!navigator.onLine) {
+        await refreshSyncStats();
+        return;
+      }
+      const queued = await idbEntries('sync_queue');
+      if (!queued.length) {
+        await refreshSyncStats();
+        return;
+      }
+      try {
+        const payload = await api('/offline/sync', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({items: queued})
+        });
+        const results = payload.items || [];
+        for (const result of results) {
+          const key = queueKey(result.idempotency_key);
+          const queueItem = await idbGet('sync_queue', key);
+          if (!queueItem) continue;
+          const targetKey = queueItem.kind === 'model' ? queueItem.model_key : queueItem.document_type;
+          const draft = await loadDraft(queueItem.kind, targetKey, queueItem.target_id);
+          if (result.status === 'accepted') {
+            if (draft) {
+              draft.status = 'accepted';
+              draft.target_id = result.target_id || draft.target_id || '';
+              draft.version = result.version || draft.version || 0;
+              draft.etag = result.etag || draft.etag || '';
+              await saveDraft(queueItem.kind, targetKey, draft.target_id || queueItem.target_id, draft);
+            }
+            await idbDelete('sync_queue', key);
+          } else if (result.status === 'conflict') {
+            if (draft) {
+              draft.status = 'conflict';
+              draft.conflict = result.conflict || {};
+              await saveDraft(queueItem.kind, targetKey, queueItem.target_id, draft);
+            }
+            await idbDelete('sync_queue', key);
+          } else {
+            if (draft) {
+              draft.status = 'failed';
+              draft.last_error = result.error || 'sync failed';
+              await saveDraft(queueItem.kind, targetKey, queueItem.target_id, draft);
+            }
+          }
+          await idbPut('sync_results', result.idempotency_key, result);
+        }
+      } catch (_) {}
+      await refreshSyncStats();
     }
 
     function renderLogin(message) {
@@ -862,6 +1199,8 @@ const uiShellHTML = `<!doctype html>
               body: JSON.stringify({username, password})
             });
             state.bootstrap = await api('/ui/bootstrap');
+            await loadOfflineBootstrap();
+            await processSyncQueue();
             if (!window.location.hash && state.bootstrap.default_path) {
               window.location.hash = '#' + state.bootstrap.default_path;
             }
@@ -955,7 +1294,13 @@ const uiShellHTML = `<!doctype html>
         query.set('page', String(page));
         query.set('page_size', String(pageSize));
         const listPath = view.model_key ? '/ui/data/models?' : (view.projection_key ? '/ui/data/projections/documents?' : '/ui/data/documents?');
-        const payload = await api(listPath + query.toString());
+        let payload;
+        try {
+          payload = await api(listPath + query.toString());
+        } catch (err) {
+          payload = await projectionFallback(view);
+          if (!payload) throw err;
+        }
         const pagedItems = payload.items || [];
         const newRoute = view.model_key ? routeForModel(view.model_key, 'form') : routeForDocument(view.document_type, 'form');
         const filterBar = '<div class="actions">' +
@@ -1092,22 +1437,56 @@ const uiShellHTML = `<!doctype html>
         if (view.model_key) {
           let payload = {record: {id: '', version: 0, values: {}}, definition: {relations: []}, related_definitions: {}};
           let record = {id: '', version: 0, values: {}};
-          if (documentID) {
-            payload = await api('/ui/data/models/' + encodeURIComponent(view.model_key) + '/' + encodeURIComponent(documentID));
-            record = payload.record;
-          } else {
-            payload = await api('/ui/data/models?model=' + encodeURIComponent(view.model_key) + '&page_size=1');
+          const localDraft = await loadDraft('model', view.model_key, documentID);
+          if (localDraft && localDraft.values) {
+            record = {id: documentID || '', version: localDraft.version || 0, values: localDraft.values};
+          }
+          try {
+            if (documentID) {
+              payload = await api('/ui/data/models/' + encodeURIComponent(view.model_key) + '/' + encodeURIComponent(documentID));
+              record = payload.record;
+            } else {
+              payload = await api('/ui/data/models?model=' + encodeURIComponent(view.model_key) + '&page_size=1');
+            }
+          } catch (_) {
+            if (!documentID) {
+              payload = {record, definition: {relations: []}, related_definitions: {}, model_definitions: {}};
+            }
           }
           const formSections = (view.sections || []).length > 0
             ? (view.sections || []).map((section) => renderModelFormSection(section, record)).join('')
             : '<div class="list">' + (view.fields || []).map((field) => renderEditableModelField(field, record)).join('') + '</div>';
           const relationViews = (view.related_views && view.related_views.length) ? view.related_views : deriveRelatedViews(payload.definition);
           const relationEditors = relationViews.map((item) => renderRelationEditor(item, payload)).join('');
-          root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3>' + formSections + relationEditors + '<p class="status" id="form-status"></p><div class="actions"><button id="save-form">' + (documentID ? 'Save' : 'Create') + '</button></div></section>';
+          const offlineCapable = !!offlineModelCapability(view.model_key);
+          root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3>' + formSections + relationEditors + '<p class="status" id="form-status"></p><div class="actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? 'Queue Sync' : (documentID ? 'Save' : 'Create')) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>Save Local</button></div></section>';
           bindRelationRemove(root);
           root.querySelectorAll('[data-relation-add]').forEach((button) => {
             button.addEventListener('click', () => appendRelationRow(button.dataset.relationAdd, payload));
           });
+          const saveLocalButton = root.querySelector('#save-local');
+          if (saveLocalButton) {
+            saveLocalButton.addEventListener('click', async () => {
+              const values = {};
+              root.querySelectorAll('[data-path]').forEach((input) => {
+                if (input.closest('[data-relation-editor]')) return;
+                assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input));
+              });
+              const relations = collectRelationMutations(root);
+              await saveDraft('model', view.model_key, documentID, {
+                kind: 'model',
+                model_key: view.model_key,
+                target_id: documentID || '',
+                version: record.version || 0,
+                values,
+                relations,
+                status: 'local_only'
+              });
+              await refreshSyncStats();
+              document.getElementById('form-status').textContent = 'Draft saved locally.';
+              setStatus('Draft saved locally.');
+            });
+          }
           const button = root.querySelector('#save-form');
           if (button) {
             button.addEventListener('click', async () => {
@@ -1119,18 +1498,42 @@ const uiShellHTML = `<!doctype html>
               const relations = collectRelationMutations(root);
               const csrf = readCookie('orbyte_csrf');
               try {
-                const created = await api('/models/' + encodeURIComponent(view.model_key) + (documentID ? '/' + encodeURIComponent(documentID) : ''), {
-                  method: documentID ? 'PUT' : 'POST',
-                  headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
-                  body: JSON.stringify(documentID ? {values, expected_version: record.version, relations} : {values, relations})
-                });
-                document.getElementById('form-status').textContent = documentID ? 'Record updated.' : 'Record created.';
-                setStatus(documentID ? 'Record updated.' : 'Record created.');
-                if (!documentID) {
-                  const detailRoute = routeForModel(view.model_key, 'detail');
-                  const createdRecord = created && (created.record || created);
-                  if (detailRoute && createdRecord && createdRecord.id) {
-                    window.location.hash = '#' + detailRoute + '?id=' + encodeURIComponent(createdRecord.id);
+                if (!navigator.onLine && offlineCapable) {
+                  const queued = await queueSyncItem({
+                    kind: 'model',
+                    operation: documentID ? 'update' : 'create',
+                    model_key: view.model_key,
+                    target_id: documentID || '',
+                    expected_version: record.version || 0,
+                    values,
+                    relations
+                  });
+                  await saveDraft('model', view.model_key, documentID, {
+                    kind: 'model',
+                    model_key: view.model_key,
+                    target_id: documentID || '',
+                    version: record.version || 0,
+                    values,
+                    relations,
+                    status: 'queued',
+                    idempotency_key: queued.idempotency_key
+                  });
+                  document.getElementById('form-status').textContent = 'Draft queued for sync.';
+                  setStatus('Draft queued for sync.');
+                } else {
+                  const created = await api('/models/' + encodeURIComponent(view.model_key) + (documentID ? '/' + encodeURIComponent(documentID) : ''), {
+                    method: documentID ? 'PUT' : 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
+                    body: JSON.stringify(documentID ? {values, expected_version: record.version, relations} : {values, relations})
+                  });
+                  document.getElementById('form-status').textContent = documentID ? 'Record updated.' : 'Record created.';
+                  setStatus(documentID ? 'Record updated.' : 'Record created.');
+                  if (!documentID) {
+                    const detailRoute = routeForModel(view.model_key, 'detail');
+                    const createdRecord = created && (created.record || created);
+                    if (detailRoute && createdRecord && createdRecord.id) {
+                      window.location.hash = '#' + detailRoute + '?id=' + encodeURIComponent(createdRecord.id);
+                    }
                   }
                 }
               } catch (err) {
@@ -1141,11 +1544,42 @@ const uiShellHTML = `<!doctype html>
           }
           return;
         }
-        const record = await api('/documents/' + encodeURIComponent(documentID) + '?view=expanded');
+        const offlineCapable = !!offlineDocumentCapability(view.document_type);
+        let record = {header: {id: documentID || '', version: 0, etag: '', type: view.document_type || '', status: 'draft'}, body: {payload: {}}};
+        const localDraft = await loadDraft('document', view.document_type, documentID);
+        if (localDraft && localDraft.payload) {
+          record.body.payload = localDraft.payload;
+          record.header.version = localDraft.version || 0;
+          record.header.etag = localDraft.etag || '';
+        }
+        if (documentID) {
+          try {
+            record = await api('/documents/' + encodeURIComponent(documentID) + '?view=expanded');
+          } catch (_) {}
+        }
         const formSections = (view.sections || []).length > 0
           ? (view.sections || []).map((section) => renderFormSection(section, record)).join('')
           : '<div class="list">' + (view.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div>';
-        root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3>' + formSections + '<p class="status" id="form-status"></p><div class="actions"><button id="save-form">Save Draft</button></div></section>';
+        root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3>' + formSections + '<p class="status" id="form-status"></p><div class="actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? 'Queue Sync' : 'Save Draft') + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>Save Local</button></div></section>';
+        const saveLocalButton = root.querySelector('#save-local');
+        if (saveLocalButton) {
+          saveLocalButton.addEventListener('click', async () => {
+            const payload = {};
+            root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\\.payload\\./, ''), readFieldValue(input)));
+            await saveDraft('document', view.document_type, documentID, {
+              kind: 'document',
+              document_type: view.document_type,
+              target_id: documentID || '',
+              version: record.header.version || 0,
+              etag: record.header.etag || '',
+              payload,
+              status: 'local_only'
+            });
+            await refreshSyncStats();
+            document.getElementById('form-status').textContent = 'Draft saved locally.';
+            setStatus('Draft saved locally.');
+          });
+        }
         const button = root.querySelector('#save-form');
         if (button) {
           button.addEventListener('click', async () => {
@@ -1153,13 +1587,40 @@ const uiShellHTML = `<!doctype html>
             root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\\.payload\\./, ''), readFieldValue(input)));
             const csrf = readCookie('orbyte_csrf');
             try {
-              await api('/documents/' + encodeURIComponent(documentID), {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
-                body: JSON.stringify({payload})
-              });
-              document.getElementById('form-status').textContent = 'Draft updated through manifest-driven form.';
-              setStatus('Draft updated through manifest-driven form.');
+              if (offlineCapable && (!navigator.onLine || !documentID)) {
+                const queued = await queueSyncItem({
+                  kind: 'document',
+                  operation: documentID ? 'update' : 'create',
+                  document_type: view.document_type,
+                  target_id: documentID || '',
+                  expected_version: record.header.version || 0,
+                  expected_etag: record.header.etag || '',
+                  organization_id: (record.header && record.header.organization_id) || 'org_default',
+                  location_id: (record.header && record.header.location_id) || '',
+                  payload
+                });
+                await saveDraft('document', view.document_type, documentID, {
+                  kind: 'document',
+                  document_type: view.document_type,
+                  target_id: documentID || '',
+                  version: record.header.version || 0,
+                  etag: record.header.etag || '',
+                  payload,
+                  status: 'queued',
+                  idempotency_key: queued.idempotency_key
+                });
+                if (navigator.onLine) await processSyncQueue();
+                document.getElementById('form-status').textContent = 'Draft queued for sync.';
+                setStatus('Draft queued for sync.');
+              } else {
+                await api('/documents/' + encodeURIComponent(documentID), {
+                  method: 'PUT',
+                  headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
+                  body: JSON.stringify({payload})
+                });
+                document.getElementById('form-status').textContent = 'Draft updated through manifest-driven form.';
+                setStatus('Draft updated through manifest-driven form.');
+              }
             } catch (err) {
               document.getElementById('form-status').textContent = err.message;
               setStatus(err.message);
@@ -1502,14 +1963,20 @@ const uiShellHTML = `<!doctype html>
     }
 
     async function bootstrap() {
+      refreshOfflineStatus();
+      await registerServiceWorker();
+      await refreshSyncStats();
       try {
         state.authOptions = await api('/auth/options');
         state.bootstrap = await api('/ui/bootstrap');
+        await loadOfflineBootstrap();
+        await processSyncQueue();
         if (!window.location.hash && state.bootstrap.default_path) {
           window.location.hash = '#' + state.bootstrap.default_path;
         }
         await renderRoute();
       } catch (err) {
+        await loadOfflineBootstrap();
         if (err.message === 'authentication required' || err.message === 'session not found' || err.message === 'session not active' || err.message === 'session revoked' || err.message === 'session expired') {
           renderLogin('');
           return;
@@ -1519,11 +1986,53 @@ const uiShellHTML = `<!doctype html>
       }
     }
 
+    window.addEventListener('online', () => { refreshOfflineStatus(); void processSyncQueue(); });
+    window.addEventListener('offline', () => { refreshOfflineStatus(); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) void processSyncQueue();
+    });
     window.addEventListener('hashchange', () => { void renderRoute(); });
     void bootstrap();
   </script>
 </body>
 </html>`
+
+const uiServiceWorkerJS = `const CACHE_NAME = 'orbyte-ui-shell-v1';
+const PRECACHE_URLS = ['/ui', '/ui/manifest.webmanifest'];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))).then(() => self.clients.claim()));
+});
+
+function shouldCache(requestURL) {
+  return requestURL.pathname === '/ui' ||
+    requestURL.pathname === '/auth/options' ||
+    requestURL.pathname === '/ui/bootstrap' ||
+    requestURL.pathname.indexOf('/ui/routes/resolve') === 0 ||
+    requestURL.pathname.indexOf('/ui/views/') === 0 ||
+    requestURL.pathname.indexOf('/ui/assets/modules/') === 0;
+}
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  const requestURL = new URL(event.request.url);
+  if (!shouldCache(requestURL)) return;
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/ui')))
+  );
+});`
 
 func AnalyticsCockpitBundle() string {
 	return `(function() {

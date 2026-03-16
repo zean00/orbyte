@@ -135,6 +135,16 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 				t.Fatalf("register config definition failed: %v", err)
 			}
 		}
+		for _, def := range manifest.ReferenceTypes {
+			if err := referenceSvc.RegisterType(def); err != nil {
+				t.Fatalf("register reference type failed: %v", err)
+			}
+		}
+		for _, record := range manifest.ReferenceRecords {
+			if err := referenceSvc.UpsertRecord(record); err != nil {
+				t.Fatalf("register reference record failed: %v", err)
+			}
+		}
 		for _, ext := range manifest.DocumentExtensions {
 			if err := docs.RegisterExtension(document.ExtensionDefinition{
 				DocumentType:  ext.DocumentType,
@@ -401,6 +411,22 @@ func builtInTestModuleManifests() []module.Manifest {
 					},
 				},
 			},
+			Offline: module.OfflineDefinition{
+				Projections: []module.OfflineProjectionDefinition{{
+					IndexKey:             "documents.requests.search",
+					Title:                "Requests",
+					RequiredPermissions:  []string{"document.list"},
+					DefaultFilters:       []string{"status=draft"},
+					DefaultIncludeFields: []string{"document_id", "status", "title"},
+				}},
+				Documents: []module.OfflineDocumentDefinition{{
+					Type:                "generic_request",
+					Title:               "Generic Request",
+					CreatePermissionKey: "document.create",
+					UpdatePermissionKey: "document.update_draft",
+					RequiredPermissions: []string{"document.read"},
+				}},
+			},
 		},
 		{
 			Key:                    "analytics",
@@ -461,6 +487,23 @@ func builtInTestModuleManifests() []module.Manifest {
 				Key:    "analytics-cockpit",
 				Script: AnalyticsCockpitBundle(),
 			}},
+		},
+		{
+			Key:          "reference_masterdata",
+			Name:         "Reference Master Data",
+			Version:      "1.0.0",
+			DomainFamily: "platform",
+			ReferenceTypes: []reference.TypeDefinition{
+				{Key: "appointment_type", DisplayName: "Appointment Type", OwnerModuleKey: "reference_masterdata"},
+			},
+			ReferenceRecords: []reference.Record{
+				{TypeKey: "appointment_type", Key: "consultation", DisplayName: "Consultation", Scope: "deployment", UpdatedAt: time.Now().UTC(), UpdatedBy: "system", Value: map[string]any{"reference_type": "appointment_type"}},
+			},
+			Offline: module.OfflineDefinition{
+				References: []module.OfflineReferenceDefinition{
+					{TypeKey: "appointment_type", Title: "Appointment Types"},
+				},
+			},
 		},
 		{
 			Key:                    "monitoring",

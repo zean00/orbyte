@@ -19,6 +19,7 @@ import (
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
@@ -38,6 +39,7 @@ type RouterDeps struct {
 	Search       SearchDeps
 	Admin        AdminDeps
 	MCP          MCPDeps
+	Offline      OfflineDeps
 	UI           UIDeps
 	CrossCutting CrossCuttingDeps
 }
@@ -130,6 +132,17 @@ type MCPDeps struct {
 	StreamPath      string
 }
 
+type OfflineDeps struct {
+	Identity        *identity.Service
+	Modules         *module.Service
+	Offline         *offline.Service
+	Documents       *document.Service
+	DocumentActions *application.DocumentActions
+	Models          *model.Service
+	ModelActions    *application.ModelActions
+	FieldSecurity   *securityfields.Service
+}
+
 type CrossCuttingDeps struct {
 	Config        *config.Service
 	Identity      *identity.Service
@@ -168,6 +181,10 @@ func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
 	registerMCPRoutes(mux, deps.Identity, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath)
+}
+
+func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {
+	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.FieldSecurity)
 }
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {

@@ -863,6 +863,12 @@ func builtInModuleManifests() []module.Manifest {
 				{TypeKey: "visit_priority", Key: "routine", DisplayName: "Routine", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
 				{TypeKey: "visit_priority", Key: "urgent", DisplayName: "Urgent", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
 			},
+			Offline: module.OfflineDefinition{
+				References: []module.OfflineReferenceDefinition{
+					{TypeKey: "appointment_type", Title: "Appointment Types"},
+					{TypeKey: "party_type", Title: "Party Types"},
+				},
+			},
 		},
 		{
 			Key:          "masterdata",
@@ -1004,6 +1010,21 @@ func builtInModuleManifests() []module.Manifest {
 						},
 					},
 				},
+			},
+			Offline: module.OfflineDefinition{
+				Projections: []module.OfflineProjectionDefinition{{
+					IndexKey:             "masterdata.party.search",
+					Title:                "Party Search",
+					RequiredPermissions:  []string{"party.list"},
+					DefaultIncludeFields: []string{"name", "email", "status"},
+				}},
+				Models: []module.OfflineModelDefinition{{
+					ModelKey:            "party",
+					Title:               "Party",
+					CreatePermissionKey: "party.create",
+					UpdatePermissionKey: "party.update",
+					RequiredPermissions: []string{"party.read"},
+				}},
 			},
 		},
 		{
@@ -1297,6 +1318,22 @@ func builtInModuleManifests() []module.Manifest {
 					{Key: "status", Path: "status", Type: "string", Facet: true, Sort: true},
 				},
 			}},
+			Offline: module.OfflineDefinition{
+				Projections: []module.OfflineProjectionDefinition{{
+					IndexKey:             "documents.requests.search",
+					Title:                "Requests",
+					RequiredPermissions:  []string{"document.list"},
+					DefaultFilters:       []string{"status=draft"},
+					DefaultIncludeFields: []string{"document_id", "document_type", "status", "title"},
+				}},
+				Documents: []module.OfflineDocumentDefinition{{
+					Type:                "generic_request",
+					Title:               "Generic Request",
+					CreatePermissionKey: "document.create",
+					UpdatePermissionKey: "document.update_draft",
+					RequiredPermissions: []string{"document.read"},
+				}},
+			},
 		},
 		{
 			Key:          "analytics",

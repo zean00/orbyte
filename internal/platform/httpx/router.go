@@ -24,6 +24,7 @@ import (
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
@@ -40,6 +41,7 @@ const analyticsMCPStreamPath = "/mcp/events/analytics/snapshot"
 func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
 	analyticsStream := mcp.NewAnalyticsStream()
+	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
 	if analyticsSvc != nil {
 		analyticsSvc.SetCaptureHook(analyticsStream.Publish)
 	}
@@ -102,6 +104,16 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			AnalyticsStream: analyticsStream,
 			StreamPath:      analyticsMCPStreamPath,
 		},
+		Offline: OfflineDeps{
+			Identity:        ident,
+			Modules:         modules,
+			Offline:         offlineSvc,
+			Documents:       docs,
+			DocumentActions: docActions,
+			Models:          models,
+			ModelActions:    modelActions,
+			FieldSecurity:   fieldSecurity,
+		},
 		UI: UIDeps{
 			Identity:      ident,
 			Modules:       modules,
@@ -144,6 +156,7 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerSearchRoutesWithDeps(mux, deps.Search)
 	registerAdminRoutesWithDeps(mux, deps.Admin)
 	registerMCPRoutesWithDeps(mux, deps.MCP)
+	registerOfflineRoutesWithDeps(mux, deps.Offline)
 	registerUIRoutesWithDeps(mux, deps.UI)
 
 	return withObservability(withAuthentication(withCSRFProtection(mux, deps.CrossCutting.Config), deps.CrossCutting.Identity), deps.CrossCutting.Logger, deps.CrossCutting.Observability)
@@ -299,6 +312,10 @@ func routeFamilyForPath(path string) string {
 		return "mcp"
 	case path == "/mcp":
 		return "mcp"
+	case len(path) >= 9 && path[:9] == "/offline/":
+		return "offline"
+	case path == "/offline":
+		return "offline"
 	case len(path) >= 4 && path[:4] == "/ui/":
 		return "ui"
 	default:
