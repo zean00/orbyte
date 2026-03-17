@@ -114,6 +114,13 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			ModelActions:    modelActions,
 			FieldSecurity:   fieldSecurity,
 		},
+		Docs: DocsDeps{
+			Config:    cfg,
+			Modules:   modules,
+			Models:    models,
+			Documents: docs,
+			Search:    searchSvc,
+		},
 		UI: UIDeps{
 			Identity:      ident,
 			Modules:       modules,
@@ -157,6 +164,7 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerAdminRoutesWithDeps(mux, deps.Admin)
 	registerMCPRoutesWithDeps(mux, deps.MCP)
 	registerOfflineRoutesWithDeps(mux, deps.Offline)
+	registerDocsRoutesWithDeps(mux, deps.Docs)
 	registerLocaleRoutes(mux, deps.CrossCutting.Identity)
 	registerUIRoutesWithDeps(mux, deps.UI)
 

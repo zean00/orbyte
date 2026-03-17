@@ -41,6 +41,7 @@ type RouterDeps struct {
 	MCP          MCPDeps
 	Offline      OfflineDeps
 	UI           UIDeps
+	Docs         DocsDeps
 	CrossCutting CrossCuttingDeps
 }
 
@@ -151,6 +152,14 @@ type CrossCuttingDeps struct {
 	Health        *runtimehealth.Tracker
 }
 
+type DocsDeps struct {
+	Config    *config.Service
+	Modules   *module.Service
+	Models    *model.Service
+	Documents *document.Service
+	Search    *search.Service
+}
+
 func registerPlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runtimehealth.Tracker) {
 	registerCorePlatformRoutes(mux, deps, health)
 }
@@ -189,4 +198,8 @@ func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {
 	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity)
+}
+
+func registerDocsRoutesWithDeps(mux *http.ServeMux, deps DocsDeps) {
+	registerDocsRoutes(mux, deps.Config, deps.Modules, deps.Models, deps.Documents, deps.Search)
 }

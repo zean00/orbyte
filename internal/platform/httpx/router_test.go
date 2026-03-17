@@ -633,6 +633,101 @@ func TestLoginLogoutAndSessionRevocation(t *testing.T) {
 	}
 }
 
+func TestDevOpenAPIRoutesDisabledOutsideDevMode(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/dev/openapi.json", nil, false)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 when dev docs are disabled, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/dev/swagger", nil, false)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 swagger when dev docs are disabled, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDevOpenAPIDocumentIncludesRuntimeHeadlessContracts(t *testing.T) {
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/dev/openapi.json", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for openapi doc, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode openapi doc failed: %v", err)
+	}
+	if payload["openapi"] != "3.1.0" {
+		t.Fatalf("expected openapi 3.1.0, got %#v", payload["openapi"])
+	}
+
+	paths, _ := payload["paths"].(map[string]any)
+	if _, ok := paths["/ui/bootstrap"]; !ok {
+		t.Fatal("expected /ui/bootstrap in openapi paths")
+	}
+	if _, ok := paths["/models/{modelKey}"]; !ok {
+		t.Fatal("expected /models/{modelKey} in openapi paths")
+	}
+
+	runtimeMeta, _ := payload["x-orbyte-runtime"].(map[string]any)
+	modelKeys, _ := runtimeMeta["model_keys"].([]any)
+	if !containsAnyString(modelKeys, "party") {
+		t.Fatalf("expected runtime model_keys to include party, got %#v", modelKeys)
+	}
+	documentTypes, _ := runtimeMeta["document_types"].([]any)
+	if !containsAnyString(documentTypes, "generic_request") {
+		t.Fatalf("expected runtime document_types to include generic_request, got %#v", documentTypes)
+	}
+
+	modelPath, _ := paths["/models/{modelKey}"].(map[string]any)
+	getOp, _ := modelPath["get"].(map[string]any)
+	params, _ := getOp["parameters"].([]any)
+	if len(params) == 0 {
+		t.Fatal("expected model path parameters")
+	}
+	param, _ := params[0].(map[string]any)
+	schema, _ := param["schema"].(map[string]any)
+	enumValues, _ := schema["enum"].([]any)
+	if !containsAnyString(enumValues, "party") {
+		t.Fatalf("expected modelKey enum to include party, got %#v", enumValues)
+	}
+
+	uiPath, _ := paths["/ui/bootstrap"].(map[string]any)
+	uiGet, _ := uiPath["get"].(map[string]any)
+	if uiGet["x-orbyte-support-level"] != "public-headless" {
+		t.Fatalf("expected /ui/bootstrap support level public-headless, got %#v", uiGet["x-orbyte-support-level"])
+	}
+}
+
+func TestDevSwaggerUIRoute(t *testing.T) {
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/dev/swagger", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for swagger ui, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "/dev/openapi.json") {
+		t.Fatalf("expected swagger ui to point at openapi json, got %s", body)
+	}
+	if !strings.Contains(body, "SwaggerUIBundle") {
+		t.Fatalf("expected swagger ui script in body, got %s", body)
+	}
+}
+
+func containsAnyString(items []any, expected string) bool {
+	for _, item := range items {
+		if value, ok := item.(string); ok && value == expected {
+			return true
+		}
+	}
+	return false
+}
+
 func TestGoogleLogin(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
