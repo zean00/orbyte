@@ -131,9 +131,17 @@ func (s *Service) EnabledMap() map[string]bool {
 }
 
 func (s *Service) Menus() []MenuDefinition {
+	return s.MenusForSurface(UISurfaceBoth)
+}
+
+func (s *Service) MenusForSurface(surface UISurface) []MenuDefinition {
 	items := make([]MenuDefinition, 0)
 	for _, manifest := range s.manifests {
-		items = append(items, manifest.Frontend.Menus...)
+		for _, item := range manifest.Frontend.Menus {
+			if matchesSurface(item.Surface, surface) {
+				items = append(items, item)
+			}
+		}
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Order == items[j].Order {
@@ -145,27 +153,47 @@ func (s *Service) Menus() []MenuDefinition {
 }
 
 func (s *Service) Actions() []ActionDefinition {
+	return s.ActionsForSurface(UISurfaceBoth)
+}
+
+func (s *Service) ActionsForSurface(surface UISurface) []ActionDefinition {
 	items := make([]ActionDefinition, 0)
 	for _, manifest := range s.manifests {
-		items = append(items, manifest.Frontend.Actions...)
+		for _, item := range manifest.Frontend.Actions {
+			if matchesSurface(item.Surface, surface) {
+				items = append(items, item)
+			}
+		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
 }
 
 func (s *Service) Views() []ViewDefinition {
+	return s.ViewsForSurface(UISurfaceBoth)
+}
+
+func (s *Service) ViewsForSurface(surface UISurface) []ViewDefinition {
 	items := make([]ViewDefinition, 0)
 	for _, manifest := range s.manifests {
-		items = append(items, manifest.Frontend.Views...)
+		for _, item := range manifest.Frontend.Views {
+			if matchesSurface(item.Surface, surface) {
+				items = append(items, item)
+			}
+		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
 }
 
 func (s *Service) View(key string) (ViewDefinition, bool) {
+	return s.ViewForSurface(key, UISurfaceBoth)
+}
+
+func (s *Service) ViewForSurface(key string, surface UISurface) (ViewDefinition, bool) {
 	for _, manifest := range s.manifests {
 		for _, view := range manifest.Frontend.Views {
-			if view.Key == key {
+			if view.Key == key && matchesSurface(view.Surface, surface) {
 				return view, true
 			}
 		}
@@ -174,9 +202,17 @@ func (s *Service) View(key string) (ViewDefinition, bool) {
 }
 
 func (s *Service) CustomEntries() []CustomEntryDefinition {
+	return s.CustomEntriesForSurface(UISurfaceBoth)
+}
+
+func (s *Service) CustomEntriesForSurface(surface UISurface) []CustomEntryDefinition {
 	items := make([]CustomEntryDefinition, 0)
 	for _, manifest := range s.manifests {
-		items = append(items, manifest.Frontend.CustomEntries...)
+		for _, item := range manifest.Frontend.CustomEntries {
+			if matchesSurface(item.Surface, surface) {
+				items = append(items, item)
+			}
+		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
@@ -373,6 +409,10 @@ func (s *Service) OfflineModel(modelKey string) (OfflineModelDefinition, bool) {
 }
 
 func (s *Service) ResolveRoute(path string) (RouteResolution, bool) {
+	return s.ResolveRouteForSurface(path, UISurfaceBoth)
+}
+
+func (s *Service) ResolveRouteForSurface(path string, surface UISurface) (RouteResolution, bool) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return RouteResolution{}, false
@@ -382,6 +422,9 @@ func (s *Service) ResolveRoute(path string) (RouteResolution, bool) {
 			continue
 		}
 		for _, action := range manifest.Frontend.Actions {
+			if !matchesSurface(action.Surface, surface) {
+				continue
+			}
 			if action.RoutePath != trimmed {
 				continue
 			}
@@ -392,13 +435,13 @@ func (s *Service) ResolveRoute(path string) (RouteResolution, bool) {
 				Action:     action,
 			}
 			if action.ViewKey != "" {
-				if view, ok := s.View(action.ViewKey); ok {
+				if view, ok := s.ViewForSurface(action.ViewKey, surface); ok {
 					resolution.View = &view
 				}
 			}
 			if action.CustomEntryKey != "" {
 				for _, entry := range manifest.Frontend.CustomEntries {
-					if entry.Key == action.CustomEntryKey {
+					if entry.Key == action.CustomEntryKey && matchesSurface(entry.Surface, surface) {
 						entryCopy := entry
 						resolution.CustomEntry = &entryCopy
 						break
@@ -409,6 +452,17 @@ func (s *Service) ResolveRoute(path string) (RouteResolution, bool) {
 		}
 	}
 	return RouteResolution{}, false
+}
+
+func matchesSurface(itemSurface, requested UISurface) bool {
+	effective := itemSurface
+	if effective == "" {
+		effective = UISurfaceUser
+	}
+	if requested == "" || requested == UISurfaceBoth {
+		return true
+	}
+	return effective == UISurfaceBoth || effective == requested
 }
 
 func (s *Service) IsEnabled(key string) bool {
@@ -954,6 +1008,9 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		actions[action.Key] = manifest.Key
 		routePaths[action.RoutePath] = manifest.Key
+		if action.Surface == UISurfaceAdmin && strings.TrimSpace(action.ViewKey) == "" && strings.TrimSpace(action.CustomEntryKey) == "" {
+			continue
+		}
 		switch action.RenderMode {
 		case RenderModeGeneric:
 			if strings.TrimSpace(action.ViewKey) == "" {

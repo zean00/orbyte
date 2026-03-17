@@ -157,6 +157,7 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerAdminRoutesWithDeps(mux, deps.Admin)
 	registerMCPRoutesWithDeps(mux, deps.MCP)
 	registerOfflineRoutesWithDeps(mux, deps.Offline)
+	registerLocaleRoutes(mux, deps.CrossCutting.Identity)
 	registerUIRoutesWithDeps(mux, deps.UI)
 
 	return withObservability(withAuthentication(withCSRFProtection(mux, deps.CrossCutting.Config), deps.CrossCutting.Identity), deps.CrossCutting.Logger, deps.CrossCutting.Observability)
@@ -293,6 +294,8 @@ func routeFamilyForPath(path string) string {
 	case path == "/healthz" || path == "/readyz":
 		return "health"
 	case path == "/platform/context":
+		return "platform"
+	case path == "/locale":
 		return "platform"
 	case path == "/metrics":
 		return "metrics"

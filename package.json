@@ -1,0 +1,10 @@
+{
+  "name": "orbyte-platform-ui",
+  "private": true,
+  "scripts": {
+    "build:ui": "tailwindcss -i ./web/tailwind.css -o ./internal/platform/httpx/assets/platform.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

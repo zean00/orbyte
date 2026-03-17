@@ -5,6 +5,7 @@ import (
 
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/search"
@@ -14,6 +15,7 @@ import (
 type Manifest struct {
 	Key                    string                     `json:"key"`
 	Name                   string                     `json:"name"`
+	NameI18n               i18n.LocalizedText         `json:"name_i18n,omitempty"`
 	Version                string                     `json:"version"`
 	DomainFamily           string                     `json:"domain_family"`
 	Category               string                     `json:"category,omitempty"`
@@ -44,11 +46,12 @@ type Manifest struct {
 }
 
 type DocumentExtension struct {
-	DocumentType       string `json:"document_type"`
-	SchemaVersion      string `json:"schema_version"`
-	DisplayName        string `json:"display_name"`
-	ReadPermissionKey  string `json:"read_permission_key,omitempty"`
-	WritePermissionKey string `json:"write_permission_key,omitempty"`
+	DocumentType       string             `json:"document_type"`
+	SchemaVersion      string             `json:"schema_version"`
+	DisplayName        string             `json:"display_name"`
+	DisplayNameI18n    i18n.LocalizedText `json:"display_name_i18n,omitempty"`
+	ReadPermissionKey  string             `json:"read_permission_key,omitempty"`
+	WritePermissionKey string             `json:"write_permission_key,omitempty"`
 }
 
 type InstalledModule struct {
@@ -106,29 +109,34 @@ type SecurityDefinition struct {
 }
 
 type PermissionDefinition struct {
-	Key         string `json:"key"`
-	Action      string `json:"action"`
-	Resource    string `json:"resource"`
-	DisplayName string `json:"display_name,omitempty"`
-	Description string `json:"description,omitempty"`
-	RiskLevel   string `json:"risk_level,omitempty"`
+	Key             string             `json:"key"`
+	Action          string             `json:"action"`
+	Resource        string             `json:"resource"`
+	DisplayName     string             `json:"display_name,omitempty"`
+	DisplayNameI18n i18n.LocalizedText `json:"display_name_i18n,omitempty"`
+	Description     string             `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText `json:"description_i18n,omitempty"`
+	RiskLevel       string             `json:"risk_level,omitempty"`
 }
 
 type RoleTemplateDefinition struct {
-	Key            string   `json:"key"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description,omitempty"`
-	AllowedScopes  []string `json:"allowed_scopes,omitempty"`
-	PermissionKeys []string `json:"permission_keys,omitempty"`
+	Key             string             `json:"key"`
+	Name            string             `json:"name"`
+	NameI18n        i18n.LocalizedText `json:"name_i18n,omitempty"`
+	Description     string             `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText `json:"description_i18n,omitempty"`
+	AllowedScopes   []string           `json:"allowed_scopes,omitempty"`
+	PermissionKeys  []string           `json:"permission_keys,omitempty"`
 }
 
 type PolicyHookDefinition struct {
-	Key               string `json:"key"`
-	Kind              string `json:"kind"`
-	Target            string `json:"target"`
-	InputContractKey  string `json:"input_contract_key,omitempty"`
-	OutputContractKey string `json:"output_contract_key,omitempty"`
-	Description       string `json:"description,omitempty"`
+	Key               string             `json:"key"`
+	Kind              string             `json:"kind"`
+	Target            string             `json:"target"`
+	InputContractKey  string             `json:"input_contract_key,omitempty"`
+	OutputContractKey string             `json:"output_contract_key,omitempty"`
+	Description       string             `json:"description,omitempty"`
+	DescriptionI18n   i18n.LocalizedText `json:"description_i18n,omitempty"`
 }
 
 type ObservabilityDefinition struct {
@@ -148,23 +156,26 @@ type ProjectionDefinition struct {
 }
 
 type DashboardDefinition struct {
-	Key                 string   `json:"key"`
-	Title               string   `json:"title"`
-	ViewKey             string   `json:"view_key,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	ViewKey             string             `json:"view_key,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type ReportDefinition struct {
-	Key                 string   `json:"key"`
-	Title               string   `json:"title"`
-	Dataset             string   `json:"dataset,omitempty"`
-	Formats             []string `json:"formats,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Dataset             string             `json:"dataset,omitempty"`
+	Formats             []string           `json:"formats,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type DatasetDefinition struct {
 	Key        string             `json:"key"`
 	Title      string             `json:"title"`
+	TitleI18n  i18n.LocalizedText `json:"title_i18n,omitempty"`
 	SourceKind string             `json:"source_kind"`
 	ModelKey   string             `json:"model_key,omitempty"`
 	Dimensions []DatasetDimension `json:"dimensions,omitempty"`
@@ -172,23 +183,26 @@ type DatasetDefinition struct {
 }
 
 type DatasetDimension struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Path  string `json:"path"`
+	Key       string             `json:"key"`
+	Label     string             `json:"label"`
+	LabelI18n i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Path      string             `json:"path"`
 }
 
 type DatasetMeasure struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Kind  string `json:"kind"`
-	Path  string `json:"path,omitempty"`
+	Key       string             `json:"key"`
+	Label     string             `json:"label"`
+	LabelI18n i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Kind      string             `json:"kind"`
+	Path      string             `json:"path,omitempty"`
 }
 
 type MetricDefinition struct {
-	Key         string   `json:"key"`
-	Type        string   `json:"type"`
-	Labels      []string `json:"labels,omitempty"`
-	Description string   `json:"description,omitempty"`
+	Key             string             `json:"key"`
+	Type            string             `json:"type"`
+	Labels          []string           `json:"labels,omitempty"`
+	Description     string             `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText `json:"description_i18n,omitempty"`
 }
 
 type LogEventDefinition struct {
@@ -214,6 +228,14 @@ type FrontendDefinition struct {
 	CustomEntries []CustomEntryDefinition `json:"custom_entries,omitempty"`
 }
 
+type UISurface string
+
+const (
+	UISurfaceUser  UISurface = "user"
+	UISurfaceAdmin UISurface = "admin"
+	UISurfaceBoth  UISurface = "both"
+)
+
 type OfflineDefinition struct {
 	References  []OfflineReferenceDefinition  `json:"references,omitempty"`
 	Projections []OfflineProjectionDefinition `json:"projections,omitempty"`
@@ -222,33 +244,37 @@ type OfflineDefinition struct {
 }
 
 type OfflineReferenceDefinition struct {
-	TypeKey             string   `json:"type_key"`
-	Title               string   `json:"title"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	TypeKey             string             `json:"type_key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type OfflineProjectionDefinition struct {
-	IndexKey             string   `json:"index_key"`
-	Title                string   `json:"title"`
-	RequiredPermissions  []string `json:"required_permissions,omitempty"`
-	DefaultFilters       []string `json:"default_filters,omitempty"`
-	DefaultIncludeFields []string `json:"default_include_fields,omitempty"`
+	IndexKey             string             `json:"index_key"`
+	Title                string             `json:"title"`
+	TitleI18n            i18n.LocalizedText `json:"title_i18n,omitempty"`
+	RequiredPermissions  []string           `json:"required_permissions,omitempty"`
+	DefaultFilters       []string           `json:"default_filters,omitempty"`
+	DefaultIncludeFields []string           `json:"default_include_fields,omitempty"`
 }
 
 type OfflineDocumentDefinition struct {
-	Type                string   `json:"type"`
-	Title               string   `json:"title"`
-	CreatePermissionKey string   `json:"create_permission_key,omitempty"`
-	UpdatePermissionKey string   `json:"update_permission_key,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Type                string             `json:"type"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	CreatePermissionKey string             `json:"create_permission_key,omitempty"`
+	UpdatePermissionKey string             `json:"update_permission_key,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type OfflineModelDefinition struct {
-	ModelKey            string   `json:"model_key"`
-	Title               string   `json:"title"`
-	CreatePermissionKey string   `json:"create_permission_key,omitempty"`
-	UpdatePermissionKey string   `json:"update_permission_key,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	ModelKey            string             `json:"model_key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	CreatePermissionKey string             `json:"create_permission_key,omitempty"`
+	UpdatePermissionKey string             `json:"update_permission_key,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type MCPDefinition struct {
@@ -258,45 +284,53 @@ type MCPDefinition struct {
 }
 
 type MCPToolDefinition struct {
-	Key                 string         `json:"key"`
-	Title               string         `json:"title"`
-	Description         string         `json:"description,omitempty"`
-	Operation           string         `json:"operation"`
-	RequiredPermissions []string       `json:"required_permissions,omitempty"`
-	InputSchema         map[string]any `json:"input_schema,omitempty"`
-	OutputSchema        map[string]any `json:"output_schema,omitempty"`
-	AppKey              string         `json:"app_key,omitempty"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	Operation           string             `json:"operation"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	InputSchema         map[string]any     `json:"input_schema,omitempty"`
+	OutputSchema        map[string]any     `json:"output_schema,omitempty"`
+	AppKey              string             `json:"app_key,omitempty"`
 }
 
 type MCPResourceDefinition struct {
-	Key                 string   `json:"key"`
-	Title               string   `json:"title"`
-	Description         string   `json:"description,omitempty"`
-	URI                 string   `json:"uri"`
-	MIMEType            string   `json:"mime_type,omitempty"`
-	Provider            string   `json:"provider,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
-	AppKey              string   `json:"app_key,omitempty"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	URI                 string             `json:"uri"`
+	MIMEType            string             `json:"mime_type,omitempty"`
+	Provider            string             `json:"provider,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	AppKey              string             `json:"app_key,omitempty"`
 }
 
 type MCPAppDefinition struct {
-	Key                 string   `json:"key"`
-	Title               string   `json:"title"`
-	Description         string   `json:"description,omitempty"`
-	ResourceKey         string   `json:"resource_key"`
-	ViewKey             string   `json:"view_key,omitempty"`
-	CustomEntryKey      string   `json:"custom_entry_key,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	ResourceKey         string             `json:"resource_key"`
+	ViewKey             string             `json:"view_key,omitempty"`
+	CustomEntryKey      string             `json:"custom_entry_key,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type MenuDefinition struct {
-	Key                 string   `json:"key"`
-	Label               string   `json:"label"`
-	ParentKey           string   `json:"parent_key,omitempty"`
-	Icon                string   `json:"icon,omitempty"`
-	ActionKey           string   `json:"action_key"`
-	Order               int      `json:"order,omitempty"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Key                 string             `json:"key"`
+	Label               string             `json:"label"`
+	LabelI18n           i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Surface             UISurface          `json:"surface,omitempty"`
+	ParentKey           string             `json:"parent_key,omitempty"`
+	Icon                string             `json:"icon,omitempty"`
+	ActionKey           string             `json:"action_key"`
+	Order               int                `json:"order,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type ActionRenderMode string
@@ -307,20 +341,24 @@ const (
 )
 
 type ActionDefinition struct {
-	Key                 string           `json:"key"`
-	Label               string           `json:"label"`
-	Kind                string           `json:"kind"`
-	RoutePath           string           `json:"route_path"`
-	ViewKey             string           `json:"view_key,omitempty"`
-	CustomEntryKey      string           `json:"custom_entry_key,omitempty"`
-	RenderMode          ActionRenderMode `json:"render_mode"`
-	RequiredPermissions []string         `json:"required_permissions,omitempty"`
-	ContextDefaults     map[string]any   `json:"context_defaults,omitempty"`
+	Key                 string             `json:"key"`
+	Label               string             `json:"label"`
+	LabelI18n           i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Surface             UISurface          `json:"surface,omitempty"`
+	Kind                string             `json:"kind"`
+	RoutePath           string             `json:"route_path"`
+	ViewKey             string             `json:"view_key,omitempty"`
+	CustomEntryKey      string             `json:"custom_entry_key,omitempty"`
+	RenderMode          ActionRenderMode   `json:"render_mode"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	ContextDefaults     map[string]any     `json:"context_defaults,omitempty"`
 }
 
 type ViewDefinition struct {
 	Key                 string                      `json:"key"`
 	Title               string                      `json:"title"`
+	TitleI18n           i18n.LocalizedText          `json:"title_i18n,omitempty"`
+	Surface             UISurface                   `json:"surface,omitempty"`
 	Kind                string                      `json:"kind"`
 	DocumentType        string                      `json:"document_type,omitempty"`
 	ModelKey            string                      `json:"model_key,omitempty"`
@@ -337,62 +375,73 @@ type ViewDefinition struct {
 	RelatedViews        []RelatedViewDefinition     `json:"related_views,omitempty"`
 	ActionPlacements    []ActionPlacementDefinition `json:"action_placements,omitempty"`
 	EmptyState          string                      `json:"empty_state,omitempty"`
+	EmptyStateI18n      i18n.LocalizedText          `json:"empty_state_i18n,omitempty"`
 	DefaultPageSize     int                         `json:"default_page_size,omitempty"`
 }
 
 type ColumnDefinition struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Path  string `json:"path"`
-	Width string `json:"width,omitempty"`
+	Key       string             `json:"key"`
+	Label     string             `json:"label"`
+	LabelI18n i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Path      string             `json:"path"`
+	Width     string             `json:"width,omitempty"`
 }
 
 type FilterDefinition struct {
-	Key     string   `json:"key"`
-	Label   string   `json:"label"`
-	Type    string   `json:"type"`
-	Options []string `json:"options,omitempty"`
+	Key       string             `json:"key"`
+	Label     string             `json:"label"`
+	LabelI18n i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Type      string             `json:"type"`
+	Options   []string           `json:"options,omitempty"`
 }
 
 type SectionDefinition struct {
-	Key              string            `json:"key"`
-	Title            string            `json:"title"`
-	Fields           []FieldDefinition `json:"fields,omitempty"`
-	ExtensionSlotKey string            `json:"extension_slot_key,omitempty"`
+	Key              string             `json:"key"`
+	Title            string             `json:"title"`
+	TitleI18n        i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Fields           []FieldDefinition  `json:"fields,omitempty"`
+	ExtensionSlotKey string             `json:"extension_slot_key,omitempty"`
 }
 
 type TabDefinition struct {
-	Key      string              `json:"key"`
-	Title    string              `json:"title"`
-	Sections []SectionDefinition `json:"sections,omitempty"`
+	Key       string              `json:"key"`
+	Title     string              `json:"title"`
+	TitleI18n i18n.LocalizedText  `json:"title_i18n,omitempty"`
+	Sections  []SectionDefinition `json:"sections,omitempty"`
 }
 
 type FieldDefinition struct {
-	Key                string   `json:"key"`
-	Label              string   `json:"label"`
-	Path               string   `json:"path"`
-	Type               string   `json:"type"`
-	Widget             string   `json:"widget,omitempty"`
-	Placeholder        string   `json:"placeholder,omitempty"`
-	HelpText           string   `json:"help_text,omitempty"`
-	Options            []string `json:"options,omitempty"`
-	ReadOnly           bool     `json:"read_only,omitempty"`
-	ExtensionModuleKey string   `json:"extension_module_key,omitempty"`
+	Key                string             `json:"key"`
+	Label              string             `json:"label"`
+	LabelI18n          i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Path               string             `json:"path"`
+	Type               string             `json:"type"`
+	Widget             string             `json:"widget,omitempty"`
+	Placeholder        string             `json:"placeholder,omitempty"`
+	PlaceholderI18n    i18n.LocalizedText `json:"placeholder_i18n,omitempty"`
+	HelpText           string             `json:"help_text,omitempty"`
+	HelpTextI18n       i18n.LocalizedText `json:"help_text_i18n,omitempty"`
+	Options            []string           `json:"options,omitempty"`
+	ReadOnly           bool               `json:"read_only,omitempty"`
+	ExtensionModuleKey string             `json:"extension_module_key,omitempty"`
 }
 
 type CardDefinition struct {
-	Key       string `json:"key"`
-	Label     string `json:"label"`
-	Path      string `json:"path"`
-	Widget    string `json:"widget,omitempty"`
-	ActionKey string `json:"action_key,omitempty"`
+	Key       string             `json:"key"`
+	Label     string             `json:"label"`
+	LabelI18n i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Path      string             `json:"path"`
+	Widget    string             `json:"widget,omitempty"`
+	ActionKey string             `json:"action_key,omitempty"`
 }
 
 type RelatedViewDefinition struct {
-	Key        string `json:"key"`
-	Title      string `json:"title"`
-	Source     string `json:"source"`
-	EmptyState string `json:"empty_state,omitempty"`
+	Key            string             `json:"key"`
+	Title          string             `json:"title"`
+	TitleI18n      i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Source         string             `json:"source"`
+	EmptyState     string             `json:"empty_state,omitempty"`
+	EmptyStateI18n i18n.LocalizedText `json:"empty_state_i18n,omitempty"`
 }
 
 type ActionPlacementDefinition struct {
@@ -402,12 +451,14 @@ type ActionPlacementDefinition struct {
 }
 
 type CustomEntryDefinition struct {
-	Key                 string   `json:"key"`
-	Title               string   `json:"title"`
-	RoutePath           string   `json:"route_path"`
-	BundleKey           string   `json:"bundle_key"`
-	ComponentExport     string   `json:"component_export"`
-	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Surface             UISurface          `json:"surface,omitempty"`
+	RoutePath           string             `json:"route_path"`
+	BundleKey           string             `json:"bundle_key"`
+	ComponentExport     string             `json:"component_export"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type BundleDefinition struct {

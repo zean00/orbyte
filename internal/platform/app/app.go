@@ -16,6 +16,7 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/httpx"
+	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
@@ -71,6 +72,10 @@ type App struct {
 	DocActions         *application.DocumentActions
 	ModelActions       *application.ModelActions
 	Dispatcher         *eventing.Dispatcher
+}
+
+func localize(en, id string) i18n.LocalizedText {
+	return i18n.LocalizedText{"en": en, "id": id}
 }
 
 type Options struct {
@@ -826,53 +831,55 @@ func builtInModuleManifests() []module.Manifest {
 		{
 			Key:          "reference_masterdata",
 			Name:         "Reference Master Data",
+			NameI18n:     localize("Reference Master Data", "Data Referensi"),
 			Version:      "1.0.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{
 				{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
 			},
 			ReferenceTypes: []reference.TypeDefinition{
-				{Key: "currency", DisplayName: "Currency", OwnerModuleKey: "reference_masterdata"},
-				{Key: "uom", DisplayName: "Unit of Measure", OwnerModuleKey: "reference_masterdata"},
-				{Key: "party_type", DisplayName: "Party Type", OwnerModuleKey: "reference_masterdata"},
-				{Key: "location_type", DisplayName: "Location Type", OwnerModuleKey: "reference_masterdata"},
-				{Key: "document_reason", DisplayName: "Document Reason", OwnerModuleKey: "reference_masterdata"},
-				{Key: "appointment_type", DisplayName: "Appointment Type", OwnerModuleKey: "reference_masterdata"},
-				{Key: "patient_identifier_type", DisplayName: "Patient Identifier Type", OwnerModuleKey: "reference_masterdata"},
-				{Key: "practitioner_type", DisplayName: "Practitioner Type", OwnerModuleKey: "reference_masterdata"},
-				{Key: "payer_type", DisplayName: "Payer Type", OwnerModuleKey: "reference_masterdata"},
-				{Key: "visit_priority", DisplayName: "Visit Priority", OwnerModuleKey: "reference_masterdata"},
-				{Key: "shipment_method", DisplayName: "Shipment Method", OwnerModuleKey: "reference_masterdata"},
-				{Key: "item_category", DisplayName: "Item Category", OwnerModuleKey: "reference_masterdata"},
+				{Key: "currency", DisplayName: "Currency", DisplayNameI18n: localize("Currency", "Mata Uang"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "uom", DisplayName: "Unit of Measure", DisplayNameI18n: localize("Unit of Measure", "Satuan Ukur"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "party_type", DisplayName: "Party Type", DisplayNameI18n: localize("Party Type", "Tipe Pihak"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "location_type", DisplayName: "Location Type", DisplayNameI18n: localize("Location Type", "Tipe Lokasi"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "document_reason", DisplayName: "Document Reason", DisplayNameI18n: localize("Document Reason", "Alasan Dokumen"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "appointment_type", DisplayName: "Appointment Type", DisplayNameI18n: localize("Appointment Type", "Tipe Janji Temu"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "patient_identifier_type", DisplayName: "Patient Identifier Type", DisplayNameI18n: localize("Patient Identifier Type", "Tipe Identitas Pasien"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "practitioner_type", DisplayName: "Practitioner Type", DisplayNameI18n: localize("Practitioner Type", "Tipe Praktisi"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "payer_type", DisplayName: "Payer Type", DisplayNameI18n: localize("Payer Type", "Tipe Penjamin"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "visit_priority", DisplayName: "Visit Priority", DisplayNameI18n: localize("Visit Priority", "Prioritas Kunjungan"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "shipment_method", DisplayName: "Shipment Method", DisplayNameI18n: localize("Shipment Method", "Metode Pengiriman"), OwnerModuleKey: "reference_masterdata"},
+				{Key: "item_category", DisplayName: "Item Category", DisplayNameI18n: localize("Item Category", "Kategori Item"), OwnerModuleKey: "reference_masterdata"},
 			},
 			ReferenceRecords: []reference.Record{
-				{TypeKey: "currency", Key: "IDR", DisplayName: "Indonesian Rupiah", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"currency_code": "IDR", "minor_unit_scale": 2, "display_symbol": "Rp"}},
-				{TypeKey: "uom", Key: "ea", DisplayName: "Each", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"uom_code": "ea", "dimension": "count", "precision_scale": 0}},
-				{TypeKey: "party_type", Key: "patient", DisplayName: "Patient", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
-				{TypeKey: "party_type", Key: "payer", DisplayName: "Payer", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
-				{TypeKey: "party_type", Key: "practitioner", DisplayName: "Practitioner", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
-				{TypeKey: "location_type", Key: "clinic", DisplayName: "Clinic", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "location_type"}},
-				{TypeKey: "document_reason", Key: "walk_in", DisplayName: "Walk-In Visit", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "document_reason"}},
-				{TypeKey: "document_reason", Key: "follow_up", DisplayName: "Follow Up", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "document_reason"}},
-				{TypeKey: "appointment_type", Key: "consultation", DisplayName: "Consultation", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "appointment_type"}},
-				{TypeKey: "patient_identifier_type", Key: "mrn", DisplayName: "Medical Record Number", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "patient_identifier_type"}},
-				{TypeKey: "practitioner_type", Key: "doctor", DisplayName: "Doctor", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "practitioner_type"}},
-				{TypeKey: "practitioner_type", Key: "nurse", DisplayName: "Nurse", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "practitioner_type"}},
-				{TypeKey: "payer_type", Key: "self_pay", DisplayName: "Self Pay", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "payer_type"}},
-				{TypeKey: "payer_type", Key: "insurance", DisplayName: "Insurance", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "payer_type"}},
-				{TypeKey: "visit_priority", Key: "routine", DisplayName: "Routine", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
-				{TypeKey: "visit_priority", Key: "urgent", DisplayName: "Urgent", Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
+				{TypeKey: "currency", Key: "IDR", DisplayName: "Indonesian Rupiah", DisplayNameI18n: localize("Indonesian Rupiah", "Rupiah Indonesia"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"currency_code": "IDR", "minor_unit_scale": 2, "display_symbol": "Rp"}},
+				{TypeKey: "uom", Key: "ea", DisplayName: "Each", DisplayNameI18n: localize("Each", "Per Unit"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"uom_code": "ea", "dimension": "count", "precision_scale": 0}},
+				{TypeKey: "party_type", Key: "patient", DisplayName: "Patient", DisplayNameI18n: localize("Patient", "Pasien"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
+				{TypeKey: "party_type", Key: "payer", DisplayName: "Payer", DisplayNameI18n: localize("Payer", "Penjamin"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
+				{TypeKey: "party_type", Key: "practitioner", DisplayName: "Practitioner", DisplayNameI18n: localize("Practitioner", "Praktisi"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "party_type"}},
+				{TypeKey: "location_type", Key: "clinic", DisplayName: "Clinic", DisplayNameI18n: localize("Clinic", "Klinik"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "location_type"}},
+				{TypeKey: "document_reason", Key: "walk_in", DisplayName: "Walk-In Visit", DisplayNameI18n: localize("Walk-In Visit", "Kunjungan Langsung"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "document_reason"}},
+				{TypeKey: "document_reason", Key: "follow_up", DisplayName: "Follow Up", DisplayNameI18n: localize("Follow Up", "Kontrol Lanjutan"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "document_reason"}},
+				{TypeKey: "appointment_type", Key: "consultation", DisplayName: "Consultation", DisplayNameI18n: localize("Consultation", "Konsultasi"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "appointment_type"}},
+				{TypeKey: "patient_identifier_type", Key: "mrn", DisplayName: "Medical Record Number", DisplayNameI18n: localize("Medical Record Number", "Nomor Rekam Medis"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "patient_identifier_type"}},
+				{TypeKey: "practitioner_type", Key: "doctor", DisplayName: "Doctor", DisplayNameI18n: localize("Doctor", "Dokter"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "practitioner_type"}},
+				{TypeKey: "practitioner_type", Key: "nurse", DisplayName: "Nurse", DisplayNameI18n: localize("Nurse", "Perawat"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "practitioner_type"}},
+				{TypeKey: "payer_type", Key: "self_pay", DisplayName: "Self Pay", DisplayNameI18n: localize("Self Pay", "Bayar Sendiri"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "payer_type"}},
+				{TypeKey: "payer_type", Key: "insurance", DisplayName: "Insurance", DisplayNameI18n: localize("Insurance", "Asuransi"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "payer_type"}},
+				{TypeKey: "visit_priority", Key: "routine", DisplayName: "Routine", DisplayNameI18n: localize("Routine", "Rutin"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
+				{TypeKey: "visit_priority", Key: "urgent", DisplayName: "Urgent", DisplayNameI18n: localize("Urgent", "Mendesak"), Scope: "deployment", UpdatedAt: seededAt, UpdatedBy: "system", Value: map[string]any{"reference_type": "visit_priority"}},
 			},
 			Offline: module.OfflineDefinition{
 				References: []module.OfflineReferenceDefinition{
-					{TypeKey: "appointment_type", Title: "Appointment Types"},
-					{TypeKey: "party_type", Title: "Party Types"},
+					{TypeKey: "appointment_type", Title: "Appointment Types", TitleI18n: localize("Appointment Types", "Jenis Janji Temu")},
+					{TypeKey: "party_type", Title: "Party Types", TitleI18n: localize("Party Types", "Jenis Pihak")},
 				},
 			},
 		},
 		{
 			Key:          "masterdata",
 			Name:         "Master Data",
+			NameI18n:     localize("Master Data", "Data Master"),
 			Version:      "1.0.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{
@@ -882,6 +889,7 @@ func builtInModuleManifests() []module.Manifest {
 			Models: []model.Definition{{
 				Key:                 "party",
 				DisplayName:         "Party",
+				DisplayNameI18n:     localize("Party", "Pihak"),
 				OwnerModuleKey:      "masterdata",
 				Version:             "v1",
 				CreatePermissionKey: "party.create",
@@ -890,10 +898,10 @@ func builtInModuleManifests() []module.Manifest {
 				UpdatePermissionKey: "party.update",
 				DefaultSort:         "name",
 				Fields: []model.FieldDefinition{
-					{Key: "name", Label: "Name", Type: "string", Required: true},
-					{Key: "display_name", Label: "Display Name", Type: "string", ReadOnly: true, ComputeRuleKey: "party.display_name.compute"},
-					{Key: "email", Label: "Email", Type: "string"},
-					{Key: "status", Label: "Status", Type: "string", DefaultRuleKey: "party.status.default", ConstraintRuleKeys: []string{"party.status.allowed"}},
+					{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
+					{Key: "display_name", Label: "Display Name", LabelI18n: localize("Display Name", "Nama Tampil"), Type: "string", ReadOnly: true, ComputeRuleKey: "party.display_name.compute"},
+					{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Type: "string"},
+					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultRuleKey: "party.status.default", ConstraintRuleKeys: []string{"party.status.allowed"}},
 				},
 				Relations: []model.RelationDefinition{
 					{Key: "contacts", Type: "has_many", TargetModelKey: "party_contact", ForeignKey: "party_id"},
@@ -901,6 +909,7 @@ func builtInModuleManifests() []module.Manifest {
 			}, {
 				Key:                 "party_contact",
 				DisplayName:         "Party Contact",
+				DisplayNameI18n:     localize("Party Contact", "Kontak Pihak"),
 				OwnerModuleKey:      "masterdata",
 				Version:             "v1",
 				CreatePermissionKey: "party.update",
@@ -909,19 +918,20 @@ func builtInModuleManifests() []module.Manifest {
 				UpdatePermissionKey: "party.update",
 				DefaultSort:         "name",
 				Fields: []model.FieldDefinition{
-					{Key: "party_id", Label: "Party ID", Type: "string", Required: true},
-					{Key: "name", Label: "Name", Type: "string", Required: true},
-					{Key: "phone", Label: "Phone", Type: "string"},
-					{Key: "role", Label: "Role", Type: "string"},
+					{Key: "party_id", Label: "Party ID", LabelI18n: localize("Party ID", "ID Pihak"), Type: "string", Required: true},
+					{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
+					{Key: "phone", Label: "Phone", LabelI18n: localize("Phone", "Telepon"), Type: "string"},
+					{Key: "role", Label: "Role", LabelI18n: localize("Role", "Peran"), Type: "string"},
 				},
 			}},
 			Datasets: []module.DatasetDefinition{{
 				Key:        "masterdata.party.summary",
 				Title:      "Party Summary",
+				TitleI18n:  localize("Party Summary", "Ringkasan Pihak"),
 				SourceKind: "model",
 				ModelKey:   "party",
-				Dimensions: []module.DatasetDimension{{Key: "by_status", Label: "By Status", Path: "status"}},
-				Measures:   []module.DatasetMeasure{{Key: "total", Label: "Total", Kind: "count"}},
+				Dimensions: []module.DatasetDimension{{Key: "by_status", Label: "By Status", LabelI18n: localize("By Status", "Berdasarkan Status"), Path: "status"}},
+				Measures:   []module.DatasetMeasure{{Key: "total", Label: "Total", LabelI18n: localize("Total", "Total"), Kind: "count"}},
 			}},
 			SearchIndexes: []search.IndexDefinition{{
 				Key:                 "masterdata.party.search",
@@ -945,68 +955,70 @@ func builtInModuleManifests() []module.Manifest {
 			}},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
-					{Key: "party.create", Action: "create", Resource: "party", DisplayName: "Create Parties"},
-					{Key: "party.list", Action: "list", Resource: "party", DisplayName: "List Parties"},
-					{Key: "party.read", Action: "read", Resource: "party", DisplayName: "Read Parties"},
-					{Key: "party.update", Action: "update", Resource: "party", DisplayName: "Update Parties"},
+					{Key: "party.create", Action: "create", Resource: "party", DisplayName: "Create Parties", DisplayNameI18n: localize("Create Parties", "Buat Pihak")},
+					{Key: "party.list", Action: "list", Resource: "party", DisplayName: "List Parties", DisplayNameI18n: localize("List Parties", "Daftar Pihak")},
+					{Key: "party.read", Action: "read", Resource: "party", DisplayName: "Read Parties", DisplayNameI18n: localize("Read Parties", "Lihat Pihak")},
+					{Key: "party.update", Action: "update", Resource: "party", DisplayName: "Update Parties", DisplayNameI18n: localize("Update Parties", "Perbarui Pihak")},
 				},
 				RoleTemplates: []module.RoleTemplateDefinition{{
-					Key: "party_manager", Name: "Party Manager", AllowedScopes: []string{"deployment", "location"}, PermissionKeys: []string{"party.create", "party.list", "party.read", "party.update"},
+					Key: "party_manager", Name: "Party Manager", NameI18n: localize("Party Manager", "Pengelola Pihak"), AllowedScopes: []string{"deployment", "location"}, PermissionKeys: []string{"party.create", "party.list", "party.read", "party.update"},
 				}},
 			},
 			Frontend: module.FrontendDefinition{
 				Menus: []module.MenuDefinition{{
 					Key:                 "masterdata.parties",
 					Label:               "Parties",
+					LabelI18n:           localize("Parties", "Pihak"),
 					ActionKey:           "masterdata.parties.list",
 					Order:               5,
 					RequiredPermissions: []string{"party.list"},
 				}},
 				Actions: []module.ActionDefinition{
-					{Key: "masterdata.parties.list", Label: "Parties", Kind: "navigate", RoutePath: "/masterdata/parties", ViewKey: "masterdata.parties.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"party.list"}},
-					{Key: "masterdata.parties.detail", Label: "Party Detail", Kind: "navigate", RoutePath: "/masterdata/parties/detail", ViewKey: "masterdata.parties.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"party.read"}},
-					{Key: "masterdata.parties.form", Label: "Party Form", Kind: "navigate", RoutePath: "/masterdata/parties/form", ViewKey: "masterdata.parties.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"party.update"}},
+					{Key: "masterdata.parties.list", Label: "Parties", LabelI18n: localize("Parties", "Pihak"), Kind: "navigate", RoutePath: "/masterdata/parties", ViewKey: "masterdata.parties.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"party.list"}},
+					{Key: "masterdata.parties.detail", Label: "Party Detail", LabelI18n: localize("Party Detail", "Detail Pihak"), Kind: "navigate", RoutePath: "/masterdata/parties/detail", ViewKey: "masterdata.parties.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"party.read"}},
+					{Key: "masterdata.parties.form", Label: "Party Form", LabelI18n: localize("Party Form", "Form Pihak"), Kind: "navigate", RoutePath: "/masterdata/parties/form", ViewKey: "masterdata.parties.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"party.update"}},
 				},
 				Views: []module.ViewDefinition{
 					{
-						Key: "masterdata.parties.list", Title: "Parties", Kind: "list", ModelKey: "party", RequiredPermissions: []string{"party.list"},
+						Key: "masterdata.parties.list", Title: "Parties", TitleI18n: localize("Parties", "Pihak"), Kind: "list", ModelKey: "party", RequiredPermissions: []string{"party.list"},
 						Columns: []module.ColumnDefinition{
-							{Key: "name", Label: "Name", Path: "values.name"},
-							{Key: "email", Label: "Email", Path: "values.email"},
-							{Key: "status", Label: "Status", Path: "values.status"},
+							{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name"},
+							{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Path: "values.email"},
+							{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status"},
 						},
-						Filters:         []module.FilterDefinition{{Key: "status", Label: "Status", Type: "enum", Options: []string{"active", "inactive", "blocked"}}},
+						Filters:         []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "enum", Options: []string{"active", "inactive", "blocked"}}},
 						DefaultPageSize: 10,
 						EmptyState:      "No parties registered yet.",
+						EmptyStateI18n:  localize("No parties registered yet.", "Belum ada pihak terdaftar."),
 					},
 					{
-						Key: "masterdata.parties.detail", Title: "Party Detail", Kind: "detail", ModelKey: "party", RequiredPermissions: []string{"party.read"},
+						Key: "masterdata.parties.detail", Title: "Party Detail", TitleI18n: localize("Party Detail", "Detail Pihak"), Kind: "detail", ModelKey: "party", RequiredPermissions: []string{"party.read"},
 						Tabs: []module.TabDefinition{{
-							Key: "summary", Title: "Summary", Sections: []module.SectionDefinition{{
-								Key: "core", Title: "Core Fields", Fields: []module.FieldDefinition{
-									{Key: "name", Label: "Name", Path: "values.name", Type: "string"},
-									{Key: "display_name", Label: "Display Name", Path: "values.display_name", Type: "string"},
-									{Key: "email", Label: "Email", Path: "values.email", Type: "string"},
-									{Key: "status", Label: "Status", Path: "values.status", Type: "string"},
+							Key: "summary", Title: "Summary", TitleI18n: localize("Summary", "Ringkasan"), Sections: []module.SectionDefinition{{
+								Key: "core", Title: "Core Fields", TitleI18n: localize("Core Fields", "Field Utama"), Fields: []module.FieldDefinition{
+									{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string"},
+									{Key: "display_name", Label: "Display Name", LabelI18n: localize("Display Name", "Nama Tampil"), Path: "values.display_name", Type: "string"},
+									{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Path: "values.email", Type: "string"},
+									{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string"},
 								},
 							}},
 						}},
 						RelatedViews: []module.RelatedViewDefinition{
-							{Key: "timeline", Title: "Timeline", Source: "timeline", EmptyState: "No activity yet"},
-							{Key: "contacts", Title: "Contacts", Source: "contacts", EmptyState: "No related contacts"},
+							{Key: "timeline", Title: "Timeline", TitleI18n: localize("Timeline", "Linimasa"), Source: "timeline", EmptyState: "No activity yet", EmptyStateI18n: localize("No activity yet", "Belum ada aktivitas")},
+							{Key: "contacts", Title: "Contacts", TitleI18n: localize("Contacts", "Kontak"), Source: "contacts", EmptyState: "No related contacts", EmptyStateI18n: localize("No related contacts", "Belum ada kontak terkait")},
 						},
 					},
 					{
-						Key: "masterdata.parties.form", Title: "Party Form", Kind: "form", ModelKey: "party", RequiredPermissions: []string{"party.update"},
+						Key: "masterdata.parties.form", Title: "Party Form", TitleI18n: localize("Party Form", "Form Pihak"), Kind: "form", ModelKey: "party", RequiredPermissions: []string{"party.update"},
 						Sections: []module.SectionDefinition{{
-							Key: "edit", Title: "Edit Party", Fields: []module.FieldDefinition{
-								{Key: "name", Label: "Name", Path: "values.name", Type: "string", Widget: "text", Placeholder: "Party name"},
-								{Key: "email", Label: "Email", Path: "values.email", Type: "string", Widget: "text", Placeholder: "Email address"},
-								{Key: "status", Label: "Status", Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive", "blocked"}},
+							Key: "edit", Title: "Edit Party", TitleI18n: localize("Edit Party", "Ubah Pihak"), Fields: []module.FieldDefinition{
+								{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string", Widget: "text", Placeholder: "Party name", PlaceholderI18n: localize("Party name", "Nama pihak")},
+								{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Path: "values.email", Type: "string", Widget: "text", Placeholder: "Email address", PlaceholderI18n: localize("Email address", "Alamat email")},
+								{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive", "blocked"}},
 							},
 						}},
 						RelatedViews: []module.RelatedViewDefinition{
-							{Key: "contacts", Title: "Contacts", Source: "contacts", EmptyState: "No related contacts"},
+							{Key: "contacts", Title: "Contacts", TitleI18n: localize("Contacts", "Kontak"), Source: "contacts", EmptyState: "No related contacts", EmptyStateI18n: localize("No related contacts", "Belum ada kontak terkait")},
 						},
 					},
 				},
@@ -1015,12 +1027,14 @@ func builtInModuleManifests() []module.Manifest {
 				Projections: []module.OfflineProjectionDefinition{{
 					IndexKey:             "masterdata.party.search",
 					Title:                "Party Search",
+					TitleI18n:            localize("Party Search", "Pencarian Pihak"),
 					RequiredPermissions:  []string{"party.list"},
 					DefaultIncludeFields: []string{"name", "email", "status"},
 				}},
 				Models: []module.OfflineModelDefinition{{
 					ModelKey:            "party",
 					Title:               "Party",
+					TitleI18n:           localize("Party", "Pihak"),
 					CreatePermissionKey: "party.create",
 					UpdatePermissionKey: "party.update",
 					RequiredPermissions: []string{"party.read"},
@@ -1030,25 +1044,141 @@ func builtInModuleManifests() []module.Manifest {
 		{
 			Key:                 "platform.core",
 			Name:                "Platform Core",
+			NameI18n:            localize("Platform Core", "Inti Platform"),
 			Version:             "1.0.0",
 			DomainFamily:        "platform",
 			OwnedPermissionKeys: []string{"platform.context.read", "module.read", "module.manage", "configuration.read", "configuration.manage", "search.manage"},
 			ConfigDefinitions:   []config.Definition{httpDefinition},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
-					{Key: "platform.context.read", Action: "read", Resource: "context", DisplayName: "Read Platform Context"},
-					{Key: "module.read", Action: "read", Resource: "module", DisplayName: "Read Modules"},
-					{Key: "module.manage", Action: "manage", Resource: "module", DisplayName: "Manage Modules", RiskLevel: "high"},
-					{Key: "configuration.read", Action: "read", Resource: "configuration", DisplayName: "Read Configuration"},
-					{Key: "configuration.manage", Action: "manage", Resource: "configuration", DisplayName: "Manage Configuration", RiskLevel: "high"},
-					{Key: "search.manage", Action: "manage", Resource: "search", DisplayName: "Manage Search Indexes", RiskLevel: "high"},
+					{Key: "platform.context.read", Action: "read", Resource: "context", DisplayName: "Read Platform Context", DisplayNameI18n: localize("Read Platform Context", "Lihat Konteks Platform")},
+					{Key: "module.read", Action: "read", Resource: "module", DisplayName: "Read Modules", DisplayNameI18n: localize("Read Modules", "Lihat Modul")},
+					{Key: "module.manage", Action: "manage", Resource: "module", DisplayName: "Manage Modules", DisplayNameI18n: localize("Manage Modules", "Kelola Modul"), RiskLevel: "high"},
+					{Key: "configuration.read", Action: "read", Resource: "configuration", DisplayName: "Read Configuration", DisplayNameI18n: localize("Read Configuration", "Lihat Konfigurasi")},
+					{Key: "configuration.manage", Action: "manage", Resource: "configuration", DisplayName: "Manage Configuration", DisplayNameI18n: localize("Manage Configuration", "Kelola Konfigurasi"), RiskLevel: "high"},
+					{Key: "search.manage", Action: "manage", Resource: "search", DisplayName: "Manage Search Indexes", DisplayNameI18n: localize("Manage Search Indexes", "Kelola Indeks Pencarian"), RiskLevel: "high"},
 				},
 				RoleTemplates: []module.RoleTemplateDefinition{{
 					Key:            "platform_operator",
 					Name:           "Platform Operator",
+					NameI18n:       localize("Platform Operator", "Operator Platform"),
 					AllowedScopes:  []string{"deployment"},
 					PermissionKeys: []string{"platform.context.read", "module.read", "configuration.read"},
 				}},
+			},
+			Frontend: module.FrontendDefinition{
+				Menus: []module.MenuDefinition{
+					{
+						Key:                 "admin.modules",
+						Label:               "Modules",
+						LabelI18n:           localize("Modules", "Modul"),
+						ActionKey:           "admin.modules",
+						Order:               10,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"module.read"},
+					},
+					{
+						Key:                 "admin.auth",
+						Label:               "Authentication",
+						LabelI18n:           localize("Authentication", "Autentikasi"),
+						ActionKey:           "admin.auth",
+						Order:               20,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.configuration",
+						Label:               "Configuration",
+						LabelI18n:           localize("Configuration", "Konfigurasi"),
+						ActionKey:           "admin.configuration",
+						Order:               30,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.definitions",
+						Label:               "Definitions",
+						LabelI18n:           localize("Definitions", "Definisi"),
+						ActionKey:           "admin.definitions",
+						Order:               40,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.security",
+						Label:               "Security",
+						LabelI18n:           localize("Security", "Keamanan"),
+						ActionKey:           "admin.security",
+						Order:               50,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.observability",
+						Label:               "Observability",
+						LabelI18n:           localize("Observability", "Observabilitas"),
+						ActionKey:           "admin.observability",
+						Order:               60,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"module.read"},
+					},
+				},
+				Actions: []module.ActionDefinition{
+					{
+						Key:                 "admin.modules",
+						Label:               "Modules",
+						LabelI18n:           localize("Modules", "Modul"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/modules",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"module.read"},
+					},
+					{
+						Key:                 "admin.auth",
+						Label:               "Authentication",
+						LabelI18n:           localize("Authentication", "Autentikasi"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/auth",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.configuration",
+						Label:               "Configuration",
+						LabelI18n:           localize("Configuration", "Konfigurasi"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/config",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.definitions",
+						Label:               "Definitions",
+						LabelI18n:           localize("Definitions", "Definisi"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/definitions",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.security",
+						Label:               "Security",
+						LabelI18n:           localize("Security", "Keamanan"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/security",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.observability",
+						Label:               "Observability",
+						LabelI18n:           localize("Observability", "Observabilitas"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/observability",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"module.read"},
+					},
+				},
 			},
 			Observability: module.ObservabilityDefinition{
 				Metrics: []module.MetricDefinition{
@@ -1063,6 +1193,7 @@ func builtInModuleManifests() []module.Manifest {
 		{
 			Key:          "identity",
 			Name:         "Identity and Access",
+			NameI18n:     localize("Identity and Access", "Identitas dan Akses"),
 			Version:      "1.0.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{{
@@ -1072,14 +1203,15 @@ func builtInModuleManifests() []module.Manifest {
 			ConfigDefinitions:   []config.Definition{authDefinition},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
-					{Key: "identity.manage_sessions", Action: "manage", Resource: "session", DisplayName: "Manage Sessions", RiskLevel: "high"},
-					{Key: "identity.manage_users", Action: "manage", Resource: "user", DisplayName: "Manage Users", RiskLevel: "high"},
+					{Key: "identity.manage_sessions", Action: "manage", Resource: "session", DisplayName: "Manage Sessions", DisplayNameI18n: localize("Manage Sessions", "Kelola Sesi"), RiskLevel: "high"},
+					{Key: "identity.manage_users", Action: "manage", Resource: "user", DisplayName: "Manage Users", DisplayNameI18n: localize("Manage Users", "Kelola Pengguna"), RiskLevel: "high"},
 				},
 			},
 		},
 		{
 			Key:          "documents",
 			Name:         "Document Kernel",
+			NameI18n:     localize("Document Kernel", "Kernel Dokumen"),
 			Version:      "1.1.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{
@@ -1113,26 +1245,28 @@ func builtInModuleManifests() []module.Manifest {
 			}},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
-					{Key: "document.create", Action: "create", Resource: "document", DisplayName: "Create Documents"},
-					{Key: "document.list", Action: "list", Resource: "document", DisplayName: "List Documents"},
-					{Key: "document.read", Action: "read", Resource: "document", DisplayName: "Read Documents"},
-					{Key: "document.update_draft", Action: "update_draft", Resource: "document", DisplayName: "Update Draft Documents"},
-					{Key: "document.submit", Action: "submit", Resource: "document", DisplayName: "Submit Documents"},
-					{Key: "document.approve", Action: "approve", Resource: "document", DisplayName: "Approve Documents", RiskLevel: "medium"},
-					{Key: "document.reject", Action: "reject", Resource: "document", DisplayName: "Reject Documents", RiskLevel: "medium"},
-					{Key: "document.reopen", Action: "reopen", Resource: "document", DisplayName: "Reopen Documents", RiskLevel: "high"},
-					{Key: "document.cancel", Action: "cancel", Resource: "document", DisplayName: "Cancel Documents", RiskLevel: "high"},
+					{Key: "document.create", Action: "create", Resource: "document", DisplayName: "Create Documents", DisplayNameI18n: localize("Create Documents", "Buat Dokumen")},
+					{Key: "document.list", Action: "list", Resource: "document", DisplayName: "List Documents", DisplayNameI18n: localize("List Documents", "Daftar Dokumen")},
+					{Key: "document.read", Action: "read", Resource: "document", DisplayName: "Read Documents", DisplayNameI18n: localize("Read Documents", "Lihat Dokumen")},
+					{Key: "document.update_draft", Action: "update_draft", Resource: "document", DisplayName: "Update Draft Documents", DisplayNameI18n: localize("Update Draft Documents", "Perbarui Dokumen Draf")},
+					{Key: "document.submit", Action: "submit", Resource: "document", DisplayName: "Submit Documents", DisplayNameI18n: localize("Submit Documents", "Ajukan Dokumen")},
+					{Key: "document.approve", Action: "approve", Resource: "document", DisplayName: "Approve Documents", DisplayNameI18n: localize("Approve Documents", "Setujui Dokumen"), RiskLevel: "medium"},
+					{Key: "document.reject", Action: "reject", Resource: "document", DisplayName: "Reject Documents", DisplayNameI18n: localize("Reject Documents", "Tolak Dokumen"), RiskLevel: "medium"},
+					{Key: "document.reopen", Action: "reopen", Resource: "document", DisplayName: "Reopen Documents", DisplayNameI18n: localize("Reopen Documents", "Buka Ulang Dokumen"), RiskLevel: "high"},
+					{Key: "document.cancel", Action: "cancel", Resource: "document", DisplayName: "Cancel Documents", DisplayNameI18n: localize("Cancel Documents", "Batalkan Dokumen"), RiskLevel: "high"},
 				},
 				RoleTemplates: []module.RoleTemplateDefinition{
 					{
 						Key:            "document_clerk",
 						Name:           "Document Clerk",
+						NameI18n:       localize("Document Clerk", "Petugas Dokumen"),
 						AllowedScopes:  []string{"location"},
 						PermissionKeys: []string{"document.create", "document.list", "document.read", "document.update_draft", "document.submit"},
 					},
 					{
 						Key:            "document_reviewer",
 						Name:           "Document Reviewer",
+						NameI18n:       localize("Document Reviewer", "Peninjau Dokumen"),
 						AllowedScopes:  []string{"location"},
 						PermissionKeys: []string{"document.list", "document.read", "document.approve", "document.reject", "document.reopen", "document.cancel"},
 					},
@@ -1170,6 +1304,7 @@ func builtInModuleManifests() []module.Manifest {
 				Menus: []module.MenuDefinition{{
 					Key:                 "documents.requests",
 					Label:               "Requests",
+					LabelI18n:           localize("Requests", "Permintaan"),
 					ActionKey:           "documents.requests.list",
 					Order:               10,
 					RequiredPermissions: []string{"document.list"},
@@ -1178,6 +1313,7 @@ func builtInModuleManifests() []module.Manifest {
 					{
 						Key:                 "documents.requests.list",
 						Label:               "Requests",
+						LabelI18n:           localize("Requests", "Permintaan"),
 						Kind:                "navigate",
 						RoutePath:           "/documents",
 						ViewKey:             "documents.requests.list",
@@ -1187,6 +1323,7 @@ func builtInModuleManifests() []module.Manifest {
 					{
 						Key:                 "documents.requests.detail",
 						Label:               "Request Detail",
+						LabelI18n:           localize("Request Detail", "Detail Permintaan"),
 						Kind:                "navigate",
 						RoutePath:           "/documents/detail",
 						ViewKey:             "documents.requests.detail",
@@ -1198,63 +1335,70 @@ func builtInModuleManifests() []module.Manifest {
 					{
 						Key:                 "documents.requests.list",
 						Title:               "Requests",
+						TitleI18n:           localize("Requests", "Permintaan"),
 						Kind:                "list",
 						DocumentType:        "generic_request",
 						ProjectionKey:       "document_summary",
 						RequiredPermissions: []string{"document.list"},
 						Columns: []module.ColumnDefinition{
-							{Key: "id", Label: "Document", Path: "header.id"},
-							{Key: "status", Label: "Status", Path: "header.status"},
-							{Key: "updated_at", Label: "Updated", Path: "header.updated_at"},
+							{Key: "id", Label: "Document", LabelI18n: localize("Document", "Dokumen"), Path: "header.id"},
+							{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "header.status"},
+							{Key: "updated_at", Label: "Updated", LabelI18n: localize("Updated", "Diperbarui"), Path: "header.updated_at"},
 						},
 						Filters: []module.FilterDefinition{
-							{Key: "status", Label: "Status", Type: "enum", Options: []string{"draft", "submitted", "approved", "rejected", "cancelled"}},
+							{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "enum", Options: []string{"draft", "submitted", "approved", "rejected", "cancelled"}},
 						},
 						DefaultPageSize: 10,
 						EmptyState:      "No governed request documents exist yet.",
+						EmptyStateI18n:  localize("No governed request documents exist yet.", "Belum ada dokumen permintaan yang dikelola."),
 					},
 					{
 						Key:                 "documents.requests.detail",
 						Title:               "Request Detail",
+						TitleI18n:           localize("Request Detail", "Detail Permintaan"),
 						Kind:                "detail",
 						DocumentType:        "generic_request",
 						RequiredPermissions: []string{"document.read"},
 						AllowedActions:      []string{"submit", "approve", "reject", "reopen", "cancel"},
 						Tabs: []module.TabDefinition{
 							{
-								Key:   "summary",
-								Title: "Summary",
+								Key:       "summary",
+								Title:     "Summary",
+								TitleI18n: localize("Summary", "Ringkasan"),
 								Sections: []module.SectionDefinition{
 									{
-										Key:   "header",
-										Title: "Header",
+										Key:       "header",
+										Title:     "Header",
+										TitleI18n: localize("Header", "Header"),
 										Fields: []module.FieldDefinition{
-											{Key: "doc_id", Label: "Document ID", Path: "header.id", Type: "string", ReadOnly: true},
-											{Key: "status", Label: "Status", Path: "header.status", Type: "string", ReadOnly: true},
-											{Key: "updated_by", Label: "Updated By", Path: "header.updated_by", Type: "string", ReadOnly: true},
+											{Key: "doc_id", Label: "Document ID", LabelI18n: localize("Document ID", "ID Dokumen"), Path: "header.id", Type: "string", ReadOnly: true},
+											{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "header.status", Type: "string", ReadOnly: true},
+											{Key: "updated_by", Label: "Updated By", LabelI18n: localize("Updated By", "Diperbarui Oleh"), Path: "header.updated_by", Type: "string", ReadOnly: true},
 										},
 									},
 									{
-										Key:   "payload",
-										Title: "Payload",
+										Key:       "payload",
+										Title:     "Payload",
+										TitleI18n: localize("Payload", "Payload"),
 										Fields: []module.FieldDefinition{
-											{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string"},
+											{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string"},
 										},
 									},
 								},
 							},
 							{
-								Key:   "extensions",
-								Title: "Extensions",
+								Key:       "extensions",
+								Title:     "Extensions",
+								TitleI18n: localize("Extensions", "Ekstensi"),
 								Sections: []module.SectionDefinition{{
-									Key: "analytics_extension", Title: "Analytics Extension", ExtensionSlotKey: "analytics",
+									Key: "analytics_extension", Title: "Analytics Extension", TitleI18n: localize("Analytics Extension", "Ekstensi Analitik"), ExtensionSlotKey: "analytics",
 								}},
 							},
 						},
 						RelatedViews: []module.RelatedViewDefinition{
-							{Key: "lines", Title: "Lines", Source: "lines", EmptyState: "No lines"},
-							{Key: "links", Title: "Links", Source: "links", EmptyState: "No links"},
-							{Key: "attachments", Title: "Attachments", Source: "attachments", EmptyState: "No attachments"},
+							{Key: "lines", Title: "Lines", TitleI18n: localize("Lines", "Baris"), Source: "lines", EmptyState: "No lines", EmptyStateI18n: localize("No lines", "Belum ada baris")},
+							{Key: "links", Title: "Links", TitleI18n: localize("Links", "Tautan"), Source: "links", EmptyState: "No links", EmptyStateI18n: localize("No links", "Belum ada tautan")},
+							{Key: "attachments", Title: "Attachments", TitleI18n: localize("Attachments", "Lampiran"), Source: "attachments", EmptyState: "No attachments", EmptyStateI18n: localize("No attachments", "Belum ada lampiran")},
 						},
 						ActionPlacements: []module.ActionPlacementDefinition{
 							{ActionKey: "submit", Zone: "primary"},
@@ -1267,15 +1411,16 @@ func builtInModuleManifests() []module.Manifest {
 					{
 						Key:                 "documents.requests.form",
 						Title:               "Request Draft Form",
+						TitleI18n:           localize("Request Draft Form", "Form Draf Permintaan"),
 						Kind:                "form",
 						DocumentType:        "generic_request",
 						RequiredPermissions: []string{"document.update_draft"},
 						Fields: []module.FieldDefinition{
-							{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", HelpText: "Short summary used in lists."},
+							{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", PlaceholderI18n: localize("Enter request title", "Masukkan judul permintaan"), HelpText: "Short summary used in lists.", HelpTextI18n: localize("Short summary used in lists.", "Ringkasan singkat yang dipakai di daftar.")},
 						},
 						Sections: []module.SectionDefinition{{
-							Key: "draft_fields", Title: "Draft Fields", Fields: []module.FieldDefinition{
-								{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe the request"},
+							Key: "draft_fields", Title: "Draft Fields", TitleI18n: localize("Draft Fields", "Field Draf"), Fields: []module.FieldDefinition{
+								{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe the request", PlaceholderI18n: localize("Describe the request", "Jelaskan permintaan")},
 							},
 						}},
 					},
@@ -1322,6 +1467,7 @@ func builtInModuleManifests() []module.Manifest {
 				Projections: []module.OfflineProjectionDefinition{{
 					IndexKey:             "documents.requests.search",
 					Title:                "Requests",
+					TitleI18n:            localize("Requests", "Permintaan"),
 					RequiredPermissions:  []string{"document.list"},
 					DefaultFilters:       []string{"status=draft"},
 					DefaultIncludeFields: []string{"document_id", "document_type", "status", "title"},
@@ -1329,6 +1475,7 @@ func builtInModuleManifests() []module.Manifest {
 				Documents: []module.OfflineDocumentDefinition{{
 					Type:                "generic_request",
 					Title:               "Generic Request",
+					TitleI18n:           localize("Generic Request", "Permintaan Generik"),
 					CreatePermissionKey: "document.create",
 					UpdatePermissionKey: "document.update_draft",
 					RequiredPermissions: []string{"document.read"},
@@ -1338,6 +1485,7 @@ func builtInModuleManifests() []module.Manifest {
 		{
 			Key:          "analytics",
 			Name:         "Analytics",
+			NameI18n:     localize("Analytics", "Analitik"),
 			Version:      "1.0.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{
@@ -1349,25 +1497,26 @@ func builtInModuleManifests() []module.Manifest {
 				DocumentType:       "generic_request",
 				SchemaVersion:      "v1",
 				DisplayName:        "Analytics Extension",
+				DisplayNameI18n:    localize("Analytics Extension", "Ekstensi Analitik"),
 				ReadPermissionKey:  "analytics.read",
 				WritePermissionKey: "analytics.manage_reports",
 			}},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
-					{Key: "analytics.read", Action: "read", Resource: "analytics", DisplayName: "Read Analytics"},
-					{Key: "analytics.manage_reports", Action: "manage_reports", Resource: "analytics_report", DisplayName: "Manage Analytics Reports", RiskLevel: "high"},
-					{Key: "analytics.deliver_reports", Action: "deliver_reports", Resource: "analytics_report", DisplayName: "Deliver Analytics Reports", RiskLevel: "high"},
+					{Key: "analytics.read", Action: "read", Resource: "analytics", DisplayName: "Read Analytics", DisplayNameI18n: localize("Read Analytics", "Lihat Analitik")},
+					{Key: "analytics.manage_reports", Action: "manage_reports", Resource: "analytics_report", DisplayName: "Manage Analytics Reports", DisplayNameI18n: localize("Manage Analytics Reports", "Kelola Laporan Analitik"), RiskLevel: "high"},
+					{Key: "analytics.deliver_reports", Action: "deliver_reports", Resource: "analytics_report", DisplayName: "Deliver Analytics Reports", DisplayNameI18n: localize("Deliver Analytics Reports", "Kirim Laporan Analitik"), RiskLevel: "high"},
 				},
 				RoleTemplates: []module.RoleTemplateDefinition{{
-					Key: "analytics_viewer", Name: "Analytics Viewer", AllowedScopes: []string{"deployment", "location"}, PermissionKeys: []string{"analytics.read"},
+					Key: "analytics_viewer", Name: "Analytics Viewer", NameI18n: localize("Analytics Viewer", "Pembaca Analitik"), AllowedScopes: []string{"deployment", "location"}, PermissionKeys: []string{"analytics.read"},
 				}},
 			},
 			Observability: module.ObservabilityDefinition{
 				Dashboards: []module.DashboardDefinition{
-					{Key: "analytics.cockpit", Title: "Analytics Cockpit", RequiredPermissions: []string{"analytics.read"}},
+					{Key: "analytics.cockpit", Title: "Analytics Cockpit", TitleI18n: localize("Analytics Cockpit", "Kokpit Analitik"), RequiredPermissions: []string{"analytics.read"}},
 				},
 				Reports: []module.ReportDefinition{
-					{Key: "analytics.documents.reporting", Title: "Document Reporting", Dataset: "document_reporting", Formats: []string{"csv", "xlsx", "pdf"}, RequiredPermissions: []string{"analytics.read"}},
+					{Key: "analytics.documents.reporting", Title: "Document Reporting", TitleI18n: localize("Document Reporting", "Pelaporan Dokumen"), Dataset: "document_reporting", Formats: []string{"csv", "xlsx", "pdf"}, RequiredPermissions: []string{"analytics.read"}},
 				},
 				Metrics: []module.MetricDefinition{
 					{Key: "analytics.snapshots.total", Type: "counter", Description: "Captured analytics snapshots"},
@@ -1383,6 +1532,7 @@ func builtInModuleManifests() []module.Manifest {
 				Menus: []module.MenuDefinition{{
 					Key:                 "analytics.cockpit",
 					Label:               "Analytics Cockpit",
+					LabelI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
 					ActionKey:           "analytics.cockpit",
 					Order:               20,
 					RequiredPermissions: []string{"analytics.read"},
@@ -1390,6 +1540,7 @@ func builtInModuleManifests() []module.Manifest {
 				Actions: []module.ActionDefinition{{
 					Key:                 "analytics.cockpit",
 					Label:               "Analytics Cockpit",
+					LabelI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
 					Kind:                "navigate",
 					RoutePath:           "/analytics/cockpit",
 					CustomEntryKey:      "analytics.cockpit",
@@ -1399,6 +1550,7 @@ func builtInModuleManifests() []module.Manifest {
 				CustomEntries: []module.CustomEntryDefinition{{
 					Key:                 "analytics.cockpit",
 					Title:               "Analytics Cockpit",
+					TitleI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
 					RoutePath:           "/analytics/cockpit",
 					BundleKey:           "analytics-cockpit",
 					ComponentExport:     "render",
@@ -1409,7 +1561,9 @@ func builtInModuleManifests() []module.Manifest {
 				Tools: []module.MCPToolDefinition{{
 					Key:                 "analytics.snapshot.get",
 					Title:               "Get Analytics Snapshot",
+					TitleI18n:           localize("Get Analytics Snapshot", "Ambil Snapshot Analitik"),
 					Description:         "Returns the latest analytics snapshot and links the cockpit app.",
+					DescriptionI18n:     localize("Returns the latest analytics snapshot and links the cockpit app.", "Mengembalikan snapshot analitik terbaru dan menautkan aplikasi kokpit."),
 					Operation:           "analytics.snapshot.get",
 					RequiredPermissions: []string{"analytics.read"},
 					AppKey:              "analytics.cockpit",
@@ -1418,7 +1572,9 @@ func builtInModuleManifests() []module.Manifest {
 					{
 						Key:                 "analytics.snapshot.current",
 						Title:               "Current Analytics Snapshot",
+						TitleI18n:           localize("Current Analytics Snapshot", "Snapshot Analitik Saat Ini"),
 						Description:         "Structured current-state analytics snapshot.",
+						DescriptionI18n:     localize("Structured current-state analytics snapshot.", "Snapshot analitik terstruktur untuk kondisi saat ini."),
 						URI:                 "orbyte://analytics/snapshot/current",
 						MIMEType:            "application/json",
 						Provider:            "analytics.snapshot.current",
@@ -1427,7 +1583,9 @@ func builtInModuleManifests() []module.Manifest {
 					{
 						Key:                 "analytics.cockpit.app",
 						Title:               "Analytics Cockpit App",
+						TitleI18n:           localize("Analytics Cockpit App", "Aplikasi Kokpit Analitik"),
 						Description:         "Inline MCP app resource for the analytics cockpit.",
+						DescriptionI18n:     localize("Inline MCP app resource for the analytics cockpit.", "Resource aplikasi MCP inline untuk kokpit analitik."),
 						URI:                 "orbyte://apps/analytics.cockpit",
 						MIMEType:            "text/html",
 						Provider:            "mcp.app",
@@ -1438,7 +1596,9 @@ func builtInModuleManifests() []module.Manifest {
 				Apps: []module.MCPAppDefinition{{
 					Key:                 "analytics.cockpit",
 					Title:               "Analytics Cockpit",
+					TitleI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
 					Description:         "Interactive analytics cockpit for MCP-capable hosts.",
+					DescriptionI18n:     localize("Interactive analytics cockpit for MCP-capable hosts.", "Kokpit analitik interaktif untuk host yang mendukung MCP."),
 					ResourceKey:         "analytics.cockpit.app",
 					CustomEntryKey:      "analytics.cockpit",
 					RequiredPermissions: []string{"analytics.read"},
@@ -1452,6 +1612,7 @@ func builtInModuleManifests() []module.Manifest {
 		{
 			Key:          "monitoring",
 			Name:         "Monitoring",
+			NameI18n:     localize("Monitoring", "Pemantauan"),
 			Version:      "1.0.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{{
@@ -1459,18 +1620,18 @@ func builtInModuleManifests() []module.Manifest {
 			}},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
-					{Key: "metrics.read", Action: "read", Resource: "metrics", DisplayName: "Read Metrics"},
-					{Key: "monitoring.read", Action: "read", Resource: "dashboard", DisplayName: "Read Monitoring Dashboard"},
-					{Key: "audit.read", Action: "read", Resource: "audit_event", DisplayName: "Read Audit Events"},
-					{Key: "event.read", Action: "read", Resource: "domain_event", DisplayName: "Read Domain Events"},
-					{Key: "outbox.read", Action: "read", Resource: "outbox", DisplayName: "Read Outbox"},
-					{Key: "outbox.dispatch", Action: "dispatch", Resource: "outbox", DisplayName: "Dispatch Outbox", RiskLevel: "high"},
-					{Key: "deadletter.read", Action: "read", Resource: "dead_letter", DisplayName: "Read Dead Letters"},
+					{Key: "metrics.read", Action: "read", Resource: "metrics", DisplayName: "Read Metrics", DisplayNameI18n: localize("Read Metrics", "Lihat Metrik")},
+					{Key: "monitoring.read", Action: "read", Resource: "dashboard", DisplayName: "Read Monitoring Dashboard", DisplayNameI18n: localize("Read Monitoring Dashboard", "Lihat Dashboard Pemantauan")},
+					{Key: "audit.read", Action: "read", Resource: "audit_event", DisplayName: "Read Audit Events", DisplayNameI18n: localize("Read Audit Events", "Lihat Event Audit")},
+					{Key: "event.read", Action: "read", Resource: "domain_event", DisplayName: "Read Domain Events", DisplayNameI18n: localize("Read Domain Events", "Lihat Event Domain")},
+					{Key: "outbox.read", Action: "read", Resource: "outbox", DisplayName: "Read Outbox", DisplayNameI18n: localize("Read Outbox", "Lihat Outbox")},
+					{Key: "outbox.dispatch", Action: "dispatch", Resource: "outbox", DisplayName: "Dispatch Outbox", DisplayNameI18n: localize("Dispatch Outbox", "Kirim Outbox"), RiskLevel: "high"},
+					{Key: "deadletter.read", Action: "read", Resource: "dead_letter", DisplayName: "Read Dead Letters", DisplayNameI18n: localize("Read Dead Letters", "Lihat Dead Letter")},
 				},
 			},
 			Observability: module.ObservabilityDefinition{
 				Dashboards: []module.DashboardDefinition{
-					{Key: "monitoring.overview", Title: "Monitoring Overview", ViewKey: "monitoring.overview", RequiredPermissions: []string{"monitoring.read"}},
+					{Key: "monitoring.overview", Title: "Monitoring Overview", TitleI18n: localize("Monitoring Overview", "Ikhtisar Pemantauan"), ViewKey: "monitoring.overview", RequiredPermissions: []string{"monitoring.read"}},
 				},
 				Metrics: []module.MetricDefinition{
 					{Key: "http.responses.404.total", Type: "counter", Description: "HTTP 404 responses"},
@@ -1478,18 +1639,18 @@ func builtInModuleManifests() []module.Manifest {
 			},
 			Frontend: module.FrontendDefinition{
 				Menus: []module.MenuDefinition{{
-					Key: "monitoring.overview", Label: "Monitoring", ActionKey: "monitoring.overview", Order: 30, RequiredPermissions: []string{"monitoring.read"},
+					Key: "monitoring.overview", Label: "Monitoring", LabelI18n: localize("Monitoring", "Pemantauan"), ActionKey: "monitoring.overview", Order: 30, RequiredPermissions: []string{"monitoring.read"},
 				}},
 				Actions: []module.ActionDefinition{{
-					Key: "monitoring.overview", Label: "Monitoring Overview", Kind: "navigate", RoutePath: "/monitoring", ViewKey: "monitoring.overview", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"monitoring.read"},
+					Key: "monitoring.overview", Label: "Monitoring Overview", LabelI18n: localize("Monitoring Overview", "Ikhtisar Pemantauan"), Kind: "navigate", RoutePath: "/monitoring", ViewKey: "monitoring.overview", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"monitoring.read"},
 				}},
 				Views: []module.ViewDefinition{{
-					Key: "monitoring.overview", Title: "Monitoring Overview", Kind: "dashboard", ProjectionKey: "monitoring.summary", RequiredPermissions: []string{"monitoring.read"},
+					Key: "monitoring.overview", Title: "Monitoring Overview", TitleI18n: localize("Monitoring Overview", "Ikhtisar Pemantauan"), Kind: "dashboard", ProjectionKey: "monitoring.summary", RequiredPermissions: []string{"monitoring.read"},
 					Cards: []module.CardDefinition{
-						{Key: "documents_total", Label: "Documents", Path: "documents.total"},
-						{Key: "outbox_pending", Label: "Outbox Pending", Path: "outbox.pending"},
-						{Key: "pending_approvals", Label: "Pending Approvals", Path: "workflow.pending_approvals"},
-						{Key: "projections", Label: "Document Summaries", Path: "projections.document_summaries"},
+						{Key: "documents_total", Label: "Documents", LabelI18n: localize("Documents", "Dokumen"), Path: "documents.total"},
+						{Key: "outbox_pending", Label: "Outbox Pending", LabelI18n: localize("Outbox Pending", "Outbox Tertunda"), Path: "outbox.pending"},
+						{Key: "pending_approvals", Label: "Pending Approvals", LabelI18n: localize("Pending Approvals", "Persetujuan Tertunda"), Path: "workflow.pending_approvals"},
+						{Key: "projections", Label: "Document Summaries", LabelI18n: localize("Document Summaries", "Ringkasan Dokumen"), Path: "projections.document_summaries"},
 					},
 				}},
 			},
@@ -1497,6 +1658,7 @@ func builtInModuleManifests() []module.Manifest {
 		{
 			Key:          "integration",
 			Name:         "Integration Kernel",
+			NameI18n:     localize("Integration Kernel", "Kernel Integrasi"),
 			Version:      "1.0.0",
 			DomainFamily: "platform",
 			DependencyRequirements: []module.DependencyRequirement{

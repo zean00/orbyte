@@ -317,7 +317,31 @@ func builtInTestModuleManifests() []module.Manifest {
 	searchTypesenseDef, _ := cfg.Definition("search.typesense")
 	searchEmbeddingDef, _ := cfg.Definition("search.embedding")
 	return []module.Manifest{
-		{Key: "platform.core", Name: "Platform Core", Version: "1.0.0", DomainFamily: "platform", ConfigDefinitions: []config.Definition{httpDef, searchTypesenseDef, searchEmbeddingDef}},
+		{
+			Key:               "platform.core",
+			Name:              "Platform Core",
+			Version:           "1.0.0",
+			DomainFamily:      "platform",
+			ConfigDefinitions: []config.Definition{httpDef, searchTypesenseDef, searchEmbeddingDef},
+			Frontend: module.FrontendDefinition{
+				Menus: []module.MenuDefinition{{
+					Key:                 "admin.modules",
+					Label:               "Modules",
+					ActionKey:           "admin.modules",
+					Order:               10,
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"module.read"},
+				}},
+				Actions: []module.ActionDefinition{{
+					Key:                 "admin.modules",
+					Label:               "Modules",
+					Kind:                "navigate",
+					RoutePath:           "/admin/modules",
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"module.read"},
+				}},
+			},
+		},
 		{Key: "identity", Name: "Identity", Version: "1.0.0", DomainFamily: "platform", DependencyRequirements: []module.DependencyRequirement{{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired}}, ConfigDefinitions: []config.Definition{authDef}},
 		{
 			Key:          "documents",
@@ -1914,6 +1938,37 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	if len(bootstrapPayload["roles"].([]any)) == 0 {
 		t.Fatal("expected roles in admin bootstrap payload")
 	}
+	if len(bootstrapPayload["menus"].([]any)) == 0 {
+		t.Fatal("expected admin menus in bootstrap payload")
+	}
+	if bootstrapPayload["default_path"] != "/admin/modules" {
+		t.Fatalf("expected admin default path to target admin modules, got %v", bootstrapPayload["default_path"])
+	}
+	if bootstrapPayload["ui_access"] != true {
+		t.Fatalf("expected admin bootstrap to expose ui access, got %v", bootstrapPayload["ui_access"])
+	}
+	if uiPath, _ := bootstrapPayload["ui_path"].(string); !strings.HasPrefix(uiPath, "/ui#") {
+		t.Fatalf("expected admin bootstrap ui_path to point to user workspace, got %v", bootstrapPayload["ui_path"])
+	}
+
+	rr = h.request(http.MethodGet, "/ui/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for ui bootstrap, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var uiBootstrap map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &uiBootstrap)
+	for _, raw := range uiBootstrap["menus"].([]any) {
+		item := raw.(map[string]any)
+		if item["key"] == "admin.modules" {
+			t.Fatal("expected admin menu to be hidden from user bootstrap")
+		}
+	}
+	if uiBootstrap["admin_access"] != true {
+		t.Fatalf("expected user bootstrap to expose admin access for admin principal, got %v", uiBootstrap["admin_access"])
+	}
+	if adminPath, _ := uiBootstrap["admin_path"].(string); !strings.HasPrefix(adminPath, "/admin#") {
+		t.Fatalf("expected user bootstrap admin_path to point to admin workspace, got %v", uiBootstrap["admin_path"])
+	}
 
 	rr = h.request(http.MethodGet, "/admin/api/modules", nil, true)
 	if rr.Code != http.StatusOK {
@@ -1936,6 +1991,11 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	rr = h.request(http.MethodGet, "/admin/api/config/effective?organization_id=org_default&location_id=loc_hq", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for effective config, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/admin/modules", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for admin route in user UI, got %d body=%s", rr.Code, rr.Body.String())
 	}
 
 	updateBody, _ := json.Marshal(map[string]any{
@@ -1965,6 +2025,18 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	rr = h.request(http.MethodGet, "/admin/api/observability/contracts", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected observability contracts endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAdminShellRedirectsUnauthenticatedUsersToUI(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin", nil, false)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for unauthenticated admin shell, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if location := rr.Header().Get("Location"); location != "/ui" {
+		t.Fatalf("expected unauthenticated admin shell redirect to /ui, got %q", location)
 	}
 }
 

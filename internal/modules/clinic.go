@@ -2,16 +2,22 @@ package modules
 
 import (
 	platformdocument "orbyte/internal/platform/document"
+	platformi18n "orbyte/internal/platform/i18n"
 	platformmodel "orbyte/internal/platform/model"
 	platformmodule "orbyte/internal/platform/module"
 	platformsearch "orbyte/internal/platform/search"
 	platformworkflow "orbyte/internal/platform/workflow"
 )
 
+func localizeClinic(en, id string) platformi18n.LocalizedText {
+	return platformi18n.LocalizedText{"en": en, "id": id}
+}
+
 func clinicRegistrationManifest() platformmodule.Manifest {
 	return platformmodule.Manifest{
 		Key:          "clinic_registration",
 		Name:         "Clinic Registration",
+		NameI18n:     localizeClinic("Clinic Registration", "Registrasi Klinik"),
 		Version:      "1.0.0",
 		DomainFamily: "clinic",
 		DependencyRequirements: []platformmodule.DependencyRequirement{
@@ -32,6 +38,7 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 			{
 				Key:                 "patient_profile",
 				DisplayName:         "Patient Profile",
+				DisplayNameI18n:     localizeClinic("Patient Profile", "Profil Pasien"),
 				OwnerModuleKey:      "clinic_registration",
 				Version:             "v1",
 				CreatePermissionKey: "clinic.patient.create",
@@ -43,17 +50,18 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 					{Key: "party_id", Label: "Party ID", Type: "string", Required: true},
 					{Key: "organization_id", Label: "Organization ID", Type: "string", Required: true},
 					{Key: "location_id", Label: "Location ID", Type: "string"},
-					{Key: "display_name", Label: "Display Name", Type: "string", Required: true},
-					{Key: "patient_identifier_type", Label: "Identifier Type", Type: "string", Required: true},
-					{Key: "patient_identifier_value", Label: "Identifier Value", Type: "string", Required: true},
-					{Key: "date_of_birth", Label: "Date of Birth", Type: "string"},
-					{Key: "gender", Label: "Gender", Type: "string"},
+					{Key: "display_name", Label: "Display Name", LabelI18n: localizeClinic("Display Name", "Nama Tampil"), Type: "string", Required: true},
+					{Key: "patient_identifier_type", Label: "Identifier Type", LabelI18n: localizeClinic("Identifier Type", "Tipe Identitas"), Type: "string", Required: true},
+					{Key: "patient_identifier_value", Label: "Identifier Value", LabelI18n: localizeClinic("Identifier Value", "Nilai Identitas"), Type: "string", Required: true},
+					{Key: "date_of_birth", Label: "Date of Birth", LabelI18n: localizeClinic("Date of Birth", "Tanggal Lahir"), Type: "string"},
+					{Key: "gender", Label: "Gender", LabelI18n: localizeClinic("Gender", "Jenis Kelamin"), Type: "string"},
 					{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
 				},
 			},
 			{
 				Key:                 "practitioner_profile",
 				DisplayName:         "Practitioner Profile",
+				DisplayNameI18n:     localizeClinic("Practitioner Profile", "Profil Praktisi"),
 				OwnerModuleKey:      "clinic_registration",
 				Version:             "v1",
 				CreatePermissionKey: "clinic.practitioner.create",
@@ -65,15 +73,16 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 					{Key: "party_id", Label: "Party ID", Type: "string", Required: true},
 					{Key: "organization_id", Label: "Organization ID", Type: "string", Required: true},
 					{Key: "location_id", Label: "Location ID", Type: "string"},
-					{Key: "display_name", Label: "Display Name", Type: "string", Required: true},
-					{Key: "practitioner_type", Label: "Practitioner Type", Type: "string", Required: true},
-					{Key: "license_number", Label: "License Number", Type: "string"},
+					{Key: "display_name", Label: "Display Name", LabelI18n: localizeClinic("Display Name", "Nama Tampil"), Type: "string", Required: true},
+					{Key: "practitioner_type", Label: "Practitioner Type", LabelI18n: localizeClinic("Practitioner Type", "Tipe Praktisi"), Type: "string", Required: true},
+					{Key: "license_number", Label: "License Number", LabelI18n: localizeClinic("License Number", "Nomor Izin"), Type: "string"},
 					{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
 				},
 			},
 			{
 				Key:                 "payer_profile",
 				DisplayName:         "Payer Profile",
+				DisplayNameI18n:     localizeClinic("Payer Profile", "Profil Penjamin"),
 				OwnerModuleKey:      "clinic_registration",
 				Version:             "v1",
 				CreatePermissionKey: "clinic.payer.create",
@@ -84,9 +93,9 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 				Fields: []platformmodel.FieldDefinition{
 					{Key: "party_id", Label: "Party ID", Type: "string", Required: true},
 					{Key: "organization_id", Label: "Organization ID", Type: "string", Required: true},
-					{Key: "display_name", Label: "Display Name", Type: "string", Required: true},
-					{Key: "payer_type", Label: "Payer Type", Type: "string", Required: true},
-					{Key: "policy_reference", Label: "Policy Reference", Type: "string"},
+					{Key: "display_name", Label: "Display Name", LabelI18n: localizeClinic("Display Name", "Nama Tampil"), Type: "string", Required: true},
+					{Key: "payer_type", Label: "Payer Type", LabelI18n: localizeClinic("Payer Type", "Tipe Penjamin"), Type: "string", Required: true},
+					{Key: "policy_reference", Label: "Policy Reference", LabelI18n: localizeClinic("Policy Reference", "Referensi Polis"), Type: "string"},
 					{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
 				},
 			},
@@ -142,17 +151,19 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 			{
 				Key:        "clinic.registration.daily",
 				Title:      "Clinic Registrations",
+				TitleI18n:  localizeClinic("Clinic Registrations", "Registrasi Klinik"),
 				SourceKind: "model",
 				ModelKey:   "patient_profile",
-				Dimensions: []platformmodule.DatasetDimension{{Key: "by_status", Label: "By Status", Path: "status"}},
+				Dimensions: []platformmodule.DatasetDimension{{Key: "by_status", Label: "By Status", LabelI18n: localizeClinic("By Status", "Berdasarkan Status"), Path: "status"}},
 				Measures:   []platformmodule.DatasetMeasure{{Key: "total", Label: "Total", Kind: "count"}},
 			},
 			{
 				Key:        "clinic.practitioner.coverage",
 				Title:      "Practitioner Coverage",
+				TitleI18n:  localizeClinic("Practitioner Coverage", "Cakupan Praktisi"),
 				SourceKind: "model",
 				ModelKey:   "practitioner_profile",
-				Dimensions: []platformmodule.DatasetDimension{{Key: "by_type", Label: "By Type", Path: "practitioner_type"}},
+				Dimensions: []platformmodule.DatasetDimension{{Key: "by_type", Label: "By Type", LabelI18n: localizeClinic("By Type", "Berdasarkan Tipe"), Path: "practitioner_type"}},
 				Measures:   []platformmodule.DatasetMeasure{{Key: "total", Label: "Total", Kind: "count"}},
 			},
 		},
@@ -214,10 +225,10 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 		},
 		Security: platformmodule.SecurityDefinition{
 			Permissions: []platformmodule.PermissionDefinition{
-				{Key: "clinic.patient.create", Action: "create", Resource: "patient_profile", DisplayName: "Create Patients"},
-				{Key: "clinic.patient.list", Action: "list", Resource: "patient_profile", DisplayName: "List Patients"},
-				{Key: "clinic.patient.read", Action: "read", Resource: "patient_profile", DisplayName: "Read Patients"},
-				{Key: "clinic.patient.update", Action: "update", Resource: "patient_profile", DisplayName: "Update Patients"},
+				{Key: "clinic.patient.create", Action: "create", Resource: "patient_profile", DisplayName: "Create Patients", DisplayNameI18n: localizeClinic("Create Patients", "Buat Pasien")},
+				{Key: "clinic.patient.list", Action: "list", Resource: "patient_profile", DisplayName: "List Patients", DisplayNameI18n: localizeClinic("List Patients", "Daftar Pasien")},
+				{Key: "clinic.patient.read", Action: "read", Resource: "patient_profile", DisplayName: "Read Patients", DisplayNameI18n: localizeClinic("Read Patients", "Lihat Pasien")},
+				{Key: "clinic.patient.update", Action: "update", Resource: "patient_profile", DisplayName: "Update Patients", DisplayNameI18n: localizeClinic("Update Patients", "Perbarui Pasien")},
 				{Key: "clinic.practitioner.create", Action: "create", Resource: "practitioner_profile", DisplayName: "Create Practitioners"},
 				{Key: "clinic.practitioner.list", Action: "list", Resource: "practitioner_profile", DisplayName: "List Practitioners"},
 				{Key: "clinic.practitioner.read", Action: "read", Resource: "practitioner_profile", DisplayName: "Read Practitioners"},
@@ -230,10 +241,10 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 				{Key: "clinic.integration.manage", Action: "manage", Resource: "clinic_integration", DisplayName: "Manage Clinic Integrations"},
 			},
 			RoleTemplates: []platformmodule.RoleTemplateDefinition{
-				{Key: "registration_clerk", Name: "Registration Clerk", AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.create", "clinic.patient.list", "clinic.patient.read", "clinic.patient.update", "document.create", "document.list", "document.read", "document.update_draft", "document.submit"}},
-				{Key: "clinic_reviewer", Name: "Clinic Reviewer", AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.list", "clinic.patient.read", "document.list", "document.read", "document.approve", "document.reject", "document.reopen", "document.cancel"}},
-				{Key: "practitioner", Name: "Practitioner", AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.list", "clinic.patient.read", "clinic.practitioner.read", "document.list", "document.read", "document.submit", "document.approve"}},
-				{Key: "clinic_supervisor", Name: "Clinic Supervisor", AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.list", "clinic.patient.read", "clinic.practitioner.list", "clinic.practitioner.read", "clinic.payer.list", "clinic.payer.read", "clinic.report.read", "clinic.integration.manage", "document.list", "document.read", "document.approve", "document.reject", "document.reopen", "document.cancel"}},
+				{Key: "registration_clerk", Name: "Registration Clerk", NameI18n: localizeClinic("Registration Clerk", "Petugas Registrasi"), AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.create", "clinic.patient.list", "clinic.patient.read", "clinic.patient.update", "document.create", "document.list", "document.read", "document.update_draft", "document.submit"}},
+				{Key: "clinic_reviewer", Name: "Clinic Reviewer", NameI18n: localizeClinic("Clinic Reviewer", "Peninjau Klinik"), AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.list", "clinic.patient.read", "document.list", "document.read", "document.approve", "document.reject", "document.reopen", "document.cancel"}},
+				{Key: "practitioner", Name: "Practitioner", NameI18n: localizeClinic("Practitioner", "Praktisi"), AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.list", "clinic.patient.read", "clinic.practitioner.read", "document.list", "document.read", "document.submit", "document.approve"}},
+				{Key: "clinic_supervisor", Name: "Clinic Supervisor", NameI18n: localizeClinic("Clinic Supervisor", "Supervisor Klinik"), AllowedScopes: []string{"location"}, PermissionKeys: []string{"clinic.patient.list", "clinic.patient.read", "clinic.practitioner.list", "clinic.practitioner.read", "clinic.payer.list", "clinic.payer.read", "clinic.report.read", "clinic.integration.manage", "document.list", "document.read", "document.approve", "document.reject", "document.reopen", "document.cancel"}},
 			},
 			PolicyHooks: []platformmodule.PolicyHookDefinition{
 				{Key: "clinic.registration.approval", Kind: "workflow", Target: "clinic_registration_approval"},
@@ -241,50 +252,53 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 		},
 		Frontend: platformmodule.FrontendDefinition{
 			Menus: []platformmodule.MenuDefinition{
-				{Key: "clinic.registrations", Label: "Clinic Registrations", ActionKey: "clinic.registrations.list", Order: 40, RequiredPermissions: []string{"document.list"}},
-				{Key: "clinic.patients", Label: "Patients", ActionKey: "clinic.patients.list", Order: 41, RequiredPermissions: []string{"clinic.patient.list"}},
+				{Key: "clinic.registrations", Label: "Clinic Registrations", LabelI18n: localizeClinic("Clinic Registrations", "Registrasi Klinik"), ActionKey: "clinic.registrations.list", Order: 40, RequiredPermissions: []string{"document.list"}},
+				{Key: "clinic.patients", Label: "Patients", LabelI18n: localizeClinic("Patients", "Pasien"), ActionKey: "clinic.patients.list", Order: 41, RequiredPermissions: []string{"clinic.patient.list"}},
 			},
 			Actions: []platformmodule.ActionDefinition{
-				{Key: "clinic.registrations.list", Label: "Registrations", Kind: "navigate", RoutePath: "/clinic/registrations", ViewKey: "clinic.registrations.list", RenderMode: platformmodule.RenderModeGeneric, RequiredPermissions: []string{"document.list"}},
-				{Key: "clinic.encounters.list", Label: "Encounters", Kind: "navigate", RoutePath: "/clinic/encounters", ViewKey: "clinic.encounters.list", RenderMode: platformmodule.RenderModeGeneric, RequiredPermissions: []string{"document.list"}},
-				{Key: "clinic.patients.list", Label: "Patients", Kind: "navigate", RoutePath: "/clinic/patients", ViewKey: "clinic.patients.list", RenderMode: platformmodule.RenderModeGeneric, RequiredPermissions: []string{"clinic.patient.list"}},
+				{Key: "clinic.registrations.list", Label: "Registrations", LabelI18n: localizeClinic("Registrations", "Registrasi"), Kind: "navigate", RoutePath: "/clinic/registrations", ViewKey: "clinic.registrations.list", RenderMode: platformmodule.RenderModeGeneric, RequiredPermissions: []string{"document.list"}},
+				{Key: "clinic.encounters.list", Label: "Encounters", LabelI18n: localizeClinic("Encounters", "Encounter"), Kind: "navigate", RoutePath: "/clinic/encounters", ViewKey: "clinic.encounters.list", RenderMode: platformmodule.RenderModeGeneric, RequiredPermissions: []string{"document.list"}},
+				{Key: "clinic.patients.list", Label: "Patients", LabelI18n: localizeClinic("Patients", "Pasien"), Kind: "navigate", RoutePath: "/clinic/patients", ViewKey: "clinic.patients.list", RenderMode: platformmodule.RenderModeGeneric, RequiredPermissions: []string{"clinic.patient.list"}},
 			},
 			Views: []platformmodule.ViewDefinition{
 				{
 					Key:                 "clinic.registrations.list",
 					Title:               "Clinic Registrations",
+					TitleI18n:           localizeClinic("Clinic Registrations", "Registrasi Klinik"),
 					Kind:                "list",
 					DocumentType:        "clinic_registration",
 					RequiredPermissions: []string{"document.list"},
 					Columns: []platformmodule.ColumnDefinition{
-						{Key: "status", Label: "Status", Path: "header.status"},
-						{Key: "number", Label: "Number", Path: "header.number"},
+						{Key: "status", Label: "Status", LabelI18n: localizeClinic("Status", "Status"), Path: "header.status"},
+						{Key: "number", Label: "Number", LabelI18n: localizeClinic("Number", "Nomor"), Path: "header.number"},
 					},
-					Filters:         []platformmodule.FilterDefinition{{Key: "status", Label: "Status", Type: "enum", Options: []string{"draft", "submitted", "approved", "cancelled"}}},
+					Filters:         []platformmodule.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localizeClinic("Status", "Status"), Type: "enum", Options: []string{"draft", "submitted", "approved", "cancelled"}}},
 					DefaultPageSize: 10,
 				},
 				{
 					Key:                 "clinic.encounters.list",
 					Title:               "Clinic Encounters",
+					TitleI18n:           localizeClinic("Clinic Encounters", "Encounter Klinik"),
 					Kind:                "list",
 					DocumentType:        "clinic_encounter",
 					RequiredPermissions: []string{"document.list"},
 					Columns: []platformmodule.ColumnDefinition{
-						{Key: "status", Label: "Status", Path: "header.status"},
-						{Key: "number", Label: "Number", Path: "header.number"},
+						{Key: "status", Label: "Status", LabelI18n: localizeClinic("Status", "Status"), Path: "header.status"},
+						{Key: "number", Label: "Number", LabelI18n: localizeClinic("Number", "Nomor"), Path: "header.number"},
 					},
 					DefaultPageSize: 10,
 				},
 				{
 					Key:                 "clinic.patients.list",
 					Title:               "Patients",
+					TitleI18n:           localizeClinic("Patients", "Pasien"),
 					Kind:                "list",
 					ModelKey:            "patient_profile",
 					RequiredPermissions: []string{"clinic.patient.list"},
 					Columns: []platformmodule.ColumnDefinition{
-						{Key: "display_name", Label: "Patient", Path: "values.display_name"},
-						{Key: "patient_identifier_value", Label: "Identifier", Path: "values.patient_identifier_value"},
-						{Key: "status", Label: "Status", Path: "values.status"},
+						{Key: "display_name", Label: "Patient", LabelI18n: localizeClinic("Patient", "Pasien"), Path: "values.display_name"},
+						{Key: "patient_identifier_value", Label: "Identifier", LabelI18n: localizeClinic("Identifier", "Identitas"), Path: "values.patient_identifier_value"},
+						{Key: "status", Label: "Status", LabelI18n: localizeClinic("Status", "Status"), Path: "values.status"},
 					},
 					DefaultPageSize: 10,
 				},

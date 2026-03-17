@@ -9,6 +9,7 @@ import (
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
@@ -24,6 +25,12 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(uiShellHTML))
+	})
+
+	mux.HandleFunc("GET /ui/assets/platform.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		_, _ = w.Write(platformCSS)
 	})
 
 	mux.HandleFunc("GET /ui/manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +56,8 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		menus, actions, views := visibleUIContracts(ident, modules, p)
+		menus, actions, views, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		adminMenus, adminActions, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
 		defaultPath := ""
 		if len(menus) > 0 {
 			for _, action := range actions {
@@ -59,11 +67,24 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 				}
 			}
 		}
+		adminPath := "/admin"
+		if len(adminMenus) > 0 {
+			for _, action := range adminActions {
+				if action.Key == adminMenus[0].ActionKey {
+					adminPath = "/admin#" + action.RoutePath
+					break
+				}
+			}
+		}
 		respondJSON(w, http.StatusOK, map[string]any{
-			"menus":        menus,
-			"actions":      actions,
-			"views":        views,
-			"default_path": defaultPath,
+			"menus":             menus,
+			"actions":           actions,
+			"views":             views,
+			"default_path":      defaultPath,
+			"admin_access":      len(adminMenus) > 0,
+			"admin_path":        adminPath,
+			"locale":            localeFromRequest(r, ident),
+			"supported_locales": i18n.SupportedLocales(),
 		})
 	})
 
@@ -72,7 +93,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		menus, _, _ := visibleUIContracts(ident, modules, p)
+		menus, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		respondJSON(w, http.StatusOK, map[string]any{"items": menus})
 	})
 
@@ -81,7 +102,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		_, actions, _ := visibleUIContracts(ident, modules, p)
+		_, actions, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		respondJSON(w, http.StatusOK, map[string]any{"items": actions})
 	})
 
@@ -129,7 +150,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.NotFound("view not found"))
 			return
 		}
-		_, _, views := visibleUIContracts(ident, modules, p)
+		_, _, views, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		for _, view := range views {
 			if view.Key == viewKey {
 				respondJSON(w, http.StatusOK, view)
@@ -149,7 +170,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Validation("path is required"))
 			return
 		}
-		resolution, ok := modules.ResolveRoute(path)
+		resolution, ok := modules.ResolveRouteForSurface(path, module.UISurfaceUser)
 		if !ok {
 			respondError(w, shared.NotFound("route not found"))
 			return
@@ -641,25 +662,30 @@ func principalAllowsAll(ident *identity.Service, p principal, permissions []stri
 	return true
 }
 
-func visibleUIContracts(ident *identity.Service, modules *module.Service, p principal) ([]module.MenuDefinition, []module.ActionDefinition, []module.ViewDefinition) {
+func visibleUIContracts(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) ([]module.MenuDefinition, []module.ActionDefinition, []module.ViewDefinition, []module.CustomEntryDefinition) {
 	allowedMenus := make([]module.MenuDefinition, 0)
 	allowedActions := make([]module.ActionDefinition, 0)
 	allowedViews := make([]module.ViewDefinition, 0)
+	allowedEntries := make([]module.CustomEntryDefinition, 0)
 	actionKeys := map[string]bool{}
 	viewKeys := map[string]bool{}
+	entryKeys := map[string]bool{}
 
 	for _, detail := range modules.List() {
 		if !detail.Installed.Enabled {
 			continue
 		}
 		for _, action := range detail.Manifest.Frontend.Actions {
+			if !surfaceMatches(action.Surface, surface) {
+				continue
+			}
 			if !principalAllowsAll(ident, p, action.RequiredPermissions) {
 				continue
 			}
 			switch action.RenderMode {
 			case module.RenderModeGeneric:
 				if action.ViewKey != "" {
-					view, ok := modules.View(action.ViewKey)
+					view, ok := modules.ViewForSurface(action.ViewKey, surface)
 					if !ok || !principalAllowsAll(ident, p, view.RequiredPermissions) {
 						continue
 					}
@@ -671,8 +697,12 @@ func visibleUIContracts(ident *identity.Service, modules *module.Service, p prin
 			case module.RenderModeCustom:
 				entryAllowed := false
 				for _, entry := range detail.Manifest.Frontend.CustomEntries {
-					if entry.Key == action.CustomEntryKey && principalAllowsAll(ident, p, entry.RequiredPermissions) {
+					if entry.Key == action.CustomEntryKey && surfaceMatches(entry.Surface, surface) && principalAllowsAll(ident, p, entry.RequiredPermissions) {
 						entryAllowed = true
+						if !entryKeys[entry.Key] {
+							allowedEntries = append(allowedEntries, entry)
+							entryKeys[entry.Key] = true
+						}
 						break
 					}
 				}
@@ -692,6 +722,9 @@ func visibleUIContracts(ident *identity.Service, modules *module.Service, p prin
 			continue
 		}
 		for _, menuDef := range detail.Manifest.Frontend.Menus {
+			if !surfaceMatches(menuDef.Surface, surface) {
+				continue
+			}
 			if !principalAllowsAll(ident, p, menuDef.RequiredPermissions) || !actionKeys[menuDef.ActionKey] {
 				continue
 			}
@@ -707,8 +740,20 @@ func visibleUIContracts(ident *identity.Service, modules *module.Service, p prin
 	})
 	sort.Slice(allowedActions, func(i, j int) bool { return allowedActions[i].Key < allowedActions[j].Key })
 	sort.Slice(allowedViews, func(i, j int) bool { return allowedViews[i].Key < allowedViews[j].Key })
+	sort.Slice(allowedEntries, func(i, j int) bool { return allowedEntries[i].Key < allowedEntries[j].Key })
 
-	return allowedMenus, allowedActions, allowedViews
+	return allowedMenus, allowedActions, allowedViews, allowedEntries
+}
+
+func surfaceMatches(itemSurface, requested module.UISurface) bool {
+	effective := itemSurface
+	if effective == "" {
+		effective = module.UISurfaceUser
+	}
+	if requested == "" || requested == module.UISurfaceBoth {
+		return true
+	}
+	return effective == module.UISurfaceBoth || effective == requested
 }
 
 func viewKeyFromPath(path string) string {
@@ -734,60 +779,34 @@ const uiShellHTML = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#1f6f5f">
   <link rel="manifest" href="/ui/manifest.webmanifest">
-  <title>Clinic UI</title>
-  <style>
-    :root { --bg:#f3efe7; --panel:#fffdf8; --ink:#16221b; --muted:#5f6c62; --line:#d8d0c2; --accent:#1f6f5f; --accent-soft:#d7ece5; --warn:#8f2d1f; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family: "Iowan Old Style", Georgia, serif; background: radial-gradient(circle at top, #fff9ee, #efe8da 55%, #e6dfd2); color:var(--ink); }
-    .shell { min-height:100vh; display:grid; grid-template-columns:280px 1fr; }
-    .sidebar { border-right:1px solid var(--line); padding:24px 18px; background:rgba(255,253,248,.86); backdrop-filter: blur(8px); }
-    .brand { font-size:26px; margin:0 0 6px; }
-    .subtitle { color:var(--muted); margin:0 0 22px; font-size:14px; }
-    .menu-list { display:grid; gap:10px; }
-    .menu-link { display:block; padding:12px 14px; border:1px solid var(--line); border-radius:14px; color:inherit; text-decoration:none; background:#fffdf8; }
-    .menu-link.active { border-color:var(--accent); background:var(--accent-soft); }
-    .content { padding:28px; display:grid; gap:18px; }
-    .panel { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 12px 32px rgba(31,42,33,.06); }
-    .panel h2, .panel h3 { margin-top:0; }
-    .status { color:var(--muted); font-size:14px; }
-    .list { display:grid; gap:12px; }
-    .card { border:1px solid var(--line); border-radius:14px; padding:14px; background:#fffefa; }
-    .meta { color:var(--muted); font-size:13px; }
-    button { border:0; border-radius:999px; background:var(--accent); color:#fff; padding:10px 16px; cursor:pointer; font:inherit; }
-    button.secondary { background:#e5ece8; color:var(--ink); }
-    button.google { background:#ffffff; color:var(--ink); border:1px solid var(--line); }
-    button.warn { background:var(--warn); }
-    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .status-bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
-    .badge { display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border:1px solid var(--line); border-radius:999px; background:#fffefa; color:var(--muted); font-size:13px; }
-    .badge strong { color:var(--ink); }
-    pre { margin:0; white-space:pre-wrap; word-break:break-word; background:#f6f1e7; padding:14px; border-radius:12px; border:1px solid var(--line); }
-    .kv { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
-    .kv .card strong { display:block; font-size:24px; margin-top:4px; }
-    .login-shell { max-width:460px; margin:8vh auto 0; }
-    .login-shell .panel { background:rgba(255,253,248,.94); }
-    .field { display:grid; gap:8px; margin:0 0 14px; }
-    .field input { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:14px; font:inherit; background:#fffefa; }
-    .divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; margin:18px 0; }
-    .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--line); }
-    .hidden { display:none !important; }
-    @media (max-width: 900px) {
-      .shell { grid-template-columns:1fr; }
-      .sidebar { border-right:0; border-bottom:1px solid var(--line); }
-    }
-  </style>
+  <title>Orbyte Platform UI</title>
+  <link rel="stylesheet" href="/ui/assets/platform.css?v=` + platformAssetVersion + `">
 </head>
 <body>
-  <div class="shell">
-    <aside class="sidebar">
-      <h1 class="brand">Clinic UI</h1>
-      <p class="subtitle">Manifest-driven shell with generic pages and module custom entries.</p>
+  <div class="shell" id="shell-root">
+    <aside class="sidebar" id="shell-sidebar">
+      <div class="toolbar">
+        <div>
+          <h1 class="brand" id="shell-brand">Orbyte Platform UI</h1>
+          <p class="subtitle" id="shell-subtitle">Manifest-driven shell with generic pages and module custom entries.</p>
+        </div>
+        <div class="actions">
+          <label class="locale-switch">
+            <span id="locale-label">Language</span>
+            <select id="locale-switcher"></select>
+          </label>
+          <a id="admin-link-button" class="button secondary" href="/admin" hidden>Admin</a>
+          <button type="button" id="logout-button" class="secondary" hidden>Log out</button>
+        </div>
+      </div>
       <nav id="menu" class="menu-list"></nav>
     </aside>
     <main class="content">
-      <div class="panel">
-        <div id="route-title"><h2>Loading…</h2></div>
-        <p class="status" id="route-status">Resolving module UI registry.</p>
+      <div class="route-panel" id="route-panel">
+        <div class="route-copy">
+          <div id="route-title"><h2>Loading…</h2></div>
+          <p class="status" id="route-status">Resolving module UI registry.</p>
+        </div>
         <div class="status-bar">
           <span class="badge"><strong id="network-status">online</strong></span>
           <span class="badge">sync <strong id="sync-status">0 pending</strong></span>
@@ -800,6 +819,179 @@ const uiShellHTML = `<!doctype html>
   <script>
     const offlineDBName = 'orbyte_ui_offline_v1';
     const offlineDBVersion = 1;
+    const defaultSupportedLocales = ['en', 'id'];
+    const uiMessages = {
+      en: {
+        shell_brand: 'Orbyte Platform UI',
+        shell_subtitle: 'Manifest-driven shell with generic pages and module custom entries.',
+        locale_label: 'Language',
+        admin_link: 'Admin',
+        logout: 'Log out',
+        loading: 'Loading…',
+        online: 'online',
+        offline: 'offline',
+        cache_cold: 'cold',
+        cache_warm: 'warm',
+        route_resolving: 'Resolving module UI registry.',
+        using_cached_data: 'Using cached data for',
+        login_title: 'Platform Access',
+        login_subtitle: 'Sign in to continue.',
+        google_button: 'Continue with Google',
+        username: 'Username',
+        password: 'Password',
+        sign_in: 'Sign in',
+        sign_in_unavailable: 'No interactive sign-in method is enabled for this deployment.',
+        or: 'or',
+        view_unavailable: 'View unavailable',
+        custom_loading: 'Loading custom module page…',
+        search: 'Search',
+        sort: 'Sort',
+        sort_document: 'Document',
+        sort_updated: 'Updated',
+        sort_status: 'Status',
+        sort_name: 'Name',
+        all: 'All',
+        new: 'New',
+        open: 'Open',
+        previous: 'Previous',
+        next: 'Next',
+        page: 'Page',
+        standard_list: 'Standard list page rendered from the module manifest.',
+        no_records: 'No records yet.',
+        select_record: 'Select a record from the list to inspect its canonical record.',
+        queue_sync: 'Queue Sync',
+        save: 'Save',
+        create: 'Create',
+        save_local: 'Save Local',
+        save_draft: 'Save Draft',
+        record_updated: 'Record updated.',
+        record_created: 'Record created.',
+        draft_saved_local: 'Draft saved locally.',
+        draft_queued: 'Draft queued for sync.',
+        draft_updated: 'Draft updated through manifest-driven form.',
+        ui_bootstrap_failed: 'UI bootstrap failed',
+        ui_bootstrap_failed_status: 'Failed to bootstrap module UI.',
+        no_routes: 'No permitted routes are available for this principal.',
+        resolved_from_module: 'Resolved from module',
+        using_rendering: 'using',
+        sync_pending: 'pending',
+        sync_conflict: 'conflict',
+        value_active: 'Active',
+        value_inactive: 'Inactive',
+        value_blocked: 'Blocked',
+        value_draft: 'Draft',
+        value_registered: 'Registered',
+        value_completed: 'Completed',
+        value_submitted: 'Submitted',
+        value_approved: 'Approved',
+        value_rejected: 'Rejected',
+        value_cancelled: 'Cancelled',
+        value_failed: 'Failed',
+        value_conflict: 'Conflict',
+        value_queued: 'Queued',
+        value_pending: 'Pending',
+        value_enabled: 'Enabled',
+        value_disabled: 'Disabled',
+        value_true: 'Yes',
+        value_false: 'No',
+        action_submit: 'Submit',
+        action_approve: 'Approve',
+        action_reject: 'Reject',
+        action_reopen: 'Reopen',
+        action_cancel: 'Cancel',
+        add: 'Add',
+        add_row: 'Add Row',
+        remove: 'Remove',
+        no_related_items: 'No related items.',
+        no_related_items_yet: 'No related items yet.',
+        related_record_created: 'Related record created.'
+      },
+      id: {
+        shell_brand: 'UI Platform Orbyte',
+        shell_subtitle: 'Shell berbasis manifest dengan halaman generik dan entri modul kustom.',
+        locale_label: 'Bahasa',
+        admin_link: 'Admin',
+        logout: 'Keluar',
+        loading: 'Memuat…',
+        online: 'online',
+        offline: 'offline',
+        cache_cold: 'dingin',
+        cache_warm: 'hangat',
+        route_resolving: 'Menyelesaikan registri UI modul.',
+        using_cached_data: 'Menggunakan data cache untuk',
+        login_title: 'Akses Platform',
+        login_subtitle: 'Masuk untuk melanjutkan.',
+        google_button: 'Lanjut dengan Google',
+        username: 'Nama pengguna',
+        password: 'Kata sandi',
+        sign_in: 'Masuk',
+        sign_in_unavailable: 'Tidak ada metode masuk interaktif yang aktif untuk deployment ini.',
+        or: 'atau',
+        view_unavailable: 'Tampilan tidak tersedia',
+        custom_loading: 'Memuat halaman modul kustom…',
+        search: 'Cari',
+        sort: 'Urutkan',
+        sort_document: 'Dokumen',
+        sort_updated: 'Diperbarui',
+        sort_status: 'Status',
+        sort_name: 'Nama',
+        all: 'Semua',
+        new: 'Baru',
+        open: 'Buka',
+        previous: 'Sebelumnya',
+        next: 'Berikutnya',
+        page: 'Halaman',
+        standard_list: 'Halaman daftar standar yang dirender dari manifest modul.',
+        no_records: 'Belum ada data.',
+        select_record: 'Pilih data dari daftar untuk melihat catatan kanonisnya.',
+        queue_sync: 'Antrikan Sinkronisasi',
+        save: 'Simpan',
+        create: 'Buat',
+        save_local: 'Simpan Lokal',
+        save_draft: 'Simpan Draf',
+        record_updated: 'Data diperbarui.',
+        record_created: 'Data dibuat.',
+        draft_saved_local: 'Draf disimpan secara lokal.',
+        draft_queued: 'Draf diantrikan untuk sinkronisasi.',
+        draft_updated: 'Draf diperbarui melalui formulir berbasis manifest.',
+        ui_bootstrap_failed: 'Bootstrap UI gagal',
+        ui_bootstrap_failed_status: 'Gagal melakukan bootstrap UI modul.',
+        no_routes: 'Tidak ada rute yang diizinkan untuk principal ini.',
+        resolved_from_module: 'Diselesaikan dari modul',
+        using_rendering: 'menggunakan',
+        sync_pending: 'tertunda',
+        sync_conflict: 'konflik',
+        value_active: 'Aktif',
+        value_inactive: 'Tidak Aktif',
+        value_blocked: 'Diblokir',
+        value_draft: 'Draf',
+        value_registered: 'Terdaftar',
+        value_completed: 'Selesai',
+        value_submitted: 'Diajukan',
+        value_approved: 'Disetujui',
+        value_rejected: 'Ditolak',
+        value_cancelled: 'Dibatalkan',
+        value_failed: 'Gagal',
+        value_conflict: 'Konflik',
+        value_queued: 'Diantrikan',
+        value_pending: 'Tertunda',
+        value_enabled: 'Aktif',
+        value_disabled: 'Nonaktif',
+        value_true: 'Ya',
+        value_false: 'Tidak',
+        action_submit: 'Ajukan',
+        action_approve: 'Setujui',
+        action_reject: 'Tolak',
+        action_reopen: 'Buka Kembali',
+        action_cancel: 'Batalkan',
+        add: 'Tambah',
+        add_row: 'Tambah Baris',
+        remove: 'Hapus',
+        no_related_items: 'Belum ada item terkait.',
+        no_related_items_yet: 'Belum ada item terkait.',
+        related_record_created: 'Data terkait berhasil dibuat.'
+      }
+    };
     const state = {
       bootstrap: null,
       route: null,
@@ -807,8 +999,148 @@ const uiShellHTML = `<!doctype html>
       authOptions: null,
       offlineBootstrap: null,
       syncStats: {pending: 0, conflict: 0, failed: 0},
-      cacheWarm: false
+      cacheWarm: false,
+      locale: 'en',
+      supportedLocales: defaultSupportedLocales
     };
+
+    function normalizeLocale(locale) {
+      const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-');
+      if (!value) return 'en';
+      if (value === 'id' || value.indexOf('id-') === 0) return 'id';
+      return 'en';
+    }
+
+    function detectPreferredLocale() {
+      if (navigator.languages && navigator.languages.length) return normalizeLocale(navigator.languages[0]);
+      return normalizeLocale(navigator.language || 'en');
+    }
+
+    function t(key) {
+      const locale = state.locale || 'en';
+      return (uiMessages[locale] && uiMessages[locale][key]) || (uiMessages.en && uiMessages.en[key]) || key;
+    }
+
+    function pickText(item, baseField) {
+      if (!item) return '';
+      const localized = item[baseField + '_i18n'];
+      if (localized && typeof localized === 'object') {
+        const current = localized[state.locale];
+        if (current) return current;
+        if (localized.en) return localized.en;
+        if (localized.id) return localized.id;
+      }
+      return item[baseField] || '';
+    }
+
+    function humanizeToken(value) {
+      const raw = String(value == null ? '' : value).trim();
+      if (!raw) return '';
+      if (/[A-Z]/.test(raw) || raw.indexOf(' ') >= 0 || !/^[a-z0-9_-]+$/.test(raw)) return raw;
+      return raw.split(/[_-]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+    }
+
+    function translateToken(prefix, value) {
+      const raw = String(value == null ? '' : value).trim();
+      if (!raw) return '';
+      const key = prefix + '_' + raw.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const translated = t(key);
+      if (translated !== key) return translated;
+      return humanizeToken(raw);
+    }
+
+    function displayValue(value) {
+      if (value == null) return '';
+      if (typeof value === 'boolean') return t(value ? 'value_true' : 'value_false');
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'string') return translateToken('value', value);
+      return String(value);
+    }
+
+    async function persistLocale(locale) {
+      try {
+        const response = await fetch('/locale?locale=' + encodeURIComponent(locale), {credentials: 'same-origin'});
+        if (!response.ok) throw new Error('locale update failed');
+        const payload = await response.json();
+        state.locale = normalizeLocale(payload.locale || locale);
+        state.supportedLocales = payload.supported_locales || state.supportedLocales || defaultSupportedLocales;
+      } catch (_) {
+        state.locale = normalizeLocale(locale);
+      }
+    }
+
+    function escapeHTML(value) {
+      return String(value == null ? '' : value).replace(/[&<>"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]));
+    }
+
+    function applyLocale() {
+      document.documentElement.lang = state.locale;
+      document.title = t('shell_brand');
+      const brand = document.getElementById('shell-brand');
+      const subtitle = document.getElementById('shell-subtitle');
+      const localeLabel = document.getElementById('locale-label');
+      const adminLinkButton = document.getElementById('admin-link-button');
+      const logoutButton = document.getElementById('logout-button');
+      const routeTitle = document.getElementById('route-title');
+      const routeStatus = document.getElementById('route-status');
+      if (brand) brand.textContent = t('shell_brand');
+      if (subtitle) subtitle.textContent = t('shell_subtitle');
+      if (localeLabel) localeLabel.textContent = t('locale_label');
+      if (adminLinkButton) adminLinkButton.textContent = t('admin_link');
+      if (logoutButton) logoutButton.textContent = t('logout');
+      if (routeTitle && !state.route) routeTitle.innerHTML = '<h2>' + escapeHTML(t('loading')) + '</h2>';
+      if (routeStatus && !state.route) routeStatus.textContent = t('route_resolving');
+      refreshOfflineStatus();
+    }
+
+    function applyShellLayout(authenticated) {
+      const shell = document.getElementById('shell-root');
+      const sidebar = document.getElementById('shell-sidebar');
+      const routePanel = document.getElementById('route-panel');
+      const content = document.querySelector('.content');
+      if (authenticated) {
+        if (shell) {
+          shell.classList.remove('login-mode');
+          shell.classList.add('workspace-mode');
+        }
+        if (sidebar) sidebar.hidden = false;
+        if (routePanel) routePanel.hidden = false;
+        if (content) {
+          content.classList.remove('login-mode');
+          content.classList.add('workspace-mode');
+        }
+        return;
+      }
+      if (shell) {
+        shell.classList.remove('workspace-mode');
+        shell.classList.add('login-mode');
+      }
+      if (sidebar) sidebar.hidden = true;
+      if (routePanel) routePanel.hidden = true;
+      if (content) {
+        content.classList.remove('workspace-mode');
+        content.classList.add('login-mode');
+      }
+    }
+
+    function renderLocaleSwitcher() {
+      const select = document.getElementById('locale-switcher');
+      if (!select) return;
+      select.innerHTML = (state.supportedLocales || defaultSupportedLocales).map((locale) => {
+        const name = locale === 'id' ? 'Bahasa Indonesia' : 'English';
+        return '<option value="' + locale + '">' + name + '</option>';
+      }).join('');
+      select.value = state.locale;
+      select.onchange = async () => {
+        await persistLocale(select.value);
+        applyLocale();
+        if (state.bootstrap) {
+          await renderRoute();
+        } else {
+          renderLogin(authErrorFromQuery());
+        }
+      };
+    }
 
     async function registerServiceWorker() {
       if (!('serviceWorker' in navigator)) return;
@@ -927,7 +1259,7 @@ const uiShellHTML = `<!doctype html>
         if (shouldCacheResponse(path, requestOptions) && (isNetworkError(err) || !navigator.onLine)) {
           const cached = await loadCachedResponse(path);
           if (cached != null) {
-            setStatus('Using cached data for ' + path + '.');
+            setStatus(t('using_cached_data') + ' ' + path + '.');
             return cached;
           }
         }
@@ -956,9 +1288,9 @@ const uiShellHTML = `<!doctype html>
       const networkNode = document.getElementById('network-status');
       const syncNode = document.getElementById('sync-status');
       const cacheNode = document.getElementById('cache-status');
-      if (networkNode) networkNode.textContent = navigator.onLine ? 'online' : 'offline';
-      if (syncNode) syncNode.textContent = state.syncStats.pending + ' pending / ' + state.syncStats.conflict + ' conflict';
-      if (cacheNode) cacheNode.textContent = state.cacheWarm ? 'warm' : 'cold';
+      if (networkNode) networkNode.textContent = navigator.onLine ? t('online') : t('offline');
+      if (syncNode) syncNode.textContent = state.syncStats.pending + ' ' + t('sync_pending') + ' / ' + state.syncStats.conflict + ' ' + t('sync_conflict');
+      if (cacheNode) cacheNode.textContent = state.cacheWarm ? t('cache_warm') : t('cache_cold');
     }
 
     function authErrorFromQuery() {
@@ -966,17 +1298,23 @@ const uiShellHTML = `<!doctype html>
       return params.get('auth_error') || '';
     }
 
-    function loginTitle() {
-      return (state.authOptions && state.authOptions.login_title) || 'Platform Access';
-    }
+	function loginTitle() {
+		if (state.authOptions && state.authOptions['login_title_' + state.locale]) return state.authOptions['login_title_' + state.locale];
+		if (state.authOptions && state.authOptions.login_title && !(state.locale !== 'en' && state.authOptions.login_title === 'Platform Access')) return state.authOptions.login_title;
+		return t('login_title');
+	}
 
-    function loginSubtitle() {
-      return (state.authOptions && state.authOptions.login_subtitle) || 'Sign in to continue.';
-    }
+	function loginSubtitle() {
+		if (state.authOptions && state.authOptions['login_subtitle_' + state.locale]) return state.authOptions['login_subtitle_' + state.locale];
+		if (state.authOptions && state.authOptions.login_subtitle && !(state.locale !== 'en' && state.authOptions.login_subtitle === 'Sign in to continue.')) return state.authOptions.login_subtitle;
+		return t('login_subtitle');
+	}
 
-    function googleButtonLabel() {
-      return (state.authOptions && state.authOptions.google_button_label) || 'Continue with Google';
-    }
+	function googleButtonLabel() {
+		if (state.authOptions && state.authOptions['google_button_label_' + state.locale]) return state.authOptions['google_button_label_' + state.locale];
+		if (state.authOptions && state.authOptions.google_button_label && !(state.locale !== 'en' && state.authOptions.google_button_label === 'Continue with Google')) return state.authOptions.google_button_label;
+		return t('google_button');
+	}
 
     function requestedUIRoute() {
       return currentPath();
@@ -1169,21 +1507,41 @@ const uiShellHTML = `<!doctype html>
       await refreshSyncStats();
     }
 
+    async function performLogout() {
+      const csrf = readCookie('orbyte_csrf');
+      try {
+        await fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: csrf ? {'X-CSRF-Token': csrf} : {}
+        });
+      } catch (_) {}
+      state.bootstrap = null;
+      state.route = null;
+      state.offlineBootstrap = null;
+      window.location.hash = '';
+      applyShellLayout(false);
+      renderLogin(loginSubtitle());
+    }
+
     function renderLogin(message) {
       const root = document.getElementById('view-root');
       const passwordEnabled = !state.authOptions || !!state.authOptions.password_enabled;
       const googleEnabled = !!(state.authOptions && state.authOptions.google_enabled);
       const statusMessage = message || (authErrorFromQuery() === 'google_login_failed' ? 'Google sign-in failed. Try again or use a local account.' : loginSubtitle());
+      applyShellLayout(false);
       document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(loginTitle()) + '</h2>';
       setStatus(statusMessage);
       document.getElementById('menu').innerHTML = '';
+      document.getElementById('admin-link-button').hidden = true;
+      document.getElementById('logout-button').hidden = true;
       const passwordForm = passwordEnabled
-        ? '<form id="login-form"><label class="field"><span class="meta">Username</span><input id="login-username" name="username" autocomplete="username"></label><label class="field"><span class="meta">Password</span><input id="login-password" name="password" type="password" autocomplete="current-password"></label><div class="actions"><button type="submit">Sign in</button></div></form>'
+        ? '<form id="login-form"><label class="field"><span class="meta">' + escapeHTML(t('username')) + '</span><input id="login-username" name="username" autocomplete="username"></label><label class="field"><span class="meta">' + escapeHTML(t('password')) + '</span><input id="login-password" name="password" type="password" autocomplete="current-password"></label><div class="actions"><button type="submit">' + escapeHTML(t('sign_in')) + '</button></div></form>'
         : '';
       const emptyState = !passwordEnabled && !googleEnabled
-        ? '<p class="status">No interactive sign-in method is enabled for this deployment.</p>'
+        ? '<p class="status">' + escapeHTML(t('sign_in_unavailable')) + '</p>'
         : '';
-      const divider = passwordEnabled && googleEnabled ? '<div class="divider">or</div>' : '';
+      const divider = passwordEnabled && googleEnabled ? '<div class="divider">' + escapeHTML(t('or')) + '</div>' : '';
       const googleAction = googleEnabled ? '<div class="actions"><button type="button" id="google-login" class="google">' + escapeHTML(googleButtonLabel()) + '</button></div>' : '';
       root.innerHTML = '<section class="login-shell"><div class="panel"><h3>' + escapeHTML(loginTitle()) + '</h3><p class="status">' + escapeHTML(statusMessage) + '</p>' + passwordForm + divider + googleAction + emptyState + '</div></section>';
       const form = document.getElementById('login-form');
@@ -1199,6 +1557,12 @@ const uiShellHTML = `<!doctype html>
               body: JSON.stringify({username, password})
             });
             state.bootstrap = await api('/ui/bootstrap');
+            state.supportedLocales = state.bootstrap.supported_locales || defaultSupportedLocales;
+            if (state.bootstrap.locale) {
+              state.locale = normalizeLocale(state.bootstrap.locale);
+            }
+            renderLocaleSwitcher();
+            applyLocale();
             await loadOfflineBootstrap();
             await processSyncQueue();
             if (!window.location.hash && state.bootstrap.default_path) {
@@ -1222,13 +1586,22 @@ const uiShellHTML = `<!doctype html>
     function renderMenus() {
       const container = document.getElementById('menu');
       container.innerHTML = '';
+      if (!state.bootstrap) {
+        document.getElementById('admin-link-button').hidden = true;
+        document.getElementById('logout-button').hidden = true;
+        return;
+      }
+      applyShellLayout(true);
+      document.getElementById('admin-link-button').hidden = !state.bootstrap || !state.bootstrap.admin_access;
+      document.getElementById('admin-link-button').href = state.bootstrap && state.bootstrap.admin_path ? state.bootstrap.admin_path : '/admin';
+      document.getElementById('logout-button').hidden = !state.bootstrap;
       for (const menu of state.bootstrap.menus) {
         const action = state.bootstrap.actions.find((item) => item.key === menu.action_key);
         if (!action) continue;
         const link = document.createElement('a');
         link.className = 'menu-link' + (currentPath() === action.route_path ? ' active' : '');
         link.href = '#' + action.route_path;
-        link.textContent = menu.label;
+        link.textContent = pickText(menu, 'label');
         container.appendChild(link);
       }
     }
@@ -1270,7 +1643,7 @@ const uiShellHTML = `<!doctype html>
 
     function renderJSONCard(title, payload) {
       const root = document.getElementById('view-root');
-      root.innerHTML = '<section class="panel"><h3>' + title + '</h3><pre></pre></section>';
+      root.innerHTML = '<section class="panel"><h3>' + escapeHTML(title) + '</h3><pre></pre></section>';
       root.querySelector('pre').textContent = JSON.stringify(payload, null, 2);
     }
 
@@ -1278,7 +1651,7 @@ const uiShellHTML = `<!doctype html>
       const root = document.getElementById('view-root');
       const view = route.view;
       if (!view) {
-        renderJSONCard('View unavailable', route);
+        renderJSONCard(t('view_unavailable'), route);
         return;
       }
       if (view.kind === 'list') {
@@ -1303,26 +1676,35 @@ const uiShellHTML = `<!doctype html>
         }
         const pagedItems = payload.items || [];
         const newRoute = view.model_key ? routeForModel(view.model_key, 'form') : routeForDocument(view.document_type, 'form');
-        const filterBar = '<div class="actions">' +
+        const filterBar = '<div class="toolbar-row">' +
           ((view.filters || []).map((filter) => {
             if (filter.type !== 'enum') return '';
-            const options = ['<option value="">All ' + filter.label + '</option>'].concat((filter.options || []).map((option) => '<option value="' + option + '"' + (params.get(filter.key) === option ? ' selected' : '') + '>' + option + '</option>'));
-            return '<label class="card"><span class="meta">' + filter.label + '</span><select data-filter="' + filter.key + '">' + options.join('') + '</select></label>';
+            const options = ['<option value="">' + t('all') + ' ' + escapeHTML(pickText(filter, 'label')) + '</option>'].concat((filter.options || []).map((option) => '<option value="' + option + '"' + (params.get(filter.key) === option ? ' selected' : '') + '>' + escapeHTML(displayValue(option)) + '</option>'));
+            return '<label class="control-tile"><span class="meta">' + escapeHTML(pickText(filter, 'label')) + '</span><select data-filter="' + filter.key + '">' + options.join('') + '</select></label>';
           }).join('')) +
-          (view.model_key ? '<label class="card"><span class="meta">Search</span><input data-filter="name" value="' + escapeHTML(params.get('name') || '') + '" placeholder="Search"></label>' : '') +
-          '<label class="card"><span class="meta">Sort</span><select data-filter="sort"><option value="">Document</option><option value="updated_at"' + (params.get('sort') === 'updated_at' ? ' selected' : '') + '>Updated</option><option value="status"' + (params.get('sort') === 'status' ? ' selected' : '') + '>Status</option><option value="name"' + (params.get('sort') === 'name' ? ' selected' : '') + '>Name</option></select></label>' +
-          (newRoute ? '<button type="button" data-new="1">New</button>' : '') +
+          (view.model_key ? '<label class="control-tile grow"><span class="meta">' + t('search') + '</span><input data-filter="name" value="' + escapeHTML(params.get('name') || '') + '" placeholder="' + escapeHTML(t('search')) + '"></label>' : '') +
+          '<label class="control-tile"><span class="meta">' + t('sort') + '</span><select data-filter="sort"><option value="">' + t('sort_document') + '</option><option value="updated_at"' + (params.get('sort') === 'updated_at' ? ' selected' : '') + '>' + t('sort_updated') + '</option><option value="status"' + (params.get('sort') === 'status' ? ' selected' : '') + '>' + t('sort_status') + '</option><option value="name"' + (params.get('sort') === 'name' ? ' selected' : '') + '>' + t('sort_name') + '</option></select></label>' +
+          (newRoute ? '<button type="button" data-new="1">' + t('new') + '</button>' : '') +
           '</div>';
+        const columnDefs = view.columns || [];
         const rows = pagedItems.map((item) => {
-          const cells = (view.columns || []).map((column) => {
-            return '<div><span class="meta">' + column.label + '</span><strong>' + resolvePath(item, column.path) + '</strong></div>';
-          }).join('');
           const openID = item.id || (item.header && item.header.id) || '';
-          return '<article class="card"><div class="kv">' + (cells || ('<div><span class="meta">Record</span><strong>' + openID + '</strong></div>')) + '</div><div class="actions"><button data-open="' + openID + '">Open</button></div></article>';
+          const cells = columnDefs.map((column, index) => {
+            const value = escapeHTML(displayValue(resolvePath(item, column.path)));
+            if (index === 0) {
+              return '<td><div class="row-primary">' + value + '</div><div class="row-secondary">' + escapeHTML(openID) + '</div></td>';
+            }
+            return '<td>' + value + '</td>';
+          }).join('');
+          return '<tr>' + (cells || ('<td><div class="row-primary">' + escapeHTML(openID) + '</div></td>')) + '<td><button class="secondary" data-open="' + openID + '">' + t('open') + '</button></td></tr>';
         }).join('');
         const total = payload.total || pagedItems.length;
-        const pagination = '<div class="actions"><button class="secondary" data-page="' + Math.max(1, page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>Previous</button><span class="status">Page ' + page + ' / ' + Math.max(1, Math.ceil(total / pageSize)) + '</span><button class="secondary" data-page="' + (page + 1) + '"' + (page * pageSize >= total ? ' disabled' : '') + '>Next</button></div>';
-        root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3><p class="status">' + (view.empty_state || 'Standard list page rendered from the module manifest.') + '</p>' + filterBar + '<div class="list">' + (rows || '<p class="status">No records yet.</p>') + '</div>' + pagination + '</section>';
+        const tableHeader = columnDefs.map((column) => '<th>' + escapeHTML(pickText(column, 'label')) + '</th>').join('') + '<th></th>';
+        const tableMarkup = rows
+          ? '<div class="table-shell"><table class="data-table"><thead><tr>' + tableHeader + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+          : '<div class="table-shell"><div class="page-body"><p class="status">' + t('no_records') + '</p></div></div>';
+        const pagination = '<div class="pagination-bar"><span class="status">' + t('page') + ' ' + page + ' / ' + Math.max(1, Math.ceil(total / pageSize)) + '</span><div class="actions"><button class="secondary" data-page="' + Math.max(1, page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>' + t('previous') + '</button><button class="secondary" data-page="' + (page + 1) + '"' + (page * pageSize >= total ? ' disabled' : '') + '>' + t('next') + '</button></div></div>';
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || t('standard_list')) + '</p></div></div><div class="page-body">' + filterBar + tableMarkup + pagination + '</div></section>';
         root.querySelectorAll('[data-filter]').forEach((input) => {
           input.addEventListener('change', () => {
             const next = currentParams();
@@ -1357,7 +1739,7 @@ const uiShellHTML = `<!doctype html>
       if (view.kind === 'detail') {
         const documentID = currentParams().get('id');
         if (!documentID) {
-          root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3><p class="status">Select a record from the list to inspect its canonical document.</p></section>';
+          root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(t('select_record')) + '</p></div></div></section>';
           return;
         }
         if (view.model_key) {
@@ -1365,11 +1747,11 @@ const uiShellHTML = `<!doctype html>
           const record = payload.record;
           const tabMarkup = (view.tabs || []).map((tab) => {
             const sections = (tab.sections || []).map((section) => renderModelSection(section, record)).join('');
-            return '<section class="panel"><h3>' + tab.title + '</h3>' + sections + '</section>';
+            return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
           }).join('');
           const sectionMarkup = (view.sections || []).map((section) => renderModelSection(section, record)).join('');
           const relatedViews = (view.related_views || []).map((item) => renderRelatedView(item, payload, view)).join('');
-          root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3><p class="meta">' + record.id + ' · v' + record.version + '</p>' + (tabMarkup || sectionMarkup) + '</section>' + relatedViews;
+          root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(record.id + ' · v' + record.version) + '</p></div></div><div class="page-body"><div class="section-stack">' + (tabMarkup || sectionMarkup) + '</div></div></section>' + relatedViews;
           root.querySelectorAll('[data-related-save]').forEach((button) => {
             button.addEventListener('click', async () => {
               const sourceKey = button.dataset.relatedSave;
@@ -1384,7 +1766,7 @@ const uiShellHTML = `<!doctype html>
                   body: JSON.stringify({values})
                 });
                 const statusNode = section.querySelector('[data-related-status="' + sourceKey + '"]');
-                if (statusNode) statusNode.textContent = 'Related record created.';
+                if (statusNode) statusNode.textContent = t('related_record_created');
                 await renderRoute();
               } catch (err) {
                 const statusNode = section.querySelector('[data-related-status="' + sourceKey + '"]');
@@ -1399,19 +1781,19 @@ const uiShellHTML = `<!doctype html>
         const record = payload.record;
         const tabMarkup = (view.tabs || []).map((tab) => {
           const sections = (tab.sections || []).map((section) => renderSection(section, record)).join('');
-          return '<section class="panel"><h3>' + tab.title + '</h3>' + sections + '</section>';
+          return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
         }).join('');
         const sectionMarkup = (view.sections || []).map((section) => renderSection(section, record)).join('');
         const relatedViews = (view.related_views || []).map((item) => renderRelatedView(item, payload, view)).join('');
         const actionZones = renderActionZones(view);
-        root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3><p class="meta">' + record.header.id + ' · v' + record.header.version + ' · ' + record.header.status + '</p>' + (tabMarkup || sectionMarkup || ('<pre>' + escapeHTML(JSON.stringify(record.body.payload, null, 2)) + '</pre>')) + actionZones + '</section>' + relatedViews;
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(record.header.id + ' · v' + record.header.version + ' · ' + displayValue(record.header.status)) + '</p></div></div><div class="page-body"><div class="section-stack">' + (tabMarkup || sectionMarkup || ('<pre>' + escapeHTML(JSON.stringify(record.body.payload, null, 2)) + '</pre>')) + '</div></div><div class="page-actions">' + actionZones + '</div></section>' + relatedViews;
         for (const actionKey of view.allowed_actions || []) {
           const placement = await api('/ui/actions/render?action=' + encodeURIComponent(actionKey) + '&document_id=' + encodeURIComponent(record.header.id));
           if (!placement.allowed) {
             continue;
           }
           const button = document.createElement('button');
-          button.textContent = actionKey;
+          button.textContent = translateToken('action', actionKey);
           const zone = resolveActionPlacement(view, actionKey, placement);
           if (zone === 'primary') {
             button.className = '';
@@ -1455,11 +1837,11 @@ const uiShellHTML = `<!doctype html>
           }
           const formSections = (view.sections || []).length > 0
             ? (view.sections || []).map((section) => renderModelFormSection(section, record)).join('')
-            : '<div class="list">' + (view.fields || []).map((field) => renderEditableModelField(field, record)).join('') + '</div>';
+            : '<div class="form-grid">' + (view.fields || []).map((field) => renderEditableModelField(field, record)).join('') + '</div>';
           const relationViews = (view.related_views && view.related_views.length) ? view.related_views : deriveRelatedViews(payload.definition);
           const relationEditors = relationViews.map((item) => renderRelationEditor(item, payload)).join('');
           const offlineCapable = !!offlineModelCapability(view.model_key);
-          root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3>' + formSections + relationEditors + '<p class="status" id="form-status"></p><div class="actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? 'Queue Sync' : (documentID ? 'Save' : 'Create')) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>Save Local</button></div></section>';
+          root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(documentID ? record.id + ' · v' + record.version : t('record_created')) + '</p></div></div><div class="page-body"><div class="section-stack">' + formSections + relationEditors + '</div><p class="status" id="form-status"></p></div><div class="page-actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? t('queue_sync') : (documentID ? t('save') : t('create'))) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>' + t('save_local') + '</button></div></section>';
           bindRelationRemove(root);
           root.querySelectorAll('[data-relation-add]').forEach((button) => {
             button.addEventListener('click', () => appendRelationRow(button.dataset.relationAdd, payload));
@@ -1483,8 +1865,8 @@ const uiShellHTML = `<!doctype html>
                 status: 'local_only'
               });
               await refreshSyncStats();
-              document.getElementById('form-status').textContent = 'Draft saved locally.';
-              setStatus('Draft saved locally.');
+              document.getElementById('form-status').textContent = t('draft_saved_local');
+              setStatus(t('draft_saved_local'));
             });
           }
           const button = root.querySelector('#save-form');
@@ -1518,16 +1900,16 @@ const uiShellHTML = `<!doctype html>
                     status: 'queued',
                     idempotency_key: queued.idempotency_key
                   });
-                  document.getElementById('form-status').textContent = 'Draft queued for sync.';
-                  setStatus('Draft queued for sync.');
+                  document.getElementById('form-status').textContent = t('draft_queued');
+                  setStatus(t('draft_queued'));
                 } else {
                   const created = await api('/models/' + encodeURIComponent(view.model_key) + (documentID ? '/' + encodeURIComponent(documentID) : ''), {
                     method: documentID ? 'PUT' : 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
                     body: JSON.stringify(documentID ? {values, expected_version: record.version, relations} : {values, relations})
                   });
-                  document.getElementById('form-status').textContent = documentID ? 'Record updated.' : 'Record created.';
-                  setStatus(documentID ? 'Record updated.' : 'Record created.');
+                  document.getElementById('form-status').textContent = documentID ? t('record_updated') : t('record_created');
+                  setStatus(documentID ? t('record_updated') : t('record_created'));
                   if (!documentID) {
                     const detailRoute = routeForModel(view.model_key, 'detail');
                     const createdRecord = created && (created.record || created);
@@ -1559,8 +1941,8 @@ const uiShellHTML = `<!doctype html>
         }
         const formSections = (view.sections || []).length > 0
           ? (view.sections || []).map((section) => renderFormSection(section, record)).join('')
-          : '<div class="list">' + (view.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div>';
-        root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3>' + formSections + '<p class="status" id="form-status"></p><div class="actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? 'Queue Sync' : 'Save Draft') + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>Save Local</button></div></section>';
+          : '<div class="form-grid">' + (view.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div>';
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(displayValue(record.header.status || 'draft')) + '</p></div></div><div class="page-body"><div class="section-stack">' + formSections + '</div><p class="status" id="form-status"></p></div><div class="page-actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? t('queue_sync') : t('save_draft')) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>' + t('save_local') + '</button></div></section>';
         const saveLocalButton = root.querySelector('#save-local');
         if (saveLocalButton) {
           saveLocalButton.addEventListener('click', async () => {
@@ -1576,8 +1958,8 @@ const uiShellHTML = `<!doctype html>
               status: 'local_only'
             });
             await refreshSyncStats();
-            document.getElementById('form-status').textContent = 'Draft saved locally.';
-            setStatus('Draft saved locally.');
+            document.getElementById('form-status').textContent = t('draft_saved_local');
+            setStatus(t('draft_saved_local'));
           });
         }
         const button = root.querySelector('#save-form');
@@ -1610,16 +1992,16 @@ const uiShellHTML = `<!doctype html>
                   idempotency_key: queued.idempotency_key
                 });
                 if (navigator.onLine) await processSyncQueue();
-                document.getElementById('form-status').textContent = 'Draft queued for sync.';
-                setStatus('Draft queued for sync.');
+                document.getElementById('form-status').textContent = t('draft_queued');
+                setStatus(t('draft_queued'));
               } else {
                 await api('/documents/' + encodeURIComponent(documentID), {
                   method: 'PUT',
                   headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
                   body: JSON.stringify({payload})
                 });
-                document.getElementById('form-status').textContent = 'Draft updated through manifest-driven form.';
-                setStatus('Draft updated through manifest-driven form.');
+                document.getElementById('form-status').textContent = t('draft_updated');
+                setStatus(t('draft_updated'));
               }
             } catch (err) {
               document.getElementById('form-status').textContent = err.message;
@@ -1636,15 +2018,15 @@ const uiShellHTML = `<!doctype html>
           ? await api('/ui/data/monitoring/summary')
           : await api('/ui/data/analytics/snapshot'));
         const summary = (view.cards || []).map((card) => ({card, value: resolvePath(source, card.path)}));
-        root.innerHTML = '<section class="panel"><h3>' + view.title + '</h3><div class="kv">' + summary.map((item) => {
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3></div></div><div class="page-body"><div class="metric-grid">' + summary.map((item) => {
           if (item.card.widget === 'json') {
-            return '<article class="card"><span class="meta">' + item.card.label + '</span><pre>' + escapeHTML(JSON.stringify(item.value, null, 2)) + '</pre></article>';
+            return '<article class="metric-card"><span class="meta">' + escapeHTML(pickText(item.card, 'label')) + '</span><pre>' + escapeHTML(JSON.stringify(item.value, null, 2)) + '</pre></article>';
           }
           if (item.card.widget === 'table' && Array.isArray(item.value)) {
-            return '<article class="card" data-action="' + (item.card.action_key || '') + '"><span class="meta">' + item.card.label + '</span><pre>' + escapeHTML(JSON.stringify(item.value, null, 2)) + '</pre></article>';
+            return '<article class="metric-card" data-action="' + (item.card.action_key || '') + '"><span class="meta">' + escapeHTML(pickText(item.card, 'label')) + '</span><pre>' + escapeHTML(JSON.stringify(item.value, null, 2)) + '</pre></article>';
           }
-          return '<article class="card" data-action="' + (item.card.action_key || '') + '"><span class="meta">' + item.card.label + '</span><strong>' + escapeHTML(String(item.value == null ? '' : item.value)) + '</strong></article>';
-        }).join('') + '</div></section>';
+          return '<article class="metric-card" data-action="' + (item.card.action_key || '') + '"><span class="meta">' + escapeHTML(pickText(item.card, 'label')) + '</span><strong>' + escapeHTML(displayValue(item.value)) + '</strong></article>';
+        }).join('') + '</div></div></section>';
         root.querySelectorAll('[data-action]').forEach((card) => {
           if (!card.dataset.action) return;
           card.addEventListener('click', () => {
@@ -1654,7 +2036,7 @@ const uiShellHTML = `<!doctype html>
         });
         return;
       }
-      renderJSONCard(view.title, route);
+      renderJSONCard(pickText(view, 'title'), route);
     }
 
     async function invokeDocumentAction(documentID, action, expectedVersion, expectedETag) {
@@ -1668,7 +2050,7 @@ const uiShellHTML = `<!doctype html>
 
     async function renderCustom(route) {
       const root = document.getElementById('view-root');
-      root.innerHTML = '<section class="panel"><h3>Loading custom module page…</h3></section>';
+      root.innerHTML = '<section class="panel"><h3>' + escapeHTML(t('custom_loading')) + '</h3></section>';
       const entry = route.custom_entry;
       const bundle = await loadBundle(entry.bundle_key);
       const renderFn = bundle[entry.component_export];
@@ -1679,22 +2061,28 @@ const uiShellHTML = `<!doctype html>
         mount,
         route,
         api,
-        params: Object.fromEntries(currentParams().entries())
+        params: Object.fromEntries(currentParams().entries()),
+        t,
+        locale: state.locale
       });
     }
 
     async function renderRoute() {
+      if (!state.bootstrap) {
+        applyShellLayout(false);
+        return;
+      }
       renderMenus();
       const path = currentPath() || state.bootstrap.default_path;
       if (!path) {
-        setStatus('No permitted routes are available for this principal.');
+        setStatus(t('no_routes'));
         document.getElementById('view-root').innerHTML = '';
         return;
       }
       const route = await api('/ui/routes/resolve?path=' + encodeURIComponent(path));
       state.route = route;
-      document.getElementById('route-title').innerHTML = '<h2>' + (route.action.label || route.path) + '</h2>';
-      setStatus('Resolved from module ' + route.module_key + ' using ' + route.render_mode + ' rendering.');
+      document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(pickText(route.action, 'label') || route.path) + '</h2>';
+      setStatus(t('resolved_from_module') + ' ' + route.module_key + ' ' + t('using_rendering') + ' ' + route.render_mode + ' rendering.');
       if (route.render_mode === 'custom') {
         await renderCustom(route);
         return;
@@ -1705,10 +2093,6 @@ const uiShellHTML = `<!doctype html>
 
     function readCookie(name) {
       return document.cookie.split(';').map((item) => item.trim()).find((item) => item.startsWith(name + '='))?.slice(name.length + 1) || '';
-    }
-
-    function escapeHTML(value) {
-      return value.replace(/[&<>"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]));
     }
 
     function resolvePath(payload, path) {
@@ -1736,19 +2120,19 @@ const uiShellHTML = `<!doctype html>
       const readonly = field.read_only ? ' readonly disabled' : '';
       const current = value == null ? '' : value;
       if (field.widget === 'textarea') {
-        return '<textarea data-path="' + field.path + '"' + readonly + ' placeholder="' + escapeHTML(field.placeholder || '') + '">' + escapeHTML(String(current)) + '</textarea>';
+        return '<textarea data-path="' + field.path + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">' + escapeHTML(String(current)) + '</textarea>';
       }
       if (field.widget === 'select' || (field.options || []).length > 0) {
-        const options = (field.options || []).map((option) => '<option value="' + option + '"' + (String(current) === option ? ' selected' : '') + '>' + option + '</option>').join('');
+        const options = (field.options || []).map((option) => '<option value="' + option + '"' + (String(current) === option ? ' selected' : '') + '>' + escapeHTML(displayValue(option)) + '</option>').join('');
         return '<select data-path="' + field.path + '"' + readonly + '>' + options + '</select>';
       }
       if (field.type === 'bool') {
         return '<input type="checkbox" data-path="' + field.path + '"' + (current ? ' checked' : '') + readonly + '>';
       }
       if (field.type === 'int' || field.type === 'number') {
-        return '<input type="number" data-path="' + field.path + '" value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(field.placeholder || '') + '">';
+        return '<input type="number" data-path="' + field.path + '" value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">';
       }
-      return '<input data-path="' + field.path + '" value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(field.placeholder || '') + '">';
+      return '<input data-path="' + field.path + '" value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">';
     }
 
     function renderRelatedView(def, payload, view) {
@@ -1758,53 +2142,55 @@ const uiShellHTML = `<!doctype html>
       const createForm = relatedDef && relation ? renderRelatedCreateForm(def.source, relatedDef, relation) : '';
       const content = items.length ? '<div class="list">' + items.map((item) => {
         if (typeof item !== 'object' || item == null) {
-          return '<article class="card"><strong>' + escapeHTML(String(item)) + '</strong></article>';
+          return '<article class="detail-item"><strong>' + escapeHTML(String(item)) + '</strong></article>';
         }
         const values = (item.record && item.record.values) || item.values || item;
-        const entries = Object.keys(values).sort().slice(0, 6).map((key) => '<div><span class="meta">' + key + '</span><strong>' + escapeHTML(String(values[key])) + '</strong></div>').join('');
-        return '<article class="card"><div class="kv">' + entries + '</div></article>';
-      }).join('') + '</div>' : '<p class="status">' + (def.empty_state || 'No related items.') + '</p>';
-      return '<section class="panel"><h3>' + def.title + '</h3>' + content + createForm + '</section>';
+        const entries = Object.keys(values).sort().slice(0, 6).map((key) => '<div><span class="meta">' + key + '</span><strong>' + escapeHTML(displayValue(values[key])) + '</strong></div>').join('');
+        return '<article class="detail-item"><div class="kv">' + entries + '</div></article>';
+      }).join('') + '</div>' : '<p class="status">' + escapeHTML(pickText(def, 'empty_state') || t('no_related_items')) + '</p>';
+      return '<section class="section-block"><div class="section-head"><h3>' + escapeHTML(pickText(def, 'title')) + '</h3></div><div class="section-body">' + content + createForm + '</div></section>';
     }
 
     function renderSection(section, record) {
       const fields = (section.fields || []).map((field) => {
-        return '<article class="card"><span class="meta">' + field.label + '</span><strong>' + escapeHTML(String(resolvePath(record, field.path))) + '</strong></article>';
+        return '<article class="detail-item"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span><strong>' + escapeHTML(displayValue(resolvePath(record, field.path))) + '</strong></article>';
       }).join('');
       const extensionModule = section.extension_slot_key || '';
       let extensionFields = '';
       if (extensionModule && record.body && record.body.payload && record.body.payload.extensions && record.body.payload.extensions[extensionModule]) {
         const ext = record.body.payload.extensions[extensionModule];
         extensionFields = Object.keys(ext).sort().map((key) => {
-          return '<article class="card"><span class="meta">' + extensionModule + '.' + key + '</span><strong>' + escapeHTML(String(ext[key])) + '</strong></article>';
+          return '<article class="detail-item"><span class="meta">' + extensionModule + '.' + key + '</span><strong>' + escapeHTML(displayValue(ext[key])) + '</strong></article>';
         }).join('');
       }
-      return '<section><h4>' + section.title + '</h4><div class="kv">' + fields + extensionFields + '</div></section>';
+      return '<section class="section-block"><div class="section-head"><h4>' + escapeHTML(pickText(section, 'title')) + '</h4></div><div class="section-body"><div class="detail-grid">' + fields + extensionFields + '</div></div></section>';
     }
 
     function renderModelSection(section, record) {
       const fields = (section.fields || []).map((field) => {
-        return '<article class="card"><span class="meta">' + field.label + '</span><strong>' + escapeHTML(String(resolvePath(record, field.path))) + '</strong></article>';
+        return '<article class="detail-item"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span><strong>' + escapeHTML(displayValue(resolvePath(record, field.path))) + '</strong></article>';
       }).join('');
-      return '<section><h4>' + section.title + '</h4><div class="kv">' + fields + '</div></section>';
+      return '<section class="section-block"><div class="section-head"><h4>' + escapeHTML(pickText(section, 'title')) + '</h4></div><div class="section-body"><div class="detail-grid">' + fields + '</div></div></section>';
     }
 
     function renderEditableField(field, record) {
       const value = resolvePath(record, field.path);
-      return '<label class="card"><span class="meta">' + field.label + '</span>' + renderFieldInput(field, value) + (field.help_text ? '<span class="meta">' + field.help_text + '</span>' : '') + '</label>';
+      const helpText = pickText(field, 'help_text');
+      return '<label class="form-field' + (((field.widget === 'textarea') || (field.type === 'json') || (field.type === 'text')) ? ' wide' : '') + '"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span>' + renderFieldInput(field, value) + (helpText ? '<span class="status">' + escapeHTML(helpText) + '</span>' : '') + '</label>';
     }
 
     function renderEditableModelField(field, record) {
       const value = resolvePath(record, field.path);
-      return '<label class="card"><span class="meta">' + field.label + '</span>' + renderFieldInput(field, value) + (field.help_text ? '<span class="meta">' + field.help_text + '</span>' : '') + '</label>';
+      const helpText = pickText(field, 'help_text');
+      return '<label class="form-field' + (((field.widget === 'textarea') || (field.type === 'json') || (field.type === 'text')) ? ' wide' : '') + '"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span>' + renderFieldInput(field, value) + (helpText ? '<span class="status">' + escapeHTML(helpText) + '</span>' : '') + '</label>';
     }
 
     function renderFormSection(section, record) {
-      return '<section class="panel"><h3>' + section.title + '</h3><div class="list">' + (section.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div></section>';
+      return '<section class="section-block"><div class="section-head"><h3>' + escapeHTML(pickText(section, 'title')) + '</h3></div><div class="section-body"><div class="form-grid">' + (section.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div></div></section>';
     }
 
     function renderModelFormSection(section, record) {
-      return '<section class="panel"><h3>' + section.title + '</h3><div class="list">' + (section.fields || []).map((field) => renderEditableModelField(field, record)).join('') + '</div></section>';
+      return '<section class="section-block"><div class="section-head"><h3>' + escapeHTML(pickText(section, 'title')) + '</h3></div><div class="section-body"><div class="form-grid">' + (section.fields || []).map((field) => renderEditableModelField(field, record)).join('') + '</div></div></section>';
     }
 
     function renderRelationEditor(def, payload) {
@@ -1812,7 +2198,7 @@ const uiShellHTML = `<!doctype html>
       const relation = (payload.definition && payload.definition.relations || []).find((item) => item.key === def.source);
       if (!relatedDef || !relation) return '';
       const rows = (payload[def.source] || []).map((item) => renderRelationRow(def.source, relatedDef, relation, item, payload.model_definitions || {})).join('');
-      return '<section class="panel" data-relation-editor="' + def.source + '" data-parent-model-key="' + escapeHTML(payload.definition.key || '') + '" data-target-model-key="' + escapeHTML(relatedDef.key || '') + '"><h3>' + def.title + '</h3><div class="list" data-relation-list="' + def.source + '">' + (rows || '<p class="status">No related items yet.</p>') + '</div><div class="actions"><button type="button" class="secondary" data-relation-add="' + def.source + '">Add Row</button></div></section>';
+      return '<section class="section-block" data-relation-editor="' + def.source + '" data-parent-model-key="' + escapeHTML(payload.definition.key || '') + '" data-target-model-key="' + escapeHTML(relatedDef.key || '') + '"><div class="section-head"><h3>' + escapeHTML(pickText(def, 'title')) + '</h3></div><div class="section-body"><div class="list" data-relation-list="' + def.source + '">' + (rows || '<p class="status">' + t('no_related_items_yet') + '</p>') + '</div><div class="actions"><button type="button" class="secondary" data-relation-add="' + def.source + '">' + t('add_row') + '</button></div></div></section>';
     }
 
     function deriveRelatedViews(definition) {
@@ -1821,7 +2207,7 @@ const uiShellHTML = `<!doctype html>
         key: relation.key,
         title: relation.key.replace(/_/g, ' '),
         source: relation.key,
-        empty_state: 'No related items yet.'
+        empty_state: t('no_related_items_yet')
       }));
     }
 
@@ -1830,11 +2216,11 @@ const uiShellHTML = `<!doctype html>
       const record = graphNode ? graphNode.record : (item || {id: '', version: 0, values: {}});
       const values = record.values || {};
       const fields = (relatedDef.fields || []).filter((field) => field.key !== relation.foreign_key && !field.read_only).map((field) => {
-        const enriched = {path: 'values.' + field.key, type: field.type, widget: field.widget, options: field.options || [], placeholder: field.placeholder || '', help_text: field.help_text || ''};
-        return '<label class="card"><span class="meta">' + field.label + '</span>' + renderFieldInput(enriched, values[field.key]) + '</label>';
+        const enriched = {path: 'values.' + field.key, type: field.type, widget: field.widget, options: field.options || [], placeholder: pickText(field, 'placeholder') || '', help_text: pickText(field, 'help_text') || ''};
+        return '<label class="form-field"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span>' + renderFieldInput(enriched, values[field.key]) + '</label>';
       }).join('');
       const nested = renderNestedRelationEditors(graphNode, relatedDef, modelDefinitions);
-      return '<article class="card" data-relation-row="' + relationKey + '" data-record-id="' + escapeHTML(record.id || '') + '" data-record-version="' + escapeHTML(String(record.version || 0)) + '" data-record-op="upsert">' + fields + nested + '<div class="actions"><button type="button" class="secondary" data-relation-remove="' + relationKey + '">Remove</button></div></article>';
+      return '<article class="detail-item" data-relation-row="' + relationKey + '" data-record-id="' + escapeHTML(record.id || '') + '" data-record-version="' + escapeHTML(String(record.version || 0)) + '" data-record-op="upsert"><div class="form-grid">' + fields + '</div>' + nested + '<div class="actions"><button type="button" class="secondary" data-relation-remove="' + relationKey + '">' + t('remove') + '</button></div></article>';
     }
 
     function renderNestedRelationEditors(graphNode, relatedDef, modelDefinitions) {
@@ -1845,7 +2231,7 @@ const uiShellHTML = `<!doctype html>
         const targetDef = modelDefinitions[relation.target_model_key];
         if (!targetDef) return '';
         const rows = (relatedMap[relation.key] || []).map((item) => renderRelationRow(relation.key, targetDef, relation, item, modelDefinitions)).join('');
-        return '<section class="panel" data-relation-editor="' + relation.key + '" data-parent-model-key="' + escapeHTML(relatedDef.key || '') + '" data-target-model-key="' + escapeHTML(targetDef.key || '') + '"><h4>' + relation.key.replace(/_/g, ' ') + '</h4><div class="list" data-relation-list="' + relation.key + '">' + (rows || '<p class="status">No related items yet.</p>') + '</div><div class="actions"><button type="button" class="secondary" data-relation-add="' + relation.key + '">Add Row</button></div></section>';
+        return '<section class="section-block" data-relation-editor="' + relation.key + '" data-parent-model-key="' + escapeHTML(relatedDef.key || '') + '" data-target-model-key="' + escapeHTML(targetDef.key || '') + '"><div class="section-head"><h4>' + relation.key.replace(/_/g, ' ') + '</h4></div><div class="section-body"><div class="list" data-relation-list="' + relation.key + '">' + (rows || '<p class="status">' + t('no_related_items_yet') + '</p>') + '</div><div class="actions"><button type="button" class="secondary" data-relation-add="' + relation.key + '">' + t('add_row') + '</button></div></div></section>';
       }).join('');
     }
 
@@ -1907,7 +2293,7 @@ const uiShellHTML = `<!doctype html>
           const relationKey = editor ? editor.dataset.relationEditor : '';
           const list = editor && editor.querySelector('[data-relation-list="' + relationKey + '"]');
           if (list && !Array.from(list.querySelectorAll('[data-relation-row]')).some((item) => item.dataset.recordOp !== 'delete')) {
-            list.innerHTML = '<p class="status">No related items yet.</p>';
+            list.innerHTML = '<p class="status">' + t('no_related_items_yet') + '</p>';
           }
         };
       });
@@ -1941,9 +2327,9 @@ const uiShellHTML = `<!doctype html>
     function renderRelatedCreateForm(sourceKey, relatedDef, relation) {
       const editableFields = (relatedDef.fields || []).filter((field) => field.key !== relation.foreign_key && !field.read_only);
       if (!editableFields.length) return '';
-      return '<section class="panel"><h3>Add ' + escapeHTML(relatedDef.display_name || relatedDef.key) + '</h3><div class="list">' +
-        editableFields.map((field) => '<label class="card"><span class="meta">' + field.label + '</span>' + renderFieldInput({path: 'values.' + field.key, type: field.type, widget: field.widget, options: field.options || [], placeholder: field.placeholder || ''}, '') + '</label>').join('') +
-        '</div><p class="status" data-related-status="' + sourceKey + '"></p><div class="actions"><button type="button" data-related-save="' + sourceKey + '">Add</button></div></section>';
+      return '<section class="section-block"><div class="section-head"><h3>' + escapeHTML(t('add')) + ' ' + escapeHTML(pickText(relatedDef, 'display_name') || relatedDef.key) + '</h3></div><div class="section-body"><div class="form-grid">' +
+        editableFields.map((field) => '<label class="form-field"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span>' + renderFieldInput({path: 'values.' + field.key, type: field.type, widget: field.widget, options: field.options || [], placeholder: pickText(field, 'placeholder') || ''}, '') + '</label>').join('') +
+        '</div><p class="status" data-related-status="' + sourceKey + '"></p><div class="actions"><button type="button" data-related-save="' + sourceKey + '">' + t('add') + '</button></div></div></section>';
     }
 
     function renderActionZones(view) {
@@ -1963,12 +2349,26 @@ const uiShellHTML = `<!doctype html>
     }
 
     async function bootstrap() {
+      state.locale = detectPreferredLocale();
+      try {
+        const localePayload = await api('/locale');
+        state.supportedLocales = localePayload.supported_locales || defaultSupportedLocales;
+        state.locale = normalizeLocale(localePayload.locale || state.locale);
+      } catch (_) {}
+      renderLocaleSwitcher();
+      applyLocale();
       refreshOfflineStatus();
       await registerServiceWorker();
       await refreshSyncStats();
       try {
         state.authOptions = await api('/auth/options');
         state.bootstrap = await api('/ui/bootstrap');
+        state.supportedLocales = state.bootstrap.supported_locales || defaultSupportedLocales;
+        if (state.bootstrap.locale) {
+          state.locale = normalizeLocale(state.bootstrap.locale);
+        }
+        renderLocaleSwitcher();
+        applyLocale();
         await loadOfflineBootstrap();
         await processSyncQueue();
         if (!window.location.hash && state.bootstrap.default_path) {
@@ -1978,11 +2378,13 @@ const uiShellHTML = `<!doctype html>
       } catch (err) {
         await loadOfflineBootstrap();
         if (err.message === 'authentication required' || err.message === 'session not found' || err.message === 'session not active' || err.message === 'session revoked' || err.message === 'session expired') {
+          renderLocaleSwitcher();
+          applyLocale();
           renderLogin('');
           return;
         }
-        document.getElementById('view-root').innerHTML = '<section class="panel"><h3>UI bootstrap failed</h3><p class="status">' + err.message + '</p></section>';
-        setStatus('Failed to bootstrap module UI.');
+        document.getElementById('view-root').innerHTML = '<section class="panel"><h3>' + escapeHTML(t('ui_bootstrap_failed')) + '</h3><p class="status">' + escapeHTML(err.message) + '</p></section>';
+        setStatus(t('ui_bootstrap_failed_status'));
       }
     }
 
@@ -1992,13 +2394,14 @@ const uiShellHTML = `<!doctype html>
       if (!document.hidden) void processSyncQueue();
     });
     window.addEventListener('hashchange', () => { void renderRoute(); });
+    document.getElementById('logout-button').addEventListener('click', () => { void performLogout(); });
     void bootstrap();
   </script>
 </body>
 </html>`
 
 const uiServiceWorkerJS = `const CACHE_NAME = 'orbyte-ui-shell-v1';
-const PRECACHE_URLS = ['/ui', '/ui/manifest.webmanifest'];
+const PRECACHE_URLS = ['/ui', '/ui/manifest.webmanifest', '/ui/assets/platform.css?v=` + platformAssetVersion + `'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting()));
@@ -2010,6 +2413,7 @@ self.addEventListener('activate', (event) => {
 
 function shouldCache(requestURL) {
   return requestURL.pathname === '/ui' ||
+    requestURL.pathname === '/ui/assets/platform.css' ||
     requestURL.pathname === '/auth/options' ||
     requestURL.pathname === '/ui/bootstrap' ||
     requestURL.pathname.indexOf('/ui/routes/resolve') === 0 ||
@@ -2040,17 +2444,132 @@ func AnalyticsCockpitBundle() string {
   window.ClinicModuleBundles["analytics-cockpit"] = {
     render: async function(ctx) {
       const payload = await ctx.api('/ui/data/analytics/snapshot');
-      ctx.mount.innerHTML = '<section class="panel"><h3>Analytics Cockpit</h3><p class="status">Custom module page loaded from the analytics bundle.</p><div class="kv"></div><section class="panel"><h3>Raw Snapshot</h3><pre></pre></section></section>';
-      const grid = ctx.mount.querySelector('.kv');
-      const cards = [
-        ['Documents', (payload.documents.created || 0) + (payload.documents.draft || 0) + (payload.documents.submitted || 0) + (payload.documents.approved || 0) + (payload.documents.rejected || 0) + (payload.documents.cancelled || 0)],
-        ['Draft', payload.documents.draft],
-        ['Submitted', payload.documents.submitted],
-        ['Approvals Pending', payload.workflow.pending_approvals]
-      ];
-      grid.innerHTML = cards.map(function(item) {
-        return '<article class="card"><span class="meta">' + item[0] + '</span><strong>' + item[1] + '</strong></article>';
-      }).join('');
+      const text = function(en, id) { return ctx.locale === "id" ? id : en; };
+      const escapeHTML = function(value) {
+        return String(value == null ? '' : value).replace(/[&<>"]/g, function(char) {
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char];
+        });
+      };
+      const formatInt = function(value) {
+        return new Intl.NumberFormat(ctx.locale === "id" ? "id-ID" : "en-US").format(Number(value || 0));
+      };
+      const formatPercent = function(value) {
+        return (Number(value || 0) * 100).toFixed(1) + '%';
+      };
+      const totalDocuments = (payload.documents.created || 0) + (payload.documents.draft || 0) + (payload.documents.submitted || 0) + (payload.documents.approved || 0) + (payload.documents.rejected || 0) + (payload.documents.cancelled || 0);
+      const renderRows = function(entries, emptyLabel) {
+        if (!entries.length) {
+          return '<tr><td colspan="3" class="status">' + escapeHTML(emptyLabel) + '</td></tr>';
+        }
+        return entries.map(function(entry) {
+          return '<tr><td><div class="row-primary">' + escapeHTML(entry.label) + '</div></td><td>' + escapeHTML(entry.primary) + '</td><td>' + escapeHTML(entry.secondary) + '</td></tr>';
+        }).join('');
+      };
+      const typeRows = Object.keys((payload.segments && payload.segments.by_document_type) || {}).sort().map(function(key) {
+        const item = payload.segments.by_document_type[key] || {};
+        return {
+          label: key,
+          primary: formatInt((item.submitted || 0) + (item.approved || 0)),
+          secondary: formatInt(item.draft || 0)
+        };
+      });
+      const locationRows = Object.keys((payload.segments && payload.segments.by_location) || {}).sort().map(function(key) {
+        const item = payload.segments.by_location[key] || {};
+        return {
+          label: key || text('Unassigned', 'Tanpa Lokasi'),
+          primary: formatInt((item.approved || 0) + (item.submitted || 0)),
+          secondary: formatInt(item.rejected || 0)
+        };
+      });
+      const metrics = Object.keys(payload.metrics || {}).sort(function(a, b) {
+        return (payload.metrics[b] || 0) - (payload.metrics[a] || 0);
+      }).slice(0, 8).map(function(key) {
+        return {label: key, value: payload.metrics[key]};
+      });
+      const metricsRows = metrics.length ? metrics.map(function(item) {
+        return '<tr><td><div class="row-primary">' + escapeHTML(item.label) + '</div></td><td>' + escapeHTML(formatInt(item.value)) + '</td><td></td></tr>';
+      }).join('') : '<tr><td colspan="3" class="status">' + text('No metrics captured yet.', 'Belum ada metrik yang terekam.') + '</td></tr>';
+      ctx.mount.innerHTML = ''
+        + '<section class="page-panel">'
+        +   '<div class="page-header">'
+        +     '<div>'
+        +       '<h3>' + text('Analytics Cockpit', 'Kokpit Analitik') + '</h3>'
+        +       '<p class="status">' + text('Operational analytics overview for documents, workflow, and reliability.', 'Ringkasan analitik operasional untuk dokumen, workflow, dan reliabilitas.') + '</p>'
+        +     '</div>'
+        +     '<div class="actions">'
+        +       '<button type="button" class="secondary" data-nav="#/documents">' + text('Open Requests', 'Buka Permintaan') + '</button>'
+        +       '<button type="button" class="secondary" data-nav="#/monitoring">' + text('Open Monitoring', 'Buka Monitoring') + '</button>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div class="page-body">'
+        +     '<div class="metric-grid">'
+        +       '<article class="metric-card"><span class="meta">' + text('Documents', 'Dokumen') + '</span><strong>' + formatInt(totalDocuments) + '</strong></article>'
+        +       '<article class="metric-card"><span class="meta">' + text('Pending Approvals', 'Persetujuan Tertunda') + '</span><strong>' + formatInt(payload.workflow.pending_approvals) + '</strong></article>'
+        +       '<article class="metric-card"><span class="meta">' + text('Approval Rate', 'Tingkat Persetujuan') + '</span><strong>' + formatPercent(payload.workflow.approval_rate) + '</strong></article>'
+        +       '<article class="metric-card"><span class="meta">' + text('Dead Letter Rate', 'Tingkat Dead Letter') + '</span><strong>' + formatPercent(payload.reliability.dead_letter_rate) + '</strong></article>'
+        +     '</div>'
+        +     '<div class="admin-shell-grid">'
+        +       '<section class="stack-card">'
+        +         '<div class="section-head"><h3>' + text('Document Flow', 'Arus Dokumen') + '</h3></div>'
+        +         '<div class="section-body"><div class="detail-grid">'
+        +           '<article class="detail-item"><span class="meta">' + text('Draft', 'Draf') + '</span><strong>' + formatInt(payload.documents.draft) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Submitted', 'Diajukan') + '</span><strong>' + formatInt(payload.documents.submitted) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Approved', 'Disetujui') + '</span><strong>' + formatInt(payload.documents.approved) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Rejected', 'Ditolak') + '</span><strong>' + formatInt(payload.documents.rejected) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Cancelled', 'Dibatalkan') + '</span><strong>' + formatInt(payload.documents.cancelled) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Created', 'Dibuat') + '</span><strong>' + formatInt(payload.documents.created) + '</strong></article>'
+        +         '</div></div>'
+        +       '</section>'
+        +       '<section class="stack-card">'
+        +         '<div class="section-head"><h3>' + text('Workflow Health', 'Kesehatan Workflow') + '</h3></div>'
+        +         '<div class="section-body"><div class="detail-grid">'
+        +           '<article class="detail-item"><span class="meta">' + text('Open Tasks', 'Tugas Terbuka') + '</span><strong>' + formatInt(payload.workflow.open_tasks) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Completed Tasks', 'Tugas Selesai') + '</span><strong>' + formatInt(payload.workflow.completed_tasks) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Rejection Rate', 'Tingkat Penolakan') + '</span><strong>' + formatPercent(payload.workflow.rejection_rate) + '</strong></article>'
+        +         '</div></div>'
+        +       '</section>'
+        +     '</div>'
+        +     '<div class="admin-shell-grid">'
+        +       '<section class="stack-card">'
+        +         '<div class="section-head"><h3>' + text('By Document Type', 'Per Jenis Dokumen') + '</h3></div>'
+        +         '<div class="section-body"><div class="table-shell"><table class="data-table"><thead><tr><th>' + text('Document Type', 'Jenis Dokumen') + '</th><th>' + text('Active Flow', 'Arus Aktif') + '</th><th>' + text('Draft', 'Draf') + '</th></tr></thead><tbody>' + renderRows(typeRows, text('No document activity yet.', 'Belum ada aktivitas dokumen.')) + '</tbody></table></div></div>'
+        +       '</section>'
+        +       '<section class="stack-card">'
+        +         '<div class="section-head"><h3>' + text('By Location', 'Per Lokasi') + '</h3></div>'
+        +         '<div class="section-body"><div class="table-shell"><table class="data-table"><thead><tr><th>' + text('Location', 'Lokasi') + '</th><th>' + text('Active Flow', 'Arus Aktif') + '</th><th>' + text('Rejected', 'Ditolak') + '</th></tr></thead><tbody>' + renderRows(locationRows, text('No location activity yet.', 'Belum ada aktivitas lokasi.')) + '</tbody></table></div></div>'
+        +       '</section>'
+        +     '</div>'
+        +     '<div class="admin-shell-grid">'
+        +       '<section class="stack-card">'
+        +         '<div class="section-head"><h3>' + text('Reliability', 'Reliabilitas') + '</h3></div>'
+        +         '<div class="section-body"><div class="detail-grid">'
+        +           '<article class="detail-item"><span class="meta">' + text('Outbox Pending', 'Outbox Tertunda') + '</span><strong>' + formatInt(payload.reliability.outbox_pending) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Dead Letters', 'Dead Letter') + '</span><strong>' + formatInt(payload.reliability.outbox_dead_letters) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Dispatch Success', 'Dispatch Berhasil') + '</span><strong>' + formatInt(payload.reliability.dispatch_success) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Dispatch Retries', 'Dispatch Retry') + '</span><strong>' + formatInt(payload.reliability.dispatch_retries) + '</strong></article>'
+        +         '</div></div>'
+        +       '</section>'
+        +       '<section class="stack-card">'
+        +         '<div class="section-head"><h3>' + text('Coverage', 'Cakupan') + '</h3></div>'
+        +         '<div class="section-body"><div class="detail-grid">'
+        +           '<article class="detail-item"><span class="meta">' + text('Document Summaries', 'Ringkasan Dokumen') + '</span><strong>' + formatInt(payload.coverage.document_summaries) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Projection Coverage', 'Cakupan Proyeksi') + '</span><strong>' + formatPercent(payload.coverage.projection_coverage) + '</strong></article>'
+        +           '<article class="detail-item"><span class="meta">' + text('Audit Events', 'Event Audit') + '</span><strong>' + formatInt(payload.coverage.audit_events) + '</strong></article>'
+        +         '</div></div>'
+        +       '</section>'
+        +     '</div>'
+        +     '<section class="stack-card">'
+        +       '<div class="section-head"><h3>' + text('Top Metrics', 'Metrik Utama') + '</h3></div>'
+        +       '<div class="section-body"><div class="table-shell"><table class="data-table"><thead><tr><th>' + text('Metric', 'Metrik') + '</th><th>' + text('Value', 'Nilai') + '</th><th></th></tr></thead><tbody>' + metricsRows + '</tbody></table></div></div>'
+        +     '</section>'
+        +     '<details class="stack-card"><summary class="row-primary">' + text('Raw Snapshot', 'Snapshot Mentah') + '</summary><div class="section-body"><pre></pre></div></details>'
+        +   '</div>'
+        + '</section>';
+      ctx.mount.querySelectorAll('[data-nav]').forEach(function(node) {
+        node.addEventListener('click', function() {
+          window.location.hash = node.getAttribute('data-nav');
+        });
+      });
       ctx.mount.querySelector('pre').textContent = JSON.stringify(payload, null, 2);
     }
   };

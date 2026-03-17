@@ -3,13 +3,14 @@ package identity
 import "time"
 
 type User struct {
-	ID                string    `json:"id"`
-	Username          string    `json:"username"`
-	AuthenticationSubject string `json:"authentication_subject,omitempty"`
-	Status            string    `json:"status"`
-	DefaultLocationID string    `json:"default_location_id,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                    string    `json:"id"`
+	Username              string    `json:"username"`
+	AuthenticationSubject string    `json:"authentication_subject,omitempty"`
+	Status                string    `json:"status"`
+	DefaultLocationID     string    `json:"default_location_id,omitempty"`
+	PreferredLocale       string    `json:"preferred_locale,omitempty"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 type Role struct {

@@ -155,6 +155,20 @@ func TestServiceStartTouchAndRevokeSession(t *testing.T) {
 	}
 }
 
+func TestSetUserPreferredLocale(t *testing.T) {
+	svc := NewService(organization.NewService())
+	user, err := svc.SetUserPreferredLocale("user_admin", "id-ID")
+	if err != nil {
+		t.Fatalf("expected preferred locale update to succeed: %v", err)
+	}
+	if user.PreferredLocale != "id" {
+		t.Fatalf("expected normalized locale on user, got %+v", user)
+	}
+	if got := svc.PreferredLocale("user_admin"); got != "id" {
+		t.Fatalf("expected preferred locale lookup to return id, got %q", got)
+	}
+}
+
 func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	svc := NewService(organization.NewService())
 	session, err := svc.AuthenticatePassword("admin", "admin123!", "loc_hq", map[string]any{"source": "test"}, time.Hour)

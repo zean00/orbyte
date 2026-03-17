@@ -231,6 +231,42 @@ func TestServiceAccessorsExposeRegisteredContracts(t *testing.T) {
 	}
 }
 
+func TestSurfaceAwareFrontendAccessors(t *testing.T) {
+	svc := NewService()
+	manifest := Manifest{
+		Key: "surfaces",
+		Frontend: FrontendDefinition{
+			Menus: []MenuDefinition{
+				{Key: "user.menu", Label: "User", ActionKey: "user.action"},
+				{Key: "admin.menu", Label: "Admin", ActionKey: "admin.action", Surface: UISurfaceAdmin},
+			},
+			Actions: []ActionDefinition{
+				{Key: "user.action", Label: "User", RoutePath: "/user", ViewKey: "user.view", RenderMode: RenderModeGeneric},
+				{Key: "admin.action", Label: "Admin", RoutePath: "/admin/modules", Surface: UISurfaceAdmin},
+			},
+			Views: []ViewDefinition{
+				{Key: "user.view", Title: "User View", Kind: "list"},
+			},
+		},
+	}
+	if err := svc.Register(manifest, "system"); err != nil {
+		t.Fatalf("register manifest failed: %v", err)
+	}
+
+	if len(svc.MenusForSurface(UISurfaceUser)) != 1 {
+		t.Fatalf("expected only user menus, got %+v", svc.MenusForSurface(UISurfaceUser))
+	}
+	if len(svc.MenusForSurface(UISurfaceAdmin)) != 1 {
+		t.Fatalf("expected only admin menus, got %+v", svc.MenusForSurface(UISurfaceAdmin))
+	}
+	if _, ok := svc.ResolveRouteForSurface("/admin/modules", UISurfaceUser); ok {
+		t.Fatal("expected admin route to be hidden from user surface")
+	}
+	if route, ok := svc.ResolveRouteForSurface("/admin/modules", UISurfaceAdmin); !ok || route.Action.Key != "admin.action" {
+		t.Fatalf("expected admin route to resolve for admin surface, got %+v %v", route, ok)
+	}
+}
+
 func TestRegisterRejectsUnknownRoleTemplatePermissionAndInvalidDependencyRange(t *testing.T) {
 	svc := NewService()
 	if err := svc.Register(Manifest{

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/shared"
 )
@@ -388,6 +389,17 @@ func (s *Service) FindUser(id string) (User, bool) {
 	return s.repo.FindUser(id)
 }
 
+func (s *Service) PreferredLocale(userID string) string {
+	user, ok := s.repo.FindUser(userID)
+	if !ok {
+		return ""
+	}
+	if strings.TrimSpace(user.PreferredLocale) == "" {
+		return ""
+	}
+	return i18n.NormalizeLocale(user.PreferredLocale)
+}
+
 func (s *Service) Bindings() []RoleBinding {
 	return s.repo.RoleBindings()
 }
@@ -410,6 +422,19 @@ func (s *Service) FindSession(id string) (Session, bool) {
 
 func (s *Service) FindUserByUsername(username string) (User, bool) {
 	return s.repo.FindUserByUsername(username)
+}
+
+func (s *Service) SetUserPreferredLocale(userID, locale string) (User, error) {
+	user, ok := s.repo.FindUser(userID)
+	if !ok {
+		return User{}, shared.NotFound("user not found")
+	}
+	user.PreferredLocale = i18n.NormalizeLocale(locale)
+	user.UpdatedAt = time.Now().UTC()
+	if err := s.repo.SaveUser(user); err != nil {
+		return User{}, err
+	}
+	return user, nil
 }
 
 func (s *Service) FindCredentialByUserID(userID string) (Credential, bool) {

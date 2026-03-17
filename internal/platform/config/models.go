@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"orbyte/internal/platform/i18n"
+)
 
 type Entry struct {
 	Key         string         `json:"key"`
@@ -15,24 +19,28 @@ type Entry struct {
 }
 
 type Definition struct {
-	Key           string            `json:"key"`
-	ModuleKey     string            `json:"module_key"`
-	Category      string            `json:"category"`
-	DisplayName   string            `json:"display_name"`
-	Description   string            `json:"description,omitempty"`
-	AllowedScopes []string          `json:"allowed_scopes"`
-	DefaultValue  map[string]any    `json:"default_value"`
-	Fields        []FieldDefinition `json:"fields"`
+	Key             string             `json:"key"`
+	ModuleKey       string             `json:"module_key"`
+	Category        string             `json:"category"`
+	DisplayName     string             `json:"display_name"`
+	DisplayNameI18n i18n.LocalizedText `json:"display_name_i18n,omitempty"`
+	Description     string             `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText `json:"description_i18n,omitempty"`
+	AllowedScopes   []string           `json:"allowed_scopes"`
+	DefaultValue    map[string]any     `json:"default_value"`
+	Fields          []FieldDefinition  `json:"fields"`
 }
 
 type FieldDefinition struct {
-	Key         string   `json:"key"`
-	Label       string   `json:"label"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required"`
-	Description string   `json:"description,omitempty"`
-	Enum        []string `json:"enum,omitempty"`
-	Sensitive   bool     `json:"sensitive,omitempty"`
+	Key             string             `json:"key"`
+	Label           string             `json:"label"`
+	LabelI18n       i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Type            string             `json:"type"`
+	Required        bool               `json:"required"`
+	Description     string             `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText `json:"description_i18n,omitempty"`
+	Enum            []string           `json:"enum,omitempty"`
+	Sensitive       bool               `json:"sensitive,omitempty"`
 }
 
 type EffectiveValue struct {
