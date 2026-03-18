@@ -56,8 +56,8 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		menus, actions, views, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
-		adminMenus, adminActions, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
+		menus, actions, views, _, flows := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		adminMenus, adminActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
 		defaultPath := defaultRouteForSurface(ident, p.userID, "user", menus, actions)
 		adminPath := "/admin"
 		if len(adminMenus) > 0 {
@@ -72,6 +72,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			"menus":             menus,
 			"actions":           actions,
 			"views":             views,
+			"flows":             flows,
 			"default_path":      defaultPath,
 			"admin_access":      len(adminMenus) > 0,
 			"admin_path":        adminPath,
@@ -85,7 +86,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		menus, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		menus, _, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		respondJSON(w, http.StatusOK, map[string]any{"items": menus})
 	})
 
@@ -94,7 +95,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		_, actions, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		_, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		respondJSON(w, http.StatusOK, map[string]any{"items": actions})
 	})
 
@@ -142,7 +143,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.NotFound("view not found"))
 			return
 		}
-		_, _, views, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		_, _, views, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		for _, view := range views {
 			if view.Key == viewKey {
 				respondJSON(w, http.StatusOK, view)
@@ -179,7 +180,29 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Forbidden("route is not allowed"))
 			return
 		}
+		if resolution.Flow != nil && !principalAllowsAll(ident, p, resolution.Flow.RequiredPermissions) {
+			respondError(w, shared.Forbidden("route is not allowed"))
+			return
+		}
 		respondJSON(w, http.StatusOK, resolution)
+	})
+
+	mux.HandleFunc("GET /ui/document-flows/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		flowKey := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/ui/document-flows/"))
+		if flowKey == "" {
+			respondError(w, shared.NotFound("document flow not found"))
+			return
+		}
+		flow, ok := modules.DocumentFlowForSurface(flowKey, module.UISurfaceUser)
+		if !ok || !principalAllowsAll(ident, p, flow.RequiredPermissions) {
+			respondError(w, shared.NotFound("document flow not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, flow)
 	})
 
 	mux.HandleFunc("GET /ui/assets/modules/", func(w http.ResponseWriter, r *http.Request) {
@@ -285,12 +308,23 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
 		rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
 		rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "ui")
+		var flowInstance any
+		if instance, err := resolveDocumentFlowInstance(modules, docs, "", documentID); err == nil {
+			for index := range instance.Items {
+				item := instance.Items[index]
+				renderedItem := docs.Render(item.Record, document.ViewExpanded, modules.EnabledMap())
+				renderedItem = filterDocumentExtensionsForPrincipal(renderedItem, modules, ident, policySvc, p)
+				instance.Items[index].Record = sanitizeDocumentRecord(fieldSecurity, ident, p, renderedItem, "ui")
+			}
+			flowInstance = instance
+		}
 		respondJSON(w, http.StatusOK, map[string]any{
-			"record":       rendered,
-			"lines":        record.Lines,
-			"links":        record.Links,
-			"attachments":  record.Attachments,
-			"documentType": record.Header.Type,
+			"record":        rendered,
+			"lines":         record.Lines,
+			"links":         record.Links,
+			"attachments":   record.Attachments,
+			"documentType":  record.Header.Type,
+			"flow_instance": flowInstance,
 		})
 	})
 
@@ -654,14 +688,16 @@ func principalAllowsAll(ident *identity.Service, p principal, permissions []stri
 	return true
 }
 
-func visibleUIContracts(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) ([]module.MenuDefinition, []module.ActionDefinition, []module.ViewDefinition, []module.CustomEntryDefinition) {
+func visibleUIContracts(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) ([]module.MenuDefinition, []module.ActionDefinition, []module.ViewDefinition, []module.CustomEntryDefinition, []module.DocumentFlowDefinition) {
 	allowedMenus := make([]module.MenuDefinition, 0)
 	allowedActions := make([]module.ActionDefinition, 0)
 	allowedViews := make([]module.ViewDefinition, 0)
 	allowedEntries := make([]module.CustomEntryDefinition, 0)
+	allowedFlows := make([]module.DocumentFlowDefinition, 0)
 	actionKeys := map[string]bool{}
 	viewKeys := map[string]bool{}
 	entryKeys := map[string]bool{}
+	flowKeys := map[string]bool{}
 
 	for _, detail := range modules.List() {
 		if !detail.Installed.Enabled {
@@ -701,6 +737,21 @@ func visibleUIContracts(ident *identity.Service, modules *module.Service, p prin
 				if !entryAllowed {
 					continue
 				}
+			case module.RenderModeFlow:
+				flowAllowed := false
+				for _, flow := range detail.Manifest.Frontend.DocumentFlows {
+					if flow.Key == action.FlowKey && surfaceMatches(flow.Surface, surface) && principalAllowsAll(ident, p, flow.RequiredPermissions) {
+						flowAllowed = true
+						if !flowKeys[flow.Key] {
+							allowedFlows = append(allowedFlows, flow)
+							flowKeys[flow.Key] = true
+						}
+						break
+					}
+				}
+				if !flowAllowed {
+					continue
+				}
 			}
 			if !actionKeys[action.Key] {
 				allowedActions = append(allowedActions, action)
@@ -733,8 +784,9 @@ func visibleUIContracts(ident *identity.Service, modules *module.Service, p prin
 	sort.Slice(allowedActions, func(i, j int) bool { return allowedActions[i].Key < allowedActions[j].Key })
 	sort.Slice(allowedViews, func(i, j int) bool { return allowedViews[i].Key < allowedViews[j].Key })
 	sort.Slice(allowedEntries, func(i, j int) bool { return allowedEntries[i].Key < allowedEntries[j].Key })
+	sort.Slice(allowedFlows, func(i, j int) bool { return allowedFlows[i].Key < allowedFlows[j].Key })
 
-	return allowedMenus, allowedActions, allowedViews, allowedEntries
+	return allowedMenus, allowedActions, allowedViews, allowedEntries, allowedFlows
 }
 
 func surfaceMatches(itemSurface, requested module.UISurface) bool {
@@ -899,6 +951,7 @@ const uiShellHTML = `<!doctype html>
         close_preview: 'Close Preview',
         add: 'Add',
         add_row: 'Add Row',
+        edit: 'Edit',
         remove: 'Remove',
         no_related_items: 'No related items.',
         no_related_items_yet: 'No related items yet.',
@@ -990,6 +1043,7 @@ const uiShellHTML = `<!doctype html>
         close_preview: 'Tutup Pratinjau',
         add: 'Tambah',
         add_row: 'Tambah Baris',
+        edit: 'Ubah',
         remove: 'Hapus',
         no_related_items: 'Belum ada item terkait.',
         no_related_items_yet: 'Belum ada item terkait.',
@@ -1000,6 +1054,7 @@ const uiShellHTML = `<!doctype html>
       bootstrap: null,
       route: null,
       bundles: {},
+      flowTabs: {},
       authOptions: null,
       offlineBootstrap: null,
       syncStats: {pending: 0, conflict: 0, failed: 0},
@@ -1637,6 +1692,42 @@ const uiShellHTML = `<!doctype html>
       return action ? action.route_path : '';
     }
 
+    function routeForFlow(flowKey) {
+      const action = (state.bootstrap.actions || []).find((item) => item.render_mode === 'flow' && item.flow_key === flowKey);
+      return action ? action.route_path : '';
+    }
+
+    function flowForKey(flowKey) {
+      return ((state.bootstrap && state.bootstrap.flows) || []).find((item) => item.key === flowKey) || null;
+    }
+
+    function routeForDocumentCreate(documentType) {
+      const flowAction = (state.bootstrap.actions || []).find((action) => {
+        if (action.render_mode !== 'flow' || !action.flow_key) return false;
+        const flow = flowForKey(action.flow_key);
+        return !!flow && flow.primary_document_type === documentType;
+      });
+      if (flowAction) return flowAction.route_path;
+      return routeForDocument(documentType, 'form');
+    }
+
+    function routeForDocumentEdit(record, flowInstance) {
+      const instance = flowInstance || null;
+      if (instance && instance.flow && instance.primary_document_id) {
+        const flowRoute = routeForFlow(instance.flow.key);
+        if (flowRoute) {
+          const params = new URLSearchParams();
+          params.set('id', instance.primary_document_id);
+          const activeDocumentKey = currentParams().get('document_key') || ((((record || {}).header || {}).metadata || {}).flow_document_key) || instance.active_document_key || '';
+          if (activeDocumentKey) params.set('document_key', activeDocumentKey);
+          return flowRoute + '?' + params.toString();
+        }
+      }
+      const formRoute = routeForDocument(record.header.type, 'form');
+      if (!formRoute || !record.header.id) return '';
+      return formRoute + '?id=' + encodeURIComponent(record.header.id);
+    }
+
     async function loadBundle(bundleKey) {
       if (state.bundles[bundleKey]) return state.bundles[bundleKey];
       const script = document.createElement('script');
@@ -1688,7 +1779,7 @@ const uiShellHTML = `<!doctype html>
           if (!payload) throw err;
         }
         const pagedItems = payload.items || [];
-        const newRoute = view.model_key ? routeForModel(view.model_key, 'form') : routeForDocument(view.document_type, 'form');
+        const newRoute = view.model_key ? routeForModel(view.model_key, 'form') : routeForDocumentCreate(view.document_type);
         const filterBar = '<div class="toolbar-row">' +
           ((view.filters || []).map((filter) => {
             if (filter.type !== 'enum') return '';
@@ -1770,7 +1861,7 @@ const uiShellHTML = `<!doctype html>
               const sourceKey = button.dataset.relatedSave;
               const section = button.closest('section');
               const values = {};
-              section.querySelectorAll('[data-path]').forEach((input) => assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input)));
+              section.querySelectorAll('[data-path]').forEach((input) => assignPath(values, input.dataset.path.replace(/^values\./, ''), readFieldValue(input)));
               const csrf = readCookie('orbyte_csrf');
               try {
                 await api('/models/' + encodeURIComponent(view.model_key) + '/' + encodeURIComponent(record.id) + '/relations/' + encodeURIComponent(sourceKey), {
@@ -1791,17 +1882,48 @@ const uiShellHTML = `<!doctype html>
           return;
         }
         const payload = await api('/ui/data/documents/' + encodeURIComponent(documentID));
+        const flowInstance = payload.flow_instance || null;
         const record = payload.record;
-        const tabMarkup = (view.tabs || []).map((tab) => {
-          const sections = (tab.sections || []).map((section) => renderSection(section, record)).join('');
-          return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
-        }).join('');
-        const sectionMarkup = (view.sections || []).map((section) => renderSection(section, record)).join('');
-        const relatedViews = (view.related_views || []).map((item) => renderRelatedView(item, payload, view)).join('');
+        let activeRecord = record;
+        let detailMarkup = '';
+        let relatedViews = '';
+        if (flowInstance && (flowInstance.items || []).length > 0) {
+          const requestedDocumentKey = currentParams().get('document_key') || flowInstance.active_document_key || '';
+          const activeItem = (flowInstance.items || []).find((item) => item.definition.key === requestedDocumentKey) || flowInstance.items[0];
+          activeRecord = activeItem.record;
+          const flowTabs = (flowInstance.items || []).map((item) => '<button type="button" class="' + (item.definition.key === activeItem.definition.key ? '' : 'secondary') + '" data-flow-detail-tab="' + escapeHTML(item.definition.key) + '">' + escapeHTML(pickText(item.definition, 'title')) + '</button>').join('');
+          detailMarkup = '<div class="toolbar-row">' + flowTabs + '</div><div class="section-stack">' + renderFlowReadonlyDocumentDefinition(activeItem.definition, activeItem.record) + '</div>';
+        } else {
+          const tabMarkup = (view.tabs || []).map((tab) => {
+            const sections = (tab.sections || []).map((section) => renderSection(section, record)).join('');
+            return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
+          }).join('');
+          const sectionMarkup = (view.sections || []).map((section) => renderSection(section, record)).join('');
+          detailMarkup = '<div class="section-stack">' + (tabMarkup || sectionMarkup || ('<pre>' + escapeHTML(JSON.stringify(record.body.payload, null, 2)) + '</pre>')) + '</div>';
+          relatedViews = (view.related_views || []).map((item) => renderRelatedView(item, payload, view)).join('');
+        }
         const actionZones = renderActionZones(view);
-        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(record.header.id + ' · v' + record.header.version + ' · ' + displayValue(record.header.status)) + '</p></div></div><div class="page-body"><div class="section-stack">' + (tabMarkup || sectionMarkup || ('<pre>' + escapeHTML(JSON.stringify(record.body.payload, null, 2)) + '</pre>')) + '</div></div><div class="page-actions">' + actionZones + '</div></section>' + relatedViews;
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(activeRecord.header.id + ' · v' + activeRecord.header.version + ' · ' + displayValue(activeRecord.header.status)) + '</p></div></div><div class="page-body">' + detailMarkup + '</div><div class="page-actions">' + actionZones + '</div></section>' + relatedViews;
+        root.querySelectorAll('[data-flow-detail-tab]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const params = currentParams();
+            params.set('id', flowInstance.primary_document_id || documentID);
+            params.set('document_key', button.dataset.flowDetailTab || '');
+            window.location.hash = '#' + route.action.route_path + '?' + params.toString();
+          });
+        });
+        const editRoute = activeRecord.header.status === 'draft' ? routeForDocumentEdit(activeRecord, flowInstance) : '';
+        if (editRoute) {
+          const editButton = document.createElement('button');
+          editButton.className = 'secondary';
+          editButton.textContent = t('edit');
+          editButton.addEventListener('click', () => {
+            window.location.hash = '#' + editRoute;
+          });
+          (root.querySelector('[data-zone="secondary"]') || root.querySelector('.page-actions')).appendChild(editButton);
+        }
         for (const actionKey of view.allowed_actions || []) {
-          const placement = await api('/ui/actions/render?action=' + encodeURIComponent(actionKey) + '&document_id=' + encodeURIComponent(record.header.id));
+          const placement = await api('/ui/actions/render?action=' + encodeURIComponent(actionKey) + '&document_id=' + encodeURIComponent(activeRecord.header.id));
           if (!placement.allowed) {
             continue;
           }
@@ -1817,7 +1939,7 @@ const uiShellHTML = `<!doctype html>
           }
           button.addEventListener('click', async () => {
             try {
-              await invokeDocumentAction(record.header.id, actionKey, record.header.version, record.header.etag);
+              await invokeDocumentAction(activeRecord.header.id, actionKey, activeRecord.header.version, activeRecord.header.etag);
               await renderRoute();
             } catch (err) {
               setStatus(err.message);
@@ -1828,11 +1950,11 @@ const uiShellHTML = `<!doctype html>
         const printSupport = view.printable
           ? await resolvePrintTemplate(
               'document',
-              record.header.type,
+              activeRecord.header.type,
               view.print_purpose || 'official',
               view.print_channel || 'print',
-              record.header.organization_id || '',
-              record.header.location_id || ''
+              activeRecord.header.organization_id || '',
+              activeRecord.header.location_id || ''
             )
           : {resolved: false};
         if (printSupport.resolved) {
@@ -1844,10 +1966,10 @@ const uiShellHTML = `<!doctype html>
             try {
               await previewTemplateOutput({
                 target_kind: 'document',
-                target_key: record.header.type,
-                target_id: record.header.id,
-                organization_id: record.header.organization_id || '',
-                location_id: record.header.location_id || '',
+                target_key: activeRecord.header.type,
+                target_id: activeRecord.header.id,
+                organization_id: activeRecord.header.organization_id || '',
+                location_id: activeRecord.header.location_id || '',
                 purpose: view.print_purpose || 'official',
                 channel: view.print_channel || 'print'
               });
@@ -1866,10 +1988,10 @@ const uiShellHTML = `<!doctype html>
                 headers: {'Content-Type': 'application/json', 'X-CSRF-Token': readCookie('orbyte_csrf')},
                 body: JSON.stringify({
                   target_kind: 'document',
-                  target_key: record.header.type,
-                  target_id: record.header.id,
-                  organization_id: record.header.organization_id || '',
-                  location_id: record.header.location_id || '',
+                  target_key: activeRecord.header.type,
+                  target_id: activeRecord.header.id,
+                  organization_id: activeRecord.header.organization_id || '',
+                  location_id: activeRecord.header.location_id || '',
                   purpose: view.print_purpose || 'official',
                   channel: view.print_channel || 'print',
                   format: 'html'
@@ -1888,10 +2010,10 @@ const uiShellHTML = `<!doctype html>
             try {
               await downloadTemplatePDF({
                 target_kind: 'document',
-                target_key: record.header.type,
-                target_id: record.header.id,
-                organization_id: record.header.organization_id || '',
-                location_id: record.header.location_id || '',
+                target_key: activeRecord.header.type,
+                target_id: activeRecord.header.id,
+                organization_id: activeRecord.header.organization_id || '',
+                location_id: activeRecord.header.location_id || '',
                 purpose: view.print_purpose || 'official',
                 channel: view.print_channel || 'print'
               });
@@ -1941,7 +2063,7 @@ const uiShellHTML = `<!doctype html>
               const values = {};
               root.querySelectorAll('[data-path]').forEach((input) => {
                 if (input.closest('[data-relation-editor]')) return;
-                assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input));
+                assignPath(values, input.dataset.path.replace(/^values\./, ''), readFieldValue(input));
               });
               const relations = collectRelationMutations(root);
               await saveDraft('model', view.model_key, documentID, {
@@ -1964,7 +2086,7 @@ const uiShellHTML = `<!doctype html>
               const values = {};
               root.querySelectorAll('[data-path]').forEach((input) => {
                 if (input.closest('[data-relation-editor]')) return;
-                assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input));
+                assignPath(values, input.dataset.path.replace(/^values\./, ''), readFieldValue(input));
               });
               const relations = collectRelationMutations(root);
               const csrf = readCookie('orbyte_csrf');
@@ -2026,6 +2148,17 @@ const uiShellHTML = `<!doctype html>
         if (documentID) {
           try {
             record = await api('/documents/' + encodeURIComponent(documentID) + '?view=expanded');
+            const flowKey = (((record || {}).header || {}).metadata || {}).flow_key;
+            const primaryDocumentID = ((((record || {}).header || {}).metadata || {}).flow_primary_document_id) || documentID;
+            const flowDocumentKey = ((((record || {}).header || {}).metadata || {}).flow_document_key) || '';
+            const flowRoute = flowKey ? routeForFlow(flowKey) : '';
+            if (flowRoute) {
+              const params = new URLSearchParams();
+              params.set('id', primaryDocumentID);
+              if (flowDocumentKey) params.set('document_key', flowDocumentKey);
+              window.location.hash = '#' + flowRoute + '?' + params.toString();
+              return;
+            }
           } catch (_) {}
         }
         const formSections = (view.sections || []).length > 0
@@ -2036,7 +2169,7 @@ const uiShellHTML = `<!doctype html>
         if (saveLocalButton) {
           saveLocalButton.addEventListener('click', async () => {
             const payload = {};
-            root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\\.payload\\./, ''), readFieldValue(input)));
+            root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\.payload\./, ''), readFieldValue(input)));
             await saveDraft('document', view.document_type, documentID, {
               kind: 'document',
               document_type: view.document_type,
@@ -2055,7 +2188,7 @@ const uiShellHTML = `<!doctype html>
         if (button) {
           button.addEventListener('click', async () => {
             const payload = {};
-            root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\\.payload\\./, ''), readFieldValue(input)));
+            root.querySelectorAll('[data-path]').forEach((input) => assignPath(payload, input.dataset.path.replace(/^body\.payload\./, ''), readFieldValue(input)));
             const csrf = readCookie('orbyte_csrf');
             try {
               if (offlineCapable && (!navigator.onLine || !documentID)) {
@@ -2306,6 +2439,311 @@ const uiShellHTML = `<!doctype html>
       );
     }
 
+    function flowDraftStateKey(flowKey, targetID) {
+      return flowKey + '::' + (targetID || 'new');
+    }
+
+    function flowDraftData(flow, targetID) {
+      const current = state.flowTabs[flowDraftStateKey(flow.key, targetID)] || {};
+      return {
+        documents: Object.assign({}, current.documents || {}),
+        step_index: current.step_index || 0,
+        active_document_key: current.active_document_key || ''
+      };
+    }
+
+    async function loadFlowDraft(flowKey, targetID) {
+      const saved = await loadDraft('document_flow', flowKey, targetID || '');
+      if (saved) state.flowTabs[flowDraftStateKey(flowKey, targetID)] = saved;
+      return flowDraftData({key: flowKey}, targetID);
+    }
+
+    async function saveFlowDraft(flowKey, targetID, draft) {
+      state.flowTabs[flowDraftStateKey(flowKey, targetID)] = draft;
+      await saveDraft('document_flow', flowKey, targetID || '', draft);
+    }
+
+    function flowContext(draft) {
+      const documents = {};
+      Object.keys(draft.documents || {}).forEach((key) => {
+        documents[key] = {payload: (draft.documents[key] && draft.documents[key].payload) || {}};
+      });
+      return {documents};
+    }
+
+    function flowPathValue(payload, path) {
+      return String(path || '').split('.').reduce((current, key) => current && current[key] != null ? current[key] : '', payload);
+    }
+
+    function flowRuleMatches(rule, draft) {
+      const value = flowPathValue(flowContext(draft), rule.path);
+      if (rule.truthy) return !!value && String(value).toLowerCase() !== 'false';
+      if (rule.equals !== undefined && rule.equals !== '') return String(value) === String(rule.equals);
+      if (Array.isArray(rule.in) && rule.in.length) return rule.in.map(String).includes(String(value));
+      return false;
+    }
+
+    function resolveFlowSequence(flow, draft) {
+      const steps = flow.steps || [];
+      if (!steps.length) return [];
+      const stepMap = {};
+      steps.forEach((step) => { stepMap[step.key] = step; });
+      const sequence = [];
+      const seen = {};
+      let current = steps[0];
+      while (current && !seen[current.key]) {
+        seen[current.key] = true;
+        sequence.push(current);
+        let next = '';
+        for (const rule of (current.next_rules || [])) {
+          if (flowRuleMatches(rule, draft)) {
+            next = rule.next_step_key;
+            break;
+          }
+        }
+        if (!next) next = current.next_step_key || '';
+        current = next ? stepMap[next] : null;
+      }
+      return sequence;
+    }
+
+    function flowDocumentRecord(docDef, draft) {
+      return {
+        header: {type: docDef.document_type, status: 'draft'},
+        body: {payload: ((draft.documents || {})[docDef.key] && draft.documents[docDef.key].payload) || {}}
+      };
+    }
+
+    function flowDocumentFields(docDef) {
+      const fields = [];
+      (docDef.fields || []).forEach((field) => fields.push(field));
+      (docDef.sections || []).forEach((section) => {
+        (section.fields || []).forEach((field) => fields.push(field));
+      });
+      (docDef.tabs || []).forEach((tab) => {
+        (tab.sections || []).forEach((section) => {
+          (section.fields || []).forEach((field) => fields.push(field));
+        });
+      });
+      return fields;
+    }
+
+    function applyFlowDraftDefaults(flow, draft) {
+      const next = JSON.parse(JSON.stringify(draft || {documents: {}}));
+      let changed = false;
+      (flow.steps || []).forEach((step) => {
+        (step.documents || []).forEach((docDef) => {
+          next.documents[docDef.key] = next.documents[docDef.key] || {payload: {}};
+          const payload = next.documents[docDef.key].payload || {};
+          flowDocumentFields(docDef).forEach((field) => {
+            const normalizedPath = String(field.path || '').replace(/^body\.payload\./, '');
+            if (!normalizedPath) return;
+            const current = resolvePath(payload, normalizedPath);
+            if ((current === '' || current == null) && (field.options || []).length > 0) {
+              assignPath(payload, normalizedPath, field.options[0]);
+              changed = true;
+            }
+          });
+          next.documents[docDef.key].payload = payload;
+        });
+      });
+      return {draft: next, changed};
+    }
+
+    function renderFlowDocumentDefinition(docDef, draft) {
+      const record = flowDocumentRecord(docDef, draft);
+      if ((docDef.tabs || []).length > 0) {
+        return (docDef.tabs || []).map((tab) => {
+          const sections = (tab.sections || []).map((section) => renderFormSection(section, record)).join('');
+          return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
+        }).join('');
+      }
+      if ((docDef.sections || []).length > 0) {
+        return (docDef.sections || []).map((section) => renderFormSection(section, record)).join('');
+      }
+      return '<div class="form-grid">' + (docDef.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div>';
+    }
+
+    function collectFlowDraft(root, draft) {
+      const next = JSON.parse(JSON.stringify(draft || {documents: {}}));
+      root.querySelectorAll('[data-flow-doc-key]').forEach((section) => {
+        const docKey = section.dataset.flowDocKey;
+        next.documents[docKey] = next.documents[docKey] || {payload: {}};
+        const payload = {};
+        section.querySelectorAll('[data-path]').forEach((input) => {
+          assignPath(payload, input.dataset.path.replace(/^body\.payload\./, ''), readFieldValue(input));
+        });
+        next.documents[docKey].payload = payload;
+      });
+      return next;
+    }
+
+    function flowDraftFromInstance(instance) {
+      const documents = {};
+      (instance.items || []).forEach((item) => {
+        documents[item.definition.key] = {
+          payload: (((item.record || {}).body || {}).payload) || {}
+        };
+      });
+      return {
+        documents,
+        step_index: 0,
+        active_document_key: instance.active_document_key || ''
+      };
+    }
+
+    function flowStepIndexForDocumentKey(steps, documentKey) {
+      if (!documentKey) return 0;
+      for (let index = 0; index < (steps || []).length; index += 1) {
+        if (((steps[index].documents || []).some((item) => item.key === documentKey))) return index;
+      }
+      return 0;
+    }
+
+    async function renderFlow(route) {
+      const root = document.getElementById('view-root');
+      const flow = route.flow;
+      if (!flow) {
+        renderJSONCard(t('view_unavailable'), route);
+        return;
+      }
+      const flowDocumentID = currentParams().get('id') || '';
+      const activeDocumentParam = currentParams().get('document_key') || '';
+      let draft = await loadFlowDraft(flow.key, flowDocumentID);
+      if (flowDocumentID) {
+        try {
+          const payload = await api('/ui/data/documents/' + encodeURIComponent(flowDocumentID));
+          if (payload.flow_instance && payload.flow_instance.flow && payload.flow_instance.flow.key === flow.key) {
+            draft = flowDraftFromInstance(payload.flow_instance);
+            if (activeDocumentParam) draft.active_document_key = activeDocumentParam;
+          }
+        } catch (_) {}
+      }
+      const seeded = applyFlowDraftDefaults(flow, draft);
+      draft = seeded.draft;
+      if (seeded.changed) {
+        await saveFlowDraft(flow.key, flowDocumentID, draft);
+      }
+      const steps = resolveFlowSequence(flow, draft);
+      if (!steps.length) {
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(flow, 'title')) + '</h3><p class="status">' + escapeHTML(t('view_unavailable')) + '</p></div></div></section>';
+        return;
+      }
+      let stepIndex = Math.min((activeDocumentParam ? flowStepIndexForDocumentKey(steps, activeDocumentParam) : (draft.step_index || 0)), steps.length - 1);
+      const step = steps[stepIndex];
+      const activeDocKey = draft.active_document_key && (step.documents || []).some((item) => item.key === draft.active_document_key)
+        ? draft.active_document_key
+        : (activeDocumentParam && (step.documents || []).some((item) => item.key === activeDocumentParam)
+          ? activeDocumentParam
+          : (((step.documents || [])[0] && step.documents[0].key) || ''));
+      const stepRail = steps.map((item, index) => '<button type="button" class="' + (index === stepIndex ? '' : 'secondary') + '" data-flow-step="' + index + '">' + escapeHTML(pickText(item, 'title')) + '</button>').join('');
+      const tabBar = (step.documents || []).length > 1
+        ? '<div class="toolbar-row">' + (step.documents || []).map((item) => '<button type="button" class="' + (item.key === activeDocKey ? '' : 'secondary') + '" data-flow-tab="' + escapeHTML(item.key) + '">' + escapeHTML(pickText(item, 'title')) + '</button>').join('') + '</div>'
+        : '';
+      const panels = (step.documents || []).map((docDef) => {
+        const hidden = docDef.key === activeDocKey ? '' : ' hidden';
+        return '<section class="section-block' + hidden + '" data-flow-doc-key="' + escapeHTML(docDef.key) + '"><div class="section-head"><h3>' + escapeHTML(pickText(docDef, 'title')) + '</h3></div><div class="section-body">' + renderFlowDocumentDefinition(docDef, draft) + '</div></section>';
+      }).join('');
+      const isLast = stepIndex >= steps.length - 1;
+      root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(flow, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(step, 'title')) + '</p></div></div><div class="page-body"><div class="toolbar-row">' + stepRail + '</div>' + tabBar + '<div class="section-stack">' + panels + '</div><p class="status" id="flow-status"></p></div><div class="page-actions">' +
+        '<button type="button" id="flow-back" class="secondary"' + (stepIndex === 0 ? ' disabled' : '') + '>' + escapeHTML(t('previous')) + '</button>' +
+        '<button type="button" id="flow-save-local" class="secondary">' + escapeHTML(t('save_local')) + '</button>' +
+        '<button type="button" id="flow-next">' + escapeHTML(isLast ? (flowDocumentID ? t('save') : t('create')) : t('next')) + '</button>' +
+        '</div></section>';
+
+      root.querySelectorAll('[data-flow-step]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          draft = collectFlowDraft(root, draft);
+          draft.step_index = parseInt(button.dataset.flowStep || '0', 10);
+          draft.active_document_key = activeDocKey;
+          await saveFlowDraft(flow.key, flowDocumentID, draft);
+          await renderFlow(route);
+        });
+      });
+      root.querySelectorAll('[data-flow-tab]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          draft = collectFlowDraft(root, draft);
+          draft.step_index = stepIndex;
+          draft.active_document_key = button.dataset.flowTab || '';
+          await saveFlowDraft(flow.key, flowDocumentID, draft);
+          await renderFlow(route);
+        });
+      });
+      root.querySelectorAll('[data-flow-doc-key] [data-path]').forEach((input) => {
+        input.addEventListener('change', async () => {
+          const updated = collectFlowDraft(root, draft);
+          updated.step_index = stepIndex;
+          updated.active_document_key = activeDocKey;
+          draft = updated;
+          await saveFlowDraft(flow.key, flowDocumentID, updated);
+        });
+      });
+      const back = root.querySelector('#flow-back');
+      if (back) {
+        back.addEventListener('click', async () => {
+          draft = collectFlowDraft(root, draft);
+          draft.step_index = Math.max(0, stepIndex - 1);
+          draft.active_document_key = activeDocKey;
+          await saveFlowDraft(flow.key, flowDocumentID, draft);
+          await renderFlow(route);
+        });
+      }
+      const saveLocal = root.querySelector('#flow-save-local');
+      if (saveLocal) {
+        saveLocal.addEventListener('click', async () => {
+          draft = collectFlowDraft(root, draft);
+          draft.step_index = stepIndex;
+          draft.active_document_key = activeDocKey;
+          await saveFlowDraft(flow.key, flowDocumentID, draft);
+          document.getElementById('flow-status').textContent = t('draft_saved_local');
+          setStatus(t('draft_saved_local'));
+        });
+      }
+      const next = root.querySelector('#flow-next');
+      if (next) {
+        next.addEventListener('click', async () => {
+          draft = collectFlowDraft(root, draft);
+          draft.step_index = stepIndex;
+          draft.active_document_key = activeDocKey;
+          await saveFlowDraft(flow.key, flowDocumentID, draft);
+          const updatedSteps = resolveFlowSequence(flow, draft);
+          const hasNext = stepIndex < updatedSteps.length - 1;
+          if (hasNext) {
+            draft.step_index = stepIndex + 1;
+            await saveFlowDraft(flow.key, flowDocumentID, draft);
+            await renderFlow(route);
+            return;
+          }
+          try {
+            const payload = await api('/document-flows/' + encodeURIComponent(flow.key) + '/commit', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json', 'X-CSRF-Token': readCookie('orbyte_csrf')},
+              body: JSON.stringify({
+                organization_id: 'org_default',
+                primary_document_id: flowDocumentID || '',
+                documents: Object.keys(draft.documents || {}).reduce((result, key) => {
+                  result[key] = (draft.documents[key] && draft.documents[key].payload) || {};
+                  return result;
+                }, {})
+              })
+            });
+            await idbDelete('drafts', draftKey('document_flow', flow.key, flowDocumentID || ''));
+            delete state.flowTabs[flowDraftStateKey(flow.key, flowDocumentID)];
+            const detailRoute = routeForDocument(payload.primary_document_type, 'detail');
+            if (detailRoute && payload.primary_document_id) {
+              window.location.hash = '#' + detailRoute + '?id=' + encodeURIComponent(payload.primary_document_id);
+              return;
+            }
+            document.getElementById('flow-status').textContent = t('record_created');
+            setStatus(t('record_created'));
+          } catch (err) {
+            document.getElementById('flow-status').textContent = err.message;
+            setStatus(err.message);
+          }
+        });
+      }
+    }
+
     async function renderCustom(route) {
       const root = document.getElementById('view-root');
       root.innerHTML = '<section class="panel"><h3>' + escapeHTML(t('custom_loading')) + '</h3></section>';
@@ -2385,6 +2823,11 @@ const uiShellHTML = `<!doctype html>
         await renderCustom(route);
         return;
       }
+      if (route.render_mode === 'flow') {
+        await renderFlow(route);
+        renderMenus();
+        return;
+      }
       await renderGeneric(route);
       renderMenus();
     }
@@ -2462,6 +2905,22 @@ const uiShellHTML = `<!doctype html>
         }).join('');
       }
       return '<section class="section-block"><div class="section-head"><h4>' + escapeHTML(pickText(section, 'title')) + '</h4></div><div class="section-body"><div class="detail-grid">' + fields + extensionFields + '</div></div></section>';
+    }
+
+    function renderFlowReadonlyDocumentDefinition(docDef, record) {
+      if ((docDef.tabs || []).length > 0) {
+        return (docDef.tabs || []).map((tab) => {
+          const sections = (tab.sections || []).map((section) => renderSection(section, record)).join('');
+          return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
+        }).join('');
+      }
+      if ((docDef.sections || []).length > 0) {
+        return (docDef.sections || []).map((section) => renderSection(section, record)).join('');
+      }
+      const fields = (docDef.fields || []).map((field) => {
+        return '<article class="detail-item"><span class="meta">' + escapeHTML(pickText(field, 'label')) + '</span><strong>' + escapeHTML(displayValue(resolvePath(record, field.path))) + '</strong></article>';
+      }).join('');
+      return '<section class="section-block"><div class="section-head"><h4>' + escapeHTML(pickText(docDef, 'title')) + '</h4></div><div class="section-body"><div class="detail-grid">' + fields + '</div></div></section>';
     }
 
     function renderModelSection(section, record) {
@@ -2605,7 +3064,7 @@ const uiShellHTML = `<!doctype html>
         Array.from(editor.querySelectorAll(':scope > [data-relation-list] > [data-relation-row]')).forEach((row) => {
           const op = row.dataset.recordOp || 'upsert';
           const values = {};
-          row.querySelectorAll(':scope > label [data-path], :scope > .card > label [data-path]').forEach((input) => assignPath(values, input.dataset.path.replace(/^values\\./, ''), readFieldValue(input)));
+          row.querySelectorAll(':scope > label [data-path], :scope > .card > label [data-path]').forEach((input) => assignPath(values, input.dataset.path.replace(/^values\./, ''), readFieldValue(input)));
           const nested = collectRelationMutations(row);
           rows.push({
             operation: op,

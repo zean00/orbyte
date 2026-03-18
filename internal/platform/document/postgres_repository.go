@@ -143,16 +143,20 @@ func (r *PostgresRepository) SaveRecord(record Record) error {
 	if err != nil {
 		return shared.Validation("invalid document payload")
 	}
+	metadata, err := json.Marshal(record.Header.Metadata)
+	if err != nil {
+		return shared.Validation("invalid document metadata")
+	}
 
 	const query = `
 		INSERT INTO document_records (
 			document_id, document_type, status, version, etag, organization_id, location_id, number,
 			created_by, created_at, updated_by, updated_at, submitted_by, submitted_at,
-			schema_version, payload_json, content_hash, total_amount_minor, total_amount_currency
+			schema_version, payload_json, content_hash, total_amount_minor, total_amount_currency, metadata_json
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''),
 			$9, $10, $11, $12, NULLIF($13, ''), $14,
-			$15, $16, NULLIF($17, ''), $18, $19
+			$15, $16, NULLIF($17, ''), $18, $19, $20
 		)
 		ON CONFLICT (document_id) DO UPDATE SET
 			status = EXCLUDED.status,
@@ -168,7 +172,8 @@ func (r *PostgresRepository) SaveRecord(record Record) error {
 			payload_json = EXCLUDED.payload_json,
 			content_hash = EXCLUDED.content_hash,
 			total_amount_minor = EXCLUDED.total_amount_minor,
-			total_amount_currency = EXCLUDED.total_amount_currency`
+			total_amount_currency = EXCLUDED.total_amount_currency,
+			metadata_json = EXCLUDED.metadata_json`
 
 	_, err = r.db.ExecContext(context.Background(), query,
 		record.Header.ID,
@@ -190,6 +195,7 @@ func (r *PostgresRepository) SaveRecord(record Record) error {
 		record.Body.ContentHash,
 		record.Header.TotalAmount.AmountMinor,
 		record.Header.TotalAmount.Currency,
+		metadata,
 	)
 	return err
 }
@@ -200,13 +206,14 @@ func (r *PostgresRepository) GetRecord(documentID string) (Record, bool) {
 			COALESCE(location_id, ''), COALESCE(number, ''), created_by, created_at,
 			updated_by, updated_at, COALESCE(submitted_by, ''), submitted_at,
 			schema_version, payload_json, COALESCE(content_hash, ''), total_amount_minor,
-			COALESCE(total_amount_currency, '')
+			COALESCE(total_amount_currency, ''), COALESCE(metadata_json, '{}'::jsonb)
 		FROM document_records
 		WHERE document_id = $1`
 
 	var (
 		record           Record
 		payload          []byte
+		metadata         []byte
 		submittedAt      sql.NullTime
 		totalAmountMinor int64
 	)
@@ -231,6 +238,7 @@ func (r *PostgresRepository) GetRecord(documentID string) (Record, bool) {
 		&record.Body.ContentHash,
 		&totalAmountMinor,
 		&record.Header.TotalAmount.Currency,
+		&metadata,
 	)
 	if err != nil {
 		return Record{}, false
@@ -243,6 +251,7 @@ func (r *PostgresRepository) GetRecord(documentID string) (Record, bool) {
 	if err := json.Unmarshal(payload, &record.Body.Payload); err != nil {
 		return Record{}, false
 	}
+	_ = json.Unmarshal(metadata, &record.Header.Metadata)
 	record.Lines = r.ListLines(documentID)
 	record.Links = r.ListLinks(documentID)
 	record.Attachments = r.ListAttachments(documentID)
@@ -255,7 +264,7 @@ func (r *PostgresRepository) ListRecords() []Record {
 			COALESCE(location_id, ''), COALESCE(number, ''), created_by, created_at,
 			updated_by, updated_at, COALESCE(submitted_by, ''), submitted_at,
 			schema_version, payload_json, COALESCE(content_hash, ''), total_amount_minor,
-			COALESCE(total_amount_currency, '')
+			COALESCE(total_amount_currency, ''), COALESCE(metadata_json, '{}'::jsonb)
 		FROM document_records`
 
 	rows, err := r.db.QueryContext(context.Background(), query)
@@ -269,6 +278,7 @@ func (r *PostgresRepository) ListRecords() []Record {
 		var (
 			record           Record
 			payload          []byte
+			metadata         []byte
 			submittedAt      sql.NullTime
 			totalAmountMinor int64
 		)
@@ -292,6 +302,7 @@ func (r *PostgresRepository) ListRecords() []Record {
 			&record.Body.ContentHash,
 			&totalAmountMinor,
 			&record.Header.TotalAmount.Currency,
+			&metadata,
 		); err != nil {
 			continue
 		}
@@ -303,6 +314,7 @@ func (r *PostgresRepository) ListRecords() []Record {
 		if err := json.Unmarshal(payload, &record.Body.Payload); err != nil {
 			continue
 		}
+		_ = json.Unmarshal(metadata, &record.Header.Metadata)
 		record.Lines = r.ListLines(record.Header.ID)
 		record.Links = r.ListLinks(record.Header.ID)
 		record.Attachments = r.ListAttachments(record.Header.ID)

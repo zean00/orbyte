@@ -181,6 +181,7 @@ func registerModelRoutesWithDeps(mux *http.ServeMux, deps ModelDeps) {
 
 func registerDocumentRoutesWithDeps(mux *http.ServeMux, deps DocumentDeps) {
 	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Policy, deps.FieldSecurity, deps.Observability)
+	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.FieldSecurity)
 }
 
 func registerOpsRoutesWithDeps(mux *http.ServeMux, deps OpsDeps) {

@@ -218,6 +218,34 @@ func (s *Service) CustomEntriesForSurface(surface UISurface) []CustomEntryDefini
 	return items
 }
 
+func (s *Service) DocumentFlows() []DocumentFlowDefinition {
+	return s.DocumentFlowsForSurface(UISurfaceBoth)
+}
+
+func (s *Service) DocumentFlowsForSurface(surface UISurface) []DocumentFlowDefinition {
+	items := make([]DocumentFlowDefinition, 0)
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.Frontend.DocumentFlows {
+			if matchesSurface(item.Surface, surface) {
+				items = append(items, item)
+			}
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) DocumentFlowForSurface(key string, surface UISurface) (DocumentFlowDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, flow := range manifest.Frontend.DocumentFlows {
+			if flow.Key == key && matchesSurface(flow.Surface, surface) {
+				return flow, true
+			}
+		}
+	}
+	return DocumentFlowDefinition{}, false
+}
+
 func (s *Service) Bundle(key string) (BundleDefinition, bool) {
 	for _, manifest := range s.manifests {
 		for _, bundle := range manifest.Bundles {
@@ -468,6 +496,15 @@ func (s *Service) ResolveRouteForSurface(path string, surface UISurface) (RouteR
 					}
 				}
 			}
+			if action.FlowKey != "" {
+				for _, flow := range manifest.Frontend.DocumentFlows {
+					if flow.Key == action.FlowKey && matchesSurface(flow.Surface, surface) {
+						flowCopy := flow
+						resolution.Flow = &flowCopy
+						break
+					}
+				}
+			}
 			return resolution, true
 		}
 	}
@@ -607,6 +644,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	actions := map[string]string{}
 	views := map[string]string{}
 	customEntries := map[string]string{}
+	flows := map[string]string{}
 	bundles := map[string]string{}
 	menus := map[string]string{}
 	mcpTools := map[string]string{}
@@ -630,7 +668,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	documentTypes := map[string]string{}
 
 	for moduleKey, current := range existing {
-		indexFrontendContracts(moduleKey, current, actions, views, customEntries, bundles, menus)
+		indexFrontendContracts(moduleKey, current, actions, views, customEntries, flows, bundles, menus)
 		indexMCPContracts(moduleKey, current, mcpTools, mcpResources, mcpURIs, mcpApps)
 		indexTemplateContracts(moduleKey, current, templates)
 		indexSecurityContracts(moduleKey, current, permissions, roleTemplates, policyHooks)
@@ -928,6 +966,59 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		customEntries[entry.Key] = manifest.Key
 	}
+	for _, flow := range manifest.Frontend.DocumentFlows {
+		if strings.TrimSpace(flow.Key) == "" || strings.TrimSpace(flow.Title) == "" || strings.TrimSpace(flow.RoutePath) == "" || strings.TrimSpace(flow.PrimaryDocumentType) == "" {
+			return shared.Validation("document flow key, title, route_path, and primary_document_type are required")
+		}
+		if owner, ok := flows[flow.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("document flow key already registered")
+		}
+		if _, ok := documentTypes[flow.PrimaryDocumentType]; !ok {
+			return shared.Validation("document flow primary_document_type is not registered")
+		}
+		primaryCount := 0
+		stepKeys := map[string]bool{}
+		for _, step := range flow.Steps {
+			if strings.TrimSpace(step.Key) == "" || strings.TrimSpace(step.Title) == "" {
+				return shared.Validation("document flow step key and title are required")
+			}
+			if stepKeys[step.Key] {
+				return shared.Validation("document flow step key must be unique")
+			}
+			stepKeys[step.Key] = true
+			if len(step.Documents) == 0 {
+				return shared.Validation("document flow step requires at least one document")
+			}
+			for _, item := range step.Documents {
+				if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.DocumentType) == "" {
+					return shared.Validation("document flow document key, title, and document_type are required")
+				}
+				if _, ok := documentTypes[item.DocumentType]; !ok {
+					return shared.Validation("document flow document_type is not registered")
+				}
+				if item.PrimaryOutput {
+					primaryCount++
+				}
+			}
+		}
+		for _, step := range flow.Steps {
+			if strings.TrimSpace(step.NextStepKey) != "" && !stepKeys[step.NextStepKey] {
+				return shared.Validation("document flow next_step_key is not registered")
+			}
+			for _, rule := range step.NextRules {
+				if strings.TrimSpace(rule.Path) == "" || strings.TrimSpace(rule.NextStepKey) == "" {
+					return shared.Validation("document flow branch rule path and next_step_key are required")
+				}
+				if !stepKeys[rule.NextStepKey] {
+					return shared.Validation("document flow branch next_step_key is not registered")
+				}
+			}
+		}
+		if primaryCount != 1 {
+			return shared.Validation("document flow requires exactly one primary output document")
+		}
+		flows[flow.Key] = manifest.Key
+	}
 	for _, bundle := range manifest.Bundles {
 		if strings.TrimSpace(bundle.Key) == "" || strings.TrimSpace(bundle.Script) == "" {
 			return shared.Validation("bundle key and script are required")
@@ -1026,12 +1117,19 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 	}
 	routePaths := map[string]string{}
+	localFlowKeys := map[string]bool{}
+	for _, flow := range manifest.Frontend.DocumentFlows {
+		localFlowKeys[flow.Key] = true
+	}
 	for moduleKey, current := range existing {
 		for _, action := range current.Frontend.Actions {
 			routePaths[action.RoutePath] = moduleKey
 		}
 		for _, entry := range current.Frontend.CustomEntries {
 			routePaths[entry.RoutePath] = moduleKey
+		}
+		for _, flow := range current.Frontend.DocumentFlows {
+			routePaths[flow.RoutePath] = moduleKey
 		}
 	}
 	for _, action := range manifest.Frontend.Actions {
@@ -1064,6 +1162,13 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 			if _, ok := customEntries[action.CustomEntryKey]; !ok {
 				return shared.Validation("action custom_entry_key is not registered")
 			}
+		case RenderModeFlow:
+			if strings.TrimSpace(action.FlowKey) == "" {
+				return shared.Validation("flow actions require flow_key")
+			}
+			if _, ok := flows[action.FlowKey]; !ok && !localFlowKeys[action.FlowKey] {
+				return shared.Validation("action flow_key is not registered")
+			}
 		default:
 			return shared.Validation("action render_mode is invalid")
 		}
@@ -1080,6 +1185,12 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		if owner, ok := routePaths[entry.RoutePath]; ok && owner != manifest.Key {
 			return shared.Conflict("frontend route path already registered")
 		}
+	}
+	for _, flow := range manifest.Frontend.DocumentFlows {
+		if owner, ok := routePaths[flow.RoutePath]; ok && owner != manifest.Key {
+			return shared.Conflict("frontend route path already registered")
+		}
+		routePaths[flow.RoutePath] = manifest.Key
 	}
 	return nil
 }
@@ -1103,7 +1214,7 @@ func lifecycleState(enabled bool, diagnostics []DependencyDiagnostic) string {
 	return "healthy"
 }
 
-func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views, customEntries, bundles, menus map[string]string) {
+func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views, customEntries, flows, bundles, menus map[string]string) {
 	for _, menu := range manifest.Frontend.Menus {
 		menus[menu.Key] = moduleKey
 	}
@@ -1115,6 +1226,9 @@ func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views,
 	}
 	for _, entry := range manifest.Frontend.CustomEntries {
 		customEntries[entry.Key] = moduleKey
+	}
+	for _, flow := range manifest.Frontend.DocumentFlows {
+		flows[flow.Key] = moduleKey
 	}
 	for _, bundle := range manifest.Bundles {
 		bundles[bundle.Key] = moduleKey

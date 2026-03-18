@@ -409,6 +409,15 @@ func builtInTestModuleManifests() []module.Manifest {
 				}},
 				Actions: []module.ActionDefinition{
 					{
+						Key:                 "documents.requests.create",
+						Label:               "New Request",
+						Kind:                "navigate",
+						RoutePath:           "/documents/new",
+						FlowKey:             "documents.requests.intake",
+						RenderMode:          module.RenderModeFlow,
+						RequiredPermissions: []string{"document.create"},
+					},
+					{
 						Key:                 "documents.requests.list",
 						Label:               "Requests",
 						Kind:                "navigate",
@@ -457,6 +466,50 @@ func builtInTestModuleManifests() []module.Manifest {
 						}},
 					},
 				},
+				DocumentFlows: []module.DocumentFlowDefinition{{
+					Key:                 "documents.requests.intake",
+					Title:               "Request Intake",
+					RoutePath:           "/documents/new",
+					PrimaryDocumentType: "generic_request",
+					RequiredPermissions: []string{"document.create"},
+					Steps: []module.DocumentFlowStepDefinition{
+						{
+							Key:   "intake",
+							Title: "Primary Request",
+							Documents: []module.DocumentFlowDocumentDefinition{{
+								Key:           "request",
+								Title:         "Request",
+								DocumentType:  "generic_request",
+								PrimaryOutput: true,
+								Sections: []module.SectionDefinition{{
+									Key: "request", Title: "Request", Fields: []module.FieldDefinition{
+										{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string"},
+										{Key: "request_kind", Label: "Request Kind", Path: "body.payload.request_kind", Type: "string", Options: []string{"review", "followup"}},
+									},
+								}},
+							}},
+							NextRules: []module.DocumentFlowBranchRule{
+								{Path: "documents.request.payload.request_kind", Equals: "review", NextStepKey: "review"},
+								{Path: "documents.request.payload.request_kind", Equals: "followup", NextStepKey: "followup"},
+							},
+						},
+						{
+							Key:   "review",
+							Title: "Review",
+							Documents: []module.DocumentFlowDocumentDefinition{
+								{Key: "review_note", Title: "Review Note", DocumentType: "generic_request", LinkType: "related_to", Fields: []module.FieldDefinition{{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string"}}},
+								{Key: "review_checklist", Title: "Checklist", DocumentType: "generic_request", LinkType: "related_to", Fields: []module.FieldDefinition{{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string"}}},
+							},
+						},
+						{
+							Key:   "followup",
+							Title: "Followup",
+							Documents: []module.DocumentFlowDocumentDefinition{
+								{Key: "followup_plan", Title: "Plan", DocumentType: "generic_request", LinkType: "related_to", Fields: []module.FieldDefinition{{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string"}}},
+							},
+						},
+					},
+				}},
 			},
 			Offline: module.OfflineDefinition{
 				Projections: []module.OfflineProjectionDefinition{{
@@ -2608,6 +2661,10 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	if payload["default_path"].(string) == "" {
 		t.Fatal("expected default_path in ui bootstrap")
 	}
+	flows, ok := payload["flows"].([]any)
+	if !ok || len(flows) == 0 {
+		t.Fatalf("expected ui bootstrap to include document flows, got %+v", payload["flows"])
+	}
 
 	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/documents", nil, true)
 	if rr.Code != http.StatusOK {
@@ -2654,6 +2711,19 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	}
 	if _, ok := customEntry["print_target_kind"]; ok {
 		t.Fatalf("expected analytics custom entry to omit print target metadata, got %+v", customEntry)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/documents/new", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected flow route resolution, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	route = map[string]any{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &route)
+	if route["render_mode"].(string) != string(module.RenderModeFlow) {
+		t.Fatalf("expected flow render mode, got %+v", route)
+	}
+	if _, ok := route["flow"].(map[string]any); !ok {
+		t.Fatalf("expected flow contract in route resolution, got %+v", route)
 	}
 
 	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/monitoring", nil, true)
@@ -2950,6 +3020,217 @@ func TestSearchIndexRoutes(t *testing.T) {
 	rr = h.request(http.MethodPost, "/ops/search/indexes/documents.requests.search/rebuild", nil, true)
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("expected async search rebuild to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDocumentFlowCommitCreatesBranchDocuments(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"documents": map[string]any{
+			"request": map[string]any{
+				"title":        "Main Request",
+				"request_kind": "review",
+			},
+			"review_note": map[string]any{
+				"title": "Review Note",
+			},
+			"review_checklist": map[string]any{
+				"title": "Checklist",
+			},
+		},
+	})
+	rr := h.request(http.MethodPost, "/document-flows/documents.requests.intake/commit", body, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected flow commit to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if payload["primary_document_id"].(string) == "" {
+		t.Fatalf("expected primary document id, got %+v", payload)
+	}
+	items := payload["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("expected three created documents for review branch, got %+v", payload)
+	}
+
+	rr = h.request(http.MethodGet, "/documents", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected document list to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if len(payload["items"].([]any)) < 3 {
+		t.Fatalf("expected committed flow documents to be persisted, got %+v", payload)
+	}
+}
+
+func TestDocumentFlowCommitCreatesAlternateBranchDocuments(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"documents": map[string]any{
+			"request": map[string]any{
+				"title":        "Main Request",
+				"request_kind": "followup",
+			},
+			"followup_plan": map[string]any{
+				"title": "Follow-up Plan",
+			},
+		},
+	})
+	rr := h.request(http.MethodPost, "/document-flows/documents.requests.intake/commit", body, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected alternate flow commit to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	items := payload["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("expected two created documents for followup branch, got %+v", payload)
+	}
+}
+
+func TestUIDocumentDetailReturnsFlowInstanceForPrimaryAndSecondary(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"documents": map[string]any{
+			"request": map[string]any{
+				"title":        "Main Request",
+				"request_kind": "review",
+			},
+			"review_note": map[string]any{
+				"title": "Review Note",
+			},
+			"review_checklist": map[string]any{
+				"title": "Checklist",
+			},
+		},
+	})
+	rr := h.request(http.MethodPost, "/document-flows/documents.requests.intake/commit", body, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected flow commit to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var created map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	primaryID := created["primary_document_id"].(string)
+
+	rr = h.request(http.MethodGet, "/ui/data/documents/"+primaryID, nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected primary ui detail data, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	flowInstance, ok := payload["flow_instance"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected flow_instance for primary document, got %+v", payload)
+	}
+	if flowInstance["primary_document_id"] != primaryID {
+		t.Fatalf("expected matching primary document id, got %+v", flowInstance)
+	}
+	items := flowInstance["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("expected three flow items, got %+v", flowInstance)
+	}
+	secondaryID := ""
+	for _, raw := range items {
+		item := raw.(map[string]any)
+		definition := item["definition"].(map[string]any)
+		if definition["key"] != "review_note" {
+			continue
+		}
+		record := item["record"].(map[string]any)
+		header := record["header"].(map[string]any)
+		secondaryID = header["id"].(string)
+	}
+	if secondaryID == "" {
+		t.Fatalf("expected secondary review_note id in flow instance, got %+v", flowInstance)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/documents/"+secondaryID, nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected secondary ui detail data, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	flowInstance, ok = payload["flow_instance"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected flow_instance for secondary document, got %+v", payload)
+	}
+	if flowInstance["active_document_key"] != "review_note" {
+		t.Fatalf("expected secondary tab to be active, got %+v", flowInstance)
+	}
+}
+
+func TestDocumentFlowCommitUpdatesExistingFlowInstance(t *testing.T) {
+	h := newTestHarness(t)
+
+	createBody, _ := json.Marshal(map[string]any{
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"documents": map[string]any{
+			"request": map[string]any{
+				"title":        "Main Request",
+				"request_kind": "review",
+			},
+			"review_note": map[string]any{
+				"title": "Review Note",
+			},
+			"review_checklist": map[string]any{
+				"title": "Checklist",
+			},
+		},
+	})
+	rr := h.request(http.MethodPost, "/document-flows/documents.requests.intake/commit", createBody, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected flow create to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var created map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	primaryID := created["primary_document_id"].(string)
+
+	updateBody, _ := json.Marshal(map[string]any{
+		"organization_id":     "org_default",
+		"location_id":         "loc_hq",
+		"primary_document_id": primaryID,
+		"documents": map[string]any{
+			"request": map[string]any{
+				"title":        "Main Request Updated",
+				"request_kind": "review",
+			},
+			"review_note": map[string]any{
+				"title": "Review Note Updated",
+			},
+			"review_checklist": map[string]any{
+				"title": "Checklist Updated",
+			},
+		},
+	})
+	rr = h.request(http.MethodPost, "/document-flows/documents.requests.intake/commit", updateBody, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected flow update to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/documents/"+primaryID, nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected primary ui detail data after update, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	record := payload["record"].(map[string]any)
+	bodyMap := record["body"].(map[string]any)
+	payloadMap := bodyMap["payload"].(map[string]any)
+	if payloadMap["title"] != "Main Request Updated" {
+		t.Fatalf("expected updated primary payload, got %+v", payloadMap)
+	}
+	flowInstance := payload["flow_instance"].(map[string]any)
+	if len(flowInstance["items"].([]any)) != 3 {
+		t.Fatalf("expected updated flow instance to retain three items, got %+v", flowInstance)
 	}
 }
 

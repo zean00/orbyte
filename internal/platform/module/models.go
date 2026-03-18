@@ -223,10 +223,11 @@ type DomainEventDefinition struct {
 }
 
 type FrontendDefinition struct {
-	Menus         []MenuDefinition        `json:"menus,omitempty"`
-	Actions       []ActionDefinition      `json:"actions,omitempty"`
-	Views         []ViewDefinition        `json:"views,omitempty"`
-	CustomEntries []CustomEntryDefinition `json:"custom_entries,omitempty"`
+	Menus         []MenuDefinition         `json:"menus,omitempty"`
+	Actions       []ActionDefinition       `json:"actions,omitempty"`
+	Views         []ViewDefinition         `json:"views,omitempty"`
+	CustomEntries []CustomEntryDefinition  `json:"custom_entries,omitempty"`
+	DocumentFlows []DocumentFlowDefinition `json:"document_flows,omitempty"`
 }
 
 type UISurface string
@@ -358,6 +359,7 @@ type ActionRenderMode string
 const (
 	RenderModeGeneric ActionRenderMode = "generic"
 	RenderModeCustom  ActionRenderMode = "custom"
+	RenderModeFlow    ActionRenderMode = "flow"
 )
 
 type ActionDefinition struct {
@@ -369,9 +371,51 @@ type ActionDefinition struct {
 	RoutePath           string             `json:"route_path"`
 	ViewKey             string             `json:"view_key,omitempty"`
 	CustomEntryKey      string             `json:"custom_entry_key,omitempty"`
+	FlowKey             string             `json:"flow_key,omitempty"`
 	RenderMode          ActionRenderMode   `json:"render_mode"`
 	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 	ContextDefaults     map[string]any     `json:"context_defaults,omitempty"`
+}
+
+type DocumentFlowDefinition struct {
+	Key                 string                       `json:"key"`
+	Title               string                       `json:"title"`
+	TitleI18n           i18n.LocalizedText           `json:"title_i18n,omitempty"`
+	Surface             UISurface                    `json:"surface,omitempty"`
+	RoutePath           string                       `json:"route_path"`
+	PrimaryDocumentType string                       `json:"primary_document_type"`
+	RequiredPermissions []string                     `json:"required_permissions,omitempty"`
+	Steps               []DocumentFlowStepDefinition `json:"steps,omitempty"`
+}
+
+type DocumentFlowStepDefinition struct {
+	Key         string                           `json:"key"`
+	Title       string                           `json:"title"`
+	TitleI18n   i18n.LocalizedText               `json:"title_i18n,omitempty"`
+	Documents   []DocumentFlowDocumentDefinition `json:"documents,omitempty"`
+	NextRules   []DocumentFlowBranchRule         `json:"next_rules,omitempty"`
+	NextStepKey string                           `json:"next_step_key,omitempty"`
+}
+
+type DocumentFlowDocumentDefinition struct {
+	Key                 string              `json:"key"`
+	Title               string              `json:"title"`
+	TitleI18n           i18n.LocalizedText  `json:"title_i18n,omitempty"`
+	DocumentType        string              `json:"document_type"`
+	PrimaryOutput       bool                `json:"primary_output,omitempty"`
+	LinkType            string              `json:"link_type,omitempty"`
+	RequiredPermissions []string            `json:"required_permissions,omitempty"`
+	Tabs                []TabDefinition     `json:"tabs,omitempty"`
+	Sections            []SectionDefinition `json:"sections,omitempty"`
+	Fields              []FieldDefinition   `json:"fields,omitempty"`
+}
+
+type DocumentFlowBranchRule struct {
+	Path        string   `json:"path"`
+	Equals      string   `json:"equals,omitempty"`
+	In          []string `json:"in,omitempty"`
+	Truthy      bool     `json:"truthy,omitempty"`
+	NextStepKey string   `json:"next_step_key"`
 }
 
 type ViewDefinition struct {
@@ -495,10 +539,11 @@ type BundleDefinition struct {
 }
 
 type RouteResolution struct {
-	Path        string                 `json:"path"`
-	ModuleKey   string                 `json:"module_key"`
-	RenderMode  ActionRenderMode       `json:"render_mode"`
-	Action      ActionDefinition       `json:"action"`
-	View        *ViewDefinition        `json:"view,omitempty"`
-	CustomEntry *CustomEntryDefinition `json:"custom_entry,omitempty"`
+	Path        string                  `json:"path"`
+	ModuleKey   string                  `json:"module_key"`
+	RenderMode  ActionRenderMode        `json:"render_mode"`
+	Action      ActionDefinition        `json:"action"`
+	View        *ViewDefinition         `json:"view,omitempty"`
+	CustomEntry *CustomEntryDefinition  `json:"custom_entry,omitempty"`
+	Flow        *DocumentFlowDefinition `json:"flow,omitempty"`
 }

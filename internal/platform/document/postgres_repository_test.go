@@ -57,13 +57,17 @@ func TestPostgresRepositoryRecordLifecycle(t *testing.T) {
 		t.Fatalf("save record failed: %v", err)
 	}
 
-	getRows := sqlmock.NewRows([]string{"document_id", "document_type", "status", "version", "etag", "organization_id", "location_id", "number", "created_by", "created_at", "updated_by", "updated_at", "submitted_by", "submitted_at", "schema_version", "payload_json", "content_hash", "total_amount_minor", "total_amount_currency"}).AddRow("d1", "x", "draft", 1, "d1:1", "org", "", "", "u1", now, "u1", now, "", nil, "v1", []byte(`{"a":1}`), "", 0, "IDR")
+	getRows := sqlmock.NewRows([]string{"document_id", "document_type", "status", "version", "etag", "organization_id", "location_id", "number", "created_by", "created_at", "updated_by", "updated_at", "submitted_by", "submitted_at", "schema_version", "payload_json", "content_hash", "total_amount_minor", "total_amount_currency", "metadata_json"}).AddRow("d1", "x", "draft", 1, "d1:1", "org", "", "", "u1", now, "u1", now, "", nil, "v1", []byte(`{"a":1}`), "", 0, "IDR", []byte(`{"flow_key":"x"}`))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT document_id, document_type, status, version, etag, organization_id,")).WillReturnRows(getRows)
-	if _, ok := repo.GetRecord("d1"); !ok {
+	record, found := repo.GetRecord("d1")
+	if !found {
 		t.Fatal("expected record")
 	}
+	if record.Header.Metadata["flow_key"] != "x" {
+		t.Fatalf("expected record metadata, got %+v", record.Header.Metadata)
+	}
 
-	listRows := sqlmock.NewRows([]string{"document_id", "document_type", "status", "version", "etag", "organization_id", "location_id", "number", "created_by", "created_at", "updated_by", "updated_at", "submitted_by", "submitted_at", "schema_version", "payload_json", "content_hash", "total_amount_minor", "total_amount_currency"}).AddRow("d1", "x", "draft", 1, "d1:1", "org", "", "", "u1", now, "u1", now, "", nil, "v1", []byte(`{"a":1}`), "", 0, "IDR")
+	listRows := sqlmock.NewRows([]string{"document_id", "document_type", "status", "version", "etag", "organization_id", "location_id", "number", "created_by", "created_at", "updated_by", "updated_at", "submitted_by", "submitted_at", "schema_version", "payload_json", "content_hash", "total_amount_minor", "total_amount_currency", "metadata_json"}).AddRow("d1", "x", "draft", 1, "d1:1", "org", "", "", "u1", now, "u1", now, "", nil, "v1", []byte(`{"a":1}`), "", 0, "IDR", []byte(`{"flow_key":"x"}`))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT document_id, document_type, status, version, etag, organization_id,")).WillReturnRows(listRows)
 	if len(repo.ListRecords()) != 1 {
 		t.Fatal("expected list records")

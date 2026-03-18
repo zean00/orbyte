@@ -69,8 +69,8 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 		if !ok {
 			return
 		}
-		menus, actions, views, entries := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
-		uiMenus, uiActions, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		menus, actions, views, entries, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
+		uiMenus, uiActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		defaultPath := defaultRouteForSurface(ident, p.userID, "admin", menus, actions)
 		uiPath := "/ui"
 		if len(uiMenus) > 0 {

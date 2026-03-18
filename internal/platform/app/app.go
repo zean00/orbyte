@@ -1371,6 +1371,16 @@ func builtInModuleManifests() []module.Manifest {
 				}},
 				Actions: []module.ActionDefinition{
 					{
+						Key:                 "documents.requests.create",
+						Label:               "New Request",
+						LabelI18n:           localize("New Request", "Permintaan Baru"),
+						Kind:                "navigate",
+						RoutePath:           "/documents/new",
+						FlowKey:             "documents.requests.intake",
+						RenderMode:          module.RenderModeFlow,
+						RequiredPermissions: []string{"document.create"},
+					},
+					{
 						Key:                 "documents.requests.list",
 						Label:               "Requests",
 						LabelI18n:           localize("Requests", "Permintaan"),
@@ -1488,6 +1498,89 @@ func builtInModuleManifests() []module.Manifest {
 						}},
 					},
 				},
+				DocumentFlows: []module.DocumentFlowDefinition{{
+					Key:                 "documents.requests.intake",
+					Title:               "Request Intake",
+					TitleI18n:           localize("Request Intake", "Intake Permintaan"),
+					RoutePath:           "/documents/new",
+					PrimaryDocumentType: "generic_request",
+					RequiredPermissions: []string{"document.create"},
+					Steps: []module.DocumentFlowStepDefinition{
+						{
+							Key:       "intake",
+							Title:     "Primary Request",
+							TitleI18n: localize("Primary Request", "Permintaan Utama"),
+							Documents: []module.DocumentFlowDocumentDefinition{{
+								Key:           "request",
+								Title:         "Request",
+								TitleI18n:     localize("Request", "Permintaan"),
+								DocumentType:  "generic_request",
+								PrimaryOutput: true,
+								Sections: []module.SectionDefinition{{
+									Key: "request_core", Title: "Request Details", TitleI18n: localize("Request Details", "Detail Permintaan"), Fields: []module.FieldDefinition{
+										{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", PlaceholderI18n: localize("Enter request title", "Masukkan judul permintaan")},
+										{Key: "request_kind", Label: "Request Kind", LabelI18n: localize("Request Kind", "Jenis Permintaan"), Path: "body.payload.request_kind", Type: "string", Widget: "select", Options: []string{"review", "followup"}},
+									},
+								}},
+							}},
+							NextRules: []module.DocumentFlowBranchRule{
+								{Path: "documents.request.payload.request_kind", Equals: "review", NextStepKey: "review_packet"},
+								{Path: "documents.request.payload.request_kind", Equals: "followup", NextStepKey: "followup_plan"},
+							},
+						},
+						{
+							Key:       "review_packet",
+							Title:     "Review Packet",
+							TitleI18n: localize("Review Packet", "Paket Tinjauan"),
+							Documents: []module.DocumentFlowDocumentDefinition{
+								{
+									Key:          "review_note",
+									Title:        "Review Note",
+									TitleI18n:    localize("Review Note", "Catatan Tinjauan"),
+									DocumentType: "generic_request",
+									LinkType:     "related_to",
+									Sections: []module.SectionDefinition{{
+										Key: "review_note", Title: "Review Note", TitleI18n: localize("Review Note", "Catatan Tinjauan"), Fields: []module.FieldDefinition{
+											{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text"},
+											{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "body.payload.notes", Type: "string", Widget: "textarea"},
+										},
+									}},
+								},
+								{
+									Key:          "review_checklist",
+									Title:        "Review Checklist",
+									TitleI18n:    localize("Review Checklist", "Daftar Periksa Tinjauan"),
+									DocumentType: "generic_request",
+									LinkType:     "related_to",
+									Sections: []module.SectionDefinition{{
+										Key: "review_checklist", Title: "Checklist", TitleI18n: localize("Checklist", "Daftar Periksa"), Fields: []module.FieldDefinition{
+											{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text"},
+											{Key: "owner", Label: "Owner", LabelI18n: localize("Owner", "Penanggung Jawab"), Path: "body.payload.owner", Type: "string", Widget: "text"},
+										},
+									}},
+								},
+							},
+						},
+						{
+							Key:       "followup_plan",
+							Title:     "Follow-up Plan",
+							TitleI18n: localize("Follow-up Plan", "Rencana Tindak Lanjut"),
+							Documents: []module.DocumentFlowDocumentDefinition{{
+								Key:          "followup_plan",
+								Title:        "Follow-up Plan",
+								TitleI18n:    localize("Follow-up Plan", "Rencana Tindak Lanjut"),
+								DocumentType: "generic_request",
+								LinkType:     "related_to",
+								Sections: []module.SectionDefinition{{
+									Key: "followup_plan", Title: "Plan", TitleI18n: localize("Plan", "Rencana"), Fields: []module.FieldDefinition{
+										{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text"},
+										{Key: "next_action", Label: "Next Action", LabelI18n: localize("Next Action", "Tindak Lanjut"), Path: "body.payload.next_action", Type: "string", Widget: "textarea"},
+									},
+								}},
+							}},
+						},
+					},
+				}},
 			},
 			SearchIndexes: []search.IndexDefinition{{
 				Key:                 "documents.requests.search",
