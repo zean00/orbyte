@@ -3,6 +3,7 @@ package identity
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,12 +43,13 @@ func NewService(org *organization.Service) *Service {
 
 func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData {
 	roles := []Role{{
-		ID:        "role_admin",
-		Key:       "platform_admin",
-		Name:      "Platform Administrator",
-		ScopeType: "deployment",
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                "role_admin",
+		Key:               "platform_admin",
+		Name:              "Platform Administrator",
+		ScopeType:         "deployment",
+		DefaultAdminRoute: "/admin/modules",
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}}
 	permissions := []Permission{{
 		Key:      "document.create",
@@ -225,6 +227,7 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 		UserID:        "user_admin",
 		RoleID:        "role_admin",
 		ScopeType:     "deployment",
+		Priority:      100,
 		EffectiveFrom: now,
 		Status:        "active",
 	}}
@@ -300,6 +303,21 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "configuration.manage",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "template.read",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "template.manage",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "template.publish",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "template.bind",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "template.render",
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "identity.manage_sessions",
@@ -400,6 +418,67 @@ func (s *Service) PreferredLocale(userID string) string {
 	return i18n.NormalizeLocale(user.PreferredLocale)
 }
 
+func (s *Service) PreferredRoute(userID, surface string) string {
+	user, ok := s.repo.FindUser(userID)
+	if !ok {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(surface)) {
+	case "admin":
+		return normalizeRoutePreference(user.PreferredAdminRoute)
+	default:
+		return normalizeRoutePreference(user.PreferredUserRoute)
+	}
+}
+
+func (s *Service) DefaultRoute(userID, surface string) string {
+	now := time.Now().UTC()
+	type rankedRole struct {
+		role     Role
+		priority int
+		from     time.Time
+	}
+	ranked := make([]rankedRole, 0)
+	for _, binding := range s.repo.RoleBindings() {
+		if binding.UserID != userID || binding.Status != "active" {
+			continue
+		}
+		if binding.EffectiveFrom.After(now) {
+			continue
+		}
+		if !binding.EffectiveTo.IsZero() && binding.EffectiveTo.Before(now) {
+			continue
+		}
+		role, ok := s.findRole(binding.RoleID)
+		if !ok {
+			continue
+		}
+		ranked = append(ranked, rankedRole{role: role, priority: binding.Priority, from: binding.EffectiveFrom})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].priority == ranked[j].priority {
+			if ranked[i].from.Equal(ranked[j].from) {
+				return ranked[i].role.ID < ranked[j].role.ID
+			}
+			return ranked[i].from.After(ranked[j].from)
+		}
+		return ranked[i].priority > ranked[j].priority
+	})
+	for _, item := range ranked {
+		switch strings.ToLower(strings.TrimSpace(surface)) {
+		case "admin":
+			if route := normalizeRoutePreference(item.role.DefaultAdminRoute); route != "" {
+				return route
+			}
+		default:
+			if route := normalizeRoutePreference(item.role.DefaultUserRoute); route != "" {
+				return route
+			}
+		}
+	}
+	return ""
+}
+
 func (s *Service) Bindings() []RoleBinding {
 	return s.repo.RoleBindings()
 }
@@ -430,6 +509,20 @@ func (s *Service) SetUserPreferredLocale(userID, locale string) (User, error) {
 		return User{}, shared.NotFound("user not found")
 	}
 	user.PreferredLocale = i18n.NormalizeLocale(locale)
+	user.UpdatedAt = time.Now().UTC()
+	if err := s.repo.SaveUser(user); err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+func (s *Service) SetUserPreferredRoutes(userID, userRoute, adminRoute string) (User, error) {
+	user, ok := s.repo.FindUser(userID)
+	if !ok {
+		return User{}, shared.NotFound("user not found")
+	}
+	user.PreferredUserRoute = normalizeRoutePreference(userRoute)
+	user.PreferredAdminRoute = normalizeRoutePreference(adminRoute)
 	user.UpdatedAt = time.Now().UTC()
 	if err := s.repo.SaveUser(user); err != nil {
 		return User{}, err
@@ -515,6 +608,7 @@ func (s *Service) CreateUserWithPasswordPolicy(username, password, defaultLocati
 		RoleID:        roleID,
 		ScopeType:     scopeType,
 		ScopeID:       scopeID,
+		Priority:      0,
 		EffectiveFrom: now,
 		Status:        "active",
 	}); err != nil {
@@ -676,6 +770,7 @@ func (s *Service) provisionGoogleUser(identity GoogleIdentity, subject string, p
 		RoleID:        roleID,
 		ScopeType:     scopeType,
 		ScopeID:       strings.TrimSpace(provisioning.ScopeID),
+		Priority:      0,
 		EffectiveFrom: now,
 		Status:        "active",
 	}); err != nil {
@@ -816,12 +911,28 @@ func (s *Service) UpsertRole(role Role) error {
 	if strings.TrimSpace(role.ID) == "" || strings.TrimSpace(role.Key) == "" || strings.TrimSpace(role.Name) == "" {
 		return shared.Validation("role id, key, and name are required")
 	}
+	role.DefaultUserRoute = normalizeRoutePreference(role.DefaultUserRoute)
+	role.DefaultAdminRoute = normalizeRoutePreference(role.DefaultAdminRoute)
 	now := time.Now().UTC()
 	if role.CreatedAt.IsZero() {
 		role.CreatedAt = now
 	}
 	role.UpdatedAt = now
 	return s.repo.SaveRole(role)
+}
+
+func (s *Service) SetRoleDefaultRoutes(roleID, userRoute, adminRoute string) (Role, error) {
+	role, ok := s.findRole(roleID)
+	if !ok {
+		return Role{}, shared.NotFound("role not found")
+	}
+	role.DefaultUserRoute = normalizeRoutePreference(userRoute)
+	role.DefaultAdminRoute = normalizeRoutePreference(adminRoute)
+	role.UpdatedAt = time.Now().UTC()
+	if err := s.repo.SaveRole(role); err != nil {
+		return Role{}, err
+	}
+	return role, nil
 }
 
 func (s *Service) UpsertPermission(permission Permission) error {
@@ -836,6 +947,23 @@ func (s *Service) GrantRolePermission(grant RolePermission) error {
 		return shared.Validation("role permission grant is invalid")
 	}
 	return s.repo.SaveRolePermission(grant)
+}
+
+func (s *Service) SetRoleBindingPriority(bindingID string, priority int) (RoleBinding, error) {
+	if priority < 0 {
+		return RoleBinding{}, shared.Validation("priority must be zero or greater")
+	}
+	for _, binding := range s.repo.RoleBindings() {
+		if binding.ID != bindingID {
+			continue
+		}
+		binding.Priority = priority
+		if err := s.repo.SaveRoleBinding(binding); err != nil {
+			return RoleBinding{}, err
+		}
+		return binding, nil
+	}
+	return RoleBinding{}, shared.NotFound("role binding not found")
 }
 
 func (s *Service) RefreshSession(sessionID string, ttl time.Duration) (Session, error) {
@@ -1081,6 +1209,26 @@ func (s *Service) roleExists(roleID string) bool {
 		}
 	}
 	return false
+}
+
+func (s *Service) findRole(roleID string) (Role, bool) {
+	for _, role := range s.repo.Roles() {
+		if role.ID == roleID {
+			return role, true
+		}
+	}
+	return Role{}, false
+}
+
+func normalizeRoutePreference(route string) string {
+	route = strings.TrimSpace(route)
+	if route == "" {
+		return ""
+	}
+	if !strings.HasPrefix(route, "/") {
+		route = "/" + route
+	}
+	return route
 }
 
 func (s *Service) revokeUserSessions(userID string, revokedAt time.Time) error {

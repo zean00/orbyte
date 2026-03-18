@@ -33,6 +33,7 @@ import (
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/store"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 	"os"
 	"sort"
@@ -65,6 +66,7 @@ type App struct {
 	Activities         *activity.Service
 	Reporting          *reporting.Service
 	Reference          *reference.Service
+	Templates          *templateoutput.Service
 	Observability      *observability.Service
 	Policy             *policy.Service
 	Integration        *integration.Service
@@ -105,7 +107,7 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	graph := constructServiceGraph(postgres, businessManifests)
-	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))); err != nil {
 		return nil, err
 	}
 	graph.runtimeHealth.SetBootstrapped(true)
@@ -152,6 +154,7 @@ func New(opts Options) (*App, error) {
 		Activities:         graph.activities,
 		Reporting:          graph.reporting,
 		Reference:          graph.reference,
+		Templates:          graph.templates,
 		Observability:      graph.observability,
 		Policy:             graph.policy,
 		Integration:        graph.integration,
@@ -203,7 +206,7 @@ func ignoreConflict(err error) error {
 	return err
 }
 
-func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, businessManifests []module.Manifest, bootstrapPassword string) error {
+func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, templateSvc *templateoutput.Service, referenceSvc *reference.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, businessManifests []module.Manifest, bootstrapPassword string) error {
 	manifests := append(builtInModuleManifests(), businessManifests...)
 	for _, def := range config.BuiltInDefinitions() {
 		if err := configSvc.RegisterDefinition(def); err != nil {
@@ -267,6 +270,11 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 				Dimensions: datasetDimensions(dataset.Dimensions),
 				Measures:   datasetMeasures(dataset.Measures),
 			})); err != nil {
+				return err
+			}
+		}
+		for _, def := range manifest.Templates {
+			if err := ignoreConflict(templateSvc.RegisterDefinition(templateoutput.FromModule(def, manifest.Key))); err != nil {
 				return err
 			}
 		}
@@ -1040,6 +1048,35 @@ func builtInModuleManifests() []module.Manifest {
 					RequiredPermissions: []string{"party.read"},
 				}},
 			},
+			Templates: []module.TemplateDefinition{{
+				Key:                 "documents.generic_request.default",
+				Title:               "Generic Request Print",
+				TitleI18n:           localize("Generic Request Print", "Cetak Permintaan Generik"),
+				Description:         "Default printable request template.",
+				DescriptionI18n:     localize("Default printable request template.", "Template cetak default untuk permintaan."),
+				TargetKind:          "document",
+				TargetKey:           "generic_request",
+				RendererKind:        "html",
+				DefaultFormat:       "html",
+				Formats:             []string{"html", "pdf"},
+				Purpose:             "official",
+				Channel:             "print",
+				AllowedScopes:       []string{"deployment", "organization", "location"},
+				RequiredPermissions: []string{"template.read", "template.render"},
+				DefaultBody: `<article class="print-sheet">
+  <header>
+    <h1>Generic Request</h1>
+    <p>{{ .document.Header.Number }}</p>
+  </header>
+  <dl>
+    <dt>Status</dt><dd>{{ .document.Header.Status }}</dd>
+    <dt>Title</dt><dd>{{ index .document.Body.Payload "title" }}</dd>
+    <dt>Organization</dt><dd>{{ .document.Header.OrganizationID }}</dd>
+    <dt>Location</dt><dd>{{ .document.Header.LocationID }}</dd>
+  </dl>
+</article>`,
+				DefaultStyle: `.print-sheet{font-family:Arial,sans-serif;padding:24px;color:#0f172a}.print-sheet h1{margin:0 0 8px}.print-sheet dl{display:grid;grid-template-columns:160px 1fr;gap:8px 12px}`,
+			}},
 		},
 		{
 			Key:                 "platform.core",
@@ -1047,7 +1084,7 @@ func builtInModuleManifests() []module.Manifest {
 			NameI18n:            localize("Platform Core", "Inti Platform"),
 			Version:             "1.0.0",
 			DomainFamily:        "platform",
-			OwnedPermissionKeys: []string{"platform.context.read", "module.read", "module.manage", "configuration.read", "configuration.manage", "search.manage"},
+			OwnedPermissionKeys: []string{"platform.context.read", "module.read", "module.manage", "configuration.read", "configuration.manage", "search.manage", "template.read", "template.manage", "template.publish", "template.bind", "template.render"},
 			ConfigDefinitions:   []config.Definition{httpDefinition},
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
@@ -1057,13 +1094,18 @@ func builtInModuleManifests() []module.Manifest {
 					{Key: "configuration.read", Action: "read", Resource: "configuration", DisplayName: "Read Configuration", DisplayNameI18n: localize("Read Configuration", "Lihat Konfigurasi")},
 					{Key: "configuration.manage", Action: "manage", Resource: "configuration", DisplayName: "Manage Configuration", DisplayNameI18n: localize("Manage Configuration", "Kelola Konfigurasi"), RiskLevel: "high"},
 					{Key: "search.manage", Action: "manage", Resource: "search", DisplayName: "Manage Search Indexes", DisplayNameI18n: localize("Manage Search Indexes", "Kelola Indeks Pencarian"), RiskLevel: "high"},
+					{Key: "template.read", Action: "read", Resource: "template", DisplayName: "Read Templates", DisplayNameI18n: localize("Read Templates", "Lihat Template")},
+					{Key: "template.manage", Action: "manage", Resource: "template", DisplayName: "Manage Templates", DisplayNameI18n: localize("Manage Templates", "Kelola Template"), RiskLevel: "high"},
+					{Key: "template.publish", Action: "publish", Resource: "template", DisplayName: "Publish Templates", DisplayNameI18n: localize("Publish Templates", "Publikasikan Template"), RiskLevel: "high"},
+					{Key: "template.bind", Action: "bind", Resource: "template", DisplayName: "Bind Templates", DisplayNameI18n: localize("Bind Templates", "Atur Binding Template"), RiskLevel: "high"},
+					{Key: "template.render", Action: "render", Resource: "template_output", DisplayName: "Render Template Outputs", DisplayNameI18n: localize("Render Template Outputs", "Render Output Template")},
 				},
 				RoleTemplates: []module.RoleTemplateDefinition{{
 					Key:            "platform_operator",
 					Name:           "Platform Operator",
 					NameI18n:       localize("Platform Operator", "Operator Platform"),
 					AllowedScopes:  []string{"deployment"},
-					PermissionKeys: []string{"platform.context.read", "module.read", "configuration.read"},
+					PermissionKeys: []string{"platform.context.read", "module.read", "configuration.read", "template.read", "template.render"},
 				}},
 			},
 			Frontend: module.FrontendDefinition{
@@ -1103,6 +1145,15 @@ func builtInModuleManifests() []module.Manifest {
 						Order:               40,
 						Surface:             module.UISurfaceAdmin,
 						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.templates",
+						Label:               "Templates",
+						LabelI18n:           localize("Templates", "Template"),
+						ActionKey:           "admin.templates",
+						Order:               45,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"template.read"},
 					},
 					{
 						Key:                 "admin.security",
@@ -1159,6 +1210,15 @@ func builtInModuleManifests() []module.Manifest {
 						RoutePath:           "/admin/definitions",
 						Surface:             module.UISurfaceAdmin,
 						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:                 "admin.templates",
+						Label:               "Templates",
+						LabelI18n:           localize("Templates", "Template"),
+						Kind:                "navigate",
+						RoutePath:           "/admin/templates",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"template.read"},
 					},
 					{
 						Key:                 "admin.security",
@@ -1358,6 +1418,9 @@ func builtInModuleManifests() []module.Manifest {
 						TitleI18n:           localize("Request Detail", "Detail Permintaan"),
 						Kind:                "detail",
 						DocumentType:        "generic_request",
+						Printable:           true,
+						PrintPurpose:        "official",
+						PrintChannel:        "print",
 						RequiredPermissions: []string{"document.read"},
 						AllowedActions:      []string{"submit", "approve", "reject", "reopen", "cancel"},
 						Tabs: []module.TabDefinition{
@@ -1528,6 +1591,24 @@ func builtInModuleManifests() []module.Manifest {
 					{Type: "analytics.snapshot.captured", Role: "producer", CorrelationRequired: true},
 				},
 			},
+			Templates: []module.TemplateDefinition{{
+				Key:                 "analytics.document_reporting.default",
+				Title:               "Document Reporting Print",
+				TitleI18n:           localize("Document Reporting Print", "Cetak Pelaporan Dokumen"),
+				Description:         "Default printable analytics reporting template.",
+				DescriptionI18n:     localize("Default printable analytics reporting template.", "Template cetak default untuk pelaporan analitik."),
+				TargetKind:          "report",
+				TargetKey:           "document_reporting",
+				RendererKind:        "visual",
+				DefaultFormat:       "html",
+				Formats:             []string{"html", "pdf"},
+				Purpose:             "report",
+				Channel:             "print",
+				AllowedScopes:       []string{"deployment", "organization", "location"},
+				RequiredPermissions: []string{"template.read", "template.render", "analytics.read"},
+				DefaultBody:         `{"schema_version":"visual-grid/v1","title":"Document Reporting","settings":{"paper_preset":"a4","orientation":"portrait","density":"comfortable"},"sections":[{"id":"header","title":"Summary","rows":[{"columns":[{"span":8,"blocks":[{"type":"text","text":"Document Reporting","font_size":"xl","emphasis":"strong"}]},{"span":4,"blocks":[{"type":"field","label":"Total Rows","path":"report.total","align":"right"}]}]}]},{"id":"body","title":"Rows","rows":[{"columns":[{"span":12,"blocks":[{"type":"table","rows_path":"report.rows","columns":[{"label":"Dimension","path":"dimension_key"},{"label":"Label","path":"label"},{"label":"Total","path":"total"}]}]}]}]},{"id":"footer","title":"Notes","rows":[{"columns":[{"span":12,"blocks":[{"type":"text","text":"Generated from the reporting workspace.","align":"right","emphasis":"muted"}]}]}]}]}`,
+				DefaultStyle:        `.template-visual{font-family:Arial,sans-serif;color:#0f172a}`,
+			}},
 			Frontend: module.FrontendDefinition{
 				Menus: []module.MenuDefinition{{
 					Key:                 "analytics.cockpit",

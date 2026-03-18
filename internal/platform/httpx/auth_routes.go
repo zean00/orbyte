@@ -71,6 +71,20 @@ type userStatusRequest struct {
 	Status string `json:"status"`
 }
 
+type userNavigationPreferencesRequest struct {
+	PreferredUserRoute  string `json:"preferred_user_route"`
+	PreferredAdminRoute string `json:"preferred_admin_route"`
+}
+
+type roleNavigationDefaultsRequest struct {
+	DefaultUserRoute  string `json:"default_user_route"`
+	DefaultAdminRoute string `json:"default_admin_route"`
+}
+
+type roleBindingPriorityRequest struct {
+	Priority int `json:"priority"`
+}
+
 func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, auditSvc *audit.Service) {
 	mux.HandleFunc("GET /users", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
@@ -136,6 +150,20 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			items = filtered
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("GET /roles", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": ident.Roles()})
+	})
+
+	mux.HandleFunc("GET /role-bindings", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": ident.Bindings()})
 	})
 
 	mux.HandleFunc("GET /auth/options", func(w http.ResponseWriter, r *http.Request) {
@@ -576,6 +604,50 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		respondJSON(w, http.StatusCreated, user)
 	})
 
+	mux.HandleFunc("GET /me/preferences/navigation", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		user, found := ident.FindUser(p.userID)
+		if !found {
+			respondError(w, shared.NotFound("user not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"preferred_user_route":  user.PreferredUserRoute,
+			"preferred_admin_route": user.PreferredAdminRoute,
+		})
+	})
+
+	mux.HandleFunc("PUT /me/preferences/navigation", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req userNavigationPreferencesRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid navigation preference payload"))
+			return
+		}
+		user, err := ident.SetUserPreferredRoutes(p.userID, req.PreferredUserRoute, req.PreferredAdminRoute)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, user)
+	})
+
 	mux.HandleFunc("POST /sessions/", func(w http.ResponseWriter, r *http.Request) {
 		sessionID, ok := sessionRevokePath(r.URL.Path)
 		if !ok {
@@ -663,6 +735,70 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		respondJSON(w, http.StatusOK, map[string]any{"status": "password_reset"})
 	})
 
+	mux.HandleFunc("PUT /users/", func(w http.ResponseWriter, r *http.Request) {
+		if userID, ok := userNavigationPreferencesPath(r.URL.Path); ok {
+			if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+				return
+			}
+			var req userNavigationPreferencesRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid navigation preference payload"))
+				return
+			}
+			user, err := ident.SetUserPreferredRoutes(userID, req.PreferredUserRoute, req.PreferredAdminRoute)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, user)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	mux.HandleFunc("PUT /roles/", func(w http.ResponseWriter, r *http.Request) {
+		if roleID, ok := roleNavigationDefaultsPath(r.URL.Path); ok {
+			if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+				return
+			}
+			var req roleNavigationDefaultsRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid role navigation defaults payload"))
+				return
+			}
+			role, err := ident.SetRoleDefaultRoutes(roleID, req.DefaultUserRoute, req.DefaultAdminRoute)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, role)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	mux.HandleFunc("PUT /role-bindings/", func(w http.ResponseWriter, r *http.Request) {
+		bindingID, ok := roleBindingPriorityPath(r.URL.Path)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		var req roleBindingPriorityRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid role binding priority payload"))
+			return
+		}
+		binding, err := ident.SetRoleBindingPriority(bindingID, req.Priority)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, binding)
+	})
+
 	mux.HandleFunc("GET /sessions/", func(w http.ResponseWriter, r *http.Request) {
 		sessionID, ok := sessionIDPath(r.URL.Path)
 		if !ok {
@@ -680,6 +816,33 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		review, _ := ident.ReviewSession(sessionID)
 		respondJSON(w, http.StatusOK, map[string]any{"session": session, "review": review})
 	})
+}
+
+func userNavigationPreferencesPath(path string) (string, bool) {
+	if !strings.HasPrefix(path, "/users/") || !strings.HasSuffix(path, "/preferences/navigation") {
+		return "", false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, "/users/"), "/preferences/navigation")
+	id = strings.Trim(id, "/")
+	return id, id != ""
+}
+
+func roleNavigationDefaultsPath(path string) (string, bool) {
+	if !strings.HasPrefix(path, "/roles/") || !strings.HasSuffix(path, "/defaults/navigation") {
+		return "", false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, "/roles/"), "/defaults/navigation")
+	id = strings.Trim(id, "/")
+	return id, id != ""
+}
+
+func roleBindingPriorityPath(path string) (string, bool) {
+	if !strings.HasPrefix(path, "/role-bindings/") || !strings.HasSuffix(path, "/priority") {
+		return "", false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, "/role-bindings/"), "/priority")
+	id = strings.Trim(id, "/")
+	return id, id != ""
 }
 
 func validateGoogleOAuthPolicy(policy config.AuthPolicy) error {

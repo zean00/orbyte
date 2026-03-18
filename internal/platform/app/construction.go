@@ -28,6 +28,7 @@ import (
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/store"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -55,6 +56,7 @@ type serviceGraph struct {
 	mcpAnalytics      *mcp.AnalyticsStream
 	offline           *offline.Service
 	monitoring        *monitoring.Service
+	templates         *templateoutput.Service
 	runtimeHealth     *runtimehealth.Tracker
 	docActions        *application.DocumentActions
 	modelActions      *application.ModelActions
@@ -82,6 +84,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	}
 	graph.identity = identity.NewService(graph.organization)
 	graph.reporting = reporting.NewService(graph.models)
+	graph.templates = templateoutput.NewService(graph.documents, graph.reporting)
 	graph.policy = policy.NewServiceWithConfig(graph.config)
 	graph.fieldSecurity = securityfields.NewService(graph.policy)
 	graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
@@ -106,6 +109,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.models = model.NewServiceWithRepository(model.NewPostgresRepository(postgres.DB))
 		graph.activities = activity.NewService()
 		graph.reporting = reporting.NewService(graph.models)
+		graph.templates = templateoutput.NewServiceWithRepository(templateoutput.NewPostgresRepository(postgres.DB), graph.documents, graph.reporting)
 		graph.reference = reference.NewServiceWithRepository(reference.NewPostgresRepository(postgres.DB))
 		graph.documents = document.NewServiceWithRepository(document.NewPostgresRepository(postgres.DB))
 		graph.workflows = workflow.NewServiceWithRepository(workflow.NewPostgresRepository(postgres.DB))

@@ -9,17 +9,21 @@ type User struct {
 	Status                string    `json:"status"`
 	DefaultLocationID     string    `json:"default_location_id,omitempty"`
 	PreferredLocale       string    `json:"preferred_locale,omitempty"`
+	PreferredUserRoute    string    `json:"preferred_user_route,omitempty"`
+	PreferredAdminRoute   string    `json:"preferred_admin_route,omitempty"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 type Role struct {
-	ID        string    `json:"id"`
-	Key       string    `json:"key"`
-	Name      string    `json:"name"`
-	ScopeType string    `json:"scope_type"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	Key               string    `json:"key"`
+	Name              string    `json:"name"`
+	ScopeType         string    `json:"scope_type"`
+	DefaultUserRoute  string    `json:"default_user_route,omitempty"`
+	DefaultAdminRoute string    `json:"default_admin_route,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type Permission struct {
@@ -36,6 +40,7 @@ type RoleBinding struct {
 	RoleID        string    `json:"role_id"`
 	ScopeType     string    `json:"scope_type"`
 	ScopeID       string    `json:"scope_id,omitempty"`
+	Priority      int       `json:"priority,omitempty"`
 	EffectiveFrom time.Time `json:"effective_from"`
 	EffectiveTo   time.Time `json:"effective_to,omitempty"`
 	Status        string    `json:"status"`

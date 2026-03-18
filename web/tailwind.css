@@ -262,6 +262,290 @@
     @apply grid gap-6 xl:grid-cols-[1.2fr_1fr];
   }
 
+  .template-admin-grid {
+    @apply grid gap-6 xl:grid-cols-[280px_minmax(0,1.4fr)_340px];
+  }
+
+  .template-stack {
+    @apply grid gap-6;
+  }
+
+  .template-palette {
+    @apply grid gap-2;
+  }
+
+  .template-palette button {
+    @apply justify-start border-line bg-white text-left text-ink;
+  }
+
+  .template-designer-shell {
+    @apply grid gap-4;
+  }
+
+  .template-section-tabs {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .template-section-tab {
+    @apply inline-flex items-center rounded-full border border-line bg-white px-3 py-2 text-sm font-medium text-muted no-underline;
+  }
+
+  .template-section-tab.active {
+    @apply border-accent/20 bg-accent-soft text-accent;
+  }
+
+  .template-canvas {
+    @apply rounded-2xl border border-dashed border-line bg-slate-50/70 p-4;
+  }
+
+  .template-paper {
+    @apply mx-auto min-h-[640px] rounded-2xl border border-line bg-white p-6 shadow-panel;
+  }
+
+  .template-paper.paper-a4 {
+    @apply max-w-[210mm];
+  }
+
+  .template-paper.paper-a4-landscape {
+    @apply max-w-[297mm];
+  }
+
+  .template-paper.paper-receipt-80 {
+    @apply max-w-[82mm];
+  }
+
+  .template-paper.paper-receipt-58 {
+    @apply max-w-[60mm];
+  }
+
+  .template-visual.density-compact,
+  .template-paper.density-compact {
+    @apply text-sm;
+  }
+
+  .template-visual.density-comfortable,
+  .template-paper.density-comfortable {
+    @apply text-[15px];
+  }
+
+  .template-designer-section {
+    @apply grid gap-3;
+  }
+
+  .template-designer-row {
+    @apply grid grid-cols-12 gap-3 rounded-xl border border-line bg-surface p-3;
+  }
+
+  .template-cell-drop {
+    @apply min-h-24 rounded-xl border border-dashed border-line bg-white p-3;
+  }
+
+  .template-cell-drop.dragover {
+    @apply border-accent bg-accent-soft/40;
+  }
+
+  .template-designer-row-wrap {
+    @apply grid gap-2;
+  }
+
+  .template-row-actions {
+    @apply mt-0 items-center;
+  }
+
+  .template-row-actions .status {
+    @apply mr-auto;
+  }
+
+  .template-cell-toolbar {
+    @apply mb-2 flex items-center justify-between gap-2;
+  }
+
+  .template-designer-block {
+    @apply mb-2 rounded-xl border border-line bg-slate-50 p-3;
+  }
+
+  .template-designer-block.is-selected {
+    @apply border-accent shadow-panel;
+  }
+
+  .template-designer-block:last-child {
+    @apply mb-0;
+  }
+
+  .template-block-title {
+    @apply text-sm font-semibold text-ink;
+  }
+
+  .template-block-meta {
+    @apply mt-1 text-xs text-muted;
+  }
+
+  .template-preview-frame {
+    @apply overflow-auto rounded-2xl border border-line bg-slate-50 p-4;
+  }
+
+  .template-preview-frame .template-visual {
+    @apply mx-auto;
+  }
+
+  .preview-overlay {
+    @apply fixed inset-0 z-50 grid place-items-center p-6;
+  }
+
+  .preview-overlay.hidden {
+    display: none;
+  }
+
+  .preview-backdrop {
+    @apply absolute inset-0 bg-slate-900/40 backdrop-blur-[1px];
+  }
+
+  .preview-dialog {
+    @apply relative z-10 max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-auto rounded-3xl border border-line bg-surface p-5 shadow-panel;
+  }
+
+  .preview-panel {
+    @apply grid gap-4;
+  }
+
+  .template-visual {
+    @apply mx-auto rounded-2xl border border-line bg-white p-8 text-sm text-ink shadow-panel;
+  }
+
+  .template-page-title h1 {
+    @apply m-0 text-2xl font-semibold tracking-[-0.02em];
+  }
+
+  .template-section {
+    @apply mb-6;
+  }
+
+  .template-section h2 {
+    @apply mb-3 mt-0 text-sm font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .template-row {
+    @apply grid grid-cols-12 gap-4;
+  }
+
+  .template-cell {
+    @apply min-w-0;
+  }
+
+  .template-cell.span-1 { grid-column: span 1 / span 1; }
+  .template-cell.span-2 { grid-column: span 2 / span 2; }
+  .template-cell.span-3 { grid-column: span 3 / span 3; }
+  .template-cell.span-4 { grid-column: span 4 / span 4; }
+  .template-cell.span-5 { grid-column: span 5 / span 5; }
+  .template-cell.span-6 { grid-column: span 6 / span 6; }
+  .template-cell.span-7 { grid-column: span 7 / span 7; }
+  .template-cell.span-8 { grid-column: span 8 / span 8; }
+  .template-cell.span-9 { grid-column: span 9 / span 9; }
+  .template-cell.span-10 { grid-column: span 10 / span 10; }
+  .template-cell.span-11 { grid-column: span 11 / span 11; }
+  .template-cell.span-12 { grid-column: span 12 / span 12; }
+
+  .template-block {
+    @apply mb-4;
+  }
+
+  .template-block:last-child {
+    @apply mb-0;
+  }
+
+  .template-block.align-center {
+    @apply text-center;
+  }
+
+  .template-block.align-right {
+    @apply text-right;
+  }
+
+  .template-block.emphasis-strong {
+    @apply font-semibold;
+  }
+
+  .template-block.emphasis-muted {
+    @apply text-muted;
+  }
+
+  .template-block.size-sm {
+    @apply text-xs;
+  }
+
+  .template-block.size-lg {
+    @apply text-lg;
+  }
+
+  .template-block.size-xl {
+    @apply text-2xl;
+  }
+
+  .template-field {
+    @apply flex items-baseline justify-between gap-4 rounded-xl border border-line bg-slate-50 px-3 py-2;
+  }
+
+  .template-field.total {
+    @apply bg-accent-soft;
+  }
+
+  .template-field-label {
+    @apply text-xs uppercase tracking-[0.14em] text-muted;
+  }
+
+  .template-field-value,
+  .template-value {
+    @apply text-sm font-medium text-ink;
+  }
+
+  .template-image {
+    @apply max-h-20 max-w-full object-contain;
+  }
+
+  .template-image.placeholder {
+    @apply flex min-h-20 items-center justify-center rounded-xl border border-dashed border-line bg-slate-50 text-sm text-muted;
+  }
+
+  .template-divider {
+    @apply border-0 border-t border-line;
+  }
+
+  .template-table-wrap {
+    @apply overflow-hidden rounded-xl border border-line;
+  }
+
+  .template-table {
+    @apply w-full border-collapse bg-white;
+  }
+
+  .template-table th {
+    @apply bg-slate-100 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.1em] text-muted;
+  }
+
+  .template-table td {
+    @apply border-t border-line px-3 py-2 align-top text-sm text-ink;
+  }
+
+  .template-empty {
+    @apply text-center text-muted;
+  }
+
+  .template-code {
+    @apply rounded-xl border border-line bg-slate-50 px-3 py-3;
+  }
+
+  .template-code-label {
+    @apply block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .template-signature {
+    @apply pt-10 text-center;
+  }
+
+  .template-signature-line {
+    @apply mx-auto mb-2 h-px w-40 bg-ink;
+  }
+
   .admin-row {
     @apply grid gap-3 md:grid-cols-2;
   }

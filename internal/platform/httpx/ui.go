@@ -58,15 +58,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		}
 		menus, actions, views, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 		adminMenus, adminActions, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
-		defaultPath := ""
-		if len(menus) > 0 {
-			for _, action := range actions {
-				if action.Key == menus[0].ActionKey {
-					defaultPath = action.RoutePath
-					break
-				}
-			}
-		}
+		defaultPath := defaultRouteForSurface(ident, p.userID, "user", menus, actions)
 		adminPath := "/admin"
 		if len(adminMenus) > 0 {
 			for _, action := range adminActions {
@@ -899,6 +891,12 @@ const uiShellHTML = `<!doctype html>
         action_reject: 'Reject',
         action_reopen: 'Reopen',
         action_cancel: 'Cancel',
+        print_preview: 'Preview',
+        print_document: 'Print',
+        download_pdf: 'Download PDF',
+        template_unavailable: 'No print template is available for this page.',
+        print_preview_title: 'Print Preview',
+        close_preview: 'Close Preview',
         add: 'Add',
         add_row: 'Add Row',
         remove: 'Remove',
@@ -984,6 +982,12 @@ const uiShellHTML = `<!doctype html>
         action_reject: 'Tolak',
         action_reopen: 'Buka Kembali',
         action_cancel: 'Batalkan',
+        print_preview: 'Pratinjau',
+        print_document: 'Cetak',
+        download_pdf: 'Unduh PDF',
+        template_unavailable: 'Tidak ada template cetak untuk halaman ini.',
+        print_preview_title: 'Pratinjau Cetak',
+        close_preview: 'Tutup Pratinjau',
         add: 'Tambah',
         add_row: 'Tambah Baris',
         remove: 'Hapus',
@@ -1239,6 +1243,15 @@ const uiShellHTML = `<!doctype html>
 
     async function api(path, options) {
       const requestOptions = Object.assign({credentials: 'same-origin'}, options || {});
+      const method = String(requestOptions.method || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        const headers = Object.assign({}, requestOptions.headers || {});
+        if (!headers['X-CSRF-Token']) {
+          const csrf = readCookie('orbyte_csrf');
+          if (csrf) headers['X-CSRF-Token'] = csrf;
+        }
+        requestOptions.headers = headers;
+      }
       try {
         const response = await fetch(path, requestOptions);
         if (!response.ok) {
@@ -1812,6 +1825,82 @@ const uiShellHTML = `<!doctype html>
           });
           (root.querySelector('[data-zone="' + zone + '"]') || root.querySelector('[data-zone="secondary"]')).appendChild(button);
         }
+        const printSupport = view.printable
+          ? await resolvePrintTemplate(
+              'document',
+              record.header.type,
+              view.print_purpose || 'official',
+              view.print_channel || 'print',
+              record.header.organization_id || '',
+              record.header.location_id || ''
+            )
+          : {resolved: false};
+        if (printSupport.resolved) {
+          const secondaryZone = root.querySelector('[data-zone="secondary"]');
+          const previewButton = document.createElement('button');
+          previewButton.className = 'secondary';
+          previewButton.textContent = t('print_preview');
+          previewButton.addEventListener('click', async () => {
+            try {
+              await previewTemplateOutput({
+                target_kind: 'document',
+                target_key: record.header.type,
+                target_id: record.header.id,
+                organization_id: record.header.organization_id || '',
+                location_id: record.header.location_id || '',
+                purpose: view.print_purpose || 'official',
+                channel: view.print_channel || 'print'
+              });
+            } catch (err) {
+              setStatus(err.message);
+            }
+          });
+          secondaryZone.appendChild(previewButton);
+          const printButton = document.createElement('button');
+          printButton.className = 'secondary';
+          printButton.textContent = t('print_document');
+          printButton.addEventListener('click', async () => {
+            try {
+              const payload = await api('/outputs/render', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': readCookie('orbyte_csrf')},
+                body: JSON.stringify({
+                  target_kind: 'document',
+                  target_key: record.header.type,
+                  target_id: record.header.id,
+                  organization_id: record.header.organization_id || '',
+                  location_id: record.header.location_id || '',
+                  purpose: view.print_purpose || 'official',
+                  channel: view.print_channel || 'print',
+                  format: 'html'
+                })
+              });
+              openPrintWindow(payload.output);
+            } catch (err) {
+              setStatus(err.message);
+            }
+          });
+          secondaryZone.appendChild(printButton);
+          const pdfButton = document.createElement('button');
+          pdfButton.className = 'secondary';
+          pdfButton.textContent = t('download_pdf');
+          pdfButton.addEventListener('click', async () => {
+            try {
+              await downloadTemplatePDF({
+                target_kind: 'document',
+                target_key: record.header.type,
+                target_id: record.header.id,
+                organization_id: record.header.organization_id || '',
+                location_id: record.header.location_id || '',
+                purpose: view.print_purpose || 'official',
+                channel: view.print_channel || 'print'
+              });
+            } catch (err) {
+              setStatus(err.message);
+            }
+          });
+          secondaryZone.appendChild(pdfButton);
+        }
         return;
       }
       if (view.kind === 'form') {
@@ -2026,7 +2115,7 @@ const uiShellHTML = `<!doctype html>
             return '<article class="metric-card" data-action="' + (item.card.action_key || '') + '"><span class="meta">' + escapeHTML(pickText(item.card, 'label')) + '</span><pre>' + escapeHTML(JSON.stringify(item.value, null, 2)) + '</pre></article>';
           }
           return '<article class="metric-card" data-action="' + (item.card.action_key || '') + '"><span class="meta">' + escapeHTML(pickText(item.card, 'label')) + '</span><strong>' + escapeHTML(displayValue(item.value)) + '</strong></article>';
-        }).join('') + '</div></div></section>';
+        }).join('') + '</div></div><div class="page-actions" data-report-actions></div></section>';
         root.querySelectorAll('[data-action]').forEach((card) => {
           if (!card.dataset.action) return;
           card.addEventListener('click', () => {
@@ -2034,6 +2123,67 @@ const uiShellHTML = `<!doctype html>
             if (action) window.location.hash = '#' + action.route_path;
           });
         });
+        if (view.dataset_key && view.printable) {
+          const printSupport = await resolvePrintTemplate('report', view.dataset_key, view.print_purpose || 'report', view.print_channel || 'print');
+          if (printSupport.resolved) {
+            const zone = root.querySelector('[data-report-actions]');
+            const previewButton = document.createElement('button');
+            previewButton.className = 'secondary';
+            previewButton.textContent = t('print_preview');
+            previewButton.onclick = async () => {
+              try {
+                await previewTemplateOutput({
+                  target_kind: 'report',
+                  target_key: view.dataset_key,
+                  purpose: view.print_purpose || 'report',
+                  channel: view.print_channel || 'print',
+                  sample: false
+                });
+              } catch (err) {
+                setStatus(err.message);
+              }
+            };
+            zone.appendChild(previewButton);
+            const printButton = document.createElement('button');
+            printButton.className = 'secondary';
+            printButton.textContent = t('print_document');
+            printButton.onclick = async () => {
+              try {
+                const payload = await api('/outputs/render', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json', 'X-CSRF-Token': readCookie('orbyte_csrf')},
+                  body: JSON.stringify({
+                    target_kind: 'report',
+                    target_key: view.dataset_key,
+                    purpose: view.print_purpose || 'report',
+                    channel: view.print_channel || 'print',
+                    format: 'html'
+                  })
+                });
+                openPrintWindow(payload.output);
+              } catch (err) {
+                setStatus(err.message);
+              }
+            };
+            zone.appendChild(printButton);
+            const pdfButton = document.createElement('button');
+            pdfButton.className = 'secondary';
+            pdfButton.textContent = t('download_pdf');
+            pdfButton.onclick = async () => {
+              try {
+                await downloadTemplatePDF({
+                  target_kind: 'report',
+                  target_key: view.dataset_key,
+                  purpose: view.print_purpose || 'report',
+                  channel: view.print_channel || 'print'
+                });
+              } catch (err) {
+                setStatus(err.message);
+              }
+            };
+            zone.appendChild(pdfButton);
+          }
+        }
         return;
       }
       renderJSONCard(pickText(view, 'title'), route);
@@ -2048,10 +2198,119 @@ const uiShellHTML = `<!doctype html>
       });
     }
 
+    async function resolvePrintTemplate(targetKind, targetKey, purpose, channel, organizationID, locationID) {
+      try {
+        let path = '/outputs/templates/resolve?target_kind=' + encodeURIComponent(targetKind) + '&target_key=' + encodeURIComponent(targetKey) + '&purpose=' + encodeURIComponent(purpose || '') + '&channel=' + encodeURIComponent(channel || 'print');
+        if (organizationID) path += '&organization_id=' + encodeURIComponent(organizationID);
+        if (locationID) path += '&location_id=' + encodeURIComponent(locationID);
+        return await api(path);
+      } catch (_) {
+        return {resolved: false};
+      }
+    }
+
+    function renderPrintPreviewShell(output) {
+      const html = output && output.html ? output.html : '';
+      return '<section class="preview-panel"><div class="page-header"><div><h3>' + escapeHTML(t('print_preview_title')) + '</h3><p class="status">' + escapeHTML((output && output.file_name) || '') + '</p></div></div><div class="page-body"><div class="template-preview-frame">' + html + '</div></div><div class="page-actions"><button type="button" id="preview-print-button">' + escapeHTML(t('print_document')) + '</button><button type="button" id="preview-close-button" class="secondary">' + escapeHTML(t('close_preview')) + '</button></div></section>';
+    }
+
+    function ensurePreviewOverlay() {
+      let overlay = document.getElementById('preview-overlay');
+      if (overlay) return overlay;
+      overlay = document.createElement('div');
+      overlay.id = 'preview-overlay';
+      overlay.className = 'preview-overlay hidden';
+      overlay.innerHTML = '<div class="preview-backdrop" id="preview-backdrop"></div><div class="preview-dialog"><div id="preview-content"></div></div>';
+      document.body.appendChild(overlay);
+      const backdrop = document.getElementById('preview-backdrop');
+      if (backdrop) {
+        backdrop.onclick = () => closePreviewOverlay();
+      }
+      return overlay;
+    }
+
+    function closePreviewOverlay() {
+      const overlay = document.getElementById('preview-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      const content = document.getElementById('preview-content');
+      if (content) content.innerHTML = '';
+    }
+
+    function openPrintWindow(output) {
+      const win = window.open('', '_blank', 'noopener,noreferrer,width=980,height=760');
+      if (!win) return;
+      win.document.open();
+      win.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHTML((output && output.file_name) || t('print_preview_title')) + '</title><link rel="stylesheet" href="/ui/assets/platform.css?v=' + encodeURIComponent(platformAssetVersion) + '"></head><body>' + ((output && output.html) || '') + '</body></html>');
+      win.document.close();
+      win.focus();
+      win.print();
+    }
+
+    async function downloadTemplatePDF(renderRequest) {
+      const csrf = readCookie('orbyte_csrf');
+      const response = await fetch('/outputs/render', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
+        body: JSON.stringify(Object.assign({}, renderRequest, {format: 'pdf'}))
+      });
+      if (!response.ok) {
+        let message = 'render failed';
+        try {
+          const payload = await response.json();
+          message = payload.error && payload.error.message ? payload.error.message : message;
+        } catch (_) {}
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = (response.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'output.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    }
+
+    async function previewTemplateOutput(renderRequest) {
+      const payload = await api('/outputs/render', Object.assign({
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': readCookie('orbyte_csrf')},
+        body: JSON.stringify(Object.assign({}, renderRequest, {format: 'html'}))
+      }));
+      const overlay = ensurePreviewOverlay();
+      const content = document.getElementById('preview-content');
+      if (content) content.innerHTML = renderPrintPreviewShell(payload.output);
+      overlay.classList.remove('hidden');
+      const printButton = document.getElementById('preview-print-button');
+      const closeButton = document.getElementById('preview-close-button');
+      if (printButton) {
+        printButton.onclick = () => openPrintWindow(payload.output);
+      }
+      if (closeButton) {
+        closeButton.onclick = () => closePreviewOverlay();
+      }
+    }
+
+    async function resolveCustomPrintSupport(entry) {
+      if (!entry || !entry.printable || !entry.print_target_kind || !entry.print_target_key) {
+        return {resolved: false};
+      }
+      return resolvePrintTemplate(
+        entry.print_target_kind,
+        entry.print_target_key,
+        entry.print_purpose || '',
+        entry.print_channel || 'print'
+      );
+    }
+
     async function renderCustom(route) {
       const root = document.getElementById('view-root');
       root.innerHTML = '<section class="panel"><h3>' + escapeHTML(t('custom_loading')) + '</h3></section>';
       const entry = route.custom_entry;
+      const printSupport = await resolveCustomPrintSupport(entry);
       const bundle = await loadBundle(entry.bundle_key);
       const renderFn = bundle[entry.component_export];
       if (typeof renderFn !== 'function') throw new Error('module component export not found');
@@ -2063,7 +2322,46 @@ const uiShellHTML = `<!doctype html>
         api,
         params: Object.fromEntries(currentParams().entries()),
         t,
-        locale: state.locale
+        locale: state.locale,
+        print: {
+          resolved: !!printSupport.resolved,
+          definition: printSupport.definition || null,
+          version: printSupport.version || null,
+          preview: async function(extra) {
+            if (!printSupport.resolved) return;
+            await previewTemplateOutput(Object.assign({
+              target_kind: entry.print_target_kind,
+              target_key: entry.print_target_key,
+              purpose: entry.print_purpose || '',
+              channel: entry.print_channel || 'print',
+              sample: false
+            }, extra || {}));
+          },
+          open: async function(extra) {
+            if (!printSupport.resolved) return;
+            const payload = await api('/outputs/render', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json', 'X-CSRF-Token': readCookie('orbyte_csrf')},
+              body: JSON.stringify(Object.assign({
+                target_kind: entry.print_target_kind,
+                target_key: entry.print_target_key,
+                purpose: entry.print_purpose || '',
+                channel: entry.print_channel || 'print',
+                format: 'html'
+              }, extra || {}))
+            });
+            openPrintWindow(payload.output);
+          },
+          downloadPDF: async function(extra) {
+            if (!printSupport.resolved) return;
+            await downloadTemplatePDF(Object.assign({
+              target_kind: entry.print_target_kind,
+              target_key: entry.print_target_key,
+              purpose: entry.print_purpose || '',
+              channel: entry.print_channel || 'print'
+            }, extra || {}));
+          }
+        }
       });
     }
 
@@ -2497,6 +2795,7 @@ func AnalyticsCockpitBundle() string {
         +       '<p class="status">' + text('Operational analytics overview for documents, workflow, and reliability.', 'Ringkasan analitik operasional untuk dokumen, workflow, dan reliabilitas.') + '</p>'
         +     '</div>'
         +     '<div class="actions">'
+        +       (ctx.print && ctx.print.resolved ? '<button type="button" class="secondary" data-print-preview="1">' + text('Preview', 'Pratinjau') + '</button><button type="button" class="secondary" data-print-window="1">' + text('Print', 'Cetak') + '</button><button type="button" class="secondary" data-print-pdf="1">' + text('Download PDF', 'Unduh PDF') + '</button>' : '')
         +       '<button type="button" class="secondary" data-nav="#/documents">' + text('Open Requests', 'Buka Permintaan') + '</button>'
         +       '<button type="button" class="secondary" data-nav="#/monitoring">' + text('Open Monitoring', 'Buka Monitoring') + '</button>'
         +     '</div>'
@@ -2570,6 +2869,24 @@ func AnalyticsCockpitBundle() string {
           window.location.hash = node.getAttribute('data-nav');
         });
       });
+      const previewButton = ctx.mount.querySelector('[data-print-preview]');
+      if (previewButton && ctx.print && ctx.print.resolved) {
+        previewButton.addEventListener('click', function() {
+          ctx.print.preview({sample: true});
+        });
+      }
+      const printButton = ctx.mount.querySelector('[data-print-window]');
+      if (printButton && ctx.print && ctx.print.resolved) {
+        printButton.addEventListener('click', function() {
+          ctx.print.open({sample: true});
+        });
+      }
+      const pdfButton = ctx.mount.querySelector('[data-print-pdf]');
+      if (pdfButton && ctx.print && ctx.print.resolved) {
+        pdfButton.addEventListener('click', function() {
+          ctx.print.downloadPDF({sample: true});
+        });
+      }
       ctx.mount.querySelector('pre').textContent = JSON.stringify(payload, null, 2);
     }
   };

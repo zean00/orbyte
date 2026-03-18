@@ -27,6 +27,7 @@ import (
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -40,6 +41,7 @@ type RouterDeps struct {
 	Admin        AdminDeps
 	MCP          MCPDeps
 	Offline      OfflineDeps
+	Templates    TemplateDeps
 	UI           UIDeps
 	Docs         DocsDeps
 	CrossCutting CrossCuttingDeps
@@ -109,6 +111,11 @@ type AdminDeps struct {
 	Observability *observability.Service
 	Integration   *integration.Service
 	Reference     *reference.Service
+}
+
+type TemplateDeps struct {
+	Identity  *identity.Service
+	Templates *templateoutput.Service
 }
 
 type UIDeps struct {
@@ -194,6 +201,10 @@ func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
 
 func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {
 	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.FieldSecurity)
+}
+
+func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {
+	registerTemplateRoutes(mux, deps.Identity, deps.Templates)
 }
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {

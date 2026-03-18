@@ -169,6 +169,39 @@ func TestSetUserPreferredLocale(t *testing.T) {
 	}
 }
 
+func TestDefaultRoutePrefersUserOverrideThenHighestPriorityRole(t *testing.T) {
+	svc := NewService(organization.NewService())
+	if err := svc.UpsertRole(Role{ID: "role_ops", Key: "ops", Name: "Ops", ScopeType: "deployment", DefaultUserRoute: "/monitoring", DefaultAdminRoute: "/admin/observability"}); err != nil {
+		t.Fatalf("upsert role failed: %v", err)
+	}
+	now := time.Now().UTC()
+	repo := svc.repo
+	if err := repo.SaveRoleBinding(RoleBinding{ID: "rb_ops", UserID: "user_admin", RoleID: "role_ops", ScopeType: "deployment", Priority: 10, EffectiveFrom: now, Status: "active"}); err != nil {
+		t.Fatalf("save role binding failed: %v", err)
+	}
+	if got := svc.DefaultRoute("user_admin", "admin"); got != "/admin/modules" {
+		t.Fatalf("expected bootstrap admin role default route first, got %q", got)
+	}
+	if _, err := svc.SetRoleBindingPriority("rb_ops", 200); err != nil {
+		t.Fatalf("set role binding priority failed: %v", err)
+	}
+	if got := svc.DefaultRoute("user_admin", "user"); got != "/monitoring" {
+		t.Fatalf("expected highest-priority role user route, got %q", got)
+	}
+	if got := svc.DefaultRoute("user_admin", "admin"); got != "/admin/observability" {
+		t.Fatalf("expected highest-priority role admin route, got %q", got)
+	}
+	if _, err := svc.SetUserPreferredRoutes("user_admin", "/documents", "/admin/security"); err != nil {
+		t.Fatalf("set user preferred routes failed: %v", err)
+	}
+	if got := svc.PreferredRoute("user_admin", "user"); got != "/documents" {
+		t.Fatalf("expected preferred user route, got %q", got)
+	}
+	if got := svc.PreferredRoute("user_admin", "admin"); got != "/admin/security" {
+		t.Fatalf("expected preferred admin route, got %q", got)
+	}
+}
+
 func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	svc := NewService(organization.NewService())
 	session, err := svc.AuthenticatePassword("admin", "admin123!", "loc_hq", map[string]any{"source": "test"}, time.Hour)

@@ -42,6 +42,7 @@ type Manifest struct {
 	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
 	Offline                OfflineDefinition          `json:"offline,omitempty"`
 	MCP                    MCPDefinition              `json:"mcp,omitempty"`
+	Templates              []TemplateDefinition       `json:"templates,omitempty"`
 	Bundles                []BundleDefinition         `json:"-"`
 }
 
@@ -283,6 +284,25 @@ type MCPDefinition struct {
 	Apps      []MCPAppDefinition      `json:"apps,omitempty"`
 }
 
+type TemplateDefinition struct {
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	TargetKind          string             `json:"target_kind"`
+	TargetKey           string             `json:"target_key"`
+	RendererKind        string             `json:"renderer_kind"`
+	DefaultFormat       string             `json:"default_format,omitempty"`
+	Formats             []string           `json:"formats,omitempty"`
+	Purpose             string             `json:"purpose,omitempty"`
+	Channel             string             `json:"channel,omitempty"`
+	AllowedScopes       []string           `json:"allowed_scopes,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	DefaultBody         string             `json:"default_body,omitempty"`
+	DefaultStyle        string             `json:"default_style,omitempty"`
+}
+
 type MCPToolDefinition struct {
 	Key                 string             `json:"key"`
 	Title               string             `json:"title"`
@@ -364,6 +384,9 @@ type ViewDefinition struct {
 	ModelKey            string                      `json:"model_key,omitempty"`
 	ProjectionKey       string                      `json:"projection_key,omitempty"`
 	DatasetKey          string                      `json:"dataset_key,omitempty"`
+	Printable           bool                        `json:"printable,omitempty"`
+	PrintPurpose        string                      `json:"print_purpose,omitempty"`
+	PrintChannel        string                      `json:"print_channel,omitempty"`
 	RequiredPermissions []string                    `json:"required_permissions,omitempty"`
 	AllowedActions      []string                    `json:"allowed_actions,omitempty"`
 	Columns             []ColumnDefinition          `json:"columns,omitempty"`
@@ -458,6 +481,11 @@ type CustomEntryDefinition struct {
 	RoutePath           string             `json:"route_path"`
 	BundleKey           string             `json:"bundle_key"`
 	ComponentExport     string             `json:"component_export"`
+	Printable           bool               `json:"printable,omitempty"`
+	PrintTargetKind     string             `json:"print_target_kind,omitempty"`
+	PrintTargetKey      string             `json:"print_target_key,omitempty"`
+	PrintPurpose        string             `json:"print_purpose,omitempty"`
+	PrintChannel        string             `json:"print_channel,omitempty"`
 	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 

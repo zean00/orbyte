@@ -13,8 +13,8 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	defer db.Close()
 	repo := NewPostgresRepository(db)
 	now := time.Now().UTC()
-	userRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", "id", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at")).WillReturnRows(userRows)
+	userRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "preferred_user_route", "preferred_admin_route", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", "id", "/documents", "/admin/modules", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at")).WillReturnRows(userRows)
 	users := repo.Users()
 	if len(users) != 1 {
 		t.Fatal("expected users")
@@ -22,8 +22,11 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if users[0].PreferredLocale != "id" {
 		t.Fatalf("expected preferred locale to load, got %+v", users[0])
 	}
-	roleRows := sqlmock.NewRows([]string{"role_id", "role_key", "name", "scope_type", "created_at", "updated_at"}).AddRow("r1", "admin", "Admin", "deployment", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT role_id, role_key, name, scope_type, created_at, updated_at")).WillReturnRows(roleRows)
+	if users[0].PreferredUserRoute != "/documents" || users[0].PreferredAdminRoute != "/admin/modules" {
+		t.Fatalf("expected preferred routes to load, got %+v", users[0])
+	}
+	roleRows := sqlmock.NewRows([]string{"role_id", "role_key", "name", "scope_type", "default_user_route", "default_admin_route", "created_at", "updated_at"}).AddRow("r1", "admin", "Admin", "deployment", "/documents", "/admin/modules", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT role_id, role_key, name, scope_type, COALESCE(default_user_route, ''), COALESCE(default_admin_route, ''), created_at, updated_at")).WillReturnRows(roleRows)
 	if len(repo.Roles()) != 1 {
 		t.Fatal("expected roles")
 	}
@@ -32,8 +35,8 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if len(repo.Permissions()) != 1 {
 		t.Fatal("expected perms")
 	}
-	bindingRows := sqlmock.NewRows([]string{"role_binding_id", "user_id", "role_id", "scope_type", "scope_id", "effective_from", "effective_to", "status"}).AddRow("rb1", "u1", "r1", "deployment", "", now, nil, "active")
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT role_binding_id, user_id, role_id, scope_type, COALESCE(scope_id, ''), effective_from, effective_to, status")).WillReturnRows(bindingRows)
+	bindingRows := sqlmock.NewRows([]string{"role_binding_id", "user_id", "role_id", "scope_type", "scope_id", "priority", "effective_from", "effective_to", "status"}).AddRow("rb1", "u1", "r1", "deployment", "", 5, now, nil, "active")
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT role_binding_id, user_id, role_id, scope_type, COALESCE(scope_id, ''), COALESCE(priority, 0), effective_from, effective_to, status")).WillReturnRows(bindingRows)
 	if len(repo.RoleBindings()) != 1 {
 		t.Fatal("expected bindings")
 	}
@@ -61,29 +64,29 @@ func TestPostgresIdentityRepository(t *testing.T) {
 		t.Fatal("expected service principals")
 	}
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO users (")).
-		WithArgs("u2", "clerk", "", "active", "loc1", "id", now, now).
+		WithArgs("u2", "clerk", "", "active", "loc1", "id", "/documents", "/admin/modules", now, now).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	if err := repo.SaveUser(User{ID: "u2", Username: "clerk", Status: "active", DefaultLocationID: "loc1", PreferredLocale: "id", CreatedAt: now, UpdatedAt: now}); err != nil {
+	if err := repo.SaveUser(User{ID: "u2", Username: "clerk", Status: "active", DefaultLocationID: "loc1", PreferredLocale: "id", PreferredUserRoute: "/documents", PreferredAdminRoute: "/admin/modules", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatalf("expected save user: %v", err)
 	}
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO role_bindings (")).
-		WithArgs("rb2", "u2", "r1", "deployment", "", now, nil, "active").
+		WithArgs("rb2", "u2", "r1", "deployment", "", 3, now, nil, "active").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	if err := repo.SaveRoleBinding(RoleBinding{ID: "rb2", UserID: "u2", RoleID: "r1", ScopeType: "deployment", EffectiveFrom: now, Status: "active"}); err != nil {
+	if err := repo.SaveRoleBinding(RoleBinding{ID: "rb2", UserID: "u2", RoleID: "r1", ScopeType: "deployment", Priority: 3, EffectiveFrom: now, Status: "active"}); err != nil {
 		t.Fatalf("expected save role binding: %v", err)
 	}
-	findRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", "id", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at")).WithArgs("u1").WillReturnRows(findRows)
+	findRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "preferred_user_route", "preferred_admin_route", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", "id", "/documents", "/admin/modules", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at")).WithArgs("u1").WillReturnRows(findRows)
 	if _, ok := repo.FindUser("u1"); !ok {
 		t.Fatal("expected find user")
 	}
-	findUserByNameRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", "id", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at")).WithArgs("admin").WillReturnRows(findUserByNameRows)
+	findUserByNameRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "preferred_user_route", "preferred_admin_route", "created_at", "updated_at"}).AddRow("u1", "admin", "", "active", "loc1", "id", "/documents", "/admin/modules", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at")).WithArgs("admin").WillReturnRows(findUserByNameRows)
 	if _, ok := repo.FindUserByUsername("admin"); !ok {
 		t.Fatal("expected find user by username")
 	}
-	findUserBySubjectRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "created_at", "updated_at"}).AddRow("u1", "admin", "google:sub-1", "active", "loc1", "id", now, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at")).WithArgs("google:sub-1").WillReturnRows(findUserBySubjectRows)
+	findUserBySubjectRows := sqlmock.NewRows([]string{"user_id", "username", "authentication_subject", "status", "default_location_id", "preferred_locale", "preferred_user_route", "preferred_admin_route", "created_at", "updated_at"}).AddRow("u1", "admin", "google:sub-1", "active", "loc1", "id", "/documents", "/admin/modules", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at")).WithArgs("google:sub-1").WillReturnRows(findUserBySubjectRows)
 	if _, ok := repo.FindUserByAuthenticationSubject("google:sub-1"); !ok {
 		t.Fatal("expected find user by authentication subject")
 	}

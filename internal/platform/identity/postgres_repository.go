@@ -17,7 +17,7 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 
 func (r *PostgresRepository) Users() []User {
 	const query = `
-		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at
 		FROM users
 		ORDER BY created_at ASC`
 
@@ -30,7 +30,7 @@ func (r *PostgresRepository) Users() []User {
 	items := make([]User, 0)
 	for rows.Next() {
 		var item User
-		if err := rows.Scan(&item.ID, &item.Username, &item.AuthenticationSubject, &item.Status, &item.DefaultLocationID, &item.PreferredLocale, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Username, &item.AuthenticationSubject, &item.Status, &item.DefaultLocationID, &item.PreferredLocale, &item.PreferredUserRoute, &item.PreferredAdminRoute, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			continue
 		}
 		items = append(items, item)
@@ -40,7 +40,7 @@ func (r *PostgresRepository) Users() []User {
 
 func (r *PostgresRepository) Roles() []Role {
 	const query = `
-		SELECT role_id, role_key, name, scope_type, created_at, updated_at
+		SELECT role_id, role_key, name, scope_type, COALESCE(default_user_route, ''), COALESCE(default_admin_route, ''), created_at, updated_at
 		FROM roles
 		ORDER BY created_at ASC`
 
@@ -53,7 +53,7 @@ func (r *PostgresRepository) Roles() []Role {
 	items := make([]Role, 0)
 	for rows.Next() {
 		var item Role
-		if err := rows.Scan(&item.ID, &item.Key, &item.Name, &item.ScopeType, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Key, &item.Name, &item.ScopeType, &item.DefaultUserRoute, &item.DefaultAdminRoute, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			continue
 		}
 		items = append(items, item)
@@ -86,7 +86,7 @@ func (r *PostgresRepository) Permissions() []Permission {
 
 func (r *PostgresRepository) RoleBindings() []RoleBinding {
 	const query = `
-		SELECT role_binding_id, user_id, role_id, scope_type, COALESCE(scope_id, ''), effective_from, effective_to, status
+		SELECT role_binding_id, user_id, role_id, scope_type, COALESCE(scope_id, ''), COALESCE(priority, 0), effective_from, effective_to, status
 		FROM role_bindings
 		ORDER BY effective_from ASC`
 	rows, err := r.db.QueryContext(context.Background(), query)
@@ -98,7 +98,7 @@ func (r *PostgresRepository) RoleBindings() []RoleBinding {
 	for rows.Next() {
 		var item RoleBinding
 		var effectiveTo sql.NullTime
-		if err := rows.Scan(&item.ID, &item.UserID, &item.RoleID, &item.ScopeType, &item.ScopeID, &item.EffectiveFrom, &effectiveTo, &item.Status); err != nil {
+		if err := rows.Scan(&item.ID, &item.UserID, &item.RoleID, &item.ScopeType, &item.ScopeID, &item.Priority, &item.EffectiveFrom, &effectiveTo, &item.Status); err != nil {
 			continue
 		}
 		if effectiveTo.Valid {
@@ -161,7 +161,7 @@ func (r *PostgresRepository) Credentials() []Credential {
 
 func (r *PostgresRepository) FindUser(id string) (User, bool) {
 	const query = `
-		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at
 		FROM users
 		WHERE user_id = $1`
 
@@ -173,6 +173,8 @@ func (r *PostgresRepository) FindUser(id string) (User, bool) {
 		&item.Status,
 		&item.DefaultLocationID,
 		&item.PreferredLocale,
+		&item.PreferredUserRoute,
+		&item.PreferredAdminRoute,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
@@ -184,7 +186,7 @@ func (r *PostgresRepository) FindUser(id string) (User, bool) {
 
 func (r *PostgresRepository) FindUserByUsername(username string) (User, bool) {
 	const query = `
-		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at
 		FROM users
 		WHERE username = $1`
 
@@ -196,6 +198,8 @@ func (r *PostgresRepository) FindUserByUsername(username string) (User, bool) {
 		&item.Status,
 		&item.DefaultLocationID,
 		&item.PreferredLocale,
+		&item.PreferredUserRoute,
+		&item.PreferredAdminRoute,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
@@ -207,7 +211,7 @@ func (r *PostgresRepository) FindUserByUsername(username string) (User, bool) {
 
 func (r *PostgresRepository) FindUserByAuthenticationSubject(subject string) (User, bool) {
 	const query = `
-		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), created_at, updated_at
+		SELECT user_id, username, COALESCE(authentication_subject, ''), status, COALESCE(default_location_id, ''), COALESCE(preferred_locale, ''), COALESCE(preferred_user_route, ''), COALESCE(preferred_admin_route, ''), created_at, updated_at
 		FROM users
 		WHERE authentication_subject = $1`
 
@@ -219,6 +223,8 @@ func (r *PostgresRepository) FindUserByAuthenticationSubject(subject string) (Us
 		&item.Status,
 		&item.DefaultLocationID,
 		&item.PreferredLocale,
+		&item.PreferredUserRoute,
+		&item.PreferredAdminRoute,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
@@ -318,14 +324,16 @@ func (r *PostgresRepository) ServicePrincipals() []ServicePrincipal {
 func (r *PostgresRepository) SaveUser(user User) error {
 	const query = `
 		INSERT INTO users (
-			user_id, username, authentication_subject, status, default_location_id, preferred_locale, created_at, updated_at
-		) VALUES ($1, $2, NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8)
+			user_id, username, authentication_subject, status, default_location_id, preferred_locale, preferred_user_route, preferred_admin_route, created_at, updated_at
+		) VALUES ($1, $2, NULLIF($3, ''), $4, NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10)
 		ON CONFLICT (user_id) DO UPDATE SET
 			username = EXCLUDED.username,
 			authentication_subject = EXCLUDED.authentication_subject,
 			status = EXCLUDED.status,
 			default_location_id = EXCLUDED.default_location_id,
 			preferred_locale = EXCLUDED.preferred_locale,
+			preferred_user_route = EXCLUDED.preferred_user_route,
+			preferred_admin_route = EXCLUDED.preferred_admin_route,
 			updated_at = EXCLUDED.updated_at`
 	_, err := r.db.ExecContext(
 		context.Background(),
@@ -336,6 +344,8 @@ func (r *PostgresRepository) SaveUser(user User) error {
 		user.Status,
 		user.DefaultLocationID,
 		user.PreferredLocale,
+		user.PreferredUserRoute,
+		user.PreferredAdminRoute,
 		user.CreatedAt,
 		user.UpdatedAt,
 	)
@@ -345,12 +355,14 @@ func (r *PostgresRepository) SaveUser(user User) error {
 func (r *PostgresRepository) SaveRole(role Role) error {
 	const query = `
 		INSERT INTO roles (
-			role_id, role_key, name, scope_type, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			role_id, role_key, name, scope_type, default_user_route, default_admin_route, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''), $7, $8)
 		ON CONFLICT (role_id) DO UPDATE SET
 			role_key = EXCLUDED.role_key,
 			name = EXCLUDED.name,
 			scope_type = EXCLUDED.scope_type,
+			default_user_route = EXCLUDED.default_user_route,
+			default_admin_route = EXCLUDED.default_admin_route,
 			updated_at = EXCLUDED.updated_at`
 	_, err := r.db.ExecContext(
 		context.Background(),
@@ -359,6 +371,8 @@ func (r *PostgresRepository) SaveRole(role Role) error {
 		role.Key,
 		role.Name,
 		role.ScopeType,
+		role.DefaultUserRoute,
+		role.DefaultAdminRoute,
 		role.CreatedAt,
 		role.UpdatedAt,
 	)
@@ -390,12 +404,13 @@ func (r *PostgresRepository) SavePermission(permission Permission) error {
 func (r *PostgresRepository) SaveRoleBinding(binding RoleBinding) error {
 	const query = `
 		INSERT INTO role_bindings (
-			role_binding_id, user_id, role_id, scope_type, scope_id, effective_from, effective_to, status
-		) VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8)
+			role_binding_id, user_id, role_id, scope_type, scope_id, priority, effective_from, effective_to, status
+		) VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9)
 		ON CONFLICT (role_binding_id) DO UPDATE SET
 			role_id = EXCLUDED.role_id,
 			scope_type = EXCLUDED.scope_type,
 			scope_id = EXCLUDED.scope_id,
+			priority = EXCLUDED.priority,
 			effective_from = EXCLUDED.effective_from,
 			effective_to = EXCLUDED.effective_to,
 			status = EXCLUDED.status`
@@ -411,6 +426,7 @@ func (r *PostgresRepository) SaveRoleBinding(binding RoleBinding) error {
 		binding.RoleID,
 		binding.ScopeType,
 		binding.ScopeID,
+		binding.Priority,
 		binding.EffectiveFrom,
 		effectiveTo,
 		binding.Status,

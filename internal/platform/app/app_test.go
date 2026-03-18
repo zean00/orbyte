@@ -17,6 +17,7 @@ import (
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -116,10 +117,11 @@ func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	referenceSvc := reference.NewService()
 	searchSvc := search.NewService()
 	docs := document.NewServiceWithRepository(document.NewMemoryRepository())
+	templateSvc := templateoutput.NewService(docs, reportingSvc)
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("seed platform kernel failed: %v", err)
 	}
 
@@ -166,13 +168,14 @@ func TestSeedPlatformKernelIsIdempotentForRestart(t *testing.T) {
 	referenceSvc := reference.NewService()
 	searchSvc := search.NewService()
 	docs := document.NewServiceWithRepository(document.NewMemoryRepository())
+	templateSvc := templateoutput.NewService(docs, reportingSvc)
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("first seed failed: %v", err)
 	}
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("second seed failed: %v", err)
 	}
 }

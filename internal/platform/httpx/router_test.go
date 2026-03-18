@@ -324,22 +324,42 @@ func builtInTestModuleManifests() []module.Manifest {
 			DomainFamily:      "platform",
 			ConfigDefinitions: []config.Definition{httpDef, searchTypesenseDef, searchEmbeddingDef},
 			Frontend: module.FrontendDefinition{
-				Menus: []module.MenuDefinition{{
-					Key:                 "admin.modules",
-					Label:               "Modules",
-					ActionKey:           "admin.modules",
-					Order:               10,
-					Surface:             module.UISurfaceAdmin,
-					RequiredPermissions: []string{"module.read"},
-				}},
-				Actions: []module.ActionDefinition{{
-					Key:                 "admin.modules",
-					Label:               "Modules",
-					Kind:                "navigate",
-					RoutePath:           "/admin/modules",
-					Surface:             module.UISurfaceAdmin,
-					RequiredPermissions: []string{"module.read"},
-				}},
+				Menus: []module.MenuDefinition{
+					{
+						Key:                 "admin.modules",
+						Label:               "Modules",
+						ActionKey:           "admin.modules",
+						Order:               10,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"module.read"},
+					},
+					{
+						Key:                 "admin.auth",
+						Label:               "Authentication",
+						ActionKey:           "admin.auth",
+						Order:               20,
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+				},
+				Actions: []module.ActionDefinition{
+					{
+						Key:                 "admin.modules",
+						Label:               "Modules",
+						Kind:                "navigate",
+						RoutePath:           "/admin/modules",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"module.read"},
+					},
+					{
+						Key:                 "admin.auth",
+						Label:               "Authentication",
+						Kind:                "navigate",
+						RoutePath:           "/admin/auth",
+						Surface:             module.UISurfaceAdmin,
+						RequiredPermissions: []string{"configuration.read"},
+					},
+				},
 			},
 		},
 		{Key: "identity", Name: "Identity", Version: "1.0.0", DomainFamily: "platform", DependencyRequirements: []module.DependencyRequirement{{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired}}, ConfigDefinitions: []config.Definition{authDef}},
@@ -425,6 +445,9 @@ func builtInTestModuleManifests() []module.Manifest {
 						Title:               "Request Detail",
 						Kind:                "detail",
 						DocumentType:        "generic_request",
+						Printable:           true,
+						PrintPurpose:        "official",
+						PrintChannel:        "print",
 						RequiredPermissions: []string{"document.read"},
 						AllowedActions:      []string{"submit", "approve", "reject", "reopen", "cancel"},
 						Tabs: []module.TabDefinition{{
@@ -451,6 +474,19 @@ func builtInTestModuleManifests() []module.Manifest {
 					RequiredPermissions: []string{"document.read"},
 				}},
 			},
+			Templates: []module.TemplateDefinition{{
+				Key:                 "documents.generic_request.default",
+				Title:               "Generic Request Print",
+				TargetKind:          "document",
+				TargetKey:           "generic_request",
+				RendererKind:        "html",
+				DefaultFormat:       "html",
+				Formats:             []string{"html"},
+				Purpose:             "official",
+				Channel:             "print",
+				RequiredPermissions: []string{"template.read", "template.render"},
+				DefaultBody:         `<article><h1>{{ .document.Header.Type }}</h1><p>{{ index .document.Body.Payload "title" }}</p></article>`,
+			}},
 		},
 		{
 			Key:                    "analytics",
@@ -633,6 +669,18 @@ func TestLoginLogoutAndSessionRevocation(t *testing.T) {
 	}
 }
 
+func TestRootRedirectsToUI(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/", nil, false)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 for root redirect, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if location := rr.Header().Get("Location"); location != "/ui" {
+		t.Fatalf("expected root redirect to /ui, got %q", location)
+	}
+}
+
 func TestDevOpenAPIRoutesDisabledOutsideDevMode(t *testing.T) {
 	h := newTestHarness(t)
 
@@ -726,6 +774,51 @@ func containsAnyString(items []any, expected string) bool {
 		}
 	}
 	return false
+}
+
+func TestNavigationPreferencesAndRoleDefaults(t *testing.T) {
+	h := newTestHarness(t)
+
+	if _, err := h.ident.SetRoleDefaultRoutes("role_admin", "/monitoring", "/admin/auth"); err != nil {
+		t.Fatalf("set role defaults failed: %v", err)
+	}
+
+	rr := h.request(http.MethodGet, "/ui/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected ui bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if got := payload["default_path"]; got != "/monitoring" {
+		t.Fatalf("expected role-based ui default path, got %v", got)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected admin bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if got := payload["default_path"]; got != "/admin/auth" {
+		t.Fatalf("expected role-based admin default path, got %v", got)
+	}
+
+	body, _ := json.Marshal(map[string]any{"preferred_user_route": "/documents", "preferred_admin_route": "/admin/modules"})
+	rr = h.request(http.MethodPut, "/me/preferences/navigation", body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected preference update to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/bootstrap", nil, true)
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if got := payload["default_path"]; got != "/documents" {
+		t.Fatalf("expected user override ui default path, got %v", got)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/bootstrap", nil, true)
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if got := payload["default_path"]; got != "/admin/modules" {
+		t.Fatalf("expected user override admin default path, got %v", got)
+	}
 }
 
 func TestGoogleLogin(t *testing.T) {
@@ -2036,6 +2129,12 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	if len(bootstrapPayload["menus"].([]any)) == 0 {
 		t.Fatal("expected admin menus in bootstrap payload")
 	}
+	if _, ok := bootstrapPayload["current_user_id"].(string); !ok {
+		t.Fatalf("expected current_user_id in admin bootstrap, got %v", bootstrapPayload["current_user_id"])
+	}
+	if _, ok := bootstrapPayload["user_actions"].([]any); !ok {
+		t.Fatalf("expected user_actions in admin bootstrap, got %T", bootstrapPayload["user_actions"])
+	}
 	if bootstrapPayload["default_path"] != "/admin/modules" {
 		t.Fatalf("expected admin default path to target admin modules, got %v", bootstrapPayload["default_path"])
 	}
@@ -2121,6 +2220,133 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected observability contracts endpoint, got %d body=%s", rr.Code, rr.Body.String())
 	}
+
+	rr = h.request(http.MethodGet, "/admin/api/templates/definitions", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected template definitions endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var templatePayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &templatePayload)
+	if len(templatePayload["items"].([]any)) == 0 {
+		t.Fatal("expected template definitions in admin payload")
+	}
+}
+
+func TestTemplateRoutesManageDraftBindingAndRender(t *testing.T) {
+	h := newTestHarness(t)
+
+	draftBody, _ := json.Marshal(map[string]any{
+		"body":  `<article><h1>{{ .document.Header.Type }}</h1><p>{{ index .document.Body.Payload "title" }}</p></article>`,
+		"style": `article{font-family:Arial}`,
+	})
+	rr := h.request(http.MethodPut, "/admin/api/templates/documents.generic_request.default/actions/draft", draftBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected draft save to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	version := payload["version"].(map[string]any)
+	if version["status"] != "draft" {
+		t.Fatalf("expected draft version, got %+v", version)
+	}
+
+	bindingBody, _ := json.Marshal(map[string]any{
+		"template_key": "documents.generic_request.default",
+		"scope_type":   "deployment",
+		"target_kind":  "document",
+		"target_key":   "generic_request",
+		"purpose":      "official",
+		"channel":      "print",
+		"is_default":   true,
+		"is_official":  true,
+	})
+	rr = h.request(http.MethodPut, "/admin/api/template-bindings", bindingBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected binding save to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	docBody, _ := json.Marshal(map[string]any{"type": "generic_request", "organization_id": "org_default", "location_id": "loc_hq", "payload": map[string]any{"title": "Printed Request"}})
+	rr = h.request(http.MethodPost, "/documents", docBody, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected document create to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var created map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	header := created["header"].(map[string]any)
+
+	renderBody, _ := json.Marshal(map[string]any{
+		"target_kind": "document",
+		"target_key":  "generic_request",
+		"target_id":   header["id"],
+		"format":      "html",
+		"purpose":     "official",
+		"channel":     "print",
+	})
+	rr = h.request(http.MethodPost, "/outputs/render", renderBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected render to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	output := payload["output"].(map[string]any)
+	if !strings.Contains(output["html"].(string), "Printed Request") {
+		t.Fatalf("expected rendered html to contain document content, got %s", output["html"])
+	}
+}
+
+func TestTemplateRenderSupportsVisualPreviewOverrides(t *testing.T) {
+	h := newTestHarness(t)
+
+	renderBody, _ := json.Marshal(map[string]any{
+		"template_key":  "documents.generic_request.default",
+		"target_kind":   "document",
+		"target_key":    "generic_request",
+		"format":        "html",
+		"sample":        true,
+		"renderer_kind": "visual",
+		"body":          `{"schema_version":"visual-grid/v1","title":"Preview Receipt","settings":{"paper_preset":"receipt-80","density":"compact"},"sections":[{"id":"body","title":"Rows","rows":[{"columns":[{"span":12,"blocks":[{"type":"text","text":"Preview Receipt","font_size":"xl"},{"type":"field","label":"Number","path":"document.header.number"},{"type":"table","rows_path":"document.lines","columns":[{"label":"Label","path":"payload.name"},{"label":"Amount","path":"amount"}]}]}]}]}]}`,
+	})
+	rr := h.request(http.MethodPost, "/outputs/render", renderBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected preview render to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	output := payload["output"].(map[string]any)
+	if !strings.Contains(output["html"].(string), "Preview Receipt") || !strings.Contains(output["html"].(string), "SAMPLE-0001") {
+		t.Fatalf("expected preview override html, got %s", output["html"])
+	}
+}
+
+func TestTemplateResolveAndPDFRender(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/outputs/templates/resolve?target_kind=document&target_key=generic_request&purpose=official&channel=print", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected template resolve to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resolved map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &resolved)
+	if ok, _ := resolved["resolved"].(bool); !ok {
+		t.Fatalf("expected template to resolve, got %+v", resolved)
+	}
+
+	renderBody, _ := json.Marshal(map[string]any{
+		"template_key": "documents.generic_request.default",
+		"target_kind":  "document",
+		"target_key":   "generic_request",
+		"format":       "pdf",
+		"sample":       true,
+	})
+	rr = h.request(http.MethodPost, "/outputs/render", renderBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected pdf render to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/pdf" {
+		t.Fatalf("expected application/pdf, got %q", got)
+	}
+	if body := rr.Body.Bytes(); len(body) < 16 || !bytes.HasPrefix(body, []byte("%PDF")) {
+		t.Fatalf("expected pdf body, got %q", string(body))
+	}
 }
 
 func TestAdminShellRedirectsUnauthenticatedUsersToUI(t *testing.T) {
@@ -2132,6 +2358,30 @@ func TestAdminShellRedirectsUnauthenticatedUsersToUI(t *testing.T) {
 	}
 	if location := rr.Header().Get("Location"); location != "/ui" {
 		t.Fatalf("expected unauthenticated admin shell redirect to /ui, got %q", location)
+	}
+}
+
+func TestAdminShellIncludesNavigationDefaultsUI(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected authenticated admin shell, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	for _, expected := range []string{
+		`id="navigation-heading"`,
+		`id="navigation-settings"`,
+		`/users/`,
+		`/roles/`,
+		`/role-bindings/`,
+		`save-user-navigation`,
+		`save-role-navigation`,
+		`save-binding-priority`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected admin shell to include %q, body=%s", expected, body)
+		}
 	}
 }
 
@@ -2374,12 +2624,36 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 		t.Fatalf("expected view lookup to succeed, got %d body=%s", rr.Code, rr.Body.String())
 	}
 
+	rr = h.request(http.MethodGet, "/ui/views/documents.requests.detail", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected detail view lookup to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var detailView map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &detailView)
+	if detailView["printable"] != true {
+		t.Fatalf("expected request detail view to be explicitly printable, got %+v", detailView)
+	}
+
 	rr = h.request(http.MethodGet, "/ui/assets/modules/analytics-cockpit.js", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected bundle asset to succeed, got %d body=%s", rr.Code, rr.Body.String())
 	}
 	if !strings.Contains(rr.Body.String(), "ClinicModuleBundles") {
 		t.Fatalf("expected bundle script payload, got %s", rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/analytics/cockpit", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected analytics custom route resolution, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	route = map[string]any{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &route)
+	customEntry := route["custom_entry"].(map[string]any)
+	if _, ok := customEntry["printable"]; ok {
+		t.Fatalf("expected analytics custom entry to remain non-printable by default, got %+v", customEntry)
+	}
+	if _, ok := customEntry["print_target_kind"]; ok {
+		t.Fatalf("expected analytics custom entry to omit print target metadata, got %+v", customEntry)
 	}
 
 	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/monitoring", nil, true)

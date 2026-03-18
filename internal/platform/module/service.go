@@ -256,6 +256,26 @@ func (s *Service) MCPApps() []MCPAppDefinition {
 	return items
 }
 
+func (s *Service) Templates() []TemplateDefinition {
+	items := make([]TemplateDefinition, 0)
+	for _, manifest := range s.manifests {
+		items = append(items, manifest.Templates...)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) Template(key string) (TemplateDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.Templates {
+			if item.Key == key {
+				return item, true
+			}
+		}
+	}
+	return TemplateDefinition{}, false
+}
+
 func (s *Service) MCPTool(key string) (MCPToolDefinition, bool) {
 	for _, manifest := range s.manifests {
 		for _, item := range manifest.MCP.Tools {
@@ -593,6 +613,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	mcpResources := map[string]string{}
 	mcpURIs := map[string]string{}
 	mcpApps := map[string]string{}
+	templates := map[string]string{}
 	permissions := map[string]string{}
 	roleTemplates := map[string]string{}
 	policyHooks := map[string]string{}
@@ -611,6 +632,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	for moduleKey, current := range existing {
 		indexFrontendContracts(moduleKey, current, actions, views, customEntries, bundles, menus)
 		indexMCPContracts(moduleKey, current, mcpTools, mcpResources, mcpURIs, mcpApps)
+		indexTemplateContracts(moduleKey, current, templates)
 		indexSecurityContracts(moduleKey, current, permissions, roleTemplates, policyHooks)
 		indexObservabilityContracts(moduleKey, current, projections, dashboards, reports, datasets, metrics, logEvents, domainEvents)
 		indexModelContracts(moduleKey, current, models)
@@ -916,6 +938,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		bundles[bundle.Key] = manifest.Key
 	}
 	resourceKeys := map[string]struct{}{}
+	templateKeys := map[string]struct{}{}
 	for _, item := range manifest.MCP.Resources {
 		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.URI) == "" {
 			return shared.Validation("mcp resource key, title, and uri are required")
@@ -929,6 +952,21 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		mcpResources[item.Key] = manifest.Key
 		mcpURIs[item.URI] = manifest.Key
 		resourceKeys[item.Key] = struct{}{}
+	}
+	for _, item := range manifest.Templates {
+		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.TargetKind) == "" || strings.TrimSpace(item.TargetKey) == "" {
+			return shared.Validation("template key, title, target_kind, and target_key are required")
+		}
+		switch strings.TrimSpace(item.RendererKind) {
+		case "html", "visual":
+		default:
+			return shared.Validation("template renderer_kind is invalid")
+		}
+		if owner, ok := templates[item.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("template key already registered")
+		}
+		templates[item.Key] = manifest.Key
+		templateKeys[item.Key] = struct{}{}
 	}
 	appKeys := map[string]struct{}{}
 	for _, item := range manifest.MCP.Apps {
@@ -1093,6 +1131,12 @@ func indexMCPContracts(moduleKey string, manifest Manifest, tools, resources, ur
 	}
 	for _, item := range manifest.MCP.Apps {
 		apps[item.Key] = moduleKey
+	}
+}
+
+func indexTemplateContracts(moduleKey string, manifest Manifest, templates map[string]string) {
+	for _, item := range manifest.Templates {
+		templates[item.Key] = moduleKey
 	}
 }
 

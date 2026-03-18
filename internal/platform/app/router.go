@@ -68,6 +68,10 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Integration:   graph.integration,
 			Reference:     graph.reference,
 		},
+		Templates: httpx.TemplateDeps{
+			Identity:  graph.identity,
+			Templates: graph.templates,
+		},
 		MCP: httpx.MCPDeps{
 			Identity:        graph.identity,
 			Server:          mcp.NewServer(graph.modules, graph.analytics, analyticsMCPStreamPath),

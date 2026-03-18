@@ -33,6 +33,7 @@ import (
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -42,6 +43,12 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
 	analyticsStream := mcp.NewAnalyticsStream()
 	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
+	templateSvc := templateoutput.NewService(docs, reportingSvc)
+	if modules != nil {
+		for _, def := range modules.Templates() {
+			_ = templateSvc.RegisterDefinition(templateoutput.FromModule(def, ""))
+		}
+	}
 	if analyticsSvc != nil {
 		analyticsSvc.SetCaptureHook(analyticsStream.Publish)
 	}
@@ -97,6 +104,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			Integration:   integrationSvc,
 			Reference:     referenceSvc,
 		},
+		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
 			Identity:        ident,
 			Server:          mcp.NewServer(modules, analyticsSvc, analyticsMCPStreamPath),
@@ -162,6 +170,7 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerOpsRoutesWithDeps(mux, deps.Ops)
 	registerSearchRoutesWithDeps(mux, deps.Search)
 	registerAdminRoutesWithDeps(mux, deps.Admin)
+	registerTemplateRoutesWithDeps(mux, deps.Templates)
 	registerMCPRoutesWithDeps(mux, deps.MCP)
 	registerOfflineRoutesWithDeps(mux, deps.Offline)
 	registerDocsRoutesWithDeps(mux, deps.Docs)
@@ -180,6 +189,10 @@ func newFieldSecurity(policySvc *policy.Service, reportingSvc *reporting.Service
 }
 
 func registerCorePlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runtimehealth.Tracker) {
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/ui", http.StatusSeeOther)
+	})
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]any{
 			"status": "ok",
