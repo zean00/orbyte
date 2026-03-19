@@ -32,7 +32,7 @@ func TestMemoryModelActionsCreateUpdateAndPatchRelation(t *testing.T) {
 	eventingSvc := eventing.NewService()
 	actions := NewMemoryModelActions(models, activities, auditSvc, eventingSvc)
 
-	record, related, err := actions.CreateComposite("party", "u1", model.CompositeMutation{
+	record, related, err := actions.CreateComposite("party", testActing("u1"), model.CompositeMutation{
 		Values: map[string]any{"name": "Alice"},
 		Relations: map[string][]model.ChildMutation{
 			"contacts": {{Values: map[string]any{"name": "Primary"}}},
@@ -51,7 +51,7 @@ func TestMemoryModelActionsCreateUpdateAndPatchRelation(t *testing.T) {
 		t.Fatal("expected activity timeline entry")
 	}
 
-	record, related, err = actions.UpdateComposite("party", record.ID, "u1", model.CompositeMutation{
+	record, related, err = actions.UpdateComposite("party", record.ID, testActing("u1"), model.CompositeMutation{
 		ExpectedVersion: record.Version,
 		Values:          map[string]any{"name": "Alice B"},
 		Relations: map[string][]model.ChildMutation{
@@ -65,7 +65,7 @@ func TestMemoryModelActionsCreateUpdateAndPatchRelation(t *testing.T) {
 		t.Fatalf("expected updated record and relation patch, got %+v %+v", record, related)
 	}
 
-	record, related, err = actions.PatchRelation("party", record.ID, "contacts", "u1", []model.ChildMutation{
+	record, related, err = actions.PatchRelation("party", record.ID, "contacts", testActing("u1"), []model.ChildMutation{
 		{Values: map[string]any{"name": "Tertiary"}},
 	})
 	if err != nil {
@@ -86,11 +86,11 @@ func TestModelActionHelpers(t *testing.T) {
 		t.Fatal("expected empty relation keys")
 	}
 
-	auditEvent := buildModelAuditEvent("create", record, related, "u1")
+	auditEvent := buildModelAuditEvent("create", record, related, testActing("u1"))
 	if auditEvent.Action != "model.create" || auditEvent.Metadata["model_key"] != "party" {
 		t.Fatalf("unexpected audit event %+v", auditEvent)
 	}
-	domainEvent := buildModelDomainEvent("update", record, related, "u1")
+	domainEvent := buildModelDomainEvent("update", record, related, testActing("u1"))
 	if domainEvent.Type != "model.record.updated" || domainEvent.Payload["model_key"] != "party" {
 		t.Fatalf("unexpected domain event %+v", domainEvent)
 	}

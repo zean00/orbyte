@@ -26,11 +26,16 @@ const (
 type PermissionChecker func(permissionKey string) bool
 
 type ActorContext struct {
-	ActorID           string
-	SessionID         string
-	OrganizationID    string
-	LocationID        string
-	PermissionChecker PermissionChecker
+	ActorID            string
+	ActorKind          string
+	SessionID          string
+	ServicePrincipalID string
+	EffectiveUserID    string
+	OnBehalfOfUserID   string
+	DelegationGrantID  string
+	OrganizationID     string
+	LocationID         string
+	PermissionChecker  PermissionChecker
 }
 
 type Server struct {
@@ -498,7 +503,11 @@ func (s *Server) templateDraftSave(actor ActorContext, arguments map[string]any)
 		body = string(raw)
 	}
 	style := stringArg(arguments, "style")
-	version, err := s.templates.SaveDraft(templateKey, body, style, actor.ActorID)
+	updatedBy := strings.TrimSpace(actor.EffectiveUserID)
+	if updatedBy == "" {
+		updatedBy = strings.TrimSpace(actor.ActorID)
+	}
+	version, err := s.templates.SaveDraft(templateKey, body, style, updatedBy)
 	if err != nil {
 		return nil, true, err
 	}

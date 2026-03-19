@@ -32,6 +32,12 @@ func TestNewAppBootstrap(t *testing.T) {
 	if app.Address() == "" {
 		t.Fatal("expected address")
 	}
+	if app.Profile() != modules.ProfileAll {
+		t.Fatalf("expected profile %q, got %q", modules.ProfileAll, app.Profile())
+	}
+	if len(app.BusinessModuleKeys()) != 0 {
+		t.Fatalf("expected no business module keys for all profile bootstrap, got %+v", app.BusinessModuleKeys())
+	}
 	if app.Handler() == nil {
 		t.Fatal("expected handler")
 	}
@@ -232,6 +238,12 @@ func TestNewAppBootstrapsClinicProfileBusinessSlice(t *testing.T) {
 	}
 	if _, ok := app.Modules.Get("clinic_registration"); !ok {
 		t.Fatal("expected clinic module to be registered")
+	}
+	if app.Profile() != modules.ProfileClinic {
+		t.Fatalf("expected clinic profile, got %q", app.Profile())
+	}
+	if keys := app.BusinessModuleKeys(); len(keys) == 0 || keys[0] != "clinic_registration" {
+		t.Fatalf("expected clinic business module keys, got %+v", keys)
 	}
 }
 

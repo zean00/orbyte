@@ -3,10 +3,14 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/identity"
 )
 
 type flushRecorder struct {
@@ -126,5 +130,88 @@ func TestMCPAnalyticsSnapshotStreamSendsInitialAndLiveUpdates(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("stream handler did not exit after cancellation")
+	}
+}
+
+func TestMCPRouteServicePrincipalDelegation(t *testing.T) {
+	h := newTestHarness(t)
+	principal, err := h.ident.UpsertServicePrincipal(identity.ServicePrincipal{Key: "mcp_agent", Status: "active"})
+	if err != nil {
+		t.Fatalf("create service principal failed: %v", err)
+	}
+	token, err := identity.NewTokenManagerFromEnv().IssueServicePrincipalToken(principal, time.Hour)
+	if err != nil {
+		t.Fatalf("issue service principal token failed: %v", err)
+	}
+
+	grantBody, _ := json.Marshal(map[string]any{
+		"delegate_kind":           "agent",
+		"delegate_id":             principal.ID,
+		"location_id":             "loc_hq",
+		"allowed_permission_keys": []string{"analytics.read"},
+		"expires_at":              time.Now().UTC().Add(time.Hour),
+	})
+	grantRR := h.request(http.MethodPost, "/me/delegations/outgoing", grantBody, true)
+	if grantRR.Code != http.StatusCreated {
+		t.Fatalf("expected agent delegation grant create to succeed, got %d body=%s", grantRR.Code, grantRR.Body.String())
+	}
+	var grant identity.DelegationGrant
+	if err := json.Unmarshal(grantRR.Body.Bytes(), &grant); err != nil {
+		t.Fatalf("decode agent delegation grant failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/service-principals/me/delegations/incoming", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected service principal incoming grants, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	acceptReq := httptest.NewRequest(http.MethodPost, "/service-principals/me/delegations/incoming/"+grant.ID+"/accept", nil)
+	acceptReq.Header.Set("Authorization", "Bearer "+token)
+	acceptRR := httptest.NewRecorder()
+	h.router.ServeHTTP(acceptRR, acceptReq)
+	if acceptRR.Code != http.StatusOK {
+		t.Fatalf("expected service principal accept to succeed, got %d body=%s", acceptRR.Code, acceptRR.Body.String())
+	}
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "analytics.snapshot.get",
+			"arguments": map[string]any{},
+		},
+	})
+	callReq := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(string(reqBody)))
+	callReq.Header.Set("Authorization", "Bearer "+token)
+	callReq.Header.Set(mcpDelegationGrantHeader, grant.ID)
+	callRR := httptest.NewRecorder()
+	h.router.ServeHTTP(callRR, callReq)
+	if callRR.Code != http.StatusOK {
+		t.Fatalf("expected delegated MCP call to succeed, got %d body=%s", callRR.Code, callRR.Body.String())
+	}
+	var resp struct {
+		Result map[string]any `json:"result"`
+		Error  map[string]any `json:"error"`
+	}
+	if err := json.Unmarshal(callRR.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode delegated MCP response failed: %v", err)
+	}
+	if resp.Error != nil {
+		t.Fatalf("expected successful delegated MCP response, got %+v", resp.Error)
+	}
+
+	found := false
+	for _, event := range h.audit.Query(audit.Query{TargetType: "mcp_tool", TargetID: "analytics.snapshot.get", OnBehalfOfUserID: "user_admin"}) {
+		if event.ActorID == principal.ID && event.ActorKind == "service" && event.DelegationGrantID == grant.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected MCP audit event with service actor on behalf of user_admin")
 	}
 }

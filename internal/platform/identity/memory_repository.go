@@ -11,6 +11,7 @@ type MemoryRepository struct {
 	credentials       []Credential
 	sessions          []Session
 	servicePrincipals []ServicePrincipal
+	delegationGrants  []DelegationGrant
 	loginFailures     map[string][]time.Time
 }
 
@@ -24,6 +25,7 @@ func NewMemoryRepository(users []User, roles []Role, permissions []Permission, b
 		credentials:       append([]Credential(nil), credentials...),
 		sessions:          append([]Session(nil), sessions...),
 		servicePrincipals: append([]ServicePrincipal(nil), servicePrincipals...),
+		delegationGrants:  []DelegationGrant{},
 		loginFailures:     make(map[string][]time.Time),
 	}
 }
@@ -58,6 +60,10 @@ func (r *MemoryRepository) Sessions() []Session {
 
 func (r *MemoryRepository) ServicePrincipals() []ServicePrincipal {
 	return append([]ServicePrincipal(nil), r.servicePrincipals...)
+}
+
+func (r *MemoryRepository) DelegationGrants() []DelegationGrant {
+	return append([]DelegationGrant(nil), r.delegationGrants...)
 }
 
 func (r *MemoryRepository) SaveUser(user User) error {
@@ -169,6 +175,15 @@ func (r *MemoryRepository) FindServicePrincipal(id string) (ServicePrincipal, bo
 	return ServicePrincipal{}, false
 }
 
+func (r *MemoryRepository) FindDelegationGrant(id string) (DelegationGrant, bool) {
+	for _, grant := range r.delegationGrants {
+		if grant.ID == id {
+			return grant, true
+		}
+	}
+	return DelegationGrant{}, false
+}
+
 func (r *MemoryRepository) SaveServicePrincipal(principal ServicePrincipal) error {
 	for i, current := range r.servicePrincipals {
 		if current.ID == principal.ID {
@@ -177,6 +192,17 @@ func (r *MemoryRepository) SaveServicePrincipal(principal ServicePrincipal) erro
 		}
 	}
 	r.servicePrincipals = append(r.servicePrincipals, principal)
+	return nil
+}
+
+func (r *MemoryRepository) SaveDelegationGrant(grant DelegationGrant) error {
+	for i, current := range r.delegationGrants {
+		if current.ID == grant.ID {
+			r.delegationGrants[i] = grant
+			return nil
+		}
+	}
+	r.delegationGrants = append(r.delegationGrants, grant)
 	return nil
 }
 

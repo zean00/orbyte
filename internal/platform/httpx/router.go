@@ -16,8 +16,8 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -77,6 +77,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Modules:       modules,
 			Documents:     docs,
 			Actions:       docActions,
+			Audit:         auditSvc,
 			Policy:        policySvc,
 			FieldSecurity: fieldSecurity,
 			Observability: obsSvc,
@@ -112,6 +113,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
 			Identity:        ident,
+			Audit:           auditSvc,
 			Server:          mcp.NewServer(modules, analyticsSvc, templateSvc, analyticsMCPStreamPath),
 			Analytics:       analyticsSvc,
 			AnalyticsStream: analyticsStream,

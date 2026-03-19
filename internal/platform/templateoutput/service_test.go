@@ -6,6 +6,7 @@ import (
 
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
+	platformmodule "orbyte/internal/platform/module"
 	"orbyte/internal/platform/reporting"
 )
 
@@ -202,5 +203,87 @@ func TestServiceSaveBindingReusesSignatureAndScopeResolutionPrefersLocation(t *t
 	}
 	if resolved.Key != "documents.generic_request.location" {
 		t.Fatalf("expected location binding to win, got %q", resolved.Key)
+	}
+}
+
+func TestServiceHelpersAndModuleConversion(t *testing.T) {
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(repo, document.NewService(), reporting.NewService(model.NewService()))
+	def := FromModule(platformmodule.TemplateDefinition{
+		Key:                 "documents.generic_request.official",
+		Title:               "Official Request",
+		TargetKind:          "document",
+		TargetKey:           "generic_request",
+		RendererKind:        "html",
+		DefaultFormat:       "html",
+		Formats:             []string{"html", "pdf"},
+		Purpose:             "official",
+		Channel:             "print",
+		AllowedScopes:       []string{"deployment", "location"},
+		RequiredPermissions: []string{"template.read"},
+		DefaultBody:         "<p>official</p>",
+		DefaultStyle:        "body{}",
+	}, "documents")
+	if def.OwnerModuleKey != "documents" || def.Key != "documents.generic_request.official" {
+		t.Fatalf("unexpected converted definition: %+v", def)
+	}
+	if err := svc.RegisterDefinition(def); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+	if len(svc.Definitions()) != 1 {
+		t.Fatalf("expected one definition, got %+v", svc.Definitions())
+	}
+
+	draft, err := svc.SaveDraft(def.Key, "", "", "user_admin")
+	if err != nil {
+		t.Fatalf("save draft failed: %v", err)
+	}
+	if draft.Body != def.DefaultBody || draft.Style != def.DefaultStyle {
+		t.Fatalf("expected default body/style to be used, got %+v", draft)
+	}
+	if versions := svc.Versions(def.Key); len(versions) != 1 {
+		t.Fatalf("expected one stored version, got %+v", versions)
+	}
+
+	if _, err := svc.Publish(def.Key, draft.Version, "user_admin"); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+	if !svc.HasTemplate("document", "generic_request", "official", "print", "deployment", "") {
+		t.Fatal("expected template to resolve after publish")
+	}
+}
+
+func TestTemplateVisualHelpers(t *testing.T) {
+	sections := defaultSections()
+	if len(sections) != 3 || sections[0].ID != "header" || sections[2].ID != "footer" {
+		t.Fatalf("unexpected default sections: %+v", sections)
+	}
+
+	report := sampleReport(Definition{Title: "Summary"}, "report.key")
+	if report["key"] != "report.key" || report["title"] != "Summary" {
+		t.Fatalf("unexpected sample report: %+v", report)
+	}
+	rows := normalizeSlice(report["rows"])
+	if len(rows) != 3 {
+		t.Fatalf("unexpected normalized rows: %+v", rows)
+	}
+
+	ctx := map[string]any{
+		"visible": true,
+		"title":   "hello",
+		"rows":    []any{map[string]any{"x": 1}},
+		"empty":   "",
+	}
+	if !visualVisible(ctx, "visible") || !visualVisible(ctx, "title") || !visualVisible(ctx, "rows") {
+		t.Fatalf("expected visible fields to evaluate true")
+	}
+	if visualVisible(ctx, "empty") || visualVisible(ctx, "missing") {
+		t.Fatalf("expected empty and missing fields to evaluate false")
+	}
+	if !visualVisible(ctx, "") {
+		t.Fatal("expected empty visible_if to default true")
+	}
+	if maxInt(3, 7) != 7 {
+		t.Fatalf("expected maxInt to return larger value")
 	}
 }

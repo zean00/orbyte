@@ -101,6 +101,22 @@ type servicePrincipalTokenRequest struct {
 	TTLSeconds int `json:"ttl_seconds,omitempty"`
 }
 
+type delegationGrantRequest struct {
+	DelegateKind          string    `json:"delegate_kind,omitempty"`
+	DelegateID            string    `json:"delegate_id,omitempty"`
+	DelegateUserID        string    `json:"delegate_user_id"`
+	LocationID            string    `json:"location_id"`
+	AllowedPermissionKeys []string  `json:"allowed_permission_keys"`
+	AllowedDocumentTypes  []string  `json:"allowed_document_types,omitempty"`
+	StartsAt              time.Time `json:"starts_at,omitempty"`
+	ExpiresAt             time.Time `json:"expires_at"`
+	Reason                string    `json:"reason,omitempty"`
+}
+
+type delegationActivateRequest struct {
+	GrantID string `json:"grant_id"`
+}
+
 func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, auditSvc *audit.Service) {
 	mux.HandleFunc("GET /users", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
@@ -298,14 +314,14 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 		recordAudit(auditSvc, audit.Event{
-			ID:            "audit:identity:service_principal:token:" + principal.ID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
-			Action:        "identity.service_principal.token.issue",
-			TargetType:    "service_principal",
-			TargetID:      principal.ID,
-			ActorID:       principalActorID(p),
-			ActorKind:     principalActorKind(p),
-			OccurredAt:    time.Now().UTC(),
-			Metadata:      map[string]any{"ttl_seconds": req.TTLSeconds},
+			ID:         "audit:identity:service_principal:token:" + principal.ID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:     "identity.service_principal.token.issue",
+			TargetType: "service_principal",
+			TargetID:   principal.ID,
+			ActorID:    principalActorID(p),
+			ActorKind:  principalActorKind(p),
+			OccurredAt: time.Now().UTC(),
+			Metadata:   map[string]any{"ttl_seconds": req.TTLSeconds},
 		})
 		respondJSON(w, http.StatusOK, map[string]any{"token": token, "service_principal": principal})
 	})
@@ -707,6 +723,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		}
 		http.SetCookie(w, clearedSessionCookie())
 		http.SetCookie(w, clearedCSRFCookie())
+		http.SetCookie(w, clearedDelegationCookie())
 		recordAudit(auditSvc, audit.Event{
 			ID:            "audit:auth:logout:" + session.ID,
 			Action:        "auth.logout",
@@ -717,6 +734,319 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			CorrelationID: logging.CorrelationID(r.Context()),
 		})
 		respondJSON(w, http.StatusOK, map[string]any{"revoked_session_id": session.ID})
+	})
+
+	mux.HandleFunc("GET /auth/context", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		payload := map[string]any{
+			"actor_user_id":       p.userID,
+			"effective_user_id":   principalEffectiveUserID(p),
+			"location_id":         p.currentLocationID,
+			"delegation_active":   principalHasDelegation(p),
+			"delegation_grant_id": principalDelegationGrantID(p),
+		}
+		if principalHasDelegation(p) {
+			payload["delegation"] = p.delegation
+		}
+		respondJSON(w, http.StatusOK, payload)
+	})
+
+	mux.HandleFunc("POST /auth/delegation/activate", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" || p.sessionID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req delegationActivateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid delegation activate payload"))
+			return
+		}
+		grant, err := ident.ResolveDelegationGrantForActivation(req.GrantID, p.userID, p.currentLocationID, time.Now().UTC())
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		token, err := identity.NewTokenManagerFromEnv().IssueDelegationToken(grant)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		http.SetCookie(w, buildDelegationCookie(token, grant.ExpiresAt))
+		recordAudit(auditSvc, audit.Event{
+			ID:                "audit:delegation:activate:" + grant.ID + ":" + p.userID,
+			Action:            "delegation.activate",
+			TargetType:        "delegation_grant",
+			TargetID:          grant.ID,
+			ActorID:           p.userID,
+			ActorKind:         "user",
+			OnBehalfOfUserID:  grant.GrantorUserID,
+			DelegationGrantID: grant.ID,
+			LocationID:        grant.LocationID,
+			OccurredAt:        time.Now().UTC(),
+			CorrelationID:     logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"grant": grant, "delegation_active": true})
+	})
+
+	mux.HandleFunc("POST /auth/delegation/exit", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		http.SetCookie(w, clearedDelegationCookie())
+		recordAudit(auditSvc, audit.Event{
+			ID:                "audit:delegation:exit:" + principalDelegationGrantID(p) + ":" + p.userID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:            "delegation.exit",
+			TargetType:        "delegation_grant",
+			TargetID:          principalDelegationGrantID(p),
+			ActorID:           p.userID,
+			ActorKind:         "user",
+			OnBehalfOfUserID:  principalOnBehalfOfUserID(p),
+			DelegationGrantID: principalDelegationGrantID(p),
+			OccurredAt:        time.Now().UTC(),
+			CorrelationID:     logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"delegation_active": false})
+	})
+
+	mux.HandleFunc("GET /me/delegations/outgoing", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": ident.ListOutgoingDelegationGrants(p.userID)})
+	})
+
+	mux.HandleFunc("POST /me/delegations/outgoing", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req delegationGrantRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid delegation grant payload"))
+			return
+		}
+		delegateKind := strings.ToLower(strings.TrimSpace(req.DelegateKind))
+		delegateID := strings.TrimSpace(req.DelegateID)
+		if delegateKind == "" && strings.TrimSpace(req.DelegateUserID) != "" {
+			delegateKind = "user"
+			delegateID = strings.TrimSpace(req.DelegateUserID)
+		}
+		var (
+			grant identity.DelegationGrant
+			err   error
+		)
+		switch delegateKind {
+		case "", "user":
+			if delegateID == "" {
+				delegateID = strings.TrimSpace(req.DelegateUserID)
+			}
+			grant, err = ident.CreateDelegationGrant(p.userID, delegateID, req.LocationID, req.AllowedPermissionKeys, req.AllowedDocumentTypes, req.StartsAt, req.ExpiresAt, req.Reason)
+		case "agent":
+			grant, err = ident.CreateAgentDelegationGrant(p.userID, delegateID, req.LocationID, req.AllowedPermissionKeys, req.AllowedDocumentTypes, req.StartsAt, req.ExpiresAt, req.Reason)
+		default:
+			respondError(w, shared.Validation("delegate_kind must be user or agent"))
+			return
+		}
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:delegation:create:" + grant.ID,
+			Action:        "delegation.grant.create",
+			TargetType:    "delegation_grant",
+			TargetID:      grant.ID,
+			ActorID:       p.userID,
+			ActorKind:     "user",
+			LocationID:    grant.LocationID,
+			OccurredAt:    time.Now().UTC(),
+			ChangeSummary: map[string]any{"fields": []string{"delegate_kind", "delegate_id", "allowed_permission_keys", "allowed_document_types", "starts_at", "expires_at"}},
+			Metadata:      map[string]any{"delegate_kind": grant.DelegateKind, "delegate_id": grant.DelegateID, "delegate_user_id": grant.DelegateUserID, "grantor_user_id": grant.GrantorUserID},
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusCreated, grant)
+	})
+
+	mux.HandleFunc("POST /me/delegations/outgoing/", func(w http.ResponseWriter, r *http.Request) {
+		grantID, action, ok := delegationOutgoingActionPath(r.URL.Path)
+		if !ok || action != "revoke" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		grant, err := ident.RevokeDelegationGrant(grantID, p.userID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:delegation:revoke:" + grant.ID,
+			Action:        "delegation.grant.revoke",
+			TargetType:    "delegation_grant",
+			TargetID:      grant.ID,
+			ActorID:       p.userID,
+			ActorKind:     "user",
+			LocationID:    grant.LocationID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, grant)
+	})
+
+	mux.HandleFunc("GET /me/delegations/incoming", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": ident.ListIncomingDelegationGrants(p.userID)})
+	})
+
+	mux.HandleFunc("GET /service-principals/me/delegations/incoming", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != servicePrincipal || p.serviceID == "" {
+			respondError(w, shared.Unauthorized("service principal authentication required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": ident.ListIncomingAgentDelegationGrants(p.serviceID)})
+	})
+
+	mux.HandleFunc("POST /me/delegations/incoming/", func(w http.ResponseWriter, r *http.Request) {
+		grantID, action, ok := delegationIncomingActionPath(r.URL.Path)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var (
+			grant identity.DelegationGrant
+			err   error
+		)
+		switch action {
+		case "accept":
+			grant, err = ident.AcceptDelegationGrant(grantID, p.userID)
+		case "reject":
+			grant, err = ident.RejectDelegationGrant(grantID, p.userID)
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:delegation:" + action + ":" + grant.ID,
+			Action:        "delegation.grant." + action,
+			TargetType:    "delegation_grant",
+			TargetID:      grant.ID,
+			ActorID:       p.userID,
+			ActorKind:     "user",
+			LocationID:    grant.LocationID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, grant)
+	})
+
+	mux.HandleFunc("POST /service-principals/me/delegations/incoming/", func(w http.ResponseWriter, r *http.Request) {
+		grantID, action, ok := delegationServicePrincipalIncomingActionPath(r.URL.Path)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != servicePrincipal || p.serviceID == "" {
+			respondError(w, shared.Unauthorized("service principal authentication required"))
+			return
+		}
+		var (
+			grant identity.DelegationGrant
+			err   error
+		)
+		switch action {
+		case "accept":
+			grant, err = ident.AcceptAgentDelegationGrant(grantID, p.serviceID)
+		case "reject":
+			grant, err = ident.RejectAgentDelegationGrant(grantID, p.serviceID)
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:delegation:" + action + ":" + grant.ID + ":" + p.serviceID,
+			Action:        "delegation.grant." + action,
+			TargetType:    "delegation_grant",
+			TargetID:      grant.ID,
+			ActorID:       p.serviceID,
+			ActorKind:     "service",
+			LocationID:    grant.LocationID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, grant)
 	})
 
 	mux.HandleFunc("POST /users", func(w http.ResponseWriter, r *http.Request) {
@@ -1160,9 +1490,35 @@ func buildSessionCookie(token string, expiresAt time.Time) *http.Cookie {
 	}
 }
 
+func buildDelegationCookie(token string, expiresAt time.Time) *http.Cookie {
+	secure := buildSessionCookie("", time.Now().UTC()).Secure
+	return &http.Cookie{
+		Name:     delegationCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt.UTC(),
+	}
+}
+
 func clearedSessionCookie() *http.Cookie {
 	return &http.Cookie{
 		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   buildSessionCookie("", time.Now().UTC()).Secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0).UTC(),
+		MaxAge:   -1,
+	}
+}
+
+func clearedDelegationCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     delegationCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -1213,6 +1569,30 @@ func sessionIDPath(path string) (string, bool) {
 	return strings.TrimSpace(parts[1]), parts[1] != ""
 }
 
+func delegationOutgoingActionPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 5 || parts[0] != "me" || parts[1] != "delegations" || parts[2] != "outgoing" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[3]), strings.TrimSpace(parts[4]), parts[3] != "" && parts[4] != ""
+}
+
+func delegationIncomingActionPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 5 || parts[0] != "me" || parts[1] != "delegations" || parts[2] != "incoming" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[3]), strings.TrimSpace(parts[4]), parts[3] != "" && parts[4] != ""
+}
+
+func delegationServicePrincipalIncomingActionPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 6 || parts[0] != "service-principals" || parts[1] != "me" || parts[2] != "delegations" || parts[3] != "incoming" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[4]), strings.TrimSpace(parts[5]), parts[4] != "" && parts[5] != ""
+}
+
 func clientMetadataFromRequest(r *http.Request) map[string]any {
 	metadata := map[string]any{}
 	if userAgent := strings.TrimSpace(r.UserAgent()); userAgent != "" {
@@ -1236,6 +1616,20 @@ func principalActorKind(p principal) string {
 		return "service"
 	}
 	return "user"
+}
+
+func principalAuditEvent(p principal, event audit.Event) audit.Event {
+	event.ActorID = principalActorID(p)
+	if event.ActorKind == "" {
+		event.ActorKind = principalActorKind(p)
+	}
+	if event.OnBehalfOfUserID == "" {
+		event.OnBehalfOfUserID = principalOnBehalfOfUserID(p)
+	}
+	if event.DelegationGrantID == "" {
+		event.DelegationGrantID = principalDelegationGrantID(p)
+	}
+	return event
 }
 
 func loginLimitKey(r *http.Request, username string) string {

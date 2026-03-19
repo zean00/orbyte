@@ -690,15 +690,16 @@ func opsAuditTimelinePath(path string) (string, string, bool) {
 
 func auditQueryFromRequest(r *http.Request) (audit.Query, error) {
 	q := audit.Query{
-		TargetType:      strings.TrimSpace(r.URL.Query().Get("target_type")),
-		TargetID:        strings.TrimSpace(r.URL.Query().Get("target_id")),
-		ActorID:         strings.TrimSpace(r.URL.Query().Get("actor_id")),
-		ActorKind:       strings.TrimSpace(r.URL.Query().Get("actor_kind")),
-		Action:          strings.TrimSpace(r.URL.Query().Get("action")),
-		CorrelationID:   strings.TrimSpace(r.URL.Query().Get("correlation_id")),
-		OrganizationID:  strings.TrimSpace(r.URL.Query().Get("organization_id")),
-		LocationID:      strings.TrimSpace(r.URL.Query().Get("location_id")),
-		OperatingUnitID: strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+		TargetType:       strings.TrimSpace(r.URL.Query().Get("target_type")),
+		TargetID:         strings.TrimSpace(r.URL.Query().Get("target_id")),
+		ActorID:          strings.TrimSpace(r.URL.Query().Get("actor_id")),
+		ActorKind:        strings.TrimSpace(r.URL.Query().Get("actor_kind")),
+		OnBehalfOfUserID: strings.TrimSpace(r.URL.Query().Get("on_behalf_of_user_id")),
+		Action:           strings.TrimSpace(r.URL.Query().Get("action")),
+		CorrelationID:    strings.TrimSpace(r.URL.Query().Get("correlation_id")),
+		OrganizationID:   strings.TrimSpace(r.URL.Query().Get("organization_id")),
+		LocationID:       strings.TrimSpace(r.URL.Query().Get("location_id")),
+		OperatingUnitID:  strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
 	}
 	if from := strings.TrimSpace(r.URL.Query().Get("from")); from != "" {
 		parsed, err := time.Parse(time.RFC3339, from)

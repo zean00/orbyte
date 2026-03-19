@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"orbyte/internal/platform/authz"
+	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/shared"
 )
 
 const sessionCookieName = "orbyte_session"
 const csrfCookieName = "orbyte_csrf"
+const delegationCookieName = "orbyte_delegation"
 
 type principalKind string
 
@@ -25,11 +26,15 @@ const (
 type principal struct {
 	kind              principalKind
 	userID            string
+	effectiveUserID   string
 	sessionID         string
 	currentLocationID string
 	serviceID         string
 	authMethod        string
 	stepUpVerified    bool
+	delegationGrantID string
+	onBehalfOfUserID  string
+	delegation        *identity.DelegationGrant
 }
 
 type authContextKey string
@@ -43,7 +48,7 @@ func withAuthentication(next http.Handler, ident *identity.Service) http.Handler
 	tokenManager := identity.NewTokenManagerFromEnv()
 	devBypass := os.Getenv("APP_AUTH_DEV_BYPASS") == "true"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, authErr := authenticateRequest(r, ident, tokenManager, devBypass)
+		p, authErr := authenticateRequest(r, w, ident, tokenManager, devBypass)
 		ctx := r.Context()
 		if p != nil {
 			if p.kind == userPrincipal && p.sessionID != "" {
@@ -63,7 +68,7 @@ func withAuthentication(next http.Handler, ident *identity.Service) http.Handler
 	})
 }
 
-func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager *identity.TokenManager, devBypass bool) (*principal, error) {
+func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity.Service, tokenManager *identity.TokenManager, devBypass bool) (*principal, error) {
 	if devBypass {
 		if userID := strings.TrimSpace(r.Header.Get("X-Dev-User-ID")); userID != "" {
 			for _, session := range ident.Sessions() {
@@ -71,6 +76,7 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 					return &principal{
 						kind:              userPrincipal,
 						userID:            userID,
+						effectiveUserID:   userID,
 						sessionID:         session.ID,
 						currentLocationID: session.CurrentLocationID,
 						authMethod:        "dev_bypass",
@@ -97,14 +103,16 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 		if err := validateAuthenticatedSession(session); err != nil {
 			return nil, err
 		}
-		return &principal{
+		p := &principal{
 			kind:              userPrincipal,
 			userID:            session.UserID,
+			effectiveUserID:   session.UserID,
 			sessionID:         session.ID,
 			currentLocationID: session.CurrentLocationID,
 			authMethod:        "cookie",
 			stepUpVerified:    stepUpVerified(r),
-		}, nil
+		}
+		return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
 	}
 
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
@@ -126,14 +134,16 @@ func authenticateRequest(r *http.Request, ident *identity.Service, tokenManager 
 			if err := validateAuthenticatedSession(session); err != nil {
 				return nil, err
 			}
-			return &principal{
+			p := &principal{
 				kind:              userPrincipal,
 				userID:            session.UserID,
+				effectiveUserID:   session.UserID,
 				sessionID:         session.ID,
 				currentLocationID: session.CurrentLocationID,
 				authMethod:        "bearer",
 				stepUpVerified:    stepUpVerified(r),
-			}, nil
+			}
+			return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
 		case "service":
 			if claims.ServicePrincipal == "" {
 				return nil, shared.Unauthorized("invalid service principal token")
@@ -213,41 +223,132 @@ func requireAuthorizationWithOptions(w http.ResponseWriter, r *http.Request, ide
 		respondError(w, shared.Unauthorized("authentication required"))
 		return principal{}, false
 	}
-	subject := authz.Subject{
-		CurrentLocationID: p.currentLocationID,
-		AuthMethod:        p.authMethod,
-		StepUpVerified:    p.stepUpVerified,
-	}
 	switch p.kind {
 	case userPrincipal:
-		subject.Kind = authz.SubjectUser
-		subject.UserID = p.userID
-		subject.SessionID = p.sessionID
+		locationID := strings.TrimSpace(opts.LocationID)
+		if locationID == "" {
+			locationID = p.currentLocationID
+		}
+		decision := ident.DecideActingSession(p.sessionID, principalEffectiveUserID(p), opts.UserPermission, locationID, p.delegation)
+		if !decision.Allowed {
+			respondError(w, shared.Forbidden(decision.Reason))
+			return principal{}, false
+		}
+		if opts.RequireStepUp && !p.stepUpVerified {
+			respondError(w, shared.Forbidden("step-up verification required"))
+			return principal{}, false
+		}
+		return p, true
 	case servicePrincipal:
-		subject.Kind = authz.SubjectService
-		subject.ServiceID = p.serviceID
+		decision := ident.DecideServicePrincipal(p.serviceID, opts.ServiceOperation)
+		if !decision.Allowed {
+			respondError(w, shared.Forbidden(decision.Reason))
+			return principal{}, false
+		}
+		return p, true
 	default:
 		respondError(w, shared.Unauthorized("authentication required"))
 		return principal{}, false
 	}
-	decision := authz.NewService(ident).Decide(authz.Request{
-		Subject:          subject,
-		PermissionKey:    opts.UserPermission,
-		ServiceOperation: opts.ServiceOperation,
-		LocationID:       opts.LocationID,
-		RequireStepUp:    opts.RequireStepUp,
-	})
-	if !decision.Allowed {
-		if decision.RequireStepUp {
-			respondError(w, shared.Forbidden(decision.Reason))
-			return principal{}, false
-		}
-		respondError(w, shared.Forbidden(decision.Reason))
-		return principal{}, false
-	}
-	return p, true
 }
 
 func stepUpVerified(r *http.Request) bool {
 	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Step-Up-Verified")), "true")
+}
+
+func principalEffectiveUserID(p principal) string {
+	if strings.TrimSpace(p.effectiveUserID) != "" {
+		return p.effectiveUserID
+	}
+	return p.userID
+}
+
+func principalHasDelegation(p principal) bool {
+	return p.kind == userPrincipal && p.delegation != nil && p.delegationGrantID != ""
+}
+
+func principalOnBehalfOfUserID(p principal) string {
+	if principalHasDelegation(p) {
+		return principalEffectiveUserID(p)
+	}
+	return ""
+}
+
+func principalDelegationGrantID(p principal) string {
+	return strings.TrimSpace(p.delegationGrantID)
+}
+
+func principalActingContext(p principal) application.ActingContext {
+	return application.ActingContext{
+		ActorID:           principalActorID(p),
+		ActorKind:         principalActorKind(p),
+		EffectiveUserID:   principalEffectiveUserID(p),
+		OnBehalfOfUserID:  principalOnBehalfOfUserID(p),
+		DelegationGrantID: principalDelegationGrantID(p),
+	}
+}
+
+func principalAllowsPermission(ident *identity.Service, p principal, permissionKey, locationID string) bool {
+	if strings.TrimSpace(permissionKey) == "" {
+		return true
+	}
+	locationID = strings.TrimSpace(locationID)
+	if locationID == "" {
+		locationID = p.currentLocationID
+	}
+	switch p.kind {
+	case userPrincipal:
+		return ident.DecideActingSession(p.sessionID, principalEffectiveUserID(p), permissionKey, locationID, p.delegation).Allowed
+	case servicePrincipal:
+		return ident.DecideServicePrincipal(p.serviceID, permissionKey).Allowed
+	default:
+		return false
+	}
+}
+
+func principalAllowsDocumentType(p principal, documentType string) bool {
+	if !principalHasDelegation(p) {
+		return true
+	}
+	allowed := p.delegation.AllowedDocumentTypes
+	if len(allowed) == 0 {
+		return true
+	}
+	documentType = strings.TrimSpace(documentType)
+	for _, item := range allowed {
+		if item == documentType {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveDelegationPrincipal(r *http.Request, w http.ResponseWriter, ident *identity.Service, tokenManager *identity.TokenManager, session identity.Session, base *principal) (*principal, error) {
+	if base == nil {
+		return nil, nil
+	}
+	cookie, err := r.Cookie(delegationCookieName)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return base, nil
+	}
+	claims, err := tokenManager.Parse(cookie.Value)
+	if err != nil || claims.Kind != "delegation" || claims.DelegationGrantID == "" {
+		http.SetCookie(w, clearedDelegationCookie())
+		return base, nil
+	}
+	grant, err := ident.ResolveDelegationGrantForActivation(claims.DelegationGrantID, session.UserID, session.CurrentLocationID, time.Now().UTC())
+	if err != nil {
+		http.SetCookie(w, clearedDelegationCookie())
+		return base, nil
+	}
+	if claims.EffectiveUserID != "" && claims.EffectiveUserID != grant.GrantorUserID {
+		http.SetCookie(w, clearedDelegationCookie())
+		return base, nil
+	}
+	base.effectiveUserID = grant.GrantorUserID
+	base.currentLocationID = grant.LocationID
+	base.delegationGrantID = grant.ID
+	base.onBehalfOfUserID = grant.GrantorUserID
+	base.delegation = &grant
+	return base, nil
 }

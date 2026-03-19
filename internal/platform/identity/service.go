@@ -503,6 +503,17 @@ func (s *Service) ServicePrincipals() []ServicePrincipal {
 	return s.repo.ServicePrincipals()
 }
 
+func (s *Service) DelegationGrants() []DelegationGrant {
+	items := append([]DelegationGrant(nil), s.repo.DelegationGrants()...)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].CreatedAt.Before(items[j].CreatedAt)
+	})
+	return items
+}
+
 func (s *Service) FindSession(id string) (Session, bool) {
 	return s.repo.FindSession(id)
 }
@@ -544,6 +555,42 @@ func (s *Service) FindCredentialByUserID(userID string) (Credential, bool) {
 
 func (s *Service) FindServicePrincipal(id string) (ServicePrincipal, bool) {
 	return s.repo.FindServicePrincipal(id)
+}
+
+func (s *Service) FindDelegationGrant(id string) (DelegationGrant, bool) {
+	return s.repo.FindDelegationGrant(id)
+}
+
+func (s *Service) ListOutgoingDelegationGrants(userID string) []DelegationGrant {
+	items := make([]DelegationGrant, 0)
+	for _, item := range s.DelegationGrants() {
+		if item.GrantorUserID == userID {
+			items = append(items, s.normalizeDelegationGrant(item))
+		}
+	}
+	return items
+}
+
+func (s *Service) ListIncomingDelegationGrants(userID string) []DelegationGrant {
+	items := make([]DelegationGrant, 0)
+	for _, item := range s.DelegationGrants() {
+		normalized := s.normalizeDelegationGrant(item)
+		if normalized.DelegateKind == "user" && normalized.DelegateID == userID {
+			items = append(items, normalized)
+		}
+	}
+	return items
+}
+
+func (s *Service) ListIncomingAgentDelegationGrants(servicePrincipalID string) []DelegationGrant {
+	items := make([]DelegationGrant, 0)
+	for _, item := range s.DelegationGrants() {
+		normalized := s.normalizeDelegationGrant(item)
+		if normalized.DelegateKind == "agent" && normalized.DelegateID == servicePrincipalID {
+			items = append(items, normalized)
+		}
+	}
+	return items
 }
 
 func (s *Service) UpsertServicePrincipal(principal ServicePrincipal) (ServicePrincipal, error) {
@@ -599,6 +646,232 @@ func (s *Service) SetServicePrincipalStatus(id, status string) (ServicePrincipal
 	}
 	principal.Status = status
 	return s.UpsertServicePrincipal(principal)
+}
+
+func (s *Service) createDelegationGrant(grantorUserID, delegateKind, delegateID, locationID string, allowedPermissionKeys, allowedDocumentTypes []string, startsAt, expiresAt time.Time, reason string) (DelegationGrant, error) {
+	grantorUserID = strings.TrimSpace(grantorUserID)
+	delegateKind = strings.ToLower(strings.TrimSpace(delegateKind))
+	delegateID = strings.TrimSpace(delegateID)
+	locationID = strings.TrimSpace(locationID)
+	reason = strings.TrimSpace(reason)
+	if grantorUserID == "" || delegateID == "" {
+		return DelegationGrant{}, shared.Validation("grantor and delegate are required")
+	}
+	switch delegateKind {
+	case "", "user":
+		delegateKind = "user"
+	case "agent":
+	default:
+		return DelegationGrant{}, shared.Validation("delegate_kind must be user or agent")
+	}
+	if delegateKind == "user" && grantorUserID == delegateID {
+		return DelegationGrant{}, shared.Validation("delegate user must be different from grantor")
+	}
+	if locationID == "" {
+		return DelegationGrant{}, shared.Validation("location_id is required")
+	}
+	if ctx := s.organization.Resolve(locationID); ctx.LocationID == "" {
+		return DelegationGrant{}, shared.Validation("location_id is invalid")
+	}
+	if _, ok := s.repo.FindUser(grantorUserID); !ok {
+		return DelegationGrant{}, shared.NotFound("grantor user not found")
+	}
+	switch delegateKind {
+	case "user":
+		if _, ok := s.repo.FindUser(delegateID); !ok {
+			return DelegationGrant{}, shared.NotFound("delegate user not found")
+		}
+	case "agent":
+		principal, ok := s.repo.FindServicePrincipal(delegateID)
+		if !ok {
+			return DelegationGrant{}, shared.NotFound("delegate service principal not found")
+		}
+		if principal.Status != "active" {
+			return DelegationGrant{}, shared.Forbidden("delegate service principal is not active")
+		}
+	}
+	allowedPermissionKeys = normalizeStringList(allowedPermissionKeys)
+	if len(allowedPermissionKeys) == 0 {
+		return DelegationGrant{}, shared.Validation("allowed_permission_keys is required")
+	}
+	for _, permissionKey := range allowedPermissionKeys {
+		if !s.permissionExists(permissionKey) {
+			return DelegationGrant{}, shared.Validation("unknown permission key: " + permissionKey)
+		}
+		if !s.Decide(grantorUserID, permissionKey, locationID).Allowed {
+			return DelegationGrant{}, shared.Forbidden("grantor is not allowed to delegate permission: " + permissionKey)
+		}
+	}
+	allowedDocumentTypes = normalizeStringList(allowedDocumentTypes)
+	now := time.Now().UTC()
+	if startsAt.IsZero() {
+		startsAt = now
+	} else {
+		startsAt = startsAt.UTC()
+	}
+	if expiresAt.IsZero() {
+		return DelegationGrant{}, shared.Validation("expires_at is required")
+	}
+	expiresAt = expiresAt.UTC()
+	if !expiresAt.After(startsAt) {
+		return DelegationGrant{}, shared.Validation("expires_at must be after starts_at")
+	}
+	grant := DelegationGrant{
+		ID:                    fmt.Sprintf("dlg:%d", now.UnixNano()),
+		GrantorUserID:         grantorUserID,
+		DelegateKind:          delegateKind,
+		DelegateID:            delegateID,
+		Status:                "pending",
+		LocationID:            locationID,
+		AllowedPermissionKeys: allowedPermissionKeys,
+		AllowedDocumentTypes:  allowedDocumentTypes,
+		Reason:                reason,
+		StartsAt:              startsAt,
+		ExpiresAt:             expiresAt,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	if delegateKind == "user" {
+		grant.DelegateUserID = delegateID
+	}
+	if err := s.repo.SaveDelegationGrant(grant); err != nil {
+		return DelegationGrant{}, err
+	}
+	return grant, nil
+}
+
+func (s *Service) CreateDelegationGrant(grantorUserID, delegateUserID, locationID string, allowedPermissionKeys, allowedDocumentTypes []string, startsAt, expiresAt time.Time, reason string) (DelegationGrant, error) {
+	return s.createDelegationGrant(grantorUserID, "user", delegateUserID, locationID, allowedPermissionKeys, allowedDocumentTypes, startsAt, expiresAt, reason)
+}
+
+func (s *Service) AcceptDelegationGrant(grantID, delegateUserID string) (DelegationGrant, error) {
+	return s.acceptDelegationGrant(grantID, "user", delegateUserID)
+}
+
+func (s *Service) RejectDelegationGrant(grantID, delegateUserID string) (DelegationGrant, error) {
+	return s.rejectDelegationGrant(grantID, "user", delegateUserID)
+}
+
+func (s *Service) CreateAgentDelegationGrant(grantorUserID, servicePrincipalID, locationID string, allowedPermissionKeys, allowedDocumentTypes []string, startsAt, expiresAt time.Time, reason string) (DelegationGrant, error) {
+	return s.createDelegationGrant(grantorUserID, "agent", servicePrincipalID, locationID, allowedPermissionKeys, allowedDocumentTypes, startsAt, expiresAt, reason)
+}
+
+func (s *Service) AcceptAgentDelegationGrant(grantID, servicePrincipalID string) (DelegationGrant, error) {
+	return s.acceptDelegationGrant(grantID, "agent", servicePrincipalID)
+}
+
+func (s *Service) RejectAgentDelegationGrant(grantID, servicePrincipalID string) (DelegationGrant, error) {
+	return s.rejectDelegationGrant(grantID, "agent", servicePrincipalID)
+}
+
+func (s *Service) acceptDelegationGrant(grantID, delegateKind, delegateID string) (DelegationGrant, error) {
+	grant, err := s.requireDelegationGrant(grantID)
+	if err != nil {
+		return DelegationGrant{}, err
+	}
+	grant = s.normalizeDelegationGrant(grant)
+	if grant.DelegateKind != strings.TrimSpace(delegateKind) || grant.DelegateID != strings.TrimSpace(delegateID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not assigned to the current user")
+	}
+	if grant.Status != "pending" {
+		return DelegationGrant{}, shared.Conflict("delegation grant is not pending")
+	}
+	now := time.Now().UTC()
+	grant.Status = "accepted"
+	grant.AcceptedAt = now
+	grant.AcceptedByKind = delegateKind
+	grant.AcceptedByID = strings.TrimSpace(delegateID)
+	if grant.AcceptedByKind == "user" {
+		grant.AcceptedByUserID = grant.AcceptedByID
+	} else {
+		grant.AcceptedByUserID = ""
+	}
+	grant.UpdatedAt = now
+	if err := s.repo.SaveDelegationGrant(grant); err != nil {
+		return DelegationGrant{}, err
+	}
+	return grant, nil
+}
+
+func (s *Service) rejectDelegationGrant(grantID, delegateKind, delegateID string) (DelegationGrant, error) {
+	grant, err := s.requireDelegationGrant(grantID)
+	if err != nil {
+		return DelegationGrant{}, err
+	}
+	grant = s.normalizeDelegationGrant(grant)
+	if grant.DelegateKind != strings.TrimSpace(delegateKind) || grant.DelegateID != strings.TrimSpace(delegateID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not assigned to the current user")
+	}
+	if grant.Status != "pending" {
+		return DelegationGrant{}, shared.Conflict("delegation grant is not pending")
+	}
+	grant.Status = "rejected"
+	grant.UpdatedAt = time.Now().UTC()
+	if err := s.repo.SaveDelegationGrant(grant); err != nil {
+		return DelegationGrant{}, err
+	}
+	return grant, nil
+}
+
+func (s *Service) RevokeDelegationGrant(grantID, grantorUserID string) (DelegationGrant, error) {
+	grant, err := s.requireDelegationGrant(grantID)
+	if err != nil {
+		return DelegationGrant{}, err
+	}
+	if grant.GrantorUserID != strings.TrimSpace(grantorUserID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not owned by the current user")
+	}
+	grant = s.normalizeDelegationGrant(grant)
+	switch grant.Status {
+	case "pending", "accepted":
+	default:
+		return DelegationGrant{}, shared.Conflict("delegation grant cannot be revoked")
+	}
+	now := time.Now().UTC()
+	grant.Status = "revoked"
+	grant.RevokedAt = now
+	grant.RevokedByUserID = strings.TrimSpace(grantorUserID)
+	grant.UpdatedAt = now
+	if err := s.repo.SaveDelegationGrant(grant); err != nil {
+		return DelegationGrant{}, err
+	}
+	return grant, nil
+}
+
+func (s *Service) ResolveDelegationGrantForActivation(grantID, delegateUserID, locationID string, now time.Time) (DelegationGrant, error) {
+	grant, err := s.requireDelegationGrant(grantID)
+	if err != nil {
+		return DelegationGrant{}, err
+	}
+	grant = s.normalizeDelegationGrantAt(grant, now)
+	if grant.DelegateKind != "user" || grant.DelegateID != strings.TrimSpace(delegateUserID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not assigned to the current user")
+	}
+	if grant.Status != "accepted" {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not active")
+	}
+	if locationID != "" && grant.LocationID != strings.TrimSpace(locationID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not valid for the current location")
+	}
+	return grant, nil
+}
+
+func (s *Service) ResolveAgentDelegationGrantForActivation(grantID, servicePrincipalID, locationID string, now time.Time) (DelegationGrant, error) {
+	grant, err := s.requireDelegationGrant(grantID)
+	if err != nil {
+		return DelegationGrant{}, err
+	}
+	grant = s.normalizeDelegationGrantAt(grant, now)
+	if grant.DelegateKind != "agent" || grant.DelegateID != strings.TrimSpace(servicePrincipalID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not assigned to the current service principal")
+	}
+	if grant.Status != "accepted" {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not active")
+	}
+	if locationID != "" && grant.LocationID != strings.TrimSpace(locationID) {
+		return DelegationGrant{}, shared.Forbidden("delegation grant is not valid for the current location")
+	}
+	return grant, nil
 }
 
 func (s *Service) CountRecentLoginFailures(key string, since time.Time) int {
@@ -1148,6 +1421,10 @@ func (s *Service) Decide(userID, permissionKey, locationID string) Decision {
 }
 
 func (s *Service) DecideSession(sessionID, permissionKey, locationID string) Decision {
+	return s.DecideActingSession(sessionID, "", permissionKey, locationID, nil)
+}
+
+func (s *Service) DecideActingSession(sessionID, effectiveUserID, permissionKey, locationID string, grant *DelegationGrant) Decision {
 	if sessionID == "" {
 		return Decision{Allowed: false, Reason: "missing session"}
 	}
@@ -1167,7 +1444,74 @@ func (s *Service) DecideSession(sessionID, permissionKey, locationID string) Dec
 	if locationID == "" {
 		locationID = session.CurrentLocationID
 	}
-	return s.Decide(session.UserID, permissionKey, locationID)
+	actingUserID := strings.TrimSpace(effectiveUserID)
+	if actingUserID == "" {
+		actingUserID = session.UserID
+	}
+	if grant != nil {
+		normalized := s.normalizeDelegationGrant(*grant)
+		grant = &normalized
+		if strings.TrimSpace(grant.Status) != "accepted" {
+			return Decision{Allowed: false, Reason: "delegation grant is not active"}
+		}
+		if grant.DelegateKind != "user" || grant.DelegateID != session.UserID || grant.GrantorUserID != actingUserID {
+			return Decision{Allowed: false, Reason: "delegation grant does not match session"}
+		}
+		if grant.LocationID != "" && locationID != "" && grant.LocationID != locationID {
+			return Decision{Allowed: false, Reason: "delegation grant location mismatch"}
+		}
+		if !grant.StartsAt.IsZero() && time.Now().UTC().Before(grant.StartsAt) {
+			return Decision{Allowed: false, Reason: "delegation grant not active yet"}
+		}
+		if !grant.ExpiresAt.IsZero() && !time.Now().UTC().Before(grant.ExpiresAt) {
+			return Decision{Allowed: false, Reason: "delegation grant expired"}
+		}
+		if !containsString(grant.AllowedPermissionKeys, permissionKey) {
+			return Decision{Allowed: false, Reason: "delegation grant does not allow permission"}
+		}
+	}
+	return s.Decide(actingUserID, permissionKey, locationID)
+}
+
+func (s *Service) DecideActingServicePrincipal(principalID, effectiveUserID, permissionKey, locationID string, grant *DelegationGrant) Decision {
+	if principalID == "" {
+		return Decision{Allowed: false, Reason: "missing service principal"}
+	}
+	principal, ok := s.repo.FindServicePrincipal(principalID)
+	if !ok {
+		return Decision{Allowed: false, Reason: "service principal not found"}
+	}
+	if principal.Status != "active" {
+		return Decision{Allowed: false, Reason: "service principal not active"}
+	}
+	if grant == nil {
+		return Decision{Allowed: false, Reason: "delegation grant is required"}
+	}
+	normalized := s.normalizeDelegationGrant(*grant)
+	grant = &normalized
+	if strings.TrimSpace(grant.Status) != "accepted" {
+		return Decision{Allowed: false, Reason: "delegation grant is not active"}
+	}
+	actingUserID := strings.TrimSpace(effectiveUserID)
+	if actingUserID == "" {
+		actingUserID = grant.GrantorUserID
+	}
+	if grant.DelegateKind != "agent" || grant.DelegateID != principalID || grant.GrantorUserID != actingUserID {
+		return Decision{Allowed: false, Reason: "delegation grant does not match service principal"}
+	}
+	if grant.LocationID != "" && locationID != "" && grant.LocationID != locationID {
+		return Decision{Allowed: false, Reason: "delegation grant location mismatch"}
+	}
+	if !grant.StartsAt.IsZero() && time.Now().UTC().Before(grant.StartsAt) {
+		return Decision{Allowed: false, Reason: "delegation grant not active yet"}
+	}
+	if !grant.ExpiresAt.IsZero() && !time.Now().UTC().Before(grant.ExpiresAt) {
+		return Decision{Allowed: false, Reason: "delegation grant expired"}
+	}
+	if !containsString(grant.AllowedPermissionKeys, permissionKey) {
+		return Decision{Allowed: false, Reason: "delegation grant does not allow permission"}
+	}
+	return s.Decide(actingUserID, permissionKey, grant.LocationID)
 }
 
 func (s *Service) DecideServicePrincipal(principalID, operationType string) Decision {
@@ -1233,6 +1577,86 @@ func cloneMetadata(metadata map[string]any) map[string]any {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func normalizeStringList(items []string) []string {
+	filtered := make([]string, 0, len(items))
+	seen := map[string]bool{}
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		filtered = append(filtered, item)
+	}
+	sort.Strings(filtered)
+	return filtered
+}
+
+func containsString(items []string, candidate string) bool {
+	candidate = strings.TrimSpace(candidate)
+	for _, item := range items {
+		if item == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) permissionExists(permissionKey string) bool {
+	for _, permission := range s.repo.Permissions() {
+		if permission.Key == permissionKey {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) requireDelegationGrant(grantID string) (DelegationGrant, error) {
+	grant, ok := s.repo.FindDelegationGrant(strings.TrimSpace(grantID))
+	if !ok {
+		return DelegationGrant{}, shared.NotFound("delegation grant not found")
+	}
+	return grant, nil
+}
+
+func (s *Service) normalizeDelegationGrant(grant DelegationGrant) DelegationGrant {
+	return s.normalizeDelegationGrantAt(grant, time.Now().UTC())
+}
+
+func (s *Service) normalizeDelegationGrantAt(grant DelegationGrant, now time.Time) DelegationGrant {
+	grant.DelegateKind = strings.ToLower(strings.TrimSpace(grant.DelegateKind))
+	if grant.DelegateKind == "" {
+		grant.DelegateKind = "user"
+	}
+	grant.DelegateID = strings.TrimSpace(grant.DelegateID)
+	grant.DelegateUserID = strings.TrimSpace(grant.DelegateUserID)
+	if grant.DelegateID == "" {
+		grant.DelegateID = grant.DelegateUserID
+	}
+	if grant.DelegateKind == "user" && grant.DelegateUserID == "" {
+		grant.DelegateUserID = grant.DelegateID
+	}
+	grant.AcceptedByKind = strings.ToLower(strings.TrimSpace(grant.AcceptedByKind))
+	grant.AcceptedByID = strings.TrimSpace(grant.AcceptedByID)
+	grant.AcceptedByUserID = strings.TrimSpace(grant.AcceptedByUserID)
+	if grant.AcceptedByKind == "" && grant.AcceptedByUserID != "" {
+		grant.AcceptedByKind = "user"
+	}
+	if grant.AcceptedByID == "" {
+		grant.AcceptedByID = grant.AcceptedByUserID
+	}
+	if grant.AcceptedByKind == "user" && grant.AcceptedByUserID == "" {
+		grant.AcceptedByUserID = grant.AcceptedByID
+	}
+	switch grant.Status {
+	case "pending", "accepted":
+		if !grant.ExpiresAt.IsZero() && !now.Before(grant.ExpiresAt) {
+			grant.Status = "expired"
+		}
+	}
+	return grant
 }
 
 func defaultBootstrapAdminPassword() string {

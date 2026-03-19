@@ -38,6 +38,9 @@ func (r *MemoryRepository) Query(filter Query) []Event {
 		if filter.ActorKind != "" && item.ActorKind != filter.ActorKind {
 			continue
 		}
+		if filter.OnBehalfOfUserID != "" && item.OnBehalfOfUserID != filter.OnBehalfOfUserID {
+			continue
+		}
 		if filter.Action != "" && item.Action != filter.Action {
 			continue
 		}

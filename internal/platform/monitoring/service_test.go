@@ -23,7 +23,7 @@ func TestSummary(t *testing.T) {
 	events.RegisterHandler("document.submitted", eventing.NewDocumentProjectionHandler(docs, searchSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	_, _ = actions.Submit(record.Header.ID, "user_admin", 1, record.Header.ETag)
+	_, _ = actions.Submit(record.Header.ID, application.ActingContext{ActorID: "user_admin", EffectiveUserID: "user_admin"}, 1, record.Header.ETag)
 	_, _ = events.DispatchPending(10)
 
 	svc := NewService(docs, events, flows, searchSvc, obs)

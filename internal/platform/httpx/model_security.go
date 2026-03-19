@@ -24,10 +24,10 @@ func modelAccessProfile(fieldSecurity *securityfields.Service, ident *identity.S
 			if strings.TrimSpace(permissionKey) == "" {
 				return true
 			}
-			if ident == nil || p.sessionID == "" {
+			if ident == nil {
 				return false
 			}
-			return ident.DecideSession(p.sessionID, permissionKey, p.currentLocationID).Allowed
+			return principalAllowsPermission(ident, p, permissionKey, p.currentLocationID)
 		},
 	}, def)
 }

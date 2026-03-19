@@ -37,7 +37,7 @@ func NewDocumentActions(documents *document.Service, workflows *workflow.Service
 	return actions
 }
 
-func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
+func (a *DocumentActions) Submit(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
 	record, err := a.documents.Get(documentID)
 	if err != nil {
 		return document.Record{}, err
@@ -53,7 +53,7 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 	if err != nil {
 		return document.Record{}, err
 	}
-	if err := a.ensureTransitionAllowed(record, actorID, "submit"); err != nil {
+	if err := a.ensureTransitionAllowed(record, acting.EffectiveActorID(), "submit"); err != nil {
 		return document.Record{}, err
 	}
 	if def.WorkflowKey == "" {
@@ -68,50 +68,55 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 
 	now := time.Now().UTC()
 	record.Header.Status = transition.ToState
-	a.assignNumberIfNeeded(&record, def, actorID, "submit", now)
+	a.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "submit", now)
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
-	record.Header.SubmittedBy = actorID
+	record.Header.SubmittedBy = acting.EffectiveActorID()
 	record.Header.SubmittedAt = now
 
 	correlationID := fmt.Sprintf("doc-submit:%s:%d", record.Header.ID, record.Header.Version)
 	auditEvent := audit.Event{
-		ID:            fmt.Sprintf("audit:%s", correlationID),
-		Action:        "document.submit",
-		TargetType:    "document",
-		TargetID:      record.Header.ID,
-		ActorID:       actorID,
-		ActorKind:     "user",
-		FromState:     transition.FromState,
-		ToState:       transition.ToState,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
-		CorrelationID: correlationID,
-		ChangeSummary: documentChangeSummary(beforeRecord, record),
+		ID:                fmt.Sprintf("audit:%s", correlationID),
+		Action:            "document.submit",
+		TargetType:        "document",
+		TargetID:          record.Header.ID,
+		ActorID:           acting.ActorID,
+		ActorKind:         "user",
+		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
+		DelegationGrantID: acting.DelegationGrantID,
+		FromState:         transition.FromState,
+		ToState:           transition.ToState,
+		OrganizationID:    record.Header.OrganizationID,
+		LocationID:        record.Header.LocationID,
+		OccurredAt:        now,
+		CorrelationID:     correlationID,
+		ChangeSummary:     documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"version":       record.Header.Version,
 		},
 	}
 	domainEvent := eventing.Event{
-		ID:            fmt.Sprintf("event:%s", correlationID),
-		Type:          "document.submitted",
-		Version:       1,
-		AggregateType: "document",
-		AggregateID:   record.Header.ID,
-		ActorID:       actorID,
+		ID:             fmt.Sprintf("event:%s", correlationID),
+		Type:           "document.submitted",
+		Version:        1,
+		AggregateType:  "document",
+		AggregateID:    record.Header.ID,
+		ActorID:        acting.ActorID,
 		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
+		LocationID:     record.Header.LocationID,
+		OccurredAt:     now,
 		Payload: map[string]any{
-			"document_type": record.Header.Type,
-			"from_state":    transition.FromState,
-			"to_state":      transition.ToState,
-			"version":       record.Header.Version,
-			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
+			"document_type":        record.Header.Type,
+			"from_state":           transition.FromState,
+			"to_state":             transition.ToState,
+			"version":              record.Header.Version,
+			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
+			"effective_user_id":    acting.EffectiveActorID(),
+			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
+			"delegation_grant_id":  acting.DelegationGrantID,
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -121,14 +126,14 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 		Status:    "pending",
 		CreatedAt: now,
 	}
-	workflowMutation := a.workflows.PlanCreateSideEffects(transition, "document", record.Header.ID, actorID, now)
+	workflowMutation := a.workflows.PlanCreateSideEffects(transition, "document", record.Header.ID, acting.EffectiveActorID(), now)
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
 	return record, nil
 }
 
-func (a *DocumentActions) UpdateDraft(documentID, actorID string, payload map[string]any, expectedVersion int, expectedETag string) (document.Record, error) {
+func (a *DocumentActions) UpdateDraft(documentID string, acting ActingContext, payload map[string]any, expectedVersion int, expectedETag string) (document.Record, error) {
 	record, err := a.documents.Get(documentID)
 	if err != nil {
 		return document.Record{}, err
@@ -148,46 +153,51 @@ func (a *DocumentActions) UpdateDraft(documentID, actorID string, payload map[st
 	now := time.Now().UTC()
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
 	record.Body.Payload = mergeBasePayload(record.Body.Payload, payload)
 	record.Body.ContentHash = document.ContentHash(record.Body.Payload)
 
 	correlationID := fmt.Sprintf("doc-update:%s:%d", record.Header.ID, record.Header.Version)
 	auditEvent := audit.Event{
-		ID:            fmt.Sprintf("audit:%s", correlationID),
-		Action:        "document.update",
-		TargetType:    "document",
-		TargetID:      record.Header.ID,
-		ActorID:       actorID,
-		ActorKind:     "user",
-		FromState:     "draft",
-		ToState:       "draft",
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
-		CorrelationID: correlationID,
-		ChangeSummary: documentChangeSummary(beforeRecord, record),
+		ID:                fmt.Sprintf("audit:%s", correlationID),
+		Action:            "document.update",
+		TargetType:        "document",
+		TargetID:          record.Header.ID,
+		ActorID:           acting.ActorID,
+		ActorKind:         "user",
+		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
+		DelegationGrantID: acting.DelegationGrantID,
+		FromState:         "draft",
+		ToState:           "draft",
+		OrganizationID:    record.Header.OrganizationID,
+		LocationID:        record.Header.LocationID,
+		OccurredAt:        now,
+		CorrelationID:     correlationID,
+		ChangeSummary:     documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"version":       record.Header.Version,
 		},
 	}
 	domainEvent := eventing.Event{
-		ID:            fmt.Sprintf("event:%s", correlationID),
-		Type:          "document.updated",
-		Version:       1,
-		AggregateType: "document",
-		AggregateID:   record.Header.ID,
-		ActorID:       actorID,
+		ID:             fmt.Sprintf("event:%s", correlationID),
+		Type:           "document.updated",
+		Version:        1,
+		AggregateType:  "document",
+		AggregateID:    record.Header.ID,
+		ActorID:        acting.ActorID,
 		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
+		LocationID:     record.Header.LocationID,
+		OccurredAt:     now,
 		Payload: map[string]any{
-			"document_type": record.Header.Type,
-			"status":        record.Header.Status,
-			"version":       record.Header.Version,
-			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
+			"document_type":        record.Header.Type,
+			"status":               record.Header.Status,
+			"version":              record.Header.Version,
+			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
+			"effective_user_id":    acting.EffectiveActorID(),
+			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
+			"delegation_grant_id":  acting.DelegationGrantID,
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -203,7 +213,7 @@ func (a *DocumentActions) UpdateDraft(documentID, actorID string, payload map[st
 	return record, nil
 }
 
-func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string, extensionPayload map[string]any, expectedVersion int, expectedETag string) (document.Record, error) {
+func (a *DocumentActions) UpdateExtension(documentID, moduleKey string, acting ActingContext, extensionPayload map[string]any, expectedVersion int, expectedETag string) (document.Record, error) {
 	record, err := a.documents.Get(documentID)
 	if err != nil {
 		return document.Record{}, err
@@ -226,26 +236,28 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string,
 	now := time.Now().UTC()
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
 	record.Body.Payload = document.SetExtensionPayload(record.Body.Payload, moduleKey, extensionPayload)
 	record.Body.ContentHash = document.ContentHash(record.Body.Payload)
 
 	correlationID := fmt.Sprintf("doc-extension-update:%s:%s:%d", moduleKey, record.Header.ID, record.Header.Version)
 	auditEvent := audit.Event{
-		ID:            fmt.Sprintf("audit:%s", correlationID),
-		Action:        "document.extension.update",
-		TargetType:    "document",
-		TargetID:      record.Header.ID,
-		ActorID:       actorID,
-		ActorKind:     "user",
-		FromState:     record.Header.Status,
-		ToState:       record.Header.Status,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
-		CorrelationID: correlationID,
-		ChangeSummary: documentChangeSummary(beforeRecord, record),
+		ID:                fmt.Sprintf("audit:%s", correlationID),
+		Action:            "document.extension.update",
+		TargetType:        "document",
+		TargetID:          record.Header.ID,
+		ActorID:           acting.ActorID,
+		ActorKind:         "user",
+		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
+		DelegationGrantID: acting.DelegationGrantID,
+		FromState:         record.Header.Status,
+		ToState:           record.Header.Status,
+		OrganizationID:    record.Header.OrganizationID,
+		LocationID:        record.Header.LocationID,
+		OccurredAt:        now,
+		CorrelationID:     correlationID,
+		ChangeSummary:     documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"module_key":    moduleKey,
@@ -253,21 +265,24 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string,
 		},
 	}
 	domainEvent := eventing.Event{
-		ID:            fmt.Sprintf("event:%s", correlationID),
-		Type:          "document.extension.updated",
-		Version:       1,
-		AggregateType: "document",
-		AggregateID:   record.Header.ID,
-		ActorID:       actorID,
+		ID:             fmt.Sprintf("event:%s", correlationID),
+		Type:           "document.extension.updated",
+		Version:        1,
+		AggregateType:  "document",
+		AggregateID:    record.Header.ID,
+		ActorID:        acting.ActorID,
 		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
+		LocationID:     record.Header.LocationID,
+		OccurredAt:     now,
 		Payload: map[string]any{
-			"document_type": record.Header.Type,
-			"module_key":    moduleKey,
-			"status":        record.Header.Status,
-			"version":       record.Header.Version,
-			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
+			"document_type":        record.Header.Type,
+			"module_key":           moduleKey,
+			"status":               record.Header.Status,
+			"version":              record.Header.Version,
+			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
+			"effective_user_id":    acting.EffectiveActorID(),
+			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
+			"delegation_grant_id":  acting.DelegationGrantID,
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -283,7 +298,7 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string,
 	return record, nil
 }
 
-func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
+func (a *DocumentActions) Approve(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
 	record, err := a.documents.Get(documentID)
 	if err != nil {
 		return document.Record{}, err
@@ -303,54 +318,59 @@ func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion in
 	if err != nil {
 		return document.Record{}, err
 	}
-	if err := a.ensureTransitionAllowed(record, actorID, "approve"); err != nil {
+	if err := a.ensureTransitionAllowed(record, acting.EffectiveActorID(), "approve"); err != nil {
 		return document.Record{}, err
 	}
 	previousVersion := record.Header.Version
 	now := time.Now().UTC()
 	record.Header.Status = transition.ToState
-	a.assignNumberIfNeeded(&record, def, actorID, "approve", now)
+	a.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "approve", now)
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
 
 	correlationID := fmt.Sprintf("doc-approve:%s:%d", record.Header.ID, record.Header.Version)
 	auditEvent := audit.Event{
-		ID:            fmt.Sprintf("audit:%s", correlationID),
-		Action:        "document.approve",
-		TargetType:    "document",
-		TargetID:      record.Header.ID,
-		ActorID:       actorID,
-		ActorKind:     "user",
-		FromState:     transition.FromState,
-		ToState:       transition.ToState,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
-		CorrelationID: correlationID,
-		ChangeSummary: documentChangeSummary(beforeRecord, record),
+		ID:                fmt.Sprintf("audit:%s", correlationID),
+		Action:            "document.approve",
+		TargetType:        "document",
+		TargetID:          record.Header.ID,
+		ActorID:           acting.ActorID,
+		ActorKind:         "user",
+		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
+		DelegationGrantID: acting.DelegationGrantID,
+		FromState:         transition.FromState,
+		ToState:           transition.ToState,
+		OrganizationID:    record.Header.OrganizationID,
+		LocationID:        record.Header.LocationID,
+		OccurredAt:        now,
+		CorrelationID:     correlationID,
+		ChangeSummary:     documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"version":       record.Header.Version,
 		},
 	}
 	domainEvent := eventing.Event{
-		ID:            fmt.Sprintf("event:%s", correlationID),
-		Type:          "document.approved",
-		Version:       1,
-		AggregateType: "document",
-		AggregateID:   record.Header.ID,
-		ActorID:       actorID,
+		ID:             fmt.Sprintf("event:%s", correlationID),
+		Type:           "document.approved",
+		Version:        1,
+		AggregateType:  "document",
+		AggregateID:    record.Header.ID,
+		ActorID:        acting.ActorID,
 		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
+		LocationID:     record.Header.LocationID,
+		OccurredAt:     now,
 		Payload: map[string]any{
-			"document_type": record.Header.Type,
-			"from_state":    transition.FromState,
-			"to_state":      transition.ToState,
-			"version":       record.Header.Version,
-			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
+			"document_type":        record.Header.Type,
+			"from_state":           transition.FromState,
+			"to_state":             transition.ToState,
+			"version":              record.Header.Version,
+			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
+			"effective_user_id":    acting.EffectiveActorID(),
+			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
+			"delegation_grant_id":  acting.DelegationGrantID,
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -360,7 +380,7 @@ func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion in
 		Status:    "pending",
 		CreatedAt: now,
 	}
-	workflowMutation := a.workflows.PlanResolveArtifacts(record.Header.ID, "approved", "completed", actorID, now)
+	workflowMutation := a.workflows.PlanResolveArtifacts(record.Header.ID, "approved", "completed", acting.EffectiveActorID(), now)
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
@@ -385,19 +405,19 @@ func (a *DocumentActions) persistDocument(previousVersion int, record document.R
 	return a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
 }
 
-func (a *DocumentActions) Reject(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "reject", "document.reject")
+func (a *DocumentActions) Reject(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
+	return a.transitionDocument(documentID, acting, expectedVersion, expectedETag, "reject", "document.reject")
 }
 
-func (a *DocumentActions) Reopen(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "reopen", "document.reopened")
+func (a *DocumentActions) Reopen(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
+	return a.transitionDocument(documentID, acting, expectedVersion, expectedETag, "reopen", "document.reopened")
 }
 
-func (a *DocumentActions) Cancel(documentID, actorID string, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, actorID, expectedVersion, expectedETag, "cancel", "document.cancelled")
+func (a *DocumentActions) Cancel(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
+	return a.transitionDocument(documentID, acting, expectedVersion, expectedETag, "cancel", "document.cancelled")
 }
 
-func (a *DocumentActions) transitionDocument(documentID, actorID string, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
+func (a *DocumentActions) transitionDocument(documentID string, acting ActingContext, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
 	record, err := a.documents.Get(documentID)
 	if err != nil {
 		return document.Record{}, err
@@ -417,49 +437,51 @@ func (a *DocumentActions) transitionDocument(documentID, actorID string, expecte
 	if err != nil {
 		return document.Record{}, err
 	}
-	if err := a.ensureTransitionAllowed(record, actorID, action); err != nil {
+	if err := a.ensureTransitionAllowed(record, acting.EffectiveActorID(), action); err != nil {
 		return document.Record{}, err
 	}
 	previousVersion := record.Header.Version
 	now := time.Now().UTC()
 	workflowMutation := workflow.Mutation{}
 	if action == "reject" || action == "cancel" {
-		workflowMutation = a.workflows.PlanResolveArtifacts(documentID, transition.ToState, "cancelled", actorID, now)
+		workflowMutation = a.workflows.PlanResolveArtifacts(documentID, transition.ToState, "cancelled", acting.EffectiveActorID(), now)
 	}
 	record.Header.Status = transition.ToState
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
 
 	correlationID := fmt.Sprintf("doc-%s:%s:%d", action, record.Header.ID, record.Header.Version)
 	auditEvent := audit.Event{
-		ID:            fmt.Sprintf("audit:%s", correlationID),
-		Action:        "document." + action,
-		TargetType:    "document",
-		TargetID:      record.Header.ID,
-		ActorID:       actorID,
-		ActorKind:     "user",
-		FromState:     transition.FromState,
-		ToState:       transition.ToState,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
-		CorrelationID: correlationID,
-		ChangeSummary: documentChangeSummary(beforeRecord, record),
-		Metadata:      map[string]any{"document_type": record.Header.Type, "version": record.Header.Version},
+		ID:                fmt.Sprintf("audit:%s", correlationID),
+		Action:            "document." + action,
+		TargetType:        "document",
+		TargetID:          record.Header.ID,
+		ActorID:           acting.ActorID,
+		ActorKind:         "user",
+		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
+		DelegationGrantID: acting.DelegationGrantID,
+		FromState:         transition.FromState,
+		ToState:           transition.ToState,
+		OrganizationID:    record.Header.OrganizationID,
+		LocationID:        record.Header.LocationID,
+		OccurredAt:        now,
+		CorrelationID:     correlationID,
+		ChangeSummary:     documentChangeSummary(beforeRecord, record),
+		Metadata:          map[string]any{"document_type": record.Header.Type, "version": record.Header.Version},
 	}
 	domainEvent := eventing.Event{
-		ID:            fmt.Sprintf("event:%s", correlationID),
-		Type:          eventType,
-		Version:       1,
-		AggregateType: "document",
-		AggregateID:   record.Header.ID,
-		ActorID:       actorID,
+		ID:             fmt.Sprintf("event:%s", correlationID),
+		Type:           eventType,
+		Version:        1,
+		AggregateType:  "document",
+		AggregateID:    record.Header.ID,
+		ActorID:        acting.ActorID,
 		OrganizationID: record.Header.OrganizationID,
-		LocationID:    record.Header.LocationID,
-		OccurredAt:    now,
-		Payload:       map[string]any{"document_type": record.Header.Type, "from_state": transition.FromState, "to_state": transition.ToState, "version": record.Header.Version, "snapshots": documentSnapshotEnvelope(beforeRecord, record)},
+		LocationID:     record.Header.LocationID,
+		OccurredAt:     now,
+		Payload:        map[string]any{"document_type": record.Header.Type, "from_state": transition.FromState, "to_state": transition.ToState, "version": record.Header.Version, "snapshots": documentSnapshotEnvelope(beforeRecord, record), "effective_user_id": acting.EffectiveActorID(), "on_behalf_of_user_id": acting.OnBehalfOfUserID, "delegation_grant_id": acting.DelegationGrantID},
 	}
 	outboxRecord := eventing.OutboxRecord{ID: domainEvent.ID + ":outbox", EventID: domainEvent.ID, EventType: domainEvent.Type, Status: "pending", CreatedAt: now}
 	if err := a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation); err != nil {

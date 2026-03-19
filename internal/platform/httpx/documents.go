@@ -5,8 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
@@ -55,7 +57,7 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, policySvc *policy.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, auditSvc *audit.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
 		if !ok {
@@ -103,6 +105,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		if !ok {
 			return
 		}
+		if !principalAllowsDocumentType(p, req.Type) {
+			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+			return
+		}
 		locationID := req.LocationID
 		if locationID == "" && p.kind == userPrincipal {
 			locationID = p.currentLocationID
@@ -120,12 +126,29 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, err)
 			return
 		}
-		record, err := docs.Create(req.Type, req.OrganizationID, locationID, p.userID, req.Payload)
+		record, err := docs.Create(req.Type, req.OrganizationID, locationID, principalEffectiveUserID(p), req.Payload)
 		if err != nil {
 			incActionMetric(obs, "create", "error")
 			respondError(w, err)
 			return
 		}
+		recordAudit(auditSvc, principalAuditEvent(p, audit.Event{
+			ID:             "audit:document:create:" + record.Header.ID + ":" + record.Header.ETag,
+			Action:         "document.create",
+			TargetType:     "document",
+			TargetID:       record.Header.ID,
+			OccurredAt:     time.Now().UTC(),
+			FromState:      "",
+			ToState:        record.Header.Status,
+			OrganizationID: record.Header.OrganizationID,
+			LocationID:     record.Header.LocationID,
+			ChangeSummary:  map[string]any{"fields": []string{"payload", "status"}},
+			Metadata: map[string]any{
+				"document_type":     record.Header.Type,
+				"version":           record.Header.Version,
+				"effective_user_id": principalEffectiveUserID(p),
+			},
+		}))
 		incActionMetric(obs, "create", "success")
 		respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api"))
 	})
@@ -141,6 +164,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			if !ok {
 				return
 			}
+			if !principalAllowsDocumentType(p, record.Header.Type) {
+				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+				return
+			}
 			respondJSON(w, http.StatusOK, map[string]any{"items": sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api").Links})
 			return
 		}
@@ -152,6 +179,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			}
 			p, ok := requireAuthorization(w, r, ident, "document.read", record.Header.LocationID, "")
 			if !ok {
+				return
+			}
+			if !principalAllowsDocumentType(p, record.Header.Type) {
+				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 				return
 			}
 			respondJSON(w, http.StatusOK, map[string]any{"items": sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api").Attachments})
@@ -169,6 +200,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		}
 		p, ok := requireAuthorization(w, r, ident, "document.read", record.Header.LocationID, "")
 		if !ok {
+			return
+		}
+		if !principalAllowsDocumentType(p, record.Header.Type) {
+			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 			return
 		}
 		viewMode := documentViewMode(r)
@@ -196,6 +231,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			if !ok {
 				return
 			}
+			if !principalAllowsDocumentType(p, current.Header.Type) {
+				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+				return
+			}
 			if !modules.IsEnabled(moduleKey) {
 				respondError(w, shared.Conflict("module is disabled"))
 				return
@@ -213,7 +252,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 				respondError(w, err)
 				return
 			}
-			record, err := docActions.UpdateExtension(documentID, moduleKey, p.userID, req.Payload, req.ExpectedVersion, req.ExpectedETag)
+			record, err := docActions.UpdateExtension(documentID, moduleKey, principalActingContext(p), req.Payload, req.ExpectedVersion, req.ExpectedETag)
 			if err != nil {
 				incActionMetric(obs, "update_extension", "error")
 				respondError(w, err)
@@ -238,6 +277,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		if !ok {
 			return
 		}
+		if !principalAllowsDocumentType(p, current.Header.Type) {
+			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+			return
+		}
 		var req updateDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, shared.Validation("invalid document update payload"))
@@ -247,7 +290,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, err)
 			return
 		}
-		record, err := docActions.UpdateDraft(documentID, p.userID, req.Payload, req.ExpectedVersion, req.ExpectedETag)
+		record, err := docActions.UpdateDraft(documentID, principalActingContext(p), req.Payload, req.ExpectedVersion, req.ExpectedETag)
 		if err != nil {
 			incActionMetric(obs, "update", "error")
 			respondError(w, err)
@@ -338,19 +381,23 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		if !ok {
 			return
 		}
+		if !principalAllowsDocumentType(p, current.Header.Type) {
+			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+			return
+		}
 
 		var record document.Record
 		switch req.Action {
 		case "submit":
-			record, err = docActions.Submit(documentID, p.userID, req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Submit(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
 		case "approve":
-			record, err = docActions.Approve(documentID, p.userID, req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Approve(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
 		case "reject":
-			record, err = docActions.Reject(documentID, p.userID, req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Reject(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
 		case "reopen":
-			record, err = docActions.Reopen(documentID, p.userID, req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Reopen(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
 		case "cancel":
-			record, err = docActions.Cancel(documentID, p.userID, req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Cancel(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
 		}
 		if err != nil {
 			incActionMetric(obs, req.Action, "error")

@@ -23,4 +23,15 @@ func TestPostgresOrganizationRepository(t *testing.T) {
 	if len(repo.Locations()) != 1 {
 		t.Fatal("expected locations")
 	}
+
+	ouRows := sqlmock.NewRows([]string{"operating_unit_id", "organization_id", "location_id", "operating_unit_key", "name", "status", "created_at", "updated_at"}).AddRow("ou1", "org1", "loc1", "hq_ops", "HQ Ops", "active", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT operating_unit_id, organization_id, COALESCE(location_id, ''), operating_unit_key, name, status, created_at, updated_at")).WillReturnRows(ouRows)
+	if len(repo.OperatingUnits()) != 1 {
+		t.Fatal("expected operating units")
+	}
+
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO operating_units (")).WillReturnResult(sqlmock.NewResult(1, 1))
+	if err := repo.SaveOperatingUnit(OperatingUnit{ID: "ou1", OrganizationID: "org1", LocationID: "loc1", Key: "hq_ops", Name: "HQ Ops", Status: "active", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("save operating unit failed: %v", err)
+	}
 }

@@ -11,8 +11,8 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -78,6 +78,7 @@ type DocumentDeps struct {
 	Modules       *module.Service
 	Documents     *document.Service
 	Actions       *application.DocumentActions
+	Audit         *audit.Service
 	Policy        *policy.Service
 	FieldSecurity *securityfields.Service
 	Observability *observability.Service
@@ -139,6 +140,7 @@ type UIDeps struct {
 
 type MCPDeps struct {
 	Identity        *identity.Service
+	Audit           *audit.Service
 	Server          *mcp.Server
 	Analytics       *analytics.Service
 	AnalyticsStream *mcp.AnalyticsStream
@@ -186,7 +188,7 @@ func registerModelRoutesWithDeps(mux *http.ServeMux, deps ModelDeps) {
 }
 
 func registerDocumentRoutesWithDeps(mux *http.ServeMux, deps DocumentDeps) {
-	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Policy, deps.FieldSecurity, deps.Observability)
+	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.FieldSecurity, deps.Observability)
 	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.FieldSecurity, deps.Idempotency)
 }
 
@@ -203,7 +205,7 @@ func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
 }
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
-	registerMCPRoutes(mux, deps.Identity, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath)
+	registerMCPRoutes(mux, deps.Identity, deps.Audit, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath)
 }
 
 func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {

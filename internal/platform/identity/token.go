@@ -18,13 +18,15 @@ type TokenManager struct {
 }
 
 type TokenClaims struct {
-	Subject          string `json:"sub"`
-	SessionID        string `json:"session_id,omitempty"`
-	ServicePrincipal string `json:"service_principal_id,omitempty"`
-	Kind             string `json:"kind"`
-	IssuedAt         int64  `json:"iat"`
-	ExpiresAt        int64  `json:"exp"`
-	Issuer           string `json:"iss"`
+	Subject           string `json:"sub"`
+	SessionID         string `json:"session_id,omitempty"`
+	ServicePrincipal  string `json:"service_principal_id,omitempty"`
+	DelegationGrantID string `json:"delegation_grant_id,omitempty"`
+	EffectiveUserID   string `json:"effective_user_id,omitempty"`
+	Kind              string `json:"kind"`
+	IssuedAt          int64  `json:"iat"`
+	ExpiresAt         int64  `json:"exp"`
+	Issuer            string `json:"iss"`
 }
 
 func NewTokenManagerFromEnv() *TokenManager {
@@ -68,6 +70,34 @@ func (m *TokenManager) IssueServicePrincipalToken(principal ServicePrincipal, tt
 		IssuedAt:         now.Unix(),
 		ExpiresAt:        now.Add(ttl).Unix(),
 		Issuer:           m.issuer,
+	})
+}
+
+func (m *TokenManager) IssueDelegationToken(grant DelegationGrant) (string, error) {
+	delegateID := strings.TrimSpace(grant.DelegateID)
+	if delegateID == "" {
+		delegateID = strings.TrimSpace(grant.DelegateUserID)
+	}
+	delegateKind := strings.ToLower(strings.TrimSpace(grant.DelegateKind))
+	if delegateKind == "" {
+		delegateKind = "user"
+	}
+	if grant.ID == "" || delegateID == "" || grant.GrantorUserID == "" || delegateKind != "user" {
+		return "", errors.New("invalid delegation token subject")
+	}
+	now := m.now()
+	expiresAt := grant.ExpiresAt
+	if expiresAt.IsZero() {
+		expiresAt = now.Add(time.Hour)
+	}
+	return m.issue(TokenClaims{
+		Subject:           delegateID,
+		DelegationGrantID: grant.ID,
+		EffectiveUserID:   grant.GrantorUserID,
+		Kind:              "delegation",
+		IssuedAt:          now.Unix(),
+		ExpiresAt:         expiresAt.Unix(),
+		Issuer:            m.issuer,
 	})
 }
 

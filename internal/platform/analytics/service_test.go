@@ -28,7 +28,7 @@ func TestSnapshot(t *testing.T) {
 	events.RegisterHandler("document.submitted", eventing.NewDocumentProjectionHandler(docs, searchSvc))
 	actions := application.NewDocumentActions(docs, flows, nil, application.NewMemorySubmitStore(docs, flows, auditSvc, events))
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	_, _ = actions.Submit(record.Header.ID, "user_admin", 1, record.Header.ETag)
+	_, _ = actions.Submit(record.Header.ID, application.ActingContext{ActorID: "user_admin", EffectiveUserID: "user_admin"}, 1, record.Header.ETag)
 	_, _ = events.DispatchPending(10)
 
 	svc := NewService(docs, flows, events, searchSvc, auditSvc, obs)
@@ -317,5 +317,51 @@ func TestExportDocumentReportingXLSXAndReports(t *testing.T) {
 	}
 	if len(svc.ListReportArtifacts()) != 0 {
 		t.Fatal("expected artifacts cleaned up")
+	}
+}
+
+func TestAnalyticsServiceRecentConsistencyAndEnsureDefinition(t *testing.T) {
+	docs := document.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	obs := observability.NewService()
+	events := eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), obs, nil)
+	searchSvc := search.NewService()
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(docs, flows, events, searchSvc, auditSvc, obs, repo)
+
+	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "a"})
+	_ = docs.Save(record)
+	searchSvc.RefreshDocument(record)
+	if err := auditSvc.Record(audit.Event{ID: "a1", Action: "document.create", TargetType: "document", TargetID: record.Header.ID, ActorID: "user_admin", OccurredAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("record audit event failed: %v", err)
+	}
+	if _, err := svc.CaptureSnapshot(); err != nil {
+		t.Fatalf("capture snapshot failed: %v", err)
+	}
+	if _, err := svc.RecomputeCurrentState(); err != nil {
+		t.Fatalf("recompute current state failed: %v", err)
+	}
+	if len(svc.ListRecent(1)) != 1 {
+		t.Fatalf("expected recent snapshot list, got %+v", svc.ListRecent(1))
+	}
+	report := svc.Consistency()
+	if report.DocumentCount != 1 || report.ProjectionCount != 1 || report.SnapshotCount < 2 {
+		t.Fatalf("unexpected consistency report: %+v", report)
+	}
+	if report.Observations["audit_events"].(int) != 1 {
+		t.Fatalf("expected audit event observation, got %+v", report.Observations)
+	}
+
+	created, err := svc.EnsureReportDefinition(ReportDefinition{Name: "Daily docs", Dimension: "document_type"})
+	if err != nil {
+		t.Fatalf("ensure report definition failed: %v", err)
+	}
+	reused, err := svc.EnsureReportDefinition(ReportDefinition{Name: "Daily docs"})
+	if err != nil {
+		t.Fatalf("ensure existing report definition failed: %v", err)
+	}
+	if created.ID != reused.ID {
+		t.Fatalf("expected EnsureReportDefinition to reuse existing definition, got %+v and %+v", created, reused)
 	}
 }

@@ -9,8 +9,8 @@ import (
 
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/offline"
@@ -195,6 +195,11 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			result.Error = "access denied"
 			return result
 		}
+		if !principalAllowsDocumentType(p, item.DocumentType) {
+			result.Status = "forbidden"
+			result.Error = "delegation grant does not allow this document type"
+			return result
+		}
 		locationID := effectiveOfflineLocation(item.LocationID, p)
 		candidate := document.Record{
 			Header: document.Header{
@@ -209,7 +214,7 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			result.Error = err.Error()
 			return result
 		}
-		record, err := docs.Create(item.DocumentType, item.OrganizationID, locationID, p.userID, item.Payload)
+		record, err := docs.Create(item.DocumentType, item.OrganizationID, locationID, principalEffectiveUserID(p), item.Payload)
 		if err != nil {
 			result.Error = err.Error()
 			return result
@@ -240,7 +245,7 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 		}
 		var record document.Record
 		if docActions != nil {
-			record, err = docActions.UpdateDraft(item.TargetID, p.userID, item.Payload, item.ExpectedVersion, item.ExpectedETag)
+			record, err = docActions.UpdateDraft(item.TargetID, principalActingContext(p), item.Payload, item.ExpectedVersion, item.ExpectedETag)
 		} else {
 			result.Error = "document actions are not configured"
 			return result
@@ -294,9 +299,9 @@ func applyOfflineModelSync(ident *identity.Service, p principal, modules *module
 		var record model.Record
 		var err error
 		if modelActions != nil {
-			record, _, err = modelActions.CreateComposite(item.ModelKey, p.userID, model.CompositeMutation{Values: item.Values, Relations: item.Relations})
+			record, _, err = modelActions.CreateComposite(item.ModelKey, principalActingContext(p), model.CompositeMutation{Values: item.Values, Relations: item.Relations})
 		} else {
-			record, _, err = models.CreateComposite(item.ModelKey, p.userID, model.CompositeMutation{Values: item.Values, Relations: item.Relations})
+			record, _, err = models.CreateComposite(item.ModelKey, principalEffectiveUserID(p), model.CompositeMutation{Values: item.Values, Relations: item.Relations})
 		}
 		if err != nil {
 			result.Error = err.Error()
@@ -332,9 +337,9 @@ func applyOfflineModelSync(ident *identity.Service, p principal, modules *module
 			Relations:       item.Relations,
 		}
 		if modelActions != nil {
-			record, _, err = modelActions.UpdateComposite(item.ModelKey, item.TargetID, p.userID, mutation)
+			record, _, err = modelActions.UpdateComposite(item.ModelKey, item.TargetID, principalActingContext(p), mutation)
 		} else {
-			record, _, err = models.UpdateComposite(item.ModelKey, item.TargetID, p.userID, mutation)
+			record, _, err = models.UpdateComposite(item.ModelKey, item.TargetID, principalEffectiveUserID(p), mutation)
 		}
 		if err != nil {
 			result = offlineConflictFromError(err, result, map[string]any{

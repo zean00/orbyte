@@ -8,8 +8,8 @@ import (
 
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
@@ -110,6 +110,10 @@ func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, mod
 				respondError(w, shared.Forbidden("document flow document is not allowed"))
 				return
 			}
+			if !principalAllowsDocumentType(p, item.Definition.DocumentType) {
+				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+				return
+			}
 			candidate := flowDocumentCandidate(item.Definition, req.OrganizationID, locationID, item.Payload)
 			if existing, ok := existingByKey[item.Definition.Key]; ok {
 				candidate = existing
@@ -126,7 +130,7 @@ func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, mod
 			createdByKey := map[string]document.Record{}
 			var primary document.Record
 			for _, item := range resolvedDocs {
-				record, err := upsertDocumentFlowRecord(docs, docActions, existingByKey[item.Definition.Key], item.Definition, req.OrganizationID, locationID, p.userID, item.Payload)
+				record, err := upsertDocumentFlowRecord(docs, docActions, existingByKey[item.Definition.Key], item.Definition, req.OrganizationID, locationID, principalActingContext(p), item.Payload)
 				if err != nil {
 					return idempotency.Outcome{}, err
 				}
@@ -360,14 +364,14 @@ func flowDocumentCandidate(def module.DocumentFlowDocumentDefinition, organizati
 	}
 }
 
-func upsertDocumentFlowRecord(docs *document.Service, docActions *application.DocumentActions, existing document.Record, def module.DocumentFlowDocumentDefinition, organizationID, locationID, actorID string, payload map[string]any) (document.Record, error) {
+func upsertDocumentFlowRecord(docs *document.Service, docActions *application.DocumentActions, existing document.Record, def module.DocumentFlowDocumentDefinition, organizationID, locationID string, acting application.ActingContext, payload map[string]any) (document.Record, error) {
 	if existing.Header.ID != "" {
 		if docActions == nil {
 			return document.Record{}, shared.Conflict("document flow update is not available")
 		}
-		return docActions.UpdateDraft(existing.Header.ID, actorID, payload, existing.Header.Version, existing.Header.ETag)
+		return docActions.UpdateDraft(existing.Header.ID, acting, payload, existing.Header.Version, existing.Header.ETag)
 	}
-	return docs.Create(def.DocumentType, organizationID, locationID, actorID, payload)
+	return docs.Create(def.DocumentType, organizationID, locationID, acting.EffectiveActorID(), payload)
 }
 
 func mergeFlowMetadata(metadata map[string]any, flowKey, flowDocumentKey, primaryDocumentID string) map[string]any {

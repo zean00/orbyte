@@ -26,10 +26,10 @@ func documentAccessProfile(fieldSecurity *securityfields.Service, ident *identit
 			if strings.TrimSpace(permissionKey) == "" {
 				return true
 			}
-			if ident == nil || p.sessionID == "" {
+			if ident == nil {
 				return false
 			}
-			return ident.DecideSession(p.sessionID, permissionKey, p.currentLocationID).Allowed
+			return principalAllowsPermission(ident, p, permissionKey, p.currentLocationID)
 		},
 	}, record)
 }

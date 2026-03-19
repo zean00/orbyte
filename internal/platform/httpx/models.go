@@ -54,20 +54,20 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 				err    error
 			)
 			if modelActions != nil {
-				_, related, actionErr := modelActions.PatchRelation(modelKey, recordID, relationKey, p.userID, []model.ChildMutation{{Operation: "upsert", Values: req.Values}})
+				_, related, actionErr := modelActions.PatchRelation(modelKey, recordID, relationKey, principalActingContext(p), []model.ChildMutation{{Operation: "upsert", Values: req.Values}})
 				err = actionErr
 				if err == nil && len(related[relationKey]) > 0 {
 					record = related[relationKey][0]
 				}
 			} else {
-				record, err = models.CreateRelated(modelKey, recordID, relationKey, p.userID, req.Values)
+				record, err = models.CreateRelated(modelKey, recordID, relationKey, principalEffectiveUserID(p), req.Values)
 			}
 			if err != nil {
 				respondError(w, err)
 				return
 			}
 			if modelActions == nil {
-				_, _ = activities.AddMessage("model:"+modelKey, recordID, p.userID, "Related record created", map[string]any{"model_key": modelKey, "relation_key": relationKey, "related_record_id": record.ID})
+				_, _ = activities.AddMessage("model:"+modelKey, recordID, principalActorID(p), "Related record created", map[string]any{"model_key": modelKey, "relation_key": relationKey, "related_record_id": record.ID, "effective_user_id": principalEffectiveUserID(p), "on_behalf_of_user_id": principalOnBehalfOfUserID(p)})
 			}
 			if targetDef, ok := relatedDefinition(models, def, relationKey); ok {
 				record = sanitizeModelRecord(fieldSecurity, ident, p, targetDef, record, "api")
@@ -105,16 +105,16 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			err     error
 		)
 		if modelActions != nil {
-			record, related, err = modelActions.CreateComposite(modelKey, p.userID, req)
+			record, related, err = modelActions.CreateComposite(modelKey, principalActingContext(p), req)
 		} else {
-			record, related, err = models.CreateComposite(modelKey, p.userID, req)
+			record, related, err = models.CreateComposite(modelKey, principalEffectiveUserID(p), req)
 		}
 		if err != nil {
 			respondError(w, err)
 			return
 		}
 		if modelActions == nil {
-			_, _ = activities.AddMessage("model:"+modelKey, record.ID, p.userID, "Record created", map[string]any{"model_key": modelKey})
+			_, _ = activities.AddMessage("model:"+modelKey, record.ID, principalActorID(p), "Record created", map[string]any{"model_key": modelKey, "effective_user_id": principalEffectiveUserID(p), "on_behalf_of_user_id": principalOnBehalfOfUserID(p)})
 		}
 		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, "api")
 		related = sanitizeRelatedRecords(fieldSecurity, ident, p, models, def, related, "api")
@@ -228,16 +228,16 @@ func registerModelRoutes(mux *http.ServeMux, ident *identity.Service, models *mo
 			err     error
 		)
 		if modelActions != nil {
-			record, related, err = modelActions.UpdateComposite(modelKey, recordID, p.userID, req)
+			record, related, err = modelActions.UpdateComposite(modelKey, recordID, principalActingContext(p), req)
 		} else {
-			record, related, err = models.UpdateComposite(modelKey, recordID, p.userID, req)
+			record, related, err = models.UpdateComposite(modelKey, recordID, principalEffectiveUserID(p), req)
 		}
 		if err != nil {
 			respondError(w, err)
 			return
 		}
 		if modelActions == nil {
-			_, _ = activities.AddMessage("model:"+modelKey, record.ID, p.userID, "Record updated", map[string]any{"model_key": modelKey})
+			_, _ = activities.AddMessage("model:"+modelKey, record.ID, principalActorID(p), "Record updated", map[string]any{"model_key": modelKey, "effective_user_id": principalEffectiveUserID(p), "on_behalf_of_user_id": principalOnBehalfOfUserID(p)})
 		}
 		record = sanitizeModelRecord(fieldSecurity, ident, p, def, record, "api")
 		related = sanitizeRelatedRecords(fieldSecurity, ident, p, models, def, related, "api")

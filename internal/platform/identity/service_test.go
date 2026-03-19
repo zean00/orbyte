@@ -516,3 +516,127 @@ func TestAppendIfMissing(t *testing.T) {
 		t.Fatalf("expected unique append behavior, got %+v", flags)
 	}
 }
+
+func TestDelegationGrantLifecycleAndDecision(t *testing.T) {
+	svc := NewService(organization.NewService())
+	delegate, err := svc.CreateUser("delegate-clerk", "clerk-pass-123", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create delegate user failed: %v", err)
+	}
+	expiresAt := time.Now().UTC().Add(time.Hour)
+
+	grant, err := svc.CreateDelegationGrant("user_admin", delegate.ID, "loc_hq", []string{"document.create", "document.approve"}, []string{"generic_request"}, time.Time{}, expiresAt, "cover leave")
+	if err != nil {
+		t.Fatalf("create delegation grant failed: %v", err)
+	}
+	if grant.Status != "pending" {
+		t.Fatalf("expected pending grant, got %+v", grant)
+	}
+	if len(svc.ListOutgoingDelegationGrants("user_admin")) == 0 {
+		t.Fatal("expected outgoing grants")
+	}
+	if len(svc.ListIncomingDelegationGrants(delegate.ID)) == 0 {
+		t.Fatal("expected incoming grants")
+	}
+
+	grant, err = svc.AcceptDelegationGrant(grant.ID, delegate.ID)
+	if err != nil {
+		t.Fatalf("accept delegation grant failed: %v", err)
+	}
+	if grant.Status != "accepted" || grant.AcceptedByUserID != delegate.ID {
+		t.Fatalf("unexpected accepted grant: %+v", grant)
+	}
+
+	resolved, err := svc.ResolveDelegationGrantForActivation(grant.ID, delegate.ID, "loc_hq", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("resolve delegation grant failed: %v", err)
+	}
+	session, err := svc.StartSession("delegate-clerk", "loc_hq", "password", nil, time.Hour)
+	if err != nil {
+		t.Fatalf("start delegate session failed: %v", err)
+	}
+	decision := svc.DecideActingSession(session.ID, "user_admin", "document.approve", "loc_hq", &resolved)
+	if !decision.Allowed {
+		t.Fatalf("expected delegated acting decision to allow: %+v", decision)
+	}
+	denied := svc.DecideActingSession(session.ID, "user_admin", "document.reject", "loc_hq", &resolved)
+	if denied.Allowed {
+		t.Fatalf("expected delegation permission restriction to deny: %+v", denied)
+	}
+}
+
+func TestDelegationGrantRejectAndRevoke(t *testing.T) {
+	svc := NewService(organization.NewService())
+	delegate, err := svc.CreateUser("delegate-reject", "clerk-pass-123", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create delegate user failed: %v", err)
+	}
+
+	rejectedGrant, err := svc.CreateDelegationGrant("user_admin", delegate.ID, "loc_hq", []string{"document.create"}, nil, time.Time{}, time.Now().UTC().Add(time.Hour), "")
+	if err != nil {
+		t.Fatalf("create delegation grant failed: %v", err)
+	}
+	rejectedGrant, err = svc.RejectDelegationGrant(rejectedGrant.ID, delegate.ID)
+	if err != nil {
+		t.Fatalf("reject delegation grant failed: %v", err)
+	}
+	if rejectedGrant.Status != "rejected" {
+		t.Fatalf("expected rejected status, got %+v", rejectedGrant)
+	}
+
+	revokedGrant, err := svc.CreateDelegationGrant("user_admin", delegate.ID, "loc_hq", []string{"document.create"}, nil, time.Time{}, time.Now().UTC().Add(time.Hour), "")
+	if err != nil {
+		t.Fatalf("create delegation grant failed: %v", err)
+	}
+	revokedGrant, err = svc.AcceptDelegationGrant(revokedGrant.ID, delegate.ID)
+	if err != nil {
+		t.Fatalf("accept delegation grant failed: %v", err)
+	}
+	revokedGrant, err = svc.RevokeDelegationGrant(revokedGrant.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("revoke delegation grant failed: %v", err)
+	}
+	if revokedGrant.Status != "revoked" || revokedGrant.RevokedByUserID != "user_admin" {
+		t.Fatalf("unexpected revoked grant: %+v", revokedGrant)
+	}
+}
+
+func TestAgentDelegationGrantLifecycleAndDecision(t *testing.T) {
+	svc := NewService(organization.NewService())
+	principal, err := svc.UpsertServicePrincipal(ServicePrincipal{Key: "mcp-agent", Status: "active"})
+	if err != nil {
+		t.Fatalf("create service principal failed: %v", err)
+	}
+
+	grant, err := svc.CreateAgentDelegationGrant("user_admin", principal.ID, "loc_hq", []string{"document.create"}, nil, time.Time{}, time.Now().UTC().Add(time.Hour), "agent assist")
+	if err != nil {
+		t.Fatalf("create agent delegation grant failed: %v", err)
+	}
+	if grant.DelegateKind != "agent" || grant.DelegateID != principal.ID {
+		t.Fatalf("unexpected agent delegation grant: %+v", grant)
+	}
+	if len(svc.ListIncomingAgentDelegationGrants(principal.ID)) != 1 {
+		t.Fatal("expected incoming agent grants")
+	}
+
+	grant, err = svc.AcceptAgentDelegationGrant(grant.ID, principal.ID)
+	if err != nil {
+		t.Fatalf("accept agent delegation grant failed: %v", err)
+	}
+	if grant.AcceptedByKind != "agent" || grant.AcceptedByID != principal.ID {
+		t.Fatalf("unexpected accepted agent grant: %+v", grant)
+	}
+
+	resolved, err := svc.ResolveAgentDelegationGrantForActivation(grant.ID, principal.ID, "", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("resolve agent delegation grant failed: %v", err)
+	}
+	decision := svc.DecideActingServicePrincipal(principal.ID, "user_admin", "document.create", "loc_hq", &resolved)
+	if !decision.Allowed {
+		t.Fatalf("expected delegated service principal decision to allow: %+v", decision)
+	}
+	denied := svc.DecideActingServicePrincipal(principal.ID, "user_admin", "document.approve", "loc_hq", &resolved)
+	if denied.Allowed {
+		t.Fatalf("expected delegation permission restriction to deny: %+v", denied)
+	}
+}

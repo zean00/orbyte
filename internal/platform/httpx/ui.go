@@ -78,6 +78,12 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			"admin_path":        adminPath,
 			"locale":            localeFromRequest(r, ident),
 			"supported_locales": i18n.SupportedLocales(),
+			"auth_context": map[string]any{
+				"actor_user_id":       p.userID,
+				"effective_user_id":   principalEffectiveUserID(p),
+				"delegation_active":   principalHasDelegation(p),
+				"delegation_grant_id": principalDelegationGrantID(p),
+			},
 		})
 	})
 
@@ -681,7 +687,7 @@ func principalAllowsAll(ident *identity.Service, p principal, permissions []stri
 		if strings.TrimSpace(permission) == "" {
 			continue
 		}
-		if decision := ident.DecideSession(p.sessionID, permission, p.currentLocationID); !decision.Allowed {
+		if !principalAllowsPermission(ident, p, permission, p.currentLocationID) {
 			return false
 		}
 	}

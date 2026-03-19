@@ -321,6 +321,70 @@ func (r *PostgresRepository) ServicePrincipals() []ServicePrincipal {
 	return items
 }
 
+func (r *PostgresRepository) DelegationGrants() []DelegationGrant {
+	const query = `
+		SELECT delegation_grant_id, grantor_user_id, COALESCE(delegate_kind, 'user'), COALESCE(delegate_id, delegate_user_id, ''), COALESCE(delegate_user_id, ''), status, location_id,
+		       COALESCE(allowed_permission_keys_json, '[]'::jsonb),
+		       COALESCE(allowed_document_types_json, '[]'::jsonb),
+		       COALESCE(reason, ''), starts_at, expires_at, accepted_at,
+		       COALESCE(accepted_by_kind, CASE WHEN accepted_by_user_id IS NOT NULL AND accepted_by_user_id <> '' THEN 'user' ELSE '' END),
+		       COALESCE(accepted_by_id, accepted_by_user_id, ''),
+		       COALESCE(accepted_by_user_id, ''), revoked_at, COALESCE(revoked_by_user_id, ''),
+		       created_at, updated_at
+		FROM delegation_grants
+		ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	items := make([]DelegationGrant, 0)
+	for rows.Next() {
+		var (
+			item                 DelegationGrant
+			allowedPermissions   []byte
+			allowedDocumentTypes []byte
+			acceptedAt           sql.NullTime
+			revokedAt            sql.NullTime
+		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.GrantorUserID,
+			&item.DelegateKind,
+			&item.DelegateID,
+			&item.DelegateUserID,
+			&item.Status,
+			&item.LocationID,
+			&allowedPermissions,
+			&allowedDocumentTypes,
+			&item.Reason,
+			&item.StartsAt,
+			&item.ExpiresAt,
+			&acceptedAt,
+			&item.AcceptedByKind,
+			&item.AcceptedByID,
+			&item.AcceptedByUserID,
+			&revokedAt,
+			&item.RevokedByUserID,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			continue
+		}
+		if acceptedAt.Valid {
+			item.AcceptedAt = acceptedAt.Time
+		}
+		if revokedAt.Valid {
+			item.RevokedAt = revokedAt.Time
+		}
+		_ = json.Unmarshal(allowedPermissions, &item.AllowedPermissionKeys)
+		_ = json.Unmarshal(allowedDocumentTypes, &item.AllowedDocumentTypes)
+		items = append(items, item)
+	}
+	return items
+}
+
 func (r *PostgresRepository) SaveUser(user User) error {
 	const query = `
 		INSERT INTO users (
@@ -504,6 +568,61 @@ func (r *PostgresRepository) FindServicePrincipal(id string) (ServicePrincipal, 
 	return item, true
 }
 
+func (r *PostgresRepository) FindDelegationGrant(id string) (DelegationGrant, bool) {
+	const query = `
+		SELECT delegation_grant_id, grantor_user_id, COALESCE(delegate_kind, 'user'), COALESCE(delegate_id, delegate_user_id, ''), COALESCE(delegate_user_id, ''), status, location_id,
+		       COALESCE(allowed_permission_keys_json, '[]'::jsonb),
+		       COALESCE(allowed_document_types_json, '[]'::jsonb),
+		       COALESCE(reason, ''), starts_at, expires_at, accepted_at,
+		       COALESCE(accepted_by_kind, CASE WHEN accepted_by_user_id IS NOT NULL AND accepted_by_user_id <> '' THEN 'user' ELSE '' END),
+		       COALESCE(accepted_by_id, accepted_by_user_id, ''),
+		       COALESCE(accepted_by_user_id, ''), revoked_at, COALESCE(revoked_by_user_id, ''),
+		       created_at, updated_at
+		FROM delegation_grants
+		WHERE delegation_grant_id = $1`
+	var (
+		item                 DelegationGrant
+		allowedPermissions   []byte
+		allowedDocumentTypes []byte
+		acceptedAt           sql.NullTime
+		revokedAt            sql.NullTime
+	)
+	err := r.db.QueryRowContext(context.Background(), query, id).Scan(
+		&item.ID,
+		&item.GrantorUserID,
+		&item.DelegateKind,
+		&item.DelegateID,
+		&item.DelegateUserID,
+		&item.Status,
+		&item.LocationID,
+		&allowedPermissions,
+		&allowedDocumentTypes,
+		&item.Reason,
+		&item.StartsAt,
+		&item.ExpiresAt,
+		&acceptedAt,
+		&item.AcceptedByKind,
+		&item.AcceptedByID,
+		&item.AcceptedByUserID,
+		&revokedAt,
+		&item.RevokedByUserID,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return DelegationGrant{}, false
+	}
+	if acceptedAt.Valid {
+		item.AcceptedAt = acceptedAt.Time
+	}
+	if revokedAt.Valid {
+		item.RevokedAt = revokedAt.Time
+	}
+	_ = json.Unmarshal(allowedPermissions, &item.AllowedPermissionKeys)
+	_ = json.Unmarshal(allowedDocumentTypes, &item.AllowedDocumentTypes)
+	return item, true
+}
+
 func (r *PostgresRepository) SaveServicePrincipal(principal ServicePrincipal) error {
 	const query = `
 		INSERT INTO service_principals (
@@ -529,6 +648,74 @@ func (r *PostgresRepository) SaveServicePrincipal(principal ServicePrincipal) er
 		principal.CredentialRef,
 		principal.CreatedAt,
 		principal.UpdatedAt,
+	)
+	return err
+}
+
+func (r *PostgresRepository) SaveDelegationGrant(grant DelegationGrant) error {
+	const query = `
+		INSERT INTO delegation_grants (
+			delegation_grant_id, grantor_user_id, delegate_kind, delegate_id, delegate_user_id, status, location_id,
+			allowed_permission_keys_json, allowed_document_types_json, reason, starts_at, expires_at,
+			accepted_at, accepted_by_kind, accepted_by_id, accepted_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at
+		) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8::jsonb, $9::jsonb, NULLIF($10, ''), $11, $12, $13, NULLIF($14, ''), NULLIF($15, ''), NULLIF($16, ''), $17, NULLIF($18, ''), $19, $20)
+		ON CONFLICT (delegation_grant_id) DO UPDATE SET
+			delegate_kind = EXCLUDED.delegate_kind,
+			delegate_id = EXCLUDED.delegate_id,
+			delegate_user_id = EXCLUDED.delegate_user_id,
+			status = EXCLUDED.status,
+			location_id = EXCLUDED.location_id,
+			allowed_permission_keys_json = EXCLUDED.allowed_permission_keys_json,
+			allowed_document_types_json = EXCLUDED.allowed_document_types_json,
+			reason = EXCLUDED.reason,
+			starts_at = EXCLUDED.starts_at,
+			expires_at = EXCLUDED.expires_at,
+			accepted_at = EXCLUDED.accepted_at,
+			accepted_by_kind = EXCLUDED.accepted_by_kind,
+			accepted_by_id = EXCLUDED.accepted_by_id,
+			accepted_by_user_id = EXCLUDED.accepted_by_user_id,
+			revoked_at = EXCLUDED.revoked_at,
+			revoked_by_user_id = EXCLUDED.revoked_by_user_id,
+			updated_at = EXCLUDED.updated_at`
+	allowedPermissionsJSON, err := json.Marshal(grant.AllowedPermissionKeys)
+	if err != nil {
+		return err
+	}
+	allowedDocumentTypesJSON, err := json.Marshal(grant.AllowedDocumentTypes)
+	if err != nil {
+		return err
+	}
+	var acceptedAt any
+	if !grant.AcceptedAt.IsZero() {
+		acceptedAt = grant.AcceptedAt
+	}
+	var revokedAt any
+	if !grant.RevokedAt.IsZero() {
+		revokedAt = grant.RevokedAt
+	}
+	_, err = r.db.ExecContext(
+		context.Background(),
+		query,
+		grant.ID,
+		grant.GrantorUserID,
+		grant.DelegateKind,
+		grant.DelegateID,
+		grant.DelegateUserID,
+		grant.Status,
+		grant.LocationID,
+		string(allowedPermissionsJSON),
+		string(allowedDocumentTypesJSON),
+		grant.Reason,
+		grant.StartsAt,
+		grant.ExpiresAt,
+		acceptedAt,
+		grant.AcceptedByKind,
+		grant.AcceptedByID,
+		grant.AcceptedByUserID,
+		revokedAt,
+		grant.RevokedByUserID,
+		grant.CreatedAt,
+		grant.UpdatedAt,
 	)
 	return err
 }

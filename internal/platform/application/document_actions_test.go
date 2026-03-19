@@ -9,6 +9,10 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
+func testActing(userID string) ActingContext {
+	return ActingContext{ActorID: userID, EffectiveUserID: userID}
+}
+
 func TestSubmitRecordsAuditAndOutbox(t *testing.T) {
 	docs := document.NewService()
 	flows := workflow.NewService()
@@ -21,7 +25,7 @@ func TestSubmitRecordsAuditAndOutbox(t *testing.T) {
 		t.Fatalf("create failed: %v", err)
 	}
 
-	record, err = actions.Submit(record.Header.ID, "user_admin", 1, record.Header.ETag)
+	record, err = actions.Submit(record.Header.ID, testActing("user_admin"), 1, record.Header.ETag)
 	if err != nil {
 		t.Fatalf("submit failed: %v", err)
 	}
@@ -51,7 +55,7 @@ func TestSubmitRejectsVersionMismatch(t *testing.T) {
 		t.Fatalf("create failed: %v", err)
 	}
 
-	_, err = actions.Submit(record.Header.ID, "user_admin", 99, record.Header.ETag)
+	_, err = actions.Submit(record.Header.ID, testActing("user_admin"), 99, record.Header.ETag)
 	if err == nil {
 		t.Fatal("expected version mismatch error")
 	}
@@ -69,7 +73,7 @@ func TestUpdateDraftRecordsAuditAndOutbox(t *testing.T) {
 		t.Fatalf("create failed: %v", err)
 	}
 
-	record, err = actions.UpdateDraft(record.Header.ID, "user_admin", map[string]any{"title": "y"}, 1, record.Header.ETag)
+	record, err = actions.UpdateDraft(record.Header.ID, testActing("user_admin"), map[string]any{"title": "y"}, 1, record.Header.ETag)
 	if err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
@@ -92,9 +96,9 @@ func TestUpdateDraftRejectsNonDraft(t *testing.T) {
 	actions := NewDocumentActions(docs, flows, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	_, _ = actions.Submit(record.Header.ID, "user_admin", 1, record.Header.ETag)
+	_, _ = actions.Submit(record.Header.ID, testActing("user_admin"), 1, record.Header.ETag)
 	latest, _ := docs.Get(record.Header.ID)
-	_, err := actions.UpdateDraft(record.Header.ID, "user_admin", map[string]any{"title": "z"}, latest.Header.Version, latest.Header.ETag)
+	_, err := actions.UpdateDraft(record.Header.ID, testActing("user_admin"), map[string]any{"title": "z"}, latest.Header.Version, latest.Header.ETag)
 	if err == nil {
 		t.Fatal("expected non-draft update conflict")
 	}
@@ -108,8 +112,8 @@ func TestApproveResolvesWorkflowArtifacts(t *testing.T) {
 	actions := NewDocumentActions(docs, flows, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	record, _ = actions.Submit(record.Header.ID, "user_admin", 1, record.Header.ETag)
-	record, err := actions.Approve(record.Header.ID, "user_admin", record.Header.Version, record.Header.ETag)
+	record, _ = actions.Submit(record.Header.ID, testActing("user_admin"), 1, record.Header.ETag)
+	record, err := actions.Approve(record.Header.ID, testActing("user_admin"), record.Header.Version, record.Header.ETag)
 	if err != nil {
 		t.Fatalf("approve failed: %v", err)
 	}
@@ -132,8 +136,8 @@ func TestRejectResolvesWorkflowArtifacts(t *testing.T) {
 	actions := NewDocumentActions(docs, flows, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	record, _ = actions.Submit(record.Header.ID, "user_admin", 1, record.Header.ETag)
-	record, err := actions.Reject(record.Header.ID, "user_admin", record.Header.Version, record.Header.ETag)
+	record, _ = actions.Submit(record.Header.ID, testActing("user_admin"), 1, record.Header.ETag)
+	record, err := actions.Reject(record.Header.ID, testActing("user_admin"), record.Header.Version, record.Header.ETag)
 	if err != nil {
 		t.Fatalf("reject failed: %v", err)
 	}
@@ -153,15 +157,15 @@ func TestReopenAndCancel(t *testing.T) {
 	actions := NewDocumentActions(docs, flows, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	record, _ = actions.Cancel(record.Header.ID, "user_admin", 1, record.Header.ETag)
+	record, _ = actions.Cancel(record.Header.ID, testActing("user_admin"), 1, record.Header.ETag)
 	if record.Header.Status != "cancelled" {
 		t.Fatalf("expected cancelled status, got %s", record.Header.Status)
 	}
 
 	record2, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "y"})
-	record2, _ = actions.Submit(record2.Header.ID, "user_admin", 1, record2.Header.ETag)
-	record2, _ = actions.Reject(record2.Header.ID, "user_admin", record2.Header.Version, record2.Header.ETag)
-	record2, err := actions.Reopen(record2.Header.ID, "user_admin", record2.Header.Version, record2.Header.ETag)
+	record2, _ = actions.Submit(record2.Header.ID, testActing("user_admin"), 1, record2.Header.ETag)
+	record2, _ = actions.Reject(record2.Header.ID, testActing("user_admin"), record2.Header.Version, record2.Header.ETag)
+	record2, err := actions.Reopen(record2.Header.ID, testActing("user_admin"), record2.Header.Version, record2.Header.ETag)
 	if err != nil {
 		t.Fatalf("reopen failed: %v", err)
 	}
@@ -180,7 +184,7 @@ func TestUpdateDraftPreservesExtensions(t *testing.T) {
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
 	record, _ = docs.ReplaceExtension(record.Header.ID, "analytics", map[string]any{"score": 9})
-	record, err := actions.UpdateDraft(record.Header.ID, "user_admin", map[string]any{"title": "y"}, record.Header.Version, record.Header.ETag)
+	record, err := actions.UpdateDraft(record.Header.ID, testActing("user_admin"), map[string]any{"title": "y"}, record.Header.Version, record.Header.ETag)
 	if err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
@@ -201,7 +205,7 @@ func TestUpdateExtensionRecordsAuditAndOutbox(t *testing.T) {
 	actions := NewDocumentActions(docs, flows, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
-	record, err := actions.UpdateExtension(record.Header.ID, "analytics", "user_admin", map[string]any{"score": 7}, record.Header.Version, record.Header.ETag)
+	record, err := actions.UpdateExtension(record.Header.ID, "analytics", testActing("user_admin"), map[string]any{"score": 7}, record.Header.Version, record.Header.ETag)
 	if err != nil {
 		t.Fatalf("update extension failed: %v", err)
 	}

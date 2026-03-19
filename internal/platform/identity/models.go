@@ -73,6 +73,29 @@ type Session struct {
 	ClientMetadata       map[string]any `json:"client_metadata,omitempty"`
 }
 
+type DelegationGrant struct {
+	ID                    string    `json:"id"`
+	GrantorUserID         string    `json:"grantor_user_id"`
+	DelegateKind          string    `json:"delegate_kind,omitempty"`
+	DelegateID            string    `json:"delegate_id,omitempty"`
+	DelegateUserID        string    `json:"delegate_user_id"`
+	Status                string    `json:"status"`
+	LocationID            string    `json:"location_id"`
+	AllowedPermissionKeys []string  `json:"allowed_permission_keys,omitempty"`
+	AllowedDocumentTypes  []string  `json:"allowed_document_types,omitempty"`
+	Reason                string    `json:"reason,omitempty"`
+	StartsAt              time.Time `json:"starts_at"`
+	ExpiresAt             time.Time `json:"expires_at"`
+	AcceptedAt            time.Time `json:"accepted_at,omitempty"`
+	AcceptedByKind        string    `json:"accepted_by_kind,omitempty"`
+	AcceptedByID          string    `json:"accepted_by_id,omitempty"`
+	AcceptedByUserID      string    `json:"accepted_by_user_id,omitempty"`
+	RevokedAt             time.Time `json:"revoked_at,omitempty"`
+	RevokedByUserID       string    `json:"revoked_by_user_id,omitempty"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
 type SessionReview struct {
 	ConcurrentActiveSessions int      `json:"concurrent_active_sessions"`
 	Flags                    []string `json:"flags,omitempty"`

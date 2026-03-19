@@ -26,8 +26,8 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -648,6 +648,27 @@ func (h testHarness) request(method, path string, body []byte, authenticated boo
 		if requiresCSRFProtection(method) && h.csrf != nil {
 			req.Header.Set("X-CSRF-Token", h.csrf.Value)
 		}
+	}
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	return rr
+}
+
+func (h testHarness) requestWithCookies(method, path string, body []byte, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, bytes.NewReader(body))
+	req.RemoteAddr = "192.0.2.10:1234"
+	var csrf *http.Cookie
+	for _, cookie := range cookies {
+		if cookie == nil {
+			continue
+		}
+		req.AddCookie(cookie)
+		if cookie.Name == csrfCookieName {
+			csrf = cookie
+		}
+	}
+	if requiresCSRFProtection(method) && csrf != nil {
+		req.Header.Set("X-CSRF-Token", csrf.Value)
 	}
 	rr := httptest.NewRecorder()
 	h.router.ServeHTTP(rr, req)
@@ -1787,10 +1808,10 @@ func TestAdminFeatureFlagRoutes(t *testing.T) {
 	}
 
 	update := h.request(http.MethodPut, "/admin/api/feature-flags/platform.admin_console/value", mustJSON(t, map[string]any{
-		"scope":   "location",
+		"scope":    "location",
 		"scope_id": "loc_hq",
-		"enabled": false,
-		"status":  "active",
+		"enabled":  false,
+		"status":   "active",
 	}), true)
 	if update.Code != http.StatusOK {
 		t.Fatalf("expected feature flag update to succeed, got %d body=%s", update.Code, update.Body.String())
@@ -1848,6 +1869,163 @@ func TestAuditQueryAndTimelineRoutes(t *testing.T) {
 	timeline := h.request(http.MethodGet, "/ops/audit-events/document/"+record.Header.ID, nil, true)
 	if list.Code != http.StatusOK || timeline.Code != http.StatusOK {
 		t.Fatalf("expected audit routes to succeed, got %d and %d", list.Code, timeline.Code)
+	}
+}
+
+func TestDelegationRoutesAndDelegatedDocumentAudit(t *testing.T) {
+	h := newTestHarness(t)
+	delegate, err := h.ident.CreateUser("delegate_clerk", "clerk-pass-123", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create delegate user failed: %v", err)
+	}
+
+	grantResp := h.request(http.MethodPost, "/me/delegations/outgoing", mustJSON(t, map[string]any{
+		"delegate_user_id":        delegate.ID,
+		"location_id":             "loc_hq",
+		"allowed_permission_keys": []string{"document.create", "document.update_draft", "document.submit", "document.approve"},
+		"allowed_document_types":  []string{"generic_request"},
+		"expires_at":              time.Now().UTC().Add(time.Hour),
+		"reason":                  "cover shift",
+	}), true)
+	if grantResp.Code != http.StatusCreated {
+		t.Fatalf("expected delegation grant create to succeed, got %d body=%s", grantResp.Code, grantResp.Body.String())
+	}
+	var grant identity.DelegationGrant
+	if err := json.Unmarshal(grantResp.Body.Bytes(), &grant); err != nil {
+		t.Fatalf("decode delegation grant: %v", err)
+	}
+
+	loginResp := h.request(http.MethodPost, "/auth/login", mustJSON(t, map[string]any{
+		"username":    "delegate_clerk",
+		"password":    "clerk-pass-123",
+		"location_id": "loc_hq",
+	}), false)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("expected clerk login to succeed, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+	clerkSession := findCookieByName(loginResp.Result().Cookies(), sessionCookieName)
+	clerkCSRF := findCookieByName(loginResp.Result().Cookies(), csrfCookieName)
+	if clerkSession == nil || clerkCSRF == nil {
+		t.Fatal("expected clerk auth cookies on login")
+	}
+
+	incoming := h.requestWithCookies(http.MethodGet, "/me/delegations/incoming", nil, clerkSession, clerkCSRF)
+	if incoming.Code != http.StatusOK {
+		t.Fatalf("expected incoming delegations to load, got %d body=%s", incoming.Code, incoming.Body.String())
+	}
+
+	acceptResp := h.requestWithCookies(http.MethodPost, "/me/delegations/incoming/"+grant.ID+"/accept", nil, clerkSession, clerkCSRF)
+	if acceptResp.Code != http.StatusOK {
+		t.Fatalf("expected delegation accept to succeed, got %d body=%s", acceptResp.Code, acceptResp.Body.String())
+	}
+
+	activateResp := h.requestWithCookies(http.MethodPost, "/auth/delegation/activate", mustJSON(t, map[string]any{"grant_id": grant.ID}), clerkSession, clerkCSRF)
+	if activateResp.Code != http.StatusOK {
+		t.Fatalf("expected delegation activate to succeed, got %d body=%s", activateResp.Code, activateResp.Body.String())
+	}
+	delegationCookie := findCookieByName(activateResp.Result().Cookies(), delegationCookieName)
+	if delegationCookie == nil {
+		t.Fatal("expected delegation cookie after activation")
+	}
+
+	contextResp := h.requestWithCookies(http.MethodGet, "/auth/context", nil, clerkSession, clerkCSRF, delegationCookie)
+	if contextResp.Code != http.StatusOK {
+		t.Fatalf("expected auth context to succeed, got %d body=%s", contextResp.Code, contextResp.Body.String())
+	}
+	var authContext map[string]any
+	if err := json.Unmarshal(contextResp.Body.Bytes(), &authContext); err != nil {
+		t.Fatalf("decode auth context: %v", err)
+	}
+	if authContext["actor_user_id"] != delegate.ID || authContext["effective_user_id"] != "user_admin" || authContext["delegation_active"] != true {
+		t.Fatalf("unexpected auth context: %+v", authContext)
+	}
+
+	created := h.requestWithCookies(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Delegated Request"},
+	}), clerkSession, clerkCSRF, delegationCookie)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected delegated document create to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+	var record document.Record
+	if err := json.Unmarshal(created.Body.Bytes(), &record); err != nil {
+		t.Fatalf("decode delegated document create: %v", err)
+	}
+
+	updated := h.requestWithCookies(http.MethodPut, "/documents/"+record.Header.ID, mustJSON(t, map[string]any{
+		"payload":          map[string]any{"title": "Delegated Request Updated"},
+		"expected_version": record.Header.Version,
+		"expected_etag":    record.Header.ETag,
+	}), clerkSession, clerkCSRF, delegationCookie)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("expected delegated document update to succeed, got %d body=%s", updated.Code, updated.Body.String())
+	}
+	if err := json.Unmarshal(updated.Body.Bytes(), &record); err != nil {
+		t.Fatalf("decode delegated document update: %v", err)
+	}
+
+	submitResp := h.requestWithCookies(http.MethodPost, "/documents/"+record.Header.ID+"/actions", mustJSON(t, map[string]any{
+		"action":           "submit",
+		"expected_version": record.Header.Version,
+		"expected_etag":    record.Header.ETag,
+	}), clerkSession, clerkCSRF, delegationCookie)
+	if submitResp.Code != http.StatusOK {
+		t.Fatalf("expected delegated submit to succeed, got %d body=%s", submitResp.Code, submitResp.Body.String())
+	}
+	if err := json.Unmarshal(submitResp.Body.Bytes(), &record); err != nil {
+		t.Fatalf("decode delegated document submit: %v", err)
+	}
+
+	approveResp := h.requestWithCookies(http.MethodPost, "/documents/"+record.Header.ID+"/actions", mustJSON(t, map[string]any{
+		"action":           "approve",
+		"expected_version": record.Header.Version,
+		"expected_etag":    record.Header.ETag,
+	}), clerkSession, clerkCSRF, delegationCookie)
+	if approveResp.Code != http.StatusOK {
+		t.Fatalf("expected delegated approve to succeed, got %d body=%s", approveResp.Code, approveResp.Body.String())
+	}
+
+	auditEvents := h.audit.Query(audit.Query{TargetType: "document", TargetID: record.Header.ID, OnBehalfOfUserID: "user_admin"})
+	if len(auditEvents) == 0 {
+		t.Fatal("expected delegated audit events for document")
+	}
+	actions := map[string]bool{
+		"document.create":  false,
+		"document.update":  false,
+		"document.submit":  false,
+		"document.approve": false,
+	}
+	for _, event := range auditEvents {
+		if _, ok := actions[event.Action]; !ok {
+			continue
+		}
+		if event.ActorID != delegate.ID || event.OnBehalfOfUserID != "user_admin" || event.DelegationGrantID != grant.ID {
+			t.Fatalf("unexpected delegated audit event: %+v", event)
+		}
+		actions[event.Action] = true
+	}
+	for action, seen := range actions {
+		if !seen {
+			t.Fatalf("expected audit event for %s, got %+v", action, auditEvents)
+		}
+	}
+
+	exitResp := h.requestWithCookies(http.MethodPost, "/auth/delegation/exit", nil, clerkSession, clerkCSRF, delegationCookie)
+	if exitResp.Code != http.StatusOK {
+		t.Fatalf("expected delegation exit to succeed, got %d body=%s", exitResp.Code, exitResp.Body.String())
+	}
+	contextResp = h.requestWithCookies(http.MethodGet, "/auth/context", nil, clerkSession, clerkCSRF)
+	if contextResp.Code != http.StatusOK {
+		t.Fatalf("expected self auth context after exit, got %d body=%s", contextResp.Code, contextResp.Body.String())
+	}
+	authContext = map[string]any{}
+	if err := json.Unmarshal(contextResp.Body.Bytes(), &authContext); err != nil {
+		t.Fatalf("decode self auth context: %v", err)
+	}
+	if authContext["actor_user_id"] != delegate.ID || authContext["effective_user_id"] != delegate.ID || authContext["delegation_active"] != false {
+		t.Fatalf("unexpected self auth context after exit: %+v", authContext)
 	}
 }
 
