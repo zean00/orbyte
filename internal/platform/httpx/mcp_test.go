@@ -37,7 +37,14 @@ func TestMCPRouteListsToolsAndCallsAnalyticsSnapshot(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	if len(listResp.Result.Tools) == 0 || listResp.Result.Tools[0].Name != "analytics.snapshot.get" {
+	found := false
+	for _, tool := range listResp.Result.Tools {
+		if tool.Name == "analytics.snapshot.get" {
+			found = true
+			break
+		}
+	}
+	if !found {
 		t.Fatalf("expected analytics mcp tool, got %+v", listResp.Result.Tools)
 	}
 

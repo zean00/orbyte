@@ -74,7 +74,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 		},
 		MCP: httpx.MCPDeps{
 			Identity:        graph.identity,
-			Server:          mcp.NewServer(graph.modules, graph.analytics, analyticsMCPStreamPath),
+			Server:          mcp.NewServer(graph.modules, graph.analytics, graph.templates, analyticsMCPStreamPath),
 			AnalyticsStream: graph.mcpAnalytics,
 			Analytics:       graph.analytics,
 			StreamPath:      analyticsMCPStreamPath,

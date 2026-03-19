@@ -14,7 +14,9 @@ import (
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -42,26 +44,129 @@ func TestHandleInitializeAndUnknownMethod(t *testing.T) {
 func TestServerListsToolsAndResourcesByPermission(t *testing.T) {
 	server := newTestServer(t)
 	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, ActorContext{
-		PermissionChecker: func(permissionKey string) bool { return permissionKey == "analytics.read" },
+		PermissionChecker: func(permissionKey string) bool { return permissionKey == "analytics.read" || permissionKey == "template.read" },
 	})
 	if resp.Error != nil {
 		t.Fatalf("tools/list failed: %+v", resp.Error)
 	}
 	payload := resp.Result.(map[string]any)
 	tools := payload["tools"].([]ToolDescriptor)
-	if len(tools) != 1 || tools[0].Name != "analytics.snapshot.get" {
-		t.Fatalf("expected analytics mcp tool, got %+v", tools)
+	if len(tools) != 4 {
+		t.Fatalf("expected analytics and template read tools, got %+v", tools)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 2, Method: "resources/list"}, ActorContext{
-		PermissionChecker: func(permissionKey string) bool { return permissionKey == "analytics.read" },
+		PermissionChecker: func(permissionKey string) bool { return permissionKey == "analytics.read" || permissionKey == "template.read" },
 	})
 	if resp.Error != nil {
 		t.Fatalf("resources/list failed: %+v", resp.Error)
 	}
 	resources := resp.Result.(map[string]any)["resources"].([]ResourceDescriptor)
-	if len(resources) != 2 {
+	if len(resources) != 3 {
 		t.Fatalf("expected analytics resources, got %+v", resources)
+	}
+}
+
+func TestServerTemplateDraftFlowAndPreview(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID: "user:agent",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "template.read", "template.manage", "template.render":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "template.definition.get", "arguments": map[string]any{"template_key": "clinic.registration.print"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("template.definition.get failed: %+v", resp.Error)
+	}
+	defPayload := resp.Result.(map[string]any)
+	meta := defPayload["_meta"].(map[string]any)["orbyte/app"].(map[string]any)
+	if meta["resource_uri"] != "orbyte://apps/template.designer?template_key=clinic.registration.print" {
+		t.Fatalf("expected template app resource uri, got %+v", meta)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "template.draft.save",
+			"arguments": map[string]any{
+				"template_key": "clinic.registration.print",
+				"style":        ".template-visual{color:#222}",
+				"visual_template": map[string]any{
+					"schema_version": "visual-grid/v1",
+					"title":          "Registration Slip",
+					"sections": []map[string]any{{
+						"id":    "body",
+						"title": "Body",
+						"kind":  "body",
+						"rows": []map[string]any{{
+							"id": "body-row-1",
+							"columns": []map[string]any{{
+								"id":   "body-cell-1",
+								"span": 12,
+								"blocks": []map[string]any{{
+									"id":   "block-1",
+									"type": "text",
+									"text": "Registration Slip",
+								}},
+							}},
+						}},
+					}},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("template.draft.save failed: %+v", resp.Error)
+	}
+	saved := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	draft := saved["draft"].(templateoutput.Version)
+	if draft.Status != "draft" {
+		t.Fatalf("expected draft status, got %+v", draft)
+	}
+	if !strings.Contains(draft.Body, "Registration Slip") {
+		t.Fatalf("expected visual template body to be serialized, got %+v", draft)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "template.render.preview", "arguments": map[string]any{"template_key": "clinic.registration.print", "sample": true}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("template.render.preview failed: %+v", resp.Error)
+	}
+	preview := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["output"].(map[string]any)
+	if !strings.Contains(preview["html"].(string), "Registration Slip") {
+		t.Fatalf("expected rendered preview html, got %+v", preview)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "resources/read",
+		Params:  mustJSON(t, map[string]any{"uri": "orbyte://apps/template.designer?template_key=clinic.registration.print"}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("template resource read failed: %+v", resp.Error)
+	}
+	contents := resp.Result.(map[string]any)["contents"].([]ResourceContent)
+	if len(contents) != 1 || !strings.Contains(contents[0].Text, "Registration Slip") {
+		t.Fatalf("expected template designer app html, got %+v", contents)
 	}
 }
 
@@ -187,7 +292,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, "")
+	unavailable := NewServer(nil, nil, nil, "")
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -244,7 +349,7 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, "")
+	server = NewServer(newTestModules(t), nil, newTestTemplates(t), "")
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -291,7 +396,7 @@ func newTestServer(t *testing.T) *Server {
 	searchSvc := search.NewService()
 	obsSvc := observability.NewService()
 	analyticsSvc := analytics.NewService(documents, flows, eventingSvc, searchSvc, audit.NewService(), obsSvc)
-	return NewServer(modules, analyticsSvc, "/mcp/events/analytics/snapshot")
+	return NewServer(modules, analyticsSvc, newTestTemplates(t), "/mcp/events/analytics/snapshot")
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -315,7 +420,7 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), "/mcp/events/analytics/snapshot")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "/mcp/events/analytics/snapshot")
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -331,7 +436,7 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "")
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -347,7 +452,24 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "")
+}
+
+func newTestTemplates(t *testing.T) *templateoutput.Service {
+	t.Helper()
+	svc := templateoutput.NewService(document.NewService(), reporting.NewService(nil))
+	if err := svc.RegisterDefinition(templateoutput.Definition{
+		Key:           "clinic.registration.print",
+		Title:         "Clinic Registration Print",
+		TargetKind:    "document",
+		TargetKey:     "clinic_registration",
+		RendererKind:  "visual",
+		DefaultFormat: "html",
+		DefaultBody:   `{"schema_version":"visual-grid/v1","title":"Default Registration Template","sections":[{"id":"body","title":"Body","kind":"body","rows":[{"id":"body-row-1","columns":[{"id":"body-cell-1","span":12,"blocks":[{"id":"block-1","type":"text","text":"Default Registration Template"}]}]}]}]}`,
+	}); err != nil {
+		t.Fatalf("register template definition failed: %v", err)
+	}
+	return svc
 }
 
 func newTestModules(t *testing.T) *module.Service {

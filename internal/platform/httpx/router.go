@@ -107,7 +107,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
 			Identity:        ident,
-			Server:          mcp.NewServer(modules, analyticsSvc, analyticsMCPStreamPath),
+			Server:          mcp.NewServer(modules, analyticsSvc, templateSvc, analyticsMCPStreamPath),
 			Analytics:       analyticsSvc,
 			AnalyticsStream: analyticsStream,
 			StreamPath:      analyticsMCPStreamPath,
