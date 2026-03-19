@@ -165,6 +165,42 @@ func TestDefinitionsEntriesResolveAllAndSaveValidation(t *testing.T) {
 	}
 }
 
+func TestSensitiveValuesStoredAsSecretRefs(t *testing.T) {
+	svc := NewService()
+	if err := svc.Save(Entry{
+		Key:      "search.typesense",
+		Category: "search",
+		Scope:    "deployment",
+		Value: map[string]any{
+			"enabled":  true,
+			"endpoint": "http://typesense.local",
+			"api_key":  "secret-key-123",
+		},
+	}); err != nil {
+		t.Fatalf("save sensitive config: %v", err)
+	}
+
+	entry, ok := svc.Get("search.typesense")
+	if !ok {
+		t.Fatal("expected saved entry")
+	}
+	field, ok := entry.Value["api_key"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stored secret ref, got %#v", entry.Value["api_key"])
+	}
+	if _, ok := field["secret_ref"].(string); !ok {
+		t.Fatalf("expected secret ref payload, got %#v", field)
+	}
+
+	effective, ok := svc.Resolve("search.typesense", "", "")
+	if !ok {
+		t.Fatal("expected effective value")
+	}
+	if effective.Value["api_key"] != "secret-key-123" {
+		t.Fatalf("expected resolved secret value, got %#v", effective.Value["api_key"])
+	}
+}
+
 func TestNATSPolicyDefaultsAndOverrides(t *testing.T) {
 	svc := NewService()
 	policy := svc.NATSPolicy()

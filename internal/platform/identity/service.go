@@ -181,6 +181,11 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 		Module:   "identity",
 		Action:   "manage",
 		Resource: "user",
+	}, {
+		Key:      "identity.manage_service_principals",
+		Module:   "identity",
+		Action:   "manage",
+		Resource: "service_principal",
 	}}
 	users := []User{{
 		ID:                "user_admin",
@@ -324,6 +329,9 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "identity.manage_users",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "identity.manage_service_principals",
 	}}
 	return bootstrapData{
 		roles:             roles,
@@ -536,6 +544,61 @@ func (s *Service) FindCredentialByUserID(userID string) (Credential, bool) {
 
 func (s *Service) FindServicePrincipal(id string) (ServicePrincipal, bool) {
 	return s.repo.FindServicePrincipal(id)
+}
+
+func (s *Service) UpsertServicePrincipal(principal ServicePrincipal) (ServicePrincipal, error) {
+	if strings.TrimSpace(principal.Key) == "" {
+		return ServicePrincipal{}, shared.Validation("service principal key is required")
+	}
+	status := strings.TrimSpace(strings.ToLower(principal.Status))
+	if status == "" {
+		status = "active"
+	}
+	switch status {
+	case "active", "disabled":
+	default:
+		return ServicePrincipal{}, shared.Validation("service principal status must be active or disabled")
+	}
+	now := time.Now().UTC()
+	if strings.TrimSpace(principal.ID) == "" {
+		principal.ID = fmt.Sprintf("sp:%d", now.UnixNano())
+	}
+	if existing, ok := s.repo.FindServicePrincipal(principal.ID); ok {
+		principal.CreatedAt = existing.CreatedAt
+		if principal.CredentialRef == "" {
+			principal.CredentialRef = existing.CredentialRef
+		}
+	}
+	if principal.CreatedAt.IsZero() {
+		principal.CreatedAt = now
+	}
+	principal.Key = strings.TrimSpace(principal.Key)
+	principal.Status = status
+	principal.UpdatedAt = now
+	if principal.CredentialRef == "" {
+		principal.CredentialRef = "managed://" + principal.Key
+	}
+	filtered := make([]string, 0, len(principal.AllowedOperationTypes))
+	seen := map[string]bool{}
+	for _, item := range principal.AllowedOperationTypes {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		filtered = append(filtered, item)
+	}
+	principal.AllowedOperationTypes = filtered
+	return principal, s.repo.SaveServicePrincipal(principal)
+}
+
+func (s *Service) SetServicePrincipalStatus(id, status string) (ServicePrincipal, error) {
+	principal, ok := s.repo.FindServicePrincipal(strings.TrimSpace(id))
+	if !ok {
+		return ServicePrincipal{}, shared.NotFound("service principal not found")
+	}
+	principal.Status = status
+	return s.UpsertServicePrincipal(principal)
 }
 
 func (s *Service) CountRecentLoginFailures(key string, since time.Time) int {

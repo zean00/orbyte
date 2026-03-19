@@ -25,7 +25,28 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		if _, ok := requireAuthorization(w, r, ident, "audit.read", "", "audit.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": auditSvc.List()})
+		filter, err := auditQueryFromRequest(r)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": auditSvc.Query(filter)})
+	})
+
+	mux.HandleFunc("GET /ops/audit-events/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "audit.read", "", "audit.read"); !ok {
+			return
+		}
+		targetType, targetID, ok := opsAuditTimelinePath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("audit timeline not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"target_type": targetType,
+			"target_id":   targetID,
+			"items":       auditSvc.Query(audit.Query{TargetType: targetType, TargetID: targetID}),
+		})
 	})
 
 	mux.HandleFunc("GET /ops/outbox", func(w http.ResponseWriter, r *http.Request) {
@@ -553,6 +574,13 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		respondJSON(w, http.StatusOK, searchSvc.Consistency(documentSvc.List()))
 	})
 
+	mux.HandleFunc("GET /ops/projections/status", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": searchSvc.ProjectionStatuses(documentSvc.List())})
+	})
+
 	mux.HandleFunc("POST /ops/consistency/projections/document-summary/rebuild", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "outbox.dispatch", "", "outbox.dispatch"); !ok {
 			return
@@ -650,6 +678,43 @@ func opsJobActionPath(path string) (string, string, bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
+}
+
+func opsAuditTimelinePath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 4 || parts[0] != "ops" || parts[1] != "audit-events" {
+		return "", "", false
+	}
+	return parts[2], parts[3], parts[2] != "" && parts[3] != ""
+}
+
+func auditQueryFromRequest(r *http.Request) (audit.Query, error) {
+	q := audit.Query{
+		TargetType:      strings.TrimSpace(r.URL.Query().Get("target_type")),
+		TargetID:        strings.TrimSpace(r.URL.Query().Get("target_id")),
+		ActorID:         strings.TrimSpace(r.URL.Query().Get("actor_id")),
+		ActorKind:       strings.TrimSpace(r.URL.Query().Get("actor_kind")),
+		Action:          strings.TrimSpace(r.URL.Query().Get("action")),
+		CorrelationID:   strings.TrimSpace(r.URL.Query().Get("correlation_id")),
+		OrganizationID:  strings.TrimSpace(r.URL.Query().Get("organization_id")),
+		LocationID:      strings.TrimSpace(r.URL.Query().Get("location_id")),
+		OperatingUnitID: strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+	}
+	if from := strings.TrimSpace(r.URL.Query().Get("from")); from != "" {
+		parsed, err := time.Parse(time.RFC3339, from)
+		if err != nil {
+			return audit.Query{}, shared.Validation("invalid audit from timestamp")
+		}
+		q.OccurredFrom = parsed
+	}
+	if to := strings.TrimSpace(r.URL.Query().Get("to")); to != "" {
+		parsed, err := time.Parse(time.RFC3339, to)
+		if err != nil {
+			return audit.Query{}, shared.Validation("invalid audit to timestamp")
+		}
+		q.OccurredTo = parsed
+	}
+	return q, nil
 }
 
 func renderDBStatsMetrics(snapshot runtimehealth.Snapshot) string {

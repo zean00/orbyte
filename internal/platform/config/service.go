@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/i18n"
+	"orbyte/internal/platform/secretstore"
 	"orbyte/internal/platform/shared"
 )
 
@@ -70,10 +71,11 @@ const (
 type Service struct {
 	repo        Repository
 	definitions map[string]Definition
+	secrets     *secretstore.Service
 }
 
 func NewService() *Service {
-	svc := NewServiceWithRepository(NewMemoryRepository(nil))
+	svc := NewServiceWithRepositoryAndSecrets(NewMemoryRepository(nil), secretstore.NewService())
 	for _, def := range BuiltInDefinitions() {
 		_ = svc.RegisterDefinition(def)
 	}
@@ -85,7 +87,11 @@ func NewService() *Service {
 }
 
 func NewServiceWithRepository(repo Repository) *Service {
-	svc := &Service{repo: repo, definitions: map[string]Definition{}}
+	return NewServiceWithRepositoryAndSecrets(repo, secretstore.NewService())
+}
+
+func NewServiceWithRepositoryAndSecrets(repo Repository, secrets *secretstore.Service) *Service {
+	svc := &Service{repo: repo, definitions: map[string]Definition{}, secrets: secrets}
 	for _, def := range BuiltInDefinitions() {
 		_ = svc.RegisterDefinition(def)
 	}
@@ -402,6 +408,7 @@ func (s *Service) Save(entry Entry) error {
 	if entry.Value == nil {
 		entry.Value = map[string]any{}
 	}
+	entry.Value = s.prepareStoredValue(def, entry)
 	return s.repo.Save(entry)
 }
 
@@ -431,7 +438,7 @@ func (s *Service) Resolve(key, organizationID, locationID string) (EffectiveValu
 		if !ok {
 			continue
 		}
-		mergeMap(resolved, entry.Value)
+		mergeMap(resolved, s.resolveSecrets(def, entry.Value))
 		sourceScope = candidate.scope
 		sourceScopeID = candidate.scopeID
 	}
@@ -444,6 +451,65 @@ func (s *Service) Resolve(key, organizationID, locationID string) (EffectiveValu
 		SourceScopeID: sourceScopeID,
 		ResolvedAt:    time.Now().UTC(),
 	}, true
+}
+
+func (s *Service) prepareStoredValue(def Definition, entry Entry) map[string]any {
+	stored := cloneMap(entry.Value)
+	for _, field := range def.Fields {
+		if !field.Sensitive {
+			continue
+		}
+		raw, ok := stored[field.Key]
+		if !ok {
+			continue
+		}
+		if ref := secretRefFromValue(raw); ref != "" {
+			stored[field.Key] = map[string]any{"secret_ref": ref}
+			continue
+		}
+		text, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		name := def.Key + ":" + field.Key + ":" + entry.Scope + ":" + entry.ScopeID
+		secret, err := s.secrets.Upsert(name, "", text)
+		if err != nil {
+			continue
+		}
+		stored[field.Key] = map[string]any{"secret_ref": secret.Ref}
+	}
+	return stored
+}
+
+func (s *Service) resolveSecrets(def Definition, value map[string]any) map[string]any {
+	resolved := cloneMap(value)
+	for _, field := range def.Fields {
+		if !field.Sensitive {
+			continue
+		}
+		raw, ok := resolved[field.Key]
+		if !ok {
+			continue
+		}
+		ref := secretRefFromValue(raw)
+		if ref == "" {
+			continue
+		}
+		if secret, ok := s.secrets.Resolve(ref); ok {
+			resolved[field.Key] = secret
+		}
+	}
+	return resolved
+}
+
+func secretRefFromValue(raw any) string {
+	switch value := raw.(type) {
+	case map[string]any:
+		if ref, _ := value["secret_ref"].(string); strings.TrimSpace(ref) != "" {
+			return strings.TrimSpace(ref)
+		}
+	}
+	return ""
 }
 
 func (s *Service) ResolveAll(organizationID, locationID string) []EffectiveValue {

@@ -15,7 +15,9 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -39,7 +41,7 @@ import (
 
 const analyticsMCPStreamPath = "/mcp/events/analytics/snapshot"
 
-func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
+func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, idempotencySvc *idempotency.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
 	analyticsStream := mcp.NewAnalyticsStream()
 	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
@@ -78,6 +80,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			Policy:        policySvc,
 			FieldSecurity: fieldSecurity,
 			Observability: obsSvc,
+			Idempotency:   idempotencySvc,
 		},
 		Ops: OpsDeps{
 			Identity:      ident,
@@ -95,6 +98,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 		Search: SearchDeps{Identity: ident, Search: searchSvc, Jobs: jobSvc},
 		Admin: AdminDeps{
 			Config:        cfg,
+			Flags:         flags,
 			Organization:  org,
 			Identity:      ident,
 			Modules:       modules,
@@ -103,6 +107,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			Observability: obsSvc,
 			Integration:   integrationSvc,
 			Reference:     referenceSvc,
+			Idempotency:   idempotencySvc,
 		},
 		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
@@ -121,6 +126,7 @@ func NewRouter(cfg *config.Service, org *organization.Service, ident *identity.S
 			Models:          models,
 			ModelActions:    modelActions,
 			FieldSecurity:   fieldSecurity,
+			Idempotency:     idempotencySvc,
 		},
 		Docs: DocsDeps{
 			Config:    cfg,

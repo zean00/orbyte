@@ -8,8 +8,10 @@ import (
 
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
@@ -36,7 +38,7 @@ type authSettingsResponse struct {
 	Entry      config.EffectiveValue `json:"entry"`
 }
 
-func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service) {
+func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		if err := authError(r); err != nil {
 			http.Redirect(w, r, "/ui", http.StatusSeeOther)
@@ -84,6 +86,7 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 		respondJSON(w, http.StatusOK, map[string]any{
 			"organization":      org.Root(),
 			"locations":         org.Locations(),
+			"operating_units":   org.OperatingUnits(),
 			"roles":             ident.Roles(),
 			"menus":             menus,
 			"actions":           actions,
@@ -161,6 +164,164 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissions()})
+	})
+
+	mux.HandleFunc("GET /admin/api/feature-flags/definitions", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": flags.Definitions()})
+	})
+
+	mux.HandleFunc("GET /admin/api/feature-flags/values", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": flags.Values()})
+	})
+
+	mux.HandleFunc("GET /admin/api/feature-flags/effective", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"items": flags.ResolveAllWithOperatingUnit(strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")), strings.TrimSpace(r.URL.Query().Get("operating_unit_id")), time.Now().UTC()),
+		})
+	})
+
+	mux.HandleFunc("GET /admin/api/operating-units", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": org.OperatingUnits()})
+	})
+
+	mux.HandleFunc("PUT /admin/api/operating-units/", func(w http.ResponseWriter, r *http.Request) {
+		unitID, ok := adminOperatingUnitPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("operating unit not found"))
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		var req struct {
+			OrganizationID string `json:"organization_id,omitempty"`
+			LocationID     string `json:"location_id,omitempty"`
+			Key            string `json:"key"`
+			Name           string `json:"name"`
+			Status         string `json:"status,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid operating unit request"))
+			return
+		}
+		unit, err := org.UpsertOperatingUnit(organization.OperatingUnit{
+			ID:             unitID,
+			OrganizationID: strings.TrimSpace(req.OrganizationID),
+			LocationID:     strings.TrimSpace(req.LocationID),
+			Key:            strings.TrimSpace(req.Key),
+			Name:           strings.TrimSpace(req.Name),
+			Status:         strings.TrimSpace(req.Status),
+		})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:             "audit:organization:operating_unit:update:" + unit.ID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:         "organization.operating_unit.update",
+			TargetType:     "operating_unit",
+			TargetID:       unit.ID,
+			ActorID:        principalActorID(p),
+			ActorKind:      principalActorKind(p),
+			OrganizationID: unit.OrganizationID,
+			LocationID:     unit.LocationID,
+			OccurredAt:     time.Now().UTC(),
+			ChangeSummary:  map[string]any{"fields": []string{"key", "name", "status", "location_id"}},
+			Metadata:       map[string]any{"key": unit.Key, "name": unit.Name, "status": unit.Status},
+		})
+		respondJSON(w, http.StatusOK, unit)
+	})
+
+	mux.HandleFunc("PUT /admin/api/feature-flags/", func(w http.ResponseWriter, r *http.Request) {
+		flagKey, ok := adminFeatureFlagPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("feature flag not found"))
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		var req struct {
+			Scope         string    `json:"scope"`
+			ScopeID       string    `json:"scope_id,omitempty"`
+			Enabled       bool      `json:"enabled"`
+			Status        string    `json:"status,omitempty"`
+			EffectiveFrom time.Time `json:"effective_from,omitempty"`
+			EffectiveTo   time.Time `json:"effective_to,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid feature flag request"))
+			return
+		}
+		if err := flags.UpsertValue(featureflags.Value{
+			FlagKey:       flagKey,
+			Scope:         strings.TrimSpace(req.Scope),
+			ScopeID:       strings.TrimSpace(req.ScopeID),
+			Enabled:       req.Enabled,
+			Status:        strings.TrimSpace(req.Status),
+			UpdatedBy:     principalActorID(p),
+			EffectiveFrom: req.EffectiveFrom,
+			EffectiveTo:   req.EffectiveTo,
+		}); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:feature_flag:update:" + flagKey + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "feature_flag.update",
+			TargetType:    "feature_flag",
+			TargetID:      flagKey,
+			ActorID:       principalActorID(p),
+			ActorKind:     principalActorKind(p),
+			OccurredAt:    time.Now().UTC(),
+			ChangeSummary: map[string]any{"fields": []string{"scope", "scope_id", "enabled", "status"}},
+			Metadata:      map[string]any{"scope": req.Scope, "scope_id": req.ScopeID, "enabled": req.Enabled, "status": req.Status},
+		})
+		orgID := ""
+		locationID := ""
+		operatingUnitID := ""
+		if req.Scope == "organization" {
+			orgID = req.ScopeID
+		}
+		if req.Scope == "location" {
+			locationID = req.ScopeID
+		}
+		if req.Scope == "operating_unit" {
+			operatingUnitID = req.ScopeID
+		}
+		effective, _ := flags.ResolveWithOperatingUnit(flagKey, orgID, locationID, operatingUnitID, time.Now().UTC())
+		respondJSON(w, http.StatusOK, effective)
+	})
+
+	mux.HandleFunc("GET /admin/api/idempotency/records", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		items := idempotencySvc.List()
+		if operation := strings.TrimSpace(r.URL.Query().Get("operation")); operation != "" {
+			filtered := make([]idempotency.Record, 0, len(items))
+			for _, item := range items {
+				if item.Operation == operation {
+					filtered = append(filtered, item)
+				}
+			}
+			items = filtered
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
 	mux.HandleFunc("GET /admin/api/references/types", func(w http.ResponseWriter, r *http.Request) {
@@ -370,6 +531,7 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			return
 		}
 		var req struct {
+			IdempotencyKey string         `json:"idempotency_key"`
 			SystemKey     string         `json:"system_key"`
 			OperationType string         `json:"operation_type"`
 			DocumentID    string         `json:"document_id"`
@@ -381,36 +543,41 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, org *organizat
 			respondError(w, shared.Validation("invalid request body"))
 			return
 		}
-		record, err := integrationSvc.CreateSubmission(req.SystemKey, req.OperationType, req.DocumentID, req.CorrelationID, req.Payload)
+		outcome, err := idempotencySvc.Execute("integration.submission.create", req.IdempotencyKey, principalActorID(p), req, func() (idempotency.Outcome, error) {
+			record, err := integrationSvc.CreateSubmission(req.SystemKey, req.OperationType, req.DocumentID, req.CorrelationID, req.Payload)
+			if err != nil {
+				return idempotency.Outcome{}, err
+			}
+			status := http.StatusOK
+			response := map[string]any{"record": record}
+			if req.ProcessNow {
+				if job, queueErr := integrationSvc.EnqueueProcessSubmission(record.ID); queueErr == nil {
+					status = http.StatusAccepted
+					response["job"] = job
+				} else {
+					record, err = integrationSvc.ProcessSubmission(record.ID)
+					if err != nil {
+						return idempotency.Outcome{}, err
+					}
+					response["record"] = record
+				}
+			}
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:integration:create:" + record.ID,
+				Action:        "integration.submission.create",
+				TargetType:    "integration_submission",
+				TargetID:      record.ID,
+				ActorID:       principalActorID(p),
+				OccurredAt:    time.Now().UTC(),
+				CorrelationID: "integration:create:" + record.ID,
+			})
+			return idempotency.Outcome{StatusCode: status, Response: response}, nil
+		})
 		if err != nil {
 			respondError(w, err)
 			return
 		}
-		status := http.StatusOK
-		response := map[string]any{"record": record}
-		if req.ProcessNow {
-			if job, queueErr := integrationSvc.EnqueueProcessSubmission(record.ID); queueErr == nil {
-				status = http.StatusAccepted
-				response["job"] = job
-			} else {
-				record, err = integrationSvc.ProcessSubmission(record.ID)
-				if err != nil {
-					respondError(w, err)
-					return
-				}
-				response["record"] = record
-			}
-		}
-		recordAudit(auditSvc, audit.Event{
-			ID:            "audit:integration:create:" + record.ID,
-			Action:        "integration.submission.create",
-			TargetType:    "integration_submission",
-			TargetID:      record.ID,
-			ActorID:       principalActorID(p),
-			OccurredAt:    time.Now().UTC(),
-			CorrelationID: "integration:create:" + record.ID,
-		})
-		respondJSON(w, status, response)
+		respondJSON(w, outcome.StatusCode, outcome.Response)
 	})
 
 	mux.HandleFunc("POST /admin/api/integrations/submissions/", func(w http.ResponseWriter, r *http.Request) {
@@ -647,6 +814,22 @@ func adminIntegrationSubmissionActionPath(path string) (string, string, bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(parts[4]), strings.TrimSpace(parts[6]), parts[4] != "" && parts[6] != ""
+}
+
+func adminFeatureFlagPath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 5 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "feature-flags" || parts[4] != "value" {
+		return "", false
+	}
+	return strings.TrimSpace(parts[3]), parts[3] != ""
+}
+
+func adminOperatingUnitPath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 5 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "operating-units" {
+		return "", false
+	}
+	return strings.TrimSpace(parts[3]), parts[3] != "" && parts[4] == "value"
 }
 
 func firstTemplateScope(scopes []string) string {

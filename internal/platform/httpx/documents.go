@@ -41,6 +41,20 @@ type updateDocumentExtensionRequest struct {
 	Payload         map[string]any `json:"payload"`
 }
 
+type createDocumentLinkRequest struct {
+	LinkedDocumentID string         `json:"linked_document_id"`
+	LinkType         string         `json:"link_type"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
+}
+
+type createDocumentAttachmentRequest struct {
+	AttachmentType string `json:"attachment_type"`
+	FileName       string `json:"file_name"`
+	ContentType    string `json:"content_type"`
+	StorageKey     string `json:"storage_key"`
+	SizeBytes      int64  `json:"size_bytes"`
+}
+
 func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, policySvc *policy.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
@@ -117,6 +131,32 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 	})
 
 	mux.HandleFunc("GET /documents/", func(w http.ResponseWriter, r *http.Request) {
+		if documentID, ok := documentLinkCollectionPath(r.URL.Path); ok {
+			record, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.read", record.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"items": sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api").Links})
+			return
+		}
+		if documentID, ok := documentAttachmentCollectionPath(r.URL.Path); ok {
+			record, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.read", record.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"items": sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api").Attachments})
+			return
+		}
 		documentID, ok := documentIDFromPath(r.URL.Path)
 		if !ok {
 			http.NotFound(w, r)
@@ -218,6 +258,50 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 	})
 
 	mux.HandleFunc("POST /documents/", func(w http.ResponseWriter, r *http.Request) {
+		if documentID, ok := documentLinkCollectionPath(r.URL.Path); ok {
+			record, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if _, ok := requireAuthorization(w, r, ident, "document.update_draft", record.Header.LocationID, ""); !ok {
+				return
+			}
+			var req createDocumentLinkRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid document link payload"))
+				return
+			}
+			link, err := docs.AddLink(documentID, strings.TrimSpace(req.LinkedDocumentID), strings.TrimSpace(req.LinkType), req.Metadata)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, link)
+			return
+		}
+		if documentID, ok := documentAttachmentCollectionPath(r.URL.Path); ok {
+			record, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if _, ok := requireAuthorization(w, r, ident, "document.update_draft", record.Header.LocationID, ""); !ok {
+				return
+			}
+			var req createDocumentAttachmentRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid document attachment payload"))
+				return
+			}
+			attachment, err := docs.AddAttachment(documentID, strings.TrimSpace(req.AttachmentType), strings.TrimSpace(req.FileName), strings.TrimSpace(req.ContentType), strings.TrimSpace(req.StorageKey), req.SizeBytes)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, attachment)
+			return
+		}
 		documentID, ok := documentActionPath(r.URL.Path)
 		if !ok {
 			http.NotFound(w, r)
@@ -278,6 +362,74 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
 		respondJSON(w, http.StatusOK, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
 	})
+
+	mux.HandleFunc("DELETE /documents/", func(w http.ResponseWriter, r *http.Request) {
+		if documentID, linkID, ok := documentLinkItemPath(r.URL.Path); ok {
+			record, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if _, ok := requireAuthorization(w, r, ident, "document.update_draft", record.Header.LocationID, ""); !ok {
+				return
+			}
+			if err := docs.RemoveLink(documentID, linkID); err != nil {
+				respondError(w, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if documentID, attachmentID, ok := documentAttachmentItemPath(r.URL.Path); ok {
+			record, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if _, ok := requireAuthorization(w, r, ident, "document.update_draft", record.Header.LocationID, ""); !ok {
+				return
+			}
+			if err := docs.RemoveAttachment(documentID, attachmentID); err != nil {
+				respondError(w, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	})
+}
+
+func documentLinkCollectionPath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 3 || parts[0] != "documents" || parts[2] != "links" {
+		return "", false
+	}
+	return strings.TrimSpace(parts[1]), parts[1] != ""
+}
+
+func documentAttachmentCollectionPath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 3 || parts[0] != "documents" || parts[2] != "attachments" {
+		return "", false
+	}
+	return strings.TrimSpace(parts[1]), parts[1] != ""
+}
+
+func documentLinkItemPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 4 || parts[0] != "documents" || parts[2] != "links" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[1]), strings.TrimSpace(parts[3]), parts[1] != "" && parts[3] != ""
+}
+
+func documentAttachmentItemPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 4 || parts[0] != "documents" || parts[2] != "attachments" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[1]), strings.TrimSpace(parts[3]), parts[1] != "" && parts[3] != ""
 }
 
 func filterDocumentExtensionsForPrincipal(record document.Record, modules *module.Service, ident *identity.Service, policySvc *policy.Service, p principal) document.Record {

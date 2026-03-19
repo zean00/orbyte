@@ -22,3 +22,47 @@ func (r *MemoryRepository) List() []Event {
 	})
 	return items
 }
+
+func (r *MemoryRepository) Query(filter Query) []Event {
+	items := make([]Event, 0, len(r.events))
+	for _, item := range r.events {
+		if filter.TargetType != "" && item.TargetType != filter.TargetType {
+			continue
+		}
+		if filter.TargetID != "" && item.TargetID != filter.TargetID {
+			continue
+		}
+		if filter.ActorID != "" && item.ActorID != filter.ActorID {
+			continue
+		}
+		if filter.ActorKind != "" && item.ActorKind != filter.ActorKind {
+			continue
+		}
+		if filter.Action != "" && item.Action != filter.Action {
+			continue
+		}
+		if filter.CorrelationID != "" && item.CorrelationID != filter.CorrelationID {
+			continue
+		}
+		if filter.OrganizationID != "" && item.OrganizationID != filter.OrganizationID {
+			continue
+		}
+		if filter.LocationID != "" && item.LocationID != filter.LocationID {
+			continue
+		}
+		if filter.OperatingUnitID != "" && item.OperatingUnitID != filter.OperatingUnitID {
+			continue
+		}
+		if !filter.OccurredFrom.IsZero() && item.OccurredAt.Before(filter.OccurredFrom) {
+			continue
+		}
+		if !filter.OccurredTo.IsZero() && item.OccurredAt.After(filter.OccurredTo) {
+			continue
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].OccurredAt.Before(items[j].OccurredAt)
+	})
+	return items
+}

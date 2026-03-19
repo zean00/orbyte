@@ -19,3 +19,10 @@ func (s *Service) Record(event Event) error {
 func (s *Service) List() []Event {
 	return s.repo.List()
 }
+
+func (s *Service) Query(filter Query) []Event {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	return s.repo.Query(filter)
+}

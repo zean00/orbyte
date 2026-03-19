@@ -9,6 +9,7 @@ import (
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
@@ -36,7 +37,7 @@ type flowInstancePayload struct {
 	Items               []flowInstanceItem            `json:"items"`
 }
 
-func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, fieldSecurity *securityfields.Service) {
+func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, fieldSecurity *securityfields.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("POST /document-flows/", func(w http.ResponseWriter, r *http.Request) {
 		flowKey, ok := documentFlowCommitPath(r.URL.Path)
 		if !ok {
@@ -120,60 +121,66 @@ func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, mod
 			}
 		}
 
-		created := make([]document.Record, 0, len(resolvedDocs))
-		createdByKey := map[string]document.Record{}
-		var primary document.Record
-		for _, item := range resolvedDocs {
-			record, err := upsertDocumentFlowRecord(docs, docActions, existingByKey[item.Definition.Key], item.Definition, req.OrganizationID, locationID, p.userID, item.Payload)
-			if err != nil {
-				respondError(w, err)
-				return
+		outcome, err := idempotencySvc.Execute("document_flow.commit:"+flow.Key, req.IdempotencyKey, principalActorID(p), req, func() (idempotency.Outcome, error) {
+			created := make([]document.Record, 0, len(resolvedDocs))
+			createdByKey := map[string]document.Record{}
+			var primary document.Record
+			for _, item := range resolvedDocs {
+				record, err := upsertDocumentFlowRecord(docs, docActions, existingByKey[item.Definition.Key], item.Definition, req.OrganizationID, locationID, p.userID, item.Payload)
+				if err != nil {
+					return idempotency.Outcome{}, err
+				}
+				created = append(created, sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api"))
+				createdByKey[item.Definition.Key] = record
+				if item.Definition.PrimaryOutput {
+					primary = record
+				}
 			}
-			created = append(created, sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api"))
-			createdByKey[item.Definition.Key] = record
-			if item.Definition.PrimaryOutput {
-				primary = record
+			if primary.Header.ID == "" {
+				return idempotency.Outcome{}, shared.Validation("document flow primary output is missing")
 			}
-		}
-		if primary.Header.ID == "" {
-			respondError(w, shared.Validation("document flow primary output is missing"))
+			for _, item := range resolvedDocs {
+				record := createdByKey[item.Definition.Key]
+				record.Header.Metadata = mergeFlowMetadata(record.Header.Metadata, flow.Key, item.Definition.Key, primary.Header.ID)
+				if err := docs.Save(record); err != nil {
+					return idempotency.Outcome{}, err
+				}
+				createdByKey[item.Definition.Key] = record
+			}
+			for _, item := range resolvedDocs {
+				if item.Definition.PrimaryOutput {
+					continue
+				}
+				record := createdByKey[item.Definition.Key]
+				if hasFlowLink(primary, record.Header.ID, flow.Key, item.Definition.Key) {
+					continue
+				}
+				linkType := strings.TrimSpace(item.Definition.LinkType)
+				if linkType == "" {
+					linkType = "related_to"
+				}
+				if _, err := docs.AddLink(primary.Header.ID, record.Header.ID, linkType, map[string]any{
+					"flow_key":          flow.Key,
+					"flow_document_key": item.Definition.Key,
+				}); err != nil {
+					return idempotency.Outcome{}, err
+				}
+			}
+			return idempotency.Outcome{
+				StatusCode: http.StatusCreated,
+				Response: map[string]any{
+					"flow_key":              flow.Key,
+					"primary_document_id":   primary.Header.ID,
+					"primary_document_type": primary.Header.Type,
+					"items":                 created,
+				},
+			}, nil
+		})
+		if err != nil {
+			respondError(w, err)
 			return
 		}
-		for _, item := range resolvedDocs {
-			record := createdByKey[item.Definition.Key]
-			record.Header.Metadata = mergeFlowMetadata(record.Header.Metadata, flow.Key, item.Definition.Key, primary.Header.ID)
-			if err := docs.Save(record); err != nil {
-				respondError(w, err)
-				return
-			}
-			createdByKey[item.Definition.Key] = record
-		}
-		for _, item := range resolvedDocs {
-			if item.Definition.PrimaryOutput {
-				continue
-			}
-			record := createdByKey[item.Definition.Key]
-			if hasFlowLink(primary, record.Header.ID, flow.Key, item.Definition.Key) {
-				continue
-			}
-			linkType := strings.TrimSpace(item.Definition.LinkType)
-			if linkType == "" {
-				linkType = "related_to"
-			}
-			if _, err := docs.AddLink(primary.Header.ID, record.Header.ID, linkType, map[string]any{
-				"flow_key":          flow.Key,
-				"flow_document_key": item.Definition.Key,
-			}); err != nil {
-				respondError(w, err)
-				return
-			}
-		}
-		respondJSON(w, http.StatusCreated, map[string]any{
-			"flow_key":              flow.Key,
-			"primary_document_id":   primary.Header.ID,
-			"primary_document_type": primary.Header.Type,
-			"items":                 created,
-		})
+		respondJSON(w, outcome.StatusCode, outcome.Response)
 	})
 }
 

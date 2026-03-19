@@ -25,7 +25,9 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -66,6 +68,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	t.Setenv("APP_JWT_ISSUER", "test-suite")
 
 	cfg := config.NewService()
+	flags := featureflags.NewService()
 	if len(entries) > 0 {
 		cfg = config.NewServiceWithRepository(config.NewMemoryRepository(entries))
 	}
@@ -91,6 +94,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	monitoringSvc := monitoring.NewService(docs, eventingSvc, flows, searchSvc, obsSvc)
 	integrationSvc := integration.NewService(obsSvc, loggerSvc)
 	jobSvc := jobs.NewService()
+	idempotencySvc := idempotency.NewService()
 	health := runtimehealth.NewTracker()
 	health.SetBootstrapped(true)
 	health.SetBackgroundStarted(true)
@@ -292,7 +296,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router:    NewRouter(cfg, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, actions, modelActions),
+		router:    NewRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions),
 		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
 		csrf:      csrfCookie,
 		ident:     ident,
@@ -1637,6 +1641,236 @@ func TestAdminUserAndSessionInspectionRoutes(t *testing.T) {
 	}
 }
 
+func TestServicePrincipalManagementRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	createBody := mustJSON(t, map[string]any{
+		"key":                     "billing_worker",
+		"allowed_operation_types": []string{"billing.sync", "outbox.dispatch"},
+	})
+	rr := h.request(http.MethodPost, "/service-principals", createBody, true)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected service principal create to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var created identity.ServicePrincipal
+	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode service principal: %v", err)
+	}
+	if created.ID == "" || created.Key != "billing_worker" {
+		t.Fatalf("unexpected service principal payload: %+v", created)
+	}
+
+	rr = h.request(http.MethodGet, "/service-principals", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected list to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = h.request(http.MethodGet, "/service-principals/"+created.ID, nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected detail to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodPost, "/service-principals/"+created.ID+"/tokens", mustJSON(t, map[string]any{"ttl_seconds": 120}), true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected token issuance to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var tokenPayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &tokenPayload)
+	if strings.TrimSpace(tokenPayload["token"].(string)) == "" {
+		t.Fatal("expected issued token")
+	}
+
+	rr = h.request(http.MethodPut, "/service-principals/"+created.ID+"/status", mustJSON(t, map[string]any{"status": "disabled"}), true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status update to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDocumentLinksAndAttachmentsRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	first := h.request(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Primary"},
+	}), true)
+	second := h.request(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Related"},
+	}), true)
+	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
+		t.Fatalf("expected document creation to succeed, got %d and %d", first.Code, second.Code)
+	}
+
+	var primary document.Record
+	var related document.Record
+	_ = json.Unmarshal(first.Body.Bytes(), &primary)
+	_ = json.Unmarshal(second.Body.Bytes(), &related)
+
+	link := h.request(http.MethodPost, "/documents/"+primary.Header.ID+"/links", mustJSON(t, map[string]any{
+		"linked_document_id": related.Header.ID,
+		"link_type":          "related_to",
+		"metadata":           map[string]any{"source": "test"},
+	}), true)
+	if link.Code != http.StatusCreated {
+		t.Fatalf("expected link create to succeed, got %d body=%s", link.Code, link.Body.String())
+	}
+	var linkPayload document.Link
+	_ = json.Unmarshal(link.Body.Bytes(), &linkPayload)
+
+	attachment := h.request(http.MethodPost, "/documents/"+primary.Header.ID+"/attachments", mustJSON(t, map[string]any{
+		"attachment_type": "document",
+		"file_name":       "summary.pdf",
+		"content_type":    "application/pdf",
+		"storage_key":     "object://docs/summary.pdf",
+		"size_bytes":      42,
+	}), true)
+	if attachment.Code != http.StatusCreated {
+		t.Fatalf("expected attachment create to succeed, got %d body=%s", attachment.Code, attachment.Body.String())
+	}
+	var attachmentPayload document.Attachment
+	_ = json.Unmarshal(attachment.Body.Bytes(), &attachmentPayload)
+
+	listLinks := h.request(http.MethodGet, "/documents/"+primary.Header.ID+"/links", nil, true)
+	listAttachments := h.request(http.MethodGet, "/documents/"+primary.Header.ID+"/attachments", nil, true)
+	if listLinks.Code != http.StatusOK || listAttachments.Code != http.StatusOK {
+		t.Fatalf("expected metadata list routes to succeed, got %d and %d", listLinks.Code, listAttachments.Code)
+	}
+
+	removeLink := h.request(http.MethodDelete, "/documents/"+primary.Header.ID+"/links/"+linkPayload.ID, nil, true)
+	removeAttachment := h.request(http.MethodDelete, "/documents/"+primary.Header.ID+"/attachments/"+attachmentPayload.ID, nil, true)
+	if removeLink.Code != http.StatusNoContent || removeAttachment.Code != http.StatusNoContent {
+		t.Fatalf("expected metadata delete routes to succeed, got %d and %d", removeLink.Code, removeAttachment.Code)
+	}
+}
+
+func TestIntegrationSubmissionIdempotency(t *testing.T) {
+	h := newTestHarness(t)
+
+	body := mustJSON(t, map[string]any{
+		"idempotency_key": "submission-1",
+		"system_key":      "fake_erp",
+		"operation_type":  "submit_document",
+		"document_id":     "doc-1",
+		"correlation_id":  "corr-1",
+		"payload":         map[string]any{"foo": "bar"},
+	})
+	first := h.request(http.MethodPost, "/admin/api/integrations/submissions", body, true)
+	second := h.request(http.MethodPost, "/admin/api/integrations/submissions", body, true)
+	if first.Code != http.StatusOK || second.Code != http.StatusOK {
+		t.Fatalf("expected idempotent submission requests to succeed, got %d and %d", first.Code, second.Code)
+	}
+
+	var firstPayload map[string]map[string]any
+	var secondPayload map[string]map[string]any
+	_ = json.Unmarshal(first.Body.Bytes(), &firstPayload)
+	_ = json.Unmarshal(second.Body.Bytes(), &secondPayload)
+	if firstPayload["record"]["id"] != secondPayload["record"]["id"] {
+		t.Fatalf("expected cached record id, got %v and %v", firstPayload["record"]["id"], secondPayload["record"]["id"])
+	}
+
+	idempotencyList := h.request(http.MethodGet, "/admin/api/idempotency/records?operation=integration.submission.create", nil, true)
+	if idempotencyList.Code != http.StatusOK {
+		t.Fatalf("expected idempotency record listing to succeed, got %d body=%s", idempotencyList.Code, idempotencyList.Body.String())
+	}
+}
+
+func TestAdminFeatureFlagRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	defs := h.request(http.MethodGet, "/admin/api/feature-flags/definitions", nil, true)
+	if defs.Code != http.StatusOK {
+		t.Fatalf("expected feature flag definitions to load, got %d body=%s", defs.Code, defs.Body.String())
+	}
+
+	update := h.request(http.MethodPut, "/admin/api/feature-flags/platform.admin_console/value", mustJSON(t, map[string]any{
+		"scope":   "location",
+		"scope_id": "loc_hq",
+		"enabled": false,
+		"status":  "active",
+	}), true)
+	if update.Code != http.StatusOK {
+		t.Fatalf("expected feature flag update to succeed, got %d body=%s", update.Code, update.Body.String())
+	}
+
+	values := h.request(http.MethodGet, "/admin/api/feature-flags/values", nil, true)
+	effective := h.request(http.MethodGet, "/admin/api/feature-flags/effective?location_id=loc_hq", nil, true)
+	if values.Code != http.StatusOK || effective.Code != http.StatusOK {
+		t.Fatalf("expected feature flag reads to succeed, got %d and %d", values.Code, effective.Code)
+	}
+}
+
+func TestProjectionStatusRoute(t *testing.T) {
+	h := newTestHarness(t)
+
+	created := h.request(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Projection Track"},
+	}), true)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected document create to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+
+	status := h.request(http.MethodGet, "/ops/projections/status", nil, true)
+	if status.Code != http.StatusOK {
+		t.Fatalf("expected projection status route to succeed, got %d body=%s", status.Code, status.Body.String())
+	}
+}
+
+func TestAuditQueryAndTimelineRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	created := h.request(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Audited"},
+	}), true)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected document create to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+	var record document.Record
+	_ = json.Unmarshal(created.Body.Bytes(), &record)
+
+	updated := h.request(http.MethodPut, "/documents/"+record.Header.ID, mustJSON(t, map[string]any{
+		"payload": map[string]any{"title": "Audited V2"},
+	}), true)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("expected document update to succeed, got %d body=%s", updated.Code, updated.Body.String())
+	}
+
+	list := h.request(http.MethodGet, "/ops/audit-events?target_type=document&target_id="+record.Header.ID+"&action=document.update", nil, true)
+	timeline := h.request(http.MethodGet, "/ops/audit-events/document/"+record.Header.ID, nil, true)
+	if list.Code != http.StatusOK || timeline.Code != http.StatusOK {
+		t.Fatalf("expected audit routes to succeed, got %d and %d", list.Code, timeline.Code)
+	}
+}
+
+func TestOperatingUnitAdminRoute(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodPut, "/admin/api/operating-units/ou_clinic_ops/value", mustJSON(t, map[string]any{
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"key":             "clinic_ops",
+		"name":            "Clinic Ops",
+		"status":          "active",
+	}), true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected operating unit upsert to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	list := h.request(http.MethodGet, "/admin/api/operating-units", nil, true)
+	if list.Code != http.StatusOK {
+		t.Fatalf("expected operating unit list to succeed, got %d body=%s", list.Code, list.Body.String())
+	}
+}
+
 func TestLoginRateLimit(t *testing.T) {
 	h := newTestHarnessWithConfig(t, []config.Entry{
 		{
@@ -2107,7 +2341,7 @@ func TestReadyzReturnsUnavailableWhenRuntimeHealthIsDegraded(t *testing.T) {
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
-	router := NewRouter(cfg, org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, jobSvc, health, application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
+	router := NewRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

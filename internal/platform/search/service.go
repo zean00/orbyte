@@ -41,6 +41,21 @@ type ProjectionConsistency struct {
 	MaxProjectedVersion int       `json:"max_projected_version"`
 }
 
+type ProjectionStatus struct {
+	ProjectionKey        string    `json:"projection_key"`
+	LastRefreshStatus    string    `json:"last_refresh_status"`
+	LastSuccessAt        time.Time `json:"last_success_at,omitempty"`
+	LastFailureAt        time.Time `json:"last_failure_at,omitempty"`
+	LastError            string    `json:"last_error,omitempty"`
+	LastRebuildStartedAt time.Time `json:"last_rebuild_started_at,omitempty"`
+	LastRebuildFinishedAt time.Time `json:"last_rebuild_finished_at,omitempty"`
+	LastRebuildCount     int       `json:"last_rebuild_count"`
+	SourceCount          int       `json:"source_count"`
+	ProjectionCount      int       `json:"projection_count"`
+	StaleCount           int       `json:"stale_count"`
+	MissingCount         int       `json:"missing_count"`
+}
+
 type Service struct {
 	repo      Repository
 	backend   Backend
@@ -241,6 +256,12 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 	if !ok {
 		return nil, shared.NotFound("search index not found")
 	}
+	projectionKey := projectionKeyForDefinition(def)
+	s.markRebuildStart(projectionKey)
+	var (
+		result map[string]any
+		err    error
+	)
 	switch def.SourceKind {
 	case "document":
 		if s.documents == nil {
@@ -256,7 +277,7 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 			}
 			count++
 		}
-		return map[string]any{"index_key": key, "reindexed": count}, nil
+		result = map[string]any{"index_key": key, "reindexed": count}
 	case "model":
 		if s.models == nil {
 			return nil, shared.Validation("model source is not configured")
@@ -269,7 +290,7 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 			}
 			count++
 		}
-		return map[string]any{"index_key": key, "reindexed": count}, nil
+		result = map[string]any{"index_key": key, "reindexed": count}
 	case "projection":
 		if def.ProjectionKey != "document_summary" {
 			return nil, shared.Validation("projection rebuild is not supported for this projection")
@@ -281,10 +302,16 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 			}
 			count++
 		}
-		return map[string]any{"index_key": key, "reindexed": count}, nil
+		result = map[string]any{"index_key": key, "reindexed": count}
 	default:
-		return nil, shared.Validation("search index source_kind is invalid")
+		err = shared.Validation("search index source_kind is invalid")
 	}
+	if err != nil {
+		s.markRebuildFailure(projectionKey, err)
+		return nil, err
+	}
+	s.markRebuildSuccess(projectionKey, intValue(result["reindexed"]))
+	return result, nil
 }
 
 func (s *Service) Query(indexKey, organizationID, locationID string, req QueryRequest) (QueryResult, error) {
@@ -348,7 +375,24 @@ func (s *Service) Consistency(records []document.Record) ProjectionConsistency {
 			report.StaleCount++
 		}
 	}
+	status := s.currentProjectionStatus("document_summary")
+	status.ProjectionKey = "document_summary"
+	status.SourceCount = report.SourceCount
+	status.ProjectionCount = report.ProjectionCount
+	status.StaleCount = report.StaleCount
+	status.MissingCount = report.MissingCount
+	if status.LastRefreshStatus == "" {
+		status.LastRefreshStatus = "idle"
+	}
+	_ = s.repo.SaveProjectionStatus(status)
 	return report
+}
+
+func (s *Service) ProjectionStatuses(records []document.Record) []ProjectionStatus {
+	_ = s.Consistency(records)
+	items := s.repo.ListProjectionStatuses()
+	sort.Slice(items, func(i, j int) bool { return items[i].ProjectionKey < items[j].ProjectionKey })
+	return items
 }
 
 func (s *Service) enqueue(name string, payload map[string]any, fn func() error) {
@@ -408,10 +452,106 @@ func (s *Service) indexDocumentAndProjection(record document.Record) error {
 	}
 	for _, def := range s.matchingProjectionIndexes("document_summary") {
 		if err := s.indexProjectionSummary(def, summary); err != nil {
+			s.markRefreshFailure("document_summary", err)
 			return err
 		}
 	}
+	s.markRefreshSuccess("document_summary")
 	return nil
+}
+
+func (s *Service) markRefreshSuccess(projectionKey string) {
+	status := s.currentProjectionStatus(projectionKey)
+	status.ProjectionKey = projectionKey
+	status.LastRefreshStatus = "succeeded"
+	status.LastSuccessAt = time.Now().UTC()
+	status.LastError = ""
+	_ = s.repo.SaveProjectionStatus(status)
+}
+
+func (s *Service) markRefreshFailure(projectionKey string, err error) {
+	status := s.currentProjectionStatus(projectionKey)
+	status.ProjectionKey = projectionKey
+	status.LastRefreshStatus = "failed"
+	status.LastFailureAt = time.Now().UTC()
+	if err != nil {
+		status.LastError = err.Error()
+	}
+	_ = s.repo.SaveProjectionStatus(status)
+}
+
+func (s *Service) markRebuildStart(projectionKey string) {
+	if projectionKey == "" {
+		return
+	}
+	status := s.currentProjectionStatus(projectionKey)
+	status.ProjectionKey = projectionKey
+	status.LastRefreshStatus = "rebuilding"
+	status.LastRebuildStartedAt = time.Now().UTC()
+	_ = s.repo.SaveProjectionStatus(status)
+}
+
+func (s *Service) markRebuildSuccess(projectionKey string, count int) {
+	if projectionKey == "" {
+		return
+	}
+	status := s.currentProjectionStatus(projectionKey)
+	status.ProjectionKey = projectionKey
+	status.LastRefreshStatus = "succeeded"
+	status.LastSuccessAt = time.Now().UTC()
+	status.LastRebuildFinishedAt = time.Now().UTC()
+	status.LastRebuildCount = count
+	status.LastError = ""
+	_ = s.repo.SaveProjectionStatus(status)
+}
+
+func (s *Service) markRebuildFailure(projectionKey string, err error) {
+	if projectionKey == "" {
+		return
+	}
+	status := s.currentProjectionStatus(projectionKey)
+	status.ProjectionKey = projectionKey
+	status.LastRefreshStatus = "failed"
+	status.LastFailureAt = time.Now().UTC()
+	status.LastRebuildFinishedAt = time.Now().UTC()
+	if err != nil {
+		status.LastError = err.Error()
+	}
+	_ = s.repo.SaveProjectionStatus(status)
+}
+
+func projectionKeyForDefinition(def IndexDefinition) string {
+	switch def.SourceKind {
+	case "projection":
+		return def.ProjectionKey
+	case "document":
+		return "document_summary"
+	default:
+		return def.Key
+	}
+}
+
+func intValue(value any) int {
+	switch current := value.(type) {
+	case int:
+		return current
+	case int64:
+		return int(current)
+	case float64:
+		return int(current)
+	default:
+		return 0
+	}
+}
+
+func (s *Service) currentProjectionStatus(projectionKey string) ProjectionStatus {
+	items := s.repo.ListProjectionStatuses()
+	for _, item := range items {
+		if item.ProjectionKey == projectionKey {
+			return item
+		}
+	}
+	return ProjectionStatus{}
 }
 
 func (s *Service) indexModelByRecord(record model.Record) error {

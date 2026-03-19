@@ -230,6 +230,56 @@ func (s *Service) AddAttachment(documentID, attachmentType, fileName, contentTyp
 	return attachment, s.repo.SaveRecord(record)
 }
 
+func (s *Service) RemoveLink(documentID, linkID string) error {
+	record, err := s.Get(documentID)
+	if err != nil {
+		return err
+	}
+	links := s.repo.ListLinks(documentID)
+	filtered := make([]Link, 0, len(links))
+	found := false
+	for _, link := range links {
+		if link.ID == linkID {
+			found = true
+			continue
+		}
+		filtered = append(filtered, link)
+	}
+	if !found {
+		return shared.NotFound("document link not found")
+	}
+	if err := s.repo.SaveLinks(documentID, filtered); err != nil {
+		return err
+	}
+	record.Links = filtered
+	return s.repo.SaveRecord(record)
+}
+
+func (s *Service) RemoveAttachment(documentID, attachmentID string) error {
+	record, err := s.Get(documentID)
+	if err != nil {
+		return err
+	}
+	attachments := s.repo.ListAttachments(documentID)
+	filtered := make([]Attachment, 0, len(attachments))
+	found := false
+	for _, attachment := range attachments {
+		if attachment.ID == attachmentID {
+			found = true
+			continue
+		}
+		filtered = append(filtered, attachment)
+	}
+	if !found {
+		return shared.NotFound("document attachment not found")
+	}
+	if err := s.repo.SaveAttachments(documentID, filtered); err != nil {
+		return err
+	}
+	record.Attachments = filtered
+	return s.repo.SaveRecord(record)
+}
+
 func contains(values []string, candidate string) bool {
 	for _, value := range values {
 		if value == candidate {

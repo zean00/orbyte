@@ -10,7 +10,9 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -79,6 +81,7 @@ type DocumentDeps struct {
 	Policy        *policy.Service
 	FieldSecurity *securityfields.Service
 	Observability *observability.Service
+	Idempotency   *idempotency.Service
 }
 
 type OpsDeps struct {
@@ -103,6 +106,7 @@ type SearchDeps struct {
 
 type AdminDeps struct {
 	Config        *config.Service
+	Flags         *featureflags.Service
 	Organization  *organization.Service
 	Identity      *identity.Service
 	Modules       *module.Service
@@ -111,6 +115,7 @@ type AdminDeps struct {
 	Observability *observability.Service
 	Integration   *integration.Service
 	Reference     *reference.Service
+	Idempotency   *idempotency.Service
 }
 
 type TemplateDeps struct {
@@ -149,6 +154,7 @@ type OfflineDeps struct {
 	Models          *model.Service
 	ModelActions    *application.ModelActions
 	FieldSecurity   *securityfields.Service
+	Idempotency     *idempotency.Service
 }
 
 type CrossCuttingDeps struct {
@@ -181,7 +187,7 @@ func registerModelRoutesWithDeps(mux *http.ServeMux, deps ModelDeps) {
 
 func registerDocumentRoutesWithDeps(mux *http.ServeMux, deps DocumentDeps) {
 	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Policy, deps.FieldSecurity, deps.Observability)
-	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.FieldSecurity)
+	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.FieldSecurity, deps.Idempotency)
 }
 
 func registerOpsRoutesWithDeps(mux *http.ServeMux, deps OpsDeps) {
@@ -193,7 +199,7 @@ func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
 }
 
 func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
-	registerAdminRoutes(mux, deps.Config, deps.Organization, deps.Identity, deps.Modules, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference)
+	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency)
 }
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
@@ -201,7 +207,7 @@ func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
 }
 
 func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {
-	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.FieldSecurity)
+	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.FieldSecurity, deps.Idempotency)
 }
 
 func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {

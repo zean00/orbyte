@@ -10,6 +10,7 @@ import (
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/offline"
@@ -50,7 +51,7 @@ type offlineSyncItem struct {
 	Relations       map[string][]model.ChildMutation `json:"relations,omitempty"`
 }
 
-func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, offlineSvc *offline.Service, docs *document.Service, docActions *application.DocumentActions, models *model.Service, modelActions *application.ModelActions, fieldSecurity *securityfields.Service) {
+func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, offlineSvc *offline.Service, docs *document.Service, docActions *application.DocumentActions, models *model.Service, modelActions *application.ModelActions, fieldSecurity *securityfields.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("GET /offline/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthenticatedPrincipal(w, r)
 		if !ok {
@@ -141,14 +142,17 @@ func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules 
 		}
 		results := make([]offline.SyncResultItem, 0, len(req.Items))
 		for _, item := range req.Items {
-			if cached, ok := offlineSvc.SyncResult(item.IdempotencyKey); ok {
-				results = append(results, cached)
-				continue
+			outcome, err := idempotencySvc.Execute("offline.sync:"+strings.TrimSpace(item.Kind)+":"+strings.TrimSpace(item.Operation), item.IdempotencyKey, principalActorID(p), item, func() (idempotency.Outcome, error) {
+				result := applyOfflineSyncItem(ident, p, modules, docs, docActions, models, modelActions, fieldSecurity, item)
+				return idempotency.Outcome{StatusCode: http.StatusOK, Response: map[string]any{"item": result}}, nil
+			})
+			if err != nil {
+				respondError(w, err)
+				return
 			}
-			result := applyOfflineSyncItem(ident, p, modules, docs, docActions, models, modelActions, fieldSecurity, item)
-			if item.IdempotencyKey != "" {
-				offlineSvc.RememberSyncResult(item.IdempotencyKey, result)
-			}
+			var result offline.SyncResultItem
+			encoded, _ := json.Marshal(outcome.Response["item"])
+			_ = json.Unmarshal(encoded, &result)
 			results = append(results, result)
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": results})

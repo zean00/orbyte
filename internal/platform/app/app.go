@@ -15,9 +15,11 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/httpx"
 	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -49,6 +51,7 @@ type App struct {
 	profile            string
 	businessModuleKeys []string
 	Config             *config.Service
+	Flags              *featureflags.Service
 	Organization       *organization.Service
 	Identity           *identity.Service
 	Documents          *document.Service
@@ -70,6 +73,7 @@ type App struct {
 	Observability      *observability.Service
 	Policy             *policy.Service
 	Integration        *integration.Service
+	Idempotency        *idempotency.Service
 	Jobs               *jobs.Service
 	DocActions         *application.DocumentActions
 	ModelActions       *application.ModelActions
@@ -137,6 +141,7 @@ func New(opts Options) (*App, error) {
 		profile:            profile,
 		businessModuleKeys: manifestKeys(businessManifests),
 		Config:             graph.config,
+		Flags:              graph.flags,
 		Organization:       graph.organization,
 		Identity:           graph.identity,
 		Documents:          graph.documents,
@@ -158,6 +163,7 @@ func New(opts Options) (*App, error) {
 		Observability:      graph.observability,
 		Policy:             graph.policy,
 		Integration:        graph.integration,
+		Idempotency:        graph.idempotency,
 		Jobs:               graph.jobs,
 		DocActions:         graph.docActions,
 		ModelActions:       graph.modelActions,

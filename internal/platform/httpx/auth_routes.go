@@ -85,6 +85,22 @@ type roleBindingPriorityRequest struct {
 	Priority int `json:"priority"`
 }
 
+type servicePrincipalRequest struct {
+	ID                    string   `json:"id,omitempty"`
+	Key                   string   `json:"key"`
+	Status                string   `json:"status,omitempty"`
+	AllowedOperationTypes []string `json:"allowed_operation_types,omitempty"`
+	CredentialRef         string   `json:"credential_ref,omitempty"`
+}
+
+type servicePrincipalStatusRequest struct {
+	Status string `json:"status"`
+}
+
+type servicePrincipalTokenRequest struct {
+	TTLSeconds int `json:"ttl_seconds,omitempty"`
+}
+
 func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, auditSvc *audit.Service) {
 	mux.HandleFunc("GET /users", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
@@ -164,6 +180,134 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": ident.Bindings()})
+	})
+
+	mux.HandleFunc("GET /service-principals", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_service_principals", "", "identity.manage_service_principals"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": ident.ServicePrincipals()})
+	})
+
+	mux.HandleFunc("GET /service-principals/", func(w http.ResponseWriter, r *http.Request) {
+		principalID, action, ok := servicePrincipalPath(r.URL.Path)
+		if !ok || action != "" {
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_service_principals", "", "identity.manage_service_principals"); !ok {
+			return
+		}
+		principal, found := ident.FindServicePrincipal(principalID)
+		if !found {
+			respondError(w, shared.NotFound("service principal not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, principal)
+	})
+
+	mux.HandleFunc("POST /service-principals", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "identity.manage_service_principals", "", "identity.manage_service_principals")
+		if !ok {
+			return
+		}
+		var req servicePrincipalRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid service principal payload"))
+			return
+		}
+		principal, err := ident.UpsertServicePrincipal(identity.ServicePrincipal{
+			ID:                    req.ID,
+			Key:                   req.Key,
+			Status:                req.Status,
+			AllowedOperationTypes: req.AllowedOperationTypes,
+			CredentialRef:         req.CredentialRef,
+		})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:identity:service_principal:create:" + principal.ID,
+			Action:        "identity.service_principal.create",
+			TargetType:    "service_principal",
+			TargetID:      principal.ID,
+			ActorID:       principalActorID(p),
+			ActorKind:     principalActorKind(p),
+			OccurredAt:    time.Now().UTC(),
+			ChangeSummary: map[string]any{"fields": []string{"key", "status", "allowed_operation_types"}},
+			Metadata:      map[string]any{"key": principal.Key, "status": principal.Status},
+		})
+		respondJSON(w, http.StatusCreated, principal)
+	})
+
+	mux.HandleFunc("PUT /service-principals/", func(w http.ResponseWriter, r *http.Request) {
+		principalID, action, ok := servicePrincipalPath(r.URL.Path)
+		if !ok || action != "status" {
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "identity.manage_service_principals", "", "identity.manage_service_principals")
+		if !ok {
+			return
+		}
+		var req servicePrincipalStatusRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid service principal status payload"))
+			return
+		}
+		principal, err := ident.SetServicePrincipalStatus(principalID, req.Status)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:identity:service_principal:status:" + principal.ID + ":" + strings.ToLower(principal.Status),
+			Action:        "identity.service_principal.status",
+			TargetType:    "service_principal",
+			TargetID:      principal.ID,
+			ActorID:       principalActorID(p),
+			ActorKind:     principalActorKind(p),
+			OccurredAt:    time.Now().UTC(),
+			ChangeSummary: map[string]any{"fields": []string{"status"}},
+			Metadata:      map[string]any{"status": principal.Status},
+		})
+		respondJSON(w, http.StatusOK, principal)
+	})
+
+	mux.HandleFunc("POST /service-principals/", func(w http.ResponseWriter, r *http.Request) {
+		principalID, action, ok := servicePrincipalPath(r.URL.Path)
+		if !ok || action != "tokens" {
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "identity.manage_service_principals", "", "identity.manage_service_principals")
+		if !ok {
+			return
+		}
+		var req servicePrincipalTokenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			respondError(w, shared.Validation("invalid service principal token payload"))
+			return
+		}
+		principal, found := ident.FindServicePrincipal(principalID)
+		if !found {
+			respondError(w, shared.NotFound("service principal not found"))
+			return
+		}
+		token, err := identity.NewTokenManagerFromEnv().IssueServicePrincipalToken(principal, time.Duration(req.TTLSeconds)*time.Second)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:identity:service_principal:token:" + principal.ID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "identity.service_principal.token.issue",
+			TargetType:    "service_principal",
+			TargetID:      principal.ID,
+			ActorID:       principalActorID(p),
+			ActorKind:     principalActorKind(p),
+			OccurredAt:    time.Now().UTC(),
+			Metadata:      map[string]any{"ttl_seconds": req.TTLSeconds},
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"token": token, "service_principal": principal})
 	})
 
 	mux.HandleFunc("GET /auth/options", func(w http.ResponseWriter, r *http.Request) {
@@ -818,6 +962,17 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 	})
 }
 
+func servicePrincipalPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 2 && parts[0] == "service-principals" {
+		return strings.TrimSpace(parts[1]), "", parts[1] != ""
+	}
+	if len(parts) == 3 && parts[0] == "service-principals" {
+		return strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2]), parts[1] != "" && parts[2] != ""
+	}
+	return "", "", false
+}
+
 func userNavigationPreferencesPath(path string) (string, bool) {
 	if !strings.HasPrefix(path, "/users/") || !strings.HasSuffix(path, "/preferences/navigation") {
 		return "", false
@@ -1076,6 +1231,13 @@ func principalActorID(p principal) string {
 	return p.userID
 }
 
+func principalActorKind(p principal) string {
+	if p.kind == servicePrincipal {
+		return "service"
+	}
+	return "user"
+}
+
 func loginLimitKey(r *http.Request, username string) string {
 	return strings.ToLower(strings.TrimSpace(username)) + "|" + clientIP(r)
 }
@@ -1095,6 +1257,14 @@ func clientIP(r *http.Request) string {
 func recordAudit(auditSvc *audit.Service, event audit.Event) {
 	if auditSvc == nil {
 		return
+	}
+	if event.ActorKind == "" {
+		switch {
+		case strings.HasPrefix(event.ActorID, "sp"), strings.HasPrefix(event.ActorID, "projection_worker"):
+			event.ActorKind = "service"
+		default:
+			event.ActorKind = "user"
+		}
 	}
 	_ = auditSvc.Record(event)
 }

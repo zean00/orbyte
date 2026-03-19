@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
@@ -10,7 +11,9 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -27,6 +30,7 @@ import (
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/secretstore"
 	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -34,6 +38,8 @@ import (
 
 type serviceGraph struct {
 	config            *config.Service
+	flags             *featureflags.Service
+	secrets           *secretstore.Service
 	organization      *organization.Service
 	identity          *identity.Service
 	modules           *module.Service
@@ -57,6 +63,7 @@ type serviceGraph struct {
 	offline           *offline.Service
 	monitoring        *monitoring.Service
 	templates         *templateoutput.Service
+	idempotency       *idempotency.Service
 	runtimeHealth     *runtimehealth.Tracker
 	docActions        *application.DocumentActions
 	modelActions      *application.ModelActions
@@ -67,6 +74,8 @@ type serviceGraph struct {
 
 func constructServiceGraph(postgres *store.Postgres, businessManifests []module.Manifest) *serviceGraph {
 	graph := &serviceGraph{
+		secrets:           secretstore.NewService(),
+		flags:             featureflags.NewService(),
 		config:            config.NewService(),
 		organization:      organization.NewService(),
 		modules:           module.NewService(),
@@ -81,6 +90,13 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		runtimeHealth:     runtimehealth.NewTracker(),
 		analyticsRepo:     analytics.NewMemoryRepository(),
 		businessManifests: append([]module.Manifest(nil), businessManifests...),
+	}
+	graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewMemoryRepository(nil), graph.secrets)
+	for _, def := range config.BuiltInDefinitions() {
+		_ = graph.config.RegisterDefinition(def)
+	}
+	for _, entry := range config.BuiltInEntries(time.Now().UTC()) {
+		_ = graph.config.Save(entry)
 	}
 	graph.identity = identity.NewService(graph.organization)
 	graph.reporting = reporting.NewService(graph.models)
@@ -98,9 +114,12 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.integration.AttachPolicy(graph.policy)
 	graph.submitStore = application.NewMemorySubmitStore(graph.documents, graph.workflows, graph.audit, graph.eventing)
 	graph.modelActions = application.NewMemoryModelActions(graph.models, graph.activities, graph.audit, graph.eventing)
+	graph.idempotency = idempotency.NewService()
 
 	if postgres != nil && postgres.DB != nil {
-		graph.config = config.NewServiceWithRepository(config.NewPostgresRepository(postgres.DB))
+		graph.flags = featureflags.NewServiceWithRepository(featureflags.NewPostgresRepository(postgres.DB))
+		graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepository(postgres.DB))
+		graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepository(postgres.DB), graph.secrets)
 		graph.policy = policy.NewServiceWithConfig(graph.config)
 		graph.fieldSecurity = securityfields.NewService(graph.policy)
 		graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepository(postgres.DB))
@@ -119,6 +138,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.search = search.NewServiceWithRepository(search.NewPostgresRepository(postgres.DB))
 		graph.analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
 		graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), graph.observability, graph.logger)
+		graph.idempotency = idempotency.NewServiceWithRepository(idempotency.NewPostgresRepository(postgres.DB))
 		graph.integration.AttachPolicy(graph.policy)
 		graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
 		graph.search.AttachSources(graph.documents, graph.models)

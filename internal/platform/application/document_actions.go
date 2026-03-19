@@ -48,6 +48,7 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 	if expectedETag != "" && record.Header.ETag != expectedETag {
 		return document.Record{}, shared.Conflict("document etag mismatch")
 	}
+	beforeRecord := cloneDocumentRecord(record)
 	def, err := a.documents.Definition(record.Header.Type)
 	if err != nil {
 		return document.Record{}, err
@@ -82,10 +83,14 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 		TargetType:    "document",
 		TargetID:      record.Header.ID,
 		ActorID:       actorID,
+		ActorKind:     "user",
 		FromState:     transition.FromState,
 		ToState:       transition.ToState,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		CorrelationID: correlationID,
+		ChangeSummary: documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"version":       record.Header.Version,
@@ -98,12 +103,15 @@ func (a *DocumentActions) Submit(documentID, actorID string, expectedVersion int
 		AggregateType: "document",
 		AggregateID:   record.Header.ID,
 		ActorID:       actorID,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		Payload: map[string]any{
 			"document_type": record.Header.Type,
 			"from_state":    transition.FromState,
 			"to_state":      transition.ToState,
 			"version":       record.Header.Version,
+			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -125,6 +133,7 @@ func (a *DocumentActions) UpdateDraft(documentID, actorID string, payload map[st
 	if err != nil {
 		return document.Record{}, err
 	}
+	beforeRecord := cloneDocumentRecord(record)
 	if record.Header.Status != "draft" {
 		return document.Record{}, shared.Conflict("only draft documents may be updated")
 	}
@@ -151,10 +160,14 @@ func (a *DocumentActions) UpdateDraft(documentID, actorID string, payload map[st
 		TargetType:    "document",
 		TargetID:      record.Header.ID,
 		ActorID:       actorID,
+		ActorKind:     "user",
 		FromState:     "draft",
 		ToState:       "draft",
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		CorrelationID: correlationID,
+		ChangeSummary: documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"version":       record.Header.Version,
@@ -167,11 +180,14 @@ func (a *DocumentActions) UpdateDraft(documentID, actorID string, payload map[st
 		AggregateType: "document",
 		AggregateID:   record.Header.ID,
 		ActorID:       actorID,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		Payload: map[string]any{
 			"document_type": record.Header.Type,
 			"status":        record.Header.Status,
 			"version":       record.Header.Version,
+			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -192,6 +208,7 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string,
 	if err != nil {
 		return document.Record{}, err
 	}
+	beforeRecord := cloneDocumentRecord(record)
 	if record.Header.Status != "draft" {
 		return document.Record{}, shared.Conflict("only draft documents may be extended")
 	}
@@ -221,10 +238,14 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string,
 		TargetType:    "document",
 		TargetID:      record.Header.ID,
 		ActorID:       actorID,
+		ActorKind:     "user",
 		FromState:     record.Header.Status,
 		ToState:       record.Header.Status,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		CorrelationID: correlationID,
+		ChangeSummary: documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"module_key":    moduleKey,
@@ -238,12 +259,15 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey, actorID string,
 		AggregateType: "document",
 		AggregateID:   record.Header.ID,
 		ActorID:       actorID,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		Payload: map[string]any{
 			"document_type": record.Header.Type,
 			"module_key":    moduleKey,
 			"status":        record.Header.Status,
 			"version":       record.Header.Version,
+			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -264,6 +288,7 @@ func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion in
 	if err != nil {
 		return document.Record{}, err
 	}
+	beforeRecord := cloneDocumentRecord(record)
 	if expectedVersion > 0 && record.Header.Version != expectedVersion {
 		return document.Record{}, shared.Conflict("document version mismatch")
 	}
@@ -297,10 +322,14 @@ func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion in
 		TargetType:    "document",
 		TargetID:      record.Header.ID,
 		ActorID:       actorID,
+		ActorKind:     "user",
 		FromState:     transition.FromState,
 		ToState:       transition.ToState,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		CorrelationID: correlationID,
+		ChangeSummary: documentChangeSummary(beforeRecord, record),
 		Metadata: map[string]any{
 			"document_type": record.Header.Type,
 			"version":       record.Header.Version,
@@ -313,12 +342,15 @@ func (a *DocumentActions) Approve(documentID, actorID string, expectedVersion in
 		AggregateType: "document",
 		AggregateID:   record.Header.ID,
 		ActorID:       actorID,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		Payload: map[string]any{
 			"document_type": record.Header.Type,
 			"from_state":    transition.FromState,
 			"to_state":      transition.ToState,
 			"version":       record.Header.Version,
+			"snapshots":     documentSnapshotEnvelope(beforeRecord, record),
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{
@@ -370,6 +402,7 @@ func (a *DocumentActions) transitionDocument(documentID, actorID string, expecte
 	if err != nil {
 		return document.Record{}, err
 	}
+	beforeRecord := cloneDocumentRecord(record)
 	if expectedVersion > 0 && record.Header.Version != expectedVersion {
 		return document.Record{}, shared.Conflict("document version mismatch")
 	}
@@ -406,10 +439,14 @@ func (a *DocumentActions) transitionDocument(documentID, actorID string, expecte
 		TargetType:    "document",
 		TargetID:      record.Header.ID,
 		ActorID:       actorID,
+		ActorKind:     "user",
 		FromState:     transition.FromState,
 		ToState:       transition.ToState,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
 		CorrelationID: correlationID,
+		ChangeSummary: documentChangeSummary(beforeRecord, record),
 		Metadata:      map[string]any{"document_type": record.Header.Type, "version": record.Header.Version},
 	}
 	domainEvent := eventing.Event{
@@ -419,8 +456,10 @@ func (a *DocumentActions) transitionDocument(documentID, actorID string, expecte
 		AggregateType: "document",
 		AggregateID:   record.Header.ID,
 		ActorID:       actorID,
+		OrganizationID: record.Header.OrganizationID,
+		LocationID:    record.Header.LocationID,
 		OccurredAt:    now,
-		Payload:       map[string]any{"document_type": record.Header.Type, "from_state": transition.FromState, "to_state": transition.ToState, "version": record.Header.Version},
+		Payload:       map[string]any{"document_type": record.Header.Type, "from_state": transition.FromState, "to_state": transition.ToState, "version": record.Header.Version, "snapshots": documentSnapshotEnvelope(beforeRecord, record)},
 	}
 	outboxRecord := eventing.OutboxRecord{ID: domainEvent.ID + ":outbox", EventID: domainEvent.ID, EventType: domainEvent.Type, Status: "pending", CreatedAt: now}
 	if err := a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation); err != nil {
@@ -707,4 +746,44 @@ func hasDocumentExtension(defs []document.ExtensionDefinition, moduleKey string)
 		}
 	}
 	return false
+}
+
+func cloneDocumentRecord(record document.Record) document.Record {
+	encoded, _ := json.Marshal(record)
+	var cloned document.Record
+	_ = json.Unmarshal(encoded, &cloned)
+	return cloned
+}
+
+func documentSnapshotEnvelope(before, after document.Record) map[string]any {
+	return map[string]any{
+		"before": map[string]any{
+			"header": before.Header,
+			"body":   before.Body,
+		},
+		"after": map[string]any{
+			"header": after.Header,
+			"body":   after.Body,
+		},
+	}
+}
+
+func documentChangeSummary(before, after document.Record) map[string]any {
+	fields := []string{}
+	if before.Header.Status != after.Header.Status {
+		fields = append(fields, "header.status")
+	}
+	if before.Header.Number != after.Header.Number {
+		fields = append(fields, "header.number")
+	}
+	if before.Body.ContentHash != after.Body.ContentHash {
+		fields = append(fields, "body.payload")
+	}
+	return map[string]any{
+		"fields":         fields,
+		"before_version": before.Header.Version,
+		"after_version":  after.Header.Version,
+		"before_status":  before.Header.Status,
+		"after_status":   after.Header.Status,
+	}
 }
