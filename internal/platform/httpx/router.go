@@ -39,7 +39,10 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-const analyticsMCPStreamPath = "/mcp/events/analytics/snapshot"
+const (
+	analyticsMCPStreamPath       = "/mcp/events/analytics/snapshot"
+	analyticsScopedMCPStreamPath = "/mcp/analytics/events/analytics/snapshot"
+)
 
 func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, idempotencySvc *idempotency.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
@@ -112,12 +115,13 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 		},
 		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
-			Identity:        ident,
-			Audit:           auditSvc,
-			Server:          mcp.NewServer(modules, analyticsSvc, templateSvc, analyticsMCPStreamPath),
-			Analytics:       analyticsSvc,
-			AnalyticsStream: analyticsStream,
-			StreamPath:      analyticsMCPStreamPath,
+			Identity:         ident,
+			Audit:            auditSvc,
+			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			Analytics:        analyticsSvc,
+			AnalyticsStream:  analyticsStream,
+			StreamPath:       analyticsMCPStreamPath,
+			ScopedStreamPath: analyticsScopedMCPStreamPath,
 		},
 		Offline: OfflineDeps{
 			Identity:        ident,

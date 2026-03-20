@@ -10,6 +10,9 @@ type MemoryRepository struct {
 	rollups             map[string]Rollup
 	facts               FactBundle
 	dimensions          DimensionBundle
+	dashboards          []Dashboard
+	savedMetrics        []SavedMetric
+	savedQueries        []SavedQuery
 	reports             []ReportDefinition
 	runs                []ReportRun
 	artifacts           []ReportArtifact
@@ -18,7 +21,20 @@ type MemoryRepository struct {
 }
 
 func NewMemoryRepository() *MemoryRepository {
-	return &MemoryRepository{snapshots: []Snapshot{}, rollups: map[string]Rollup{}, facts: FactBundle{}, dimensions: DimensionBundle{}, reports: []ReportDefinition{}, runs: []ReportRun{}, artifacts: []ReportArtifact{}, deliveries: []ReportDelivery{}, deliveryDeadLetters: []ReportDeliveryDeadLetter{}}
+	return &MemoryRepository{
+		snapshots:           []Snapshot{},
+		rollups:             map[string]Rollup{},
+		facts:               FactBundle{},
+		dimensions:          DimensionBundle{},
+		dashboards:          []Dashboard{},
+		savedMetrics:        []SavedMetric{},
+		savedQueries:        []SavedQuery{},
+		reports:             []ReportDefinition{},
+		runs:                []ReportRun{},
+		artifacts:           []ReportArtifact{},
+		deliveries:          []ReportDelivery{},
+		deliveryDeadLetters: []ReportDeliveryDeadLetter{},
+	}
 }
 
 func (r *MemoryRepository) SaveDimensions(dimensions DimensionBundle) error {
@@ -193,6 +209,12 @@ func (r *MemoryRepository) ReportingBreakdown(query FactQuery, dimension string)
 }
 
 func (r *MemoryRepository) SaveReportDefinition(def ReportDefinition) error {
+	for i := range r.reports {
+		if r.reports[i].ID == def.ID {
+			r.reports[i] = def
+			return nil
+		}
+	}
 	r.reports = append(r.reports, def)
 	return nil
 }
@@ -210,6 +232,132 @@ func (r *MemoryRepository) UpdateReportDefinition(def ReportDefinition) error {
 			return nil
 		}
 	}
+	return nil
+}
+
+func (r *MemoryRepository) DeleteReportDefinition(id string) error {
+	filtered := make([]ReportDefinition, 0, len(r.reports))
+	for _, item := range r.reports {
+		if item.ID == id {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	r.reports = filtered
+	return nil
+}
+
+func (r *MemoryRepository) SaveDashboard(item Dashboard) error {
+	for i := range r.dashboards {
+		if r.dashboards[i].ID == item.ID {
+			r.dashboards[i] = item
+			return nil
+		}
+	}
+	r.dashboards = append(r.dashboards, item)
+	return nil
+}
+
+func (r *MemoryRepository) ListDashboards() []Dashboard {
+	items := append([]Dashboard(nil), r.dashboards...)
+	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.Before(items[j].UpdatedAt) })
+	return items
+}
+
+func (r *MemoryRepository) GetDashboard(id string) (Dashboard, bool) {
+	for _, item := range r.dashboards {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return Dashboard{}, false
+}
+
+func (r *MemoryRepository) DeleteDashboard(id string) error {
+	filtered := make([]Dashboard, 0, len(r.dashboards))
+	for _, item := range r.dashboards {
+		if item.ID == id {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	r.dashboards = filtered
+	return nil
+}
+
+func (r *MemoryRepository) SaveSavedMetric(item SavedMetric) error {
+	for i := range r.savedMetrics {
+		if r.savedMetrics[i].ID == item.ID {
+			r.savedMetrics[i] = item
+			return nil
+		}
+	}
+	r.savedMetrics = append(r.savedMetrics, item)
+	return nil
+}
+
+func (r *MemoryRepository) ListSavedMetrics() []SavedMetric {
+	items := append([]SavedMetric(nil), r.savedMetrics...)
+	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.Before(items[j].UpdatedAt) })
+	return items
+}
+
+func (r *MemoryRepository) GetSavedMetric(id string) (SavedMetric, bool) {
+	for _, item := range r.savedMetrics {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return SavedMetric{}, false
+}
+
+func (r *MemoryRepository) DeleteSavedMetric(id string) error {
+	filtered := make([]SavedMetric, 0, len(r.savedMetrics))
+	for _, item := range r.savedMetrics {
+		if item.ID == id {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	r.savedMetrics = filtered
+	return nil
+}
+
+func (r *MemoryRepository) SaveSavedQuery(item SavedQuery) error {
+	for i := range r.savedQueries {
+		if r.savedQueries[i].ID == item.ID {
+			r.savedQueries[i] = item
+			return nil
+		}
+	}
+	r.savedQueries = append(r.savedQueries, item)
+	return nil
+}
+
+func (r *MemoryRepository) ListSavedQueries() []SavedQuery {
+	items := append([]SavedQuery(nil), r.savedQueries...)
+	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.Before(items[j].UpdatedAt) })
+	return items
+}
+
+func (r *MemoryRepository) GetSavedQuery(id string) (SavedQuery, bool) {
+	for _, item := range r.savedQueries {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return SavedQuery{}, false
+}
+
+func (r *MemoryRepository) DeleteSavedQuery(id string) error {
+	filtered := make([]SavedQuery, 0, len(r.savedQueries))
+	for _, item := range r.savedQueries {
+		if item.ID == id {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	r.savedQueries = filtered
 	return nil
 }
 

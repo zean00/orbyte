@@ -35,7 +35,7 @@ func (r *PostgresRepository) SaveDimensions(dimensions DimensionBundle) error {
 }
 
 func (r *PostgresRepository) SaveReportDefinition(def ReportDefinition) error {
-	const query = `INSERT INTO analytics_report_definitions (report_id, name, dimension, format, window_key, location_id, document_type, delivery_channel, delivery_target, schedule_key, next_run_at, enabled) VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''),NULLIF($8,''),NULLIF($9,''),$10,$11,$12)`
+	const query = `INSERT INTO analytics_report_definitions (report_id, name, dimension, format, window_key, location_id, document_type, delivery_channel, delivery_target, schedule_key, next_run_at, enabled) VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''),NULLIF($8,''),NULLIF($9,''),$10,$11,$12) ON CONFLICT (report_id) DO UPDATE SET name = EXCLUDED.name, dimension = EXCLUDED.dimension, format = EXCLUDED.format, window_key = EXCLUDED.window_key, location_id = EXCLUDED.location_id, document_type = EXCLUDED.document_type, delivery_channel = EXCLUDED.delivery_channel, delivery_target = EXCLUDED.delivery_target, schedule_key = EXCLUDED.schedule_key, next_run_at = EXCLUDED.next_run_at, enabled = EXCLUDED.enabled`
 	_, err := r.db.ExecContext(context.Background(), query, def.ID, def.Name, def.Dimension, def.Format, def.Window, def.LocationID, def.DocumentType, def.DeliveryChannel, def.DeliveryTarget, def.Schedule, def.NextRunAt, def.Enabled)
 	return err
 }
@@ -60,6 +60,90 @@ func (r *PostgresRepository) ListReportDefinitions() []ReportDefinition {
 func (r *PostgresRepository) UpdateReportDefinition(def ReportDefinition) error {
 	const query = `UPDATE analytics_report_definitions SET name=$1, dimension=$2, format=$3, window_key=$4, location_id=NULLIF($5,''), document_type=NULLIF($6,''), delivery_channel=NULLIF($7,''), delivery_target=NULLIF($8,''), schedule_key=$9, next_run_at=$10, enabled=$11 WHERE report_id=$12`
 	_, err := r.db.ExecContext(context.Background(), query, def.Name, def.Dimension, def.Format, def.Window, def.LocationID, def.DocumentType, def.DeliveryChannel, def.DeliveryTarget, def.Schedule, def.NextRunAt, def.Enabled, def.ID)
+	return err
+}
+
+func (r *PostgresRepository) DeleteReportDefinition(id string) error {
+	const query = `DELETE FROM analytics_report_definitions WHERE report_id = $1`
+	_, err := r.db.ExecContext(context.Background(), query, id)
+	return err
+}
+
+func (r *PostgresRepository) SaveDashboard(item Dashboard) error {
+	payload, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	const query = `INSERT INTO analytics_dashboards (dashboard_id, name, visibility, scope_type, scope_id, owner_user_id, organization_id, location_id, status, payload_json, updated_at, created_at, updated_by) VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),NULLIF($7,''),NULLIF($8,''),$9,$10,$11,$12,NULLIF($13,'')) ON CONFLICT (dashboard_id) DO UPDATE SET name = EXCLUDED.name, visibility = EXCLUDED.visibility, scope_type = EXCLUDED.scope_type, scope_id = EXCLUDED.scope_id, owner_user_id = EXCLUDED.owner_user_id, organization_id = EXCLUDED.organization_id, location_id = EXCLUDED.location_id, status = EXCLUDED.status, payload_json = EXCLUDED.payload_json, updated_at = EXCLUDED.updated_at, created_at = EXCLUDED.created_at, updated_by = EXCLUDED.updated_by`
+	_, err = r.db.ExecContext(context.Background(), query, item.ID, item.Name, item.Visibility, item.ScopeType, item.ScopeID, item.OwnerUserID, item.OrganizationID, item.LocationID, item.Status, payload, item.UpdatedAt, item.CreatedAt, item.UpdatedBy)
+	return err
+}
+
+func (r *PostgresRepository) ListDashboards() []Dashboard {
+	const query = `SELECT payload_json FROM analytics_dashboards ORDER BY updated_at ASC`
+	return listPayloads[Dashboard](r.db, query)
+}
+
+func (r *PostgresRepository) GetDashboard(id string) (Dashboard, bool) {
+	const query = `SELECT payload_json FROM analytics_dashboards WHERE dashboard_id = $1`
+	return getPayload[Dashboard](r.db, query, id)
+}
+
+func (r *PostgresRepository) DeleteDashboard(id string) error {
+	const query = `DELETE FROM analytics_dashboards WHERE dashboard_id = $1`
+	_, err := r.db.ExecContext(context.Background(), query, id)
+	return err
+}
+
+func (r *PostgresRepository) SaveSavedMetric(item SavedMetric) error {
+	payload, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	const query = `INSERT INTO analytics_saved_metrics (metric_id, metric_key, name, scope_type, scope_id, owner_user_id, organization_id, location_id, status, payload_json, updated_at, created_at, updated_by) VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),NULLIF($7,''),NULLIF($8,''),$9,$10,$11,$12,NULLIF($13,'')) ON CONFLICT (metric_id) DO UPDATE SET metric_key = EXCLUDED.metric_key, name = EXCLUDED.name, scope_type = EXCLUDED.scope_type, scope_id = EXCLUDED.scope_id, owner_user_id = EXCLUDED.owner_user_id, organization_id = EXCLUDED.organization_id, location_id = EXCLUDED.location_id, status = EXCLUDED.status, payload_json = EXCLUDED.payload_json, updated_at = EXCLUDED.updated_at, created_at = EXCLUDED.created_at, updated_by = EXCLUDED.updated_by`
+	_, err = r.db.ExecContext(context.Background(), query, item.ID, item.Key, item.Name, item.ScopeType, item.ScopeID, item.OwnerUserID, item.OrganizationID, item.LocationID, item.Status, payload, item.UpdatedAt, item.CreatedAt, item.UpdatedBy)
+	return err
+}
+
+func (r *PostgresRepository) ListSavedMetrics() []SavedMetric {
+	const query = `SELECT payload_json FROM analytics_saved_metrics ORDER BY updated_at ASC`
+	return listPayloads[SavedMetric](r.db, query)
+}
+
+func (r *PostgresRepository) GetSavedMetric(id string) (SavedMetric, bool) {
+	const query = `SELECT payload_json FROM analytics_saved_metrics WHERE metric_id = $1`
+	return getPayload[SavedMetric](r.db, query, id)
+}
+
+func (r *PostgresRepository) DeleteSavedMetric(id string) error {
+	const query = `DELETE FROM analytics_saved_metrics WHERE metric_id = $1`
+	_, err := r.db.ExecContext(context.Background(), query, id)
+	return err
+}
+
+func (r *PostgresRepository) SaveSavedQuery(item SavedQuery) error {
+	payload, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	const query = `INSERT INTO analytics_saved_queries (query_id, name, scope_type, scope_id, owner_user_id, organization_id, location_id, status, payload_json, updated_at, created_at, updated_by) VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),NULLIF($7,''),$8,$9,$10,$11,NULLIF($12,'')) ON CONFLICT (query_id) DO UPDATE SET name = EXCLUDED.name, scope_type = EXCLUDED.scope_type, scope_id = EXCLUDED.scope_id, owner_user_id = EXCLUDED.owner_user_id, organization_id = EXCLUDED.organization_id, location_id = EXCLUDED.location_id, status = EXCLUDED.status, payload_json = EXCLUDED.payload_json, updated_at = EXCLUDED.updated_at, created_at = EXCLUDED.created_at, updated_by = EXCLUDED.updated_by`
+	_, err = r.db.ExecContext(context.Background(), query, item.ID, item.Name, item.ScopeType, item.ScopeID, item.OwnerUserID, item.OrganizationID, item.LocationID, item.Status, payload, item.UpdatedAt, item.CreatedAt, item.UpdatedBy)
+	return err
+}
+
+func (r *PostgresRepository) ListSavedQueries() []SavedQuery {
+	const query = `SELECT payload_json FROM analytics_saved_queries ORDER BY updated_at ASC`
+	return listPayloads[SavedQuery](r.db, query)
+}
+
+func (r *PostgresRepository) GetSavedQuery(id string) (SavedQuery, bool) {
+	const query = `SELECT payload_json FROM analytics_saved_queries WHERE query_id = $1`
+	return getPayload[SavedQuery](r.db, query, id)
+}
+
+func (r *PostgresRepository) DeleteSavedQuery(id string) error {
+	const query = `DELETE FROM analytics_saved_queries WHERE query_id = $1`
+	_, err := r.db.ExecContext(context.Background(), query, id)
 	return err
 }
 
@@ -457,6 +541,42 @@ func (r *PostgresRepository) listByQuery(query string, args ...any) []Snapshot {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].GeneratedAt.Before(items[j].GeneratedAt) })
 	return items
+}
+
+func listPayloads[T any](db *sql.DB, query string, args ...any) []T {
+	rows, err := db.QueryContext(context.Background(), query, args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	items := make([]T, 0)
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			continue
+		}
+		var item T
+		if err := json.Unmarshal(payload, &item); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func getPayload[T any](db *sql.DB, query string, args ...any) (T, bool) {
+	var payload []byte
+	err := db.QueryRowContext(context.Background(), query, args...).Scan(&payload)
+	if err != nil {
+		var zero T
+		return zero, false
+	}
+	var item T
+	if err := json.Unmarshal(payload, &item); err != nil {
+		var zero T
+		return zero, false
+	}
+	return item, true
 }
 
 func joinClauses(clauses []string) string {

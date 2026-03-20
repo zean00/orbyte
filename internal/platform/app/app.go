@@ -18,8 +18,8 @@ import (
 	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/httpx"
 	"orbyte/internal/platform/i18n"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -1666,6 +1666,7 @@ func builtInModuleManifests() []module.Manifest {
 			Security: module.SecurityDefinition{
 				Permissions: []module.PermissionDefinition{
 					{Key: "analytics.read", Action: "read", Resource: "analytics", DisplayName: "Read Analytics", DisplayNameI18n: localize("Read Analytics", "Lihat Analitik")},
+					{Key: "analytics.author", Action: "author", Resource: "analytics_runtime", DisplayName: "Author Runtime Analytics", DisplayNameI18n: localize("Author Runtime Analytics", "Kelola Analitik Runtime"), RiskLevel: "high"},
 					{Key: "analytics.manage_reports", Action: "manage_reports", Resource: "analytics_report", DisplayName: "Manage Analytics Reports", DisplayNameI18n: localize("Manage Analytics Reports", "Kelola Laporan Analitik"), RiskLevel: "high"},
 					{Key: "analytics.deliver_reports", Action: "deliver_reports", Resource: "analytics_report", DisplayName: "Deliver Analytics Reports", DisplayNameI18n: localize("Deliver Analytics Reports", "Kirim Laporan Analitik"), RiskLevel: "high"},
 				},

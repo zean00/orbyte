@@ -16,8 +16,19 @@ import (
 
 const mcpDelegationGrantHeader = "X-Delegation-Grant-ID"
 
-func registerMCPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, server *mcp.Server, analyticsSvc *analytics.Service, stream *mcp.AnalyticsStream, streamPath string) {
-	mux.HandleFunc("POST /mcp", func(w http.ResponseWriter, r *http.Request) {
+func registerMCPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, server *mcp.Server, analyticsSvc *analytics.Service, stream *mcp.AnalyticsStream, streamPath, scopedStreamPath string) {
+	registerMCPJSONRPCRoute(mux, "POST /mcp", ident, auditSvc, server, mcp.EndpointScopeAll)
+	registerMCPJSONRPCRoute(mux, "POST /mcp/analytics", ident, auditSvc, server, mcp.EndpointScopeAnalytics)
+	if strings.TrimSpace(streamPath) != "" {
+		registerMCPStreamRoute(mux, "GET "+streamPath, ident, analyticsSvc, stream, mcp.EndpointScopeAll)
+	}
+	if strings.TrimSpace(scopedStreamPath) != "" {
+		registerMCPStreamRoute(mux, "GET "+scopedStreamPath, ident, analyticsSvc, stream, mcp.EndpointScopeAnalytics)
+	}
+}
+
+func registerMCPJSONRPCRoute(mux *http.ServeMux, pattern string, ident *identity.Service, auditSvc *audit.Service, server *mcp.Server, endpointScope string) {
+	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if server == nil {
 			respondError(w, shared.NotFound("mcp server is not configured"))
 			return
@@ -36,7 +47,7 @@ func registerMCPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			respondError(w, shared.Validation("invalid mcp request payload"))
 			return
 		}
-		actor, actorErr := mcpActorContext(r, ident, p)
+		actor, actorErr := mcpActorContext(r, ident, p, endpointScope)
 		if actorErr != nil {
 			respondError(w, actorErr)
 			return
@@ -45,10 +56,10 @@ func registerMCPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		recordMCPTrail(auditSvc, req, actor, resp)
 		respondJSON(w, http.StatusOK, resp)
 	})
-	if strings.TrimSpace(streamPath) == "" {
-		return
-	}
-	mux.HandleFunc("GET "+streamPath, func(w http.ResponseWriter, r *http.Request) {
+}
+
+func registerMCPStreamRoute(mux *http.ServeMux, pattern string, ident *identity.Service, analyticsSvc *analytics.Service, stream *mcp.AnalyticsStream, endpointScope string) {
+	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if stream == nil || analyticsSvc == nil {
 			respondError(w, shared.NotFound("mcp analytics stream is not configured"))
 			return
@@ -60,6 +71,10 @@ func registerMCPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		p, ok := currentPrincipal(r)
 		if !ok {
 			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		if strings.TrimSpace(endpointScope) != "" && endpointScope != mcp.EndpointScopeAnalytics {
+			respondError(w, shared.Forbidden("stream is not available on this endpoint"))
 			return
 		}
 		if !principalAllowsAll(ident, p, []string{"analytics.read"}) {
@@ -114,7 +129,7 @@ func registerMCPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 	})
 }
 
-func mcpActorContext(r *http.Request, ident *identity.Service, p principal) (mcp.ActorContext, error) {
+func mcpActorContext(r *http.Request, ident *identity.Service, p principal, endpointScope string) (mcp.ActorContext, error) {
 	actor := mcp.ActorContext{
 		ActorID:            principalActorID(p),
 		ActorKind:          principalActorKind(p),
@@ -124,6 +139,7 @@ func mcpActorContext(r *http.Request, ident *identity.Service, p principal) (mcp
 		OnBehalfOfUserID:   principalOnBehalfOfUserID(p),
 		DelegationGrantID:  principalDelegationGrantID(p),
 		LocationID:         p.currentLocationID,
+		EndpointScope:      strings.TrimSpace(endpointScope),
 	}
 	switch p.kind {
 	case userPrincipal:
@@ -183,6 +199,7 @@ func recordMCPTrail(auditSvc *audit.Service, req mcp.JSONRPCRequest, actor mcp.A
 		metadata["resource_uri"] = targetID
 	}
 	metadata["jsonrpc_method"] = req.Method
+	metadata["endpoint_scope"] = actor.EndpointScope
 	metadata["status"] = "ok"
 	if resp.Error != nil {
 		metadata["status"] = "error"

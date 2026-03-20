@@ -5,7 +5,10 @@ import (
 	"orbyte/internal/platform/mcp"
 )
 
-const analyticsMCPStreamPath = "/mcp/events/analytics/snapshot"
+const (
+	analyticsMCPStreamPath       = "/mcp/events/analytics/snapshot"
+	analyticsScopedMCPStreamPath = "/mcp/analytics/events/analytics/snapshot"
+)
 
 func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 	return httpx.RouterDeps{
@@ -76,11 +79,12 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Templates: graph.templates,
 		},
 		MCP: httpx.MCPDeps{
-			Identity:        graph.identity,
-			Server:          mcp.NewServer(graph.modules, graph.analytics, graph.templates, analyticsMCPStreamPath),
-			AnalyticsStream: graph.mcpAnalytics,
-			Analytics:       graph.analytics,
-			StreamPath:      analyticsMCPStreamPath,
+			Identity:         graph.identity,
+			Server:           mcp.NewServer(graph.modules, graph.analytics, graph.templates, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			AnalyticsStream:  graph.mcpAnalytics,
+			Analytics:        graph.analytics,
+			StreamPath:       analyticsMCPStreamPath,
+			ScopedStreamPath: analyticsScopedMCPStreamPath,
 		},
 		Offline: httpx.OfflineDeps{
 			Identity:        graph.identity,

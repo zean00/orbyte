@@ -139,12 +139,13 @@ type UIDeps struct {
 }
 
 type MCPDeps struct {
-	Identity        *identity.Service
-	Audit           *audit.Service
-	Server          *mcp.Server
-	Analytics       *analytics.Service
-	AnalyticsStream *mcp.AnalyticsStream
-	StreamPath      string
+	Identity         *identity.Service
+	Audit            *audit.Service
+	Server           *mcp.Server
+	Analytics        *analytics.Service
+	AnalyticsStream  *mcp.AnalyticsStream
+	StreamPath       string
+	ScopedStreamPath string
 }
 
 type OfflineDeps struct {
@@ -205,7 +206,7 @@ func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
 }
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
-	registerMCPRoutes(mux, deps.Identity, deps.Audit, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath)
+	registerMCPRoutes(mux, deps.Identity, deps.Audit, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath, deps.ScopedStreamPath)
 }
 
 func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {

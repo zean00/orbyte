@@ -15,9 +15,22 @@ type Repository interface {
 	SaveFacts(facts FactBundle) error
 	QueryFacts(query FactQuery) FactBundle
 	ReportingBreakdown(query FactQuery, dimension string) []ReportingRow
+	SaveDashboard(item Dashboard) error
+	ListDashboards() []Dashboard
+	GetDashboard(id string) (Dashboard, bool)
+	DeleteDashboard(id string) error
+	SaveSavedMetric(item SavedMetric) error
+	ListSavedMetrics() []SavedMetric
+	GetSavedMetric(id string) (SavedMetric, bool)
+	DeleteSavedMetric(id string) error
+	SaveSavedQuery(item SavedQuery) error
+	ListSavedQueries() []SavedQuery
+	GetSavedQuery(id string) (SavedQuery, bool)
+	DeleteSavedQuery(id string) error
 	SaveReportDefinition(def ReportDefinition) error
 	ListReportDefinitions() []ReportDefinition
 	UpdateReportDefinition(def ReportDefinition) error
+	DeleteReportDefinition(id string) error
 	SaveReportRun(run ReportRun) error
 	ListReportRuns() []ReportRun
 	SaveReportArtifact(artifact ReportArtifact) error

@@ -77,8 +77,62 @@ func TestMCPRouteListsToolsAndCallsAnalyticsSnapshot(t *testing.T) {
 	if appMeta["resource_uri"] != "orbyte://apps/analytics.cockpit" {
 		t.Fatalf("expected app resource uri, got %+v", appMeta)
 	}
-	if appMeta["stream_uri"] != "/mcp/events/analytics/snapshot" {
+	if appMeta["stream_uri"] != "/mcp/analytics/events/analytics/snapshot" {
 		t.Fatalf("expected app stream uri, got %+v", appMeta)
+	}
+}
+
+func TestMCPScopedAnalyticsRouteFiltersSurface(t *testing.T) {
+	h := newTestHarness(t)
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/list",
+	})
+	rr := h.request("POST", "/mcp/analytics", reqBody, true)
+	if rr.Code != 200 {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var listResp struct {
+		Result struct {
+			Tools []struct {
+				Name  string `json:"name"`
+				Scope string `json:"scope"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	foundAnalytics := false
+	for _, tool := range listResp.Result.Tools {
+		if tool.Name == "template.definition.list" {
+			t.Fatalf("did not expect template tool on scoped analytics endpoint: %+v", listResp.Result.Tools)
+		}
+		if tool.Scope != "analytics" {
+			t.Fatalf("expected analytics scope, got %+v", tool)
+		}
+		if tool.Name == "analytics.snapshot.get" {
+			foundAnalytics = true
+		}
+	}
+	if !foundAnalytics {
+		t.Fatalf("expected analytics tool on scoped endpoint, got %+v", listResp.Result.Tools)
+	}
+
+	reqBody, _ = json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "template.definition.list",
+			"arguments": map[string]any{},
+		},
+	})
+	rr = h.request("POST", "/mcp/analytics", reqBody, true)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "not available on this endpoint") {
+		t.Fatalf("expected scoped endpoint rejection, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -87,7 +141,7 @@ func TestMCPAnalyticsSnapshotStreamSendsInitialAndLiveUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req := httptest.NewRequest("GET", "/mcp/events/analytics/snapshot", nil).WithContext(ctx)
+	req := httptest.NewRequest("GET", "/mcp/analytics/events/analytics/snapshot", nil).WithContext(ctx)
 	req.AddCookie(h.cookie)
 	req.AddCookie(h.csrf)
 	rr := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}

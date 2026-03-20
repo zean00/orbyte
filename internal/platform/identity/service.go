@@ -147,6 +147,11 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 		Action:   "manage_reports",
 		Resource: "analytics_report",
 	}, {
+		Key:      "analytics.author",
+		Module:   "analytics",
+		Action:   "author",
+		Resource: "analytics_runtime",
+	}, {
 		Key:      "analytics.deliver_reports",
 		Module:   "analytics",
 		Action:   "deliver_reports",
@@ -293,6 +298,9 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "analytics.manage_reports",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "analytics.author",
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "analytics.deliver_reports",

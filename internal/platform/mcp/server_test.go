@@ -44,26 +44,273 @@ func TestHandleInitializeAndUnknownMethod(t *testing.T) {
 func TestServerListsToolsAndResourcesByPermission(t *testing.T) {
 	server := newTestServer(t)
 	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, ActorContext{
-		PermissionChecker: func(permissionKey string) bool { return permissionKey == "analytics.read" || permissionKey == "template.read" },
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "analytics.read" || permissionKey == "template.read"
+		},
 	})
 	if resp.Error != nil {
 		t.Fatalf("tools/list failed: %+v", resp.Error)
 	}
 	payload := resp.Result.(map[string]any)
 	tools := payload["tools"].([]ToolDescriptor)
-	if len(tools) != 4 {
-		t.Fatalf("expected analytics and template read tools, got %+v", tools)
+	toolNames := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		toolNames = append(toolNames, tool.Name)
+	}
+	for _, name := range []string{
+		"template.definition.list",
+		"template.definition.get",
+		"template.draft.get",
+		"analytics.snapshot.get",
+		"analytics.dashboard.list",
+		"analytics.query.execute",
+		"analytics.report.definition.list",
+	} {
+		if !contains(toolNames, name) {
+			t.Fatalf("expected tool %q in %+v", name, toolNames)
+		}
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 2, Method: "resources/list"}, ActorContext{
-		PermissionChecker: func(permissionKey string) bool { return permissionKey == "analytics.read" || permissionKey == "template.read" },
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "analytics.read" || permissionKey == "template.read"
+		},
 	})
 	if resp.Error != nil {
 		t.Fatalf("resources/list failed: %+v", resp.Error)
 	}
 	resources := resp.Result.(map[string]any)["resources"].([]ResourceDescriptor)
-	if len(resources) != 3 {
-		t.Fatalf("expected analytics resources, got %+v", resources)
+	resourceURIs := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		resourceURIs = append(resourceURIs, resource.URI)
+	}
+	for _, uri := range []string{
+		"orbyte://analytics/snapshot/current",
+		"orbyte://apps/analytics.cockpit",
+		"orbyte://apps/analytics.studio",
+		"orbyte://apps/template.designer",
+	} {
+		if !contains(resourceURIs, uri) {
+			t.Fatalf("expected resource %q in %+v", uri, resourceURIs)
+		}
+	}
+}
+
+func TestServerAnalyticsAuthoringAndAdHocQueryFlow(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "analytics.read", "analytics.author", "analytics.manage_reports", "analytics.deliver_reports":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+	if _, err := server.analytics.CaptureSnapshot(); err != nil {
+		t.Fatalf("capture analytics snapshot failed: %v", err)
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.query.execute",
+			"arguments": map[string]any{
+				"query": map[string]any{
+					"source_kind": "snapshot",
+					"measures":    []string{"submitted", "approved"},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.query.execute failed: %+v", resp.Error)
+	}
+	execResult := resp.Result.(map[string]any)
+	if execResult["_meta"] == nil {
+		t.Fatal("expected analytics execution app metadata")
+	}
+	structured := execResult["structuredContent"].(map[string]any)
+	result := structured["result"].(analytics.QueryExecution)
+	if result.Chart.Type == "" || len(result.Rows) != 1 {
+		t.Fatalf("expected ad hoc result and chart, got %+v", result)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.query.save",
+			"arguments": map[string]any{
+				"query": map[string]any{
+					"name": "Current Performance",
+					"spec": map[string]any{
+						"source_kind": "snapshot",
+						"measures":    []string{"submitted", "approved"},
+					},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.query.save failed: %+v", resp.Error)
+	}
+	savedQuery := resp.Result.(map[string]any)["structuredContent"].(analytics.SavedQuery)
+	if savedQuery.ID == "" {
+		t.Fatalf("expected saved query id, got %+v", savedQuery)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.save",
+			"arguments": map[string]any{
+				"dashboard": map[string]any{
+					"name": "Sales Performance",
+					"widgets": []map[string]any{{
+						"title":    "Current Sales",
+						"kind":     "chart",
+						"query_id": savedQuery.ID,
+					}},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.save failed: %+v", resp.Error)
+	}
+	savedDashboard := resp.Result.(map[string]any)["structuredContent"].(analytics.Dashboard)
+	if savedDashboard.ID == "" || len(savedDashboard.Widgets) != 1 {
+		t.Fatalf("expected saved dashboard with widget, got %+v", savedDashboard)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.report.definition.save",
+			"arguments": map[string]any{
+				"report": map[string]any{
+					"name":      "Current Sales Report",
+					"dimension": "document_type",
+					"format":    "csv",
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.report.definition.save failed: %+v", resp.Error)
+	}
+	reportDef := resp.Result.(map[string]any)["structuredContent"].(analytics.ReportDefinition)
+	if reportDef.ID == "" {
+		t.Fatalf("expected report definition id, got %+v", reportDef)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      5,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "analytics.report.run", "arguments": map[string]any{"report_id": reportDef.ID}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.report.run failed: %+v", resp.Error)
+	}
+	runPayload := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	run := runPayload["run"].(analytics.ReportRun)
+	if run.ArtifactID == "" {
+		t.Fatalf("expected report run artifact, got %+v", run)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      6,
+		Method:  "resources/read",
+		Params:  mustJSON(t, map[string]any{"uri": "orbyte://apps/analytics.studio?kind=dashboard&id=" + savedDashboard.ID}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics studio resource failed: %+v", resp.Error)
+	}
+	contents := resp.Result.(map[string]any)["contents"].([]ResourceContent)
+	if len(contents) != 1 || !strings.Contains(contents[0].Text, "Analytics Studio") {
+		t.Fatalf("expected analytics studio app html, got %+v", contents)
+	}
+}
+
+func TestServerAnalyticsScopedEndpointFiltersToolsAndResources(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		EndpointScope: EndpointScopeAnalytics,
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "analytics.read" || permissionKey == "template.read"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics scoped tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	toolNames := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		toolNames = append(toolNames, tool.Name)
+		if tool.Scope != EndpointScopeAnalytics {
+			t.Fatalf("expected analytics scope, got %+v", tool)
+		}
+	}
+	if contains(toolNames, "template.definition.list") {
+		t.Fatalf("did not expect template tool on analytics endpoint: %+v", toolNames)
+	}
+	if !contains(toolNames, "analytics.snapshot.get") {
+		t.Fatalf("expected analytics tool on analytics endpoint: %+v", toolNames)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 2, Method: "resources/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics scoped resources/list failed: %+v", resp.Error)
+	}
+	resources := resp.Result.(map[string]any)["resources"].([]ResourceDescriptor)
+	resourceURIs := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		resourceURIs = append(resourceURIs, resource.URI)
+		if resource.Scope != EndpointScopeAnalytics {
+			t.Fatalf("expected analytics scope, got %+v", resource)
+		}
+	}
+	if contains(resourceURIs, templateDesignerResourceURI) {
+		t.Fatalf("did not expect template resource on analytics endpoint: %+v", resourceURIs)
+	}
+	if !contains(resourceURIs, analyticsStudioResourceURI) {
+		t.Fatalf("expected analytics studio resource on analytics endpoint: %+v", resourceURIs)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "template.definition.list", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "not available on this endpoint") {
+		t.Fatalf("expected scoped endpoint tool rejection, got %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "resources/read",
+		Params:  mustJSON(t, map[string]any{"uri": templateDesignerResourceURI}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "not available on this endpoint") {
+		t.Fatalf("expected scoped endpoint resource rejection, got %+v", resp.Error)
 	}
 }
 
@@ -188,7 +435,7 @@ func TestServerCallsAnalyticsToolAndReadsAppResource(t *testing.T) {
 	if meta["resource_uri"] != "orbyte://apps/analytics.cockpit" {
 		t.Fatalf("expected app resource uri, got %+v", meta)
 	}
-	if meta["stream_uri"] != "/mcp/events/analytics/snapshot" {
+	if meta["stream_uri"] != "/mcp/analytics/events/analytics/snapshot" {
 		t.Fatalf("expected app stream uri, got %+v", meta)
 	}
 
@@ -210,7 +457,7 @@ func TestServerCallsAnalyticsToolAndReadsAppResource(t *testing.T) {
 	if contents[0].Text == "" {
 		t.Fatal("expected app html")
 	}
-	if !strings.Contains(contents[0].Text, "/mcp/events/analytics/snapshot") {
+	if !strings.Contains(contents[0].Text, "/mcp/analytics/events/analytics/snapshot") {
 		t.Fatalf("expected app html to include stream uri, got %q", contents[0].Text)
 	}
 
@@ -292,7 +539,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, nil, "")
+	unavailable := NewServer(nil, nil, nil, "", "")
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -349,7 +596,7 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, newTestTemplates(t), "")
+	server = NewServer(newTestModules(t), nil, newTestTemplates(t), "", "")
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -396,7 +643,7 @@ func newTestServer(t *testing.T) *Server {
 	searchSvc := search.NewService()
 	obsSvc := observability.NewService()
 	analyticsSvc := analytics.NewService(documents, flows, eventingSvc, searchSvc, audit.NewService(), obsSvc)
-	return NewServer(modules, analyticsSvc, newTestTemplates(t), "/mcp/events/analytics/snapshot")
+	return NewServer(modules, analyticsSvc, newTestTemplates(t), "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -420,7 +667,7 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "/mcp/events/analytics/snapshot")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -436,7 +683,7 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "", "")
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -452,7 +699,7 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "", "")
 }
 
 func newTestTemplates(t *testing.T) *templateoutput.Service {
@@ -508,4 +755,13 @@ func mustJSON(t *testing.T, value any) json.RawMessage {
 		t.Fatalf("marshal params failed: %v", err)
 	}
 	return buf
+}
+
+func contains(items []string, expected string) bool {
+	for _, item := range items {
+		if item == expected {
+			return true
+		}
+	}
+	return false
 }
