@@ -26,7 +26,7 @@ func TestSnapshot(t *testing.T) {
 	events := eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), obs, nil)
 	searchSvc := search.NewService()
 	events.RegisterHandler("document.submitted", eventing.NewDocumentProjectionHandler(docs, searchSvc))
-	actions := application.NewDocumentActions(docs, flows, nil, application.NewMemorySubmitStore(docs, flows, auditSvc, events))
+	actions := application.NewDocumentActions(docs, flows, nil, nil, application.NewMemorySubmitStore(docs, flows, auditSvc, events))
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})
 	_, _ = actions.Submit(record.Header.ID, application.ActingContext{ActorID: "user_admin", EffectiveUserID: "user_admin"}, 1, record.Header.ETag)
 	_, _ = events.DispatchPending(10)

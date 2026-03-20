@@ -136,6 +136,57 @@ func TestMCPScopedAnalyticsRouteFiltersSurface(t *testing.T) {
 	}
 }
 
+func TestMCPRouteListsWorkflowToolsAndRejectsPublishWithoutConfirmation(t *testing.T) {
+	h := newTestHarness(t)
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/list",
+	})
+	rr := h.request("POST", "/mcp", reqBody, true)
+	if rr.Code != 200 {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var listResp struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	found := false
+	for _, tool := range listResp.Result.Tools {
+		if tool.Name == "workflow.definition.list" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected workflow mcp tool, got %+v", listResp.Result.Tools)
+	}
+
+	reqBody, _ = json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "workflow.draft.publish",
+			"arguments": map[string]any{
+				"workflow_key": "generic_request_flow",
+				"version":      1,
+			},
+		},
+	})
+	rr = h.request("POST", "/mcp", reqBody, true)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "confirm_publish") {
+		t.Fatalf("expected publish confirmation rejection, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestMCPAnalyticsSnapshotStreamSendsInitialAndLiveUpdates(t *testing.T) {
 	h := newTestHarness(t)
 

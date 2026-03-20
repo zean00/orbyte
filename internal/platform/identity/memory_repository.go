@@ -12,6 +12,7 @@ type MemoryRepository struct {
 	sessions          []Session
 	servicePrincipals []ServicePrincipal
 	delegationGrants  []DelegationGrant
+	reportingLines    []ReportingLine
 	loginFailures     map[string][]time.Time
 }
 
@@ -26,6 +27,7 @@ func NewMemoryRepository(users []User, roles []Role, permissions []Permission, b
 		sessions:          append([]Session(nil), sessions...),
 		servicePrincipals: append([]ServicePrincipal(nil), servicePrincipals...),
 		delegationGrants:  []DelegationGrant{},
+		reportingLines:    []ReportingLine{},
 		loginFailures:     make(map[string][]time.Time),
 	}
 }
@@ -64,6 +66,10 @@ func (r *MemoryRepository) ServicePrincipals() []ServicePrincipal {
 
 func (r *MemoryRepository) DelegationGrants() []DelegationGrant {
 	return append([]DelegationGrant(nil), r.delegationGrants...)
+}
+
+func (r *MemoryRepository) ReportingLines() []ReportingLine {
+	return append([]ReportingLine(nil), r.reportingLines...)
 }
 
 func (r *MemoryRepository) SaveUser(user User) error {
@@ -203,6 +209,17 @@ func (r *MemoryRepository) SaveDelegationGrant(grant DelegationGrant) error {
 		}
 	}
 	r.delegationGrants = append(r.delegationGrants, grant)
+	return nil
+}
+
+func (r *MemoryRepository) SaveReportingLine(line ReportingLine) error {
+	for i, current := range r.reportingLines {
+		if current.ID == line.ID {
+			r.reportingLines[i] = line
+			return nil
+		}
+	}
+	r.reportingLines = append(r.reportingLines, line)
 	return nil
 }
 

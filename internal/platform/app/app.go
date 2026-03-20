@@ -476,6 +476,36 @@ func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Servic
 	}); err != nil {
 		return err
 	}
+	if err := policySvc.SetEvaluator("documents.workflow.assignment", func(req policy.Request) policy.Decision {
+		output := map[string]any{}
+		if role := strings.TrimSpace(stringValue(req.Rule["assignee_role_key"])); role != "" {
+			output["assignee_role_key"] = role
+		}
+		if mode := strings.TrimSpace(stringValue(req.Rule["assignment_mode"])); mode != "" {
+			output["assignment_mode"] = mode
+		}
+		if userID := strings.TrimSpace(stringValue(req.Rule["assignee_user_id"])); userID != "" {
+			output["assignee_user_id"] = userID
+		}
+		if candidates := stringSliceRule(req.Rule, "candidate_role_keys"); len(candidates) > 0 {
+			output["candidate_role_keys"] = candidates
+		}
+		return policy.Decision{Allowed: true, Output: output}
+	}); err != nil {
+		return err
+	}
+	if err := policySvc.SetEvaluator("documents.workflow.sla", func(req policy.Request) policy.Decision {
+		output := map[string]any{}
+		if due := intRule(req.Rule, "due_after_seconds"); due > 0 {
+			output["due_after_seconds"] = due
+		}
+		if escalate := intRule(req.Rule, "escalate_after_seconds"); escalate > 0 {
+			output["escalate_after_seconds"] = escalate
+		}
+		return policy.Decision{Allowed: true, Output: output}
+	}); err != nil {
+		return err
+	}
 	if err := policySvc.SetEvaluator("documents.search.visibility", func(req policy.Request) policy.Decision {
 		if hidden := stringSliceRule(req.Rule, "hidden_statuses"); containsValue(hidden, stringValue(req.Inputs["status"])) {
 			return policy.Decision{Allowed: false, Code: "status_hidden", Reason: "document status hidden by policy"}
@@ -1341,6 +1371,8 @@ func builtInModuleManifests() []module.Manifest {
 					{Key: "documents.extension.view", Kind: "access", Target: "document_extension_view", InputContractKey: "document.extension.access.v1", OutputContractKey: "decision.v1", Description: "Controls extension visibility in expanded/raw document reads."},
 					{Key: "documents.extension.write", Kind: "access", Target: "document_extension_write", InputContractKey: "document.extension.access.v1", OutputContractKey: "decision.v1", Description: "Controls extension writes for draft documents."},
 					{Key: "documents.workflow.transition", Kind: "workflow", Target: "document_transition", InputContractKey: "document.transition.v1", OutputContractKey: "decision.v1", Description: "Controls workflow transitions before they are committed."},
+					{Key: "documents.workflow.assignment", Kind: "workflow", Target: "document_assignment", InputContractKey: "document.assignment.v1", OutputContractKey: "decision.v1", Description: "Controls workflow assignment before side effects are persisted."},
+					{Key: "documents.workflow.sla", Kind: "workflow", Target: "document_sla", InputContractKey: "document.sla.v1", OutputContractKey: "decision.v1", Description: "Controls workflow task due and escalation timing before side effects are persisted."},
 					{Key: "documents.search.visibility", Kind: "search", Target: "document_search", InputContractKey: "document.search.v1", OutputContractKey: "decision.v1", Description: "Controls document visibility in search and list views."},
 					{Key: "documents.numbering.assign", Kind: "numbering", Target: "document_numbering", InputContractKey: "document.numbering.v1", OutputContractKey: "decision.v1", Description: "Assigns document numbers when numbering is policy-bound."},
 					{Key: "documents.action.render", Kind: "ui", Target: "document_action_render", InputContractKey: "document.action.render.v1", OutputContractKey: "decision.v1", Description: "Controls action placement and visibility in generic detail views."},

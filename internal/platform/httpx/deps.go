@@ -111,6 +111,7 @@ type AdminDeps struct {
 	Organization  *organization.Service
 	Identity      *identity.Service
 	Modules       *module.Service
+	Workflows     *workflow.Service
 	Audit         *audit.Service
 	Policy        *policy.Service
 	Observability *observability.Service
@@ -202,7 +203,7 @@ func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
 }
 
 func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
-	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency)
+	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency)
 }
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {

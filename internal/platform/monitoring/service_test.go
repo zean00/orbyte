@@ -19,7 +19,7 @@ func TestSummary(t *testing.T) {
 	events := eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), obs, nil)
 	searchSvc := search.NewService()
 	auditSvc := audit.NewService()
-	actions := application.NewDocumentActions(docs, flows, nil, application.NewMemorySubmitStore(docs, flows, auditSvc, events))
+	actions := application.NewDocumentActions(docs, flows, nil, nil, application.NewMemorySubmitStore(docs, flows, auditSvc, events))
 	events.RegisterHandler("document.submitted", eventing.NewDocumentProjectionHandler(docs, searchSvc))
 
 	record, _ := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "x"})

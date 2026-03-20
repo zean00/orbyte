@@ -232,12 +232,13 @@ func getDocumentRecordTx(tx *sql.Tx, documentID string) (document.Record, bool, 
 			COALESCE(location_id, ''), COALESCE(number, ''), created_by, created_at,
 			updated_by, updated_at, COALESCE(submitted_by, ''), submitted_at,
 			schema_version, payload_json, COALESCE(content_hash, ''), total_amount_minor,
-			COALESCE(total_amount_currency, '')
+			COALESCE(total_amount_currency, ''), COALESCE(metadata_json, '{}'::jsonb)
 		FROM document_records
 		WHERE document_id = $1`
 	var (
 		record           document.Record
 		payload          []byte
+		metadata         []byte
 		submittedAt      sql.NullTime
 		totalAmountMinor int64
 	)
@@ -261,6 +262,7 @@ func getDocumentRecordTx(tx *sql.Tx, documentID string) (document.Record, bool, 
 		&record.Body.ContentHash,
 		&totalAmountMinor,
 		&record.Header.TotalAmount.Currency,
+		&metadata,
 	)
 	if err == sql.ErrNoRows {
 		return document.Record{}, false, nil
@@ -276,6 +278,7 @@ func getDocumentRecordTx(tx *sql.Tx, documentID string) (document.Record, bool, 
 	if err := json.Unmarshal(payload, &record.Body.Payload); err != nil {
 		return document.Record{}, false, err
 	}
+	_ = json.Unmarshal(metadata, &record.Header.Metadata)
 	record.Lines = listDocumentLinesTx(tx, documentID)
 	record.Links = listDocumentLinksTx(tx, documentID)
 	record.Attachments = listDocumentAttachmentsTx(tx, documentID)
@@ -287,15 +290,19 @@ func saveDocumentRecordUpsertTx(tx *sql.Tx, record document.Record) error {
 	if err != nil {
 		return shared.Validation("invalid document payload")
 	}
+	metadata, err := json.Marshal(record.Header.Metadata)
+	if err != nil {
+		return shared.Validation("invalid document metadata")
+	}
 	const query = `
 		INSERT INTO document_records (
 			document_id, document_type, status, version, etag, organization_id, location_id, number,
 			created_by, created_at, updated_by, updated_at, submitted_by, submitted_at,
-			schema_version, payload_json, content_hash, total_amount_minor, total_amount_currency
+			schema_version, payload_json, content_hash, total_amount_minor, total_amount_currency, metadata_json
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''),
 			$9, $10, $11, $12, NULLIF($13, ''), $14,
-			$15, $16, NULLIF($17, ''), $18, $19
+			$15, $16, NULLIF($17, ''), $18, $19, $20
 		)
 		ON CONFLICT (document_id) DO UPDATE SET
 			status = EXCLUDED.status,
@@ -311,7 +318,8 @@ func saveDocumentRecordUpsertTx(tx *sql.Tx, record document.Record) error {
 			payload_json = EXCLUDED.payload_json,
 			content_hash = EXCLUDED.content_hash,
 			total_amount_minor = EXCLUDED.total_amount_minor,
-			total_amount_currency = EXCLUDED.total_amount_currency`
+			total_amount_currency = EXCLUDED.total_amount_currency,
+			metadata_json = EXCLUDED.metadata_json`
 	_, err = tx.ExecContext(context.Background(), query,
 		record.Header.ID,
 		record.Header.Type,
@@ -332,6 +340,7 @@ func saveDocumentRecordUpsertTx(tx *sql.Tx, record document.Record) error {
 		record.Body.ContentHash,
 		record.Header.TotalAmount.AmountMinor,
 		record.Header.TotalAmount.Currency,
+		metadata,
 	)
 	return err
 }
@@ -340,6 +349,10 @@ func updateDocumentRecordTx(tx *sql.Tx, previousVersion int, record document.Rec
 	payload, err := json.Marshal(record.Body.Payload)
 	if err != nil {
 		return shared.Validation("invalid document payload")
+	}
+	metadata, err := json.Marshal(record.Header.Metadata)
+	if err != nil {
+		return shared.Validation("invalid document metadata")
 	}
 	const query = `
 		UPDATE document_records
@@ -356,8 +369,9 @@ func updateDocumentRecordTx(tx *sql.Tx, previousVersion int, record document.Rec
 			payload_json = $11,
 			content_hash = NULLIF($12, ''),
 			total_amount_minor = $13,
-			total_amount_currency = $14
-		WHERE document_id = $15 AND version = $16`
+			total_amount_currency = $14,
+			metadata_json = $15
+		WHERE document_id = $16 AND version = $17`
 	result, err := tx.ExecContext(context.Background(), query,
 		record.Header.Status,
 		record.Header.Version,
@@ -373,6 +387,7 @@ func updateDocumentRecordTx(tx *sql.Tx, previousVersion int, record document.Rec
 		record.Body.ContentHash,
 		record.Header.TotalAmount.AmountMinor,
 		record.Header.TotalAmount.Currency,
+		metadata,
 		record.Header.ID,
 		previousVersion,
 	)

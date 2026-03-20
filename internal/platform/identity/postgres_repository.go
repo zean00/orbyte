@@ -385,6 +385,33 @@ func (r *PostgresRepository) DelegationGrants() []DelegationGrant {
 	return items
 }
 
+func (r *PostgresRepository) ReportingLines() []ReportingLine {
+	const query = `
+		SELECT reporting_line_id, subject_user_id, manager_user_id, relationship_type,
+		       COALESCE(organization_id, ''), COALESCE(location_id, ''), COALESCE(operating_unit_id, ''),
+		       status, COALESCE(priority, 0), effective_from, effective_to, created_at, updated_at
+		FROM user_reporting_lines
+		ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	items := make([]ReportingLine, 0)
+	for rows.Next() {
+		var item ReportingLine
+		var effectiveTo sql.NullTime
+		if err := rows.Scan(&item.ID, &item.SubjectUserID, &item.ManagerUserID, &item.RelationshipType, &item.OrganizationID, &item.LocationID, &item.OperatingUnitID, &item.Status, &item.Priority, &item.EffectiveFrom, &effectiveTo, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			continue
+		}
+		if effectiveTo.Valid {
+			item.EffectiveTo = effectiveTo.Time
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
 func (r *PostgresRepository) SaveUser(user User) error {
 	const query = `
 		INSERT INTO users (
@@ -720,6 +747,28 @@ func (r *PostgresRepository) SaveDelegationGrant(grant DelegationGrant) error {
 	return err
 }
 
+func (r *PostgresRepository) SaveReportingLine(line ReportingLine) error {
+	const query = `
+		INSERT INTO user_reporting_lines (
+			reporting_line_id, subject_user_id, manager_user_id, relationship_type, organization_id, location_id,
+			operating_unit_id, status, priority, effective_from, effective_to, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),NULLIF($7,''),$8,$9,$10,$11,$12,$13)
+		ON CONFLICT (reporting_line_id) DO UPDATE SET
+			subject_user_id = EXCLUDED.subject_user_id,
+			manager_user_id = EXCLUDED.manager_user_id,
+			relationship_type = EXCLUDED.relationship_type,
+			organization_id = EXCLUDED.organization_id,
+			location_id = EXCLUDED.location_id,
+			operating_unit_id = EXCLUDED.operating_unit_id,
+			status = EXCLUDED.status,
+			priority = EXCLUDED.priority,
+			effective_from = EXCLUDED.effective_from,
+			effective_to = EXCLUDED.effective_to,
+			updated_at = EXCLUDED.updated_at`
+	_, err := r.db.ExecContext(context.Background(), query, line.ID, line.SubjectUserID, line.ManagerUserID, line.RelationshipType, line.OrganizationID, line.LocationID, line.OperatingUnitID, line.Status, line.Priority, line.EffectiveFrom, nullableTime(line.EffectiveTo), line.CreatedAt, line.UpdatedAt)
+	return err
+}
+
 func (r *PostgresRepository) CountRecentLoginFailures(key string, since time.Time) int {
 	const query = `
 		SELECT COUNT(*)
@@ -821,4 +870,11 @@ func (r *PostgresRepository) SaveCredential(credential Credential) error {
 		credential.UpdatedAt,
 	)
 	return err
+}
+
+func nullableTime(value time.Time) any {
+	if value.IsZero() {
+		return nil
+	}
+	return value
 }

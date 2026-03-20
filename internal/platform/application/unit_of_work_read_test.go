@@ -79,8 +79,8 @@ func TestPostgresUnitOfWorkGetDocumentLoadsRelatedCollections(t *testing.T) {
 			"document_id", "document_type", "status", "version", "etag", "organization_id",
 			"location_id", "number", "created_by", "created_at", "updated_by", "updated_at",
 			"submitted_by", "submitted_at", "schema_version", "payload_json", "content_hash",
-			"total_amount_minor", "total_amount_currency",
-		}).AddRow("doc-1", "generic_request", "submitted", 2, "doc-1:2", "org", "loc_hq", "ORD-1", "u1", now, "u1", now, "u1", now, "v1", payload, "hash", int64(2500), "IDR"))
+			"total_amount_minor", "total_amount_currency", "metadata_json",
+		}).AddRow("doc-1", "generic_request", "submitted", 2, "doc-1:2", "org", "loc_hq", "ORD-1", "u1", now, "u1", now, "u1", now, "v1", payload, "hash", int64(2500), "IDR", []byte(`{"workflow_version":1}`)))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT document_line_id, line_no, line_type, COALESCE(line_schema_ref, ''),")).WithArgs("doc-1").
 		WillReturnRows(sqlmock.NewRows([]string{"document_line_id", "line_no", "line_type", "line_schema_ref", "payload_json", "amount_minor", "amount_currency"}).
 			AddRow("line-1", 1, "item", "line.v1", linePayload, int64(2500), "IDR"))
@@ -126,7 +126,7 @@ func TestPostgresUnitOfWorkGetDocumentReturnsNotFound(t *testing.T) {
 			"document_id", "document_type", "status", "version", "etag", "organization_id",
 			"location_id", "number", "created_by", "created_at", "updated_by", "updated_at",
 			"submitted_by", "submitted_at", "schema_version", "payload_json", "content_hash",
-			"total_amount_minor", "total_amount_currency",
+			"total_amount_minor", "total_amount_currency", "metadata_json",
 		}))
 	mock.ExpectRollback()
 

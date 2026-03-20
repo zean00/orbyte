@@ -3,6 +3,8 @@ package httpx
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,8 +12,8 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/i18n"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
@@ -19,6 +21,7 @@ import (
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/workflow"
 )
 
 type configUpdateRequest struct {
@@ -33,12 +36,53 @@ type regoUpdateRequest struct {
 	Source  string `json:"source"`
 }
 
+type reportingLineRequest struct {
+	SubjectUserID    string `json:"subject_user_id"`
+	ManagerUserID    string `json:"manager_user_id"`
+	RelationshipType string `json:"relationship_type"`
+	OrganizationID   string `json:"organization_id"`
+	LocationID       string `json:"location_id"`
+	OperatingUnitID  string `json:"operating_unit_id"`
+	Status           string `json:"status"`
+	Priority         int    `json:"priority"`
+	EffectiveFrom    string `json:"effective_from"`
+	EffectiveTo      string `json:"effective_to"`
+}
+
 type authSettingsResponse struct {
 	Definition config.Definition     `json:"definition"`
 	Entry      config.EffectiveValue `json:"entry"`
 }
 
-func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service) {
+type adminHierarchyNode struct {
+	ID                string `json:"id"`
+	Username          string `json:"username"`
+	Status            string `json:"status"`
+	DefaultLocationID string `json:"default_location_id,omitempty"`
+}
+
+type adminHierarchyEdge struct {
+	ID               string    `json:"id"`
+	SubjectUserID    string    `json:"subject_user_id"`
+	ManagerUserID    string    `json:"manager_user_id"`
+	RelationshipType string    `json:"relationship_type"`
+	Status           string    `json:"status"`
+	OrganizationID   string    `json:"organization_id,omitempty"`
+	LocationID       string    `json:"location_id,omitempty"`
+	OperatingUnitID  string    `json:"operating_unit_id,omitempty"`
+	Priority         int       `json:"priority,omitempty"`
+	EffectiveFrom    time.Time `json:"effective_from"`
+	EffectiveTo      time.Time `json:"effective_to,omitempty"`
+}
+
+type adminHierarchySummary struct {
+	TotalUsers      int `json:"total_users"`
+	ActiveLines     int `json:"active_lines"`
+	OrphanUsers     int `json:"orphan_users"`
+	ActingOverrides int `json:"acting_overrides"`
+}
+
+func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		if err := authError(r); err != nil {
 			http.Redirect(w, r, "/ui", http.StatusSeeOther)
@@ -138,6 +182,230 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 		respondJSON(w, http.StatusOK, map[string]any{
 			"items": policySvc.Runtimes(strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id"))),
 		})
+	})
+
+	mux.HandleFunc("GET /admin/api/workflows", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListDefinitions()})
+	})
+
+	mux.HandleFunc("GET /admin/api/reporting-lines", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		items := ident.ReportingLines()
+		subjectUserID := strings.TrimSpace(r.URL.Query().Get("subject_user_id"))
+		managerUserID := strings.TrimSpace(r.URL.Query().Get("manager_user_id"))
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
+		filtered := make([]identity.ReportingLine, 0, len(items))
+		for _, item := range items {
+			if subjectUserID != "" && item.SubjectUserID != subjectUserID {
+				continue
+			}
+			if managerUserID != "" && item.ManagerUserID != managerUserID {
+				continue
+			}
+			if status != "" && item.Status != status {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": filtered})
+	})
+
+	mux.HandleFunc("GET /admin/api/hierarchy/graph", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		users, edges := hierarchyGraphData(
+			ident,
+			strings.TrimSpace(r.URL.Query().Get("organization_id")),
+			strings.TrimSpace(r.URL.Query().Get("location_id")),
+			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			strings.TrimSpace(r.URL.Query().Get("status")),
+		)
+		respondJSON(w, http.StatusOK, map[string]any{
+			"nodes":   users,
+			"edges":   edges,
+			"summary": hierarchySummary(users, edges),
+		})
+	})
+
+	mux.HandleFunc("GET /admin/api/hierarchy/summary", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		users, edges := hierarchyGraphData(
+			ident,
+			strings.TrimSpace(r.URL.Query().Get("organization_id")),
+			strings.TrimSpace(r.URL.Query().Get("location_id")),
+			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			strings.TrimSpace(r.URL.Query().Get("status")),
+		)
+		respondJSON(w, http.StatusOK, hierarchySummary(users, edges))
+	})
+
+	mux.HandleFunc("GET /admin/api/hierarchy/chain", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+		if userID == "" {
+			respondError(w, shared.Validation("user_id is required"))
+			return
+		}
+		chain := hierarchyChain(
+			ident,
+			userID,
+			strings.TrimSpace(r.URL.Query().Get("organization_id")),
+			strings.TrimSpace(r.URL.Query().Get("location_id")),
+			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+		)
+		respondJSON(w, http.StatusOK, map[string]any{"items": chain})
+	})
+
+	mux.HandleFunc("POST /admin/api/reporting-lines", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		var req reportingLineRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid reporting line request"))
+			return
+		}
+		item, err := ident.UpsertReportingLine(reportingLineFromRequest("", req))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusCreated, item)
+	})
+
+	mux.HandleFunc("PUT /admin/api/reporting-lines/", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := adminReportingLinePath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("reporting line not found"))
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		var req reportingLineRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid reporting line request"))
+			return
+		}
+		item, err := ident.UpsertReportingLine(reportingLineFromRequest(id, req))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, item)
+	})
+
+	mux.HandleFunc("GET /admin/api/workflows/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		key, version, action, ok := adminWorkflowPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("workflow route not found"))
+			return
+		}
+		switch {
+		case version == 0 && action == "versions":
+			respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListVersions(key)})
+		case version > 0 && action == "":
+			item, err := workflowSvc.GetVersion(key, version)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+		default:
+			respondError(w, shared.NotFound("workflow route not found"))
+		}
+	})
+
+	mux.HandleFunc("POST /admin/api/workflows/", func(w http.ResponseWriter, r *http.Request) {
+		key, version, action, ok := adminWorkflowPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("workflow route not found"))
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		switch {
+		case version == 0 && action == "drafts":
+			item, err := workflowSvc.CreateDraft(key, principalActorID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, item)
+		case version > 0 && action == "validate":
+			item, err := workflowSvc.GetVersion(key, version)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, workflowSvc.Validate(item))
+		case version > 0 && action == "simulate":
+			item, err := workflowSvc.GetVersion(key, version)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			var req workflow.SimulationInput
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid workflow simulation request"))
+				return
+			}
+			result := workflowSvc.Simulate(item, req)
+			respondJSON(w, http.StatusOK, map[string]any{
+				"simulation":      result,
+				"routing_preview": workflowRoutingPreview(ident, item, req),
+			})
+		case version > 0 && action == "publish":
+			item, err := workflowSvc.Publish(key, version, principalActorID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+		default:
+			respondError(w, shared.NotFound("workflow route not found"))
+		}
+	})
+
+	mux.HandleFunc("PUT /admin/api/workflows/", func(w http.ResponseWriter, r *http.Request) {
+		key, version, action, ok := adminWorkflowPath(r.URL.Path)
+		if !ok || version <= 0 || action != "" {
+			respondError(w, shared.NotFound("workflow route not found"))
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		var req workflow.Definition
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid workflow draft request"))
+			return
+		}
+		req.Key = key
+		req.Version = version
+		req.Status = "draft"
+		item, err := workflowSvc.SaveDraft(req, principalActorID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, item)
 	})
 
 	mux.HandleFunc("GET /admin/api/observability/contracts", func(w http.ResponseWriter, r *http.Request) {
@@ -532,12 +800,12 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 		}
 		var req struct {
 			IdempotencyKey string         `json:"idempotency_key"`
-			SystemKey     string         `json:"system_key"`
-			OperationType string         `json:"operation_type"`
-			DocumentID    string         `json:"document_id"`
-			CorrelationID string         `json:"correlation_id"`
-			Payload       map[string]any `json:"payload"`
-			ProcessNow    bool           `json:"process_now"`
+			SystemKey      string         `json:"system_key"`
+			OperationType  string         `json:"operation_type"`
+			DocumentID     string         `json:"document_id"`
+			CorrelationID  string         `json:"correlation_id"`
+			Payload        map[string]any `json:"payload"`
+			ProcessNow     bool           `json:"process_now"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, shared.Validation("invalid request body"))
@@ -832,6 +1100,331 @@ func adminOperatingUnitPath(path string) (string, bool) {
 	return strings.TrimSpace(parts[3]), parts[3] != "" && parts[4] == "value"
 }
 
+func adminWorkflowPath(path string) (string, int, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 5 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "workflows" {
+		return "", 0, "", false
+	}
+	key := strings.TrimSpace(parts[3])
+	if key == "" {
+		return "", 0, "", false
+	}
+	if len(parts) == 5 && parts[4] == "drafts" {
+		return key, 0, "drafts", true
+	}
+	if len(parts) == 5 && parts[4] == "versions" {
+		return key, 0, "versions", true
+	}
+	if len(parts) == 6 && parts[4] == "versions" {
+		version, err := strconv.Atoi(strings.TrimSpace(parts[5]))
+		if err != nil || version <= 0 {
+			return "", 0, "", false
+		}
+		return key, version, "", true
+	}
+	if len(parts) == 7 && parts[4] == "versions" {
+		version, err := strconv.Atoi(strings.TrimSpace(parts[5]))
+		if err != nil || version <= 0 {
+			return "", 0, "", false
+		}
+		return key, version, strings.TrimSpace(parts[6]), true
+	}
+	return "", 0, "", false
+}
+
+func adminReportingLinePath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 4 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "reporting-lines" {
+		return "", false
+	}
+	return strings.TrimSpace(parts[3]), parts[3] != ""
+}
+
+func reportingLineFromRequest(id string, req reportingLineRequest) identity.ReportingLine {
+	line := identity.ReportingLine{
+		ID:               strings.TrimSpace(id),
+		SubjectUserID:    strings.TrimSpace(req.SubjectUserID),
+		ManagerUserID:    strings.TrimSpace(req.ManagerUserID),
+		RelationshipType: strings.TrimSpace(req.RelationshipType),
+		OrganizationID:   strings.TrimSpace(req.OrganizationID),
+		LocationID:       strings.TrimSpace(req.LocationID),
+		OperatingUnitID:  strings.TrimSpace(req.OperatingUnitID),
+		Status:           strings.TrimSpace(req.Status),
+		Priority:         req.Priority,
+	}
+	if parsed, err := parseOptionalTime(req.EffectiveFrom); err == nil {
+		line.EffectiveFrom = parsed
+	}
+	if parsed, err := parseOptionalTime(req.EffectiveTo); err == nil {
+		line.EffectiveTo = parsed
+	}
+	return line
+}
+
+func parseOptionalTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+	return time.Parse(time.RFC3339, value)
+}
+
+func hierarchyGraphData(ident *identity.Service, organizationID, locationID, operatingUnitID, status string) ([]adminHierarchyNode, []adminHierarchyEdge) {
+	lines := ident.ReportingLines()
+	filteredEdges := make([]adminHierarchyEdge, 0)
+	includedUserIDs := map[string]struct{}{}
+	status = strings.TrimSpace(status)
+	for _, line := range lines {
+		if !reportingLineMatchesAdminFilters(line, organizationID, locationID, operatingUnitID, status) {
+			continue
+		}
+		filteredEdges = append(filteredEdges, adminHierarchyEdge{
+			ID:               line.ID,
+			SubjectUserID:    line.SubjectUserID,
+			ManagerUserID:    line.ManagerUserID,
+			RelationshipType: line.RelationshipType,
+			Status:           line.Status,
+			OrganizationID:   line.OrganizationID,
+			LocationID:       line.LocationID,
+			OperatingUnitID:  line.OperatingUnitID,
+			Priority:         line.Priority,
+			EffectiveFrom:    line.EffectiveFrom,
+			EffectiveTo:      line.EffectiveTo,
+		})
+		includedUserIDs[line.SubjectUserID] = struct{}{}
+		includedUserIDs[line.ManagerUserID] = struct{}{}
+	}
+	users := ident.Users()
+	nodes := make([]adminHierarchyNode, 0)
+	for _, user := range users {
+		if locationID != "" && user.DefaultLocationID != "" && user.DefaultLocationID != locationID {
+			if _, ok := includedUserIDs[user.ID]; !ok {
+				continue
+			}
+		}
+		if len(includedUserIDs) > 0 {
+			if _, ok := includedUserIDs[user.ID]; !ok && locationID != "" {
+				continue
+			}
+		}
+		nodes = append(nodes, adminHierarchyNode{
+			ID:                user.ID,
+			Username:          user.Username,
+			Status:            user.Status,
+			DefaultLocationID: user.DefaultLocationID,
+		})
+	}
+	sort.Slice(nodes, func(i, j int) bool {
+		if nodes[i].Username == nodes[j].Username {
+			return nodes[i].ID < nodes[j].ID
+		}
+		return nodes[i].Username < nodes[j].Username
+	})
+	sort.Slice(filteredEdges, func(i, j int) bool {
+		if filteredEdges[i].SubjectUserID == filteredEdges[j].SubjectUserID {
+			if filteredEdges[i].Priority == filteredEdges[j].Priority {
+				return filteredEdges[i].ID < filteredEdges[j].ID
+			}
+			return filteredEdges[i].Priority > filteredEdges[j].Priority
+		}
+		return filteredEdges[i].SubjectUserID < filteredEdges[j].SubjectUserID
+	})
+	return nodes, filteredEdges
+}
+
+func hierarchySummary(nodes []adminHierarchyNode, edges []adminHierarchyEdge) adminHierarchySummary {
+	summary := adminHierarchySummary{TotalUsers: len(nodes)}
+	resolvedManagers := map[string]bool{}
+	now := time.Now().UTC()
+	for _, edge := range edges {
+		if edge.Status == "active" && !edge.EffectiveFrom.After(now) && (edge.EffectiveTo.IsZero() || !edge.EffectiveTo.Before(now)) {
+			summary.ActiveLines++
+			resolvedManagers[edge.SubjectUserID] = true
+			if edge.RelationshipType == "acting_manager" {
+				summary.ActingOverrides++
+			}
+		}
+	}
+	for _, node := range nodes {
+		if !resolvedManagers[node.ID] {
+			summary.OrphanUsers++
+		}
+	}
+	return summary
+}
+
+func hierarchyChain(ident *identity.Service, userID, organizationID, locationID, operatingUnitID string) []map[string]any {
+	items := make([]map[string]any, 0)
+	visited := map[string]bool{}
+	currentUserID := strings.TrimSpace(userID)
+	for currentUserID != "" && !visited[currentUserID] {
+		visited[currentUserID] = true
+		user, ok := ident.FindUser(currentUserID)
+		if !ok {
+			break
+		}
+		entry := map[string]any{
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"user":      user,
+			"is_origin": len(items) == 0,
+		}
+		resolution, ok := ident.ResolveManager(currentUserID, organizationID, locationID, operatingUnitID, time.Now().UTC())
+		if ok {
+			entry["manager_user_id"] = resolution.Manager.ID
+			entry["manager_username"] = resolution.Manager.Username
+			entry["resolved_via"] = resolution.Via
+			entry["line"] = resolution.Line
+			currentUserID = resolution.Manager.ID
+		} else {
+			currentUserID = ""
+		}
+		items = append(items, entry)
+	}
+	return items
+}
+
+func reportingLineMatchesAdminFilters(line identity.ReportingLine, organizationID, locationID, operatingUnitID, status string) bool {
+	if organizationID != "" && line.OrganizationID != "" && line.OrganizationID != organizationID {
+		return false
+	}
+	if locationID != "" && line.LocationID != "" && line.LocationID != locationID {
+		return false
+	}
+	if operatingUnitID != "" && line.OperatingUnitID != "" && line.OperatingUnitID != operatingUnitID {
+		return false
+	}
+	if status != "" && line.Status != status {
+		return false
+	}
+	return true
+}
+
+func workflowRoutingPreview(ident *identity.Service, def workflow.Definition, input workflow.SimulationInput) map[string]any {
+	preview := map[string]any{
+		"valid": false,
+	}
+	if ident == nil {
+		preview["error"] = "identity service unavailable"
+		return preview
+	}
+	transition, err := workflowTransitionForAdmin(def, input.CurrentState, input.Action)
+	if err != nil {
+		preview["error"] = err.Error()
+		return preview
+	}
+	requesterUserID := stringMapValue(input.AdditionalInput, "requester_user_id")
+	if requesterUserID == "" {
+		requesterUserID = strings.TrimSpace(input.ActorID)
+	}
+	previousApproverID := stringMapValue(input.AdditionalInput, "previous_approver_id")
+	sourceUserID := ""
+	switch transition.AssignmentStrategy {
+	case "requester_manager":
+		sourceUserID = requesterUserID
+	case "previous_approver_manager":
+		sourceUserID = adminFirstNonEmpty(previousApproverID, input.ActorID)
+	}
+	preview["transition"] = transition
+	preview["source_user_id"] = sourceUserID
+	preview["valid"] = true
+	switch transition.AssignmentStrategy {
+	case "", "static_user", "static_role":
+		preview["mode"] = adminFirstNonEmpty(transition.AssignmentMode, "static")
+		preview["fallback_role_key"] = transition.FallbackRoleKey
+		preview["candidate_role_keys"] = append([]string(nil), transition.CandidateRoleKeys...)
+	case "requester_manager", "previous_approver_manager":
+		if sourceUserID == "" {
+			preview["valid"] = false
+			preview["error"] = "source user is required for manager routing"
+			return preview
+		}
+		if resolution, ok := ident.ResolveManager(sourceUserID, input.OrganizationID, input.LocationID, "", time.Now().UTC()); ok {
+			preview["resolved_via"] = resolution.Via
+			preview["resolved_assignee_user_id"] = resolution.Manager.ID
+			preview["resolved_assignee_username"] = resolution.Manager.Username
+			preview["line"] = resolution.Line
+			return preview
+		}
+		preview["fallback_used"] = true
+		fallthrough
+	case "role_fallback":
+		roleKey := adminFirstNonEmpty(transition.FallbackRoleKey, transition.AssigneeRoleKey)
+		preview["fallback_role_key"] = roleKey
+		candidates := ident.ResolveRoleCandidates(roleKey, input.OrganizationID, input.LocationID, "", time.Now().UTC())
+		if len(candidates) == 0 {
+			preview["valid"] = false
+			preview["error"] = "no matching assignee candidates"
+			return preview
+		}
+		if len(candidates) == 1 {
+			preview["resolved_via"] = "fallback_role"
+			preview["resolved_assignee_user_id"] = candidates[0].ID
+			preview["resolved_assignee_username"] = candidates[0].Username
+			return preview
+		}
+		preview["resolved_via"] = "fallback_role"
+		preview["resolved_candidate_user_ids"] = mapUsers(candidates, func(item identity.User) string { return item.ID })
+		preview["resolved_candidate_usernames"] = mapUsers(candidates, func(item identity.User) string { return item.Username })
+		return preview
+	default:
+		preview["valid"] = false
+		preview["error"] = "unsupported assignment strategy"
+	}
+	return preview
+}
+
+func workflowTransitionForAdmin(def workflow.Definition, currentState, action string) (workflow.Transition, error) {
+	for _, rule := range def.Actions {
+		if rule.Action == action && rule.FromState == currentState {
+			return workflow.Transition{
+				WorkflowKey:          def.Key,
+				WorkflowVersion:      def.Version,
+				Action:               rule.Action,
+				FromState:            rule.FromState,
+				ToState:              rule.ToState,
+				PermissionKey:        rule.PermissionKey,
+				TaskType:             rule.TaskType,
+				CreateApproval:       rule.CreateApproval,
+				AssignmentStrategy:   rule.AssignmentStrategy,
+				AssignmentMode:       rule.AssignmentMode,
+				AssigneeRoleKey:      rule.AssigneeRoleKey,
+				CandidateRoleKeys:    append([]string(nil), rule.CandidateRoleKeys...),
+				FallbackRoleKey:      rule.FallbackRoleKey,
+				ApprovalStageKey:     rule.ApprovalStageKey,
+				DueAfterSeconds:      rule.DueAfterSeconds,
+				EscalateAfterSeconds: rule.EscalateAfterSeconds,
+			}, nil
+		}
+	}
+	return workflow.Transition{}, shared.Conflict("workflow action not allowed from current state")
+}
+
+func stringMapValue(values map[string]any, key string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	value, _ := values[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func adminFirstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func mapUsers[T any](items []identity.User, mapper func(identity.User) T) []T {
+	output := make([]T, 0, len(items))
+	for _, item := range items {
+		output = append(output, mapper(item))
+	}
+	return output
+}
+
 func firstTemplateScope(scopes []string) string {
 	if len(scopes) == 0 {
 		return "deployment"
@@ -1058,6 +1651,146 @@ const adminConsoleHTML = `<!doctype html>
         <p id="config-status" class="muted"></p>
       </section>
     </div>
+    <div class="section-stack" data-admin-route="/admin/org">
+      <section class="page-panel">
+        <div class="page-header">
+          <div>
+            <h3 id="org-heading">Org Chart</h3>
+            <p class="status" id="org-subtitle">Browse reporting lines, spot gaps, and update managers from one place.</p>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="toolbar-row">
+            <label class="control-tile">
+              <span class="meta" id="org-location-label">Location</span>
+              <select id="org-location-filter"></select>
+            </label>
+            <label class="control-tile">
+              <span class="meta" id="org-status-label">Line Status</span>
+              <select id="org-status-filter"><option value="">all</option><option value="active">active</option><option value="inactive">inactive</option></select>
+            </label>
+            <label class="control-tile grow">
+              <span class="meta" id="org-user-label">Focus User</span>
+              <select id="org-focus-user"></select>
+            </label>
+            <div class="actions">
+              <button id="org-refresh" class="secondary">Refresh</button>
+              <button id="org-new-line">New Reporting Line</button>
+            </div>
+          </div>
+          <div id="org-summary" class="metric-grid"></div>
+        </div>
+      </section>
+      <div class="admin-shell-grid">
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="org-chart-heading">Hierarchy Explorer</h3>
+              <p class="status" id="org-chart-status">Select a user card to inspect the chain and edit reporting lines.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div id="org-chart" class="org-chart-shell"></div>
+            <div id="org-chain" class="list"></div>
+          </div>
+        </section>
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="org-editor-heading">Reporting Line Editor</h3>
+              <p class="status" id="org-editor-status">Choose a user or line, then save changes.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div id="org-selected-user" class="detail-grid"></div>
+            <div id="org-user-lines" class="list"></div>
+            <div class="form-grid">
+              <label class="field"><span id="org-form-subject-label">Subject User</span><select id="org-form-subject"></select></label>
+              <label class="field"><span id="org-form-manager-label">Manager User</span><select id="org-form-manager"></select></label>
+              <label class="field"><span id="org-form-type-label">Relationship Type</span><select id="org-form-type"><option value="primary_manager">primary_manager</option><option value="acting_manager">acting_manager</option></select></label>
+              <label class="field"><span id="org-form-status-label">Status</span><select id="org-form-status"><option value="active">active</option><option value="inactive">inactive</option></select></label>
+              <label class="field"><span id="org-form-priority-label">Priority</span><input id="org-form-priority" type="number" min="0" step="1" value="0"></label>
+              <label class="field"><span id="org-form-location-label">Scope Location</span><select id="org-form-location"></select></label>
+              <label class="field"><span id="org-form-effective-from-label">Effective From</span><input id="org-form-effective-from" type="datetime-local"></label>
+              <label class="field"><span id="org-form-effective-to-label">Effective To</span><input id="org-form-effective-to" type="datetime-local"></label>
+            </div>
+          </div>
+          <div class="page-actions">
+            <button id="org-save-line">Save Reporting Line</button>
+            <button id="org-reset-line" class="secondary">Reset</button>
+            <span id="org-form-message" class="status"></span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="section-stack" data-admin-route="/admin/workflows">
+      <section class="page-panel">
+        <div class="page-header">
+          <div>
+            <h3 id="workflow-heading">Workflow Routing</h3>
+            <p class="status" id="workflow-subtitle">Edit draft transitions and inspect assignment resolution before publishing.</p>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="toolbar-row">
+            <label class="control-tile grow">
+              <span class="meta" id="workflow-key-label">Workflow</span>
+              <select id="workflow-key-select"></select>
+            </label>
+            <label class="control-tile">
+              <span class="meta" id="workflow-version-label">Version</span>
+              <select id="workflow-version-select"></select>
+            </label>
+            <div class="actions">
+              <button id="workflow-create-draft" class="secondary">Create Draft</button>
+              <button id="workflow-validate" class="secondary">Validate</button>
+              <button id="workflow-publish">Publish Draft</button>
+            </div>
+          </div>
+          <div id="workflow-summary" class="detail-grid"></div>
+          <p id="workflow-message" class="status"></p>
+        </div>
+      </section>
+      <div class="admin-shell-grid">
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="workflow-editor-heading">Draft Editor</h3>
+              <p class="status" id="workflow-editor-status">Update states and assignment rules in a structured table, then save the draft.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <label class="field"><span id="workflow-states-label">States</span><input id="workflow-states-input" placeholder="draft, submitted, approved"></label>
+            <div id="workflow-actions-editor" class="table-shell"></div>
+          </div>
+          <div class="page-actions">
+            <button id="workflow-add-action" class="secondary">Add Action</button>
+            <button id="workflow-save-draft">Save Draft</button>
+          </div>
+        </section>
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="workflow-inspector-heading">Routing Inspector</h3>
+              <p class="status" id="workflow-inspector-status">Simulate manager-chain and fallback routing for the selected transition.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div class="form-grid">
+              <label class="field"><span id="workflow-sim-state-label">Current State</span><input id="workflow-sim-state"></label>
+              <label class="field"><span id="workflow-sim-action-label">Action</span><input id="workflow-sim-action"></label>
+              <label class="field"><span id="workflow-sim-requester-label">Requester</span><select id="workflow-sim-requester"></select></label>
+              <label class="field"><span id="workflow-sim-previous-approver-label">Previous Approver</span><select id="workflow-sim-previous-approver"></select></label>
+              <label class="field"><span id="workflow-sim-location-label">Location</span><select id="workflow-sim-location"></select></label>
+            </div>
+            <div class="actions">
+              <button id="workflow-simulate">Simulate Routing</button>
+            </div>
+            <div id="workflow-simulation" class="list"></div>
+          </div>
+        </section>
+      </div>
+    </div>
     <div class="template-stack" data-admin-route="/admin/templates">
       <section class="card">
         <h2 id="templates-heading">Template Library</h2>
@@ -1170,6 +1903,42 @@ const adminConsoleHTML = `<!doctype html>
         modules: 'Modules',
         auth_settings: 'Authentication Settings',
         config_editor: 'Config Editor',
+        org_chart: 'Org Chart',
+        org_chart_subtitle: 'Browse reporting lines, spot gaps, and update managers from one place.',
+        hierarchy_explorer: 'Hierarchy Explorer',
+        hierarchy_explorer_status: 'Select a user card to inspect the chain and edit reporting lines.',
+        reporting_line_editor: 'Reporting Line Editor',
+        reporting_line_editor_status: 'Choose a user or line, then save changes.',
+        workflow_routing: 'Workflow Routing',
+        workflow_routing_subtitle: 'Edit draft transitions and inspect assignment resolution before publishing.',
+        workflow_draft_editor: 'Draft Editor',
+        workflow_draft_editor_status: 'Update states and assignment rules in a structured table, then save the draft.',
+        workflow_routing_inspector: 'Routing Inspector',
+        workflow_routing_inspector_status: 'Simulate manager-chain and fallback routing for the selected transition.',
+        focus_user: 'Focus User',
+        line_status: 'Line Status',
+        subject_user: 'Subject User',
+        manager_user: 'Manager User',
+        relationship_type: 'Relationship Type',
+        effective_from: 'Effective From',
+        effective_to: 'Effective To',
+        workflow_key: 'Workflow',
+        workflow_version: 'Version',
+        workflow_states: 'States',
+        action: 'Action',
+        current_state: 'Current State',
+        requester: 'Requester',
+        previous_approver: 'Previous Approver',
+        refresh: 'Refresh',
+        new_reporting_line: 'New Reporting Line',
+        save_reporting_line: 'Save Reporting Line',
+        reset: 'Reset',
+        create_draft: 'Create Draft',
+        validate: 'Validate',
+        publish_draft: 'Publish Draft',
+        save_draft: 'Save Draft',
+        add_action: 'Add Action',
+        simulate_routing: 'Simulate Routing',
         templates: 'Templates',
         template_library: 'Template Library',
         template_definition: 'Template',
@@ -1348,6 +2117,42 @@ const adminConsoleHTML = `<!doctype html>
         modules: 'Modul',
         auth_settings: 'Pengaturan Autentikasi',
         config_editor: 'Editor Konfigurasi',
+        org_chart: 'Bagan Organisasi',
+        org_chart_subtitle: 'Telusuri reporting line, temukan gap, dan perbarui atasan dari satu tempat.',
+        hierarchy_explorer: 'Penjelajah Hierarki',
+        hierarchy_explorer_status: 'Pilih kartu pengguna untuk melihat rantai dan mengedit reporting line.',
+        reporting_line_editor: 'Editor Reporting Line',
+        reporting_line_editor_status: 'Pilih pengguna atau line, lalu simpan perubahan.',
+        workflow_routing: 'Routing Workflow',
+        workflow_routing_subtitle: 'Edit transisi draf dan inspeksi resolusi assignment sebelum publikasi.',
+        workflow_draft_editor: 'Editor Draf',
+        workflow_draft_editor_status: 'Perbarui state dan aturan assignment dalam tabel terstruktur, lalu simpan draf.',
+        workflow_routing_inspector: 'Inspector Routing',
+        workflow_routing_inspector_status: 'Simulasikan routing manager-chain dan fallback untuk transisi terpilih.',
+        focus_user: 'Fokus Pengguna',
+        line_status: 'Status Line',
+        subject_user: 'Pengguna Subjek',
+        manager_user: 'Pengguna Atasan',
+        relationship_type: 'Tipe Relasi',
+        effective_from: 'Berlaku Dari',
+        effective_to: 'Berlaku Sampai',
+        workflow_key: 'Workflow',
+        workflow_version: 'Versi',
+        workflow_states: 'State',
+        action: 'Aksi',
+        current_state: 'State Saat Ini',
+        requester: 'Peminta',
+        previous_approver: 'Penyetuju Sebelumnya',
+        refresh: 'Muat Ulang',
+        new_reporting_line: 'Line Baru',
+        save_reporting_line: 'Simpan Reporting Line',
+        reset: 'Reset',
+        create_draft: 'Buat Draf',
+        validate: 'Validasi',
+        publish_draft: 'Publikasikan Draf',
+        save_draft: 'Simpan Draf',
+        add_action: 'Tambah Aksi',
+        simulate_routing: 'Simulasikan Routing',
         templates: 'Template',
         template_library: 'Pustaka Template',
         template_definition: 'Template',
@@ -1518,7 +2323,7 @@ const adminConsoleHTML = `<!doctype html>
         saved_config: 'Menyimpan'
       }
     };
-    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, templateDefinitions: [], templateBindings: [], templateVersions: [], templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' } };
+    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' } };
     function normalizeLocale(locale) {
       const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-');
       if (value === 'id' || value.indexOf('id-') === 0) return 'id';
@@ -1545,12 +2350,20 @@ const adminConsoleHTML = `<!doctype html>
       const menus = (adminState.bootstrap && adminState.bootstrap.menus) || [];
       const actions = (adminState.bootstrap && adminState.bootstrap.actions) || [];
       const path = adminCurrentPath();
+      const staticMenus = [
+        {label: t('org_chart'), route_path: '/admin/org'},
+        {label: t('workflow_routing'), route_path: '/admin/workflows'}
+      ];
       container.innerHTML = menus.map((menu) => {
         const action = actions.find((item) => item.key === menu.action_key);
         if (!action) return '';
         const selected = action.route_path === path ? 'true' : 'false';
         const classes = action.route_path === path ? 'admin-tab active' : 'admin-tab';
         return '<a class="' + classes + '" role="tab" aria-selected="' + selected + '" href="#' + action.route_path + '">' + escapeHTML(pickText(menu, 'label')) + '</a>';
+      }).join('') + staticMenus.map((item) => {
+        const selected = item.route_path === path ? 'true' : 'false';
+        const classes = item.route_path === path ? 'admin-tab active' : 'admin-tab';
+        return '<a class="' + classes + '" role="tab" aria-selected="' + selected + '" href="#' + item.route_path + '">' + escapeHTML(item.label) + '</a>';
       }).join('');
     }
     function applyAdminRoute() {
@@ -1603,6 +2416,47 @@ const adminConsoleHTML = `<!doctype html>
         'modules-heading': 'modules',
         'auth-heading': 'auth_settings',
         'config-heading': 'config_editor',
+        'org-heading': 'org_chart',
+        'org-subtitle': 'org_chart_subtitle',
+        'org-location-label': 'location',
+        'org-status-label': 'line_status',
+        'org-user-label': 'focus_user',
+        'org-refresh': 'refresh',
+        'org-new-line': 'new_reporting_line',
+        'org-chart-heading': 'hierarchy_explorer',
+        'org-chart-status': 'hierarchy_explorer_status',
+        'org-editor-heading': 'reporting_line_editor',
+        'org-editor-status': 'reporting_line_editor_status',
+        'org-form-subject-label': 'subject_user',
+        'org-form-manager-label': 'manager_user',
+        'org-form-type-label': 'relationship_type',
+        'org-form-status-label': 'status_col',
+        'org-form-priority-label': 'binding_priority',
+        'org-form-location-label': 'location',
+        'org-form-effective-from-label': 'effective_from',
+        'org-form-effective-to-label': 'effective_to',
+        'org-save-line': 'save_reporting_line',
+        'org-reset-line': 'reset',
+        'workflow-heading': 'workflow_routing',
+        'workflow-subtitle': 'workflow_routing_subtitle',
+        'workflow-key-label': 'workflow_key',
+        'workflow-version-label': 'workflow_version',
+        'workflow-create-draft': 'create_draft',
+        'workflow-validate': 'validate',
+        'workflow-publish': 'publish_draft',
+        'workflow-editor-heading': 'workflow_draft_editor',
+        'workflow-editor-status': 'workflow_draft_editor_status',
+        'workflow-states-label': 'workflow_states',
+        'workflow-add-action': 'add_action',
+        'workflow-save-draft': 'save_draft',
+        'workflow-inspector-heading': 'workflow_routing_inspector',
+        'workflow-inspector-status': 'workflow_routing_inspector_status',
+        'workflow-sim-state-label': 'current_state',
+        'workflow-sim-action-label': 'action',
+        'workflow-sim-requester-label': 'requester',
+        'workflow-sim-previous-approver-label': 'previous_approver',
+        'workflow-sim-location-label': 'location',
+        'workflow-simulate': 'simulate_routing',
         'templates-heading': 'template_library',
         'template-definition-label': 'template_definition',
         'template-binding-scope-label': 'template_binding_scope',
@@ -1716,7 +2570,7 @@ const adminConsoleHTML = `<!doctype html>
       if (!adminState.bootstrap) {
         adminState.locale = normalizeLocale(navigator.language || 'en');
       }
-      const [bootstrap, modules, definitions, roleTemplates, policyHooks, observability, authSettings, users, bindings, templateDefinitions, templateBindings] = await Promise.all([
+      const [bootstrap, modules, definitions, roleTemplates, policyHooks, observability, authSettings, users, bindings, reportingLines, workflows, templateDefinitions, templateBindings] = await Promise.all([
         getJSON('/admin/api/bootstrap'),
         getJSON('/admin/api/modules'),
         getJSON('/admin/api/config/definitions'),
@@ -1726,6 +2580,8 @@ const adminConsoleHTML = `<!doctype html>
         getJSON('/admin/api/auth/settings'),
         optionalJSON('/users'),
         optionalJSON('/role-bindings'),
+        optionalJSON('/admin/api/reporting-lines'),
+        optionalJSON('/admin/api/workflows'),
         optionalJSON('/admin/api/templates/definitions'),
         optionalJSON('/admin/api/template-bindings')
       ]);
@@ -1733,6 +2589,8 @@ const adminConsoleHTML = `<!doctype html>
       adminState.supportedLocales = bootstrap.supported_locales || ['en', 'id'];
       adminState.users = (users && users.items) || [];
       adminState.bindings = (bindings && bindings.items) || [];
+      adminState.reportingLines = (reportingLines && reportingLines.items) || [];
+      adminState.workflows = (workflows && workflows.items) || [];
       adminState.navigationManageAllowed = !!(users && bindings);
       adminState.templateDefinitions = (templateDefinitions && templateDefinitions.items) || [];
       adminState.templateBindings = (templateBindings && templateBindings.items) || [];
@@ -1751,6 +2609,8 @@ const adminConsoleHTML = `<!doctype html>
       document.getElementById('location-id').innerHTML = '<option value="">' + t('default_option') + '</option>' + bootstrap.locations.map(loc => '<option value="' + loc.id + '">' + loc.name + '</option>').join('');
       renderModules(modules.items);
       renderDefinitions(definitions.items);
+      renderHierarchyAdmin();
+      void renderWorkflowAdmin();
       renderTemplates();
       renderAuthSettings(authSettings.entry.value);
       renderNavigationSettings();
@@ -1967,6 +2827,472 @@ const adminConsoleHTML = `<!doctype html>
         });
         document.getElementById('config-status').textContent = t('saved_config') + ' ' + key + ' ' + t('scope') + ' ' + scope + (scopeID ? ':' + scopeID : '');
       };
+    }
+    function populateUserSelect(id, allowBlank) {
+      const select = document.getElementById(id);
+      if (!select) return;
+      const users = (adminState.users || []).slice().sort((left, right) => {
+        const name = (left.username || '').localeCompare(right.username || '');
+        return name || (left.id || '').localeCompare(right.id || '');
+      });
+      select.innerHTML = (allowBlank ? '<option value="">' + t('default_option') + '</option>' : '') + users.map((user) => '<option value="' + escapeHTML(user.id) + '">' + escapeHTML(user.username + ' (' + user.id + ')') + '</option>').join('');
+    }
+    function populateLocationSelect(id, allowBlank) {
+      const select = document.getElementById(id);
+      if (!select) return;
+      const locations = (adminState.bootstrap && adminState.bootstrap.locations) || [];
+      select.innerHTML = (allowBlank ? '<option value="">' + t('default_option') + '</option>' : '') + locations.map((loc) => '<option value="' + escapeHTML(loc.id) + '">' + escapeHTML(loc.name + ' (' + loc.id + ')') + '</option>').join('');
+    }
+    function toDateTimeLocalValue(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const offset = date.getTimezoneOffset();
+      const local = new Date(date.getTime() - offset * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+    function fromDateTimeLocalValue(value) {
+      return value ? new Date(value).toISOString() : '';
+    }
+    function hierarchyFilters() {
+      return {
+        organization_id: (adminState.bootstrap && adminState.bootstrap.organization && adminState.bootstrap.organization.id) || '',
+        location_id: document.getElementById('org-location-filter') ? document.getElementById('org-location-filter').value : '',
+        status: document.getElementById('org-status-filter') ? document.getElementById('org-status-filter').value : ''
+      };
+    }
+    function activeHierarchyEdge(subjectUserID) {
+      const edges = ((adminState.hierarchyGraph && adminState.hierarchyGraph.edges) || []).filter((item) => item.subject_user_id === subjectUserID && item.status === 'active');
+      edges.sort((left, right) => {
+        const rank = (item) => item.relationship_type === 'acting_manager' ? 0 : 1;
+        if (rank(left) === rank(right)) return (right.priority || 0) - (left.priority || 0);
+        return rank(left) - rank(right);
+      });
+      return edges[0] || null;
+    }
+    function hierarchyNode(userID) {
+      return ((adminState.hierarchyGraph && adminState.hierarchyGraph.nodes) || []).find((item) => item.id === userID) || null;
+    }
+    function renderHierarchySummary() {
+      const summary = (adminState.hierarchyGraph && adminState.hierarchyGraph.summary) || {};
+      const container = document.getElementById('org-summary');
+      if (!container) return;
+      const cards = [
+        {label: 'Users', value: summary.total_users || 0},
+        {label: 'Active Lines', value: summary.active_lines || 0},
+        {label: 'Without Manager', value: summary.orphan_users || 0},
+        {label: 'Acting Overrides', value: summary.acting_overrides || 0}
+      ];
+      container.innerHTML = cards.map((item) => '<article class="metric-card"><span class="meta">' + escapeHTML(item.label) + '</span><strong>' + escapeHTML(item.value) + '</strong></article>').join('');
+    }
+    function layoutHierarchyGraph() {
+      const nodes = (adminState.hierarchyGraph && adminState.hierarchyGraph.nodes) || [];
+      const focusUserID = document.getElementById('org-focus-user') ? document.getElementById('org-focus-user').value : '';
+      const parentByChild = {};
+      const childrenByParent = {};
+      nodes.forEach((node) => { childrenByParent[node.id] = []; });
+      nodes.forEach((node) => {
+        const edge = activeHierarchyEdge(node.id);
+        if (edge) {
+          parentByChild[node.id] = edge.manager_user_id;
+          childrenByParent[edge.manager_user_id] = childrenByParent[edge.manager_user_id] || [];
+          childrenByParent[edge.manager_user_id].push(node.id);
+        }
+      });
+      Object.keys(childrenByParent).forEach((key) => childrenByParent[key].sort((left, right) => {
+        const leftNode = hierarchyNode(left) || {username: left};
+        const rightNode = hierarchyNode(right) || {username: right};
+        return (leftNode.username || '').localeCompare(rightNode.username || '') || left.localeCompare(right);
+      }));
+      let roots = nodes.filter((node) => !parentByChild[node.id]).map((node) => node.id);
+      if (!roots.length && nodes[0]) roots = [nodes[0].id];
+      if (focusUserID) {
+        const path = [];
+        const seen = new Set();
+        let current = focusUserID;
+        while (current && !seen.has(current)) {
+          seen.add(current);
+          path.unshift(current);
+          current = parentByChild[current];
+        }
+        const subtree = [];
+        const queue = [focusUserID];
+        const visited = new Set();
+        while (queue.length) {
+          const id = queue.shift();
+          if (!id || visited.has(id)) continue;
+          visited.add(id);
+          subtree.push(id);
+          (childrenByParent[id] || []).forEach((child) => queue.push(child));
+        }
+        roots = path.length ? [path[0]] : roots;
+        const allowed = new Set(path.concat(subtree));
+        const filteredNodes = nodes.filter((node) => allowed.has(node.id));
+        return hierarchyLayoutFromNodes(filteredNodes, childrenByParent, roots, parentByChild);
+      }
+      return hierarchyLayoutFromNodes(nodes, childrenByParent, roots, parentByChild);
+    }
+    function hierarchyLayoutFromNodes(nodes, childrenByParent, roots, parentByChild) {
+      const positions = {};
+      const levelIndex = {};
+      const visible = new Set(nodes.map((node) => node.id));
+      function place(nodeID, depth) {
+        if (!visible.has(nodeID) || positions[nodeID]) return;
+        const siblings = childrenByParent[nodeID] || [];
+        const index = levelIndex[depth] || 0;
+        positions[nodeID] = {x: depth * 240 + 24, y: index * 120 + 24};
+        levelIndex[depth] = index + 1;
+        siblings.forEach((childID) => place(childID, depth + 1));
+      }
+      roots.forEach((rootID) => place(rootID, 0));
+      nodes.forEach((node) => {
+        if (!positions[node.id]) {
+          const parentID = parentByChild[node.id];
+          const depth = parentID && positions[parentID] ? Math.round((positions[parentID].x - 24) / 240) + 1 : 0;
+          place(node.id, depth);
+        }
+      });
+      return positions;
+    }
+    function renderHierarchyChart() {
+      const container = document.getElementById('org-chart');
+      if (!container) return;
+      const nodes = (adminState.hierarchyGraph && adminState.hierarchyGraph.nodes) || [];
+      if (!nodes.length) {
+        container.innerHTML = '<p class="status">-</p>';
+        return;
+      }
+      const positions = layoutHierarchyGraph();
+      const visibleNodes = nodes.filter((node) => positions[node.id]);
+      const width = Math.max.apply(null, visibleNodes.map((node) => positions[node.id].x)) + 240;
+      const height = Math.max.apply(null, visibleNodes.map((node) => positions[node.id].y)) + 140;
+      const edges = ((adminState.hierarchyGraph && adminState.hierarchyGraph.edges) || []).filter((edge) => positions[edge.subject_user_id] && positions[edge.manager_user_id]);
+      container.innerHTML = '<div class="org-chart-stage" style="width:' + width + 'px;height:' + height + 'px;">'
+        + '<svg class="org-chart-lines" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMinYMin meet">'
+        + edges.map((edge) => {
+          const from = positions[edge.manager_user_id];
+          const to = positions[edge.subject_user_id];
+          const lineClass = edge.relationship_type === 'acting_manager' ? 'acting' : 'primary';
+          const path = 'M ' + (from.x + 180) + ' ' + (from.y + 34) + ' C ' + (from.x + 210) + ' ' + (from.y + 34) + ', ' + (to.x - 30) + ' ' + (to.y + 34) + ', ' + to.x + ' ' + (to.y + 34);
+          return '<path class="' + lineClass + '" d="' + path + '"></path>';
+        }).join('')
+        + '</svg>'
+        + visibleNodes.map((node) => {
+          const position = positions[node.id];
+          const selected = adminState.hierarchySelectedUserID === node.id ? ' selected' : '';
+          const edge = activeHierarchyEdge(node.id);
+          const badge = edge ? edge.relationship_type.replace('_', ' ') : 'root';
+          return '<button type="button" class="org-node' + selected + '" data-org-user="' + escapeHTML(node.id) + '" style="left:' + position.x + 'px;top:' + position.y + 'px;">'
+            + '<strong>' + escapeHTML(node.username) + '</strong>'
+            + '<span class="meta">' + escapeHTML(node.id) + '</span>'
+            + '<span class="pill' + (node.status !== 'active' ? ' off' : '') + '">' + escapeHTML(badge) + '</span>'
+            + '</button>';
+        }).join('')
+        + '</div>';
+      container.querySelectorAll('[data-org-user]').forEach((node) => {
+        node.onclick = () => {
+          adminState.hierarchySelectedUserID = node.getAttribute('data-org-user') || '';
+          renderHierarchySelection();
+          void loadHierarchyChain(adminState.hierarchySelectedUserID);
+          renderHierarchyChart();
+        };
+      });
+    }
+    function renderHierarchySelection() {
+      const user = hierarchyNode(adminState.hierarchySelectedUserID) || ((adminState.users || []).find((item) => item.id === adminState.hierarchySelectedUserID));
+      const detail = document.getElementById('org-selected-user');
+      const lines = document.getElementById('org-user-lines');
+      if (detail) {
+        if (!user) {
+          detail.innerHTML = '<p class="status">Select a user to inspect the chain.</p>';
+        } else {
+          const edge = activeHierarchyEdge(user.id);
+          detail.innerHTML = ''
+            + '<article class="detail-item"><span class="meta">User</span><strong>' + escapeHTML(user.username || user.id) + '</strong></article>'
+            + '<article class="detail-item"><span class="meta">ID</span><strong>' + escapeHTML(user.id) + '</strong></article>'
+            + '<article class="detail-item"><span class="meta">Current Manager</span><strong>' + escapeHTML(edge ? edge.manager_user_id : 'Unassigned') + '</strong></article>';
+        }
+      }
+      if (lines) {
+        const items = (adminState.reportingLines || []).filter((item) => item.subject_user_id === adminState.hierarchySelectedUserID);
+        lines.innerHTML = items.length ? items.map((item) => '<article class="card"><strong>' + escapeHTML(item.relationship_type) + '</strong><div class="row-secondary">' + escapeHTML(item.manager_user_id + ' · ' + (item.status || '')) + '</div><div class="actions"><button type="button" class="secondary" data-org-line="' + escapeHTML(item.id) + '">Edit</button></div></article>').join('') : '<p class="status">No reporting lines for this user.</p>';
+        lines.querySelectorAll('[data-org-line]').forEach((node) => {
+          node.onclick = () => resetHierarchyForm(adminState.hierarchySelectedUserID, node.getAttribute('data-org-line') || '');
+        });
+      }
+      if (!document.getElementById('org-form-subject').value && user) {
+        resetHierarchyForm(user.id, '');
+      }
+    }
+    function renderHierarchyChain() {
+      const container = document.getElementById('org-chain');
+      if (!container) return;
+      const items = adminState.hierarchyChain || [];
+      container.innerHTML = items.length ? items.map((item, index) => '<article class="card"><strong>' + escapeHTML((item.user && item.user.username) || item.username || item.user_id) + '</strong><div class="row-secondary">' + escapeHTML(item.user_id || '') + '</div>' + (index < items.length - 1 ? '<div class="status">' + escapeHTML((item.resolved_via || 'manager') + ' → ' + (item.manager_username || item.manager_user_id || '')) + '</div>' : '') + '</article>').join('') : '<p class="status">Select a user to inspect the manager chain.</p>';
+    }
+    async function loadHierarchyChain(userID) {
+      if (!userID) {
+        adminState.hierarchyChain = [];
+        renderHierarchyChain();
+        return;
+      }
+      const params = new URLSearchParams(hierarchyFilters());
+      params.set('user_id', userID);
+      const payload = await getJSON('/admin/api/hierarchy/chain?' + params.toString());
+      adminState.hierarchyChain = payload.items || [];
+      renderHierarchyChain();
+    }
+    async function loadHierarchyGraph() {
+      const params = new URLSearchParams(hierarchyFilters());
+      const payload = await getJSON('/admin/api/hierarchy/graph?' + params.toString());
+      adminState.hierarchyGraph = payload || {nodes: [], edges: [], summary: {}};
+      renderHierarchySummary();
+      renderHierarchyChart();
+      renderHierarchySelection();
+    }
+    function resetHierarchyForm(userID, lineID) {
+      adminState.hierarchySelectedLineID = lineID || '';
+      const line = (adminState.reportingLines || []).find((item) => item.id === lineID) || null;
+      document.getElementById('org-form-subject').value = (line && line.subject_user_id) || userID || '';
+      document.getElementById('org-form-manager').value = (line && line.manager_user_id) || '';
+      document.getElementById('org-form-type').value = (line && line.relationship_type) || 'primary_manager';
+      document.getElementById('org-form-status').value = (line && line.status) || 'active';
+      document.getElementById('org-form-priority').value = String((line && line.priority) || 0);
+      document.getElementById('org-form-location').value = (line && line.location_id) || '';
+      document.getElementById('org-form-effective-from').value = toDateTimeLocalValue(line && line.effective_from);
+      document.getElementById('org-form-effective-to').value = toDateTimeLocalValue(line && line.effective_to);
+      document.getElementById('org-form-message').textContent = line ? 'Editing ' + line.id : '';
+    }
+    async function saveHierarchyLine() {
+      const csrf = getCookie('orbyte_csrf');
+      const body = {
+        subject_user_id: document.getElementById('org-form-subject').value,
+        manager_user_id: document.getElementById('org-form-manager').value,
+        relationship_type: document.getElementById('org-form-type').value,
+        status: document.getElementById('org-form-status').value,
+        priority: parseInt(document.getElementById('org-form-priority').value || '0', 10),
+        organization_id: (adminState.bootstrap && adminState.bootstrap.organization && adminState.bootstrap.organization.id) || '',
+        location_id: document.getElementById('org-form-location').value,
+        effective_from: fromDateTimeLocalValue(document.getElementById('org-form-effective-from').value),
+        effective_to: fromDateTimeLocalValue(document.getElementById('org-form-effective-to').value)
+      };
+      const path = adminState.hierarchySelectedLineID ? '/admin/api/reporting-lines/' + encodeURIComponent(adminState.hierarchySelectedLineID) : '/admin/api/reporting-lines';
+      const method = adminState.hierarchySelectedLineID ? 'PUT' : 'POST';
+      await getJSON(path, {method: method, headers: {'Content-Type':'application/json','X-CSRF-Token':csrf}, body: JSON.stringify(body)});
+      const lines = await getJSON('/admin/api/reporting-lines');
+      adminState.reportingLines = lines.items || [];
+      document.getElementById('org-form-message').textContent = 'Reporting line saved';
+      await loadHierarchyGraph();
+      if (body.subject_user_id) {
+        adminState.hierarchySelectedUserID = body.subject_user_id;
+        renderHierarchySelection();
+        void loadHierarchyChain(body.subject_user_id);
+      }
+    }
+    function renderHierarchyAdmin() {
+      populateUserSelect('org-focus-user', true);
+      populateUserSelect('org-form-subject', true);
+      populateUserSelect('org-form-manager', true);
+      populateLocationSelect('org-location-filter', true);
+      populateLocationSelect('org-form-location', true);
+      populateUserSelect('workflow-sim-requester', true);
+      populateUserSelect('workflow-sim-previous-approver', true);
+      populateLocationSelect('workflow-sim-location', true);
+      if (!document.getElementById('org-location-filter').value && adminState.users.length) {
+        document.getElementById('org-focus-user').value = adminState.hierarchySelectedUserID || '';
+      }
+      document.getElementById('org-refresh').onclick = () => { void loadHierarchyGraph(); };
+      document.getElementById('org-new-line').onclick = () => resetHierarchyForm(adminState.hierarchySelectedUserID, '');
+      document.getElementById('org-save-line').onclick = () => { void saveHierarchyLine(); };
+      document.getElementById('org-reset-line').onclick = () => resetHierarchyForm(adminState.hierarchySelectedUserID, adminState.hierarchySelectedLineID);
+      document.getElementById('org-focus-user').onchange = () => {
+        adminState.hierarchySelectedUserID = document.getElementById('org-focus-user').value;
+        renderHierarchySelection();
+        void loadHierarchyChain(adminState.hierarchySelectedUserID);
+        renderHierarchyChart();
+      };
+      document.getElementById('org-location-filter').onchange = () => { void loadHierarchyGraph(); };
+      document.getElementById('org-status-filter').onchange = () => { void loadHierarchyGraph(); };
+      void loadHierarchyGraph();
+      if (adminState.hierarchySelectedUserID) {
+        void loadHierarchyChain(adminState.hierarchySelectedUserID);
+      } else {
+        renderHierarchyChain();
+      }
+    }
+    async function loadWorkflowVersions(key) {
+      const payload = await getJSON('/admin/api/workflows/' + encodeURIComponent(key) + '/versions');
+      adminState.workflowVersions = payload.items || [];
+      const versionSelect = document.getElementById('workflow-version-select');
+      versionSelect.innerHTML = adminState.workflowVersions.map((item) => '<option value="' + item.version + '">' + escapeHTML('v' + item.version + ' · ' + item.status) + '</option>').join('');
+      const draft = adminState.workflowVersions.find((item) => item.status === 'draft');
+      versionSelect.value = String((draft && draft.version) || (adminState.workflowVersions[0] && adminState.workflowVersions[0].version) || '');
+      if (versionSelect.value) {
+        await loadWorkflowVersion(key, versionSelect.value);
+      }
+    }
+    async function loadWorkflowVersion(key, version) {
+      if (!key || !version) return;
+      adminState.workflowCurrent = await getJSON('/admin/api/workflows/' + encodeURIComponent(key) + '/versions/' + encodeURIComponent(version));
+      renderWorkflowEditor();
+    }
+    function workflowActionRow(row, index) {
+      function select(id, value, options) {
+        return '<select data-workflow-field="' + id + '" data-index="' + index + '">' + options.map((item) => '<option value="' + escapeHTML(item) + '"' + (item === (value || '') ? ' selected' : '') + '>' + escapeHTML(item || 'default') + '</option>').join('') + '</select>';
+      }
+      function input(id, value, type) {
+        return '<input data-workflow-field="' + id + '" data-index="' + index + '" type="' + (type || 'text') + '" value="' + escapeHTML(value || '') + '">';
+      }
+      return '<tr>'
+        + '<td>' + input('action', row.action) + '</td>'
+        + '<td>' + input('from_state', row.from_state) + '</td>'
+        + '<td>' + input('to_state', row.to_state) + '</td>'
+        + '<td>' + select('assignment_strategy', row.assignment_strategy, ['', 'requester_manager', 'previous_approver_manager', 'role_fallback', 'static_role']) + '</td>'
+        + '<td>' + input('assignee_role_key', row.assignee_role_key) + '</td>'
+        + '<td>' + input('fallback_role_key', row.fallback_role_key) + '</td>'
+        + '<td>' + input('task_type', row.task_type) + '</td>'
+        + '<td>' + input('approval_stage_key', row.approval_stage_key) + '</td>'
+        + '<td><label><input data-workflow-field="create_approval" data-index="' + index + '" type="checkbox"' + (row.create_approval ? ' checked' : '') + '> approval</label></td>'
+        + '</tr>';
+    }
+    function bindWorkflowEditorInputs() {
+      document.querySelectorAll('[data-workflow-field]').forEach((node) => {
+        const handler = () => {
+          const index = parseInt(node.getAttribute('data-index') || '-1', 10);
+          const field = node.getAttribute('data-workflow-field');
+          if (!adminState.workflowCurrent || index < 0 || !field) return;
+          const row = adminState.workflowCurrent.actions[index];
+          if (!row) return;
+          row[field] = node.type === 'checkbox' ? !!node.checked : node.value;
+        };
+        node.onchange = handler;
+        node.oninput = handler;
+      });
+    }
+    function renderWorkflowEditor() {
+      const current = adminState.workflowCurrent;
+      if (!current) return;
+      document.getElementById('workflow-states-input').value = (current.states || []).join(', ');
+      document.getElementById('workflow-summary').innerHTML = ''
+        + '<article class="detail-item"><span class="meta">Key</span><strong>' + escapeHTML(current.key) + '</strong></article>'
+        + '<article class="detail-item"><span class="meta">Version</span><strong>' + escapeHTML('v' + current.version + ' · ' + current.status) + '</strong></article>'
+        + '<article class="detail-item"><span class="meta">Transitions</span><strong>' + escapeHTML((current.actions || []).length) + '</strong></article>';
+      document.getElementById('workflow-actions-editor').innerHTML = '<table class="data-table"><thead><tr><th>Action</th><th>From</th><th>To</th><th>Strategy</th><th>Role</th><th>Fallback</th><th>Task</th><th>Stage</th><th>Artifact</th></tr></thead><tbody>' + (current.actions || []).map(workflowActionRow).join('') + '</tbody></table>';
+      bindWorkflowEditorInputs();
+    }
+    async function saveWorkflowDraft() {
+      const current = adminState.workflowCurrent;
+      if (!current) return;
+      current.states = document.getElementById('workflow-states-input').value.split(',').map((item) => item.trim()).filter(Boolean);
+      const csrf = getCookie('orbyte_csrf');
+      adminState.workflowCurrent = await getJSON('/admin/api/workflows/' + encodeURIComponent(current.key) + '/versions/' + current.version, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+        body: JSON.stringify(current)
+      });
+      document.getElementById('workflow-message').textContent = 'Draft saved';
+      await loadWorkflowVersions(current.key);
+    }
+    async function createWorkflowDraft() {
+      const key = document.getElementById('workflow-key-select').value;
+      if (!key) return;
+      const csrf = getCookie('orbyte_csrf');
+      await getJSON('/admin/api/workflows/' + encodeURIComponent(key) + '/drafts', {
+        method:'POST',
+        headers:{'X-CSRF-Token':csrf}
+      });
+      document.getElementById('workflow-message').textContent = 'Draft created';
+      await loadWorkflowVersions(key);
+    }
+    async function validateWorkflowDraft() {
+      const key = document.getElementById('workflow-key-select').value;
+      const version = document.getElementById('workflow-version-select').value;
+      if (!key || !version) return;
+      const csrf = getCookie('orbyte_csrf');
+      const payload = await getJSON('/admin/api/workflows/' + encodeURIComponent(key) + '/versions/' + encodeURIComponent(version) + '/validate', {
+        method:'POST',
+        headers:{'X-CSRF-Token':csrf}
+      });
+      document.getElementById('workflow-message').textContent = payload.valid ? 'Workflow is valid' : (payload.issues || []).join('; ');
+    }
+    async function publishWorkflowDraft() {
+      const key = document.getElementById('workflow-key-select').value;
+      const version = document.getElementById('workflow-version-select').value;
+      if (!key || !version) return;
+      const csrf = getCookie('orbyte_csrf');
+      await getJSON('/admin/api/workflows/' + encodeURIComponent(key) + '/versions/' + encodeURIComponent(version) + '/publish', {
+        method:'POST',
+        headers:{'X-CSRF-Token':csrf}
+      });
+      document.getElementById('workflow-message').textContent = 'Draft published';
+      await loadWorkflowVersions(key);
+    }
+    function renderWorkflowSimulation() {
+      const container = document.getElementById('workflow-simulation');
+      if (!container) return;
+      const payload = adminState.workflowSimulation;
+      if (!payload) {
+        container.innerHTML = '<p class="status">Run a simulation to inspect manager-chain routing.</p>';
+        return;
+      }
+      const simulation = payload.simulation || {};
+      const preview = payload.routing_preview || {};
+      container.innerHTML = ''
+        + '<article class="card"><strong>Transition</strong><div class="row-secondary">' + escapeHTML((simulation.transition && (simulation.transition.from_state + ' → ' + simulation.transition.to_state + ' via ' + simulation.transition.action)) || '-') + '</div></article>'
+        + '<article class="card"><strong>Resolution</strong><div class="row-secondary">' + escapeHTML(preview.resolved_via || preview.error || 'n/a') + '</div>'
+        + (preview.resolved_assignee_username ? '<div class="status">Assignee: ' + escapeHTML(preview.resolved_assignee_username + ' (' + preview.resolved_assignee_user_id + ')') + '</div>' : '')
+        + (preview.resolved_candidate_usernames ? '<div class="status">Candidates: ' + escapeHTML(preview.resolved_candidate_usernames.join(', ')) + '</div>' : '')
+        + (preview.fallback_role_key ? '<div class="status">Fallback role: ' + escapeHTML(preview.fallback_role_key) + '</div>' : '')
+        + '</article>'
+        + '<pre>' + escapeHTML(JSON.stringify(payload, null, 2)) + '</pre>';
+    }
+    async function simulateWorkflowRouting() {
+      const key = document.getElementById('workflow-key-select').value;
+      const version = document.getElementById('workflow-version-select').value;
+      if (!key || !version) return;
+      const csrf = getCookie('orbyte_csrf');
+      adminState.workflowSimulation = await getJSON('/admin/api/workflows/' + encodeURIComponent(key) + '/versions/' + encodeURIComponent(version) + '/simulate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+        body: JSON.stringify({
+          current_state: document.getElementById('workflow-sim-state').value,
+          action: document.getElementById('workflow-sim-action').value,
+          actor_id: document.getElementById('workflow-sim-requester').value,
+          organization_id: (adminState.bootstrap && adminState.bootstrap.organization && adminState.bootstrap.organization.id) || '',
+          location_id: document.getElementById('workflow-sim-location').value,
+          additional_input: {
+            requester_user_id: document.getElementById('workflow-sim-requester').value,
+            previous_approver_id: document.getElementById('workflow-sim-previous-approver').value
+          }
+        })
+      });
+      renderWorkflowSimulation();
+    }
+    async function renderWorkflowAdmin() {
+      const select = document.getElementById('workflow-key-select');
+      if (!select) return;
+      const items = adminState.workflows || [];
+      select.innerHTML = items.map((item) => '<option value="' + escapeHTML(item.key) + '">' + escapeHTML(item.key) + '</option>').join('');
+      if (!select.value && items[0]) {
+        select.value = items[0].key;
+      }
+      if (select.value) {
+        await loadWorkflowVersions(select.value);
+      }
+      select.onchange = () => { void loadWorkflowVersions(select.value); };
+      document.getElementById('workflow-version-select').onchange = () => { void loadWorkflowVersion(select.value, document.getElementById('workflow-version-select').value); };
+      document.getElementById('workflow-create-draft').onclick = () => { void createWorkflowDraft(); };
+      document.getElementById('workflow-validate').onclick = () => { void validateWorkflowDraft(); };
+      document.getElementById('workflow-publish').onclick = () => { void publishWorkflowDraft(); };
+      document.getElementById('workflow-save-draft').onclick = () => { void saveWorkflowDraft(); };
+      document.getElementById('workflow-add-action').onclick = () => {
+        if (!adminState.workflowCurrent) return;
+        adminState.workflowCurrent.actions = adminState.workflowCurrent.actions || [];
+        adminState.workflowCurrent.actions.push({action: '', from_state: '', to_state: '', assignment_strategy: '', assignee_role_key: '', fallback_role_key: '', task_type: '', approval_stage_key: '', create_approval: false});
+        renderWorkflowEditor();
+      };
+      document.getElementById('workflow-simulate').onclick = () => { void simulateWorkflowRouting(); };
+      renderWorkflowSimulation();
     }
     function renderRoleTemplates(items) {
       document.getElementById('role-templates').innerHTML = items.map((item) => {

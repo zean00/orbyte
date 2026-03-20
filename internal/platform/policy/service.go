@@ -37,6 +37,7 @@ type Decision struct {
 	Reason  string         `json:"reason,omitempty"`
 	Output  map[string]any `json:"output,omitempty"`
 	Rule    map[string]any `json:"rule,omitempty"`
+	Trace   map[string]any `json:"trace,omitempty"`
 }
 
 type Evaluator func(Request) Decision
@@ -348,16 +349,27 @@ func (s *Service) Evaluate(req Request) Decision {
 		req.Inputs = map[string]any{}
 	}
 	if def.Engine == EngineRego {
-		return s.evaluateRego(def, req)
+		decision := s.evaluateRego(def, req)
+		if decision.Trace == nil {
+			decision.Trace = map[string]any{}
+		}
+		decision.Trace["hook_key"] = req.HookKey
+		decision.Trace["engine"] = def.Engine
+		return decision
 	}
 	eval, ok := s.evaluators[req.HookKey]
 	if !ok {
-		return Decision{Allowed: false, Code: "policy_evaluator_not_found", Reason: "policy evaluator not configured", Rule: req.Rule}
+		return Decision{Allowed: false, Code: "policy_evaluator_not_found", Reason: "policy evaluator not configured", Rule: req.Rule, Trace: map[string]any{"hook_key": req.HookKey, "engine": def.Engine}}
 	}
 	decision := eval(req)
 	if decision.Rule == nil {
 		decision.Rule = req.Rule
 	}
+	if decision.Trace == nil {
+		decision.Trace = map[string]any{}
+	}
+	decision.Trace["hook_key"] = req.HookKey
+	decision.Trace["engine"] = def.Engine
 	return decision
 }
 
@@ -390,6 +402,11 @@ func (s *Service) evaluateRego(def HookDefinition, req Request) Decision {
 	if decision.Rule == nil {
 		decision.Rule = req.Rule
 	}
+	if decision.Trace == nil {
+		decision.Trace = map[string]any{}
+	}
+	decision.Trace["hook_key"] = def.Key
+	decision.Trace["engine"] = def.Engine
 	return decision
 }
 
@@ -538,6 +555,9 @@ func decisionFromRegoResults(results []rego.Result) (Decision, bool) {
 	if output, ok := value["output"].(map[string]any); ok {
 		decision.Output = cloneMap(output)
 	}
+	if trace, ok := value["trace"].(map[string]any); ok {
+		decision.Trace = cloneMap(trace)
+	}
 	return decision, true
 }
 
@@ -556,6 +576,18 @@ func ruleFields(schemaKey string) []config.FieldDefinition {
 			{Key: "allowed_statuses", Label: "Allowed Statuses", Type: "string_list"},
 			{Key: "minimum_amount_minor", Label: "Minimum Amount Minor", Type: "int"},
 			{Key: "require_number", Label: "Require Number", Type: "bool"},
+		}
+	case "documents.workflow.assignment":
+		return []config.FieldDefinition{
+			{Key: "assignee_role_key", Label: "Assignee Role Key", Type: "string"},
+			{Key: "candidate_role_keys", Label: "Candidate Role Keys", Type: "string_list"},
+			{Key: "assignment_mode", Label: "Assignment Mode", Type: "string"},
+			{Key: "assignee_user_id", Label: "Assignee User ID", Type: "string"},
+		}
+	case "documents.workflow.sla":
+		return []config.FieldDefinition{
+			{Key: "due_after_seconds", Label: "Due After Seconds", Type: "int"},
+			{Key: "escalate_after_seconds", Label: "Escalate After Seconds", Type: "int"},
 		}
 	case "documents.search.visibility":
 		return []config.FieldDefinition{

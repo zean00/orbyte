@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"orbyte/internal/platform/shared"
@@ -15,7 +16,7 @@ func NewService() *Service {
 	svc := NewServiceWithRepository(NewMemoryRepository())
 	_ = svc.Register(Definition{
 		Key:    "generic_request_flow",
-		States: []string{"draft", "submitted", "approved", "rejected"},
+		States: []string{"draft", "submitted", "approved", "rejected", "cancelled"},
 		Actions: []ActionRule{
 			{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true, AssignmentMode: "role_queue", AssigneeRoleKey: "approver", CandidateRoleKeys: []string{"approver"}, ApprovalStageKey: "review", DueAfterSeconds: 24 * 60 * 60, EscalateAfterSeconds: 48 * 60 * 60},
 			{Action: "approve", FromState: "submitted", ToState: "approved", PermissionKey: "document.approve"},
@@ -34,8 +35,8 @@ func NewServiceWithRepository(repo Repository) *Service {
 }
 
 func (s *Service) Register(def Definition) error {
-	if def.Key == "" {
-		return shared.Validation("workflow key is required")
+	if err := validateDefinition(def); err != nil {
+		return err
 	}
 	return s.repo.SaveDefinition(def)
 }
@@ -48,33 +49,101 @@ func (s *Service) Get(key string) (Definition, error) {
 	return def, nil
 }
 
+func (s *Service) GetVersion(key string, version int) (Definition, error) {
+	def, ok := s.repo.GetDefinitionVersion(key, version)
+	if !ok {
+		return Definition{}, shared.NotFound("workflow definition not found")
+	}
+	return def, nil
+}
+
+func (s *Service) ListDefinitions() []Definition {
+	return s.repo.ListDefinitions()
+}
+
+func (s *Service) ListVersions(key string) []Definition {
+	return s.repo.ListDefinitionVersions(key)
+}
+
+func (s *Service) CreateDraft(key, actorID string) (Definition, error) {
+	return s.repo.CreateDraft(strings.TrimSpace(key), strings.TrimSpace(actorID))
+}
+
+func (s *Service) SaveDraft(def Definition, actorID string) (Definition, error) {
+	if strings.TrimSpace(def.Status) == "" {
+		def.Status = "draft"
+	}
+	if def.Status != "draft" {
+		return Definition{}, shared.Validation("only workflow drafts may be updated")
+	}
+	if err := validateDefinition(def); err != nil {
+		return Definition{}, err
+	}
+	return s.repo.SaveDraft(def, actorID)
+}
+
+func (s *Service) Publish(key string, version int, actorID string) (Definition, error) {
+	def, ok := s.repo.GetDefinitionVersion(key, version)
+	if !ok {
+		return Definition{}, shared.NotFound("workflow draft not found")
+	}
+	if result := s.Validate(def); !result.Valid {
+		return Definition{}, shared.Validation(strings.Join(result.Issues, "; "))
+	}
+	return s.repo.PublishDefinition(strings.TrimSpace(key), version, strings.TrimSpace(actorID))
+}
+
+func (s *Service) Validate(def Definition) ValidateResult {
+	issues := validateIssues(def)
+	return ValidateResult{Valid: len(issues) == 0, Issues: issues}
+}
+
 func (s *Service) Execute(workflowKey, currentState, action string) (Transition, error) {
 	def, ok := s.repo.GetDefinition(workflowKey)
 	if !ok {
 		return Transition{}, shared.NotFound("workflow definition not found")
 	}
-	for _, rule := range def.Actions {
-		if rule.Action == action && rule.FromState == currentState {
-			return Transition{
-				WorkflowKey:            workflowKey,
-				Action:                 action,
-				FromState:              currentState,
-				ToState:                rule.ToState,
-				PermissionKey:          rule.PermissionKey,
-				TaskType:               rule.TaskType,
-				CreateApproval:         rule.CreateApproval,
-				AssignmentMode:         rule.AssignmentMode,
-				AssigneeRoleKey:        rule.AssigneeRoleKey,
-				CandidateRoleKeys:      append([]string(nil), rule.CandidateRoleKeys...),
-				ApprovalStageKey:       rule.ApprovalStageKey,
-				DueAfterSeconds:        rule.DueAfterSeconds,
-				EscalateAfterSeconds:   rule.EscalateAfterSeconds,
-				RequiresDifferentActor: rule.RequiresDifferentActor,
-				StepUpRequired:         rule.StepUpRequired,
-			}, nil
-		}
+	return transitionForDefinition(def, currentState, action)
+}
+
+func (s *Service) ExecuteVersion(workflowKey string, version int, currentState, action string) (Transition, error) {
+	if version <= 0 {
+		return s.Execute(workflowKey, currentState, action)
 	}
-	return Transition{}, shared.Conflict("workflow action not allowed from current state")
+	def, ok := s.repo.GetDefinitionVersion(workflowKey, version)
+	if !ok {
+		return Transition{}, shared.NotFound("workflow definition not found")
+	}
+	return transitionForDefinition(def, currentState, action)
+}
+
+func (s *Service) Simulate(def Definition, input SimulationInput) SimulationResult {
+	result := SimulationResult{}
+	if validation := s.Validate(def); !validation.Valid {
+		result.Valid = false
+		result.Issues = validation.Issues
+		return result
+	}
+	transition, err := transitionForDefinition(def, input.CurrentState, input.Action)
+	if err != nil {
+		result.Valid = false
+		result.Issues = []string{err.Error()}
+		return result
+	}
+	now := time.Now().UTC()
+	mutation := s.PlanCreateSideEffects(transition, "document", firstNonEmpty(input.DocumentID, "simulation"), input.ActorID, now)
+	result.Valid = true
+	result.Transition = transition
+	if len(mutation.Tasks) > 0 {
+		task := mutation.Tasks[0]
+		result.PlannedTask = &task
+		result.AppliedAssignments = cloneMap(task.Metadata)
+	}
+	if len(mutation.Approvals) > 0 {
+		approval := mutation.Approvals[0]
+		result.PlannedApproval = &approval
+	}
+	return result
 }
 
 func (s *Service) CreateSideEffects(transition Transition, targetType, targetID string, now time.Time) error {
@@ -87,6 +156,10 @@ func (s *Service) ListTasks() []Task {
 
 func (s *Service) ListApprovals() []Approval {
 	return s.repo.ListApprovals()
+}
+
+func (s *Service) ListHistory(targetType, targetID string) []HistoryEvent {
+	return s.repo.ListHistory(strings.TrimSpace(targetType), strings.TrimSpace(targetID))
 }
 
 func (s *Service) ResolveApproval(targetID string) error {
@@ -111,6 +184,7 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 		mutation.Tasks = append(mutation.Tasks, Task{
 			ID:                fmt.Sprintf("task:%s:%s", targetID, transition.Action),
 			WorkflowKey:       transition.WorkflowKey,
+			WorkflowVersion:   transition.WorkflowVersion,
 			TargetType:        targetType,
 			TargetID:          targetID,
 			TaskType:          transition.TaskType,
@@ -129,6 +203,7 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 		mutation.Approvals = append(mutation.Approvals, Approval{
 			ID:                fmt.Sprintf("approval:%s:%s", targetID, transition.Action),
 			WorkflowKey:       transition.WorkflowKey,
+			WorkflowVersion:   transition.WorkflowVersion,
 			TargetType:        targetType,
 			TargetID:          targetID,
 			Status:            "pending",
@@ -183,5 +258,88 @@ func (s *Service) ApplyMutation(mutation Mutation) error {
 			return err
 		}
 	}
+	for _, event := range mutation.History {
+		if err := s.repo.SaveHistory(event); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func validateDefinition(def Definition) error {
+	if issues := validateIssues(def); len(issues) > 0 {
+		return shared.Validation(strings.Join(issues, "; "))
+	}
+	return nil
+}
+
+func validateIssues(def Definition) []string {
+	issues := []string{}
+	if strings.TrimSpace(def.Key) == "" {
+		issues = append(issues, "workflow key is required")
+	}
+	if len(def.States) == 0 {
+		issues = append(issues, "workflow must define at least one state")
+	}
+	if len(def.Actions) == 0 {
+		issues = append(issues, "workflow must define at least one action")
+	}
+	stateSet := map[string]bool{}
+	for _, state := range def.States {
+		state = strings.TrimSpace(state)
+		if state == "" {
+			issues = append(issues, "workflow state may not be blank")
+			continue
+		}
+		stateSet[state] = true
+	}
+	for _, action := range def.Actions {
+		if strings.TrimSpace(action.Action) == "" {
+			issues = append(issues, "workflow action is required")
+		}
+		if !stateSet[action.FromState] {
+			issues = append(issues, fmt.Sprintf("unknown from_state %q", action.FromState))
+		}
+		if !stateSet[action.ToState] {
+			issues = append(issues, fmt.Sprintf("unknown to_state %q", action.ToState))
+		}
+	}
+	return issues
+}
+
+func transitionForDefinition(def Definition, currentState, action string) (Transition, error) {
+	for _, rule := range def.Actions {
+		if rule.Action == action && rule.FromState == currentState {
+			return Transition{
+				WorkflowKey:            def.Key,
+				WorkflowVersion:        def.Version,
+				Action:                 action,
+				FromState:              currentState,
+				ToState:                rule.ToState,
+				PermissionKey:          rule.PermissionKey,
+				TaskType:               rule.TaskType,
+				CreateApproval:         rule.CreateApproval,
+				AssignmentStrategy:     rule.AssignmentStrategy,
+				AssignmentMode:         rule.AssignmentMode,
+				AssigneeRoleKey:        rule.AssigneeRoleKey,
+				CandidateRoleKeys:      append([]string(nil), rule.CandidateRoleKeys...),
+				FallbackRoleKey:        rule.FallbackRoleKey,
+				ApprovalStageKey:       rule.ApprovalStageKey,
+				DueAfterSeconds:        rule.DueAfterSeconds,
+				EscalateAfterSeconds:   rule.EscalateAfterSeconds,
+				RequiresDifferentActor: rule.RequiresDifferentActor,
+				StepUpRequired:         rule.StepUpRequired,
+			}, nil
+		}
+	}
+	return Transition{}, shared.Conflict("workflow action not allowed from current state")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

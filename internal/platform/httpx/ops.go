@@ -651,6 +651,15 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListApprovals()})
 	})
+
+	mux.HandleFunc("GET /ops/workflow/history", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"items": workflowSvc.ListHistory(strings.TrimSpace(r.URL.Query().Get("target_type")), strings.TrimSpace(r.URL.Query().Get("target_id"))),
+		})
+	})
 }
 
 func opsOutboxActionPath(path string) (string, string, bool) {

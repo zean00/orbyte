@@ -5,15 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/templateoutput"
@@ -417,6 +421,260 @@ func TestServerTemplateDraftFlowAndPreview(t *testing.T) {
 	}
 }
 
+func TestServerWorkflowDraftLifecycleAndPublishConfirmation(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "configuration.read" || permissionKey == "configuration.manage" || permissionKey == "identity.manage_users"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.definition.get", "arguments": map[string]any{"workflow_key": "generic_request_flow"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.definition.get failed: %+v", resp.Error)
+	}
+	meta := resp.Result.(map[string]any)["_meta"].(map[string]any)["orbyte/app"].(map[string]any)
+	if !strings.Contains(meta["resource_uri"].(string), "orbyte://apps/workflow.manager") {
+		t.Fatalf("expected workflow manager app meta, got %+v", meta)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.draft.create", "arguments": map[string]any{"workflow_key": "generic_request_flow"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.draft.create failed: %+v", resp.Error)
+	}
+	draft := resp.Result.(map[string]any)["structuredContent"].(workflow.Definition)
+	if draft.Status != "draft" {
+		t.Fatalf("expected draft, got %+v", draft)
+	}
+
+	draft.Actions[0].AssignmentStrategy = "requester_manager"
+	draft.Actions[0].FallbackRoleKey = "platform_admin"
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.draft.save", "arguments": map[string]any{"workflow": draft}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.draft.save failed: %+v", resp.Error)
+	}
+
+	subject, err := server.identity.CreateUser("requester", "password123", "loc_hq", "", "", "")
+	if err != nil {
+		t.Fatalf("create requester failed: %v", err)
+	}
+	manager, err := server.identity.CreateUser("manager", "password123", "loc_hq", "", "", "")
+	if err != nil {
+		t.Fatalf("create manager failed: %v", err)
+	}
+	if _, err := server.identity.UpsertReportingLine(identity.ReportingLine{
+		SubjectUserID:    subject.ID,
+		ManagerUserID:    manager.ID,
+		RelationshipType: "primary_manager",
+		Status:           "active",
+		LocationID:       "loc_hq",
+	}); err != nil {
+		t.Fatalf("save reporting line failed: %v", err)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "workflow.draft.simulate",
+			"arguments": map[string]any{
+				"workflow_key": "generic_request_flow",
+				"version":      draft.Version,
+				"input": map[string]any{
+					"current_state":   "draft",
+					"action":          "submit",
+					"organization_id": "org_root",
+					"location_id":     "loc_hq",
+					"additional_input": map[string]any{
+						"requester_user_id": subject.ID,
+					},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.draft.simulate failed: %+v", resp.Error)
+	}
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	preview := structured["routing_preview"].(map[string]any)
+	if preview["resolved_assignee_user_id"] != manager.ID {
+		t.Fatalf("expected resolved manager assignee, got %+v", preview)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      5,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.draft.publish", "arguments": map[string]any{"workflow_key": "generic_request_flow", "version": draft.Version}}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "confirm_publish") {
+		t.Fatalf("expected publish confirmation error, got %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      6,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.draft.publish", "arguments": map[string]any{"workflow_key": "generic_request_flow", "version": draft.Version, "confirm_publish": true}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.draft.publish failed: %+v", resp.Error)
+	}
+	published := resp.Result.(map[string]any)["structuredContent"].(workflow.Definition)
+	if published.Status != "published" {
+		t.Fatalf("expected published status, got %+v", published)
+	}
+}
+
+func TestServerWorkflowHierarchyAndRuntimeTools(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "configuration.read" || permissionKey == "identity.manage_users"
+		},
+	}
+
+	subject, err := server.identity.CreateUser("chain_user", "password123", "loc_hq", "", "", "")
+	if err != nil {
+		t.Fatalf("create subject failed: %v", err)
+	}
+	manager, err := server.identity.CreateUser("chain_manager", "password123", "loc_hq", "", "", "")
+	if err != nil {
+		t.Fatalf("create manager failed: %v", err)
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "workflow.reporting_line.save",
+			"arguments": map[string]any{
+				"reporting_line": map[string]any{
+					"subject_user_id":   subject.ID,
+					"manager_user_id":   manager.ID,
+					"relationship_type": "primary_manager",
+					"status":            "active",
+					"location_id":       "loc_hq",
+					"organization_id":   "org_root",
+					"operating_unit_id": "",
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.reporting_line.save failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.hierarchy.graph.get", "arguments": map[string]any{"location_id": "loc_hq", "status": "active"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.hierarchy.graph.get failed: %+v", resp.Error)
+	}
+	graph := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(graph["edges"].([]workflowHierarchyEdge)) == 0 {
+		t.Fatalf("expected hierarchy edges, got %+v", graph)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.hierarchy.chain.get", "arguments": map[string]any{"user_id": subject.ID, "location_id": "loc_hq"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.hierarchy.chain.get failed: %+v", resp.Error)
+	}
+	chain := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]map[string]any)
+	if len(chain) < 2 {
+		t.Fatalf("expected manager chain entries, got %+v", chain)
+	}
+
+	now := time.Now().UTC()
+	if err := server.workflows.ApplyMutation(workflow.Mutation{
+		Tasks: []workflow.Task{{
+			ID:          "task:mcp",
+			WorkflowKey: "generic_request_flow",
+			TargetType:  "document",
+			TargetID:    "doc:mcp",
+			TaskType:    "review",
+			Status:      "open",
+			CreatedAt:   now,
+		}},
+		Approvals: []workflow.Approval{{
+			ID:          "approval:mcp",
+			WorkflowKey: "generic_request_flow",
+			TargetType:  "document",
+			TargetID:    "doc:mcp",
+			Status:      "pending",
+			RequestedAt: now,
+		}},
+		History: []workflow.HistoryEvent{{
+			ID:          "history:mcp",
+			WorkflowKey: "generic_request_flow",
+			TargetType:  "document",
+			TargetID:    "doc:mcp",
+			Action:      "submit",
+			OccurredAt:  now,
+		}},
+	}); err != nil {
+		t.Fatalf("seed workflow runtime data failed: %v", err)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "workflow.runtime.tasks.list", "arguments": map[string]any{"target_id": "doc:mcp"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow.runtime.tasks.list failed: %+v", resp.Error)
+	}
+	tasks := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]workflow.Task)
+	if len(tasks) != 1 {
+		t.Fatalf("expected one task, got %+v", tasks)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      5,
+		Method:  "resources/read",
+		Params:  mustJSON(t, map[string]any{"uri": "orbyte://apps/workflow.manager?workflow_key=generic_request_flow&user_id=" + url.QueryEscape(subject.ID)}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("workflow manager resource failed: %+v", resp.Error)
+	}
+	contents := resp.Result.(map[string]any)["contents"].([]ResourceContent)
+	if len(contents) != 1 || !strings.Contains(contents[0].Text, "Workflow Manager") {
+		t.Fatalf("expected workflow manager html, got %+v", contents)
+	}
+}
+
 func TestServerCallsAnalyticsToolAndReadsAppResource(t *testing.T) {
 	server := newTestServer(t)
 	resp := server.Handle(context.Background(), JSONRPCRequest{
@@ -539,7 +797,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, nil, "", "")
+	unavailable := NewServer(nil, nil, nil, nil, nil, "", "")
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -596,7 +854,7 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, newTestTemplates(t), "", "")
+	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "", "")
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -639,11 +897,12 @@ func newTestServer(t *testing.T) *Server {
 	modules := newTestModules(t)
 	documents := document.NewService()
 	flows := workflow.NewService()
+	ident := newTestIdentity(t)
 	eventingSvc := eventing.NewService()
 	searchSvc := search.NewService()
 	obsSvc := observability.NewService()
 	analyticsSvc := analytics.NewService(documents, flows, eventingSvc, searchSvc, audit.NewService(), obsSvc)
-	return NewServer(modules, analyticsSvc, newTestTemplates(t), "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -667,7 +926,7 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -683,7 +942,7 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "", "")
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -699,7 +958,12 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "", "")
+}
+
+func newTestIdentity(t *testing.T) *identity.Service {
+	t.Helper()
+	return identity.NewService(organization.NewService())
 }
 
 func newTestTemplates(t *testing.T) *templateoutput.Service {

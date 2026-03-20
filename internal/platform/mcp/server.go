@@ -11,9 +11,11 @@ import (
 	"strings"
 
 	"orbyte/internal/platform/analytics"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/templateoutput"
+	"orbyte/internal/platform/workflow"
 )
 
 const ProtocolVersion = "2024-11-05"
@@ -23,6 +25,8 @@ const (
 	templateDesignerAppKey      = "template.designer"
 	analyticsStudioResourceURI  = "orbyte://apps/analytics.studio"
 	analyticsStudioAppKey       = "analytics.studio"
+	workflowManagerResourceURI  = "orbyte://apps/workflow.manager"
+	workflowManagerAppKey       = "workflow.manager"
 )
 
 const (
@@ -50,15 +54,19 @@ type Server struct {
 	modules                   *module.Service
 	analytics                 *analytics.Service
 	templates                 *templateoutput.Service
+	workflows                 *workflow.Service
+	identity                  *identity.Service
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
+func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
 	return &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
 		templates:                 templates,
+		workflows:                 workflows,
+		identity:                  identitySvc,
 		analyticsStreamPath:       analyticsStreamPath,
 		analyticsScopedStreamPath: analyticsScopedStreamPath,
 	}
@@ -379,6 +387,27 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 			builtInTool{name: "analytics.report.deliver", title: "Deliver Analytics Report", description: "Deliver a report artifact or run a report and deliver it.", permission: "analytics.deliver_reports", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "report_id": map[string]any{"type": "string"}, "channel": map[string]any{"type": "string"}, "recipient": map[string]any{"type": "string"}}}},
 		)
 	}
+	if s != nil && s.workflows != nil {
+		defs = append(defs,
+			builtInTool{name: "workflow.definition.list", title: "List Workflow Definitions", description: "List workflow definitions and published versions.", permission: "configuration.read"},
+			builtInTool{name: "workflow.definition.get", title: "Get Workflow Definition", description: "Get one workflow definition plus versions and current draft.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.version.list", title: "List Workflow Versions", description: "List all workflow versions for a definition.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.draft.create", title: "Create Workflow Draft", description: "Create a new workflow draft from the current published version.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.draft.get", title: "Get Workflow Draft", description: "Load the current workflow draft or a draft version.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.draft.save", title: "Save Workflow Draft", description: "Create or update a workflow draft definition.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow": map[string]any{"type": "object"}}, "required": []string{"workflow"}}},
+			builtInTool{name: "workflow.draft.validate", title: "Validate Workflow Draft", description: "Validate a workflow draft or draft version.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow": map[string]any{"type": "object"}, "workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}}}},
+			builtInTool{name: "workflow.draft.simulate", title: "Simulate Workflow Draft", description: "Simulate a workflow transition and preview routing.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow": map[string]any{"type": "object"}, "workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "input": map[string]any{"type": "object"}}}},
+			builtInTool{name: "workflow.draft.publish", title: "Publish Workflow Draft", description: "Publish a workflow draft version. Requires explicit confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "confirm_publish": map[string]any{"type": "boolean"}}, "required": []string{"workflow_key", "version", "confirm_publish"}}},
+			builtInTool{name: "workflow.runtime.tasks.list", title: "List Workflow Tasks", description: "List read-only workflow tasks.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "assignee_user_id": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.runtime.approvals.list", title: "List Workflow Approvals", description: "List read-only workflow approvals.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}, "stage_key": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.runtime.history.get", title: "Get Workflow History", description: "Get workflow history for one target.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"target_type": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}}, "required": []string{"target_type", "target_id"}}},
+			builtInTool{name: "workflow.hierarchy.graph.get", title: "Get Workflow Hierarchy Graph", description: "Get the reporting-line graph for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.hierarchy.chain.get", title: "Get Workflow Hierarchy Chain", description: "Get the manager chain for a user.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"user_id": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}, "required": []string{"user_id"}}},
+			builtInTool{name: "workflow.hierarchy.summary.get", title: "Get Workflow Hierarchy Summary", description: "Get hierarchy coverage and exception summary.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.reporting_line.list", title: "List Reporting Lines", description: "List reporting lines used for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"subject_user_id": map[string]any{"type": "string"}, "manager_user_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.reporting_line.save", title: "Save Reporting Line", description: "Create or update a reporting line for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"reporting_line": map[string]any{"type": "object"}}, "required": []string{"reporting_line"}}},
+		)
+	}
 	items := make([]ToolDescriptor, 0, len(defs))
 	for _, def := range defs {
 		if !scopeMatches(actor.EndpointScope, builtInToolScope(def.name)) {
@@ -420,6 +449,14 @@ func (s *Server) listBuiltInResources(actor ActorContext) []ResourceDescriptor {
 			})
 		}
 	}
+	if s != nil && s.workflows != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		items = append(items, ResourceDescriptor{
+			URI:         workflowManagerResourceURI,
+			Name:        "Workflow Manager",
+			Description: "Lightweight MCP app for workflow drafts, routing simulation, and hierarchy inspection.",
+			MIMEType:    "text/html",
+		})
+	}
 	return items
 }
 
@@ -458,6 +495,18 @@ func (s *Server) readBuiltInResource(actor ActorContext, uri string) ([]Resource
 			return nil, true, fmt.Errorf("resource is not allowed")
 		}
 		htmlText, err := s.renderAnalyticsStudioApp(actor, parsed)
+		if err != nil {
+			return nil, true, err
+		}
+		return []ResourceContent{{URI: uri, MIMEType: "text/html", Text: htmlText}}, true, nil
+	case "/workflow.manager":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		if !allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+			return nil, true, fmt.Errorf("resource is not allowed")
+		}
+		htmlText, err := s.renderWorkflowManagerApp(actor, parsed)
 		if err != nil {
 			return nil, true, err
 		}
@@ -612,6 +661,91 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 			return nil, false, nil
 		}
 		return s.analyticsReportDeliver(actor, arguments)
+	case "workflow.definition.list":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDefinitionList(actor, arguments)
+	case "workflow.definition.get":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDefinitionGet(actor, arguments)
+	case "workflow.version.list":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowVersionList(actor, arguments)
+	case "workflow.draft.create":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDraftCreate(actor, arguments)
+	case "workflow.draft.get":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDraftGet(actor, arguments)
+	case "workflow.draft.save":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDraftSave(actor, arguments)
+	case "workflow.draft.validate":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDraftValidate(actor, arguments)
+	case "workflow.draft.simulate":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDraftSimulate(actor, arguments)
+	case "workflow.draft.publish":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowDraftPublish(actor, arguments)
+	case "workflow.runtime.tasks.list":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowRuntimeTasksList(actor, arguments)
+	case "workflow.runtime.approvals.list":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowRuntimeApprovalsList(actor, arguments)
+	case "workflow.runtime.history.get":
+		if s == nil || s.workflows == nil {
+			return nil, false, nil
+		}
+		return s.workflowRuntimeHistoryGet(actor, arguments)
+	case "workflow.hierarchy.graph.get":
+		if s == nil || s.identity == nil {
+			return nil, false, nil
+		}
+		return s.workflowHierarchyGraphGet(actor, arguments)
+	case "workflow.hierarchy.chain.get":
+		if s == nil || s.identity == nil {
+			return nil, false, nil
+		}
+		return s.workflowHierarchyChainGet(actor, arguments)
+	case "workflow.hierarchy.summary.get":
+		if s == nil || s.identity == nil {
+			return nil, false, nil
+		}
+		return s.workflowHierarchySummaryGet(actor, arguments)
+	case "workflow.reporting_line.list":
+		if s == nil || s.identity == nil {
+			return nil, false, nil
+		}
+		return s.workflowReportingLineList(actor, arguments)
+	case "workflow.reporting_line.save":
+		if s == nil || s.identity == nil {
+			return nil, false, nil
+		}
+		return s.workflowReportingLineSave(actor, arguments)
 	default:
 		return nil, false, nil
 	}

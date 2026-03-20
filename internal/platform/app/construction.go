@@ -12,8 +12,8 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
-	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/idempotency"
+	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
@@ -29,8 +29,8 @@ import (
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
-	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/secretstore"
+	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -148,7 +148,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.modelActions = application.NewPostgresModelActions(postgres.DB, graph.models, graph.activities, graph.audit, graph.eventing)
 	}
 
-	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.policy, graph.submitStore)
+	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)

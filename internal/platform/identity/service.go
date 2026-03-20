@@ -499,6 +499,148 @@ func (s *Service) Bindings() []RoleBinding {
 	return s.repo.RoleBindings()
 }
 
+func (s *Service) ReportingLines() []ReportingLine {
+	items := append([]ReportingLine(nil), s.repo.ReportingLines()...)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].SubjectUserID == items[j].SubjectUserID {
+			if items[i].Priority == items[j].Priority {
+				return items[i].ID < items[j].ID
+			}
+			return items[i].Priority > items[j].Priority
+		}
+		return items[i].SubjectUserID < items[j].SubjectUserID
+	})
+	return items
+}
+
+func (s *Service) UpsertReportingLine(line ReportingLine) (ReportingLine, error) {
+	now := time.Now().UTC()
+	line.ID = strings.TrimSpace(line.ID)
+	line.SubjectUserID = strings.TrimSpace(line.SubjectUserID)
+	line.ManagerUserID = strings.TrimSpace(line.ManagerUserID)
+	line.RelationshipType = strings.ToLower(strings.TrimSpace(line.RelationshipType))
+	line.OrganizationID = strings.TrimSpace(line.OrganizationID)
+	line.LocationID = strings.TrimSpace(line.LocationID)
+	line.OperatingUnitID = strings.TrimSpace(line.OperatingUnitID)
+	line.Status = strings.ToLower(strings.TrimSpace(line.Status))
+	if line.ID == "" {
+		line.ID = fmt.Sprintf("reporting_line:%d", now.UnixNano())
+	}
+	if line.SubjectUserID == "" || line.ManagerUserID == "" {
+		return ReportingLine{}, shared.Validation("subject_user_id and manager_user_id are required")
+	}
+	if line.SubjectUserID == line.ManagerUserID {
+		return ReportingLine{}, shared.Validation("subject_user_id and manager_user_id must differ")
+	}
+	if _, ok := s.repo.FindUser(line.SubjectUserID); !ok {
+		return ReportingLine{}, shared.NotFound("subject user not found")
+	}
+	if _, ok := s.repo.FindUser(line.ManagerUserID); !ok {
+		return ReportingLine{}, shared.NotFound("manager user not found")
+	}
+	switch line.RelationshipType {
+	case "", "primary_manager":
+		line.RelationshipType = "primary_manager"
+	case "acting_manager":
+	default:
+		return ReportingLine{}, shared.Validation("relationship_type must be primary_manager or acting_manager")
+	}
+	if line.Status == "" {
+		line.Status = "active"
+	}
+	if line.Status != "active" && line.Status != "inactive" {
+		return ReportingLine{}, shared.Validation("status must be active or inactive")
+	}
+	if line.EffectiveFrom.IsZero() {
+		line.EffectiveFrom = now
+	}
+	if !line.EffectiveTo.IsZero() && line.EffectiveTo.Before(line.EffectiveFrom) {
+		return ReportingLine{}, shared.Validation("effective_to must be after effective_from")
+	}
+	if line.CreatedAt.IsZero() {
+		line.CreatedAt = now
+	}
+	line.UpdatedAt = now
+	if err := s.repo.SaveReportingLine(line); err != nil {
+		return ReportingLine{}, err
+	}
+	return line, nil
+}
+
+func (s *Service) ResolveManager(subjectUserID, organizationID, locationID, operatingUnitID string, at time.Time) (ManagerResolution, bool) {
+	lines := activeReportingLinesForUser(s.repo.ReportingLines(), strings.TrimSpace(subjectUserID), organizationID, locationID, operatingUnitID, resolveTime(at))
+	if len(lines) == 0 {
+		return ManagerResolution{}, false
+	}
+	sort.SliceStable(lines, func(i, j int) bool {
+		left := reportingLineRank(lines[i].RelationshipType)
+		right := reportingLineRank(lines[j].RelationshipType)
+		if left == right {
+			if lines[i].Priority == lines[j].Priority {
+				return lines[i].ID < lines[j].ID
+			}
+			return lines[i].Priority > lines[j].Priority
+		}
+		return left < right
+	})
+	for _, line := range lines {
+		manager, ok := s.repo.FindUser(line.ManagerUserID)
+		if !ok || manager.Status != "active" {
+			continue
+		}
+		return ManagerResolution{Line: line, Manager: manager, Via: line.RelationshipType}, true
+	}
+	return ManagerResolution{}, false
+}
+
+func (s *Service) ResolveRoleCandidates(roleKey, organizationID, locationID, operatingUnitID string, at time.Time) []User {
+	roleKey = strings.TrimSpace(roleKey)
+	if roleKey == "" {
+		return nil
+	}
+	role, ok := s.findRoleByKey(roleKey)
+	if !ok {
+		return nil
+	}
+	now := resolveTime(at)
+	candidateIDs := map[string]struct{}{}
+	for _, binding := range s.repo.RoleBindings() {
+		if binding.RoleID != role.ID || binding.Status != "active" {
+			continue
+		}
+		if binding.EffectiveFrom.After(now) {
+			continue
+		}
+		if !binding.EffectiveTo.IsZero() && binding.EffectiveTo.Before(now) {
+			continue
+		}
+		if !bindingMatchesScope(binding, organizationID, locationID, operatingUnitID) {
+			continue
+		}
+		user, ok := s.repo.FindUser(binding.UserID)
+		if !ok || user.Status != "active" {
+			continue
+		}
+		candidateIDs[user.ID] = struct{}{}
+	}
+	if len(candidateIDs) == 0 {
+		return nil
+	}
+	users := make([]User, 0, len(candidateIDs))
+	for _, user := range s.repo.Users() {
+		if _, ok := candidateIDs[user.ID]; ok {
+			users = append(users, user)
+		}
+	}
+	sort.Slice(users, func(i, j int) bool {
+		if users[i].Username == users[j].Username {
+			return users[i].ID < users[j].ID
+		}
+		return users[i].Username < users[j].Username
+	})
+	return users
+}
+
 func (s *Service) Sessions() []Session {
 	return s.repo.Sessions()
 }
@@ -1715,6 +1857,16 @@ func (s *Service) findRole(roleID string) (Role, bool) {
 	return Role{}, false
 }
 
+func (s *Service) findRoleByKey(roleKey string) (Role, bool) {
+	roleKey = strings.TrimSpace(roleKey)
+	for _, role := range s.repo.Roles() {
+		if role.Key == roleKey {
+			return role, true
+		}
+	}
+	return Role{}, false
+}
+
 func normalizeRoutePreference(route string) string {
 	route = strings.TrimSpace(route)
 	if route == "" {
@@ -1739,6 +1891,72 @@ func (s *Service) revokeUserSessions(userID string, revokedAt time.Time) error {
 		}
 	}
 	return nil
+}
+
+func resolveTime(at time.Time) time.Time {
+	if at.IsZero() {
+		return time.Now().UTC()
+	}
+	return at.UTC()
+}
+
+func reportingLineRank(kind string) int {
+	switch strings.TrimSpace(kind) {
+	case "acting_manager":
+		return 0
+	case "primary_manager":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func activeReportingLinesForUser(lines []ReportingLine, subjectUserID, organizationID, locationID, operatingUnitID string, at time.Time) []ReportingLine {
+	items := make([]ReportingLine, 0)
+	for _, line := range lines {
+		if line.SubjectUserID != subjectUserID || line.Status != "active" {
+			continue
+		}
+		if line.EffectiveFrom.After(at) {
+			continue
+		}
+		if !line.EffectiveTo.IsZero() && line.EffectiveTo.Before(at) {
+			continue
+		}
+		if !reportingLineMatchesScope(line, organizationID, locationID, operatingUnitID) {
+			continue
+		}
+		items = append(items, line)
+	}
+	return items
+}
+
+func reportingLineMatchesScope(line ReportingLine, organizationID, locationID, operatingUnitID string) bool {
+	if line.OrganizationID != "" && organizationID != "" && line.OrganizationID != organizationID {
+		return false
+	}
+	if line.LocationID != "" && locationID != "" && line.LocationID != locationID {
+		return false
+	}
+	if line.OperatingUnitID != "" && operatingUnitID != "" && line.OperatingUnitID != operatingUnitID {
+		return false
+	}
+	return true
+}
+
+func bindingMatchesScope(binding RoleBinding, organizationID, locationID, operatingUnitID string) bool {
+	switch binding.ScopeType {
+	case "", "deployment":
+		return true
+	case "organization":
+		return binding.ScopeID == "" || organizationID == "" || binding.ScopeID == organizationID
+	case "location":
+		return binding.ScopeID == "" || locationID == "" || binding.ScopeID == locationID
+	case "operating_unit":
+		return binding.ScopeID == "" || operatingUnitID == "" || binding.ScopeID == operatingUnitID
+	default:
+		return true
+	}
 }
 
 func (s *Service) ReviewSession(sessionID string) (SessionReview, bool) {

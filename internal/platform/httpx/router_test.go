@@ -119,7 +119,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 	} {
 		eventingSvc.RegisterHandler(eventType, eventing.NewDocumentProjectionHandler(docs, searchSvc))
 	}
-	actions := application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	actions := application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
 	modelActions := application.NewMemoryModelActions(models, activities, auditSvc, eventingSvc)
 	tokenManager := identity.NewTokenManagerFromEnv()
 	token, err := tokenManager.IssueSessionToken(ident.Sessions()[0])
@@ -744,6 +744,79 @@ func TestLoginLogoutAndSessionRevocation(t *testing.T) {
 	}
 	if !seenLogin || !seenLogout {
 		t.Fatalf("expected auth audit events, got %+v", events)
+	}
+}
+
+func TestAdminReportingLinesCRUD(t *testing.T) {
+	h := newTestHarness(t)
+	manager, err := h.ident.CreateUser("rl-manager", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create manager failed: %v", err)
+	}
+	subject, err := h.ident.CreateUser("rl-subject", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create subject failed: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"subject_user_id":   subject.ID,
+		"manager_user_id":   manager.ID,
+		"relationship_type": "primary_manager",
+		"organization_id":   "org_default",
+		"location_id":       "loc_hq",
+		"status":            "active",
+	})
+	create := h.request(http.MethodPost, "/admin/api/reporting-lines", body, true)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", create.Code, create.Body.String())
+	}
+
+	list := h.request(http.MethodGet, "/admin/api/reporting-lines?subject_user_id="+url.QueryEscape(subject.ID), nil, true)
+	if list.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", list.Code, list.Body.String())
+	}
+	var payload struct {
+		Items []identity.ReportingLine `json:"items"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].ManagerUserID != manager.ID {
+		t.Fatalf("unexpected reporting lines: %+v", payload.Items)
+	}
+
+	graph := h.request(http.MethodGet, "/admin/api/hierarchy/graph?subject_user_id="+url.QueryEscape(subject.ID), nil, true)
+	if graph.Code != http.StatusOK {
+		t.Fatalf("expected hierarchy graph 200, got %d body=%s", graph.Code, graph.Body.String())
+	}
+}
+
+func TestAdminWorkflowSimulationIncludesRoutingPreview(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"current_state":   "draft",
+		"action":          "submit",
+		"actor_id":        "user_admin",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"additional_input": map[string]any{
+			"requester_user_id": "user_admin",
+		},
+	})
+	rr := h.request(http.MethodPost, "/admin/api/workflows/generic_request_flow/versions/1/simulate", body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if _, ok := payload["routing_preview"]; !ok {
+		t.Fatalf("expected routing_preview, got %+v", payload)
+	}
+	if _, ok := payload["simulation"]; !ok {
+		t.Fatalf("expected simulation payload, got %+v", payload)
 	}
 }
 
@@ -2519,7 +2592,7 @@ func TestReadyzReturnsUnavailableWhenRuntimeHealthIsDegraded(t *testing.T) {
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
-	router := NewRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
+	router := NewRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

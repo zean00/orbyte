@@ -116,3 +116,25 @@ type Decision struct {
 	Constraints []string `json:"constraints,omitempty"`
 	Reason      string   `json:"reason,omitempty"`
 }
+
+type ReportingLine struct {
+	ID               string    `json:"id"`
+	SubjectUserID    string    `json:"subject_user_id"`
+	ManagerUserID    string    `json:"manager_user_id"`
+	RelationshipType string    `json:"relationship_type"`
+	OrganizationID   string    `json:"organization_id,omitempty"`
+	LocationID       string    `json:"location_id,omitempty"`
+	OperatingUnitID  string    `json:"operating_unit_id,omitempty"`
+	Status           string    `json:"status"`
+	Priority         int       `json:"priority,omitempty"`
+	EffectiveFrom    time.Time `json:"effective_from"`
+	EffectiveTo      time.Time `json:"effective_to,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type ManagerResolution struct {
+	Line    ReportingLine `json:"line"`
+	Manager User          `json:"manager"`
+	Via     string        `json:"via"`
+}

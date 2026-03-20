@@ -12,6 +12,7 @@ type Repository interface {
 	Sessions() []Session
 	ServicePrincipals() []ServicePrincipal
 	DelegationGrants() []DelegationGrant
+	ReportingLines() []ReportingLine
 	SaveUser(user User) error
 	SaveRole(role Role) error
 	SavePermission(permission Permission) error
@@ -19,6 +20,7 @@ type Repository interface {
 	SaveRolePermission(grant RolePermission) error
 	SaveServicePrincipal(principal ServicePrincipal) error
 	SaveDelegationGrant(grant DelegationGrant) error
+	SaveReportingLine(line ReportingLine) error
 	FindUser(id string) (User, bool)
 	FindUserByUsername(username string) (User, bool)
 	FindUserByAuthenticationSubject(subject string) (User, bool)
