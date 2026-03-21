@@ -40,6 +40,7 @@ type Manifest struct {
 	Security               SecurityDefinition         `json:"security,omitempty"`
 	Observability          ObservabilityDefinition    `json:"observability,omitempty"`
 	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
+	SelfService            SelfServiceDefinition      `json:"self_service,omitempty"`
 	Offline                OfflineDefinition          `json:"offline,omitempty"`
 	MCP                    MCPDefinition              `json:"mcp,omitempty"`
 	Templates              []TemplateDefinition       `json:"templates,omitempty"`
@@ -233,10 +234,39 @@ type FrontendDefinition struct {
 type UISurface string
 
 const (
-	UISurfaceUser  UISurface = "user"
-	UISurfaceAdmin UISurface = "admin"
-	UISurfaceBoth  UISurface = "both"
+	UISurfaceUser        UISurface = "user"
+	UISurfaceAdmin       UISurface = "admin"
+	UISurfaceBoth        UISurface = "both"
+	UISurfaceBackoffice  UISurface = "backoffice"
+	UISurfaceWorklist    UISurface = "worklist"
+	UISurfaceSelfService UISurface = "self_service"
+	UISurfacePOS         UISurface = "pos"
+	UISurfaceMobile      UISurface = "mobile"
 )
+
+type SelfServiceDefinition struct {
+	APIs []SelfServiceAPIDefinition `json:"apis,omitempty"`
+}
+
+type SelfServiceAPIDefinition struct {
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	Method              string             `json:"method"`
+	RoutePath           string             `json:"route_path"`
+	HandlerKind         string             `json:"handler_kind"`
+	DocumentType        string             `json:"document_type,omitempty"`
+	ModelKey            string             `json:"model_key,omitempty"`
+	FlowKey             string             `json:"flow_key,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	AudienceKinds       []string           `json:"audience_kinds,omitempty"`
+	RequestContractKey  string             `json:"request_contract_key,omitempty"`
+	ResponseContractKey string             `json:"response_contract_key,omitempty"`
+	Idempotent          bool               `json:"idempotent,omitempty"`
+	OfflineCapable      bool               `json:"offline_capable,omitempty"`
+}
 
 type OfflineDefinition struct {
 	References  []OfflineReferenceDefinition  `json:"references,omitempty"`

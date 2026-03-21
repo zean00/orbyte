@@ -427,6 +427,27 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSystems()})
 	})
 
+	mux.HandleFunc("GET /admin/api/integrations/endpoints", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListEndpoints()})
+	})
+
+	mux.HandleFunc("GET /admin/api/integrations/contracts", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListContracts()})
+	})
+
+	mux.HandleFunc("GET /admin/api/integrations/mappings", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListMappings()})
+	})
+
 	mux.HandleFunc("GET /admin/api/integrations/submissions", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
 			return
@@ -799,20 +820,37 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 			return
 		}
 		var req struct {
-			IdempotencyKey string         `json:"idempotency_key"`
-			SystemKey      string         `json:"system_key"`
-			OperationType  string         `json:"operation_type"`
-			DocumentID     string         `json:"document_id"`
-			CorrelationID  string         `json:"correlation_id"`
-			Payload        map[string]any `json:"payload"`
-			ProcessNow     bool           `json:"process_now"`
+			IdempotencyKey  string         `json:"idempotency_key"`
+			SystemKey       string         `json:"system_key"`
+			EndpointKey     string         `json:"endpoint_key"`
+			ContractKey     string         `json:"contract_key"`
+			ContractVersion int            `json:"contract_version"`
+			Intent          string         `json:"intent"`
+			Mode            string         `json:"mode"`
+			OperationType   string         `json:"operation_type"`
+			DocumentID      string         `json:"document_id"`
+			CorrelationID   string         `json:"correlation_id"`
+			Payload         map[string]any `json:"payload"`
+			ProcessNow      bool           `json:"process_now"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, shared.Validation("invalid request body"))
 			return
 		}
 		outcome, err := idempotencySvc.Execute("integration.submission.create", req.IdempotencyKey, principalActorID(p), req, func() (idempotency.Outcome, error) {
-			record, err := integrationSvc.CreateSubmission(req.SystemKey, req.OperationType, req.DocumentID, req.CorrelationID, req.Payload)
+			record, err := integrationSvc.CreateDelivery(integration.SubmissionRecord{
+				ExternalSystemKey: req.SystemKey,
+				EndpointKey:       req.EndpointKey,
+				ContractKey:       req.ContractKey,
+				ContractVersion:   req.ContractVersion,
+				Intent:            req.Intent,
+				Mode:              req.Mode,
+				OperationType:     req.OperationType,
+				DocumentID:        req.DocumentID,
+				CorrelationID:     req.CorrelationID,
+				IdempotencyKey:    req.IdempotencyKey,
+				Payload:           req.Payload,
+			})
 			if err != nil {
 				return idempotency.Outcome{}, err
 			}

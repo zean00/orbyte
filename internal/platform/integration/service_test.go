@@ -203,6 +203,87 @@ func TestAttachJobsQueuesSubmissionProcessing(t *testing.T) {
 	t.Fatalf("expected async integration processing to succeed, got %+v", stored)
 }
 
+func TestCreateDeliveryTracksContractAndAttempts(t *testing.T) {
+	obs := observability.NewService()
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.queued.total", Type: "counter"})
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.succeeded.total", Type: "counter"})
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.failed.total", Type: "counter"})
+	svc := NewService(obs, logging.NewService())
+
+	record, err := svc.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: "fake_erp",
+		EndpointKey:       "fake_erp.default",
+		ContractKey:       "document.submit",
+		ContractVersion:   1,
+		Intent:            "command",
+		Mode:              "sync",
+		OperationType:     "submit_document",
+		DocumentID:        "doc-1",
+		Payload:           map[string]any{"foo": "bar"},
+	})
+	if err != nil {
+		t.Fatalf("create delivery failed: %v", err)
+	}
+	if record.ContractKey != "document.submit" || record.EndpointKey != "fake_erp.default" {
+		t.Fatalf("expected delivery metadata, got %+v", record)
+	}
+	record, err = svc.ProcessSubmission(record.ID)
+	if err != nil {
+		t.Fatalf("process delivery failed: %v", err)
+	}
+	attempts := svc.ListSubmissionAttempts(record.ID)
+	if len(attempts) != 1 || attempts[0].Status != "succeeded" {
+		t.Fatalf("expected succeeded attempt, got %+v", attempts)
+	}
+}
+
+func TestDeadLetterReplay(t *testing.T) {
+	obs := observability.NewService()
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.queued.total", Type: "counter"})
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.succeeded.total", Type: "counter"})
+	obs.RegisterMetricDefinition(observability.MetricDefinition{Key: "integration.submissions.failed.total", Type: "counter"})
+	svc := NewService(obs, logging.NewService())
+
+	record, err := svc.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: "fake_erp",
+		EndpointKey:       "fake_erp.default",
+		ContractKey:       "document.submit",
+		ContractVersion:   1,
+		Intent:            "command",
+		Mode:              "sync",
+		OperationType:     "submit_document",
+		DocumentID:        "doc-1",
+		Payload:           map[string]any{"force_fail": true},
+	})
+	if err != nil {
+		t.Fatalf("create delivery failed: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		record, err = svc.ProcessSubmission(record.ID)
+		if err != nil {
+			t.Fatalf("process submission failed: %v", err)
+		}
+	}
+	if record.Status != "dead_letter" {
+		t.Fatalf("expected dead letter status, got %+v", record)
+	}
+	letters := svc.ListDeadLetters()
+	if len(letters) != 1 {
+		t.Fatalf("expected one dead letter, got %+v", letters)
+	}
+	record.Payload["force_fail"] = false
+	if err := svc.repo.SaveSubmission(record); err != nil {
+		t.Fatalf("save updated payload failed: %v", err)
+	}
+	replayed, err := svc.ReplayDeadLetter(letters[0].ID)
+	if err != nil {
+		t.Fatalf("replay dead letter failed: %v", err)
+	}
+	if replayed.Status != "succeeded" {
+		t.Fatalf("expected replay success, got %+v", replayed)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

@@ -246,6 +246,39 @@ func (s *Service) DocumentFlowForSurface(key string, surface UISurface) (Documen
 	return DocumentFlowDefinition{}, false
 }
 
+func (s *Service) DocumentFlow(key string) (DocumentFlowDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, flow := range manifest.Frontend.DocumentFlows {
+			if flow.Key == key {
+				return flow, true
+			}
+		}
+	}
+	return DocumentFlowDefinition{}, false
+}
+
+func (s *Service) SelfServiceAPIs() []SelfServiceAPIDefinition {
+	items := make([]SelfServiceAPIDefinition, 0)
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.SelfService.APIs {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) SelfServiceAPI(key string) (SelfServiceAPIDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.SelfService.APIs {
+			if item.Key == key {
+				return item, true
+			}
+		}
+	}
+	return SelfServiceAPIDefinition{}, false
+}
+
 func (s *Service) Bundle(key string) (BundleDefinition, bool) {
 	for _, manifest := range s.manifests {
 		for _, bundle := range manifest.Bundles {
@@ -519,7 +552,16 @@ func matchesSurface(itemSurface, requested UISurface) bool {
 	if requested == "" || requested == UISurfaceBoth {
 		return true
 	}
-	return effective == UISurfaceBoth || effective == requested
+	if effective == UISurfaceBoth {
+		return true
+	}
+	if requested == UISurfaceBackoffice && effective == UISurfaceUser {
+		return true
+	}
+	if requested == UISurfaceUser && effective == UISurfaceBackoffice {
+		return true
+	}
+	return effective == requested
 }
 
 func (s *Service) IsEnabled(key string) bool {
@@ -647,6 +689,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	flows := map[string]string{}
 	bundles := map[string]string{}
 	menus := map[string]string{}
+	selfServiceAPIs := map[string]string{}
 	mcpTools := map[string]string{}
 	mcpResources := map[string]string{}
 	mcpURIs := map[string]string{}
@@ -669,6 +712,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 
 	for moduleKey, current := range existing {
 		indexFrontendContracts(moduleKey, current, actions, views, customEntries, flows, bundles, menus)
+		indexSelfServiceContracts(moduleKey, current, selfServiceAPIs)
 		indexMCPContracts(moduleKey, current, mcpTools, mcpResources, mcpURIs, mcpApps)
 		indexTemplateContracts(moduleKey, current, templates)
 		indexSecurityContracts(moduleKey, current, permissions, roleTemplates, policyHooks)
@@ -1019,6 +1063,33 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		flows[flow.Key] = manifest.Key
 	}
+	for _, api := range manifest.SelfService.APIs {
+		if strings.TrimSpace(api.Key) == "" || strings.TrimSpace(api.Title) == "" || strings.TrimSpace(api.Method) == "" || strings.TrimSpace(api.RoutePath) == "" || strings.TrimSpace(api.HandlerKind) == "" {
+			return shared.Validation("self service api key, title, method, route_path, and handler_kind are required")
+		}
+		if !strings.HasPrefix(strings.TrimSpace(api.RoutePath), "/") {
+			return shared.Validation("self service api route_path must start with /")
+		}
+		if owner, ok := selfServiceAPIs[api.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("self service api key already registered")
+		}
+		if strings.TrimSpace(api.DocumentType) != "" {
+			if _, ok := documentTypes[api.DocumentType]; !ok {
+				return shared.Validation("self service api document_type is not registered")
+			}
+		}
+		if strings.TrimSpace(api.ModelKey) != "" {
+			if _, ok := models[api.ModelKey]; !ok {
+				return shared.Validation("self service api model_key is not registered")
+			}
+		}
+		if strings.TrimSpace(api.FlowKey) != "" {
+			if _, ok := flows[api.FlowKey]; !ok {
+				return shared.Validation("self service api flow_key is not registered")
+			}
+		}
+		selfServiceAPIs[api.Key] = manifest.Key
+	}
 	for _, bundle := range manifest.Bundles {
 		if strings.TrimSpace(bundle.Key) == "" || strings.TrimSpace(bundle.Script) == "" {
 			return shared.Validation("bundle key and script are required")
@@ -1232,6 +1303,12 @@ func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views,
 	}
 	for _, bundle := range manifest.Bundles {
 		bundles[bundle.Key] = moduleKey
+	}
+}
+
+func indexSelfServiceContracts(moduleKey string, manifest Manifest, apis map[string]string) {
+	for _, item := range manifest.SelfService.APIs {
+		apis[item.Key] = moduleKey
 	}
 }
 

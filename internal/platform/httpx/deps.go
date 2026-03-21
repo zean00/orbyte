@@ -95,6 +95,7 @@ type OpsDeps struct {
 	Analytics     *analytics.Service
 	Monitoring    *monitoring.Service
 	Observability *observability.Service
+	Integration   *integration.Service
 	Jobs          *jobs.Service
 	Health        *runtimehealth.Tracker
 }
@@ -132,6 +133,7 @@ type UIDeps struct {
 	Activities    *activity.Service
 	Reporting     *reporting.Service
 	Documents     *document.Service
+	Workflows     *workflow.Service
 	Search        *search.Service
 	Analytics     *analytics.Service
 	Monitoring    *monitoring.Service
@@ -195,7 +197,7 @@ func registerDocumentRoutesWithDeps(mux *http.ServeMux, deps DocumentDeps) {
 }
 
 func registerOpsRoutesWithDeps(mux *http.ServeMux, deps OpsDeps) {
-	registerOpsRoutes(mux, deps.Identity, deps.Audit, deps.Eventing, deps.Documents, deps.Search, deps.Workflows, deps.Analytics, deps.Monitoring, deps.Observability, deps.Jobs, deps.Health)
+	registerOpsRoutes(mux, deps.Identity, deps.Audit, deps.Eventing, deps.Documents, deps.Search, deps.Workflows, deps.Analytics, deps.Monitoring, deps.Observability, deps.Integration, deps.Jobs, deps.Health)
 }
 
 func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
@@ -219,7 +221,7 @@ func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {
 }
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {
-	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity)
+	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity)
 }
 
 func registerDocsRoutesWithDeps(mux *http.ServeMux, deps DocsDeps) {

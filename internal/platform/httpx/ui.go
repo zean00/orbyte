@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -19,9 +20,10 @@ import (
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/workflow"
 )
 
-func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
+func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(uiShellHTML))
@@ -56,9 +58,10 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		menus, actions, views, _, flows := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		surface := requestedUISurface(r)
+		menus, actions, views, _, flows := visibleUIContracts(ident, modules, p, surface)
 		adminMenus, adminActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
-		defaultPath := defaultRouteForSurface(ident, p.userID, "user", menus, actions)
+		defaultPath := defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
 		adminPath := "/admin"
 		if len(adminMenus) > 0 {
 			for _, action := range adminActions {
@@ -69,15 +72,18 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			}
 		}
 		respondJSON(w, http.StatusOK, map[string]any{
-			"menus":             menus,
-			"actions":           actions,
-			"views":             views,
-			"flows":             flows,
-			"default_path":      defaultPath,
-			"admin_access":      len(adminMenus) > 0,
-			"admin_path":        adminPath,
-			"locale":            localeFromRequest(r, ident),
-			"supported_locales": i18n.SupportedLocales(),
+			"surface":            surface,
+			"available_surfaces": availableUISurfaces(ident, modules, p),
+			"menus":              menus,
+			"actions":            actions,
+			"views":              views,
+			"flows":              flows,
+			"self_service_apis":  visibleSelfServiceAPIs(ident, modules, p),
+			"default_path":       defaultPath,
+			"admin_access":       len(adminMenus) > 0,
+			"admin_path":         adminPath,
+			"locale":             localeFromRequest(r, ident),
+			"supported_locales":  i18n.SupportedLocales(),
 			"auth_context": map[string]any{
 				"actor_user_id":       p.userID,
 				"effective_user_id":   principalEffectiveUserID(p),
@@ -92,7 +98,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		menus, _, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		menus, _, _, _, _ := visibleUIContracts(ident, modules, p, requestedUISurface(r))
 		respondJSON(w, http.StatusOK, map[string]any{"items": menus})
 	})
 
@@ -101,8 +107,16 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		if !ok {
 			return
 		}
-		_, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		_, actions, _, _, _ := visibleUIContracts(ident, modules, p, requestedUISurface(r))
 		respondJSON(w, http.StatusOK, map[string]any{"items": actions})
+	})
+
+	mux.HandleFunc("GET /ui/self-service/apis", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": visibleSelfServiceAPIs(ident, modules, p)})
 	})
 
 	mux.HandleFunc("GET /ui/actions/render", func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +163,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.NotFound("view not found"))
 			return
 		}
-		_, _, views, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
+		_, _, views, _, _ := visibleUIContracts(ident, modules, p, requestedUISurface(r))
 		for _, view := range views {
 			if view.Key == viewKey {
 				respondJSON(w, http.StatusOK, view)
@@ -169,7 +183,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Validation("path is required"))
 			return
 		}
-		resolution, ok := modules.ResolveRouteForSurface(path, module.UISurfaceUser)
+		resolution, ok := modules.ResolveRouteForSurface(path, requestedUISurface(r))
 		if !ok {
 			respondError(w, shared.NotFound("route not found"))
 			return
@@ -203,7 +217,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.NotFound("document flow not found"))
 			return
 		}
-		flow, ok := modules.DocumentFlowForSurface(flowKey, module.UISurfaceUser)
+		flow, ok := modules.DocumentFlowForSurface(flowKey, requestedUISurface(r))
 		if !ok || !principalAllowsAll(ident, p, flow.RequiredPermissions) {
 			respondError(w, shared.NotFound("document flow not found"))
 			return
@@ -375,6 +389,124 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			return
 		}
 		respondJSON(w, http.StatusOK, analyticsSvc.Snapshot())
+	})
+
+	mux.HandleFunc("GET /ui/data/worklist/tasks", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"document.list"}) {
+			respondError(w, shared.Forbidden("worklist is not allowed"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": filterWorkflowTasksForUI(docs, workflowSvc.ListTasks(), p.userID, r)})
+	})
+
+	mux.HandleFunc("GET /ui/data/worklist/approvals", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"document.list"}) {
+			respondError(w, shared.Forbidden("worklist is not allowed"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": filterWorkflowApprovalsForUI(docs, workflowSvc.ListApprovals(), p.userID, r)})
+	})
+
+	mux.HandleFunc("GET /ui/data/worklist/summary", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"document.list"}) {
+			respondError(w, shared.Forbidden("worklist is not allowed"))
+			return
+		}
+		tasks := filterWorkflowTasksForUI(docs, workflowSvc.ListTasks(), p.userID, r)
+		approvals := filterWorkflowApprovalsForUI(docs, workflowSvc.ListApprovals(), p.userID, r)
+		now := time.Now().UTC()
+		overdueTasks := 0
+		overdueApprovals := 0
+		for _, item := range tasks {
+			if item.DueAt != "" && item.Status == "open" {
+				if dueAt, err := time.Parse(time.RFC3339Nano, item.DueAt); err == nil && dueAt.Before(now) {
+					overdueTasks++
+				}
+			}
+		}
+		for _, item := range approvals {
+			if item.DueAt != "" && item.Status == "pending" {
+				if dueAt, err := time.Parse(time.RFC3339Nano, item.DueAt); err == nil && dueAt.Before(now) {
+					overdueApprovals++
+				}
+			}
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"tasks": map[string]any{
+				"total":     len(tasks),
+				"open":      countWorkflowItems(tasks, "open"),
+				"overdue":   overdueTasks,
+				"mine":      countWorklistMine(tasks),
+				"by_status": countWorkflowStatuses(tasks),
+				"workflows": countWorklistTaskWorkflowKeys(tasks),
+			},
+			"approvals": map[string]any{
+				"total":           len(approvals),
+				"pending":         countWorkflowItems(approvals, "pending"),
+				"overdue":         overdueApprovals,
+				"requested_by_me": countApprovalsRequestedByMe(approvals, p.userID),
+				"by_status":       countWorkflowStatuses(approvals),
+				"workflows":       countWorklistApprovalWorkflowKeys(approvals),
+			},
+		})
+	})
+
+	mux.HandleFunc("GET /ui/data/worklist/context", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"document.read"}) {
+			respondError(w, shared.Forbidden("worklist context is not allowed"))
+			return
+		}
+		targetType := strings.TrimSpace(r.URL.Query().Get("target_type"))
+		targetID := strings.TrimSpace(r.URL.Query().Get("target_id"))
+		workItemKind := strings.TrimSpace(r.URL.Query().Get("work_item_kind"))
+		workItemID := strings.TrimSpace(r.URL.Query().Get("work_item_id"))
+		if targetType == "" || targetID == "" {
+			respondError(w, shared.Validation("target_type and target_id are required"))
+			return
+		}
+		filteredTaskReq := r.Clone(r.Context())
+		filteredTaskReq.URL.RawQuery = url.Values{"target_id": []string{targetID}}.Encode()
+		tasks := filterWorkflowTasksForUI(docs, workflowSvc.ListTasks(), p.userID, filteredTaskReq)
+		approvals := filterWorkflowApprovalsForUI(docs, workflowSvc.ListApprovals(), p.userID, filteredTaskReq)
+		history := workflowSvc.ListHistory(targetType, targetID)
+		response := map[string]any{
+			"tasks":     tasks,
+			"approvals": approvals,
+			"history":   history,
+		}
+		switch workItemKind {
+		case "task":
+			for _, item := range tasks {
+				if item.ID == workItemID {
+					response["current_task"] = item
+					break
+				}
+			}
+		case "approval":
+			for _, item := range approvals {
+				if item.ID == workItemID {
+					response["current_approval"] = item
+					break
+				}
+			}
+		}
+		respondJSON(w, http.StatusOK, response)
 	})
 
 	mux.HandleFunc("GET /ui/data/monitoring/summary", func(w http.ResponseWriter, r *http.Request) {
@@ -694,6 +826,284 @@ func principalAllowsAll(ident *identity.Service, p principal, permissions []stri
 	return true
 }
 
+type uiWorklistTask struct {
+	ID              string         `json:"id"`
+	WorkflowKey     string         `json:"workflow_key"`
+	WorkflowVersion int            `json:"workflow_version,omitempty"`
+	TargetType      string         `json:"target_type"`
+	TargetID        string         `json:"target_id"`
+	DocumentType    string         `json:"document_type,omitempty"`
+	TargetTitle     string         `json:"target_title,omitempty"`
+	TargetNumber    string         `json:"target_number,omitempty"`
+	TargetStatus    string         `json:"target_status,omitempty"`
+	TargetUpdatedAt string         `json:"target_updated_at,omitempty"`
+	TaskType        string         `json:"task_type"`
+	Status          string         `json:"status"`
+	AssignmentMode  string         `json:"assignment_mode,omitempty"`
+	AssigneeUserID  string         `json:"assignee_user_id,omitempty"`
+	AssigneeRoleKey string         `json:"assignee_role_key,omitempty"`
+	IsMine          bool           `json:"is_mine,omitempty"`
+	DueAt           string         `json:"due_at,omitempty"`
+	EscalateAt      string         `json:"escalate_at,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+}
+
+type uiWorklistApproval struct {
+	ID              string         `json:"id"`
+	WorkflowKey     string         `json:"workflow_key"`
+	WorkflowVersion int            `json:"workflow_version,omitempty"`
+	TargetType      string         `json:"target_type"`
+	TargetID        string         `json:"target_id"`
+	DocumentType    string         `json:"document_type,omitempty"`
+	TargetTitle     string         `json:"target_title,omitempty"`
+	TargetNumber    string         `json:"target_number,omitempty"`
+	TargetStatus    string         `json:"target_status,omitempty"`
+	TargetUpdatedAt string         `json:"target_updated_at,omitempty"`
+	Status          string         `json:"status"`
+	StageKey        string         `json:"stage_key,omitempty"`
+	RequestedBy     string         `json:"requested_by,omitempty"`
+	DueAt           string         `json:"due_at,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+}
+
+func visibleSelfServiceAPIs(ident *identity.Service, modules *module.Service, p principal) []module.SelfServiceAPIDefinition {
+	items := make([]module.SelfServiceAPIDefinition, 0)
+	for _, item := range modules.SelfServiceAPIs() {
+		if !principalAllowsAll(ident, p, item.RequiredPermissions) {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func requestedUISurface(r *http.Request) module.UISurface {
+	raw := strings.TrimSpace(r.URL.Query().Get("surface"))
+	switch module.UISurface(raw) {
+	case module.UISurfaceAdmin:
+		return module.UISurfaceAdmin
+	case module.UISurfaceBackoffice:
+		return module.UISurfaceBackoffice
+	case module.UISurfaceWorklist:
+		return module.UISurfaceWorklist
+	case module.UISurfaceSelfService:
+		return module.UISurfaceSelfService
+	case module.UISurfacePOS:
+		return module.UISurfacePOS
+	case module.UISurfaceMobile:
+		return module.UISurfaceMobile
+	default:
+		return module.UISurfaceBackoffice
+	}
+}
+
+func uiSurfacePreference(surface module.UISurface) string {
+	switch surface {
+	case module.UISurfaceAdmin:
+		return "admin"
+	case module.UISurfaceSelfService:
+		return "self_service"
+	default:
+		return "user"
+	}
+}
+
+func availableUISurfaces(ident *identity.Service, modules *module.Service, p principal) []string {
+	items := make([]string, 0, 4)
+	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceBackoffice); len(menus) > 0 || len(actions) > 0 {
+		items = append(items, string(module.UISurfaceBackoffice))
+	}
+	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceWorklist); len(menus) > 0 || len(actions) > 0 {
+		items = append(items, string(module.UISurfaceWorklist))
+	}
+	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceSelfService); len(menus) > 0 || len(actions) > 0 {
+		items = append(items, string(module.UISurfaceSelfService))
+	}
+	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfacePOS); len(menus) > 0 || len(actions) > 0 {
+		items = append(items, string(module.UISurfacePOS))
+	}
+	if len(items) == 0 {
+		items = append(items, string(module.UISurfaceBackoffice))
+	}
+	return items
+}
+
+func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, currentUserID string, r *http.Request) []uiWorklistTask {
+	statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+	targetIDFilter := strings.TrimSpace(r.URL.Query().Get("target_id"))
+	workflowKeyFilter := strings.TrimSpace(r.URL.Query().Get("workflow_key"))
+	dueFilter := strings.TrimSpace(r.URL.Query().Get("due"))
+	mineFilter := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("mine")), "1") || strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("mine")), "true")
+	now := time.Now().UTC()
+	output := make([]uiWorklistTask, 0, len(items))
+	for _, item := range items {
+		if statusFilter != "" && item.Status != statusFilter {
+			continue
+		}
+		if targetIDFilter != "" && item.TargetID != targetIDFilter {
+			continue
+		}
+		if workflowKeyFilter != "" && item.WorkflowKey != workflowKeyFilter {
+			continue
+		}
+		if mineFilter && item.AssigneeUserID != currentUserID {
+			continue
+		}
+		if dueFilter == "overdue" && (item.DueAt.IsZero() || !item.DueAt.Before(now)) {
+			continue
+		}
+		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
+		output = append(output, uiWorklistTask{
+			ID:              item.ID,
+			WorkflowKey:     item.WorkflowKey,
+			WorkflowVersion: item.WorkflowVersion,
+			TargetType:      item.TargetType,
+			TargetID:        item.TargetID,
+			DocumentType:    documentType,
+			TargetTitle:     targetTitle,
+			TargetNumber:    targetNumber,
+			TargetStatus:    targetStatus,
+			TargetUpdatedAt: targetUpdatedAt,
+			TaskType:        item.TaskType,
+			Status:          item.Status,
+			AssignmentMode:  item.AssignmentMode,
+			AssigneeUserID:  item.AssigneeUserID,
+			AssigneeRoleKey: item.AssigneeRoleKey,
+			IsMine:          item.AssigneeUserID != "" && item.AssigneeUserID == currentUserID,
+			DueAt:           formatOptionalTime(item.DueAt),
+			EscalateAt:      formatOptionalTime(item.EscalateAt),
+			Metadata:        item.Metadata,
+		})
+	}
+	return output
+}
+
+func filterWorkflowApprovalsForUI(docs *document.Service, items []workflow.Approval, currentUserID string, r *http.Request) []uiWorklistApproval {
+	statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+	targetIDFilter := strings.TrimSpace(r.URL.Query().Get("target_id"))
+	workflowKeyFilter := strings.TrimSpace(r.URL.Query().Get("workflow_key"))
+	dueFilter := strings.TrimSpace(r.URL.Query().Get("due"))
+	requestedByMe := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("requested_by_me")), "1") || strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("requested_by_me")), "true")
+	now := time.Now().UTC()
+	output := make([]uiWorklistApproval, 0, len(items))
+	for _, item := range items {
+		if statusFilter != "" && item.Status != statusFilter {
+			continue
+		}
+		if targetIDFilter != "" && item.TargetID != targetIDFilter {
+			continue
+		}
+		if workflowKeyFilter != "" && item.WorkflowKey != workflowKeyFilter {
+			continue
+		}
+		if requestedByMe && item.RequestedBy != currentUserID {
+			continue
+		}
+		if dueFilter == "overdue" && (item.DueAt.IsZero() || !item.DueAt.Before(now)) {
+			continue
+		}
+		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
+		output = append(output, uiWorklistApproval{
+			ID:              item.ID,
+			WorkflowKey:     item.WorkflowKey,
+			WorkflowVersion: item.WorkflowVersion,
+			TargetType:      item.TargetType,
+			TargetID:        item.TargetID,
+			DocumentType:    documentType,
+			TargetTitle:     targetTitle,
+			TargetNumber:    targetNumber,
+			TargetStatus:    targetStatus,
+			TargetUpdatedAt: targetUpdatedAt,
+			Status:          item.Status,
+			StageKey:        item.StageKey,
+			RequestedBy:     item.RequestedBy,
+			DueAt:           formatOptionalTime(item.DueAt),
+			Metadata:        item.Metadata,
+		})
+	}
+	return output
+}
+
+func formatOptionalTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func workflowTargetDocumentSummary(docs *document.Service, targetType, targetID string) (documentType, title, number, status, updatedAt string) {
+	if docs == nil || targetType != "document" || strings.TrimSpace(targetID) == "" {
+		return "", "", "", "", ""
+	}
+	record, err := docs.Get(targetID)
+	if err != nil {
+		return "", "", "", "", ""
+	}
+	title, _ = record.Body.Payload["title"].(string)
+	return record.Header.Type, title, record.Header.Number, record.Header.Status, formatOptionalTime(record.Header.UpdatedAt)
+}
+
+func countWorkflowItems[T interface{ GetStatus() string }](items []T, status string) int {
+	total := 0
+	for _, item := range items {
+		if item.GetStatus() == status {
+			total++
+		}
+	}
+	return total
+}
+
+func countWorkflowStatuses[T interface{ GetStatus() string }](items []T) map[string]int {
+	counts := map[string]int{}
+	for _, item := range items {
+		counts[item.GetStatus()]++
+	}
+	return counts
+}
+
+func countWorklistMine(items []uiWorklistTask) int {
+	total := 0
+	for _, item := range items {
+		if item.IsMine {
+			total++
+		}
+	}
+	return total
+}
+
+func countApprovalsRequestedByMe(items []uiWorklistApproval, currentUserID string) int {
+	total := 0
+	for _, item := range items {
+		if currentUserID != "" && item.RequestedBy == currentUserID {
+			total++
+		}
+	}
+	return total
+}
+
+func countWorklistTaskWorkflowKeys(items []uiWorklistTask) int {
+	keys := map[string]struct{}{}
+	for _, item := range items {
+		if item.WorkflowKey != "" {
+			keys[item.WorkflowKey] = struct{}{}
+		}
+	}
+	return len(keys)
+}
+
+func countWorklistApprovalWorkflowKeys(items []uiWorklistApproval) int {
+	keys := map[string]struct{}{}
+	for _, item := range items {
+		if item.WorkflowKey != "" {
+			keys[item.WorkflowKey] = struct{}{}
+		}
+	}
+	return len(keys)
+}
+
+func (i uiWorklistTask) GetStatus() string     { return i.Status }
+func (i uiWorklistApproval) GetStatus() string { return i.Status }
+
 func visibleUIContracts(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) ([]module.MenuDefinition, []module.ActionDefinition, []module.ViewDefinition, []module.CustomEntryDefinition, []module.DocumentFlowDefinition) {
 	allowedMenus := make([]module.MenuDefinition, 0)
 	allowedActions := make([]module.ActionDefinition, 0)
@@ -803,7 +1213,16 @@ func surfaceMatches(itemSurface, requested module.UISurface) bool {
 	if requested == "" || requested == module.UISurfaceBoth {
 		return true
 	}
-	return effective == module.UISurfaceBoth || effective == requested
+	if effective == module.UISurfaceBoth {
+		return true
+	}
+	if requested == module.UISurfaceBackoffice && effective == module.UISurfaceUser {
+		return true
+	}
+	if requested == module.UISurfaceUser && effective == module.UISurfaceBackoffice {
+		return true
+	}
+	return effective == requested
 }
 
 func viewKeyFromPath(path string) string {
@@ -841,6 +1260,7 @@ const uiShellHTML = `<!doctype html>
           <p class="subtitle" id="shell-subtitle">Manifest-driven shell with generic pages and module custom entries.</p>
         </div>
         <div class="actions">
+          <div id="surface-switcher" class="surface-switcher" hidden></div>
           <label class="locale-switch">
             <span id="locale-label">Language</span>
             <select id="locale-switcher"></select>
@@ -875,6 +1295,10 @@ const uiShellHTML = `<!doctype html>
         shell_brand: 'Orbyte Platform UI',
         shell_subtitle: 'Manifest-driven shell with generic pages and module custom entries.',
         locale_label: 'Language',
+        surface_backoffice: 'Backoffice',
+        surface_worklist: 'Worklist',
+        surface_self_service: 'Self-Service',
+        surface_pos: 'POS',
         admin_link: 'Admin',
         logout: 'Log out',
         loading: 'Loading…',
@@ -906,6 +1330,35 @@ const uiShellHTML = `<!doctype html>
         previous: 'Previous',
         next: 'Next',
         page: 'Page',
+        queue_status: 'Status',
+        queue_due: 'Due',
+        queue_due_any: 'Any due date',
+        queue_due_overdue: 'Overdue',
+        queue_assignee: 'Assignment',
+        queue_assignee_any: 'All assignments',
+        queue_assignee_mine: 'Assigned to me',
+        queue_save_filter: 'Save Filter',
+        queue_reset_filter: 'Reset',
+        queue_saved_filter: 'Saved filter restored.',
+        queue_filter_saved: 'Worklist filter saved.',
+        queue_filter_cleared: 'Worklist filter reset.',
+        queue_target: 'Target',
+        queue_target_status: 'Target Status',
+        queue_workflow: 'Workflow',
+        queue_assignment: 'Assignment',
+        queue_tasks_label: 'Tasks',
+        queue_approvals_label: 'Approvals',
+        queue_mine_label: 'Mine',
+        queue_requested_by_me: 'Requested By Me',
+        queue_workflows_label: 'Workflows',
+        queue_actions: 'Actions',
+        queue_action_ready: 'Ready',
+        workflow_context: 'Workflow Context',
+        workflow_history: 'Workflow History',
+        workflow_active_tasks: 'Active Tasks',
+        workflow_active_approvals: 'Active Approvals',
+        workflow_opened_from_queue: 'Opened from queue',
+        workflow_back_to_queue: 'Back to Queue',
         standard_list: 'Standard list page rendered from the module manifest.',
         no_records: 'No records yet.',
         select_record: 'Select a record from the list to inspect its canonical record.',
@@ -967,6 +1420,10 @@ const uiShellHTML = `<!doctype html>
         shell_brand: 'UI Platform Orbyte',
         shell_subtitle: 'Shell berbasis manifest dengan halaman generik dan entri modul kustom.',
         locale_label: 'Bahasa',
+        surface_backoffice: 'Backoffice',
+        surface_worklist: 'Worklist',
+        surface_self_service: 'Layanan Mandiri',
+        surface_pos: 'POS',
         admin_link: 'Admin',
         logout: 'Keluar',
         loading: 'Memuat…',
@@ -998,6 +1455,35 @@ const uiShellHTML = `<!doctype html>
         previous: 'Sebelumnya',
         next: 'Berikutnya',
         page: 'Halaman',
+        queue_status: 'Status',
+        queue_due: 'Jatuh Tempo',
+        queue_due_any: 'Semua jatuh tempo',
+        queue_due_overdue: 'Lewat jatuh tempo',
+        queue_assignee: 'Penugasan',
+        queue_assignee_any: 'Semua penugasan',
+        queue_assignee_mine: 'Ditugaskan ke saya',
+        queue_save_filter: 'Simpan Filter',
+        queue_reset_filter: 'Reset',
+        queue_saved_filter: 'Filter tersimpan dipulihkan.',
+        queue_filter_saved: 'Filter antrian kerja disimpan.',
+        queue_filter_cleared: 'Filter antrian kerja direset.',
+        queue_target: 'Target',
+        queue_target_status: 'Status Target',
+        queue_workflow: 'Workflow',
+        queue_assignment: 'Penugasan',
+        queue_tasks_label: 'Tugas',
+        queue_approvals_label: 'Persetujuan',
+        queue_mine_label: 'Milik Saya',
+        queue_requested_by_me: 'Diminta Oleh Saya',
+        queue_workflows_label: 'Workflow',
+        queue_actions: 'Aksi',
+        queue_action_ready: 'Siap',
+        workflow_context: 'Konteks Workflow',
+        workflow_history: 'Riwayat Workflow',
+        workflow_active_tasks: 'Tugas Aktif',
+        workflow_active_approvals: 'Persetujuan Aktif',
+        workflow_opened_from_queue: 'Dibuka dari antrian',
+        workflow_back_to_queue: 'Kembali ke Antrian',
         standard_list: 'Halaman daftar standar yang dirender dari manifest modul.',
         no_records: 'Belum ada data.',
         select_record: 'Pilih data dari daftar untuk melihat catatan kanonisnya.',
@@ -1066,7 +1552,8 @@ const uiShellHTML = `<!doctype html>
       syncStats: {pending: 0, conflict: 0, failed: 0},
       cacheWarm: false,
       locale: 'en',
-      supportedLocales: defaultSupportedLocales
+      supportedLocales: defaultSupportedLocales,
+      surface: 'backoffice'
     };
 
     function normalizeLocale(locale) {
@@ -1210,7 +1697,7 @@ const uiShellHTML = `<!doctype html>
     async function registerServiceWorker() {
       if (!('serviceWorker' in navigator)) return;
       try {
-        await navigator.serviceWorker.register('/ui/sw.js', {scope: '/'});
+        await navigator.serviceWorker.register('/ui/sw.js', {scope: '/ui/'});
       } catch (_) {}
     }
 
@@ -1354,6 +1841,68 @@ const uiShellHTML = `<!doctype html>
       return new URLSearchParams(qIndex >= 0 ? raw.slice(qIndex + 1) : '');
     }
 
+    function currentSurface() {
+      const params = new URLSearchParams(window.location.search);
+      const value = String(params.get('surface') || state.surface || 'backoffice').trim().toLowerCase();
+      if (value === 'worklist' || value === 'self_service' || value === 'pos' || value === 'mobile' || value === 'admin') return value;
+      return 'backoffice';
+    }
+
+    function bootstrapURL() {
+      return '/ui/bootstrap?surface=' + encodeURIComponent(currentSurface());
+    }
+
+    function worklistFilterStorageKey(pathname, source) {
+      return 'orbyte:worklist-filter:' + currentSurface() + ':' + pathname + ':' + source;
+    }
+
+    function readSavedWorklistFilter(pathname, source) {
+      try {
+        const raw = window.localStorage.getItem(worklistFilterStorageKey(pathname, source));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function writeSavedWorklistFilter(pathname, source, params) {
+      try {
+        const payload = {};
+        Object.keys(params || {}).forEach((key) => {
+          if (params[key]) payload[key] = params[key];
+        });
+        if (!Object.keys(payload).length) {
+          window.localStorage.removeItem(worklistFilterStorageKey(pathname, source));
+          return;
+        }
+        window.localStorage.setItem(worklistFilterStorageKey(pathname, source), JSON.stringify(payload));
+      } catch (_) {}
+    }
+
+    function paramsFromObject(values) {
+      const params = new URLSearchParams();
+      Object.keys(values || {}).forEach((key) => {
+        if (values[key]) params.set(key, values[key]);
+      });
+      return params;
+    }
+
+    function routeForWorkItem(item, fallbackDocumentType) {
+      if (!item) return '';
+      if (item.target_type === 'document') {
+        const detailRoute = routeForDocument(item.document_type || fallbackDocumentType || 'generic_request', 'detail');
+        if (!detailRoute || !item.target_id) return '';
+        const params = new URLSearchParams();
+        params.set('id', item.target_id);
+        if (item.id) params.set('work_item_id', item.id);
+        params.set('work_item_kind', item.stage_key ? 'approval' : 'task');
+        return detailRoute + '?' + params.toString();
+      }
+      return '';
+    }
+
     function setStatus(text) {
       document.getElementById('route-status').textContent = text;
     }
@@ -1396,9 +1945,12 @@ const uiShellHTML = `<!doctype html>
 
     function requestedUIHref() {
       const path = requestedUIRoute();
-      if (!path) return '/ui';
+      const query = new URLSearchParams(window.location.search);
+      query.set('surface', currentSurface());
+      const base = '/ui' + (query.toString() ? '?' + query.toString() : '');
+      if (!path) return base;
       const params = currentParams().toString();
-      return '/ui#' + path + (params ? '?' + params : '');
+      return base + '#' + path + (params ? '?' + params : '');
     }
 
     function offlineDocumentCapability(documentType) {
@@ -1630,7 +2182,9 @@ const uiShellHTML = `<!doctype html>
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({username, password})
             });
-            state.bootstrap = await api('/ui/bootstrap');
+            state.surface = currentSurface();
+            state.bootstrap = await api(bootstrapURL());
+            state.surface = state.bootstrap.surface || state.surface;
             state.supportedLocales = state.bootstrap.supported_locales || defaultSupportedLocales;
             if (state.bootstrap.locale) {
               state.locale = normalizeLocale(state.bootstrap.locale);
@@ -1660,6 +2214,7 @@ const uiShellHTML = `<!doctype html>
     function renderMenus() {
       const container = document.getElementById('menu');
       container.innerHTML = '';
+      renderSurfaceSwitcher();
       if (!state.bootstrap) {
         document.getElementById('admin-link-button').hidden = true;
         document.getElementById('logout-button').hidden = true;
@@ -1680,6 +2235,31 @@ const uiShellHTML = `<!doctype html>
       }
     }
 
+    function renderSurfaceSwitcher() {
+      const container = document.getElementById('surface-switcher');
+      if (!container) return;
+      const items = (state.bootstrap && state.bootstrap.available_surfaces) || [];
+      if (!items.length) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+      }
+      container.hidden = false;
+      container.innerHTML = items.map((surface) => '<button type="button" class="' + (state.surface === surface ? '' : 'secondary') + '" data-surface="' + escapeHTML(surface) + '">' + escapeHTML(t('surface_' + surface)) + '</button>').join('');
+      container.querySelectorAll('[data-surface]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const params = new URLSearchParams(window.location.search);
+          params.set('surface', button.dataset.surface || 'backoffice');
+          const target = '/ui?' + params.toString();
+          if (window.location.hash) {
+            window.location.assign(target + window.location.hash);
+            return;
+          }
+          window.location.assign(target);
+        });
+      });
+    }
+
     function findActionByView(predicate) {
       return (state.bootstrap.actions || []).find((action) => {
         if (!action.view_key) return false;
@@ -1691,6 +2271,10 @@ const uiShellHTML = `<!doctype html>
     function routeForModel(modelKey, kind) {
       const action = findActionByView((view) => view.model_key === modelKey && view.kind === kind);
       return action ? action.route_path : '';
+    }
+
+    function detailViewForDocumentType(documentType) {
+      return ((state.bootstrap && state.bootstrap.views) || []).find((view) => view.document_type === documentType && view.kind === 'detail') || null;
     }
 
     function routeForDocument(documentType, kind) {
@@ -1757,11 +2341,164 @@ const uiShellHTML = `<!doctype html>
       root.querySelector('pre').textContent = JSON.stringify(payload, null, 2);
     }
 
+    function actionButtonClass(actionKey, zone) {
+      if (zone === 'primary') return '';
+      if (actionKey === 'reject' || actionKey === 'cancel') return 'warn';
+      return 'secondary';
+    }
+
+    async function resolveAllowedActionsForDocumentItem(item) {
+      if (!item || item.target_type !== 'document' || !item.target_id || !item.document_type) return [];
+      const view = detailViewForDocumentType(item.document_type);
+      if (!view) return [];
+      const allowed = [];
+      for (const actionKey of view.allowed_actions || []) {
+        try {
+          const placement = await api('/ui/actions/render?action=' + encodeURIComponent(actionKey) + '&document_id=' + encodeURIComponent(item.target_id));
+          if (placement && placement.allowed) {
+            allowed.push({key: actionKey, zone: resolveActionPlacement(view, actionKey, placement)});
+          }
+        } catch (_) {}
+      }
+      return allowed;
+    }
+
+    async function hydrateWorkItemActionContainers(root, items, rerenderTarget) {
+      const containers = Array.from(root.querySelectorAll('[data-workitem-actions]'));
+      for (const container of containers) {
+        const item = items.find((candidate) => candidate.id === (container.dataset.workitemActions || ''));
+        if (!item) continue;
+        const actions = await resolveAllowedActionsForDocumentItem(item);
+        if (!actions.length) {
+          container.innerHTML = '<span class="row-secondary">' + escapeHTML(t('queue_action_ready')) + '</span>';
+          continue;
+        }
+        container.innerHTML = actions.map((action) => '<button type="button" class="' + actionButtonClass(action.key, action.zone) + '" data-workitem-action="' + escapeHTML(action.key) + '" data-workitem-id="' + escapeHTML(item.id) + '">' + escapeHTML(translateToken('action', action.key)) + '</button>').join('');
+      }
+      root.querySelectorAll('[data-workitem-action]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const item = items.find((candidate) => candidate.id === (button.dataset.workitemId || ''));
+          if (!item) return;
+          try {
+            const documentPayload = await api('/ui/data/documents/' + encodeURIComponent(item.target_id));
+            const targetRecord = documentPayload.record;
+            await invokeDocumentAction(targetRecord.header.id, button.dataset.workitemAction || '', targetRecord.header.version, targetRecord.header.etag);
+            if (rerenderTarget === 'detail') {
+              await renderRoute();
+              return;
+            }
+            await renderRoute();
+          } catch (err) {
+            setStatus(err.message);
+          }
+        });
+      });
+    }
+
+    function renderWorkflowContextPanel(context, currentKind, currentID) {
+      if (!context) return '';
+      const tasks = context.tasks || [];
+      const approvals = context.approvals || [];
+      const history = context.history || [];
+      const currentItem = currentKind === 'approval' ? context.current_approval : context.current_task;
+      const currentMarkup = currentItem
+        ? '<article class="metric-card"><span class="meta">' + t('workflow_opened_from_queue') + '</span><strong>' + escapeHTML(displayValue(currentItem.status || currentItem.stage_key || currentItem.task_type || '')) + '</strong><div class="row-secondary">' + escapeHTML((currentItem.workflow_key || '') + ' · ' + (currentItem.due_at || '')) + '</div><div class="toolbar-row" data-workitem-actions="' + escapeHTML(currentItem.id || '') + '"></div></article>'
+        : '';
+      const taskMarkup = tasks.length
+        ? tasks.map((item) => '<article class="detail-item"><span class="meta">' + escapeHTML(item.task_type || item.workflow_key || item.id) + '</span><strong>' + escapeHTML(displayValue(item.status)) + '</strong><div class="row-secondary">' + escapeHTML((item.assignee_user_id || item.assignee_role_key || '') + (item.due_at ? ' · ' + item.due_at : '')) + '</div></article>').join('')
+        : '<p class="status">' + t('no_records') + '</p>';
+      const approvalMarkup = approvals.length
+        ? approvals.map((item) => '<article class="detail-item"><span class="meta">' + escapeHTML(item.stage_key || item.workflow_key || item.id) + '</span><strong>' + escapeHTML(displayValue(item.status)) + '</strong><div class="row-secondary">' + escapeHTML((item.requested_by || '') + (item.due_at ? ' · ' + item.due_at : '')) + '</div></article>').join('')
+        : '<p class="status">' + t('no_records') + '</p>';
+      const historyMarkup = history.length
+        ? history.slice(0, 6).map((item) => '<article class="detail-item"><span class="meta">' + escapeHTML(displayValue(item.action || '')) + '</span><strong>' + escapeHTML([item.from_state, item.to_state].filter(Boolean).join(' → ') || displayValue(item.decision_code || '')) + '</strong><div class="row-secondary">' + escapeHTML((item.actor_id || '') + (item.occurred_at ? ' · ' + item.occurred_at : '')) + '</div></article>').join('')
+        : '<p class="status">' + t('no_records') + '</p>';
+      return '<section class="panel"><h3>' + t('workflow_context') + '</h3><div class="metric-grid">' + currentMarkup + '</div><div class="section-stack"><section class="panel"><h3>' + t('workflow_active_tasks') + '</h3>' + taskMarkup + '</section><section class="panel"><h3>' + t('workflow_active_approvals') + '</h3>' + approvalMarkup + '</section><section class="panel"><h3>' + t('workflow_history') + '</h3>' + historyMarkup + '</section></div></section>';
+    }
+
     async function renderGeneric(route) {
       const root = document.getElementById('view-root');
       const view = route.view;
       if (!view) {
         renderJSONCard(t('view_unavailable'), route);
+        return;
+      }
+      if (view.kind === 'queue') {
+        const source = (view.projection_key || '').indexOf('approval') >= 0 ? 'approvals' : 'tasks';
+        const params = currentParams();
+        if (![...params.keys()].length) {
+          const saved = readSavedWorklistFilter(currentPath(), source);
+          if (saved && Object.keys(saved).length) {
+            window.location.hash = '#' + currentPath() + '?' + paramsFromObject(saved).toString();
+            setStatus(t('queue_saved_filter'));
+            return;
+          }
+        }
+        const query = new URLSearchParams();
+        if (params.get('status')) query.set('status', params.get('status'));
+        if (params.get('due')) query.set('due', params.get('due'));
+        if (params.get('workflow_key')) query.set('workflow_key', params.get('workflow_key'));
+        if (source === 'tasks' && params.get('mine')) query.set('mine', params.get('mine'));
+        if (source === 'approvals' && params.get('requested_by_me')) query.set('requested_by_me', params.get('requested_by_me'));
+        const payload = await api('/ui/data/worklist/' + source + (query.toString() ? '?' + query.toString() : ''));
+        const summary = await api('/ui/data/worklist/summary' + (query.toString() ? '?' + query.toString() : ''));
+        const items = payload.items || [];
+        const workflowOptions = Array.from(new Set(items.map((item) => item.workflow_key).filter(Boolean))).sort();
+        const filterBar = '<div class="toolbar-row">'
+          + '<label class="control-tile"><span class="meta">' + t('queue_status') + '</span><select data-worklist-filter="status"><option value="">' + t('all') + ' ' + t('queue_status') + '</option>'
+          + (source === 'approvals'
+            ? ['pending', 'approved', 'rejected'].map((status) => '<option value="' + status + '"' + (params.get('status') === status ? ' selected' : '') + '>' + escapeHTML(displayValue(status)) + '</option>').join('')
+            : ['open', 'completed', 'cancelled'].map((status) => '<option value="' + status + '"' + (params.get('status') === status ? ' selected' : '') + '>' + escapeHTML(displayValue(status)) + '</option>').join(''))
+          + '</select></label>'
+          + '<label class="control-tile"><span class="meta">' + t('queue_due') + '</span><select data-worklist-filter="due"><option value="">' + t('queue_due_any') + '</option><option value="overdue"' + (params.get('due') === 'overdue' ? ' selected' : '') + '>' + t('queue_due_overdue') + '</option></select></label>'
+          + (source === 'tasks'
+            ? '<label class="control-tile"><span class="meta">' + t('queue_assignee') + '</span><select data-worklist-filter="mine"><option value="">' + t('queue_assignee_any') + '</option><option value="1"' + (params.get('mine') === '1' ? ' selected' : '') + '>' + t('queue_assignee_mine') + '</option></select></label>'
+            : '<label class="control-tile"><span class="meta">' + t('queue_assignee') + '</span><select data-worklist-filter="requested_by_me"><option value="">' + t('queue_assignee_any') + '</option><option value="1"' + (params.get('requested_by_me') === '1' ? ' selected' : '') + '>' + t('queue_requested_by_me') + '</option></select></label>')
+          + '<label class="control-tile"><span class="meta">' + t('queue_workflow') + '</span><select data-worklist-filter="workflow_key"><option value="">' + t('all') + ' ' + t('queue_workflow') + '</option>' + workflowOptions.map((key) => '<option value="' + escapeHTML(key) + '"' + (params.get('workflow_key') === key ? ' selected' : '') + '>' + escapeHTML(humanizeToken(key)) + '</option>').join('') + '</select></label>'
+          + '<button type="button" class="secondary" data-save-worklist-filter="1">' + t('queue_save_filter') + '</button>'
+          + '<button type="button" class="secondary" data-reset-worklist-filter="1">' + t('queue_reset_filter') + '</button>'
+          + '</div>';
+        const rows = items.map((item) => {
+          const primary = item.target_title || item.target_number || item.target_id || item.id;
+          const secondary = [item.document_type || item.target_type, item.stage_key || item.task_type || item.workflow_key, item.target_status].filter(Boolean).join(' · ');
+          const assignment = source === 'tasks' ? (item.assignee_user_id || item.assignee_role_key || item.assignment_mode || '') : (item.requested_by || item.stage_key || '');
+          return '<tr><td><div class="row-primary">' + escapeHTML(primary) + '</div><div class="row-secondary">' + escapeHTML(secondary) + '</div></td><td>' + escapeHTML(displayValue(item.status)) + '</td><td>' + escapeHTML(assignment) + '<div class="toolbar-row" data-workitem-actions="' + escapeHTML(item.id || '') + '"></div></td><td>' + escapeHTML(item.due_at || '') + '</td><td><button class="secondary" data-open-workitem="' + escapeHTML(item.id || '') + '">Open</button></td></tr>';
+        }).join('');
+        const queueSummary = source === 'approvals' ? (summary.approvals || {}) : (summary.tasks || {});
+        const summaryMarkup = source === 'approvals'
+          ? '<div class="metric-grid"><article class="metric-card"><span class="meta">' + t('queue_approvals_label') + '</span><strong>' + escapeHTML(String(queueSummary.pending || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_due_overdue') + '</span><strong>' + escapeHTML(String(queueSummary.overdue || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_requested_by_me') + '</span><strong>' + escapeHTML(String(queueSummary.requested_by_me || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_workflows_label') + '</span><strong>' + escapeHTML(String(queueSummary.workflows || 0)) + '</strong></article></div>'
+          : '<div class="metric-grid"><article class="metric-card"><span class="meta">' + t('queue_tasks_label') + '</span><strong>' + escapeHTML(String(queueSummary.open || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_due_overdue') + '</span><strong>' + escapeHTML(String(queueSummary.overdue || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_mine_label') + '</span><strong>' + escapeHTML(String(queueSummary.mine || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_workflows_label') + '</span><strong>' + escapeHTML(String(queueSummary.workflows || 0)) + '</strong></article></div>';
+        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || 'Operational queue for workflow-driven work.') + '</p></div></div><div class="page-body">' + summaryMarkup + filterBar + '<div class="table-shell"><table class="data-table"><thead><tr><th>' + t('queue_target') + '</th><th>' + t('queue_status') + '</th><th>' + t('queue_assignment') + '</th><th>' + t('queue_due') + '</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5"><div class="row-secondary">' + escapeHTML(t('no_records')) + '</div></td></tr>') + '</tbody></table></div></div></section>';
+        root.querySelectorAll('[data-worklist-filter]').forEach((input) => {
+          input.addEventListener('change', () => {
+            const next = currentParams();
+            if (input.value) next.set(input.dataset.worklistFilter, input.value); else next.delete(input.dataset.worklistFilter);
+            window.location.hash = '#' + currentPath() + (next.toString() ? '?' + next.toString() : '');
+          });
+        });
+        root.querySelectorAll('[data-save-worklist-filter]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const next = currentParams();
+            writeSavedWorklistFilter(currentPath(), source, Object.fromEntries(next.entries()));
+            setStatus(t('queue_filter_saved'));
+          });
+        });
+        root.querySelectorAll('[data-reset-worklist-filter]').forEach((button) => {
+          button.addEventListener('click', () => {
+            writeSavedWorklistFilter(currentPath(), source, {});
+            setStatus(t('queue_filter_cleared'));
+            window.location.hash = '#' + currentPath();
+          });
+        });
+        root.querySelectorAll('[data-open-workitem]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const item = items.find((candidate) => candidate.id === (button.dataset.openWorkitem || ''));
+            const targetPath = routeForWorkItem(item, view.document_type);
+            if (!targetPath) return;
+            window.location.hash = '#' + targetPath;
+          });
+        });
+        await hydrateWorkItemActionContainers(root, items, 'queue');
         return;
       }
       if (view.kind === 'list') {
@@ -1847,7 +2584,8 @@ const uiShellHTML = `<!doctype html>
         return;
       }
       if (view.kind === 'detail') {
-        const documentID = currentParams().get('id');
+        const detailParams = currentParams();
+        const documentID = detailParams.get('id');
         if (!documentID) {
           root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(t('select_record')) + '</p></div></div></section>';
           return;
@@ -1890,6 +2628,14 @@ const uiShellHTML = `<!doctype html>
         const payload = await api('/ui/data/documents/' + encodeURIComponent(documentID));
         const flowInstance = payload.flow_instance || null;
         const record = payload.record;
+        const workItemKind = detailParams.get('work_item_kind') || '';
+        const workItemID = detailParams.get('work_item_id') || '';
+        let workflowContext = null;
+        if (workItemKind || currentSurface() === 'worklist') {
+          try {
+            workflowContext = await api('/ui/data/worklist/context?target_type=document&target_id=' + encodeURIComponent(documentID) + (workItemKind ? '&work_item_kind=' + encodeURIComponent(workItemKind) : '') + (workItemID ? '&work_item_id=' + encodeURIComponent(workItemID) : ''));
+          } catch (_) {}
+        }
         let activeRecord = record;
         let detailMarkup = '';
         let relatedViews = '';
@@ -1905,8 +2651,11 @@ const uiShellHTML = `<!doctype html>
             return '<section class="panel"><h3>' + escapeHTML(pickText(tab, 'title')) + '</h3>' + sections + '</section>';
           }).join('');
           const sectionMarkup = (view.sections || []).map((section) => renderSection(section, record)).join('');
-          detailMarkup = '<div class="section-stack">' + (tabMarkup || sectionMarkup || ('<pre>' + escapeHTML(JSON.stringify(record.body.payload, null, 2)) + '</pre>')) + '</div>';
+          detailMarkup = '<div class="section-stack">' + renderWorkflowContextPanel(workflowContext, workItemKind, workItemID) + (tabMarkup || sectionMarkup || ('<pre>' + escapeHTML(JSON.stringify(record.body.payload, null, 2)) + '</pre>')) + '</div>';
           relatedViews = (view.related_views || []).map((item) => renderRelatedView(item, payload, view)).join('');
+        }
+        if (workflowContext && flowInstance) {
+          detailMarkup = renderWorkflowContextPanel(workflowContext, workItemKind, workItemID) + detailMarkup;
         }
         const actionZones = renderActionZones(view);
         root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(activeRecord.header.id + ' · v' + activeRecord.header.version + ' · ' + displayValue(activeRecord.header.status)) + '</p></div></div><div class="page-body">' + detailMarkup + '</div><div class="page-actions">' + actionZones + '</div></section>' + relatedViews;
@@ -1928,6 +2677,19 @@ const uiShellHTML = `<!doctype html>
           });
           (root.querySelector('[data-zone="secondary"]') || root.querySelector('.page-actions')).appendChild(editButton);
         }
+        if (workItemKind && currentSurface() === 'worklist') {
+          const backButton = document.createElement('button');
+          backButton.className = 'secondary';
+          backButton.textContent = t('workflow_back_to_queue');
+          backButton.addEventListener('click', () => {
+            const targetPath = workItemKind === 'approval' ? '/worklist/approvals' : '/worklist';
+            window.location.hash = '#' + targetPath;
+          });
+          (root.querySelector('[data-zone="secondary"]') || root.querySelector('.page-actions')).appendChild(backButton);
+        }
+        await hydrateWorkItemActionContainers(root, []
+          .concat((workflowContext && workflowContext.tasks) || [])
+          .concat((workflowContext && workflowContext.approvals) || []), 'detail');
         for (const actionKey of view.allowed_actions || []) {
           const placement = await api('/ui/actions/render?action=' + encodeURIComponent(actionKey) + '&document_id=' + encodeURIComponent(activeRecord.header.id));
           if (!placement.allowed) {
@@ -2821,7 +3583,7 @@ const uiShellHTML = `<!doctype html>
         document.getElementById('view-root').innerHTML = '';
         return;
       }
-      const route = await api('/ui/routes/resolve?path=' + encodeURIComponent(path));
+      const route = await api('/ui/routes/resolve?path=' + encodeURIComponent(path) + '&surface=' + encodeURIComponent(state.surface || currentSurface()));
       state.route = route;
       document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(pickText(route.action, 'label') || route.path) + '</h2>';
       setStatus(t('resolved_from_module') + ' ' + route.module_key + ' ' + t('using_rendering') + ' ' + route.render_mode + ' rendering.');
@@ -3125,7 +3887,9 @@ const uiShellHTML = `<!doctype html>
       await refreshSyncStats();
       try {
         state.authOptions = await api('/auth/options');
-        state.bootstrap = await api('/ui/bootstrap');
+        state.surface = currentSurface();
+        state.bootstrap = await api(bootstrapURL());
+        state.surface = state.bootstrap.surface || state.surface;
         state.supportedLocales = state.bootstrap.supported_locales || defaultSupportedLocales;
         if (state.bootstrap.locale) {
           state.locale = normalizeLocale(state.bootstrap.locale);

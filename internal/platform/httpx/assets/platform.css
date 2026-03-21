@@ -10,3 +10,4 @@
 .org-node strong{font-size:.95rem;line-height:1.3}
 #workflow-actions-editor{overflow:auto}
 #workflow-actions-editor table input,#workflow-actions-editor table select{min-width:120px}
+.surface-switcher{display:flex;flex-wrap:wrap;gap:.5rem}

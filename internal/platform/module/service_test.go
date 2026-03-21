@@ -342,3 +342,70 @@ func TestRegisterRejectsMCPToolWithUnknownApp(t *testing.T) {
 		t.Fatal("expected unknown mcp app reference to fail")
 	}
 }
+
+func TestSelfServiceAPIAccessorsAndValidation(t *testing.T) {
+	svc := NewService()
+	manifest := Manifest{
+		Key:                "documents",
+		OwnedDocumentTypes: []string{"generic_request"},
+		Frontend: FrontendDefinition{
+			DocumentFlows: []DocumentFlowDefinition{{
+				Key:                 "documents.self_service.requests.intake",
+				Title:               "Self-Service Request",
+				Surface:             UISurfaceSelfService,
+				RoutePath:           "/self-service/requests/new",
+				PrimaryDocumentType: "generic_request",
+				Steps: []DocumentFlowStepDefinition{{
+					Key:   "request",
+					Title: "Request",
+					Documents: []DocumentFlowDocumentDefinition{{
+						Key:           "request",
+						Title:         "Request",
+						DocumentType:  "generic_request",
+						PrimaryOutput: true,
+					}},
+				}},
+			}},
+		},
+		SelfService: SelfServiceDefinition{
+			APIs: []SelfServiceAPIDefinition{{
+				Key:                 "documents.self_service.requests.create",
+				Title:               "Create Self-Service Request",
+				Method:              "POST",
+				RoutePath:           "/document-flows/documents.self_service.requests.intake/commit",
+				HandlerKind:         "flow_commit",
+				DocumentType:        "generic_request",
+				FlowKey:             "documents.self_service.requests.intake",
+				RequiredPermissions: []string{"document.create"},
+			}},
+		},
+	}
+	if err := svc.Register(manifest, "system"); err != nil {
+		t.Fatalf("register manifest failed: %v", err)
+	}
+
+	items := svc.SelfServiceAPIs()
+	if len(items) != 1 || items[0].Key != "documents.self_service.requests.create" {
+		t.Fatalf("expected self-service api accessor result, got %+v", items)
+	}
+	item, ok := svc.SelfServiceAPI("documents.self_service.requests.create")
+	if !ok || item.FlowKey != "documents.self_service.requests.intake" {
+		t.Fatalf("expected self-service api lookup, got %+v %v", item, ok)
+	}
+
+	err := svc.Register(Manifest{
+		Key: "duplicate",
+		SelfService: SelfServiceDefinition{
+			APIs: []SelfServiceAPIDefinition{{
+				Key:         "documents.self_service.requests.create",
+				Title:       "Duplicate",
+				Method:      "POST",
+				RoutePath:   "/duplicate",
+				HandlerKind: "ui_data",
+			}},
+		},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected duplicate self-service api key to be rejected")
+	}
+}

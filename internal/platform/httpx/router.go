@@ -96,6 +96,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Analytics:     analyticsSvc,
 			Monitoring:    monitoringSvc,
 			Observability: obsSvc,
+			Integration:   integrationSvc,
 			Jobs:          jobSvc,
 			Health:        health,
 		},
@@ -149,6 +150,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Activities:    activities,
 			Reporting:     reportingSvc,
 			Documents:     docs,
+			Workflows:     flows,
 			Search:        searchSvc,
 			Analytics:     analyticsSvc,
 			Monitoring:    monitoringSvc,
@@ -204,6 +206,10 @@ func newFieldSecurity(policySvc *policy.Service, reportingSvc *reporting.Service
 func registerCorePlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runtimehealth.Tracker) {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/ui", http.StatusSeeOther)
+	})
+
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

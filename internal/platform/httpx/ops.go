@@ -11,6 +11,7 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/monitoring"
 	"orbyte/internal/platform/observability"
@@ -20,7 +21,7 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, documentSvc *document.Service, searchSvc *search.Service, workflowSvc *workflow.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obs *observability.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker) {
+func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, documentSvc *document.Service, searchSvc *search.Service, workflowSvc *workflow.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obs *observability.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker) {
 	mux.HandleFunc("GET /ops/audit-events", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "audit.read", "", "audit.read"); !ok {
 			return
@@ -133,6 +134,51 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		respondJSON(w, http.StatusOK, map[string]any{"items": eventingSvc.ListDeadLetters()})
 	})
 
+	mux.HandleFunc("GET /ops/integrations/deliveries", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissions()})
+	})
+
+	mux.HandleFunc("GET /ops/integrations/deliveries/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/ops/integrations/deliveries/")
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) != 2 || parts[1] != "attempts" || strings.TrimSpace(parts[0]) == "" {
+			respondError(w, shared.NotFound("integration delivery route not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissionAttempts(parts[0])})
+	})
+
+	mux.HandleFunc("GET /ops/integrations/dead-letters", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListDeadLetters()})
+	})
+
+	mux.HandleFunc("POST /ops/integrations/dead-letters/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/ops/integrations/dead-letters/")
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) != 2 || parts[1] != "replay" || strings.TrimSpace(parts[0]) == "" {
+			respondError(w, shared.NotFound("integration dead letter route not found"))
+			return
+		}
+		item, err := integrationSvc.ReplayDeadLetter(parts[0])
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, item)
+	})
+
 	mux.HandleFunc("GET /ops/stats", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
 			return
@@ -150,6 +196,11 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		payload["outbox"] = map[string]any{
 			"items":      eventingSvc.ListOutbox(),
 			"deliveries": eventingSvc.ListDeliveries(),
+		}
+		payload["integrations"] = map[string]any{
+			"systems":      integrationSvc.ListSystems(),
+			"deliveries":   integrationSvc.ListSubmissions(),
+			"dead_letters": integrationSvc.ListDeadLetters(),
 		}
 		respondJSON(w, http.StatusOK, payload)
 	})

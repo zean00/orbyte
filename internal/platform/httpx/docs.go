@@ -44,6 +44,7 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 	searchIndexKeys := sortedSearchIndexKeys(searchSvc)
 	userViewKeys := sortedViewKeys(modules, module.UISurfaceUser)
 	userPaths := sortedActionPaths(modules, module.UISurfaceUser)
+	selfServiceAPIKeys := sortedSelfServiceAPIKeys(modules)
 	offlineReferenceKeys := sortedOfflineReferenceKeys(modules)
 	offlineProjectionKeys := sortedOfflineProjectionKeys(modules)
 	moduleKeys := sortedModuleKeys(modules)
@@ -126,11 +127,12 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 				"properties": map[string]any{"index_key": map[string]any{"type": "string", "enum": offlineProjectionKeys}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "query": map[string]any{"type": "object"}},
 			}, map[string]any{"index_key": firstOrEmpty(offlineProjectionKeys)}), nil, map[string]any{"200": jsonResponse("Projection package", "#/components/schemas/ProjectionPackageResponse")}),
 			"/offline/sync":      opPath("post", "Offline", "public-headless", "Sync offline mutations", "Accepts draft-safe offline create and update mutations in batch.", requestBodyRef("#/components/schemas/OfflineSyncRequest"), nil, map[string]any{"200": jsonResponse("Sync results", "#/components/schemas/OfflineSyncResponse")}),
-			"/ui/bootstrap":      opPath("get", "UI Contracts", "public-headless", "Get UI bootstrap", "Returns the user workspace menus, actions, views, locale, and default route path.", nil, nil, map[string]any{"200": jsonResponse("UI bootstrap", "#/components/schemas/UIBootstrapResponse")}),
+			"/ui/bootstrap":      opPath("get", "UI Contracts", "public-headless", "Get UI bootstrap", "Returns the surface-aware workspace menus, actions, views, locale, default route path, and self-service API catalog for the current principal.", nil, nil, map[string]any{"200": jsonResponse("UI bootstrap", "#/components/schemas/UIBootstrapResponse")}),
 			"/ui/routes/resolve": opPath("get", "UI Contracts", "public-headless", "Resolve UI route", "Resolves a hash-route path into an action, view, or custom entry.", nil, []map[string]any{queryEnumParam("path", "User route path.", userPaths)}, map[string]any{"200": jsonResponse("Route resolution", "#/components/schemas/UIRouteResolution")}),
 			"/ui/views/{viewKey}": map[string]any{
 				"get": operation("UI Contracts", "public-headless", "Get UI view", "Returns one registered user-surface view definition.", nil, []map[string]any{pathEnumParam("viewKey", "Registered user view key.", userViewKeys)}, map[string]any{"200": jsonResponse("View definition", "#/components/schemas/UIViewDefinition")}),
 			},
+			"/ui/self-service/apis":      opPath("get", "UI Contracts", "public-headless", "List self-service APIs", "Returns the explicit self-service APIs the current principal is allowed to invoke.", nil, nil, map[string]any{"200": jsonResponse("Self-service API list", "#/components/schemas/UISelfServiceAPIListResponse")}),
 			"/ui/data/documents":         opPath("get", "UI Contracts", "public-headless", "Get document summaries for UI", "Returns the document summary payload used by the generic user workspace.", nil, nil, map[string]any{"200": jsonResponse("UI document data", "#/components/schemas/UIDocumentsResponse")}),
 			"/ui/data/models":            opPath("get", "UI Contracts", "public-headless", "Get model list for UI", "Returns model data for the generic user workspace.", nil, nil, map[string]any{"200": jsonResponse("UI model data", "#/components/schemas/UIModelDataResponse")}),
 			"/admin/api/bootstrap":       opPath("get", "Admin", "admin", "Get admin bootstrap", "Returns admin workspace navigation and chrome state.", nil, nil, map[string]any{"200": jsonResponse("Admin bootstrap", "#/components/schemas/AdminBootstrapResponse")}),
@@ -600,14 +602,24 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 				"UIBootstrapResponse": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"menus":             map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UIMenuDefinition"}},
-						"actions":           map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UIActionDefinition"}},
-						"views":             map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UIViewDefinition"}},
-						"default_path":      map[string]any{"type": "string"},
-						"admin_access":      map[string]any{"type": "boolean"},
-						"admin_path":        map[string]any{"type": "string"},
-						"locale":            map[string]any{"type": "string"},
-						"supported_locales": stringArraySchema(),
+						"surface":            map[string]any{"type": "string"},
+						"available_surfaces": stringArraySchema(),
+						"menus":              map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UIMenuDefinition"}},
+						"actions":            map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UIActionDefinition"}},
+						"views":              map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UIViewDefinition"}},
+						"flows":              map[string]any{"type": "array", "items": genericObjectSchema("UI document flow")},
+						"self_service_apis":  map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UISelfServiceAPIDefinition"}},
+						"default_path":       map[string]any{"type": "string"},
+						"admin_access":       map[string]any{"type": "boolean"},
+						"admin_path":         map[string]any{"type": "string"},
+						"locale":             map[string]any{"type": "string"},
+						"supported_locales":  stringArraySchema(),
+					},
+					"example": map[string]any{
+						"surface":            "self_service",
+						"available_surfaces": []string{"backoffice", "self_service"},
+						"default_path":       "/self-service/requests",
+						"self_service_apis":  selfServiceAPIKeys,
 					},
 				},
 				"UIRouteResolution": map[string]any{
@@ -720,6 +732,35 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 						"items": map[string]any{"type": "array", "items": genericObjectSchema("UI document item")},
 					},
 					"additionalProperties": true,
+				},
+				"UISelfServiceAPIDefinition": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"key":                   map[string]any{"type": "string"},
+						"title":                 map[string]any{"type": "string"},
+						"title_i18n":            map[string]any{"$ref": "#/components/schemas/LocalizedText"},
+						"description":           map[string]any{"type": "string"},
+						"description_i18n":      map[string]any{"$ref": "#/components/schemas/LocalizedText"},
+						"method":                map[string]any{"type": "string"},
+						"route_path":            map[string]any{"type": "string"},
+						"handler_kind":          map[string]any{"type": "string"},
+						"document_type":         map[string]any{"type": "string"},
+						"model_key":             map[string]any{"type": "string"},
+						"flow_key":              map[string]any{"type": "string"},
+						"required_permissions":  stringArraySchema(),
+						"audience_kinds":        stringArraySchema(),
+						"request_contract_key":  map[string]any{"type": "string"},
+						"response_contract_key": map[string]any{"type": "string"},
+						"idempotent":            map[string]any{"type": "boolean"},
+						"offline_capable":       map[string]any{"type": "boolean"},
+					},
+					"additionalProperties": true,
+				},
+				"UISelfServiceAPIListResponse": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"items": map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/UISelfServiceAPIDefinition"}},
+					},
 				},
 				"UIModelDataResponse": map[string]any{
 					"type": "object",
@@ -958,6 +999,19 @@ func sortedActionPaths(modules *module.Service, surface module.UISurface) []stri
 		if strings.TrimSpace(def.RoutePath) != "" {
 			keys = append(keys, def.RoutePath)
 		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedSelfServiceAPIKeys(modules *module.Service) []string {
+	if modules == nil {
+		return nil
+	}
+	defs := modules.SelfServiceAPIs()
+	keys := make([]string, 0, len(defs))
+	for _, def := range defs {
+		keys = append(keys, def.Key)
 	}
 	sort.Strings(keys)
 	return keys

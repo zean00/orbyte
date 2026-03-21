@@ -52,6 +52,7 @@ func NewServiceWithRepository(repo Repository, obs *observability.Service, logge
 		Name:        "Fake ERP",
 		Status:      "active",
 		Adapter:     "fake",
+		Connector:   "fake",
 		Description: "Proof adapter for integration kernel flows.",
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -61,8 +62,32 @@ func NewServiceWithRepository(repo Repository, obs *observability.Service, logge
 		Name:        "HTTP Bridge",
 		Status:      "inactive",
 		Adapter:     "http",
+		Connector:   "http",
 		Description: "HTTP integration adapter boundary.",
 		Settings:    map[string]any{"url": "", "method": "POST"},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	_ = svc.RegisterContract(Contract{
+		Key:         "document.submit",
+		Name:        "Document Submit",
+		Version:     1,
+		Direction:   "outbound",
+		Intent:      "command",
+		Status:      "active",
+		Description: "Default canonical contract for document submission.",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	_ = svc.RegisterEndpoint(Endpoint{
+		Key:         "fake_erp.default",
+		SystemKey:   "fake_erp",
+		Name:        "Fake ERP Default",
+		Direction:   "outbound",
+		Mode:        "sync",
+		Status:      "active",
+		Connector:   "fake",
+		Description: "Default outbound endpoint for fake ERP.",
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
@@ -133,34 +158,172 @@ func (s *Service) RegisterSystem(system ExternalSystem) error {
 		system.CreatedAt = now
 	}
 	system.UpdatedAt = now
+	if strings.TrimSpace(system.Connector) == "" {
+		system.Connector = system.Adapter
+	}
 	if strings.TrimSpace(system.Status) == "" {
 		system.Status = "active"
 	}
 	return s.repo.SaveSystem(system)
 }
 
+func (s *Service) RegisterEndpoint(endpoint Endpoint) error {
+	if strings.TrimSpace(endpoint.Key) == "" || strings.TrimSpace(endpoint.SystemKey) == "" {
+		return shared.Validation("integration endpoint key and system_key are required")
+	}
+	system, ok := s.repo.GetSystem(strings.TrimSpace(endpoint.SystemKey))
+	if !ok {
+		return shared.NotFound("integration system not found")
+	}
+	now := time.Now().UTC()
+	if endpoint.CreatedAt.IsZero() {
+		endpoint.CreatedAt = now
+	}
+	endpoint.UpdatedAt = now
+	if strings.TrimSpace(endpoint.Connector) == "" {
+		endpoint.Connector = firstNonEmptyString(system.Connector, system.Adapter)
+	}
+	if strings.TrimSpace(endpoint.Direction) == "" {
+		endpoint.Direction = "outbound"
+	}
+	if strings.TrimSpace(endpoint.Mode) == "" {
+		endpoint.Mode = "sync"
+	}
+	if strings.TrimSpace(endpoint.Status) == "" {
+		endpoint.Status = "active"
+	}
+	return s.repo.SaveEndpoint(endpoint)
+}
+
+func (s *Service) RegisterContract(contract Contract) error {
+	if strings.TrimSpace(contract.Key) == "" || contract.Version <= 0 {
+		return shared.Validation("integration contract key and version are required")
+	}
+	now := time.Now().UTC()
+	if contract.CreatedAt.IsZero() {
+		contract.CreatedAt = now
+	}
+	contract.UpdatedAt = now
+	if strings.TrimSpace(contract.Direction) == "" {
+		contract.Direction = "outbound"
+	}
+	if strings.TrimSpace(contract.Intent) == "" {
+		contract.Intent = "command"
+	}
+	if strings.TrimSpace(contract.Status) == "" {
+		contract.Status = "active"
+	}
+	return s.repo.SaveContract(contract)
+}
+
+func (s *Service) RegisterMapping(mapping Mapping) error {
+	if strings.TrimSpace(mapping.Key) == "" || strings.TrimSpace(mapping.SystemKey) == "" || strings.TrimSpace(mapping.ContractKey) == "" || mapping.ContractVersion <= 0 {
+		return shared.Validation("integration mapping key, system_key, contract_key, and contract_version are required")
+	}
+	now := time.Now().UTC()
+	if mapping.CreatedAt.IsZero() {
+		mapping.CreatedAt = now
+	}
+	mapping.UpdatedAt = now
+	if strings.TrimSpace(mapping.Direction) == "" {
+		mapping.Direction = "outbound"
+	}
+	if strings.TrimSpace(mapping.Status) == "" {
+		mapping.Status = "active"
+	}
+	return s.repo.SaveMapping(mapping)
+}
+
 func (s *Service) ListSystems() []ExternalSystem {
 	return s.repo.ListSystems()
+}
+
+func (s *Service) ListEndpoints() []Endpoint {
+	return s.repo.ListEndpoints()
+}
+
+func (s *Service) ListContracts() []Contract {
+	return s.repo.ListContracts()
+}
+
+func (s *Service) ListMappings() []Mapping {
+	return s.repo.ListMappings()
 }
 
 func (s *Service) ListSubmissions() []SubmissionRecord {
 	return s.repo.ListSubmissions()
 }
 
+func (s *Service) ListSubmissionAttempts(submissionID string) []SubmissionAttempt {
+	return s.repo.ListSubmissionAttempts(strings.TrimSpace(submissionID))
+}
+
+func (s *Service) ListDeadLetters() []DeadLetterRecord {
+	return s.repo.ListDeadLetters()
+}
+
 func (s *Service) GetSubmission(id string) (SubmissionRecord, bool) {
 	return s.repo.GetSubmission(id)
 }
 
+func (s *Service) GetDeadLetter(id string) (DeadLetterRecord, bool) {
+	return s.repo.GetDeadLetter(strings.TrimSpace(id))
+}
+
 func (s *Service) CreateSubmission(systemKey, operationType, documentID, correlationID string, payload map[string]any) (SubmissionRecord, error) {
-	system, ok := s.repo.GetSystem(strings.TrimSpace(systemKey))
+	return s.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: strings.TrimSpace(systemKey),
+		OperationType:     strings.TrimSpace(operationType),
+		DocumentID:        strings.TrimSpace(documentID),
+		CorrelationID:     strings.TrimSpace(correlationID),
+		Payload:           cloneMap(payload),
+		Intent:            "command",
+		Mode:              "sync",
+		ContractKey:       "document.submit",
+		ContractVersion:   1,
+	})
+}
+
+func (s *Service) CreateDelivery(record SubmissionRecord) (SubmissionRecord, error) {
+	systemKey := strings.TrimSpace(record.ExternalSystemKey)
+	system, ok := s.repo.GetSystem(systemKey)
 	if !ok {
 		return SubmissionRecord{}, shared.NotFound("integration system not found")
 	}
 	if system.Status != "active" {
 		return SubmissionRecord{}, shared.Conflict("integration system is not active")
 	}
-	if strings.TrimSpace(operationType) == "" {
+	if strings.TrimSpace(record.OperationType) == "" {
 		return SubmissionRecord{}, shared.Validation("operation_type is required")
+	}
+	if strings.TrimSpace(record.Intent) == "" {
+		record.Intent = "command"
+	}
+	if strings.TrimSpace(record.Mode) == "" {
+		record.Mode = "sync"
+	}
+	if strings.TrimSpace(record.CorrelationID) == "" {
+		record.CorrelationID = fmt.Sprintf("integration:%d", time.Now().UTC().UnixNano())
+	}
+	if record.ContractKey != "" {
+		contract, ok := s.repo.GetContract(strings.TrimSpace(record.ContractKey), record.ContractVersion)
+		if !ok {
+			return SubmissionRecord{}, shared.NotFound("integration contract not found")
+		}
+		if contract.Status != "active" {
+			return SubmissionRecord{}, shared.Conflict("integration contract is not active")
+		}
+		record.Intent = firstNonEmptyString(strings.TrimSpace(record.Intent), contract.Intent)
+	}
+	if record.EndpointKey != "" {
+		endpoint, ok := s.repo.GetEndpoint(strings.TrimSpace(record.EndpointKey))
+		if !ok {
+			return SubmissionRecord{}, shared.NotFound("integration endpoint not found")
+		}
+		if endpoint.Status != "active" {
+			return SubmissionRecord{}, shared.Conflict("integration endpoint is not active")
+		}
+		record.Mode = firstNonEmptyString(strings.TrimSpace(record.Mode), endpoint.Mode)
 	}
 	if s.policy != nil {
 		decision := s.policy.Evaluate(policy.Request{
@@ -168,8 +331,12 @@ func (s *Service) CreateSubmission(systemKey, operationType, documentID, correla
 			Inputs: map[string]any{
 				"system_key":     system.Key,
 				"system_status":  system.Status,
-				"operation_type": strings.TrimSpace(operationType),
-				"document_id":    strings.TrimSpace(documentID),
+				"endpoint_key":   strings.TrimSpace(record.EndpointKey),
+				"contract_key":   strings.TrimSpace(record.ContractKey),
+				"intent":         strings.TrimSpace(record.Intent),
+				"mode":           strings.TrimSpace(record.Mode),
+				"operation_type": strings.TrimSpace(record.OperationType),
+				"document_id":    strings.TrimSpace(record.DocumentID),
 			},
 		})
 		if !decision.Allowed {
@@ -177,17 +344,12 @@ func (s *Service) CreateSubmission(systemKey, operationType, documentID, correla
 		}
 	}
 	now := time.Now().UTC()
-	record := SubmissionRecord{
-		ID:                fmt.Sprintf("sub:%d", now.UnixNano()),
-		ExternalSystemKey: system.Key,
-		OperationType:     strings.TrimSpace(operationType),
-		Status:            "queued",
-		DocumentID:        strings.TrimSpace(documentID),
-		CorrelationID:     strings.TrimSpace(correlationID),
-		Payload:           cloneMap(payload),
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}
+	record.ID = fmt.Sprintf("sub:%d", now.UnixNano())
+	record.ExternalSystemKey = system.Key
+	record.Status = "queued"
+	record.Payload = cloneMap(record.Payload)
+	record.CreatedAt = now
+	record.UpdatedAt = now
 	if err := s.repo.SaveSubmission(record); err != nil {
 		return SubmissionRecord{}, err
 	}
@@ -219,8 +381,32 @@ func (s *Service) ProcessSubmission(id string) (SubmissionRecord, error) {
 	if err != nil {
 		record.LastError = err.Error()
 		record.ProcessedAt = time.Now().UTC()
+		_ = s.repo.SaveSubmissionAttempt(SubmissionAttempt{
+			ID:           fmt.Sprintf("attempt:%s:%d", record.ID, record.AttemptCount),
+			SubmissionID: record.ID,
+			Attempt:      record.AttemptCount,
+			Status:       "failed",
+			ErrorCode:    classifyIntegrationError(err),
+			ErrorMessage: err.Error(),
+			Request:      submissionAttemptRequest(record),
+			OccurredAt:   record.ProcessedAt,
+		})
 		if record.AttemptCount >= 3 {
 			record.Status = "dead_letter"
+			_ = s.repo.SaveDeadLetter(DeadLetterRecord{
+				ID:                fmt.Sprintf("dl:%s", record.ID),
+				SubmissionID:      record.ID,
+				ExternalSystemKey: record.ExternalSystemKey,
+				EndpointKey:       record.EndpointKey,
+				ContractKey:       record.ContractKey,
+				ContractVersion:   record.ContractVersion,
+				Intent:            record.Intent,
+				Status:            "open",
+				LastError:         record.LastError,
+				Payload:           cloneMap(record.Payload),
+				CreatedAt:         record.CreatedAt,
+				UpdatedAt:         record.UpdatedAt,
+			})
 		} else {
 			record.Status = "failed"
 		}
@@ -239,6 +425,15 @@ func (s *Service) ProcessSubmission(id string) (SubmissionRecord, error) {
 	record.ExternalReference = result.ExternalReference
 	record.Result = cloneMap(result.Result)
 	record.ProcessedAt = time.Now().UTC()
+	_ = s.repo.SaveSubmissionAttempt(SubmissionAttempt{
+		ID:           fmt.Sprintf("attempt:%s:%d", record.ID, record.AttemptCount),
+		SubmissionID: record.ID,
+		Attempt:      record.AttemptCount,
+		Status:       "succeeded",
+		Request:      submissionAttemptRequest(record),
+		Response:     cloneMap(result.Result),
+		OccurredAt:   record.ProcessedAt,
+	})
 	if err := s.repo.SaveSubmission(record); err != nil {
 		return SubmissionRecord{}, err
 	}
@@ -266,6 +461,14 @@ func (s *Service) RetrySubmission(id string) (SubmissionRecord, error) {
 	return s.ProcessSubmission(record.ID)
 }
 
+func (s *Service) ReplayDeadLetter(id string) (SubmissionRecord, error) {
+	dead, ok := s.repo.GetDeadLetter(strings.TrimSpace(id))
+	if !ok {
+		return SubmissionRecord{}, shared.NotFound("integration dead letter not found")
+	}
+	return s.RetrySubmission(dead.SubmissionID)
+}
+
 func (s *Service) observeMetric(key string) {
 	if s.obs == nil {
 		return
@@ -291,6 +494,37 @@ func cloneMap(input map[string]any) map[string]any {
 		output[key] = value
 	}
 	return output
+}
+
+func submissionAttemptRequest(record SubmissionRecord) map[string]any {
+	return map[string]any{
+		"system_key":       record.ExternalSystemKey,
+		"endpoint_key":     record.EndpointKey,
+		"contract_key":     record.ContractKey,
+		"contract_version": record.ContractVersion,
+		"intent":           record.Intent,
+		"mode":             record.Mode,
+		"operation_type":   record.OperationType,
+		"correlation_id":   record.CorrelationID,
+		"payload":          cloneMap(record.Payload),
+	}
+}
+
+func classifyIntegrationError(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(message, "timeout"):
+		return "timeout"
+	case strings.Contains(message, "status 4"):
+		return "remote_4xx"
+	case strings.Contains(message, "status 5"):
+		return "remote_5xx"
+	default:
+		return "execution_error"
+	}
 }
 
 type FakeAdapter struct{}

@@ -55,6 +55,7 @@ type testHarness struct {
 	audit     *audit.Service
 	cfg       *config.Service
 	search    *search.Service
+	workflows *workflow.Service
 	analytics *analytics.Service
 }
 
@@ -303,6 +304,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		audit:     auditSvc,
 		cfg:       cfg,
 		search:    searchSvc,
+		workflows: flows,
 		analytics: analyticsSvc,
 	}
 }
@@ -386,6 +388,59 @@ func builtInTestModuleManifests() []module.Manifest {
 					{Key: "documents.numbering.assign", Kind: "numbering", Target: "document_numbering"},
 				},
 			},
+			SelfService: module.SelfServiceDefinition{
+				APIs: []module.SelfServiceAPIDefinition{
+					{
+						Key:                 "documents.self_service.requests.list",
+						Title:               "List Self-Service Requests",
+						Method:              "GET",
+						RoutePath:           "/ui/data/documents?type=generic_request",
+						HandlerKind:         "ui_data",
+						DocumentType:        "generic_request",
+						RequiredPermissions: []string{"document.list"},
+						AudienceKinds:       []string{"customer", "employee", "patient"},
+						ResponseContractKey: "documents.generic_request.list",
+					},
+					{
+						Key:                 "documents.self_service.requests.get",
+						Title:               "Get Self-Service Request",
+						Method:              "GET",
+						RoutePath:           "/ui/data/documents/{documentID}",
+						HandlerKind:         "ui_data",
+						DocumentType:        "generic_request",
+						RequiredPermissions: []string{"document.read"},
+						AudienceKinds:       []string{"customer", "employee", "patient"},
+						ResponseContractKey: "documents.generic_request.detail",
+					},
+					{
+						Key:                 "documents.self_service.requests.create",
+						Title:               "Create Self-Service Request",
+						Method:              "POST",
+						RoutePath:           "/document-flows/documents.self_service.requests.intake/commit",
+						HandlerKind:         "flow_commit",
+						DocumentType:        "generic_request",
+						FlowKey:             "documents.self_service.requests.intake",
+						RequiredPermissions: []string{"document.create"},
+						AudienceKinds:       []string{"customer", "employee", "patient"},
+						RequestContractKey:  "documents.generic_request.create",
+						ResponseContractKey: "documents.generic_request.detail",
+						Idempotent:          true,
+					},
+					{
+						Key:                 "documents.self_service.requests.submit",
+						Title:               "Submit Self-Service Request",
+						Method:              "POST",
+						RoutePath:           "/documents/{documentID}/actions",
+						HandlerKind:         "document_action",
+						DocumentType:        "generic_request",
+						RequiredPermissions: []string{"document.submit"},
+						AudienceKinds:       []string{"customer", "employee", "patient"},
+						RequestContractKey:  "documents.generic_request.action.submit",
+						ResponseContractKey: "documents.generic_request.detail",
+						Idempotent:          true,
+					},
+				},
+			},
 			SearchIndexes: []search.IndexDefinition{{
 				Key:                 "documents.requests.search",
 				Title:               "Requests",
@@ -409,6 +464,20 @@ func builtInTestModuleManifests() []module.Manifest {
 					Label:               "Requests",
 					ActionKey:           "documents.requests.list",
 					Order:               10,
+					RequiredPermissions: []string{"document.list"},
+				}, {
+					Key:                 "documents.self_service.requests",
+					Label:               "My Requests",
+					Surface:             module.UISurfaceSelfService,
+					ActionKey:           "documents.self_service.requests.list",
+					Order:               8,
+					RequiredPermissions: []string{"document.list"},
+				}, {
+					Key:                 "documents.worklist",
+					Label:               "Worklist",
+					Surface:             module.UISurfaceWorklist,
+					ActionKey:           "documents.worklist.tasks",
+					Order:               5,
 					RequiredPermissions: []string{"document.list"},
 				}},
 				Actions: []module.ActionDefinition{
@@ -439,6 +508,66 @@ func builtInTestModuleManifests() []module.Manifest {
 						RenderMode:          module.RenderModeGeneric,
 						RequiredPermissions: []string{"document.read"},
 					},
+					{
+						Key:                 "documents.self_service.requests.create",
+						Label:               "New Request",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "navigate",
+						RoutePath:           "/self-service/requests/new",
+						FlowKey:             "documents.self_service.requests.intake",
+						RenderMode:          module.RenderModeFlow,
+						RequiredPermissions: []string{"document.create"},
+					},
+					{
+						Key:                 "documents.self_service.requests.list",
+						Label:               "My Requests",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "navigate",
+						RoutePath:           "/self-service/requests",
+						ViewKey:             "documents.self_service.requests.list",
+						RenderMode:          module.RenderModeGeneric,
+						RequiredPermissions: []string{"document.list"},
+					},
+					{
+						Key:                 "documents.self_service.requests.detail",
+						Label:               "Request Detail",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "navigate",
+						RoutePath:           "/self-service/requests/detail",
+						ViewKey:             "documents.self_service.requests.detail",
+						RenderMode:          module.RenderModeGeneric,
+						RequiredPermissions: []string{"document.read"},
+					},
+					{
+						Key:                 "documents.self_service.requests.form",
+						Label:               "Request Draft",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "navigate",
+						RoutePath:           "/self-service/requests/form",
+						ViewKey:             "documents.self_service.requests.form",
+						RenderMode:          module.RenderModeGeneric,
+						RequiredPermissions: []string{"document.update_draft"},
+					},
+					{
+						Key:                 "documents.worklist.tasks",
+						Label:               "Task Queue",
+						Surface:             module.UISurfaceWorklist,
+						Kind:                "navigate",
+						RoutePath:           "/worklist",
+						ViewKey:             "documents.worklist.tasks",
+						RenderMode:          module.RenderModeGeneric,
+						RequiredPermissions: []string{"document.list"},
+					},
+					{
+						Key:                 "documents.worklist.approvals",
+						Label:               "Approval Queue",
+						Surface:             module.UISurfaceWorklist,
+						Kind:                "navigate",
+						RoutePath:           "/worklist/approvals",
+						ViewKey:             "documents.worklist.approvals",
+						RenderMode:          module.RenderModeGeneric,
+						RequiredPermissions: []string{"document.list"},
+					},
 				},
 				Views: []module.ViewDefinition{
 					{
@@ -468,6 +597,85 @@ func builtInTestModuleManifests() []module.Manifest {
 								Key: "header", Title: "Header", Fields: []module.FieldDefinition{{Key: "doc_id", Label: "Document ID", Path: "header.id", Type: "string"}},
 							}},
 						}},
+					},
+					{
+						Key:                 "documents.self_service.requests.list",
+						Title:               "My Requests",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "list",
+						DocumentType:        "generic_request",
+						ProjectionKey:       "document_summary",
+						RequiredPermissions: []string{"document.list"},
+						Columns: []module.ColumnDefinition{
+							{Key: "id", Label: "Request", Path: "header.id"},
+							{Key: "status", Label: "Status", Path: "header.status"},
+							{Key: "updated_at", Label: "Updated", Path: "header.updated_at"},
+						},
+						Filters: []module.FilterDefinition{
+							{Key: "status", Label: "Status", Type: "enum", Options: []string{"draft", "submitted", "approved", "rejected", "cancelled"}},
+						},
+						DefaultPageSize: 10,
+						EmptyState:      "No self-service requests yet.",
+					},
+					{
+						Key:                 "documents.self_service.requests.detail",
+						Title:               "My Request",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "detail",
+						DocumentType:        "generic_request",
+						RequiredPermissions: []string{"document.read"},
+						AllowedActions:      []string{"submit", "reopen", "cancel"},
+						Tabs: []module.TabDefinition{{
+							Key: "summary", Title: "Summary", Sections: []module.SectionDefinition{
+								{
+									Key: "header", Title: "Header", Fields: []module.FieldDefinition{
+										{Key: "doc_id", Label: "Request ID", Path: "header.id", Type: "string"},
+										{Key: "status", Label: "Status", Path: "header.status", Type: "string"},
+									},
+								},
+								{
+									Key: "payload", Title: "Payload", Fields: []module.FieldDefinition{
+										{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string"},
+									},
+								},
+							},
+						}},
+						ActionPlacements: []module.ActionPlacementDefinition{
+							{ActionKey: "submit", Zone: "primary"},
+							{ActionKey: "reopen", Zone: "secondary"},
+							{ActionKey: "cancel", Zone: "secondary", Style: "warn"},
+						},
+					},
+					{
+						Key:                 "documents.self_service.requests.form",
+						Title:               "Request Form",
+						Surface:             module.UISurfaceSelfService,
+						Kind:                "form",
+						DocumentType:        "generic_request",
+						RequiredPermissions: []string{"document.update_draft"},
+						Sections: []module.SectionDefinition{{
+							Key: "request_fields", Title: "Request", Fields: []module.FieldDefinition{
+								{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe your request"},
+							},
+						}},
+					},
+					{
+						Key:                 "documents.worklist.tasks",
+						Title:               "Task Queue",
+						Surface:             module.UISurfaceWorklist,
+						Kind:                "queue",
+						ProjectionKey:       "workflow.tasks",
+						RequiredPermissions: []string{"document.list"},
+						EmptyState:          "No open workflow tasks.",
+					},
+					{
+						Key:                 "documents.worklist.approvals",
+						Title:               "Approval Queue",
+						Surface:             module.UISurfaceWorklist,
+						Kind:                "queue",
+						ProjectionKey:       "workflow.approvals",
+						RequiredPermissions: []string{"document.list"},
+						EmptyState:          "No pending workflow approvals.",
 					},
 				},
 				DocumentFlows: []module.DocumentFlowDefinition{{
@@ -513,6 +721,28 @@ func builtInTestModuleManifests() []module.Manifest {
 							},
 						},
 					},
+				}, {
+					Key:                 "documents.self_service.requests.intake",
+					Title:               "Self-Service Request",
+					Surface:             module.UISurfaceSelfService,
+					RoutePath:           "/self-service/requests/new",
+					PrimaryDocumentType: "generic_request",
+					RequiredPermissions: []string{"document.create"},
+					Steps: []module.DocumentFlowStepDefinition{{
+						Key:   "request",
+						Title: "Request",
+						Documents: []module.DocumentFlowDocumentDefinition{{
+							Key:           "request",
+							Title:         "Request",
+							DocumentType:  "generic_request",
+							PrimaryOutput: true,
+							Sections: []module.SectionDefinition{{
+								Key: "request_core", Title: "Request", Fields: []module.FieldDefinition{
+									{Key: "title", Label: "Title", Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe your request"},
+								},
+							}},
+						}},
+					}},
 				}},
 			},
 			Offline: module.OfflineDefinition{
@@ -3219,6 +3449,185 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	rr = h.request(http.MethodGet, "/ui/actions/render?action=submit&document_id=missing", nil, true)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected render action endpoint to validate document lookup, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestUIWorklistSurfaceBootstrapAndData(t *testing.T) {
+	h := newTestHarness(t)
+	create := h.request(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Queue Target"},
+	}), true)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("expected worklist document creation to succeed, got %d body=%s", create.Code, create.Body.String())
+	}
+	var record document.Record
+	_ = json.Unmarshal(create.Body.Bytes(), &record)
+
+	now := time.Now().UTC()
+	if err := h.workflows.ApplyMutation(workflow.Mutation{
+		Tasks: []workflow.Task{{
+			ID:             "task:worklist",
+			WorkflowKey:    "generic_request_flow",
+			TargetType:     "document",
+			TargetID:       record.Header.ID,
+			TaskType:       "review",
+			Status:         "open",
+			AssigneeUserID: "user_admin",
+			CreatedAt:      now,
+			DueAt:          now.Add(-time.Hour),
+		}},
+		Approvals: []workflow.Approval{{
+			ID:          "approval:worklist",
+			WorkflowKey: "generic_request_flow",
+			TargetType:  "document",
+			TargetID:    record.Header.ID,
+			Status:      "pending",
+			StageKey:    "review",
+			RequestedBy: "user_admin",
+			RequestedAt: now,
+			DueAt:       now.Add(2 * time.Hour),
+		}},
+		History: []workflow.HistoryEvent{{
+			ID:          "history:worklist",
+			WorkflowKey: "generic_request_flow",
+			TargetType:  "document",
+			TargetID:    record.Header.ID,
+			Action:      "submit",
+			FromState:   "draft",
+			ToState:     "submitted",
+			ActorID:     "user_admin",
+			OccurredAt:  now,
+		}},
+	}); err != nil {
+		t.Fatalf("seed worklist workflow data failed: %v", err)
+	}
+
+	rr := h.request(http.MethodGet, "/ui/bootstrap?surface=worklist", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected worklist bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if payload["surface"] != string(module.UISurfaceWorklist) {
+		t.Fatalf("expected worklist surface, got %+v", payload["surface"])
+	}
+	if len(payload["available_surfaces"].([]any)) == 0 {
+		t.Fatalf("expected available surfaces, got %+v", payload)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/worklist&surface=worklist", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected worklist route resolution, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/worklist/tasks", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected worklist tasks endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var tasks map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &tasks)
+	if len(tasks["items"].([]any)) != 1 {
+		t.Fatalf("expected one task item, got %+v", tasks)
+	}
+	firstTask := tasks["items"].([]any)[0].(map[string]any)
+	if firstTask["document_type"] != "generic_request" {
+		t.Fatalf("expected enriched document_type, got %+v", firstTask)
+	}
+	if firstTask["target_title"] != "Queue Target" {
+		t.Fatalf("expected enriched target_title, got %+v", firstTask)
+	}
+	if firstTask["is_mine"] != true {
+		t.Fatalf("expected task to be marked as mine, got %+v", firstTask)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/worklist/tasks?mine=1&due=overdue", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected filtered worklist tasks endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	tasks = map[string]any{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &tasks)
+	if len(tasks["items"].([]any)) != 1 {
+		t.Fatalf("expected filtered worklist task to remain visible, got %+v", tasks)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/worklist/summary", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected worklist summary endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var summary map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &summary)
+	taskSummary := summary["tasks"].(map[string]any)
+	if taskSummary["mine"].(float64) != 1 {
+		t.Fatalf("expected task summary mine count, got %+v", taskSummary)
+	}
+	if taskSummary["overdue"].(float64) != 1 {
+		t.Fatalf("expected task summary overdue count, got %+v", taskSummary)
+	}
+
+	rr = h.request(http.MethodGet, "/ui/data/worklist/context?target_type=document&target_id="+url.QueryEscape(record.Header.ID)+"&work_item_kind=task&work_item_id=task%3Aworklist", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected worklist context endpoint, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var contextPayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &contextPayload)
+	if contextPayload["current_task"] == nil {
+		t.Fatalf("expected current_task in worklist context, got %+v", contextPayload)
+	}
+	if len(contextPayload["history"].([]any)) != 1 {
+		t.Fatalf("expected workflow history in worklist context, got %+v", contextPayload)
+	}
+}
+
+func TestUISelfServiceSurfaceBootstrapAndDiscovery(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/ui/bootstrap?surface=self_service", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected self-service bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if payload["surface"] != string(module.UISurfaceSelfService) {
+		t.Fatalf("expected self_service surface, got %+v", payload["surface"])
+	}
+	if len(payload["available_surfaces"].([]any)) == 0 {
+		t.Fatalf("expected available surfaces in self-service bootstrap, got %+v", payload)
+	}
+	apis, ok := payload["self_service_apis"].([]any)
+	if !ok || len(apis) == 0 {
+		t.Fatalf("expected self-service APIs in bootstrap, got %+v", payload["self_service_apis"])
+	}
+
+	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/self-service/requests&surface=self_service", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected self-service route resolution, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/self-service/apis", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected self-service API discovery, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var listPayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &listPayload)
+	items, ok := listPayload["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("expected discovered self-service APIs, got %+v", listPayload)
+	}
+	foundCreate := false
+	for _, raw := range items {
+		item := raw.(map[string]any)
+		if item["key"] == "documents.self_service.requests.create" {
+			foundCreate = true
+			if item["flow_key"] != "documents.self_service.requests.intake" {
+				t.Fatalf("expected self-service create API to expose flow key, got %+v", item)
+			}
+		}
+	}
+	if !foundCreate {
+		t.Fatalf("expected self-service create API in discovery payload, got %+v", items)
 	}
 }
 

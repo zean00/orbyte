@@ -44,7 +44,7 @@ func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, mod
 			http.NotFound(w, r)
 			return
 		}
-		flow, ok := modules.DocumentFlowForSurface(flowKey, module.UISurfaceUser)
+		flow, ok := modules.DocumentFlow(flowKey)
 		if !ok {
 			respondError(w, shared.NotFound("document flow not found"))
 			return
@@ -271,7 +271,7 @@ func resolveDocumentFlowInstance(modules *module.Service, docs *document.Service
 	if flowKey == "" {
 		return flowInstancePayload{}, shared.NotFound("document flow not found")
 	}
-	flow, ok := modules.DocumentFlowForSurface(flowKey, module.UISurfaceUser)
+	flow, ok := modules.DocumentFlow(flowKey)
 	if !ok {
 		return flowInstancePayload{}, shared.NotFound("document flow not found")
 	}
