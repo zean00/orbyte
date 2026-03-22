@@ -14,6 +14,7 @@ import (
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
+	"orbyte/internal/platform/engagement"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
@@ -97,12 +98,13 @@ type Server struct {
 	observability             *observability.Service
 	offline                   *offline.Service
 	dataops                   *dataops.Service
+	engagement                *engagement.Service
 	implementation            *ImplementationService
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
+func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
 	return &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
@@ -122,6 +124,7 @@ func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templat
 		observability:             obs,
 		offline:                   offlineSvc,
 		dataops:                   dataopsSvc,
+		engagement:                engagementSvc,
 		implementation:            NewImplementationService(),
 		analyticsStreamPath:       analyticsStreamPath,
 		analyticsScopedStreamPath: analyticsScopedStreamPath,
@@ -569,6 +572,30 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 			builtInTool{name: "dataops.migration.plan", title: "Plan Migration", description: "Build a migration apply plan from a registered migration artifact.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"artifact_id"}}},
 			builtInTool{name: "dataops.migration.validate", title: "Validate Migration", description: "Validate a migration artifact without applying it.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"artifact_id"}}},
 			builtInTool{name: "dataops.migration.run", title: "Run Migration", description: "Apply a validated migration artifact. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"artifact_id", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.engagement != nil {
+		defs = append(defs,
+			builtInTool{name: "engagement.program.list", title: "List Engagement Programs", description: "List engagement programs.", permission: "configuration.read"},
+			builtInTool{name: "engagement.program.get", title: "Get Engagement Program", description: "Get one engagement program.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}}, "required": []string{"program_key"}}},
+			builtInTool{name: "engagement.program.create", title: "Create Engagement Program", description: "Create one engagement program. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}, "subject_type": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"program_key", "confirm_apply"}}},
+			builtInTool{name: "engagement.program.update", title: "Update Engagement Program", description: "Update one engagement program. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}, "subject_type": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"program_key", "confirm_apply"}}},
+			builtInTool{name: "engagement.program.version.create", title: "Create Engagement Draft Version", description: "Create a new draft version for an engagement program. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "change_note": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"program_key", "confirm_apply"}}},
+			builtInTool{name: "engagement.program.version.save", title: "Save Engagement Draft Version", description: "Save rules onto an engagement draft version. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "rules": map[string]any{"type": "array", "items": map[string]any{"type": "object"}}, "change_note": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"program_key", "version", "rules", "confirm_apply"}}},
+			builtInTool{name: "engagement.program.version.validate", title: "Validate Engagement Version", description: "Validate one engagement program version.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}}, "required": []string{"program_key", "version"}}},
+			builtInTool{name: "engagement.program.version.publish", title: "Publish Engagement Version", description: "Publish one engagement program version. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"program_key", "version", "confirm_apply"}}},
+			builtInTool{name: "engagement.subject.get", title: "Get Engagement Subject", description: "Get balances, qualification, achievements, and recent journal for one subject.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}}, "required": []string{"program_key", "subject_id"}}},
+			builtInTool{name: "engagement.account.list", title: "List Engagement Accounts", description: "List accounts for one engagement subject.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}}, "required": []string{"program_key", "subject_id"}}},
+			builtInTool{name: "engagement.balance.get", title: "Get Engagement Balance", description: "Get one engagement account balance.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}, "account_key": map[string]any{"type": "string"}}, "required": []string{"program_key", "subject_id"}}},
+			builtInTool{name: "engagement.journal.list", title: "List Engagement Journal", description: "List journal entries for one program or subject.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}, "account_key": map[string]any{"type": "string"}}, "required": []string{"program_key"}}},
+			builtInTool{name: "engagement.qualification.get", title: "Get Engagement Qualification", description: "Get qualification or tier state for one subject.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}}, "required": []string{"program_key", "subject_id"}}},
+			builtInTool{name: "engagement.achievement.list", title: "List Engagement Achievements", description: "List granted achievements for one subject.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}}, "required": []string{"program_key", "subject_id"}}},
+			builtInTool{name: "engagement.consumer.list", title: "List Engagement Consumers", description: "List engagement consumer state.", permission: "configuration.read"},
+			builtInTool{name: "engagement.consumer.get", title: "Get Engagement Consumer", description: "Get one engagement consumer state.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"consumer_id": map[string]any{"type": "string"}}, "required": []string{"consumer_id"}}},
+			builtInTool{name: "engagement.replay.plan", title: "Plan Engagement Replay", description: "Plan a replay for one engagement program version.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}}, "required": []string{"program_key"}}},
+			builtInTool{name: "engagement.replay.run", title: "Run Engagement Replay", description: "Queue a replay for one engagement program version. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"program_key", "confirm_apply"}}},
+			builtInTool{name: "engagement.replay.get", title: "Get Engagement Replay", description: "Get one engagement replay run.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"replay_run_id": map[string]any{"type": "string"}}, "required": []string{"replay_run_id"}}},
+			builtInTool{name: "engagement.simulation.run", title: "Simulate Engagement Rules", description: "Preview engagement rule outcomes for one event.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"program_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "event": map[string]any{"type": "object"}}, "required": []string{"program_key", "event"}}},
 		)
 	}
 	if s != nil && (s.health != nil || s.audit != nil) {
@@ -1154,6 +1181,46 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 		return s.dataopsMigrationValidate(actor, arguments)
 	case "dataops.migration.run":
 		return s.dataopsMigrationRun(actor, arguments)
+	case "engagement.program.list":
+		return s.engagementProgramList(actor, arguments)
+	case "engagement.program.get":
+		return s.engagementProgramGet(actor, arguments)
+	case "engagement.program.create":
+		return s.engagementProgramCreate(actor, arguments)
+	case "engagement.program.update":
+		return s.engagementProgramUpdate(actor, arguments)
+	case "engagement.program.version.create":
+		return s.engagementVersionCreate(actor, arguments)
+	case "engagement.program.version.save":
+		return s.engagementVersionSave(actor, arguments)
+	case "engagement.program.version.validate":
+		return s.engagementVersionValidate(actor, arguments)
+	case "engagement.program.version.publish":
+		return s.engagementVersionPublish(actor, arguments)
+	case "engagement.subject.get":
+		return s.engagementSubjectGet(actor, arguments)
+	case "engagement.account.list":
+		return s.engagementAccountList(actor, arguments)
+	case "engagement.balance.get":
+		return s.engagementBalanceGet(actor, arguments)
+	case "engagement.journal.list":
+		return s.engagementJournalList(actor, arguments)
+	case "engagement.qualification.get":
+		return s.engagementQualificationGet(actor, arguments)
+	case "engagement.achievement.list":
+		return s.engagementAchievementList(actor, arguments)
+	case "engagement.consumer.list":
+		return s.engagementConsumerList(actor, arguments)
+	case "engagement.consumer.get":
+		return s.engagementConsumerGet(actor, arguments)
+	case "engagement.replay.plan":
+		return s.engagementReplayPlan(actor, arguments)
+	case "engagement.replay.run":
+		return s.engagementReplayRun(actor, arguments)
+	case "engagement.replay.get":
+		return s.engagementReplayGet(actor, arguments)
+	case "engagement.simulation.run":
+		return s.engagementSimulationRun(actor, arguments)
 	case "readiness.get":
 		return s.readinessGet(actor, arguments)
 	case "ops.health.get":

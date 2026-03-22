@@ -15,6 +15,7 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/engagement"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
@@ -322,6 +323,117 @@ func TestServerDataOpsFlow(t *testing.T) {
 	job := result["job"].(jobs.Job)
 	if strings.TrimSpace(run.ID) == "" || strings.TrimSpace(job.ID) == "" {
 		t.Fatal("expected queued run and job from backup run")
+	}
+}
+
+func TestServerEngagementFlow(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "configuration.read" || permissionKey == "configuration.manage"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      200,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "engagement.program.create",
+			"arguments": map[string]any{
+				"program_key":   "loyalty",
+				"name":          "Customer Loyalty",
+				"subject_type":  "customer",
+				"confirm_apply": true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("engagement.program.create failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      201,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "engagement.program.version.create",
+			"arguments": map[string]any{
+				"program_key":   "loyalty",
+				"confirm_apply": true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("engagement.program.version.create failed: %+v", resp.Error)
+	}
+	version := resp.Result.(map[string]any)["structuredContent"].(engagement.ProgramVersion)
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      202,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "engagement.program.version.save",
+			"arguments": map[string]any{
+				"program_key":   "loyalty",
+				"version":       version.Version,
+				"confirm_apply": true,
+				"rules": []map[string]any{
+					{"key": "earn_purchase", "action": "credit_points", "source_event_types": []string{"order.completed"}, "subject_source": "actor_id", "account_key": "points", "fixed_amount": 10},
+					{"key": "bronze_tier", "action": "set_tier", "source_event_types": []string{"order.completed"}, "subject_source": "actor_id", "account_key": "points", "threshold": 10, "tier_key": "bronze"},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("engagement.program.version.save failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      203,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "engagement.program.version.publish",
+			"arguments": map[string]any{
+				"program_key":   "loyalty",
+				"version":       version.Version,
+				"confirm_apply": true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("engagement.program.version.publish failed: %+v", resp.Error)
+	}
+
+	if err := server.eventing.Record(eventing.Event{ID: "evt-loyalty", Type: "order.completed", AggregateType: "order", AggregateID: "ord-1", ActorID: "cust-1", OccurredAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("record event failed: %v", err)
+	}
+	if _, err := server.eventing.DispatchPending(10); err != nil {
+		t.Fatalf("dispatch failed: %v", err)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      204,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "engagement.balance.get",
+			"arguments": map[string]any{
+				"program_key": "loyalty",
+				"subject_id":  "cust-1",
+				"account_key": "points",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("engagement.balance.get failed: %+v", resp.Error)
+	}
+	balance := resp.Result.(map[string]any)["structuredContent"].(engagement.BalanceSnapshot)
+	if balance.Balance != 10 {
+		t.Fatalf("expected balance 10, got %+v", balance)
 	}
 }
 
@@ -1288,7 +1400,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	unavailable := NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -1345,7 +1457,7 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -1406,7 +1518,9 @@ func newTestServer(t *testing.T) *Server {
 	offlineSvc := offline.NewService(modules, nil, searchSvc)
 	dataopsSvc := dataops.NewService(cfg, flags, modules, referenceSvc, ident, documents, integrationSvc)
 	dataopsSvc.AttachJobs(jobSvc)
-	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	engagementSvc := engagement.NewService()
+	engagementSvc.AttachRuntime(eventingSvc, jobSvc)
+	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, engagementSvc, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -1430,7 +1544,7 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -1446,7 +1560,7 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -1462,7 +1576,7 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 }
 
 func newTestIdentity(t *testing.T) *identity.Service {

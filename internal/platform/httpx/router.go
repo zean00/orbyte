@@ -126,7 +126,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 		MCP: MCPDeps{
 			Identity:         ident,
 			Audit:            auditSvc,
-			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, nil, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
 			Analytics:        analyticsSvc,
 			AnalyticsStream:  analyticsStream,
 			StreamPath:       analyticsMCPStreamPath,
