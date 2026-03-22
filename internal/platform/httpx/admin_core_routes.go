@@ -3,6 +3,7 @@ package httpx
 import (
 	"net/http"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
@@ -13,8 +14,8 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerAdminCoreRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service) {
-	registerAdminOverviewRoutes(mux, cfg, org, ident, modules, workflowSvc, policySvc)
+func registerAdminCoreRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, acpSvc *acp.Service) {
+	registerAdminOverviewRoutes(mux, cfg, org, ident, modules, workflowSvc, policySvc, acpSvc)
 	registerAdminHierarchyRoutes(mux, ident)
 	registerAdminWorkflowRoutes(mux, ident, workflowSvc, auditSvc, policySvc, obsSvc)
 }

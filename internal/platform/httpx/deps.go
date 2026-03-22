@@ -3,6 +3,7 @@ package httpx
 import (
 	"net/http"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	application "orbyte/internal/platform/application"
@@ -41,6 +42,7 @@ type RouterDeps struct {
 	Ops          OpsDeps
 	Search       SearchDeps
 	Admin        AdminDeps
+	ACP          ACPDeps
 	MCP          MCPDeps
 	Offline      OfflineDeps
 	Templates    TemplateDeps
@@ -123,6 +125,7 @@ type AdminDeps struct {
 	Reference     *reference.Service
 	Idempotency   *idempotency.Service
 	Health        *runtimehealth.Tracker
+	ACP           *acp.Service
 }
 
 type TemplateDeps struct {
@@ -144,6 +147,13 @@ type UIDeps struct {
 	Policy        *policy.Service
 	FieldSecurity *securityfields.Service
 	UIPreferences *UIPreferencesService
+	ACP           *acp.Service
+}
+
+type ACPDeps struct {
+	Identity *identity.Service
+	Audit    *audit.Service
+	Service  *acp.Service
 }
 
 type MCPDeps struct {
@@ -211,7 +221,11 @@ func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
 }
 
 func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
-	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health)
+	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP)
+}
+
+func registerACPRoutesWithDeps(mux *http.ServeMux, deps ACPDeps) {
+	registerACPRoutes(mux, deps.Identity, deps.Audit, deps.Service)
 }
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
@@ -227,7 +241,7 @@ func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {
 }
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {
-	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity, deps.UIPreferences)
+	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
 }
 
 func registerDocsRoutesWithDeps(mux *http.ServeMux, deps DocsDeps) {

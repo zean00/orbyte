@@ -114,6 +114,23 @@ func BuiltInDefinitions() []Definition {
 			Key: "address", Label: "Address", LabelI18n: i18n.LocalizedText{"en": "Address", "id": "Alamat"}, Type: "string", Required: true, Description: "HTTP bind address.", DescriptionI18n: i18n.LocalizedText{"en": "HTTP bind address.", "id": "Alamat bind HTTP."},
 		}},
 	}, {
+		Key:             "platform.acp",
+		ModuleKey:       "platform.core",
+		Category:        "platform",
+		DisplayName:     "ACP Integration",
+		DisplayNameI18n: i18n.LocalizedText{"en": "ACP Integration", "id": "Integrasi ACP"},
+		Description:     "Deployment-scoped ACP provider configuration for shell-native agent sessions.",
+		DescriptionI18n: i18n.LocalizedText{"en": "Deployment-scoped ACP provider configuration for shell-native agent sessions.", "id": "Konfigurasi penyedia ACP pada scope deployment untuk sesi agen native shell."},
+		AllowedScopes:   []string{"deployment"},
+		DefaultValue: map[string]any{
+			"enabled":        false,
+			"providers_json": "[]",
+		},
+		Fields: []FieldDefinition{
+			{Key: "enabled", Label: "Enabled", LabelI18n: i18n.LocalizedText{"en": "Enabled", "id": "Aktif"}, Type: "bool"},
+			{Key: "providers_json", Label: "Providers JSON", LabelI18n: i18n.LocalizedText{"en": "Providers JSON", "id": "JSON Penyedia"}, Type: "string"},
+		},
+	}, {
 		Key:             "search.typesense",
 		ModuleKey:       "platform.core",
 		Category:        "search",

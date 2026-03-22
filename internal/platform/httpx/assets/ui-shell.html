@@ -29,6 +29,7 @@
             <span id="locale-label">Language</span>
             <select id="locale-switcher"></select>
           </label>
+          <button type="button" id="agent-toggle-button" class="secondary" hidden>Agent</button>
           <a id="admin-link-button" class="button secondary" href="/admin" hidden>Admin</a>
           <button type="button" id="logout-button" class="secondary" hidden>Log out</button>
         </div>
@@ -50,6 +51,7 @@
       <div id="view-root"></div>
     </main>
   </div>
+  <aside id="agent-panel" class="agent-panel hidden" aria-live="polite"></aside>
   <script>
     const offlineDBName = 'orbyte_ui_offline_v1';
     const offlineDBVersion = 1;
@@ -358,7 +360,15 @@
       surface: 'backoffice',
       shellKind: 'workspace',
       routeState: 'booting',
-      routeFocusSelector: ''
+      routeFocusSelector: '',
+      agent: {
+        open: false,
+        providers: [],
+        sessions: [],
+        currentSessionId: '',
+        attachContext: true,
+        stream: null
+      }
     };
 
     function normalizeLocale(locale) {
@@ -1131,6 +1141,8 @@
       state.bootstrap = null;
       state.route = null;
       state.offlineBootstrap = null;
+      resetAgentState();
+      if (document.getElementById('agent-toggle-button')) document.getElementById('agent-toggle-button').hidden = true;
       window.location.hash = '';
       applyShellLayout(false);
       renderLogin(loginSubtitle());
@@ -1147,6 +1159,9 @@
       document.getElementById('menu').innerHTML = '';
       document.getElementById('admin-link-button').hidden = true;
       document.getElementById('logout-button').hidden = true;
+      if (document.getElementById('agent-toggle-button')) document.getElementById('agent-toggle-button').hidden = true;
+      resetAgentState();
+      renderAgentPanel();
       const passwordForm = passwordEnabled
         ? '<form id="login-form"><label class="field"><span class="meta">' + escapeHTML(t('username')) + '</span><input id="login-username" name="username" autocomplete="username"></label><label class="field"><span class="meta">' + escapeHTML(t('password')) + '</span><input id="login-password" name="password" type="password" autocomplete="current-password"></label><div class="actions"><button type="submit">' + escapeHTML(t('sign_in')) + '</button></div></form>'
         : '';
@@ -1178,6 +1193,7 @@
             }
             renderLocaleSwitcher();
             applyLocale();
+            await bootstrapAgent();
             await loadOfflineBootstrap();
             await processSyncQueue();
             if (!window.location.hash && state.bootstrap.default_path) {
@@ -2584,12 +2600,201 @@
       });
     }
 
+    function activeAgentSession() {
+      return (state.agent.sessions || []).find((item) => item.id === state.agent.currentSessionId) || null;
+    }
+
+    function resetAgentState() {
+      stopAgentStream();
+      state.agent.open = false;
+      state.agent.sessions = [];
+      state.agent.currentSessionId = '';
+      state.agent.stream = null;
+    }
+
+    function buildAgentContextBlocks() {
+      return [{
+        key: 'current_page',
+        label: 'Current Page',
+        kind: 'route',
+        selected: !!state.agent.attachContext,
+        value: {
+          shell: state.shellKind || 'workspace',
+          route_path: currentPath() || (state.route && state.route.requested_path) || '',
+          route_title: document.querySelector('#route-title h2') ? document.querySelector('#route-title h2').textContent : '',
+          route_status: document.getElementById('route-status') ? document.getElementById('route-status').textContent : '',
+          surface: currentSurface(),
+          actor_user_id: state.bootstrap && state.bootstrap.auth_context ? state.bootstrap.auth_context.actor_user_id : ''
+        }
+      }];
+    }
+
+    async function loadAgentSessions() {
+      try {
+        const payload = await api('/agent/api/sessions');
+        state.agent.sessions = payload.items || [];
+        if (!state.agent.currentSessionId && state.agent.sessions.length) state.agent.currentSessionId = state.agent.sessions[0].id;
+      } catch (_) {
+        state.agent.sessions = [];
+      }
+    }
+
+    function stopAgentStream() {
+      if (state.agent.stream) {
+        state.agent.stream.close();
+        state.agent.stream = null;
+      }
+    }
+
+    async function refreshAgentSession(sessionID) {
+      if (!sessionID) return;
+      try {
+        const session = await api('/agent/api/sessions/' + encodeURIComponent(sessionID));
+        const idx = state.agent.sessions.findIndex((item) => item.id === session.id);
+        if (idx >= 0) state.agent.sessions[idx] = session; else state.agent.sessions.unshift(session);
+      } catch (_) {}
+    }
+
+    function ensureAgentStream(sessionID) {
+      if (!sessionID) return;
+      if (state.agent.stream && state.agent.stream.url.indexOf(encodeURIComponent(sessionID)) >= 0) return;
+      stopAgentStream();
+      const stream = new EventSource('/agent/api/sessions/' + encodeURIComponent(sessionID) + '/events');
+      stream.addEventListener('session_update', () => { void refreshAgentSession(sessionID).then(renderAgentPanel); });
+      stream.addEventListener('turn_completed', () => { void refreshAgentSession(sessionID).then(renderAgentPanel); });
+      stream.addEventListener('turn_failed', () => { void refreshAgentSession(sessionID).then(renderAgentPanel); });
+      stream.addEventListener('session_started', () => { void refreshAgentSession(sessionID).then(renderAgentPanel); });
+      state.agent.stream = stream;
+    }
+
+    async function startAgentSession() {
+      const providers = (((state.bootstrap || {}).acp || {}).providers || []).filter((item) => item.available);
+      if (!providers.length) return null;
+      const session = await api('/agent/api/sessions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          provider_key: providers[0].key,
+          shell: 'workspace',
+          route_path: currentPath() || ((state.route && state.route.requested_path) || ''),
+          title: document.querySelector('#route-title h2') ? document.querySelector('#route-title h2').textContent : 'Workspace Agent',
+          context_blocks: buildAgentContextBlocks()
+        })
+      });
+      state.agent.currentSessionId = session.id;
+      await loadAgentSessions();
+      ensureAgentStream(session.id);
+      return session;
+    }
+
+    async function sendAgentPrompt() {
+      const composer = document.getElementById('agent-composer-input');
+      if (!composer) return;
+      const content = String(composer.value || '').trim();
+      if (!content) return;
+      let sessionID = state.agent.currentSessionId;
+      if (!sessionID) {
+        const created = await startAgentSession();
+        sessionID = created && created.id;
+      }
+      if (!sessionID) return;
+      composer.value = '';
+      await api('/agent/api/sessions/' + encodeURIComponent(sessionID) + '/prompt', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content, context_blocks: buildAgentContextBlocks()})
+      });
+      await refreshAgentSession(sessionID);
+      renderAgentPanel();
+    }
+
+    function renderAgentWorkspace(root) {
+      const session = activeAgentSession();
+      const sessionsMarkup = (state.agent.sessions || []).map((item) => {
+        const classes = item.id === state.agent.currentSessionId ? 'agent-session-item active' : 'agent-session-item';
+        return '<button type="button" class="' + classes + '" data-agent-session="' + escapeHTML(item.id) + '"><div class="meta">' + escapeHTML(item.provider_name || item.provider_key) + '</div><strong>' + escapeHTML(item.title || item.route_path || item.id) + '</strong><div class="status">' + escapeHTML(item.status || 'ready') + '</div></button>';
+      }).join('') || '<p class="status">No agent sessions yet.</p>';
+      const threadMarkup = session && session.messages && session.messages.length
+        ? session.messages.map((item) => '<article class="agent-bubble ' + escapeHTML(item.role) + '"><div class="meta">' + escapeHTML(item.role) + '</div><div>' + escapeHTML(item.content || '') + '</div></article>').join('')
+        : '<p class="status">Start a session to interact with an ACP agent.</p>';
+      root.innerHTML = '<section class="agent-shell-page"><div class="page-header"><div><h3>Agent Workspace</h3><p class="status">Review ACP sessions, prompts, and streamed responses.</p></div><div class="actions"><button type="button" id="agent-panel-open" class="secondary">Open Panel</button></div></div><div class="page-body"><div class="agent-workspace-grid"><section class="panel"><h3>Sessions</h3><div class="agent-session-list">' + sessionsMarkup + '</div></section><section class="panel"><h3>Conversation</h3><div class="agent-thread">' + threadMarkup + '</div></section></div></div></section>';
+      document.querySelectorAll('[data-agent-session]').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.agent.currentSessionId = node.dataset.agentSession;
+          ensureAgentStream(state.agent.currentSessionId);
+          void refreshAgentSession(state.agent.currentSessionId).then(() => renderAgentWorkspace(root));
+        });
+      });
+      const panelOpen = document.getElementById('agent-panel-open');
+      if (panelOpen) panelOpen.onclick = () => { state.agent.open = true; renderAgentPanel(); };
+    }
+
+    function renderAgentPanel() {
+      const panel = document.getElementById('agent-panel');
+      if (!panel) return;
+      const acpInfo = (state.bootstrap && state.bootstrap.acp) || {enabled: false, providers: []};
+      if (!state.agent.open) {
+        panel.classList.add('hidden');
+        return;
+      }
+      panel.classList.remove('hidden');
+      const session = activeAgentSession();
+      const contextBlocks = buildAgentContextBlocks();
+      const providers = (acpInfo.providers || []).filter((item) => item.available);
+      const sessionMarkup = (state.agent.sessions || []).slice(0, 5).map((item) => {
+        const classes = item.id === state.agent.currentSessionId ? 'agent-session-item active' : 'agent-session-item';
+        return '<button type="button" class="' + classes + '" data-agent-session="' + escapeHTML(item.id) + '">' + escapeHTML(item.title || item.route_path || item.id) + '</button>';
+      }).join('');
+      const threadMarkup = session && session.messages && session.messages.length
+        ? session.messages.map((item) => '<article class="agent-bubble ' + escapeHTML(item.role) + '"><div class="meta">' + escapeHTML(item.role) + '</div><div>' + escapeHTML(item.content || '') + '</div></article>').join('')
+        : '<p class="status">' + (providers.length ? 'No conversation yet.' : 'ACP is not configured for this deployment.') + '</p>';
+      panel.innerHTML = '<div class="agent-panel-header"><div class="agent-panel-title"><strong>Agent</strong><span class="status">' + escapeHTML((session && session.provider_name) || (providers[0] && providers[0].name) || 'Unavailable') + '</span></div><div class="actions"><button type="button" id="agent-open-workspace" class="secondary">Workspace</button><button type="button" id="agent-close-panel" class="secondary">Close</button></div></div><div class="agent-context-list">' + contextBlocks.map((item) => '<label class="agent-context-item"><input type="checkbox" ' + (item.selected ? 'checked' : '') + ' id="agent-context-toggle"> <strong>' + escapeHTML(item.label) + '</strong><div class="status">' + escapeHTML(item.value.route_path || '') + '</div></label>').join('') + '</div><div class="agent-panel-body"><div class="agent-session-list">' + sessionMarkup + '</div><div class="agent-thread">' + threadMarkup + '</div></div><div class="agent-composer"><textarea id="agent-composer-input" placeholder="Ask the agent about this page or current task."></textarea><div class="agent-panel-actions"><button type="button" id="agent-send-button"' + (providers.length ? '' : ' disabled') + '>Send</button></div></div>';
+      const closeButton = document.getElementById('agent-close-panel');
+      if (closeButton) closeButton.onclick = () => { state.agent.open = false; renderAgentPanel(); };
+      const workspaceButton = document.getElementById('agent-open-workspace');
+      if (workspaceButton) workspaceButton.onclick = () => { window.location.hash = '#/agent/workspace'; };
+      const sendButton = document.getElementById('agent-send-button');
+      if (sendButton) sendButton.onclick = () => { void sendAgentPrompt(); };
+      const contextToggle = document.getElementById('agent-context-toggle');
+      if (contextToggle) contextToggle.onchange = () => { state.agent.attachContext = !!contextToggle.checked; };
+      document.querySelectorAll('[data-agent-session]').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.agent.currentSessionId = node.dataset.agentSession;
+          ensureAgentStream(state.agent.currentSessionId);
+          void refreshAgentSession(state.agent.currentSessionId).then(renderAgentPanel);
+        });
+      });
+    }
+
+    async function bootstrapAgent() {
+      state.agent.providers = ((((state.bootstrap || {}).acp || {}).providers) || []).filter((item) => item.available);
+      await loadAgentSessions();
+      const toggle = document.getElementById('agent-toggle-button');
+      if (toggle) {
+        toggle.hidden = !((state.bootstrap && state.bootstrap.acp && state.bootstrap.acp.enabled) || false);
+        toggle.onclick = () => {
+          state.agent.open = !state.agent.open;
+          renderAgentPanel();
+        };
+      }
+      if (state.agent.currentSessionId) ensureAgentStream(state.agent.currentSessionId);
+      renderAgentPanel();
+    }
+
     async function renderRoute() {
       if (!state.bootstrap) {
         applyShellLayout(false);
         return;
       }
       renderMenus();
+      renderAgentPanel();
+      if (currentPath() === '/agent/workspace') {
+        document.getElementById('route-title').innerHTML = '<h2>Agent Workspace</h2>';
+        setStatus('ACP session history and contextual agent workspace.');
+        renderAgentWorkspace(document.getElementById('view-root'));
+        renderAgentPanel();
+        return;
+      }
       const route = await resolveCurrentRoute();
       state.route = route;
       const path = route.requested_path || currentPath() || state.bootstrap.default_path;
@@ -2953,6 +3158,7 @@
         }
         renderLocaleSwitcher();
         applyLocale();
+        await bootstrapAgent();
         await loadOfflineBootstrap();
         await processSyncQueue();
         if (!window.location.hash && state.bootstrap.default_path) {

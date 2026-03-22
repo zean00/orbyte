@@ -80,6 +80,12 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Reference:     graph.reference,
 			Idempotency:   graph.idempotency,
 			Health:        graph.runtimeHealth,
+			ACP:           graph.acp,
+		},
+		ACP: httpx.ACPDeps{
+			Identity: graph.identity,
+			Audit:    graph.audit,
+			Service:  graph.acp,
 		},
 		Templates: httpx.TemplateDeps{
 			Identity:  graph.identity,
@@ -126,6 +132,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Policy:        graph.policy,
 			FieldSecurity: graph.fieldSecurity,
 			UIPreferences: uiPreferences,
+			ACP:           graph.acp,
 		},
 		CrossCutting: httpx.CrossCuttingDeps{
 			Config:        graph.config,

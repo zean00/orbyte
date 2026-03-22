@@ -3,6 +3,7 @@ package httpx
 import (
 	"net/http"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/document"
@@ -17,9 +18,9 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService) {
+func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
 	registerUIShellRoutes(mux)
-	registerUISurfaceRoutes(mux, ident, modules, docs, policySvc, uiPrefs)
+	registerUISurfaceRoutes(mux, ident, modules, docs, policySvc, uiPrefs, acpSvc)
 	registerUIDataRoutes(mux, ident, modules, models, activities, reportingSvc, docs, workflowSvc, searchSvc, analyticsSvc, monitoringSvc, policySvc, fieldSecurity)
 }
 

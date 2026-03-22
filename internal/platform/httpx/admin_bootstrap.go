@@ -3,13 +3,14 @@ package httpx
 import (
 	"net/http"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/organization"
 )
 
-func buildAdminBootstrapPayload(r *http.Request, org *organization.Service, ident *identity.Service, modules *module.Service, p principal) map[string]any {
+func buildAdminBootstrapPayload(r *http.Request, org *organization.Service, ident *identity.Service, modules *module.Service, p principal, acpSvc *acp.Service) map[string]any {
 	menus, actions, views, entries, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
 	uiMenus, uiActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceUser)
 	defaultPath := defaultRouteForSurface(ident, p.userID, "admin", menus, actions)
@@ -44,5 +45,6 @@ func buildAdminBootstrapPayload(r *http.Request, org *organization.Service, iden
 		},
 		"locale":            localeFromRequest(r, ident),
 		"supported_locales": i18n.SupportedLocales(),
+		"acp":               buildACPBootstrap(acpSvc),
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
@@ -11,14 +12,14 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, policySvc *policy.Service, uiPrefs *UIPreferencesService) {
+func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, policySvc *policy.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
 	mux.HandleFunc("GET /ui/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {
 			return
 		}
 		surface := requestedUISurface(r)
-		respondJSON(w, http.StatusOK, buildWorkspaceBootstrapPayload(r, ident, modules, p, surface, uiPrefs))
+		respondJSON(w, http.StatusOK, buildWorkspaceBootstrapPayload(r, ident, modules, p, surface, uiPrefs, acpSvc))
 	})
 
 	mux.HandleFunc("GET /ui/menus", func(w http.ResponseWriter, r *http.Request) {

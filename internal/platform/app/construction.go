@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	application "orbyte/internal/platform/application"
@@ -62,6 +63,7 @@ type serviceGraph struct {
 	eventing          *eventing.Service
 	search            *search.Service
 	analytics         *analytics.Service
+	acp               *acp.Service
 	mcpAnalytics      *mcp.AnalyticsStream
 	offline           *offline.Service
 	monitoring        *monitoring.Service
@@ -106,6 +108,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		_ = graph.config.Save(entry)
 	}
 	graph.identity = identity.NewService(graph.organization)
+	graph.acp = acp.NewService(graph.config)
 	graph.reporting = reporting.NewService(graph.models)
 	graph.templates = templateoutput.NewService(graph.documents, graph.reporting)
 	graph.policy = policy.NewServiceWithConfig(graph.config)
@@ -132,6 +135,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.fieldSecurity = securityfields.NewService(graph.policy)
 		graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepository(postgres.DB))
 		graph.identity = identity.NewServiceWithRepository(graph.organization, identity.NewPostgresRepository(postgres.DB))
+		graph.acp = acp.NewService(graph.config)
 		graph.modules = module.NewServiceWithRepository(module.NewPostgresRepository(postgres.DB))
 		graph.models = model.NewServiceWithRepository(model.NewPostgresRepository(postgres.DB))
 		graph.activities = activity.NewService()

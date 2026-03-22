@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	application "orbyte/internal/platform/application"
@@ -75,6 +76,7 @@ type App struct {
 	Integration        *integration.Service
 	Idempotency        *idempotency.Service
 	Jobs               *jobs.Service
+	ACP                *acp.Service
 	DocActions         *application.DocumentActions
 	ModelActions       *application.ModelActions
 	Dispatcher         *eventing.Dispatcher
@@ -165,6 +167,7 @@ func New(opts Options) (*App, error) {
 		Integration:        graph.integration,
 		Idempotency:        graph.idempotency,
 		Jobs:               graph.jobs,
+		ACP:                graph.acp,
 		DocActions:         graph.docActions,
 		ModelActions:       graph.modelActions,
 		Dispatcher:         runtime.dispatcher,
@@ -2233,6 +2236,9 @@ func (a *App) Close() error {
 	}
 	if a.Jobs != nil {
 		a.Jobs.Stop()
+	}
+	if a.ACP != nil {
+		_ = a.ACP.Close()
 	}
 	for _, closeFn := range a.closers {
 		if closeFn == nil {

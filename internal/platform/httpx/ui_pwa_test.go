@@ -167,6 +167,42 @@ func TestUIShellIncludesIndonesianValueTranslations(t *testing.T) {
 	}
 }
 
+func TestShellAssetsIncludeACPEntryPoints(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/ui", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from ui shell, got %d", rr.Code)
+	}
+	uiBody := rr.Body.String()
+	for _, fragment := range []string{
+		`id="agent-toggle-button"`,
+		`id="agent-panel"`,
+		`/agent/api/sessions`,
+		`#/agent/workspace`,
+	} {
+		if !strings.Contains(uiBody, fragment) {
+			t.Fatalf("expected UI shell to contain %q", fragment)
+		}
+	}
+
+	rr = h.request(http.MethodGet, "/admin", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from admin shell, got %d", rr.Code)
+	}
+	adminBody := rr.Body.String()
+	for _, fragment := range []string{
+		`id="admin-agent-toggle-button"`,
+		`id="admin-agent-panel"`,
+		`data-admin-route="/admin/agent"`,
+		`/agent/api/sessions`,
+	} {
+		if !strings.Contains(adminBody, fragment) {
+			t.Fatalf("expected admin shell to contain %q", fragment)
+		}
+	}
+}
+
 func TestAuthenticatedLocalePreferencePersistsPerUser(t *testing.T) {
 	h := newTestHarness(t)
 

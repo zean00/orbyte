@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	application "orbyte/internal/platform/application"
@@ -53,6 +54,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 	dataopsSvc.AttachJobs(jobSvc)
 	templateSvc := templateoutput.NewService(docs, reportingSvc)
 	uiPreferences := NewUIPreferencesService()
+	acpSvc := acp.NewService(cfg)
 	if modules != nil {
 		for _, def := range modules.Templates() {
 			_ = templateSvc.RegisterDefinition(templateoutput.FromModule(def, ""))
@@ -121,6 +123,12 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Reference:     referenceSvc,
 			Idempotency:   idempotencySvc,
 			Health:        health,
+			ACP:           acpSvc,
+		},
+		ACP: ACPDeps{
+			Identity: ident,
+			Audit:    auditSvc,
+			Service:  acpSvc,
 		},
 		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
@@ -165,6 +173,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Policy:        policySvc,
 			FieldSecurity: fieldSecurity,
 			UIPreferences: uiPreferences,
+			ACP:           acpSvc,
 		},
 		CrossCutting: CrossCuttingDeps{
 			Config:        cfg,
@@ -194,6 +203,7 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerOpsRoutesWithDeps(mux, deps.Ops)
 	registerSearchRoutesWithDeps(mux, deps.Search)
 	registerAdminRoutesWithDeps(mux, deps.Admin)
+	registerACPRoutesWithDeps(mux, deps.ACP)
 	registerTemplateRoutesWithDeps(mux, deps.Templates)
 	registerMCPRoutesWithDeps(mux, deps.MCP)
 	registerOfflineRoutesWithDeps(mux, deps.Offline)

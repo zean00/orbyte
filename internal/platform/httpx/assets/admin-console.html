@@ -18,6 +18,7 @@
           <span id="admin-locale-label">Language</span>
           <select id="admin-locale-switcher"></select>
         </label>
+        <button type="button" id="admin-agent-toggle-button" class="secondary" hidden>Agent</button>
         <a id="admin-ui-link" class="button secondary" href="/ui" hidden>Workspace</a>
         <button type="button" id="admin-logout-button" class="secondary">Log out</button>
       </div>
@@ -321,6 +322,18 @@
         </section>
       </div>
     </div>
+    <section class="card" data-admin-route="/admin/agent">
+      <div class="page-header">
+        <div>
+          <h3>Agent Workspace</h3>
+          <p class="status">Review ACP sessions, approvals, and streamed responses in admin context.</p>
+        </div>
+        <div class="actions">
+          <button type="button" id="admin-agent-open-panel" class="secondary">Open Panel</button>
+        </div>
+      </div>
+      <div id="admin-agent-workspace"></div>
+    </section>
     <section class="card" data-admin-route="/admin/definitions">
       <h2 id="definitions-heading">Definitions</h2>
       <div id="definitions" class="list"></div>
@@ -345,6 +358,7 @@
       <pre id="observability-contracts"></pre>
     </section>
   </main>
+  <aside id="admin-agent-panel" class="agent-panel hidden" aria-live="polite"></aside>
   <script>
     const adminMessages = {
       en: {
@@ -776,7 +790,7 @@
         saved_config: 'Menyimpan'
       }
     };
-    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateFixtures: [], templatePreview: null, templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' } };
+    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateFixtures: [], templatePreview: null, templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' }, agent: { open: false, providers: [], sessions: [], currentSessionId: '', attachContext: true, stream: null } };
     function normalizeLocale(locale) {
       const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-');
       if (value === 'id' || value.indexOf('id-') === 0) return 'id';
@@ -807,6 +821,9 @@
         {label: t('org_chart'), route_path: '/admin/org'},
         {label: t('workflow_routing'), route_path: '/admin/workflows'}
       ];
+      if (adminState.bootstrap && adminState.bootstrap.acp && adminState.bootstrap.acp.enabled) {
+        staticMenus.push({label: 'Agent', route_path: '/admin/agent'});
+      }
       container.innerHTML = menus.map((menu) => {
         const action = actions.find((item) => item.key === menu.action_key);
         if (!action) return '';
@@ -825,6 +842,8 @@
         node.style.display = node.dataset.adminRoute === path ? '' : 'none';
       });
       renderAdminMenus();
+      if (path === '/admin/agent') renderAdminAgentWorkspace();
+      renderAdminAgentPanel();
     }
     async function persistLocale(locale) {
       try {
@@ -844,6 +863,7 @@
           headers: csrf ? {'X-CSRF-Token': csrf} : {}
         });
       } catch (_) {}
+      resetAdminAgentState();
       window.location.assign('/ui');
     }
     function renderLocaleSwitcher() {
@@ -1019,6 +1039,203 @@
       }
       return resp.json();
     }
+    function activeAdminAgentSession() {
+      return (adminState.agent.sessions || []).find((item) => item.id === adminState.agent.currentSessionId) || null;
+    }
+    function buildAdminAgentContextBlocks() {
+      return [{
+        key: 'current_page',
+        label: 'Current Page',
+        kind: 'route',
+        selected: !!adminState.agent.attachContext,
+        value: {
+          shell: 'admin',
+          route_path: adminCurrentPath(),
+          route_title: document.querySelector('[data-admin-route="' + adminCurrentPath() + '"] h2, [data-admin-route="' + adminCurrentPath() + '"] h3') ? document.querySelector('[data-admin-route="' + adminCurrentPath() + '"] h2, [data-admin-route="' + adminCurrentPath() + '"] h3').textContent : '',
+          actor_user_id: (adminState.bootstrap && adminState.bootstrap.current_user_id) || '',
+          organization_id: (adminState.bootstrap && adminState.bootstrap.organization && adminState.bootstrap.organization.id) || ''
+        }
+      }];
+    }
+    function stopAdminAgentStream() {
+      if (adminState.agent.stream) {
+        adminState.agent.stream.close();
+        adminState.agent.stream = null;
+      }
+    }
+    function resetAdminAgentState() {
+      stopAdminAgentStream();
+      adminState.agent.open = false;
+      adminState.agent.sessions = [];
+      adminState.agent.currentSessionId = '';
+      adminState.agent.stream = null;
+    }
+    async function loadAdminAgentSessions() {
+      try {
+        const payload = await getJSON('/agent/api/sessions');
+        adminState.agent.sessions = payload.items || [];
+        if (!adminState.agent.currentSessionId && adminState.agent.sessions.length) adminState.agent.currentSessionId = adminState.agent.sessions[0].id;
+      } catch (_) {
+        adminState.agent.sessions = [];
+      }
+    }
+    async function refreshAdminAgentSession(sessionID) {
+      if (!sessionID) return;
+      try {
+        const session = await getJSON('/agent/api/sessions/' + encodeURIComponent(sessionID));
+        const idx = adminState.agent.sessions.findIndex((item) => item.id === session.id);
+        if (idx >= 0) adminState.agent.sessions[idx] = session; else adminState.agent.sessions.unshift(session);
+      } catch (_) {}
+    }
+    function ensureAdminAgentStream(sessionID) {
+      if (!sessionID) return;
+      if (adminState.agent.stream && adminState.agent.stream.url && adminState.agent.stream.url.indexOf(encodeURIComponent(sessionID)) >= 0) return;
+      stopAdminAgentStream();
+      const stream = new EventSource('/agent/api/sessions/' + encodeURIComponent(sessionID) + '/events');
+      ['session_update', 'turn_completed', 'turn_failed', 'session_started'].forEach((kind) => {
+        stream.addEventListener(kind, () => {
+          void refreshAdminAgentSession(sessionID).then(() => {
+            renderAdminAgentPanel();
+            if (adminCurrentPath() === '/admin/agent') renderAdminAgentWorkspace();
+          });
+        });
+      });
+      adminState.agent.stream = stream;
+    }
+    async function startAdminAgentSession() {
+      const providers = (((adminState.bootstrap || {}).acp || {}).providers || []).filter((item) => item.available);
+      if (!providers.length) return null;
+      const session = await getJSON('/agent/api/sessions', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCookie('orbyte_csrf')},
+        body: JSON.stringify({
+          provider_key: providers[0].key,
+          shell: 'admin',
+          route_path: adminCurrentPath(),
+          title: 'Admin Agent',
+          context_blocks: buildAdminAgentContextBlocks()
+        })
+      });
+      adminState.agent.currentSessionId = session.id;
+      await loadAdminAgentSessions();
+      ensureAdminAgentStream(session.id);
+      return session;
+    }
+    function adminAgentComposerNode() {
+      return document.getElementById('admin-agent-panel-composer-input') || document.getElementById('admin-agent-workspace-composer-input');
+    }
+    async function sendAdminAgentPrompt() {
+      const composer = adminAgentComposerNode();
+      if (!composer) return;
+      const content = String(composer.value || '').trim();
+      if (!content) return;
+      let sessionID = adminState.agent.currentSessionId;
+      if (!sessionID) {
+        const created = await startAdminAgentSession();
+        sessionID = created && created.id;
+      }
+      if (!sessionID) return;
+      composer.value = '';
+      await getJSON('/agent/api/sessions/' + encodeURIComponent(sessionID) + '/prompt', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRF-Token': getCookie('orbyte_csrf')},
+        body: JSON.stringify({content: content, context_blocks: buildAdminAgentContextBlocks()})
+      });
+      await refreshAdminAgentSession(sessionID);
+      renderAdminAgentPanel();
+      if (adminCurrentPath() === '/admin/agent') renderAdminAgentWorkspace();
+    }
+    async function resolveAdminAgentApproval(sessionID, approvalID, action) {
+      await getJSON('/agent/api/sessions/' + encodeURIComponent(sessionID) + '/approvals/' + encodeURIComponent(approvalID) + '/' + action, {
+        method: 'POST',
+        headers: {'X-CSRF-Token': getCookie('orbyte_csrf')}
+      });
+      await refreshAdminAgentSession(sessionID);
+      renderAdminAgentPanel();
+      if (adminCurrentPath() === '/admin/agent') renderAdminAgentWorkspace();
+    }
+    function adminAgentThreadMarkup(session) {
+      const messages = (session && session.messages) || [];
+      const approvals = (session && session.approvals) || [];
+      const messageMarkup = messages.map((item) => '<article class="agent-bubble ' + escapeHTML(item.role) + '"><div class="meta">' + escapeHTML(item.role) + '</div><div>' + escapeHTML(item.content || '') + '</div></article>').join('');
+      const approvalMarkup = approvals.length ? '<div class="agent-approval-list">' + approvals.map((item) => '<article class="agent-approval-item"><strong>' + escapeHTML(item.title || item.method || item.id) + '</strong><div class="status">' + escapeHTML(item.status || 'pending') + '</div><div class="actions">' + (item.status === 'pending' ? '<button type="button" data-agent-approval="' + escapeHTML(item.id) + '" data-agent-approval-action="approve">Approve</button><button type="button" class="secondary" data-agent-approval="' + escapeHTML(item.id) + '" data-agent-approval-action="reject">Reject</button>' : '') + '</div></article>').join('') + '</div>' : '';
+      return messageMarkup || approvalMarkup ? messageMarkup + approvalMarkup : '<p class="status">Start a session to interact with an ACP agent.</p>';
+    }
+    function bindAdminAgentCommon(root) {
+      if (!root) return;
+      root.querySelectorAll('[data-agent-session]').forEach((node) => {
+        node.addEventListener('click', () => {
+          adminState.agent.currentSessionId = node.dataset.agentSession || '';
+          ensureAdminAgentStream(adminState.agent.currentSessionId);
+          void refreshAdminAgentSession(adminState.agent.currentSessionId).then(() => {
+            renderAdminAgentPanel();
+            if (adminCurrentPath() === '/admin/agent') renderAdminAgentWorkspace();
+          });
+        });
+      });
+      root.querySelectorAll('[data-agent-approval]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const session = activeAdminAgentSession();
+          if (!session) return;
+          void resolveAdminAgentApproval(session.id, node.getAttribute('data-agent-approval') || '', node.getAttribute('data-agent-approval-action') || 'approve');
+        });
+      });
+    }
+    function renderAdminAgentWorkspace() {
+      const root = document.getElementById('admin-agent-workspace');
+      if (!root) return;
+      const session = activeAdminAgentSession();
+      const sessionsMarkup = (adminState.agent.sessions || []).map((item) => {
+        const classes = item.id === adminState.agent.currentSessionId ? 'agent-session-item active' : 'agent-session-item';
+        return '<button type="button" class="' + classes + '" data-agent-session="' + escapeHTML(item.id) + '"><div class="meta">' + escapeHTML(item.provider_name || item.provider_key) + '</div><strong>' + escapeHTML(item.title || item.route_path || item.id) + '</strong><div class="status">' + escapeHTML(item.status || 'ready') + '</div></button>';
+      }).join('') || '<p class="status">No agent sessions yet.</p>';
+      root.innerHTML = '<div class="agent-workspace-grid"><section class="panel"><h3>Sessions</h3><div class="agent-session-list">' + sessionsMarkup + '</div></section><section class="panel"><h3>Conversation</h3><div class="agent-thread">' + adminAgentThreadMarkup(session) + '</div><div class="agent-composer"><textarea id="admin-agent-workspace-composer-input" placeholder="Ask the agent about this admin context."></textarea><div class="agent-panel-actions"><button type="button" id="admin-agent-workspace-send-button"' + ((((adminState.bootstrap || {}).acp || {}).enabled ? '' : ' disabled')) + '>Send</button></div></div></section></div>';
+      const openPanel = document.getElementById('admin-agent-open-panel');
+      if (openPanel) openPanel.onclick = () => { adminState.agent.open = true; renderAdminAgentPanel(); };
+      const sendButton = document.getElementById('admin-agent-workspace-send-button');
+      if (sendButton) sendButton.onclick = () => { void sendAdminAgentPrompt(); };
+      bindAdminAgentCommon(root);
+    }
+    function renderAdminAgentPanel() {
+      const panel = document.getElementById('admin-agent-panel');
+      if (!panel) return;
+      if (!adminState.agent.open) {
+        panel.classList.add('hidden');
+        return;
+      }
+      panel.classList.remove('hidden');
+      const session = activeAdminAgentSession();
+      const providers = ((((adminState.bootstrap || {}).acp || {}).providers) || []).filter((item) => item.available);
+      const contextBlocks = buildAdminAgentContextBlocks();
+      const sessionMarkup = (adminState.agent.sessions || []).slice(0, 6).map((item) => {
+        const classes = item.id === adminState.agent.currentSessionId ? 'agent-session-item active' : 'agent-session-item';
+        return '<button type="button" class="' + classes + '" data-agent-session="' + escapeHTML(item.id) + '">' + escapeHTML(item.title || item.route_path || item.id) + '</button>';
+      }).join('');
+      panel.innerHTML = '<div class="agent-panel-header"><div class="agent-panel-title"><strong>Agent</strong><span class="status">' + escapeHTML((session && session.provider_name) || (providers[0] && providers[0].name) || 'Unavailable') + '</span></div><div class="actions"><button type="button" id="admin-agent-go-workspace" class="secondary">Workspace</button><button type="button" id="admin-agent-close-panel" class="secondary">Close</button></div></div><div class="agent-context-list">' + contextBlocks.map((item) => '<label class="agent-context-item"><input type="checkbox" ' + (item.selected ? 'checked' : '') + ' id="admin-agent-context-toggle"> <strong>' + escapeHTML(item.label) + '</strong><div class="status">' + escapeHTML(item.value.route_path || '') + '</div></label>').join('') + '</div><div class="agent-panel-body"><div class="agent-session-list">' + sessionMarkup + '</div><div class="agent-thread">' + adminAgentThreadMarkup(session) + '</div></div><div class="agent-composer"><textarea id="admin-agent-panel-composer-input" placeholder="Ask the agent about this admin context."></textarea><div class="agent-panel-actions"><button type="button" id="admin-agent-panel-send-button"' + (providers.length ? '' : ' disabled') + '>Send</button></div></div>';
+      const closeButton = document.getElementById('admin-agent-close-panel');
+      if (closeButton) closeButton.onclick = () => { adminState.agent.open = false; renderAdminAgentPanel(); };
+      const workspaceButton = document.getElementById('admin-agent-go-workspace');
+      if (workspaceButton) workspaceButton.onclick = () => { window.location.hash = '#/admin/agent'; };
+      const sendButton = document.getElementById('admin-agent-panel-send-button');
+      if (sendButton) sendButton.onclick = () => { void sendAdminAgentPrompt(); };
+      const contextToggle = document.getElementById('admin-agent-context-toggle');
+      if (contextToggle) contextToggle.onchange = () => { adminState.agent.attachContext = !!contextToggle.checked; };
+      bindAdminAgentCommon(panel);
+    }
+    async function bootstrapAdminAgent() {
+      adminState.agent.providers = ((((adminState.bootstrap || {}).acp || {}).providers) || []).filter((item) => item.available);
+      await loadAdminAgentSessions();
+      const toggle = document.getElementById('admin-agent-toggle-button');
+      if (toggle) {
+        toggle.hidden = !((adminState.bootstrap && adminState.bootstrap.acp && adminState.bootstrap.acp.enabled) || false);
+        toggle.onclick = () => {
+          adminState.agent.open = !adminState.agent.open;
+          renderAdminAgentPanel();
+        };
+      }
+      if (adminState.agent.currentSessionId) ensureAdminAgentStream(adminState.agent.currentSessionId);
+      renderAdminAgentPanel();
+    }
     async function boot() {
       if (!adminState.bootstrap) {
         adminState.locale = normalizeLocale(navigator.language || 'en');
@@ -1055,6 +1272,7 @@
         uiLink.hidden = !bootstrap.ui_access;
         uiLink.href = bootstrap.ui_path || '/ui';
       }
+      await bootstrapAdminAgent();
       renderLocaleSwitcher();
       renderAdminChrome();
       renderAdminMenus();
@@ -2579,12 +2797,16 @@
         ? ((adminState.bootstrap && adminState.bootstrap.actions) || [])
         : ((adminState.bootstrap && adminState.bootstrap.user_actions) || []);
       const seen = new Set();
-      return actions.filter((action) => {
+      const items = actions.filter((action) => {
         const path = action && action.route_path;
         if (!path || seen.has(path)) return false;
         seen.add(path);
         return true;
       }).map((action) => ({path: action.route_path, label: pickText(action, 'label') || action.route_path}));
+      if (surface === 'admin' && adminState.bootstrap && adminState.bootstrap.acp && adminState.bootstrap.acp.enabled && !seen.has('/admin/agent')) {
+        items.push({path: '/admin/agent', label: 'Agent'});
+      }
+      return items;
     }
     function renderRouteOptionsDatalist(id, surface) {
       const options = routeOptions(surface);

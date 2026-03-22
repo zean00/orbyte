@@ -3,12 +3,13 @@ package httpx
 import (
 	"net/http"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/i18n"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
 )
 
-func buildWorkspaceBootstrapPayload(r *http.Request, ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, uiPrefs *UIPreferencesService) map[string]any {
+func buildWorkspaceBootstrapPayload(r *http.Request, ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, uiPrefs *UIPreferencesService, acpSvc *acp.Service) map[string]any {
 	menus, actions, views, _, flows := visibleUIContracts(ident, modules, p, surface)
 	adminMenus, adminActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
 	defaultPath := defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
@@ -53,5 +54,6 @@ func buildWorkspaceBootstrapPayload(r *http.Request, ident *identity.Service, mo
 			"delegation_active":   principalHasDelegation(p),
 			"delegation_grant_id": principalDelegationGrantID(p),
 		},
+		"acp": buildACPBootstrap(acpSvc),
 	}
 }

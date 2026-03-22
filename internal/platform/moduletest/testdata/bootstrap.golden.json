@@ -1,4 +1,8 @@
 {
+  "acp": {
+    "enabled": false,
+    "providers": []
+  },
   "actions": [
     {
       "custom_entry_key": "analytics.cockpit",

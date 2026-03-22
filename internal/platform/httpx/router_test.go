@@ -1254,6 +1254,60 @@ func TestNavigationPreferencesAndRoleDefaults(t *testing.T) {
 	}
 }
 
+func TestACPBootstrapAndProviders(t *testing.T) {
+	providersJSON := `[{"key":"codex","name":"Codex ACP","description":"External ACP provider","command":"/bin/echo","args":["ok"]}]`
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:       "platform.acp",
+		ModuleKey: "platform.core",
+		Category:  "platform",
+		Scope:     "deployment",
+		Value: map[string]any{
+			"enabled":        true,
+			"providers_json": providersJSON,
+		},
+	}})
+
+	rr := h.request(http.MethodGet, "/ui/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected ui bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var uiPayload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &uiPayload); err != nil {
+		t.Fatalf("decode ui bootstrap: %v", err)
+	}
+	acpInfo, _ := uiPayload["acp"].(map[string]any)
+	if enabled, _ := acpInfo["enabled"].(bool); !enabled {
+		t.Fatalf("expected ui bootstrap acp enabled, got %#v", acpInfo)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected admin bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var adminPayload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &adminPayload); err != nil {
+		t.Fatalf("decode admin bootstrap: %v", err)
+	}
+	acpInfo, _ = adminPayload["acp"].(map[string]any)
+	providers, _ := acpInfo["providers"].([]any)
+	if len(providers) != 1 {
+		t.Fatalf("expected one bootstrap acp provider, got %#v", acpInfo)
+	}
+
+	rr = h.request(http.MethodGet, "/agent/api/providers", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected providers route to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var providersPayload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &providersPayload); err != nil {
+		t.Fatalf("decode providers payload: %v", err)
+	}
+	items, _ := providersPayload["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected one provider item, got %#v", providersPayload)
+	}
+}
+
 func TestUIPreferencesRoundTrip(t *testing.T) {
 	h := newTestHarness(t)
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
@@ -12,13 +13,13 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, policySvc *policy.Service) {
+func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, policySvc *policy.Service, acpSvc *acp.Service) {
 	mux.HandleFunc("GET /admin/api/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read")
 		if !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, buildAdminBootstrapPayload(r, org, ident, modules, p))
+		respondJSON(w, http.StatusOK, buildAdminBootstrapPayload(r, org, ident, modules, p, acpSvc))
 	})
 
 	mux.HandleFunc("GET /admin/api/config/validate", func(w http.ResponseWriter, r *http.Request) {
