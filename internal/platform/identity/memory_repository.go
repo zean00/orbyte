@@ -127,6 +127,18 @@ func (r *MemoryRepository) SaveRolePermission(grant RolePermission) error {
 	return nil
 }
 
+func (r *MemoryRepository) DeleteRolePermission(roleID, permissionKey string) error {
+	filtered := r.grants[:0]
+	for _, grant := range r.grants {
+		if grant.RoleID == roleID && grant.PermissionKey == permissionKey {
+			continue
+		}
+		filtered = append(filtered, grant)
+	}
+	r.grants = filtered
+	return nil
+}
+
 func (r *MemoryRepository) FindUser(id string) (User, bool) {
 	for _, user := range r.users {
 		if user.ID == id {

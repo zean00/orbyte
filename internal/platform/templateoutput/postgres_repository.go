@@ -2,6 +2,7 @@ package templateoutput
 
 import (
 	"database/sql"
+	"encoding/json"
 	"sort"
 	"time"
 )
@@ -15,7 +16,7 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 }
 
 func (r *PostgresRepository) Versions(templateKey string) []Version {
-	rows, err := r.db.Query(`SELECT template_key, version_no, status, renderer_kind, body, COALESCE(style,''), updated_at, COALESCE(updated_by,''), published_at, COALESCE(published_by,'') FROM template_output_versions WHERE template_key = $1 ORDER BY version_no ASC`, templateKey)
+	rows, err := r.db.Query(`SELECT template_key, version_no, status, renderer_kind, body, COALESCE(style,''), COALESCE(change_note,''), COALESCE(cloned_from_version,0), last_previewed_at, COALESCE(last_render_status,''), COALESCE(last_render_error,''), last_rendered_at, updated_at, COALESCE(updated_by,''), published_at, COALESCE(published_by,'') FROM template_output_versions WHERE template_key = $1 ORDER BY version_no ASC`, templateKey)
 	if err != nil {
 		return nil
 	}
@@ -23,14 +24,14 @@ func (r *PostgresRepository) Versions(templateKey string) []Version {
 	items := make([]Version, 0)
 	for rows.Next() {
 		var item Version
-		_ = rows.Scan(&item.TemplateKey, &item.Version, &item.Status, &item.RendererKind, &item.Body, &item.Style, &item.UpdatedAt, &item.UpdatedBy, &item.PublishedAt, &item.PublishedBy)
+		_ = rows.Scan(&item.TemplateKey, &item.Version, &item.Status, &item.RendererKind, &item.Body, &item.Style, &item.ChangeNote, &item.ClonedFromVersion, &item.LastPreviewedAt, &item.LastRenderStatus, &item.LastRenderError, &item.LastRenderedAt, &item.UpdatedAt, &item.UpdatedBy, &item.PublishedAt, &item.PublishedBy)
 		items = append(items, item)
 	}
 	return items
 }
 
 func (r *PostgresRepository) ListVersions() []Version {
-	rows, err := r.db.Query(`SELECT template_key, version_no, status, renderer_kind, body, COALESCE(style,''), updated_at, COALESCE(updated_by,''), published_at, COALESCE(published_by,'') FROM template_output_versions ORDER BY template_key ASC, version_no ASC`)
+	rows, err := r.db.Query(`SELECT template_key, version_no, status, renderer_kind, body, COALESCE(style,''), COALESCE(change_note,''), COALESCE(cloned_from_version,0), last_previewed_at, COALESCE(last_render_status,''), COALESCE(last_render_error,''), last_rendered_at, updated_at, COALESCE(updated_by,''), published_at, COALESCE(published_by,'') FROM template_output_versions ORDER BY template_key ASC, version_no ASC`)
 	if err != nil {
 		return nil
 	}
@@ -38,17 +39,17 @@ func (r *PostgresRepository) ListVersions() []Version {
 	items := make([]Version, 0)
 	for rows.Next() {
 		var item Version
-		_ = rows.Scan(&item.TemplateKey, &item.Version, &item.Status, &item.RendererKind, &item.Body, &item.Style, &item.UpdatedAt, &item.UpdatedBy, &item.PublishedAt, &item.PublishedBy)
+		_ = rows.Scan(&item.TemplateKey, &item.Version, &item.Status, &item.RendererKind, &item.Body, &item.Style, &item.ChangeNote, &item.ClonedFromVersion, &item.LastPreviewedAt, &item.LastRenderStatus, &item.LastRenderError, &item.LastRenderedAt, &item.UpdatedAt, &item.UpdatedBy, &item.PublishedAt, &item.PublishedBy)
 		items = append(items, item)
 	}
 	return items
 }
 
 func (r *PostgresRepository) SaveVersion(version Version) error {
-	_, err := r.db.Exec(`INSERT INTO template_output_versions (template_key, version_no, status, renderer_kind, body, style, updated_at, updated_by, published_at, published_by)
-VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),$7,NULLIF($8,''),$9,NULLIF($10,''))
-ON CONFLICT (template_key, version_no) DO UPDATE SET status=EXCLUDED.status, renderer_kind=EXCLUDED.renderer_kind, body=EXCLUDED.body, style=EXCLUDED.style, updated_at=EXCLUDED.updated_at, updated_by=EXCLUDED.updated_by, published_at=EXCLUDED.published_at, published_by=EXCLUDED.published_by`,
-		version.TemplateKey, version.Version, version.Status, version.RendererKind, version.Body, version.Style, version.UpdatedAt, version.UpdatedBy, nullTime(version.PublishedAt), version.PublishedBy)
+	_, err := r.db.Exec(`INSERT INTO template_output_versions (template_key, version_no, status, renderer_kind, body, style, change_note, cloned_from_version, last_previewed_at, last_render_status, last_render_error, last_rendered_at, updated_at, updated_by, published_at, published_by)
+VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''),NULLIF($8,0),$9,NULLIF($10,''),NULLIF($11,''),$12,$13,NULLIF($14,''),$15,NULLIF($16,''))
+ON CONFLICT (template_key, version_no) DO UPDATE SET status=EXCLUDED.status, renderer_kind=EXCLUDED.renderer_kind, body=EXCLUDED.body, style=EXCLUDED.style, change_note=EXCLUDED.change_note, cloned_from_version=EXCLUDED.cloned_from_version, last_previewed_at=EXCLUDED.last_previewed_at, last_render_status=EXCLUDED.last_render_status, last_render_error=EXCLUDED.last_render_error, last_rendered_at=EXCLUDED.last_rendered_at, updated_at=EXCLUDED.updated_at, updated_by=EXCLUDED.updated_by, published_at=EXCLUDED.published_at, published_by=EXCLUDED.published_by`,
+		version.TemplateKey, version.Version, version.Status, version.RendererKind, version.Body, version.Style, version.ChangeNote, version.ClonedFromVersion, nullTime(version.LastPreviewedAt), version.LastRenderStatus, version.LastRenderError, nullTime(version.LastRenderedAt), version.UpdatedAt, version.UpdatedBy, nullTime(version.PublishedAt), version.PublishedBy)
 	return err
 }
 
@@ -76,9 +77,49 @@ ON CONFLICT (binding_id) DO UPDATE SET template_key=EXCLUDED.template_key, scope
 	return err
 }
 
+func (r *PostgresRepository) Fixtures(templateKey, targetKind string) []TemplateFixture {
+	rows, err := r.db.Query(`SELECT fixture_key, COALESCE(name,''), target_kind, COALESCE(template_key,''), COALESCE(source_type,''), COALESCE(payload_json,'{}'::jsonb), updated_at, COALESCE(updated_by,'') FROM template_output_fixtures WHERE ($1 = '' OR target_kind = $1) AND ($2 = '' OR COALESCE(template_key,'') = $2) ORDER BY target_kind ASC, fixture_key ASC`, targetKind, templateKey)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	items := make([]TemplateFixture, 0)
+	for rows.Next() {
+		var item TemplateFixture
+		var payload []byte
+		_ = rows.Scan(&item.FixtureKey, &item.Name, &item.TargetKind, &item.TemplateKey, &item.SourceType, &payload, &item.UpdatedAt, &item.UpdatedBy)
+		_ = unmarshalJSON(payload, &item.Payload)
+		items = append(items, item)
+	}
+	return items
+}
+
+func (r *PostgresRepository) SaveFixture(fixture TemplateFixture) error {
+	payload, _ := marshalJSON(fixture.Payload)
+	_, err := r.db.Exec(`INSERT INTO template_output_fixtures (fixture_key, name, target_kind, template_key, source_type, payload_json, updated_at, updated_by)
+VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7,NULLIF($8,''))
+ON CONFLICT (fixture_key) DO UPDATE SET name=EXCLUDED.name, target_kind=EXCLUDED.target_kind, template_key=EXCLUDED.template_key, source_type=EXCLUDED.source_type, payload_json=EXCLUDED.payload_json, updated_at=EXCLUDED.updated_at, updated_by=EXCLUDED.updated_by`,
+		fixture.FixtureKey, fixture.Name, fixture.TargetKind, fixture.TemplateKey, fixture.SourceType, payload, fixture.UpdatedAt, fixture.UpdatedBy)
+	return err
+}
+
 func nullTime(value time.Time) any {
 	if value.IsZero() {
 		return nil
 	}
 	return value
+}
+
+func marshalJSON(value any) ([]byte, error) {
+	if value == nil {
+		return []byte(`{}`), nil
+	}
+	return json.Marshal(value)
+}
+
+func unmarshalJSON(raw []byte, target any) error {
+	if len(raw) == 0 {
+		raw = []byte(`{}`)
+	}
+	return json.Unmarshal(raw, target)
 }

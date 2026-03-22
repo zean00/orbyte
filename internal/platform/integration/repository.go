@@ -15,6 +15,7 @@ type Repository interface {
 	SaveSubmission(record SubmissionRecord) error
 	ListSubmissions() []SubmissionRecord
 	GetSubmission(id string) (SubmissionRecord, bool)
+	FindSubmissionByIdempotency(externalSystemKey, endpointKey, contractKey, idempotencyKey string) (SubmissionRecord, bool)
 	SaveSubmissionAttempt(attempt SubmissionAttempt) error
 	ListSubmissionAttempts(submissionID string) []SubmissionAttempt
 	SaveDeadLetter(record DeadLetterRecord) error

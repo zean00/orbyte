@@ -65,3 +65,18 @@ type ValidationReport struct {
 	Valid  bool              `json:"valid"`
 	Issues []ValidationIssue `json:"issues,omitempty"`
 }
+
+type CompareContext struct {
+	Label          string `json:"label,omitempty"`
+	OrganizationID string `json:"organization_id,omitempty"`
+	LocationID     string `json:"location_id,omitempty"`
+}
+
+type ComparisonItem struct {
+	Key           string         `json:"key"`
+	ModuleKey     string         `json:"module_key"`
+	Left          EffectiveValue `json:"left"`
+	Right         EffectiveValue `json:"right"`
+	Status        string         `json:"status"`
+	ChangedFields []string       `json:"changed_fields,omitempty"`
+}

@@ -40,7 +40,7 @@ func TestRegisterValidationAndHelpers(t *testing.T) {
 	if got := sanitizeRegoIdent("Documents.Search-Visibility"); got != "documents_search_visibility" {
 		t.Fatalf("unexpected sanitized ident %q", got)
 	}
-	if got := RegoPackageForHook("documents.search.visibility"); got != "clinic.policy.documents.search.visibility" {
+	if got := RegoPackageForHook("documents.search.visibility"); got != "orbyte.policy.documents.search.visibility" {
 		t.Fatalf("unexpected rego package %q", got)
 	}
 	if got := firstNonEmpty("", " test ", "later"); got != "test" {
@@ -265,6 +265,9 @@ func TestRuntimeIncludesCompileStatus(t *testing.T) {
 	if !runtime.CompileValid || !runtime.RegoConfigured {
 		t.Fatalf("expected runtime compile status, got %+v", runtime)
 	}
+	if !runtime.EvalValid || runtime.EvalError != "" {
+		t.Fatalf("expected runtime eval status, got %+v", runtime)
+	}
 }
 
 func TestRuntimeVariantsAndRuntimesList(t *testing.T) {
@@ -340,6 +343,40 @@ func TestValidateConfiguredModulesRejectsBrokenStoredSource(t *testing.T) {
 	err := svc.ValidateConfiguredModules()
 	if err == nil || !strings.Contains(err.Error(), "integration.submission.preflight") {
 		t.Fatalf("expected broken configured module to be rejected, got %v", err)
+	}
+}
+
+func TestValidateConfiguredModulesRejectsInvalidDecisionShape(t *testing.T) {
+	cfg := config.NewService()
+	svc := NewServiceWithConfig(cfg)
+	if err := svc.Register(HookDefinition{
+		Key:               "integration.submission.preflight",
+		Kind:              "integration",
+		Target:            "integration_submission",
+		AllowedScopes:     []string{"deployment"},
+		DefaultRule:       map[string]any{"blocked_operation_types": []string{}},
+		Engine:            EngineRego,
+		RegoPackage:       "orbyte.policy.integration.submission.preflight",
+		RegoQuery:         "data.orbyte.policy.integration.submission.preflight.decision",
+		DefaultRegoSource: validPreflightModule(),
+	}); err != nil {
+		t.Fatalf("register hook failed: %v", err)
+	}
+	if err := cfg.Save(config.Entry{
+		Key:       moduleConfigKey("integration.submission.preflight"),
+		ModuleKey: "platform.core",
+		Category:  "policy",
+		Scope:     "deployment",
+		Value: map[string]any{
+			"source": "package orbyte.policy.integration.submission.preflight\n\nimport rego.v1\n\ndecision := true",
+		},
+		UpdatedBy: "tester",
+	}); err != nil {
+		t.Fatalf("save invalid module source failed: %v", err)
+	}
+	err := svc.ValidateConfiguredModules()
+	if err == nil || !strings.Contains(err.Error(), "rego policy must return a decision object") {
+		t.Fatalf("expected invalid decision shape to be rejected, got %v", err)
 	}
 }
 

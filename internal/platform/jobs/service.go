@@ -3,8 +3,11 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"orbyte/internal/platform/observability"
 )
 
 const (
@@ -43,6 +46,7 @@ type Service struct {
 	handlers  map[string]Handler
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
+	obs       *observability.Service
 	onSuccess func()
 	onFailure func(error)
 }
@@ -95,6 +99,15 @@ func (s *Service) SetHealthHooks(onSuccess func(), onFailure func(error)) {
 	defer s.mu.Unlock()
 	s.onSuccess = onSuccess
 	s.onFailure = onFailure
+}
+
+func (s *Service) AttachObservability(obs *observability.Service) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.obs = obs
 }
 
 func (s *Service) Enqueue(name string, payload map[string]any) (Job, error) {
@@ -245,10 +258,12 @@ func (s *Service) processOnce(ctx context.Context) (processResult, error) {
 	outcome.Claimed = len(items)
 	for _, job := range items {
 		handler := s.handler(job.Name)
+		started := time.Now()
 		if handler == nil {
 			if err := s.repo.MarkFailed(job.ID, StatusDeadLetter, "job handler is not registered", time.Now().UTC()); err != nil {
 				return outcome, err
 			}
+			s.recordJobOutcome(job.Name, "dead_letter", "missing_dependency", time.Since(started))
 			outcome.Failed++
 			continue
 		}
@@ -260,23 +275,60 @@ func (s *Service) processOnce(ctx context.Context) (processResult, error) {
 		}
 		if err != nil {
 			status := StatusFailed
+			failureCategory := "handler_failure"
 			if job.AttemptCount >= maxAttempts {
 				status = StatusDeadLetter
+				failureCategory = "dead_lettered"
 			} else {
 				status = StatusQueued
 			}
 			if markErr := s.repo.MarkFailed(job.ID, status, err.Error(), time.Now().UTC()); markErr != nil {
 				return outcome, markErr
 			}
+			s.recordJobOutcome(job.Name, status, failureCategory, time.Since(started))
 			outcome.Failed++
 			continue
 		}
 		if err := s.repo.MarkSucceeded(job.ID, handlerResult, time.Now().UTC()); err != nil {
 			return outcome, err
 		}
+		s.recordJobOutcome(job.Name, StatusSucceeded, "", time.Since(started))
 		outcome.Succeeded++
 	}
 	return outcome, nil
+}
+
+func (s *Service) recordJobOutcome(name, status, category string, duration time.Duration) {
+	s.mu.RLock()
+	obs := s.obs
+	s.mu.RUnlock()
+	if obs == nil {
+		return
+	}
+	obs.Observe("jobs.handler.duration", duration)
+	switch status {
+	case StatusSucceeded:
+		obs.Inc("jobs.succeeded.total")
+	case StatusDeadLetter:
+		obs.Inc("jobs.dead_letter.total")
+	default:
+		obs.Inc("jobs.failed.total")
+	}
+	if category != "" {
+		obs.Inc("jobs.failure_category." + category + ".total")
+	}
+	if name != "" {
+		obs.Inc("jobs.name." + sanitizeMetricKey(name) + "." + status + ".total")
+	}
+}
+
+func sanitizeMetricKey(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+	replacer := strings.NewReplacer(".", "_", "-", "_", " ", "_", "/", "_", ":", "_")
+	return replacer.Replace(value)
 }
 
 func (s *Service) startLeaseHeartbeat(parent context.Context, jobID string) (context.Context, func() error) {

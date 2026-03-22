@@ -281,6 +281,23 @@ func (r *PostgresRepository) GetSubmission(id string) (SubmissionRecord, bool) {
 	return item, true
 }
 
+func (r *PostgresRepository) FindSubmissionByIdempotency(externalSystemKey, endpointKey, contractKey, idempotencyKey string) (SubmissionRecord, bool) {
+	const query = `SELECT submission_id, external_system_key, COALESCE(endpoint_key,''), COALESCE(contract_key,''), contract_version, COALESCE(intent,''), COALESCE(mode,''), COALESCE(idempotency_key,''), operation_type, status, COALESCE(document_id,''), COALESCE(correlation_id,''), COALESCE(external_reference,''), attempt_count, COALESCE(last_error,''), payload_json, result_json, processed_at, created_at, updated_at FROM integration_submissions WHERE external_system_key = $1 AND COALESCE(endpoint_key,'') = $2 AND COALESCE(contract_key,'') = $3 AND COALESCE(idempotency_key,'') = $4 ORDER BY created_at ASC LIMIT 1`
+	var item SubmissionRecord
+	var payload []byte
+	var result []byte
+	var processed sql.NullTime
+	if err := r.db.QueryRowContext(context.Background(), query, externalSystemKey, endpointKey, contractKey, idempotencyKey).Scan(&item.ID, &item.ExternalSystemKey, &item.EndpointKey, &item.ContractKey, &item.ContractVersion, &item.Intent, &item.Mode, &item.IdempotencyKey, &item.OperationType, &item.Status, &item.DocumentID, &item.CorrelationID, &item.ExternalReference, &item.AttemptCount, &item.LastError, &payload, &result, &processed, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		return SubmissionRecord{}, false
+	}
+	if processed.Valid {
+		item.ProcessedAt = processed.Time
+	}
+	_ = json.Unmarshal(payload, &item.Payload)
+	_ = json.Unmarshal(result, &item.Result)
+	return item, true
+}
+
 func (r *PostgresRepository) SaveSubmissionAttempt(attempt SubmissionAttempt) error {
 	request, _ := json.Marshal(attempt.Request)
 	response, _ := json.Marshal(attempt.Response)

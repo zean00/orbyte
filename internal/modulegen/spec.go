@@ -120,6 +120,7 @@ type ModelFieldOptions struct {
 
 type Spec struct {
 	Module                 ModuleIdentity                 `yaml:"module"`
+	StarterPack            string                         `yaml:"starter_pack,omitempty"`
 	Features               FeatureOptions                 `yaml:"features"`
 	Scaffold               ScaffoldOptions                `yaml:"scaffold"`
 	Manifest               ManifestOptions                `yaml:"manifest"`
@@ -133,6 +134,8 @@ type Options struct {
 	Root                    string
 	SpecPath                string
 	Profile                 string
+	StarterPack             string
+	JSON                    bool
 	Key                     string
 	Name                    string
 	Version                 string
@@ -203,6 +206,12 @@ func ResolveSpec(base Spec, opts Options) (Spec, error) {
 	applyKindDefaults(&spec)
 	if strings.TrimSpace(opts.Profile) != "" {
 		if err := applyProfile(&spec, strings.TrimSpace(opts.Profile)); err != nil {
+			return Spec{}, err
+		}
+	}
+	if strings.TrimSpace(opts.StarterPack) != "" {
+		spec.StarterPack = strings.TrimSpace(opts.StarterPack)
+		if err := applyProfile(&spec, spec.StarterPack); err != nil {
 			return Spec{}, err
 		}
 	}
@@ -324,6 +333,9 @@ func applyKindDefaults(spec *Spec) {
 			})
 		}
 	}
+	if strings.TrimSpace(spec.StarterPack) == "" {
+		spec.StarterPack = defaultStarterPack(spec.Module.Kind)
+	}
 }
 
 func fillDerivedDefaults(spec *Spec) {
@@ -402,6 +414,7 @@ func applyProfile(spec *Spec, profile string) error {
 	case "", "default":
 		return nil
 	case "minimal":
+		spec.StarterPack = "minimal"
 		spec.Features.Search = false
 		spec.Features.UI = false
 		spec.Features.CustomUI = false
@@ -426,7 +439,8 @@ func applyProfile(spec *Spec, profile string) error {
 			CustomUIStub:      boolPtrDefault(nil, false),
 		}
 		return nil
-	case "backoffice":
+	case "backoffice", "document-workflow":
+		spec.StarterPack = "document-workflow"
 		spec.Features.Search = true
 		spec.Features.UI = true
 		spec.Features.CustomUI = false
@@ -451,7 +465,8 @@ func applyProfile(spec *Spec, profile string) error {
 			CustomUIStub:      boolPtrDefault(nil, false),
 		}
 		return nil
-	case "search-heavy":
+	case "search-heavy", "masterdata-search":
+		spec.StarterPack = "masterdata-search"
 		spec.Features.Search = true
 		spec.Features.UI = true
 		spec.Features.CustomUI = false
@@ -476,7 +491,8 @@ func applyProfile(spec *Spec, profile string) error {
 			CustomUIStub:      boolPtrDefault(nil, false),
 		}
 		return nil
-	case "integration-first":
+	case "integration-first", "integration-adapter":
+		spec.StarterPack = "integration-adapter"
 		spec.Module.Kind = KindIntegration
 		spec.Features.Search = false
 		spec.Features.UI = true
@@ -504,6 +520,19 @@ func applyProfile(spec *Spec, profile string) error {
 		return nil
 	default:
 		return fmt.Errorf("unsupported profile %q", profile)
+	}
+}
+
+func defaultStarterPack(kind Kind) string {
+	switch kind {
+	case KindDocument:
+		return "document-workflow"
+	case KindModel, KindHybrid:
+		return "masterdata-search"
+	case KindIntegration:
+		return "integration-adapter"
+	default:
+		return "minimal"
 	}
 }
 

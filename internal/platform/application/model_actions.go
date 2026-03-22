@@ -132,6 +132,7 @@ func buildModelDomainEvent(action string, record model.Record, related map[strin
 		AggregateType: "model:" + record.ModelKey,
 		AggregateID:   record.ID,
 		ActorID:       acting.ActorID,
+		CorrelationID: acting.CorrelationID,
 		OccurredAt:    now,
 		Payload: map[string]any{
 			"model_key":            record.ModelKey,

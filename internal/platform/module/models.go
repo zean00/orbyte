@@ -17,6 +17,8 @@ type Manifest struct {
 	Name                   string                     `json:"name"`
 	NameI18n               i18n.LocalizedText         `json:"name_i18n,omitempty"`
 	Version                string                     `json:"version"`
+	KernelVersionRange     string                     `json:"kernel_version_range,omitempty"`
+	RequiredCapabilities   []string                   `json:"required_capabilities,omitempty"`
 	DomainFamily           string                     `json:"domain_family"`
 	Category               string                     `json:"category,omitempty"`
 	Dependencies           []string                   `json:"dependencies,omitempty"`
@@ -68,7 +70,27 @@ type Detail struct {
 	Installed             InstalledModule        `json:"installed"`
 	DependencyState       map[string]bool        `json:"dependency_state"`
 	DependencyDiagnostics []DependencyDiagnostic `json:"dependency_diagnostics,omitempty"`
+	KernelDiagnostics     []Diagnostic           `json:"kernel_diagnostics,omitempty"`
 	LifecycleState        string                 `json:"lifecycle_state,omitempty"`
+}
+
+type DiagnosticSeverity string
+
+const (
+	SeverityError   DiagnosticSeverity = "error"
+	SeverityWarning DiagnosticSeverity = "warning"
+)
+
+type Diagnostic struct {
+	Severity  DiagnosticSeverity `json:"severity"`
+	Code      string             `json:"code"`
+	Message   string             `json:"message"`
+	ModuleKey string             `json:"module_key,omitempty"`
+	Path      string             `json:"path,omitempty"`
+}
+
+type LintReport struct {
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 }
 
 type RoleTemplateAssignment struct {

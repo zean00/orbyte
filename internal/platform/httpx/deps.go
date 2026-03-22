@@ -59,9 +59,10 @@ type PlatformDeps struct {
 }
 
 type AuthDeps struct {
-	Config   *config.Service
-	Identity *identity.Service
-	Audit    *audit.Service
+	Config        *config.Service
+	Identity      *identity.Service
+	Audit         *audit.Service
+	UIPreferences *UIPreferencesService
 }
 
 type ModelDeps struct {
@@ -80,6 +81,7 @@ type DocumentDeps struct {
 	Actions       *application.DocumentActions
 	Audit         *audit.Service
 	Policy        *policy.Service
+	Search        *search.Service
 	FieldSecurity *securityfields.Service
 	Observability *observability.Service
 	Idempotency   *idempotency.Service
@@ -89,6 +91,7 @@ type OpsDeps struct {
 	Identity      *identity.Service
 	Audit         *audit.Service
 	Eventing      *eventing.Service
+	Offline       *offline.Service
 	Documents     *document.Service
 	Search        *search.Service
 	Workflows     *workflow.Service
@@ -119,6 +122,7 @@ type AdminDeps struct {
 	Integration   *integration.Service
 	Reference     *reference.Service
 	Idempotency   *idempotency.Service
+	Health        *runtimehealth.Tracker
 }
 
 type TemplateDeps struct {
@@ -139,6 +143,7 @@ type UIDeps struct {
 	Monitoring    *monitoring.Service
 	Policy        *policy.Service
 	FieldSecurity *securityfields.Service
+	UIPreferences *UIPreferencesService
 }
 
 type MCPDeps struct {
@@ -159,6 +164,7 @@ type OfflineDeps struct {
 	DocumentActions *application.DocumentActions
 	Models          *model.Service
 	ModelActions    *application.ModelActions
+	Search          *search.Service
 	FieldSecurity   *securityfields.Service
 	Idempotency     *idempotency.Service
 }
@@ -184,7 +190,7 @@ func registerPlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runti
 }
 
 func registerAuthRoutesWithDeps(mux *http.ServeMux, deps AuthDeps) {
-	registerAuthRoutes(mux, deps.Config, deps.Identity, deps.Audit)
+	registerAuthRoutes(mux, deps.Config, deps.Identity, deps.Audit, deps.UIPreferences)
 }
 
 func registerModelRoutesWithDeps(mux *http.ServeMux, deps ModelDeps) {
@@ -192,12 +198,12 @@ func registerModelRoutesWithDeps(mux *http.ServeMux, deps ModelDeps) {
 }
 
 func registerDocumentRoutesWithDeps(mux *http.ServeMux, deps DocumentDeps) {
-	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.FieldSecurity, deps.Observability)
-	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.FieldSecurity, deps.Idempotency)
+	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
+	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
 }
 
 func registerOpsRoutesWithDeps(mux *http.ServeMux, deps OpsDeps) {
-	registerOpsRoutes(mux, deps.Identity, deps.Audit, deps.Eventing, deps.Documents, deps.Search, deps.Workflows, deps.Analytics, deps.Monitoring, deps.Observability, deps.Integration, deps.Jobs, deps.Health)
+	registerOpsRoutes(mux, deps.Identity, deps.Audit, deps.Eventing, deps.Offline, deps.Documents, deps.Search, deps.Workflows, deps.Analytics, deps.Monitoring, deps.Observability, deps.Integration, deps.Jobs, deps.Health)
 }
 
 func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
@@ -205,7 +211,7 @@ func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
 }
 
 func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
-	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency)
+	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health)
 }
 
 func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
@@ -213,7 +219,7 @@ func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
 }
 
 func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {
-	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.FieldSecurity, deps.Idempotency)
+	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.Search, deps.FieldSecurity, deps.Idempotency)
 }
 
 func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {
@@ -221,7 +227,7 @@ func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {
 }
 
 func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {
-	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity)
+	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity, deps.UIPreferences)
 }
 
 func registerDocsRoutesWithDeps(mux *http.ServeMux, deps DocsDeps) {

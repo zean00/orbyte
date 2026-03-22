@@ -130,6 +130,11 @@ func (r *PostgresRepository) RolePermissions() []RolePermission {
 	return items
 }
 
+func (r *PostgresRepository) DeleteRolePermission(roleID, permissionKey string) error {
+	_, err := r.db.ExecContext(context.Background(), `DELETE FROM role_permissions WHERE role_id = $1 AND permission_key = $2`, roleID, permissionKey)
+	return err
+}
+
 func (r *PostgresRepository) Credentials() []Credential {
 	const query = `
 		SELECT user_id, password_hash, password_changed_at, failed_attempt_count, locked_until, updated_at

@@ -140,6 +140,15 @@ func (r *MemoryRepository) GetSubmission(id string) (SubmissionRecord, bool) {
 	return item, ok
 }
 
+func (r *MemoryRepository) FindSubmissionByIdempotency(externalSystemKey, endpointKey, contractKey, idempotencyKey string) (SubmissionRecord, bool) {
+	for _, item := range r.submissions {
+		if item.ExternalSystemKey == externalSystemKey && item.EndpointKey == endpointKey && item.ContractKey == contractKey && item.IdempotencyKey == idempotencyKey {
+			return item, true
+		}
+	}
+	return SubmissionRecord{}, false
+}
+
 func (r *MemoryRepository) SaveSubmissionAttempt(attempt SubmissionAttempt) error {
 	if attempt.Request == nil {
 		attempt.Request = map[string]any{}

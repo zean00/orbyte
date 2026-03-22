@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,7 @@ type testHarness struct {
 	ident     *identity.Service
 	audit     *audit.Service
 	cfg       *config.Service
+	policy    *policy.Service
 	search    *search.Service
 	workflows *workflow.Service
 	analytics *analytics.Service
@@ -170,6 +172,8 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		{Key: "documents.extension.view", Kind: "access", Target: "document_extension_view", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"allowed_modules": []string{}, "denied_statuses": []string{"cancelled"}}},
 		{Key: "documents.extension.write", Kind: "access", Target: "document_extension_write", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"allowed_modules": []string{}, "denied_statuses": []string{"cancelled"}}},
 		{Key: "documents.workflow.transition", Kind: "workflow", Target: "document_transition", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"blocked_actions": []string{}, "allowed_actions": []string{}, "allowed_statuses": []string{}}},
+		{Key: "documents.workflow.assignment", Kind: "workflow", Target: "document_assignment", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"assignee_role_key": "", "candidate_role_keys": []string{}, "assignment_mode": ""}},
+		{Key: "documents.workflow.sla", Kind: "workflow", Target: "document_sla", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"due_after_seconds": 0, "escalate_after_seconds": 0}},
 		{Key: "documents.search.visibility", Kind: "search", Target: "document_search", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"hidden_statuses": []string{}, "allowed_types": []string{}}},
 		{Key: "documents.fields.profile", Kind: "security", Target: "document_fields", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"fields": map[string]any{}}},
 		{Key: "documents.numbering.assign", Kind: "numbering", Target: "document_numbering", AllowedScopes: []string{"deployment", "location"}, DefaultRule: map[string]any{"prefix": "", "include_location": true, "include_date": true}},
@@ -188,6 +192,12 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("set policy evaluator failed: %v", err)
 	}
 	if err := policySvc.SetEvaluator("documents.workflow.transition", func(req policy.Request) policy.Decision { return policy.Decision{Allowed: true} }); err != nil {
+		t.Fatalf("set policy evaluator failed: %v", err)
+	}
+	if err := policySvc.SetEvaluator("documents.workflow.assignment", func(req policy.Request) policy.Decision { return policy.Decision{Allowed: true} }); err != nil {
+		t.Fatalf("set policy evaluator failed: %v", err)
+	}
+	if err := policySvc.SetEvaluator("documents.workflow.sla", func(req policy.Request) policy.Decision { return policy.Decision{Allowed: true} }); err != nil {
 		t.Fatalf("set policy evaluator failed: %v", err)
 	}
 	if err := policySvc.SetEvaluator("documents.search.visibility", func(req policy.Request) policy.Decision { return policy.Decision{Allowed: true} }); err != nil {
@@ -303,6 +313,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		ident:     ident,
 		audit:     auditSvc,
 		cfg:       cfg,
+		policy:    policySvc,
 		search:    searchSvc,
 		workflows: flows,
 		analytics: analyticsSvc,
@@ -1199,6 +1210,84 @@ func TestNavigationPreferencesAndRoleDefaults(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
 	if got := payload["default_path"]; got != "/admin/modules" {
 		t.Fatalf("expected user override admin default path, got %v", got)
+	}
+}
+
+func TestUIPreferencesRoundTrip(t *testing.T) {
+	h := newTestHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"surface":      "worklist",
+		"route_path":   "/worklist",
+		"view_key":     "worklist.tasks",
+		"filters":      map[string]any{"tasks": map[string]any{"mine": "1", "due": "overdue"}},
+		"columns":      []string{"target", "status"},
+		"column_order": []string{"status", "target"},
+		"density":      "compact",
+	})
+	rr := h.request(http.MethodPut, "/me/preferences/ui", body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected ui preference update to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/me/preferences/ui?surface=worklist&route_path=%2Fworklist", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected ui preference read to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if payload["density"] != "compact" {
+		t.Fatalf("expected compact density, got %+v", payload)
+	}
+	if payload["route_path"] != "/worklist" {
+		t.Fatalf("expected route_path to round trip, got %+v", payload)
+	}
+	filters, ok := payload["filters"].(map[string]any)
+	if !ok || filters["tasks"] == nil {
+		t.Fatalf("expected stored filters, got %+v", payload)
+	}
+}
+
+func TestOpsSearchRuntimeAndSchemaRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/ops/search/indexes", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected search index ops list to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if _, ok := payload["runtime_items"].([]any); !ok {
+		t.Fatalf("expected runtime_items in ops search list, got %+v", payload)
+	}
+
+	rr = h.request(http.MethodGet, "/ops/search/indexes/documents.requests.search/runtime", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected search runtime detail to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	record, err := document.NewService().Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "Repair Me"})
+	if err != nil {
+		t.Fatalf("create helper document failed: %v", err)
+	}
+	h.search.RefreshDocument(record)
+
+	rr = h.request(http.MethodGet, "/ops/search/indexes/documents.requests.search/consistency", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected search consistency route to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodPost, "/ops/search/indexes/documents.requests.search/schema/plan", mustJSON(t, map[string]any{"version": "v2"}), true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected schema plan route to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = h.request(http.MethodPost, "/ops/search/indexes/documents.requests.search/schema/build", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected schema build route to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rr = h.request(http.MethodPost, "/ops/search/indexes/documents.requests.search/schema/activate", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected schema activate route to succeed, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -2122,8 +2211,83 @@ func TestAdminFeatureFlagRoutes(t *testing.T) {
 
 	values := h.request(http.MethodGet, "/admin/api/feature-flags/values", nil, true)
 	effective := h.request(http.MethodGet, "/admin/api/feature-flags/effective?location_id=loc_hq", nil, true)
-	if values.Code != http.StatusOK || effective.Code != http.StatusOK {
-		t.Fatalf("expected feature flag reads to succeed, got %d and %d", values.Code, effective.Code)
+	targeting := h.request(http.MethodGet, "/admin/api/feature-flags/targeting?flag_key=platform.admin_console&location_id=loc_hq", nil, true)
+	if values.Code != http.StatusOK || effective.Code != http.StatusOK || targeting.Code != http.StatusOK {
+		t.Fatalf("expected feature flag reads to succeed, got %d, %d, and %d", values.Code, effective.Code, targeting.Code)
+	}
+}
+
+func TestAdminConfigBundleCompareMatrixAndReadinessRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	compare := h.request(http.MethodGet, "/admin/api/config/compare?left_organization_id=&left_location_id=&right_organization_id=org_default&right_location_id=loc_hq", nil, true)
+	if compare.Code != http.StatusOK {
+		t.Fatalf("expected config compare to succeed, got %d body=%s", compare.Code, compare.Body.String())
+	}
+
+	exportBody := mustJSON(t, map[string]any{
+		"name":          "smoke-bundle",
+		"config_keys":   []string{"identity.auth"},
+		"config_scopes": []string{"deployment"},
+		"include_flags": true,
+		"flag_keys":     []string{"platform.admin_console"},
+	})
+	exported := h.request(http.MethodPost, "/admin/api/config/bundles/export", exportBody, true)
+	if exported.Code != http.StatusOK {
+		t.Fatalf("expected bundle export to succeed, got %d body=%s", exported.Code, exported.Body.String())
+	}
+	var exportPayload map[string]any
+	_ = json.Unmarshal(exported.Body.Bytes(), &exportPayload)
+	bundle := exportPayload["bundle"]
+	validate := h.request(http.MethodPost, "/admin/api/config/bundles/validate", mustJSON(t, map[string]any{"bundle": bundle}), true)
+	if validate.Code != http.StatusOK {
+		t.Fatalf("expected bundle validate to succeed, got %d body=%s", validate.Code, validate.Body.String())
+	}
+
+	applyBundle := map[string]any{
+		"name": "apply-bundle",
+		"config_entries": []any{
+			map[string]any{
+				"key":        "identity.auth",
+				"module_key": "identity",
+				"category":   "security",
+				"scope":      "location",
+				"scope_id":   "loc_hq",
+				"value":      map[string]any{"login_rate_limit_attempts": 3},
+			},
+		},
+		"feature_flags": []any{
+			map[string]any{
+				"flag_key": "platform.admin_console",
+				"scope":    "location",
+				"scope_id": "loc_hq",
+				"enabled":  false,
+				"status":   "active",
+			},
+		},
+	}
+	applied := h.request(http.MethodPost, "/admin/api/config/bundles/apply", mustJSON(t, map[string]any{"bundle": applyBundle}), true)
+	if applied.Code != http.StatusOK {
+		t.Fatalf("expected bundle apply to succeed, got %d body=%s", applied.Code, applied.Body.String())
+	}
+
+	matrix := h.request(http.MethodGet, "/admin/api/security/role-permission-matrix", nil, true)
+	if matrix.Code != http.StatusOK {
+		t.Fatalf("expected role permission matrix to succeed, got %d body=%s", matrix.Code, matrix.Body.String())
+	}
+
+	grant := h.request(http.MethodPut, "/admin/api/security/roles/role_admin/permissions/audit.read/value", nil, true)
+	if grant.Code != http.StatusOK {
+		t.Fatalf("expected role permission grant to succeed, got %d body=%s", grant.Code, grant.Body.String())
+	}
+	revoke := h.request(http.MethodDelete, "/admin/api/security/roles/role_admin/permissions/audit.read/value", nil, true)
+	if revoke.Code != http.StatusOK {
+		t.Fatalf("expected role permission revoke to succeed, got %d body=%s", revoke.Code, revoke.Body.String())
+	}
+
+	readiness := h.request(http.MethodGet, "/admin/api/readiness", nil, true)
+	if readiness.Code != http.StatusOK {
+		t.Fatalf("expected admin readiness to succeed, got %d body=%s", readiness.Code, readiness.Body.String())
 	}
 }
 
@@ -2759,6 +2923,13 @@ func TestHealthzAndContext(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for /readyz, got %d body=%s", rr.Code, rr.Body.String())
 	}
+	healthRR := h.request(http.MethodGet, "/ops/health", nil, true)
+	if healthRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /ops/health, got %d body=%s", healthRR.Code, healthRR.Body.String())
+	}
+	if !strings.Contains(healthRR.Body.String(), "\"summary\"") {
+		t.Fatalf("expected structured health response, got %s", healthRR.Body.String())
+	}
 	req := httptest.NewRequest(http.MethodGet, "/documents", nil)
 	req.AddCookie(h.cookie)
 	req.AddCookie(h.csrf)
@@ -2794,6 +2965,58 @@ func TestHealthzAndContext(t *testing.T) {
 	body := metricsRR.Body.String()
 	if !strings.Contains(body, "http_route_family_documents_requests_total") {
 		t.Fatalf("expected route-family metrics in /metrics, got %s", body)
+	}
+}
+
+func TestOpsTraceEndpointStitchesCorrelatedDocumentSubmit(t *testing.T) {
+	h := newTestHarness(t)
+
+	createBody, _ := json.Marshal(map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Trace Request"},
+	})
+	created := h.request(http.MethodPost, "/documents", createBody, true)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected create to succeed, got %d body=%s", created.Code, created.Body.String())
+	}
+	var record document.Record
+	if err := json.Unmarshal(created.Body.Bytes(), &record); err != nil {
+		t.Fatalf("decode created document failed: %v", err)
+	}
+
+	traceID := "trace-doc-submit"
+	submitBody, _ := json.Marshal(map[string]any{"action": "submit", "expected_version": record.Header.Version, "expected_etag": record.Header.ETag})
+	req := httptest.NewRequest(http.MethodPost, "/documents/"+record.Header.ID+"/actions", bytes.NewReader(submitBody))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	req.Header.Set("X-Correlation-ID", traceID)
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected submit to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	trace := h.request(http.MethodGet, "/ops/traces/"+traceID, nil, true)
+	if trace.Code != http.StatusOK {
+		t.Fatalf("expected trace endpoint to succeed, got %d body=%s", trace.Code, trace.Body.String())
+	}
+	body := trace.Body.String()
+	for _, marker := range []string{"\"kind\":\"http\"", "\"kind\":\"audit\"", "\"kind\":\"domain_event\"", "\"kind\":\"workflow_history\"", "\"kind\":\"outbox\""} {
+		if !strings.Contains(body, marker) {
+			t.Fatalf("expected trace to contain %s, got %s", marker, body)
+		}
+	}
+
+	correlationAudit := h.request(http.MethodGet, "/ops/audit-events/correlation/"+traceID, nil, true)
+	if correlationAudit.Code != http.StatusOK {
+		t.Fatalf("expected correlation audit route to succeed, got %d body=%s", correlationAudit.Code, correlationAudit.Body.String())
+	}
+	if !strings.Contains(correlationAudit.Body.String(), traceID) {
+		t.Fatalf("expected correlation audit payload to include trace id, got %s", correlationAudit.Body.String())
 	}
 }
 
@@ -2882,6 +3105,74 @@ func TestQueuedIntegrationActionsStillRecordAuditEvents(t *testing.T) {
 	}
 }
 
+func TestIntegrationAdminConfigAndOpsHealthRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	adapters := h.request(http.MethodGet, "/admin/api/integrations/adapters", nil, true)
+	if adapters.Code != http.StatusOK {
+		t.Fatalf("expected adapter list to succeed, got %d body=%s", adapters.Code, adapters.Body.String())
+	}
+
+	updateConfig := h.request(http.MethodPut, "/admin/api/integrations/systems/http_bridge/config", mustJSON(t, map[string]any{
+		"settings": map[string]any{
+			"url":          "https://example.test/submit",
+			"bearer_token": "secret-token-123",
+		},
+	}), true)
+	if updateConfig.Code != http.StatusOK {
+		t.Fatalf("expected config update to succeed, got %d body=%s", updateConfig.Code, updateConfig.Body.String())
+	}
+
+	getConfig := h.request(http.MethodGet, "/admin/api/integrations/systems/http_bridge/config", nil, true)
+	if getConfig.Code != http.StatusOK {
+		t.Fatalf("expected config read to succeed, got %d body=%s", getConfig.Code, getConfig.Body.String())
+	}
+	if strings.Contains(getConfig.Body.String(), "secret-token-123") {
+		t.Fatalf("expected redacted config response, got %s", getConfig.Body.String())
+	}
+
+	health := h.request(http.MethodGet, "/ops/integrations/health", nil, true)
+	if health.Code != http.StatusOK {
+		t.Fatalf("expected integration health route to succeed, got %d body=%s", health.Code, health.Body.String())
+	}
+}
+
+func TestIntegrationSubmissionDetailRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	create := h.request(http.MethodPost, "/admin/api/integrations/submissions", mustJSON(t, map[string]any{
+		"system_key":       "fake_erp",
+		"contract_key":     "document.submit",
+		"contract_version": 1,
+		"operation_type":   "sync_customer",
+		"idempotency_key":  "integration-detail-1",
+		"payload":          map[string]any{"customer_id": "cust-1"},
+		"process_now":      true,
+	}), true)
+	if create.Code != http.StatusAccepted && create.Code != http.StatusOK {
+		t.Fatalf("expected submission create to succeed, got %d body=%s", create.Code, create.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(create.Body.Bytes(), &payload)
+	record := payload["record"].(map[string]any)
+	id := record["id"].(string)
+
+	detail := h.request(http.MethodGet, "/admin/api/integrations/submissions/"+id, nil, true)
+	if detail.Code != http.StatusOK {
+		t.Fatalf("expected submission detail to succeed, got %d body=%s", detail.Code, detail.Body.String())
+	}
+
+	attempts := h.request(http.MethodGet, "/admin/api/integrations/submissions/"+id+"/attempts", nil, true)
+	if attempts.Code != http.StatusOK {
+		t.Fatalf("expected submission attempts to succeed, got %d body=%s", attempts.Code, attempts.Body.String())
+	}
+
+	opsDetail := h.request(http.MethodGet, "/ops/integrations/deliveries/"+id, nil, true)
+	if opsDetail.Code != http.StatusOK {
+		t.Fatalf("expected ops submission detail to succeed, got %d body=%s", opsDetail.Code, opsDetail.Body.String())
+	}
+}
+
 func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	h := newTestHarness(t)
 
@@ -2956,8 +3247,13 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	}
 
 	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/admin/modules", nil, true)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for admin route in user UI, got %d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected structured route resolution for admin route in user UI, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var routePayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &routePayload)
+	if routePayload["status"] != "not_found" {
+		t.Fatalf("expected admin route in user UI to resolve as not_found, got %+v", routePayload)
 	}
 
 	updateBody, _ := json.Marshal(map[string]any{
@@ -3114,6 +3410,80 @@ func TestTemplateResolveAndPDFRender(t *testing.T) {
 	}
 	if body := rr.Body.Bytes(); len(body) < 16 || !bytes.HasPrefix(body, []byte("%PDF")) {
 		t.Fatalf("expected pdf body, got %q", string(body))
+	}
+}
+
+func TestTemplateAdminPreviewFixturesAndCompare(t *testing.T) {
+	h := newTestHarness(t)
+
+	fixtureBody, _ := json.Marshal(map[string]any{
+		"name":         "Request Fixture",
+		"target_kind":  "document",
+		"template_key": "documents.generic_request.default",
+		"source_type":  "sample",
+		"payload": map[string]any{
+			"header": map[string]any{"number": "FIXTURE-100"},
+			"body":   map[string]any{"payload": map[string]any{"title": "Fixture Request"}},
+			"lines":  []any{},
+		},
+	})
+	rr := h.request(http.MethodPut, "/admin/api/template-fixtures", fixtureBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected fixture save to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	fixture := payload["fixture"].(map[string]any)
+	fixtureKey := fixture["fixture_key"].(string)
+
+	draftBody, _ := json.Marshal(map[string]any{
+		"body":        `<article><h1>{{ index .document.header "number" }}</h1></article>`,
+		"style":       `article{font-family:Arial}`,
+		"change_note": "admin preview draft",
+	})
+	rr = h.request(http.MethodPut, "/admin/api/templates/documents.generic_request.default/actions/draft", draftBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected draft save to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	version := payload["version"].(map[string]any)
+	versionNo := int(version["version"].(float64))
+
+	compareURL := "/admin/api/templates/compare?template_key=documents.generic_request.default&left=1&right=" + strconv.Itoa(versionNo)
+	rr = h.request(http.MethodGet, compareURL, nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected template compare to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	previewBody, _ := json.Marshal(map[string]any{
+		"template_key": "documents.generic_request.default",
+		"target_kind":  "document",
+		"target_key":   "generic_request",
+		"draft":        true,
+		"fixture_key":  fixtureKey,
+	})
+	rr = h.request(http.MethodPost, "/admin/api/templates/preview", previewBody, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected admin preview to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	preview := payload["preview"].(map[string]any)
+	if preview["data_source"] != "fixture" {
+		t.Fatalf("expected fixture preview data source, got %+v", preview)
+	}
+	outputs := preview["outputs"].([]any)
+	if len(outputs) != 3 {
+		t.Fatalf("expected html/pdf/print outputs, got %+v", outputs)
+	}
+	htmlOutput := outputs[0].(map[string]any)
+	if !strings.Contains(htmlOutput["html"].(string), "FIXTURE-100") {
+		t.Fatalf("expected preview html to contain fixture data, got %+v", htmlOutput)
+	}
+
+	debugURL := "/admin/api/templates/binding-debug?template_key=documents.generic_request.default&target_kind=document&target_key=generic_request&mode=draft"
+	rr = h.request(http.MethodGet, debugURL, nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected binding debug to succeed, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -3376,6 +3746,18 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	if payload["default_path"].(string) == "" {
 		t.Fatal("expected default_path in ui bootstrap")
 	}
+	if payload["shell_kind"] != "workspace" {
+		t.Fatalf("expected workspace shell, got %+v", payload["shell_kind"])
+	}
+	if payload["preferred_path"] == nil {
+		t.Fatalf("expected preferred_path field in ui bootstrap, got %+v", payload)
+	}
+	if _, ok := payload["fallback_paths"].(map[string]any); !ok {
+		t.Fatalf("expected fallback_paths map in ui bootstrap, got %+v", payload["fallback_paths"])
+	}
+	if _, ok := payload["capabilities"].(map[string]any); !ok {
+		t.Fatalf("expected capabilities in ui bootstrap, got %+v", payload["capabilities"])
+	}
 	flows, ok := payload["flows"].([]any)
 	if !ok || len(flows) == 0 {
 		t.Fatalf("expected ui bootstrap to include document flows, got %+v", payload["flows"])
@@ -3387,6 +3769,9 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	}
 	var route map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &route)
+	if route["status"] != "ok" {
+		t.Fatalf("expected route status ok, got %+v", route)
+	}
 	if route["render_mode"].(string) != string(module.RenderModeGeneric) {
 		t.Fatalf("expected generic render mode, got %+v", route)
 	}
@@ -3420,6 +3805,9 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	}
 	route = map[string]any{}
 	_ = json.Unmarshal(rr.Body.Bytes(), &route)
+	if route["status"] != "ok" {
+		t.Fatalf("expected custom route status ok, got %+v", route)
+	}
 	customEntry := route["custom_entry"].(map[string]any)
 	if _, ok := customEntry["printable"]; ok {
 		t.Fatalf("expected analytics custom entry to remain non-printable by default, got %+v", customEntry)
@@ -3434,6 +3822,9 @@ func TestUIBootstrapAndRouteResolution(t *testing.T) {
 	}
 	route = map[string]any{}
 	_ = json.Unmarshal(rr.Body.Bytes(), &route)
+	if route["status"] != "ok" {
+		t.Fatalf("expected flow route status ok, got %+v", route)
+	}
 	if route["render_mode"].(string) != string(module.RenderModeFlow) {
 		t.Fatalf("expected flow render mode, got %+v", route)
 	}
@@ -3659,8 +4050,13 @@ func TestUIDisabledModuleHidden(t *testing.T) {
 	}
 
 	rr = h.request(http.MethodGet, "/ui/routes/resolve?path=/analytics/cockpit", nil, true)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("expected disabled module route to be hidden, got %d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected structured disabled module route response, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var routePayload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &routePayload)
+	if routePayload["status"] != "not_found" {
+		t.Fatalf("expected disabled module route to resolve as not_found, got %+v", routePayload)
 	}
 
 	rr = h.request(http.MethodGet, "/ui/assets/modules/analytics-cockpit.js", nil, true)

@@ -225,3 +225,44 @@ func TestNATSPolicyDefaultsAndOverrides(t *testing.T) {
 		t.Fatalf("unexpected overridden nats policy: %+v", policy)
 	}
 }
+
+func TestValidateEntryAndCompareContexts(t *testing.T) {
+	svc := NewService()
+	report := svc.ValidateEntry(Entry{
+		Key:      "identity.auth",
+		Scope:    "deployment",
+		Value:    map[string]any{"google_enabled": true},
+		Category: "security",
+	})
+	if report.Valid {
+		t.Fatalf("expected validation failure, got %+v", report)
+	}
+
+	override := NewServiceWithRepository(NewMemoryRepository([]Entry{
+		{Key: "identity.auth", ModuleKey: "identity", Category: "security", Scope: "deployment", Value: map[string]any{"session_ttl_minutes": 90, "password_min_length": 10}},
+		{Key: "identity.auth", ModuleKey: "identity", Category: "security", Scope: "location", ScopeID: "loc_hq", Value: map[string]any{"login_rate_limit_attempts": 2}},
+	}))
+	items := override.CompareContexts(
+		CompareContext{Label: "left"},
+		CompareContext{Label: "right", LocationID: "loc_hq"},
+	)
+	if len(items) == 0 {
+		t.Fatal("expected comparison items")
+	}
+	var found bool
+	for _, item := range items {
+		if item.Key != "identity.auth" {
+			continue
+		}
+		found = true
+		if item.Status != "drifted" {
+			t.Fatalf("expected drifted config status, got %+v", item)
+		}
+		if len(item.ChangedFields) == 0 {
+			t.Fatalf("expected changed fields, got %+v", item)
+		}
+	}
+	if !found {
+		t.Fatal("expected identity.auth comparison item")
+	}
+}

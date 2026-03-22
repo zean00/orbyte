@@ -11,6 +11,7 @@ import (
 	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
 )
@@ -37,7 +38,7 @@ type flowInstancePayload struct {
 	Items               []flowInstanceItem            `json:"items"`
 }
 
-func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, fieldSecurity *securityfields.Service, idempotencySvc *idempotency.Service) {
+func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, searchSvc *search.Service, fieldSecurity *securityfields.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("POST /document-flows/", func(w http.ResponseWriter, r *http.Request) {
 		flowKey, ok := documentFlowCommitPath(r.URL.Path)
 		if !ok {
@@ -130,7 +131,7 @@ func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, mod
 			createdByKey := map[string]document.Record{}
 			var primary document.Record
 			for _, item := range resolvedDocs {
-				record, err := upsertDocumentFlowRecord(docs, docActions, existingByKey[item.Definition.Key], item.Definition, req.OrganizationID, locationID, principalActingContext(p), item.Payload)
+				record, err := upsertDocumentFlowRecord(docs, docActions, searchSvc, existingByKey[item.Definition.Key], item.Definition, req.OrganizationID, locationID, principalActingContext(p), item.Payload)
 				if err != nil {
 					return idempotency.Outcome{}, err
 				}
@@ -364,14 +365,19 @@ func flowDocumentCandidate(def module.DocumentFlowDocumentDefinition, organizati
 	}
 }
 
-func upsertDocumentFlowRecord(docs *document.Service, docActions *application.DocumentActions, existing document.Record, def module.DocumentFlowDocumentDefinition, organizationID, locationID string, acting application.ActingContext, payload map[string]any) (document.Record, error) {
+func upsertDocumentFlowRecord(docs *document.Service, docActions *application.DocumentActions, searchSvc *search.Service, existing document.Record, def module.DocumentFlowDocumentDefinition, organizationID, locationID string, acting application.ActingContext, payload map[string]any) (document.Record, error) {
 	if existing.Header.ID != "" {
 		if docActions == nil {
 			return document.Record{}, shared.Conflict("document flow update is not available")
 		}
 		return docActions.UpdateDraft(existing.Header.ID, acting, payload, existing.Header.Version, existing.Header.ETag)
 	}
-	return docs.Create(def.DocumentType, organizationID, locationID, acting.EffectiveActorID(), payload)
+	record, err := docs.Create(def.DocumentType, organizationID, locationID, acting.EffectiveActorID(), payload)
+	if err != nil {
+		return document.Record{}, err
+	}
+	refreshDocumentSearch(searchSvc, record)
+	return record, nil
 }
 
 func mergeFlowMetadata(metadata map[string]any, flowKey, flowDocumentKey, primaryDocumentID string) map[string]any {

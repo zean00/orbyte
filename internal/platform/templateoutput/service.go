@@ -110,8 +110,61 @@ func (s *Service) Bindings() []Binding {
 	return s.repo.Bindings()
 }
 
+func (s *Service) Fixtures(templateKey, targetKind string) []TemplateFixture {
+	return s.repo.Fixtures(strings.TrimSpace(templateKey), strings.TrimSpace(targetKind))
+}
+
 func (s *Service) Resolve(req RenderRequest) (Definition, Version, error) {
 	return s.resolveTemplate(req)
+}
+
+func (s *Service) ResolveBindingDebug(req RenderRequest) (BindingResolutionDebug, error) {
+	debug := BindingResolutionDebug{
+		RequestedTargetKind: strings.TrimSpace(req.TargetKind),
+		RequestedTargetKey:  strings.TrimSpace(req.TargetKey),
+		RequestedPurpose:    strings.TrimSpace(req.Purpose),
+		RequestedChannel:    strings.TrimSpace(req.Channel),
+		Mode:                "published",
+	}
+	if req.Draft {
+		debug.Mode = "draft"
+	}
+	scopes := resolveScopes(req)
+	bindings := s.Bindings()
+	for _, candidate := range scopes {
+		for _, item := range bindings {
+			if item.TargetKind != debug.RequestedTargetKind || item.TargetKey != debug.RequestedTargetKey {
+				continue
+			}
+			if debug.RequestedPurpose != "" && item.Purpose != "" && item.Purpose != debug.RequestedPurpose {
+				continue
+			}
+			if debug.RequestedChannel != "" && item.Channel != "" && item.Channel != debug.RequestedChannel {
+				continue
+			}
+			if item.ScopeType != candidate.ScopeType || item.ScopeID != candidate.ScopeID {
+				continue
+			}
+			matched := item
+			debug.MatchedBinding = &matched
+			debug.ScopePath = append(debug.ScopePath, Binding{ScopeType: candidate.ScopeType, ScopeID: candidate.ScopeID})
+			def, ok := s.Definition(item.TemplateKey)
+			if ok {
+				version := s.activeVersion(def, req.Draft)
+				debug.DefinitionKey = def.Key
+				debug.Version = version.Version
+			}
+			return debug, nil
+		}
+		debug.ScopePath = append(debug.ScopePath, Binding{ScopeType: candidate.ScopeType, ScopeID: candidate.ScopeID})
+	}
+	def, version, err := s.resolveTemplate(req)
+	if err != nil {
+		return debug, err
+	}
+	debug.DefinitionKey = def.Key
+	debug.Version = version.Version
+	return debug, nil
 }
 
 func (s *Service) HasTemplate(targetKind, targetKey, purpose, channel, scopeType, scopeID string) bool {
@@ -127,6 +180,10 @@ func (s *Service) HasTemplate(targetKind, targetKey, purpose, channel, scopeType
 }
 
 func (s *Service) SaveDraft(templateKey, body, style, actorID string) (Version, error) {
+	return s.SaveDraftWithOptions(templateKey, body, style, actorID, "", 0)
+}
+
+func (s *Service) SaveDraftWithOptions(templateKey, body, style, actorID, changeNote string, clonedFromVersion int) (Version, error) {
 	def, ok := s.Definition(templateKey)
 	if !ok {
 		return Version{}, shared.NotFound("template definition not found")
@@ -144,17 +201,29 @@ func (s *Service) SaveDraft(templateKey, body, style, actorID string) (Version, 
 	}
 	now := time.Now().UTC()
 	version := Version{
-		TemplateKey:  templateKey,
-		Version:      maxVersion + 1,
-		Status:       "draft",
-		RendererKind: def.RendererKind,
-		Body:         body,
-		Style:        style,
-		UpdatedAt:    now,
-		UpdatedBy:    actorID,
+		TemplateKey:       templateKey,
+		Version:           maxVersion + 1,
+		Status:            "draft",
+		RendererKind:      def.RendererKind,
+		Body:              body,
+		Style:             style,
+		ChangeNote:        strings.TrimSpace(changeNote),
+		ClonedFromVersion: clonedFromVersion,
+		UpdatedAt:         now,
+		UpdatedBy:         actorID,
 	}
 	if draft != nil {
 		version.Version = draft.Version
+		version.LastPreviewedAt = draft.LastPreviewedAt
+		version.LastRenderStatus = draft.LastRenderStatus
+		version.LastRenderError = draft.LastRenderError
+		version.LastRenderedAt = draft.LastRenderedAt
+		if version.ChangeNote == "" {
+			version.ChangeNote = draft.ChangeNote
+		}
+		if version.ClonedFromVersion == 0 {
+			version.ClonedFromVersion = draft.ClonedFromVersion
+		}
 	}
 	if strings.TrimSpace(version.Body) == "" {
 		version.Body = def.DefaultBody
@@ -162,10 +231,84 @@ func (s *Service) SaveDraft(templateKey, body, style, actorID string) (Version, 
 	if strings.TrimSpace(version.Style) == "" {
 		version.Style = def.DefaultStyle
 	}
+	if issues := s.validateVersion(def, version); len(filterIssues(issues, "error")) > 0 {
+		return Version{}, shared.Validation(joinIssueMessages(issues))
+	}
 	if err := s.repo.SaveVersion(version); err != nil {
 		return Version{}, err
 	}
 	return version, nil
+}
+
+func (s *Service) DuplicateDraft(templateKey string, fromVersion int, actorID string) (Version, error) {
+	def, ok := s.Definition(templateKey)
+	if !ok {
+		return Version{}, shared.NotFound("template definition not found")
+	}
+	var source Version
+	found := false
+	for _, item := range s.Versions(templateKey) {
+		if item.Version == fromVersion {
+			source = item
+			found = true
+			break
+		}
+	}
+	if !found {
+		source = s.activeVersion(def, false)
+		fromVersion = source.Version
+	}
+	return s.SaveDraftWithOptions(templateKey, source.Body, source.Style, actorID, "Duplicated from v"+fmt.Sprintf("%d", fromVersion), fromVersion)
+}
+
+func (s *Service) ResetDraftToPublished(templateKey, actorID string) (Version, error) {
+	def, ok := s.Definition(templateKey)
+	if !ok {
+		return Version{}, shared.NotFound("template definition not found")
+	}
+	published := s.activeVersion(def, false)
+	return s.SaveDraftWithOptions(templateKey, published.Body, published.Style, actorID, "Reset to published v"+fmt.Sprintf("%d", published.Version), published.Version)
+}
+
+func (s *Service) CompareVersions(templateKey string, leftVersionNo, rightVersionNo int) (VersionCompare, error) {
+	versions := s.Versions(templateKey)
+	var left Version
+	var right Version
+	foundLeft := false
+	foundRight := false
+	for _, item := range versions {
+		if item.Version == leftVersionNo {
+			left = item
+			foundLeft = true
+		}
+		if item.Version == rightVersionNo {
+			right = item
+			foundRight = true
+		}
+	}
+	if !foundLeft || !foundRight {
+		return VersionCompare{}, shared.NotFound("template version not found")
+	}
+	changed := make([]string, 0)
+	if left.Body != right.Body {
+		changed = append(changed, "body")
+	}
+	if left.Style != right.Style {
+		changed = append(changed, "style")
+	}
+	if left.RendererKind != right.RendererKind {
+		changed = append(changed, "renderer_kind")
+	}
+	if left.ChangeNote != right.ChangeNote {
+		changed = append(changed, "change_note")
+	}
+	return VersionCompare{
+		TemplateKey:    templateKey,
+		LeftVersion:    left,
+		RightVersion:   right,
+		ChangedFields:  changed,
+		HasDifferences: len(changed) > 0,
+	}, nil
 }
 
 func (s *Service) Publish(templateKey string, versionNo int, actorID string) (Version, error) {
@@ -234,60 +377,138 @@ func (s *Service) SaveBinding(binding Binding) (Binding, error) {
 	return binding, nil
 }
 
+func (s *Service) SaveFixture(fixture TemplateFixture) (TemplateFixture, error) {
+	defKey := strings.TrimSpace(fixture.TemplateKey)
+	if defKey != "" {
+		def, ok := s.Definition(defKey)
+		if !ok {
+			return TemplateFixture{}, shared.NotFound("template definition not found")
+		}
+		if strings.TrimSpace(fixture.TargetKind) == "" {
+			fixture.TargetKind = def.TargetKind
+		}
+	}
+	if strings.TrimSpace(fixture.TargetKind) == "" {
+		return TemplateFixture{}, shared.Validation("fixture target_kind is required")
+	}
+	if strings.TrimSpace(fixture.FixtureKey) == "" {
+		fixture.FixtureKey = fmt.Sprintf("tmplfixture:%d", time.Now().UTC().UnixNano())
+	}
+	if strings.TrimSpace(fixture.Name) == "" {
+		fixture.Name = fixture.FixtureKey
+	}
+	if fixture.Payload == nil {
+		fixture.Payload = map[string]any{}
+	}
+	fixture.UpdatedAt = time.Now().UTC()
+	if err := s.repo.SaveFixture(fixture); err != nil {
+		return TemplateFixture{}, err
+	}
+	return fixture, nil
+}
+
+func (s *Service) Validate(req RenderRequest) []ValidationIssue {
+	def, ok := s.Definition(strings.TrimSpace(req.TemplateKey))
+	if !ok {
+		return []ValidationIssue{{Code: "template_definition_not_found", Severity: "error", Message: "template definition not found"}}
+	}
+	version := Version{
+		TemplateKey:  def.Key,
+		RendererKind: normalizeRenderer(req.RendererKind),
+		Body:         req.Body,
+		Style:        req.Style,
+	}
+	if version.RendererKind == "" {
+		version.RendererKind = def.RendererKind
+	}
+	if strings.TrimSpace(version.Body) == "" {
+		version.Body = def.DefaultBody
+	}
+	if strings.TrimSpace(version.Style) == "" {
+		version.Style = def.DefaultStyle
+	}
+	return s.validateVersion(def, version)
+}
+
 func (s *Service) Render(req RenderRequest) (RenderedOutput, error) {
-	resolvedDef, version, err := s.resolveTemplate(req)
+	_, version, output, err := s.renderPrepared(req)
 	if err != nil {
 		return RenderedOutput{}, err
 	}
-	if strings.TrimSpace(req.Body) != "" {
-		version.Body = req.Body
-	}
-	if strings.TrimSpace(req.Style) != "" {
-		version.Style = req.Style
-	}
-	if renderer := normalizeRenderer(req.RendererKind); renderer != "" {
-		version.RendererKind = renderer
-	}
-	ctx, err := s.renderContext(req, resolvedDef)
+	s.markVersionRendered(version, "succeeded", "")
+	return output, nil
+}
+
+func (s *Service) Preview(req RenderRequest) (PreviewResponse, error) {
+	def, version, htmlOutput, err := s.renderPrepared(RenderRequest{
+		TemplateKey:    req.TemplateKey,
+		RendererKind:   req.RendererKind,
+		Body:           req.Body,
+		Style:          req.Style,
+		TargetKind:     req.TargetKind,
+		TargetKey:      req.TargetKey,
+		TargetID:       req.TargetID,
+		Sample:         req.Sample,
+		OrganizationID: req.OrganizationID,
+		LocationID:     req.LocationID,
+		ScopeType:      req.ScopeType,
+		ScopeID:        req.ScopeID,
+		Purpose:        req.Purpose,
+		Channel:        req.Channel,
+		Draft:          req.Draft,
+		FixtureKey:     req.FixtureKey,
+		Query:          req.Query,
+		ReportView:     req.ReportView,
+		Format:         "html",
+	})
 	if err != nil {
-		return RenderedOutput{}, err
+		return PreviewResponse{}, err
 	}
-	htmlText, err := s.renderHTML(version, ctx)
-	if err != nil {
-		return RenderedOutput{}, err
+	pdfOutput := PreviewOutput{Format: "pdf", Status: "ok"}
+	pdfRendered, pdfErr := s.Render(mergeRenderRequest(req, "pdf"))
+	if pdfErr != nil {
+		pdfOutput.Status = "error"
+		pdfOutput.Issues = []ValidationIssue{{Code: "pdf_render_failed", Severity: "error", Message: pdfErr.Error()}}
+	} else {
+		pdfOutput.ContentType = pdfRendered.ContentType
+		pdfOutput.FileName = pdfRendered.FileName
+		pdfOutput.Warnings = pdfRendered.Warnings
+		pdfOutput.Issues = pdfRendered.Issues
 	}
-	format := strings.TrimSpace(req.Format)
-	if format == "" {
-		format = resolvedDef.DefaultFormat
-		if format == "" {
-			format = "html"
-		}
+	printOutput := PreviewOutput{
+		Format:      "print",
+		Status:      "ok",
+		ContentType: "text/html; charset=utf-8",
+		FileName:    fileNameFor(def, req.TargetID, "html"),
+		HTML:        htmlOutput.HTML,
+		Warnings:    collectRendererWarnings(version, "print"),
+		Issues:      htmlOutput.Issues,
 	}
-	output := RenderedOutput{
-		TemplateKey: resolvedDef.Key,
-		Version:     version.Version,
-		Format:      format,
-		FileName:    fileNameFor(resolvedDef, req.TargetID, format),
-		HTML:        htmlText,
-		GeneratedAt: time.Now().UTC(),
-		Official:    !req.Draft,
+	debug, _ := s.ResolveBindingDebug(req)
+	resp := PreviewResponse{
+		TemplateKey:        def.Key,
+		SelectedVersion:    version.Version,
+		Mode:               map[bool]string{true: "draft", false: "published"}[req.Draft],
+		DataSource:         htmlOutput.DataSource,
+		RenderID:           htmlOutput.RenderID,
+		GeneratedAt:        htmlOutput.GeneratedAt,
+		BindingResolution:  debug,
+		DataContextSummary: dataContextSummary(def, htmlOutput.DataSource, req),
+		Outputs: []PreviewOutput{
+			{Format: "html", Status: "ok", ContentType: htmlOutput.ContentType, FileName: htmlOutput.FileName, HTML: htmlOutput.HTML, Warnings: htmlOutput.Warnings, Issues: htmlOutput.Issues},
+			pdfOutput,
+			printOutput,
+		},
+		Warnings: append(append([]RendererWarning(nil), htmlOutput.Warnings...), printOutput.Warnings...),
 	}
-	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "", "html":
-		output.ContentType = "text/html; charset=utf-8"
-		return output, nil
-	case "pdf":
-		pdfBytes, err := renderPDF(version, ctx, htmlText)
-		if err != nil {
-			return RenderedOutput{}, err
-		}
-		output.ContentType = "application/pdf"
-		output.Bytes = pdfBytes
-		return output, nil
-	default:
-		output.ContentType = "text/html; charset=utf-8"
-		return output, nil
+	if pdfOutput.Status == "error" {
+		resp.Issues = append(resp.Issues, pdfOutput.Issues...)
 	}
+	if len(resp.Issues) == 0 {
+		resp.Issues = htmlOutput.Issues
+	}
+	s.markVersionRendered(version, "previewed", "")
+	return resp, nil
 }
 
 func (s *Service) resolveTemplate(req RenderRequest) (Definition, Version, error) {
@@ -296,7 +517,7 @@ func (s *Service) resolveTemplate(req RenderRequest) (Definition, Version, error
 		if !ok {
 			return Definition{}, Version{}, shared.NotFound("template definition not found")
 		}
-		return def, s.activeVersion(def), nil
+		return def, s.activeVersion(def, req.Draft), nil
 	}
 	targetKind := strings.TrimSpace(req.TargetKind)
 	targetKey := strings.TrimSpace(req.TargetKey)
@@ -319,7 +540,7 @@ func (s *Service) resolveTemplate(req RenderRequest) (Definition, Version, error
 			}
 			def, ok := s.Definition(item.TemplateKey)
 			if ok {
-				return def, s.activeVersion(def), nil
+				return def, s.activeVersion(def, req.Draft), nil
 			}
 		}
 	}
@@ -331,14 +552,21 @@ func (s *Service) resolveTemplate(req RenderRequest) (Definition, Version, error
 			if channel != "" && def.Channel != "" && def.Channel != channel {
 				continue
 			}
-			return def, s.activeVersion(def), nil
+			return def, s.activeVersion(def, req.Draft), nil
 		}
 	}
 	return Definition{}, Version{}, shared.NotFound("template not resolved")
 }
 
-func (s *Service) activeVersion(def Definition) Version {
+func (s *Service) activeVersion(def Definition, draft bool) Version {
 	versions := s.Versions(def.Key)
+	if draft {
+		for _, item := range versions {
+			if item.Status == "draft" {
+				return item
+			}
+		}
+	}
 	for _, item := range versions {
 		if item.Status == "published" {
 			return item
@@ -366,6 +594,19 @@ func (s *Service) renderContext(req RenderRequest, def Definition) (map[string]a
 			"key":   def.Key,
 			"title": def.Title,
 		},
+	}
+	if fixture, err := s.resolveFixture(req, def); err != nil {
+		return nil, err
+	} else if fixture != nil {
+		switch def.TargetKind {
+		case "document":
+			ctx["document"] = fixture.Payload
+		case "report":
+			ctx["report"] = fixture.Payload
+		default:
+			return nil, shared.Validation("unsupported template target kind")
+		}
+		return ctx, nil
 	}
 	switch def.TargetKind {
 	case "document":
@@ -396,6 +637,271 @@ func (s *Service) renderContext(req RenderRequest, def Definition) (map[string]a
 		return nil, shared.Validation("unsupported template target kind")
 	}
 	return ctx, nil
+}
+
+func (s *Service) renderPrepared(req RenderRequest) (Definition, Version, RenderedOutput, error) {
+	resolvedDef, version, err := s.resolveTemplate(req)
+	if err != nil {
+		return Definition{}, Version{}, RenderedOutput{}, err
+	}
+	if strings.TrimSpace(req.Body) != "" {
+		version.Body = req.Body
+	}
+	if strings.TrimSpace(req.Style) != "" {
+		version.Style = req.Style
+	}
+	if renderer := normalizeRenderer(req.RendererKind); renderer != "" {
+		version.RendererKind = renderer
+	}
+	issues := s.validateVersion(resolvedDef, version)
+	if len(filterIssues(issues, "error")) > 0 {
+		s.markVersionRendered(version, "failed", joinIssueMessages(issues))
+		return Definition{}, Version{}, RenderedOutput{}, shared.Validation(joinIssueMessages(issues))
+	}
+	ctx, err := s.renderContext(req, resolvedDef)
+	if err != nil {
+		s.markVersionRendered(version, "failed", err.Error())
+		return Definition{}, Version{}, RenderedOutput{}, err
+	}
+	htmlText, err := s.renderHTML(version, ctx)
+	if err != nil {
+		s.markVersionRendered(version, "failed", err.Error())
+		return Definition{}, Version{}, RenderedOutput{}, err
+	}
+	format := strings.TrimSpace(req.Format)
+	if format == "" {
+		format = resolvedDef.DefaultFormat
+		if format == "" {
+			format = "html"
+		}
+	}
+	renderID := fmt.Sprintf("tmplrender:%d", time.Now().UTC().UnixNano())
+	output := RenderedOutput{
+		TemplateKey: resolvedDef.Key,
+		Version:     version.Version,
+		Format:      format,
+		FileName:    fileNameFor(resolvedDef, req.TargetID, format),
+		HTML:        htmlText,
+		GeneratedAt: time.Now().UTC(),
+		Official:    !req.Draft,
+		RenderID:    renderID,
+		DataSource:  renderDataSource(req),
+		Warnings:    collectRendererWarnings(version, format),
+		Issues:      filterIssues(issues, "warning"),
+	}
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", "html", "print":
+		output.ContentType = "text/html; charset=utf-8"
+		return resolvedDef, version, output, nil
+	case "pdf":
+		pdfBytes, err := renderPDF(version, ctx, htmlText)
+		if err != nil {
+			s.markVersionRendered(version, "failed", err.Error())
+			return Definition{}, Version{}, RenderedOutput{}, err
+		}
+		output.ContentType = "application/pdf"
+		output.Bytes = pdfBytes
+		return resolvedDef, version, output, nil
+	default:
+		output.ContentType = "text/html; charset=utf-8"
+		return resolvedDef, version, output, nil
+	}
+}
+
+func (s *Service) markVersionRendered(version Version, status, renderErr string) {
+	if version.Version <= 0 || strings.TrimSpace(version.TemplateKey) == "" {
+		return
+	}
+	version.LastPreviewedAt = time.Now().UTC()
+	version.LastRenderStatus = strings.TrimSpace(status)
+	version.LastRenderError = strings.TrimSpace(renderErr)
+	version.LastRenderedAt = version.LastPreviewedAt
+	_ = s.repo.SaveVersion(version)
+}
+
+func (s *Service) resolveFixture(req RenderRequest, def Definition) (*TemplateFixture, error) {
+	if strings.TrimSpace(req.FixtureKey) != "" {
+		for _, item := range s.Fixtures("", def.TargetKind) {
+			if item.FixtureKey == req.FixtureKey {
+				fixture := item
+				return &fixture, nil
+			}
+		}
+		return nil, shared.Validation("template fixture not found")
+	}
+	for _, item := range s.Fixtures(def.Key, def.TargetKind) {
+		if item.TemplateKey == def.Key {
+			fixture := item
+			return &fixture, nil
+		}
+	}
+	for _, item := range s.Fixtures("", def.TargetKind) {
+		if strings.TrimSpace(item.TemplateKey) == "" {
+			fixture := item
+			return &fixture, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *Service) validateVersion(def Definition, version Version) []ValidationIssue {
+	issues := make([]ValidationIssue, 0)
+	if strings.TrimSpace(version.Body) == "" {
+		issues = append(issues, ValidationIssue{Code: "template_body_required", Severity: "error", Message: "template body is required"})
+		return issues
+	}
+	switch normalizeRenderer(version.RendererKind) {
+	case "html":
+		if _, err := template.New(def.Key).Funcs(template.FuncMap{"upper": strings.ToUpper, "lower": strings.ToLower, "escape": html.EscapeString}).Parse(version.Body); err != nil {
+			issues = append(issues, ValidationIssue{Code: "html_template_invalid", Severity: "error", Message: err.Error()})
+		}
+	case "visual":
+		var visual VisualTemplate
+		if err := json.Unmarshal([]byte(version.Body), &visual); err != nil {
+			issues = append(issues, ValidationIssue{Code: "visual_template_invalid_json", Severity: "error", Message: "visual template body must be valid json"})
+			return issues
+		}
+		issues = append(issues, validateVisualTemplate(visual)...)
+	default:
+		issues = append(issues, ValidationIssue{Code: "renderer_kind_invalid", Severity: "error", Message: "unsupported template renderer_kind"})
+	}
+	return issues
+}
+
+func validateVisualTemplate(visual VisualTemplate) []ValidationIssue {
+	issues := make([]ValidationIssue, 0)
+	if strings.TrimSpace(visual.SchemaVersion) != "" && !strings.EqualFold(strings.TrimSpace(visual.SchemaVersion), "visual-grid/v1") {
+		issues = append(issues, ValidationIssue{Code: "visual_schema_unsupported", Path: "schema_version", Severity: "warning", Message: "schema_version is not visual-grid/v1"})
+	}
+	for sectionIndex, section := range visual.Sections {
+		if len(section.Rows) == 0 {
+			issues = append(issues, ValidationIssue{Code: "visual_section_empty", Path: fmt.Sprintf("sections[%d]", sectionIndex), Severity: "warning", Message: "section has no rows"})
+		}
+		for rowIndex, row := range section.Rows {
+			if len(row.Columns) == 0 {
+				issues = append(issues, ValidationIssue{Code: "visual_row_empty", Path: fmt.Sprintf("sections[%d].rows[%d]", sectionIndex, rowIndex), Severity: "warning", Message: "row has no columns"})
+			}
+			for colIndex, column := range row.Columns {
+				if column.Span <= 0 || column.Span > 12 {
+					issues = append(issues, ValidationIssue{Code: "visual_span_invalid", Path: fmt.Sprintf("sections[%d].rows[%d].columns[%d].span", sectionIndex, rowIndex, colIndex), Severity: "error", Message: "column span must be between 1 and 12"})
+				}
+				for blockIndex, block := range column.Blocks {
+					path := fmt.Sprintf("sections[%d].rows[%d].columns[%d].blocks[%d]", sectionIndex, rowIndex, colIndex, blockIndex)
+					switch strings.ToLower(strings.TrimSpace(block.Type)) {
+					case "text", "divider", "image", "barcode", "qr", "signature":
+					case "field":
+						if strings.TrimSpace(block.Path) == "" {
+							issues = append(issues, ValidationIssue{Code: "visual_field_path_required", Path: path + ".path", Severity: "warning", Message: "field block should declare a path"})
+						}
+					case "table":
+						if strings.TrimSpace(block.RowsPath) == "" {
+							issues = append(issues, ValidationIssue{Code: "visual_table_rows_path_required", Path: path + ".rows_path", Severity: "error", Message: "table block rows_path is required"})
+						}
+					case "totals":
+						if strings.TrimSpace(block.RowsPath) == "" || strings.TrimSpace(block.Path) == "" {
+							issues = append(issues, ValidationIssue{Code: "visual_totals_path_required", Path: path, Severity: "error", Message: "totals block requires rows_path and path"})
+						}
+					default:
+						issues = append(issues, ValidationIssue{Code: "visual_block_type_unknown", Path: path + ".type", Severity: "warning", Message: "block type is not explicitly supported"})
+					}
+				}
+			}
+		}
+	}
+	return issues
+}
+
+func collectRendererWarnings(version Version, format string) []RendererWarning {
+	if normalizeRenderer(version.RendererKind) != "visual" {
+		return nil
+	}
+	var visual VisualTemplate
+	if err := json.Unmarshal([]byte(version.Body), &visual); err != nil {
+		return nil
+	}
+	format = strings.ToLower(strings.TrimSpace(format))
+	warnings := make([]RendererWarning, 0)
+	for _, section := range visual.Sections {
+		for _, row := range section.Rows {
+			for _, column := range row.Columns {
+				for _, block := range column.Blocks {
+					switch strings.ToLower(strings.TrimSpace(block.Type)) {
+					case "image":
+						if format == "pdf" && strings.TrimSpace(block.ImageURL) == "" {
+							warnings = append(warnings, RendererWarning{Code: "image_placeholder", Renderer: format, Message: "image block without image_url will render as a placeholder"})
+						}
+					case "barcode", "qr", "signature":
+						if format == "pdf" || format == "print" {
+							warnings = append(warnings, RendererWarning{Code: "visual_block_simplified", Renderer: format, Message: "barcode, qr, and signature blocks render in simplified form"})
+						}
+					}
+				}
+			}
+		}
+	}
+	return warnings
+}
+
+func joinIssueMessages(issues []ValidationIssue) string {
+	messages := make([]string, 0, len(issues))
+	for _, item := range issues {
+		if item.Severity == "error" {
+			messages = append(messages, item.Message)
+		}
+	}
+	if len(messages) == 0 {
+		for _, item := range issues {
+			messages = append(messages, item.Message)
+		}
+	}
+	return strings.Join(messages, "; ")
+}
+
+func filterIssues(issues []ValidationIssue, severity string) []ValidationIssue {
+	if severity == "" {
+		return append([]ValidationIssue(nil), issues...)
+	}
+	out := make([]ValidationIssue, 0, len(issues))
+	for _, item := range issues {
+		if item.Severity == severity {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func mergeRenderRequest(req RenderRequest, format string) RenderRequest {
+	req.Format = format
+	return req
+}
+
+func renderDataSource(req RenderRequest) string {
+	if strings.TrimSpace(req.FixtureKey) != "" {
+		return "fixture"
+	}
+	if req.Sample {
+		return "sample"
+	}
+	return "live"
+}
+
+func dataContextSummary(def Definition, dataSource string, req RenderRequest) map[string]any {
+	return map[string]any{
+		"target_kind": def.TargetKind,
+		"target_key":  coalesceString(req.TargetKey, def.TargetKey),
+		"target_id":   strings.TrimSpace(req.TargetID),
+		"data_source": dataSource,
+		"fixture_key": strings.TrimSpace(req.FixtureKey),
+	}
+}
+
+func coalesceString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (s *Service) renderHTML(version Version, ctx map[string]any) (string, error) {

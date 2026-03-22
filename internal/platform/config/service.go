@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -593,6 +594,72 @@ func (s *Service) ValidateAll(organizationID, locationID string) ValidationRepor
 	return report
 }
 
+func (s *Service) ValidateEntry(entry Entry) ValidationReport {
+	report := ValidationReport{Valid: true}
+	def, ok := s.Definition(entry.Key)
+	if !ok {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{
+			Key:      entry.Key,
+			Severity: "error",
+			Message:  "configuration key is not registered",
+		})
+		return report
+	}
+	if entry.Scope == "" {
+		entry.Scope = "deployment"
+	}
+	if !containsScope(def.AllowedScopes, entry.Scope) {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{
+			Key:      entry.Key,
+			Severity: "error",
+			Message:  "configuration scope is not allowed",
+		})
+		return report
+	}
+	entry.ModuleKey = def.ModuleKey
+	entry.Category = def.Category
+	value := cloneMap(def.DefaultValue)
+	mergeMap(value, entry.Value)
+	if err := validateValue(value, def.Fields); err != nil {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{
+			Key:      def.Key,
+			Severity: "error",
+			Message:  err.Error(),
+		})
+	}
+	appendRequiredFieldIssues(&report, def, value)
+	appendSpecialValidationIssues(&report, def, value)
+	return report
+}
+
+func (s *Service) CompareContexts(left, right CompareContext) []ComparisonItem {
+	items := make([]ComparisonItem, 0, len(s.Definitions()))
+	for _, def := range s.Definitions() {
+		leftValue, _ := s.Resolve(def.Key, left.OrganizationID, left.LocationID)
+		rightValue, _ := s.Resolve(def.Key, right.OrganizationID, right.LocationID)
+		item := ComparisonItem{
+			Key:       def.Key,
+			ModuleKey: def.ModuleKey,
+			Left:      leftValue,
+			Right:     rightValue,
+			Status:    "same",
+		}
+		if leftValue.SourceScope != rightValue.SourceScope || leftValue.SourceScopeID != rightValue.SourceScopeID {
+			item.Status = "overridden"
+		}
+		item.ChangedFields = changedValueFields(leftValue.Value, rightValue.Value)
+		if len(item.ChangedFields) > 0 {
+			item.Status = "drifted"
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
 func (s *Service) AuthPolicy() AuthPolicy {
 	policy := AuthPolicy{
 		PasswordMinLength:            defaultPasswordMinLength,
@@ -748,6 +815,91 @@ func validateValue(value map[string]any, fields []FieldDefinition) error {
 		}
 	}
 	return nil
+}
+
+func appendRequiredFieldIssues(report *ValidationReport, def Definition, value map[string]any) {
+	for _, field := range def.Fields {
+		if !field.Required {
+			continue
+		}
+		current, ok := value[field.Key]
+		if !ok || isZeroFieldValue(current) {
+			report.Valid = false
+			report.Issues = append(report.Issues, ValidationIssue{
+				Key:      def.Key,
+				Field:    field.Key,
+				Severity: "error",
+				Message:  "required field is missing or empty",
+			})
+		}
+	}
+}
+
+func appendSpecialValidationIssues(report *ValidationReport, def Definition, value map[string]any) {
+	if def.Key != "identity.auth" || !boolFromValue(value["google_enabled"]) {
+		return
+	}
+	if strings.TrimSpace(stringFromValue(value["google_client_id"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_client_id", Severity: "error", Message: "google client id is required when google auth is enabled"})
+	}
+	if boolFromValue(value["google_auto_provision_enabled"]) && strings.TrimSpace(stringFromValue(value["google_auto_provision_role_id"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_auto_provision_role_id", Severity: "error", Message: "google auto provision role id is required when google auto provision is enabled"})
+	}
+	if strings.TrimSpace(stringFromValue(value["google_client_secret"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_client_secret", Severity: "error", Message: "google client secret is required when google auth is enabled"})
+	}
+	if strings.TrimSpace(stringFromValue(value["google_redirect_url"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_redirect_url", Severity: "error", Message: "google redirect url is required when google auth is enabled"})
+	}
+	if strings.TrimSpace(stringFromValue(value["google_auth_url"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_auth_url", Severity: "error", Message: "google auth url is required when google auth is enabled"})
+	}
+	if strings.TrimSpace(stringFromValue(value["google_token_url"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_token_url", Severity: "error", Message: "google token url is required when google auth is enabled"})
+	}
+	if strings.TrimSpace(stringFromValue(value["google_jwks_url"])) == "" {
+		report.Valid = false
+		report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "google_jwks_url", Severity: "error", Message: "google jwks url is required when google auth is enabled"})
+	}
+}
+
+func changedValueFields(left, right map[string]any) []string {
+	seen := map[string]struct{}{}
+	fields := make([]string, 0)
+	for key := range left {
+		seen[key] = struct{}{}
+	}
+	for key := range right {
+		seen[key] = struct{}{}
+	}
+	for key := range seen {
+		if stringifyComparable(left[key]) != stringifyComparable(right[key]) {
+			fields = append(fields, key)
+		}
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+func stringifyComparable(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	default:
+		raw, err := json.Marshal(typed)
+		if err != nil {
+			return fmt.Sprintf("%v", typed)
+		}
+		return string(raw)
+	}
 }
 
 func intValue(value any) int {

@@ -1,0 +1,16 @@
+module:
+  key: starter_masterdata
+  name: Starter Masterdata
+  version: 1.0.0
+  domain_family: examples
+  kind: model
+starter_pack: masterdata-search
+model:
+  key: starter_masterdata
+  display_name: Starter Masterdata
+  fields:
+    - key: name
+      type: string
+      required: true
+    - key: status
+      type: string

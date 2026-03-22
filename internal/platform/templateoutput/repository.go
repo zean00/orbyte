@@ -6,4 +6,6 @@ type Repository interface {
 	SaveVersion(version Version) error
 	Bindings() []Binding
 	SaveBinding(binding Binding) error
+	Fixtures(templateKey, targetKind string) []TemplateFixture
+	SaveFixture(fixture TemplateFixture) error
 }

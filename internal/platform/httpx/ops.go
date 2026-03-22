@@ -15,13 +15,14 @@ import (
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/monitoring"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/workflow"
 )
 
-func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, documentSvc *document.Service, searchSvc *search.Service, workflowSvc *workflow.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obs *observability.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker) {
+func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, offlineSvc *offline.Service, documentSvc *document.Service, searchSvc *search.Service, workflowSvc *workflow.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obs *observability.Service, integrationSvc *integration.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker) {
 	mux.HandleFunc("GET /ops/audit-events", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "audit.read", "", "audit.read"); !ok {
 			return
@@ -31,7 +32,28 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			respondError(w, err)
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": auditSvc.Query(filter)})
+		items := auditSvc.Query(filter)
+		items = filterAuditEvents(items, map[string]string{
+			"request_id":          strings.TrimSpace(r.URL.Query().Get("request_id")),
+			"delegation_grant_id": strings.TrimSpace(r.URL.Query().Get("delegation_grant_id")),
+			"from_state":          strings.TrimSpace(r.URL.Query().Get("from_state")),
+			"to_state":            strings.TrimSpace(r.URL.Query().Get("to_state")),
+			"metadata_key":        strings.TrimSpace(r.URL.Query().Get("metadata_key")),
+			"metadata_value":      strings.TrimSpace(r.URL.Query().Get("metadata_value")),
+		})
+		respondJSON(w, http.StatusOK, buildAuditResponse(items))
+	})
+
+	mux.HandleFunc("GET /ops/audit-events/correlation/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "audit.read", "", "audit.read"); !ok {
+			return
+		}
+		correlationID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/ops/audit-events/correlation/"))
+		if correlationID == "" {
+			respondError(w, shared.NotFound("audit correlation route not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, buildAuditResponse(auditSvc.Query(audit.Query{CorrelationID: correlationID})))
 	})
 
 	mux.HandleFunc("GET /ops/audit-events/", func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +68,116 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		respondJSON(w, http.StatusOK, map[string]any{
 			"target_type": targetType,
 			"target_id":   targetID,
+			"trace":       buildAuditResponse(auditSvc.Query(audit.Query{TargetType: targetType, TargetID: targetID})),
 			"items":       auditSvc.Query(audit.Query{TargetType: targetType, TargetID: targetID}),
+		})
+	})
+
+	mux.HandleFunc("GET /ops/health", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		snapshot := runtimehealth.Snapshot{Status: "healthy", Live: true, Ready: true, DependencyOK: true}
+		if health != nil {
+			snapshot = health.Snapshot(r.Context())
+		}
+		respondJSON(w, http.StatusOK, decorateHealth(snapshot))
+	})
+
+	mux.HandleFunc("GET /ops/offline/sync", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		if offlineSvc == nil {
+			respondJSON(w, http.StatusOK, map[string]any{"summary": map[string]any{}, "batches": []any{}, "recent_items": []any{}})
+			return
+		}
+		batches := offlineSvc.RecentBatches(50)
+		items := offlineSvc.RecentOutcomes(200)
+		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		actorFilter := strings.TrimSpace(r.URL.Query().Get("actor_id"))
+		deviceFilter := strings.TrimSpace(r.URL.Query().Get("device_id"))
+		if statusFilter != "" || actorFilter != "" || deviceFilter != "" {
+			filteredItems := make([]offline.SyncResultItem, 0, len(items))
+			for _, item := range items {
+				if statusFilter != "" && item.Status != statusFilter {
+					continue
+				}
+				if deviceFilter != "" && item.DeviceID != deviceFilter {
+					continue
+				}
+				if actorFilter != "" {
+					matched := false
+					for _, batch := range batches {
+						if batch.ID == item.BatchID && batch.ActorID == actorFilter {
+							matched = true
+							break
+						}
+					}
+					if !matched {
+						continue
+					}
+				}
+				filteredItems = append(filteredItems, item)
+			}
+			items = filteredItems
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"summary":      offlineSvc.SyncSummary(),
+			"batches":      batches,
+			"recent_items": items,
+		})
+	})
+
+	mux.HandleFunc("GET /ops/offline/sync/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		if offlineSvc == nil {
+			respondError(w, shared.Validation("offline service is not configured"))
+			return
+		}
+		batchID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/ops/offline/sync/"))
+		if batchID == "" {
+			respondError(w, shared.NotFound("offline sync batch not found"))
+			return
+		}
+		var batch offline.SyncBatch
+		found := false
+		for _, item := range offlineSvc.RecentBatches(200) {
+			if item.ID == batchID {
+				batch = item
+				found = true
+				break
+			}
+		}
+		if !found {
+			respondError(w, shared.NotFound("offline sync batch not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"batch": batch,
+			"items": offlineSvc.BatchOutcomes(batchID),
+		})
+	})
+
+	mux.HandleFunc("GET /ops/offline/conflicts", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		if offlineSvc == nil {
+			respondJSON(w, http.StatusOK, map[string]any{"summary": map[string]any{}, "items": []any{}})
+			return
+		}
+		items := make([]offline.SyncResultItem, 0)
+		for _, item := range offlineSvc.RecentOutcomes(200) {
+			if item.Status == offline.StatusConflict {
+				items = append(items, item)
+			}
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"summary": summarizeOfflineOutcomes(items),
+			"items":   items,
 		})
 	})
 
@@ -54,14 +185,40 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		if _, ok := requireAuthorization(w, r, ident, "outbox.read", "", "outbox.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": eventingSvc.ListOutbox()})
+		items := eventingSvc.ListOutbox()
+		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		eventTypeFilter := strings.TrimSpace(r.URL.Query().Get("event_type"))
+		filtered := make([]eventing.OutboxRecord, 0, len(items))
+		for _, item := range items {
+			if statusFilter != "" && item.Status != statusFilter {
+				continue
+			}
+			if eventTypeFilter != "" && item.EventType != eventTypeFilter {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"summary": summarizeOutbox(filtered), "items": filtered})
 	})
 
 	mux.HandleFunc("GET /ops/outbox/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "outbox.read", "", "outbox.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": eventingSvc.ListDeliveries()})
+		items := eventingSvc.ListDeliveries()
+		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		sinkFilter := strings.TrimSpace(r.URL.Query().Get("sink"))
+		filtered := make([]eventing.OutboxDeliveryRecord, 0, len(items))
+		for _, item := range items {
+			if statusFilter != "" && item.Status != statusFilter {
+				continue
+			}
+			if sinkFilter != "" && item.SinkName != sinkFilter {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"summary": summarizeDeliveries(filtered), "items": filtered})
 	})
 
 	mux.HandleFunc("POST /ops/outbox/dispatch", func(w http.ResponseWriter, r *http.Request) {
@@ -131,14 +288,47 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		if _, ok := requireAuthorization(w, r, ident, "deadletter.read", "", "deadletter.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": eventingSvc.ListDeadLetters()})
+		items := eventingSvc.ListDeadLetters()
+		sinkFilter := strings.TrimSpace(r.URL.Query().Get("sink"))
+		filtered := make([]eventing.DeadLetterRecord, 0, len(items))
+		for _, item := range items {
+			if sinkFilter != "" && item.SinkName != sinkFilter {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"summary": summarizeDeadLetters(filtered), "items": filtered})
 	})
 
 	mux.HandleFunc("GET /ops/integrations/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissions()})
+		items := integrationSvc.ListSubmissions()
+		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		systemFilter := strings.TrimSpace(r.URL.Query().Get("system_key"))
+		correlationFilter := strings.TrimSpace(r.URL.Query().Get("correlation_id"))
+		filtered := make([]integration.SubmissionRecord, 0, len(items))
+		for _, item := range items {
+			if statusFilter != "" && item.Status != statusFilter {
+				continue
+			}
+			if systemFilter != "" && item.ExternalSystemKey != systemFilter {
+				continue
+			}
+			if correlationFilter != "" && item.CorrelationID != correlationFilter {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"summary": summarizeIntegrations(filtered), "items": filtered})
+	})
+
+	mux.HandleFunc("GET /ops/integrations/health", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.HealthSummary()})
 	})
 
 	mux.HandleFunc("GET /ops/integrations/deliveries/", func(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +337,15 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/ops/integrations/deliveries/")
 		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) == 1 && strings.TrimSpace(parts[0]) != "" {
+			item, ok := integrationSvc.GetSubmission(parts[0])
+			if !ok {
+				respondError(w, shared.NotFound("integration delivery not found"))
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+			return
+		}
 		if len(parts) != 2 || parts[1] != "attempts" || strings.TrimSpace(parts[0]) == "" {
 			respondError(w, shared.NotFound("integration delivery route not found"))
 			return
@@ -159,6 +358,23 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListDeadLetters()})
+	})
+
+	mux.HandleFunc("GET /ops/integrations/dead-letters/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		deadLetterID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/ops/integrations/dead-letters/"))
+		if deadLetterID == "" || strings.Contains(deadLetterID, "/") {
+			respondError(w, shared.NotFound("integration dead letter route not found"))
+			return
+		}
+		item, ok := integrationSvc.GetDeadLetter(deadLetterID)
+		if !ok {
+			respondError(w, shared.NotFound("integration dead letter not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, item)
 	})
 
 	mux.HandleFunc("POST /ops/integrations/dead-letters/", func(w http.ResponseWriter, r *http.Request) {
@@ -186,21 +402,41 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		payload := map[string]any{"observability": obs.Snapshot()}
 		if health != nil {
 			payload["runtime_health"] = health.Snapshot(r.Context())
+			payload["health"] = decorateHealth(health.Snapshot(r.Context()))
 		}
 		if jobSvc != nil {
+			jobItems := jobSvc.List()
 			payload["jobs"] = map[string]any{
-				"summary": jobSvc.Summary(),
-				"items":   jobSvc.List(),
+				"summary":         jobSvc.Summary(),
+				"runtime_summary": summarizeJobs(jobItems),
+				"items":           jobItems,
 			}
 		}
+		outboxItems := eventingSvc.ListOutbox()
+		deliveryItems := eventingSvc.ListDeliveries()
+		deadLetterItems := eventingSvc.ListDeadLetters()
 		payload["outbox"] = map[string]any{
-			"items":      eventingSvc.ListOutbox(),
-			"deliveries": eventingSvc.ListDeliveries(),
+			"summary":             summarizeOutbox(outboxItems),
+			"items":               outboxItems,
+			"deliveries":          deliveryItems,
+			"delivery_summary":    summarizeDeliveries(deliveryItems),
+			"dead_letter_summary": summarizeDeadLetters(deadLetterItems),
 		}
+		submissions := integrationSvc.ListSubmissions()
 		payload["integrations"] = map[string]any{
 			"systems":      integrationSvc.ListSystems(),
-			"deliveries":   integrationSvc.ListSubmissions(),
+			"health":       integrationSvc.HealthSummary(),
+			"deliveries":   submissions,
+			"summary":      summarizeIntegrations(submissions),
 			"dead_letters": integrationSvc.ListDeadLetters(),
+		}
+		payload["projections"] = projectionHealthSummary(searchSvc)
+		if offlineSvc != nil {
+			payload["offline"] = map[string]any{
+				"summary":      offlineSvc.SyncSummary(),
+				"batches":      offlineSvc.RecentBatches(20),
+				"recent_items": offlineSvc.RecentOutcomes(50),
+			}
 		}
 		respondJSON(w, http.StatusOK, payload)
 	})
@@ -238,7 +474,9 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		body := obs.RenderPrometheus()
 		if health != nil {
-			body += renderDBStatsMetrics(health.Snapshot(r.Context()))
+			snapshot := health.Snapshot(r.Context())
+			body += renderDBStatsMetrics(snapshot)
+			body += renderRuntimeHealthMetrics(snapshot)
 		}
 		_, _ = w.Write([]byte(body))
 	})
@@ -622,14 +860,28 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, searchSvc.Consistency(documentSvc.List()))
+		report, err := searchSvc.ProjectionConsistencyReport()
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, report)
 	})
 
 	mux.HandleFunc("GET /ops/projections/status", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": searchSvc.ProjectionStatuses(documentSvc.List())})
+		report, err := searchSvc.ProjectionConsistencyReport()
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"items":         searchSvc.ProjectionStatuses(documentSvc.List()),
+			"runtime_items": searchSvc.IndexRuntimes(),
+			"coverage":      report,
+		})
 	})
 
 	mux.HandleFunc("POST /ops/consistency/projections/document-summary/rebuild", func(w http.ResponseWriter, r *http.Request) {
@@ -672,6 +924,34 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 		respondJSON(w, http.StatusAccepted, job)
 	})
 
+	mux.HandleFunc("GET /ops/jobs", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		if jobSvc == nil {
+			respondError(w, shared.Validation("job service is not configured"))
+			return
+		}
+		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		nameFilter := strings.TrimSpace(r.URL.Query().Get("name"))
+		correlationFilter := strings.TrimSpace(r.URL.Query().Get("correlation_id"))
+		items := jobSvc.List()
+		filtered := make([]jobs.Job, 0, len(items))
+		for _, item := range items {
+			if statusFilter != "" && item.Status != statusFilter {
+				continue
+			}
+			if nameFilter != "" && item.Name != nameFilter {
+				continue
+			}
+			if correlationFilter != "" && jobCorrelationID(item) != correlationFilter {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"summary": summarizeJobs(filtered), "items": filtered})
+	})
+
 	mux.HandleFunc("GET /ops/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
 			return
@@ -687,6 +967,18 @@ func registerOpsRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			return
 		}
 		respondJSON(w, http.StatusOK, job)
+	})
+
+	mux.HandleFunc("GET /ops/traces/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "monitoring.read", "", "monitoring.read"); !ok {
+			return
+		}
+		correlationID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/ops/traces/"))
+		if correlationID == "" {
+			respondError(w, shared.NotFound("trace not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, buildTrace(correlationID, obs, auditSvc, eventingSvc, workflowSvc, jobSvc, integrationSvc, offlineSvc))
 	})
 
 	mux.HandleFunc("GET /ops/workflow/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -794,6 +1086,24 @@ func renderDBStatsMetrics(snapshot runtimehealth.Snapshot) string {
 		"db_pool_max_idle_time_closed " + strconv.FormatInt(db.MaxIdleTimeClosed, 10),
 		"db_pool_max_lifetime_closed " + strconv.FormatInt(db.MaxLifetimeClosed, 10),
 	}, "\n") + "\n"
+}
+
+func renderRuntimeHealthMetrics(snapshot runtimehealth.Snapshot) string {
+	ready := "0"
+	if snapshot.Ready {
+		ready = "1"
+	}
+	lines := []string{
+		"runtime_ready " + ready,
+		"runtime_degraded_subsystems " + strconv.Itoa(len(snapshot.FailureCategories)),
+	}
+	for _, item := range snapshot.Subsystems {
+		if item.Status != "degraded" {
+			continue
+		}
+		lines = append(lines, "runtime_subsystem_"+strings.ReplaceAll(item.Name, "-", "_")+"_degraded 1")
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func reportArtifactIDFromPath(path string) string {

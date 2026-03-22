@@ -132,6 +132,65 @@ func (b *TypesenseBackend) Search(def IndexDefinition, organizationID string, re
 	return QueryResult{IndexKey: def.Key, Mode: mode, Total: raw.Found, Page: req.Page, PageSize: req.PageSize, Hits: hits}, nil
 }
 
+func (b *TypesenseBackend) List(def IndexDefinition, organizationID string) ([]IndexedRecord, error) {
+	page := 1
+	items := make([]IndexedRecord, 0)
+	for {
+		result, err := b.Search(def, organizationID, QueryRequest{
+			Mode:     "keyword",
+			Query:    "*",
+			Page:     page,
+			PageSize: 100,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, hit := range result.Hits {
+			record := IndexedRecord{
+				ID:             hit.ID,
+				SourceID:       hit.SourceID,
+				SourceKind:     hit.SourceKind,
+				OrganizationID: stringFrom(hit.Fields["organization_id"]),
+				LocationID:     stringFrom(hit.Fields["location_id"]),
+				Version:        intFrom(hit.Fields["version"]),
+				UpdatedAt:      timeFrom(hit.Fields["updated_at"]),
+				Fields:         cloneAnyMap(hit.Fields),
+			}
+			items = append(items, record)
+		}
+		if len(result.Hits) == 0 || len(items) >= result.Total {
+			break
+		}
+		page++
+	}
+	return items, nil
+}
+
+func (b *TypesenseBackend) Capabilities(def IndexDefinition) BackendCapabilities {
+	caps := BackendCapabilities{
+		Keyword:     true,
+		BackendKind: "typesense",
+	}
+	for _, mode := range def.Modes {
+		switch strings.TrimSpace(mode) {
+		case "vector":
+			caps.Vector = true
+		case "hybrid":
+			caps.Hybrid = true
+			caps.Vector = true
+		}
+	}
+	for _, field := range def.VectorFields {
+		if field.EmbeddingMode == "external" {
+			caps.ExternalEmbedding = true
+		}
+		if field.EmbeddingMode == "typesense_auto" {
+			caps.InBackendEmbedding = true
+		}
+	}
+	return caps
+}
+
 func (b *TypesenseBackend) do(method, path string, body any, params url.Values) (int, []byte, error) {
 	if b.endpoint == "" || b.apiKey == "" {
 		return 0, nil, fmt.Errorf("typesense backend is not configured")
@@ -259,6 +318,31 @@ func formatVector(vector []float32) string {
 		parts = append(parts, strconv.FormatFloat(float64(value), 'f', -1, 32))
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func intFrom(value any) int {
+	switch current := value.(type) {
+	case int:
+		return current
+	case int64:
+		return int(current)
+	case float64:
+		return int(current)
+	case json.Number:
+		v, _ := current.Int64()
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func timeFrom(value any) time.Time {
+	raw := strings.TrimSpace(fmt.Sprint(value))
+	if raw == "" {
+		return time.Time{}
+	}
+	parsed, _ := time.Parse(time.RFC3339Nano, raw)
+	return parsed
 }
 
 func stringFrom(value any) string {

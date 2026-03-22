@@ -12,8 +12,10 @@ import (
 )
 
 type Service struct {
-	repo      Repository
-	manifests map[string]Manifest
+	repo               Repository
+	manifests          map[string]Manifest
+	kernelVersion      string
+	kernelCapabilities map[string]bool
 }
 
 func NewService() *Service {
@@ -21,7 +23,12 @@ func NewService() *Service {
 }
 
 func NewServiceWithRepository(repo Repository) *Service {
-	return &Service{repo: repo, manifests: map[string]Manifest{}}
+	return &Service{
+		repo:               repo,
+		manifests:          map[string]Manifest{},
+		kernelVersion:      KernelVersion,
+		kernelCapabilities: DefaultKernelCapabilities(),
+	}
 }
 
 func (s *Service) Register(manifest Manifest, actorID string) error {
@@ -30,6 +37,9 @@ func (s *Service) Register(manifest Manifest, actorID string) error {
 	}
 	if err := validateManifest(s.manifests, manifest); err != nil {
 		return err
+	}
+	if report := s.Lint(append(s.ListManifests(), manifest)); !report.Valid() {
+		return report.Error()
 	}
 	s.manifests[manifest.Key] = manifest
 	if _, ok := s.repo.Get(manifest.Key); ok {
@@ -72,6 +82,15 @@ func (s *Service) Get(key string) (Detail, bool) {
 func (s *Service) CompatibilityReport() []Detail {
 	items := s.List()
 	sort.Slice(items, func(i, j int) bool { return items[i].Manifest.Key < items[j].Manifest.Key })
+	return items
+}
+
+func (s *Service) ListManifests() []Manifest {
+	items := make([]Manifest, 0, len(s.manifests))
+	for _, manifest := range s.manifests {
+		items = append(items, manifest)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
 }
 
@@ -582,6 +601,11 @@ func (s *Service) setEnabled(key, actorID string, enabled bool) (InstalledModule
 	if !ok {
 		return InstalledModule{}, shared.NotFound("module not found")
 	}
+	for _, diagnostic := range s.KernelCompatibility(s.manifests[key]) {
+		if diagnostic.Severity == SeverityError {
+			return InstalledModule{}, shared.Conflict(diagnostic.Message)
+		}
+	}
 	if enabled {
 		for _, dependency := range manifestDependencies(s.manifests[key]) {
 			if dependency.Kind == DependencyKindOptional {
@@ -675,7 +699,8 @@ func (s *Service) detail(manifest Manifest, item InstalledModule) Detail {
 		Installed:             item,
 		DependencyState:       state,
 		DependencyDiagnostics: diagnostics,
-		LifecycleState:        lifecycleState(item.Enabled, diagnostics),
+		KernelDiagnostics:     s.KernelCompatibility(manifest),
+		LifecycleState:        lifecycleState(item.Enabled, diagnostics, s.KernelCompatibility(manifest)),
 	}
 }
 
@@ -1270,9 +1295,14 @@ func roleTemplateRoleID(moduleKey, roleKey string) string {
 	return "role:" + moduleKey + ":" + roleKey
 }
 
-func lifecycleState(enabled bool, diagnostics []DependencyDiagnostic) string {
+func lifecycleState(enabled bool, diagnostics []DependencyDiagnostic, kernelDiagnostics []Diagnostic) string {
 	if !enabled {
 		return "disabled"
+	}
+	for _, diagnostic := range kernelDiagnostics {
+		if diagnostic.Severity == SeverityError {
+			return "blocked"
+		}
 	}
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Kind == DependencyKindOptional {

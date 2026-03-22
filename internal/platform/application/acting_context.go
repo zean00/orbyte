@@ -6,6 +6,7 @@ type ActingContext struct {
 	EffectiveUserID   string
 	OnBehalfOfUserID  string
 	DelegationGrantID string
+	CorrelationID     string
 }
 
 func (c ActingContext) EffectiveActorID() string {

@@ -12,6 +12,8 @@ const (
 	JobRefreshModel    = "search.refresh_model"
 	JobRebuildIndex    = "search.rebuild_index"
 	JobRebuildSummary  = "search.rebuild_document_summary"
+	JobRepairIndex     = "search.repair_index"
+	JobScanIndex       = "search.scan_index"
 )
 
 func (s *Service) registerJobHandlers(jobSvc *jobs.Service) {
@@ -73,5 +75,25 @@ func (s *Service) registerJobHandlers(jobSvc *jobs.Service) {
 		records := s.documents.List()
 		s.RebuildAll(records)
 		return map[string]any{"count": len(records)}, nil
+	})
+	jobSvc.RegisterHandler(JobRepairIndex, func(_ context.Context, payload map[string]any) (map[string]any, error) {
+		indexKey := stringValue(payload["index_key"])
+		mode := stringValue(payload["mode"])
+		targetID := stringValue(payload["target_id"])
+		if indexKey == "" {
+			return nil, shared.Validation("index_key is required")
+		}
+		return s.RepairIndex(indexKey, mode, targetID)
+	})
+	jobSvc.RegisterHandler(JobScanIndex, func(_ context.Context, payload map[string]any) (map[string]any, error) {
+		indexKey := stringValue(payload["index_key"])
+		if indexKey == "" {
+			return nil, shared.Validation("index_key is required")
+		}
+		report, err := s.ConsistencyReport(indexKey)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"index_key": indexKey, "report": report}, nil
 	})
 }

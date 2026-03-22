@@ -146,6 +146,29 @@ func TestServiceRendersPDFOutput(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsUnknownExplicitFixtureKey(t *testing.T) {
+	svc := NewService(document.NewService(), reporting.NewService(model.NewService()))
+	if err := svc.RegisterDefinition(Definition{
+		Key:          "documents.receipt.fixture-check",
+		Title:        "Fixture Check",
+		TargetKind:   "document",
+		TargetKey:    "receipt",
+		RendererKind: "html",
+		DefaultBody:  `<p>{{ .document.header.number }}</p>`,
+	}); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+	if _, err := svc.Render(RenderRequest{
+		TemplateKey: "documents.receipt.fixture-check",
+		TargetKind:  "document",
+		Format:      "html",
+		Sample:      true,
+		FixtureKey:  "missing-fixture",
+	}); err == nil || !strings.Contains(err.Error(), "fixture not found") {
+		t.Fatalf("expected explicit missing fixture to fail, got %v", err)
+	}
+}
+
 func TestServiceSaveBindingReusesSignatureAndScopeResolutionPrefersLocation(t *testing.T) {
 	svc := NewService(document.NewService(), reporting.NewService(model.NewService()))
 	for _, def := range []Definition{
@@ -285,5 +308,88 @@ func TestTemplateVisualHelpers(t *testing.T) {
 	}
 	if maxInt(3, 7) != 7 {
 		t.Fatalf("expected maxInt to return larger value")
+	}
+}
+
+func TestServicePreviewDuplicateResetAndFixtures(t *testing.T) {
+	svc := NewService(document.NewService(), reporting.NewService(model.NewService()))
+	if err := svc.RegisterDefinition(Definition{
+		Key:          "documents.generic_request.preview",
+		Title:        "Preview Request",
+		TargetKind:   "document",
+		TargetKey:    "generic_request",
+		RendererKind: "visual",
+		DefaultBody:  `{"schema_version":"visual-grid/v1","title":"Preview Request","sections":[{"id":"body","rows":[{"columns":[{"span":12,"blocks":[{"type":"text","text":"Preview Request"},{"type":"field","label":"Number","path":"document.header.number"}]}]}]}]}`,
+	}); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+	draft, err := svc.SaveDraftWithOptions("documents.generic_request.preview", `{"schema_version":"visual-grid/v1","title":"Draft Preview","sections":[{"id":"body","rows":[{"columns":[{"span":12,"blocks":[{"type":"text","text":"Draft Preview"},{"type":"field","label":"Number","path":"document.header.number"},{"type":"image","label":"Logo"}]}]}]}]}`, "", "user_admin", "draft note", 0)
+	if err != nil {
+		t.Fatalf("save draft failed: %v", err)
+	}
+	if _, err := svc.Publish("documents.generic_request.preview", draft.Version, "user_admin"); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+	dup, err := svc.DuplicateDraft("documents.generic_request.preview", draft.Version, "user_admin")
+	if err != nil {
+		t.Fatalf("duplicate draft failed: %v", err)
+	}
+	if dup.Status != "draft" || dup.ClonedFromVersion != draft.Version {
+		t.Fatalf("expected duplicated draft metadata, got %+v", dup)
+	}
+	reset, err := svc.ResetDraftToPublished("documents.generic_request.preview", "user_admin")
+	if err != nil {
+		t.Fatalf("reset draft failed: %v", err)
+	}
+	if reset.ClonedFromVersion != draft.Version {
+		t.Fatalf("expected reset draft to reference published version, got %+v", reset)
+	}
+	fixture, err := svc.SaveFixture(TemplateFixture{
+		Name:        "Preview Fixture",
+		TargetKind:  "document",
+		TemplateKey: "documents.generic_request.preview",
+		SourceType:  "sample",
+		Payload: map[string]any{
+			"header": map[string]any{"number": "FIX-001"},
+			"body":   map[string]any{"payload": map[string]any{"title": "Fixture"}},
+			"lines":  []any{},
+		},
+		UpdatedBy: "user_admin",
+	})
+	if err != nil {
+		t.Fatalf("save fixture failed: %v", err)
+	}
+	preview, err := svc.Preview(RenderRequest{
+		TemplateKey: "documents.generic_request.preview",
+		TargetKind:  "document",
+		TargetKey:   "generic_request",
+		Draft:       true,
+		FixtureKey:  fixture.FixtureKey,
+	})
+	if err != nil {
+		t.Fatalf("preview failed: %v", err)
+	}
+	if preview.DataSource != "fixture" || preview.Mode != "draft" {
+		t.Fatalf("unexpected preview metadata: %+v", preview)
+	}
+	if len(preview.Outputs) != 3 {
+		t.Fatalf("expected html/pdf/print outputs, got %+v", preview.Outputs)
+	}
+	if !strings.Contains(preview.Outputs[0].HTML, "FIX-001") {
+		t.Fatalf("expected fixture-backed preview html, got %s", preview.Outputs[0].HTML)
+	}
+	debug, err := svc.ResolveBindingDebug(RenderRequest{TemplateKey: "documents.generic_request.preview", TargetKind: "document", TargetKey: "generic_request", Draft: true})
+	if err != nil {
+		t.Fatalf("binding debug failed: %v", err)
+	}
+	if debug.DefinitionKey != "documents.generic_request.preview" || debug.Version == 0 {
+		t.Fatalf("unexpected binding debug: %+v", debug)
+	}
+	compare, err := svc.CompareVersions("documents.generic_request.preview", draft.Version, reset.Version)
+	if err != nil {
+		t.Fatalf("compare versions failed: %v", err)
+	}
+	if !compare.HasDifferences && draft.Body != reset.Body {
+		t.Fatalf("expected compare to report differences: %+v", compare)
 	}
 }

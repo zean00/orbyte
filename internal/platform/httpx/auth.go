@@ -9,6 +9,7 @@ import (
 
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/shared"
 )
 
@@ -286,6 +287,14 @@ func principalActingContext(p principal) application.ActingContext {
 		OnBehalfOfUserID:  principalOnBehalfOfUserID(p),
 		DelegationGrantID: principalDelegationGrantID(p),
 	}
+}
+
+func requestActingContext(r *http.Request, p principal) application.ActingContext {
+	acting := principalActingContext(p)
+	if r != nil {
+		acting.CorrelationID = strings.TrimSpace(logging.CorrelationID(r.Context()))
+	}
+	return acting
 }
 
 func principalAllowsPermission(ident *identity.Service, p principal, permissionKey, locationID string) bool {

@@ -25,10 +25,16 @@ type Value struct {
 }
 
 type EffectiveValue struct {
-	Key           string    `json:"key"`
-	Enabled       bool      `json:"enabled"`
-	SourceScope   string    `json:"source_scope"`
-	SourceScopeID string    `json:"source_scope_id,omitempty"`
-	OperatingUnitID string  `json:"operating_unit_id,omitempty"`
-	ResolvedAt    time.Time `json:"resolved_at"`
+	Key             string    `json:"key"`
+	Enabled         bool      `json:"enabled"`
+	SourceScope     string    `json:"source_scope"`
+	SourceScopeID   string    `json:"source_scope_id,omitempty"`
+	OperatingUnitID string    `json:"operating_unit_id,omitempty"`
+	ResolvedAt      time.Time `json:"resolved_at"`
+}
+
+type TargetingView struct {
+	Definition Definition     `json:"definition"`
+	Values     []Value        `json:"values"`
+	Effective  EffectiveValue `json:"effective"`
 }

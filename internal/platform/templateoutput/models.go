@@ -29,16 +29,22 @@ type Definition struct {
 }
 
 type Version struct {
-	TemplateKey  string    `json:"template_key"`
-	Version      int       `json:"version"`
-	Status       string    `json:"status"`
-	RendererKind string    `json:"renderer_kind"`
-	Body         string    `json:"body"`
-	Style        string    `json:"style,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	UpdatedBy    string    `json:"updated_by"`
-	PublishedAt  time.Time `json:"published_at,omitempty"`
-	PublishedBy  string    `json:"published_by,omitempty"`
+	TemplateKey       string    `json:"template_key"`
+	Version           int       `json:"version"`
+	Status            string    `json:"status"`
+	RendererKind      string    `json:"renderer_kind"`
+	Body              string    `json:"body"`
+	Style             string    `json:"style,omitempty"`
+	ChangeNote        string    `json:"change_note,omitempty"`
+	ClonedFromVersion int       `json:"cloned_from_version,omitempty"`
+	LastPreviewedAt   time.Time `json:"last_previewed_at,omitempty"`
+	LastRenderStatus  string    `json:"last_render_status,omitempty"`
+	LastRenderError   string    `json:"last_render_error,omitempty"`
+	LastRenderedAt    time.Time `json:"last_rendered_at,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	UpdatedBy         string    `json:"updated_by"`
+	PublishedAt       time.Time `json:"published_at,omitempty"`
+	PublishedBy       string    `json:"published_by,omitempty"`
 }
 
 type Binding struct {
@@ -73,20 +79,93 @@ type RenderRequest struct {
 	Channel        string                 `json:"channel,omitempty"`
 	Format         string                 `json:"format,omitempty"`
 	Draft          bool                   `json:"draft,omitempty"`
+	FixtureKey     string                 `json:"fixture_key,omitempty"`
 	Query          model.Query            `json:"query,omitempty"`
 	ReportView     reporting.QueryRequest `json:"report_view,omitempty"`
 }
 
 type RenderedOutput struct {
-	TemplateKey string    `json:"template_key"`
-	Version     int       `json:"version"`
-	Format      string    `json:"format"`
-	ContentType string    `json:"content_type"`
-	FileName    string    `json:"file_name"`
-	HTML        string    `json:"html,omitempty"`
-	Bytes       []byte    `json:"-"`
-	GeneratedAt time.Time `json:"generated_at"`
-	Official    bool      `json:"official"`
+	TemplateKey string            `json:"template_key"`
+	Version     int               `json:"version"`
+	Format      string            `json:"format"`
+	ContentType string            `json:"content_type"`
+	FileName    string            `json:"file_name"`
+	HTML        string            `json:"html,omitempty"`
+	Bytes       []byte            `json:"-"`
+	GeneratedAt time.Time         `json:"generated_at"`
+	Official    bool              `json:"official"`
+	RenderID    string            `json:"render_id,omitempty"`
+	DataSource  string            `json:"data_source,omitempty"`
+	Warnings    []RendererWarning `json:"warnings,omitempty"`
+	Issues      []ValidationIssue `json:"issues,omitempty"`
+}
+
+type TemplateFixture struct {
+	FixtureKey  string         `json:"fixture_key"`
+	Name        string         `json:"name"`
+	TargetKind  string         `json:"target_kind"`
+	TemplateKey string         `json:"template_key,omitempty"`
+	SourceType  string         `json:"source_type,omitempty"`
+	Payload     map[string]any `json:"payload"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	UpdatedBy   string         `json:"updated_by,omitempty"`
+}
+
+type ValidationIssue struct {
+	Code     string `json:"code"`
+	Path     string `json:"path,omitempty"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+}
+
+type RendererWarning struct {
+	Code     string `json:"code"`
+	Renderer string `json:"renderer,omitempty"`
+	Message  string `json:"message"`
+}
+
+type BindingResolutionDebug struct {
+	RequestedTargetKind string    `json:"requested_target_kind"`
+	RequestedTargetKey  string    `json:"requested_target_key"`
+	RequestedPurpose    string    `json:"requested_purpose,omitempty"`
+	RequestedChannel    string    `json:"requested_channel,omitempty"`
+	ScopePath           []Binding `json:"scope_path,omitempty"`
+	MatchedBinding      *Binding  `json:"matched_binding,omitempty"`
+	DefinitionKey       string    `json:"definition_key,omitempty"`
+	Version             int       `json:"version,omitempty"`
+	Mode                string    `json:"mode,omitempty"`
+}
+
+type PreviewOutput struct {
+	Format      string            `json:"format"`
+	Status      string            `json:"status"`
+	ContentType string            `json:"content_type,omitempty"`
+	FileName    string            `json:"file_name,omitempty"`
+	HTML        string            `json:"html,omitempty"`
+	Warnings    []RendererWarning `json:"warnings,omitempty"`
+	Issues      []ValidationIssue `json:"issues,omitempty"`
+}
+
+type PreviewResponse struct {
+	TemplateKey        string                 `json:"template_key"`
+	SelectedVersion    int                    `json:"selected_version"`
+	Mode               string                 `json:"mode"`
+	DataSource         string                 `json:"data_source"`
+	RenderID           string                 `json:"render_id"`
+	GeneratedAt        time.Time              `json:"generated_at"`
+	Outputs            []PreviewOutput        `json:"outputs"`
+	BindingResolution  BindingResolutionDebug `json:"binding_resolution"`
+	DataContextSummary map[string]any         `json:"data_context_summary,omitempty"`
+	Warnings           []RendererWarning      `json:"warnings,omitempty"`
+	Issues             []ValidationIssue      `json:"issues,omitempty"`
+}
+
+type VersionCompare struct {
+	TemplateKey    string   `json:"template_key"`
+	LeftVersion    Version  `json:"left_version"`
+	RightVersion   Version  `json:"right_version"`
+	ChangedFields  []string `json:"changed_fields"`
+	HasDifferences bool     `json:"has_differences"`
 }
 
 type VisualTemplate struct {

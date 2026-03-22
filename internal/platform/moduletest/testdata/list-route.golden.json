@@ -1,0 +1,31 @@
+{
+  "action": {
+    "key": "sdk.items.list",
+    "kind": "",
+    "label": "SDK Items",
+    "render_mode": "generic",
+    "route_path": "/sdk/items",
+    "view_key": "sdk.items.list"
+  },
+  "fallback_path": "/sdk/items",
+  "module_key": "sdkgolden",
+  "path": "/sdk/items",
+  "render_mode": "generic",
+  "requested_path": "/sdk/items",
+  "resolved_path": "/sdk/items",
+  "status": "ok",
+  "surface": "backoffice",
+  "view": {
+    "columns": [
+      {
+        "key": "title",
+        "label": "Title",
+        "path": "payload.title"
+      }
+    ],
+    "document_type": "sdk_item",
+    "key": "sdk.items.list",
+    "kind": "list",
+    "title": "SDK Items"
+  }
+}

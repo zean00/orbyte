@@ -18,6 +18,7 @@ type Repository interface {
 	SavePermission(permission Permission) error
 	SaveRoleBinding(binding RoleBinding) error
 	SaveRolePermission(grant RolePermission) error
+	DeleteRolePermission(roleID, permissionKey string) error
 	SaveServicePrincipal(principal ServicePrincipal) error
 	SaveDelegationGrant(grant DelegationGrant) error
 	SaveReportingLine(line ReportingLine) error

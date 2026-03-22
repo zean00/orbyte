@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,6 +13,7 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/offline"
@@ -51,7 +54,7 @@ type offlineSyncItem struct {
 	Relations       map[string][]model.ChildMutation `json:"relations,omitempty"`
 }
 
-func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, offlineSvc *offline.Service, docs *document.Service, docActions *application.DocumentActions, models *model.Service, modelActions *application.ModelActions, fieldSecurity *securityfields.Service, idempotencySvc *idempotency.Service) {
+func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, offlineSvc *offline.Service, docs *document.Service, docActions *application.DocumentActions, models *model.Service, modelActions *application.ModelActions, searchSvc *search.Service, fieldSecurity *securityfields.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("GET /offline/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthenticatedPrincipal(w, r)
 		if !ok {
@@ -65,6 +68,8 @@ func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules 
 		bootstrap.Projections = offline.FilterProjectionCapabilities(bootstrap.Projections, allow)
 		bootstrap.Documents = offline.FilterDocumentCapabilities(bootstrap.Documents, allow)
 		bootstrap.Models = offline.FilterModelCapabilities(bootstrap.Models, allow)
+		bootstrap.PackageManifest = offlineSvc.BuildPackageManifest("", effectiveOfflineLocation("", p), bootstrap.References, bootstrap.Projections)
+		bootstrap.CacheToken = offlineBootstrapToken(bootstrap)
 		respondJSON(w, http.StatusOK, bootstrap)
 	})
 
@@ -140,10 +145,11 @@ func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules 
 			respondError(w, shared.Validation("invalid offline sync request"))
 			return
 		}
+		batch := offlineSvc.StartBatch(logging.CorrelationID(r.Context()), principalEffectiveUserID(p), strings.TrimSpace(r.Header.Get("X-Offline-Device-ID")), len(req.Items))
 		results := make([]offline.SyncResultItem, 0, len(req.Items))
 		for _, item := range req.Items {
 			outcome, err := idempotencySvc.Execute("offline.sync:"+strings.TrimSpace(item.Kind)+":"+strings.TrimSpace(item.Operation), item.IdempotencyKey, principalActorID(p), item, func() (idempotency.Outcome, error) {
-				result := applyOfflineSyncItem(ident, p, modules, docs, docActions, models, modelActions, fieldSecurity, item)
+				result := applyOfflineSyncItem(ident, p, modules, docs, docActions, models, modelActions, searchSvc, fieldSecurity, item)
 				return idempotency.Outcome{StatusCode: http.StatusOK, Response: map[string]any{"item": result}}, nil
 			})
 			if err != nil {
@@ -153,32 +159,45 @@ func registerOfflineRoutes(mux *http.ServeMux, ident *identity.Service, modules 
 			var result offline.SyncResultItem
 			encoded, _ := json.Marshal(outcome.Response["item"])
 			_ = json.Unmarshal(encoded, &result)
+			result.BatchID = batch.ID
+			result.CorrelationID = batch.CorrelationID
+			result.DeviceID = batch.DeviceID
+			if result.ProcessedAt.IsZero() {
+				result.ProcessedAt = time.Now().UTC()
+			}
+			if result.AttemptCount <= 0 {
+				result.AttemptCount = 1
+			}
+			offlineSvc.RecordOutcome(&batch, result)
 			results = append(results, result)
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": results})
+		respondJSON(w, http.StatusOK, map[string]any{"batch_id": batch.ID, "items": results})
 	})
 }
 
-func applyOfflineSyncItem(ident *identity.Service, p principal, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, models *model.Service, modelActions *application.ModelActions, fieldSecurity *securityfields.Service, item offlineSyncItem) offline.SyncResultItem {
+func applyOfflineSyncItem(ident *identity.Service, p principal, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, models *model.Service, modelActions *application.ModelActions, searchSvc *search.Service, fieldSecurity *securityfields.Service, item offlineSyncItem) offline.SyncResultItem {
 	result := offline.SyncResultItem{
 		IdempotencyKey: item.IdempotencyKey,
 		Kind:           strings.TrimSpace(item.Kind),
 		Operation:      strings.TrimSpace(item.Operation),
 		TargetID:       strings.TrimSpace(item.TargetID),
-		Status:         "failed",
+		Status:         offline.StatusFailedTerminal,
+		AttemptCount:   1,
+		ProcessedAt:    time.Now().UTC(),
 	}
 	switch result.Kind {
 	case "document":
-		return applyOfflineDocumentSync(ident, p, modules, docs, docActions, fieldSecurity, item, result)
+		return applyOfflineDocumentSync(ident, p, modules, docs, docActions, searchSvc, fieldSecurity, item, result)
 	case "model":
 		return applyOfflineModelSync(ident, p, modules, models, modelActions, fieldSecurity, item, result)
 	default:
 		result.Error = "unsupported offline kind"
+		result.ErrorCode = "unsupported_kind"
 		return result
 	}
 }
 
-func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, fieldSecurity *securityfields.Service, item offlineSyncItem, result offline.SyncResultItem) offline.SyncResultItem {
+func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, searchSvc *search.Service, fieldSecurity *securityfields.Service, item offlineSyncItem, result offline.SyncResultItem) offline.SyncResultItem {
 	def, ok := modules.OfflineDocument(strings.TrimSpace(item.DocumentType))
 	if !ok {
 		result.Error = "offline document type is not registered"
@@ -191,13 +210,15 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			required = append(required, def.CreatePermissionKey)
 		}
 		if !principalAllowsAll(ident, p, required) {
-			result.Status = "forbidden"
+			result.Status = offline.StatusForbidden
 			result.Error = "access denied"
+			result.ErrorCode = "forbidden"
 			return result
 		}
 		if !principalAllowsDocumentType(p, item.DocumentType) {
-			result.Status = "forbidden"
+			result.Status = offline.StatusForbidden
 			result.Error = "delegation grant does not allow this document type"
+			result.ErrorCode = "delegation_forbidden"
 			return result
 		}
 		locationID := effectiveOfflineLocation(item.LocationID, p)
@@ -212,14 +233,16 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, candidate, item.Payload, "", "api"); err != nil {
 			result.Error = err.Error()
+			result.ErrorCode = "validation_error"
 			return result
 		}
 		record, err := docs.Create(item.DocumentType, item.OrganizationID, locationID, principalEffectiveUserID(p), item.Payload)
 		if err != nil {
-			result.Error = err.Error()
+			result = offlineFailureFromError(err, result)
 			return result
 		}
-		result.Status = "accepted"
+		refreshDocumentSearch(searchSvc, record)
+		result.Status = offline.StatusAccepted
 		result.TargetID = record.Header.ID
 		result.Version = record.Header.Version
 		result.ETag = record.Header.ETag
@@ -230,17 +253,19 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			required = append(required, def.UpdatePermissionKey)
 		}
 		if !principalAllowsAll(ident, p, required) {
-			result.Status = "forbidden"
+			result.Status = offline.StatusForbidden
 			result.Error = "access denied"
+			result.ErrorCode = "forbidden"
 			return result
 		}
 		current, err := docs.Get(item.TargetID)
 		if err != nil {
-			result.Error = err.Error()
+			result = offlineFailureFromError(err, result)
 			return result
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, current, item.Payload, "", "api"); err != nil {
 			result.Error = err.Error()
+			result.ErrorCode = "validation_error"
 			return result
 		}
 		var record document.Record
@@ -248,6 +273,7 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			record, err = docActions.UpdateDraft(item.TargetID, principalActingContext(p), item.Payload, item.ExpectedVersion, item.ExpectedETag)
 		} else {
 			result.Error = "document actions are not configured"
+			result.ErrorCode = "missing_dependency"
 			return result
 		}
 		if err != nil {
@@ -256,16 +282,20 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 				"version": current.Header.Version,
 				"etag":    current.Header.ETag,
 				"status":  current.Header.Status,
+				"payload": current.Body.Payload,
+			}, map[string]any{
+				"payload": item.Payload,
 			})
 			return result
 		}
-		result.Status = "accepted"
+		result.Status = offline.StatusAccepted
 		result.TargetID = record.Header.ID
 		result.Version = record.Header.Version
 		result.ETag = record.Header.ETag
 		return result
 	default:
 		result.Error = "unsupported offline document operation"
+		result.ErrorCode = "unsupported_operation"
 		return result
 	}
 }
@@ -288,12 +318,14 @@ func applyOfflineModelSync(ident *identity.Service, p principal, modules *module
 			required = append(required, def.CreatePermissionKey)
 		}
 		if !principalAllowsAll(ident, p, required) {
-			result.Status = "forbidden"
+			result.Status = offline.StatusForbidden
 			result.Error = "access denied"
+			result.ErrorCode = "forbidden"
 			return result
 		}
 		if err := validateModelWriteAccess(fieldSecurity, ident, p, modelDef, item.Values, "api"); err != nil {
 			result.Error = err.Error()
+			result.ErrorCode = "validation_error"
 			return result
 		}
 		var record model.Record
@@ -304,10 +336,10 @@ func applyOfflineModelSync(ident *identity.Service, p principal, modules *module
 			record, _, err = models.CreateComposite(item.ModelKey, principalEffectiveUserID(p), model.CompositeMutation{Values: item.Values, Relations: item.Relations})
 		}
 		if err != nil {
-			result.Error = err.Error()
+			result = offlineFailureFromError(err, result)
 			return result
 		}
-		result.Status = "accepted"
+		result.Status = offline.StatusAccepted
 		result.TargetID = record.ID
 		result.Version = record.Version
 		return result
@@ -317,17 +349,19 @@ func applyOfflineModelSync(ident *identity.Service, p principal, modules *module
 			required = append(required, def.UpdatePermissionKey)
 		}
 		if !principalAllowsAll(ident, p, required) {
-			result.Status = "forbidden"
+			result.Status = offline.StatusForbidden
 			result.Error = "access denied"
+			result.ErrorCode = "forbidden"
 			return result
 		}
 		current, err := models.Get(item.ModelKey, item.TargetID)
 		if err != nil {
-			result.Error = err.Error()
+			result = offlineFailureFromError(err, result)
 			return result
 		}
 		if err := validateModelWriteAccess(fieldSecurity, ident, p, modelDef, item.Values, "api"); err != nil {
 			result.Error = err.Error()
+			result.ErrorCode = "validation_error"
 			return result
 		}
 		var record model.Record
@@ -345,15 +379,19 @@ func applyOfflineModelSync(ident *identity.Service, p principal, modules *module
 			result = offlineConflictFromError(err, result, map[string]any{
 				"id":      current.ID,
 				"version": current.Version,
+				"values":  current.Values,
+			}, map[string]any{
+				"values": item.Values,
 			})
 			return result
 		}
-		result.Status = "accepted"
+		result.Status = offline.StatusAccepted
 		result.TargetID = record.ID
 		result.Version = record.Version
 		return result
 	default:
 		result.Error = "unsupported offline model operation"
+		result.ErrorCode = "unsupported_operation"
 		return result
 	}
 }
@@ -378,20 +416,81 @@ func effectiveOfflineLocation(locationID string, p principal) string {
 	return strings.TrimSpace(p.currentLocationID)
 }
 
-func offlineConflictFromError(err error, result offline.SyncResultItem, current map[string]any) offline.SyncResultItem {
+func offlineConflictFromError(err error, result offline.SyncResultItem, current, attempted map[string]any) offline.SyncResultItem {
 	var platformErr shared.Error
 	if errors.As(err, &platformErr) {
 		if platformErr.Kind == shared.KindConflict {
-			result.Status = "conflict"
+			result.Status = offline.StatusConflict
 			result.Error = platformErr.Message
-			result.Conflict = current
+			result.ErrorCode = "version_conflict"
+			result.Conflict = offline.SyncConflict{
+				Current:           current,
+				Attempted:         attempted,
+				ResolutionOptions: []string{"reload", "retry_with_latest", "duplicate_as_new"},
+			}
 			return result
 		}
-		result.Error = platformErr.Message
+		result = offlineFailureFromPlatformError(platformErr, result)
 		return result
 	}
+	result.Status = offline.StatusFailedRetryable
 	result.Error = err.Error()
+	result.ErrorCode = "sync_retryable"
+	result.AttemptCount++
+	result.RetryAfter = time.Now().UTC().Add(5 * time.Second).Format(time.RFC3339)
 	return result
+}
+
+func offlineFailureFromError(err error, result offline.SyncResultItem) offline.SyncResultItem {
+	var platformErr shared.Error
+	if errors.As(err, &platformErr) {
+		return offlineFailureFromPlatformError(platformErr, result)
+	}
+	result.Status = offline.StatusFailedRetryable
+	result.Error = err.Error()
+	result.ErrorCode = "sync_retryable"
+	result.AttemptCount++
+	result.RetryAfter = time.Now().UTC().Add(5 * time.Second).Format(time.RFC3339)
+	return result
+}
+
+func offlineFailureFromPlatformError(err shared.Error, result offline.SyncResultItem) offline.SyncResultItem {
+	result.Error = err.Message
+	switch err.Kind {
+	case shared.KindForbidden:
+		result.Status = offline.StatusForbidden
+		result.ErrorCode = "forbidden"
+	case shared.KindValidation:
+		result.Status = offline.StatusFailedTerminal
+		result.ErrorCode = "validation_error"
+	case shared.KindNotFound:
+		result.Status = offline.StatusFailedTerminal
+		result.ErrorCode = "not_found"
+	default:
+		result.Status = offline.StatusFailedRetryable
+		result.ErrorCode = "sync_retryable"
+		result.AttemptCount++
+		result.RetryAfter = time.Now().UTC().Add(5 * time.Second).Format(time.RFC3339)
+	}
+	return result
+}
+
+func offlineBootstrapToken(bootstrap offline.Bootstrap) string {
+	payload := map[string]any{
+		"schema_version": bootstrap.SchemaVersion,
+		"references":     bootstrap.References,
+		"projections":    bootstrap.Projections,
+		"documents":      bootstrap.Documents,
+		"models":         bootstrap.Models,
+		"manifest":       bootstrap.PackageManifest,
+	}
+	encoded, _ := json.Marshal(payload)
+	hash := sha256.Sum256(encoded)
+	sum := hex.EncodeToString(hash[:])
+	if len(sum) > 16 {
+		return sum[:16]
+	}
+	return sum
 }
 
 func decodeOfflineProjectionQuery(raw map[string]any) search.QueryRequest {

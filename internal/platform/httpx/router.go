@@ -49,6 +49,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 	analyticsStream := mcp.NewAnalyticsStream()
 	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
 	templateSvc := templateoutput.NewService(docs, reportingSvc)
+	uiPreferences := NewUIPreferencesService()
 	if modules != nil {
 		for _, def := range modules.Templates() {
 			_ = templateSvc.RegisterDefinition(templateoutput.FromModule(def, ""))
@@ -66,7 +67,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Documents:    docs,
 			Workflows:    flows,
 		},
-		Auth: AuthDeps{Config: cfg, Identity: ident, Audit: auditSvc},
+		Auth: AuthDeps{Config: cfg, Identity: ident, Audit: auditSvc, UIPreferences: uiPreferences},
 		Models: ModelDeps{
 			Identity:      ident,
 			Models:        models,
@@ -82,6 +83,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Actions:       docActions,
 			Audit:         auditSvc,
 			Policy:        policySvc,
+			Search:        searchSvc,
 			FieldSecurity: fieldSecurity,
 			Observability: obsSvc,
 			Idempotency:   idempotencySvc,
@@ -90,6 +92,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Identity:      ident,
 			Audit:         auditSvc,
 			Eventing:      eventingSvc,
+			Offline:       offlineSvc,
 			Documents:     docs,
 			Search:        searchSvc,
 			Workflows:     flows,
@@ -114,6 +117,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Integration:   integrationSvc,
 			Reference:     referenceSvc,
 			Idempotency:   idempotencySvc,
+			Health:        health,
 		},
 		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
 		MCP: MCPDeps{
@@ -133,6 +137,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			DocumentActions: docActions,
 			Models:          models,
 			ModelActions:    modelActions,
+			Search:          searchSvc,
 			FieldSecurity:   fieldSecurity,
 			Idempotency:     idempotencySvc,
 		},
@@ -156,6 +161,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Monitoring:    monitoringSvc,
 			Policy:        policySvc,
 			FieldSecurity: fieldSecurity,
+			UIPreferences: uiPreferences,
 		},
 		CrossCutting: CrossCuttingDeps{
 			Config:        cfg,

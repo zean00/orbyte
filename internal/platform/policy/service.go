@@ -69,6 +69,8 @@ type HookRuntime struct {
 	RegoSource     string                   `json:"rego_source,omitempty"`
 	CompileValid   bool                     `json:"compile_valid"`
 	CompileError   string                   `json:"compile_error,omitempty"`
+	EvalValid      bool                     `json:"eval_valid"`
+	EvalError      string                   `json:"eval_error,omitempty"`
 }
 
 type Service struct {
@@ -274,6 +276,11 @@ func (s *Service) Runtime(hookKey, organizationID, locationID string) (HookRunti
 		Engine:     def.Engine,
 	}
 	if def.Engine != EngineRego {
+		if _, ok := s.evaluators[def.Key]; ok {
+			runtime.EvalValid = true
+		} else {
+			runtime.EvalError = "policy evaluator is not configured"
+		}
 		return runtime, true
 	}
 	runtime.RegoPackage = def.RegoPackage
@@ -286,12 +293,22 @@ func (s *Service) Runtime(hookKey, organizationID, locationID string) (HookRunti
 	}
 	runtime.RegoConfigured = true
 	runtime.RegoSource = strings.TrimSpace(stringValue(moduleValue.Value["source"]))
-	if _, err := s.prepare(def, runtime.RegoSource); err != nil {
+	prepared, err := s.prepare(def, runtime.RegoSource)
+	if err != nil {
 		runtime.CompileValid = false
 		runtime.CompileError = err.Error()
 		return runtime, true
 	}
 	runtime.CompileValid = true
+	if err := validatePreparedDecision(prepared, Request{
+		HookKey:        def.Key,
+		OrganizationID: organizationID,
+		LocationID:     locationID,
+	}); err != nil {
+		runtime.EvalError = err.Error()
+		return runtime, true
+	}
+	runtime.EvalValid = true
 	return runtime, true
 }
 
@@ -311,7 +328,7 @@ func (s *Service) ValidateConfiguredModules() error {
 			continue
 		}
 		if value, ok := s.ResolveModule(def.Key, "", ""); ok {
-			if _, err := s.prepare(def, strings.TrimSpace(stringValue(value.Value["source"]))); err != nil {
+			if err := s.validateRegoSource(def, strings.TrimSpace(stringValue(value.Value["source"]))); err != nil {
 				return fmt.Errorf("policy hook %s: %w", def.Key, err)
 			}
 		}
@@ -326,7 +343,7 @@ func (s *Service) ValidateConfiguredModules() error {
 			if source == "" {
 				continue
 			}
-			if _, err := s.prepare(def, source); err != nil {
+			if err := s.validateRegoSource(def, source); err != nil {
 				return fmt.Errorf("policy hook %s scope %s/%s: %w", def.Key, entry.Scope, entry.ScopeID, err)
 			}
 		}
@@ -410,6 +427,14 @@ func (s *Service) evaluateRego(def HookDefinition, req Request) Decision {
 	return decision
 }
 
+func (s *Service) validateRegoSource(def HookDefinition, source string) error {
+	prepared, err := s.prepare(def, source)
+	if err != nil {
+		return err
+	}
+	return validatePreparedDecision(prepared, Request{HookKey: def.Key})
+}
+
 func (s *Service) prepare(def HookDefinition, source string) (rego.PreparedEvalQuery, error) {
 	cacheKey := compiledKey(def.Key, def.RegoQuery, source)
 	s.mu.RLock()
@@ -487,7 +512,7 @@ func normalizedEngine(engine string) string {
 func regoPackageForHook(hookKey string) string {
 	parts := strings.Split(hookKey, ".")
 	items := make([]string, 0, len(parts)+2)
-	items = append(items, "clinic", "policy")
+	items = append(items, "orbyte", "policy")
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -533,6 +558,31 @@ func sanitizeRegoIdent(value string) string {
 func compiledKey(hookKey, query, source string) string {
 	sum := sha256.Sum256([]byte(source))
 	return hookKey + "::" + query + "::" + hex.EncodeToString(sum[:])
+}
+
+func validatePreparedDecision(prepared rego.PreparedEvalQuery, req Request) error {
+	if req.Inputs == nil {
+		req.Inputs = map[string]any{}
+	}
+	if req.Rule == nil {
+		req.Rule = map[string]any{}
+	}
+	results, err := prepared.Eval(context.Background(), rego.EvalInput(map[string]any{
+		"hook_key":        req.HookKey,
+		"actor_id":        req.ActorID,
+		"organization_id": req.OrganizationID,
+		"location_id":     req.LocationID,
+		"scope_id":        req.ScopeID,
+		"inputs":          cloneMap(req.Inputs),
+		"rule":            cloneMap(req.Rule),
+	}))
+	if err != nil {
+		return err
+	}
+	if _, ok := decisionFromRegoResults(results); !ok {
+		return fmt.Errorf("rego policy must return a decision object")
+	}
+	return nil
 }
 
 func decisionFromRegoResults(results []rego.Result) (Decision, bool) {

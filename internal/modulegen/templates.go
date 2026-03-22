@@ -42,6 +42,8 @@ type templateData struct {
 	ModelPrimaryFieldKey   string
 	ModelStatusFieldKey    string
 	HasModelStatusField    bool
+	KernelVersionRange     string
+	RequiredCapabilities   []string
 }
 
 func buildTemplateData(spec Spec) templateData {
@@ -83,7 +85,32 @@ func buildTemplateData(spec Spec) templateData {
 		ModelPrimaryFieldKey:   primaryField,
 		ModelStatusFieldKey:    statusField,
 		HasModelStatusField:    statusField != "",
+		KernelVersionRange:     ">=1.0.0,<2.0.0",
+		RequiredCapabilities:   requiredCapabilities(spec),
 	}
+}
+
+func requiredCapabilities(spec Spec) []string {
+	items := []string{}
+	if spec.Features.UI {
+		items = append(items, "generic_ui")
+	}
+	if spec.Features.Policy {
+		items = append(items, "workflow_runtime")
+	}
+	if spec.Features.Search {
+		items = append(items, "search_runtime")
+	}
+	if spec.Features.Observability {
+		items = append(items, "observability_ops")
+	}
+	if spec.Features.Reporting {
+		items = append(items, "reporting")
+	}
+	if spec.Module.Kind == KindIntegration {
+		items = append(items, "mcp")
+	}
+	return items
 }
 
 func renderModelFieldLiterals(fields []ModelFieldOptions) []string {
@@ -258,6 +285,12 @@ func Manifest() module.Manifest {
 		Key:          "{{.Spec.Module.Key}}",
 		Name:         "{{.Spec.Module.Name}}",
 		Version:      "{{.Spec.Module.Version}}",
+		KernelVersionRange: "{{.KernelVersionRange}}",
+		RequiredCapabilities: []string{
+			{{- range .RequiredCapabilities }}
+			"{{ . }}",
+			{{- end }}
+		},
 		DomainFamily: "{{.Spec.Module.DomainFamily}}",
 		DependencyRequirements: []module.DependencyRequirement{
 			{{- range .Spec.DependencyRequirements }}

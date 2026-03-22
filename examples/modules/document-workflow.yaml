@@ -1,0 +1,10 @@
+module:
+  key: starter_document
+  name: Starter Document
+  version: 1.0.0
+  domain_family: examples
+  kind: document
+starter_pack: document-workflow
+document:
+  type: starter_document
+  display_name: Starter Document

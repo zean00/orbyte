@@ -30,3 +30,27 @@ func TestResolveScopedFeatureFlags(t *testing.T) {
 		t.Fatalf("expected location override to disable flag, got %+v", effective)
 	}
 }
+
+func TestTargetingView(t *testing.T) {
+	svc := NewService()
+	if err := svc.UpsertValue(Value{
+		FlagKey:   "platform.admin_console",
+		Scope:     "location",
+		ScopeID:   "loc_hq",
+		Enabled:   false,
+		Status:    "active",
+		UpdatedBy: "user_admin",
+	}); err != nil {
+		t.Fatalf("upsert value failed: %v", err)
+	}
+	view, ok := svc.TargetingView("platform.admin_console", "", "loc_hq", "", time.Now().UTC())
+	if !ok {
+		t.Fatal("expected targeting view")
+	}
+	if view.Effective.Enabled {
+		t.Fatalf("expected location override to disable flag, got %+v", view.Effective)
+	}
+	if len(view.Values) == 0 {
+		t.Fatalf("expected flag values in targeting view, got %+v", view)
+	}
+}

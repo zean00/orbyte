@@ -12,6 +12,7 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
+	"orbyte/internal/platform/httpx"
 	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
@@ -64,6 +65,7 @@ type serviceGraph struct {
 	monitoring        *monitoring.Service
 	templates         *templateoutput.Service
 	idempotency       *idempotency.Service
+	uiPreferences     *httpx.UIPreferencesService
 	runtimeHealth     *runtimehealth.Tracker
 	docActions        *application.DocumentActions
 	modelActions      *application.ModelActions
@@ -87,6 +89,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		audit:             audit.NewService(),
 		logger:            logging.NewService(),
 		observability:     observability.NewService(),
+		uiPreferences:     httpx.NewUIPreferencesService(),
 		runtimeHealth:     runtimehealth.NewTracker(),
 		analyticsRepo:     analytics.NewMemoryRepository(),
 		businessManifests: append([]module.Manifest(nil), businessManifests...),
@@ -106,6 +109,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
 	graph.integration = integration.NewService(graph.observability, graph.logger)
 	graph.jobs = jobs.NewService()
+	graph.jobs.AttachObservability(graph.observability)
 	graph.eventing = eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), graph.observability, graph.logger)
 	graph.search = search.NewService()
 	graph.search.AttachSources(graph.documents, graph.models)
@@ -135,6 +139,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.audit = audit.NewServiceWithRepository(audit.NewPostgresRepository(postgres.DB))
 		graph.eventing = eventing.NewServiceWithRepository(eventing.NewPostgresRepository(postgres.DB), graph.observability, graph.logger)
 		graph.jobs = jobs.NewServiceWithRepository(jobs.NewPostgresRepository(postgres.DB))
+		graph.jobs.AttachObservability(graph.observability)
 		graph.search = search.NewServiceWithRepository(search.NewPostgresRepository(postgres.DB))
 		graph.analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
 		graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), graph.observability, graph.logger)

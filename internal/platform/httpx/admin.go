@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
+	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/workflow"
 )
@@ -82,7 +84,7 @@ type adminHierarchySummary struct {
 	ActingOverrides int `json:"acting_overrides"`
 }
 
-func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service) {
+func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service, health *runtimehealth.Tracker) {
 	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		if err := authError(r); err != nil {
 			http.Redirect(w, r, "/ui", http.StatusSeeOther)
@@ -128,19 +130,25 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 			}
 		}
 		respondJSON(w, http.StatusOK, map[string]any{
-			"organization":      org.Root(),
-			"locations":         org.Locations(),
-			"operating_units":   org.OperatingUnits(),
-			"roles":             ident.Roles(),
-			"menus":             menus,
-			"actions":           actions,
-			"user_actions":      uiActions,
-			"views":             views,
-			"custom_entries":    entries,
-			"default_path":      defaultPath,
-			"ui_access":         len(uiMenus) > 0,
-			"ui_path":           uiPath,
-			"current_user_id":   p.userID,
+			"shell_kind":      "admin",
+			"organization":    org.Root(),
+			"locations":       org.Locations(),
+			"operating_units": org.OperatingUnits(),
+			"roles":           ident.Roles(),
+			"menus":           menus,
+			"actions":         actions,
+			"user_actions":    uiActions,
+			"views":           views,
+			"custom_entries":  entries,
+			"default_path":    defaultPath,
+			"preferred_path":  ident.PreferredRoute(p.userID, "admin"),
+			"ui_access":       len(uiMenus) > 0,
+			"ui_path":         uiPath,
+			"current_user_id": p.userID,
+			"capabilities": map[string]any{
+				"workspace_link": true,
+				"shell_recovery": true,
+			},
 			"locale":            localeFromRequest(r, ident),
 			"supported_locales": i18n.SupportedLocales(),
 		})
@@ -353,7 +361,16 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 				respondError(w, err)
 				return
 			}
-			respondJSON(w, http.StatusOK, workflowSvc.Validate(item))
+			validation := workflowSvc.Validate(item)
+			policyIssues := workflowPolicyRuntimeIssues(policySvc, item, strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")))
+			issues := append([]string{}, validation.Issues...)
+			issues = append(issues, policyIssues...)
+			respondJSON(w, http.StatusOK, map[string]any{
+				"valid":                 validation.Valid && len(policyIssues) == 0,
+				"issues":                issues,
+				"workflow_issues":       validation.Issues,
+				"policy_runtime_issues": policyIssues,
+			})
 		case version > 0 && action == "simulate":
 			item, err := workflowSvc.GetVersion(key, version)
 			if err != nil {
@@ -371,7 +388,16 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 				"routing_preview": workflowRoutingPreview(ident, item, req),
 			})
 		case version > 0 && action == "publish":
-			item, err := workflowSvc.Publish(key, version, principalActorID(p))
+			item, err := workflowSvc.GetVersion(key, version)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if issues := workflowPolicyRuntimeIssues(policySvc, item, strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id"))); len(issues) > 0 {
+				respondError(w, shared.Validation(strings.Join(issues, "; ")))
+				return
+			}
+			item, err = workflowSvc.Publish(key, version, principalActorID(p))
 			if err != nil {
 				respondError(w, err)
 				return
@@ -455,6 +481,131 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissions()})
 	})
 
+	mux.HandleFunc("GET /admin/api/integrations/adapters", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListAdapterDescriptors()})
+	})
+
+	mux.HandleFunc("GET /admin/api/integrations/systems/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		systemKey, action, ok := adminIntegrationSystemDetailPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("integration system route not found"))
+			return
+		}
+		switch action {
+		case "config":
+			view, err := integrationSvc.ValidateSystemConfig(systemKey)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, view)
+		case "health":
+			health, err := integrationSvc.HealthForSystem(systemKey)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, health)
+		default:
+			respondError(w, shared.NotFound("integration system route not found"))
+		}
+	})
+
+	mux.HandleFunc("PUT /admin/api/integrations/systems/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.manage", "", "module.manage"); !ok {
+			return
+		}
+		systemKey, action, ok := adminIntegrationSystemDetailPath(r.URL.Path)
+		if !ok || action != "config" {
+			respondError(w, shared.NotFound("integration system route not found"))
+			return
+		}
+		var req struct {
+			Settings map[string]any `json:"settings"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid request body"))
+			return
+		}
+		record, view, err := integrationSvc.UpdateSystemSettings(systemKey, req.Settings)
+		if err != nil {
+			respondIntegrationError(w, err, view)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": record, "config": view})
+	})
+
+	mux.HandleFunc("GET /admin/api/integrations/endpoints/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		endpointKey, action, ok := adminIntegrationEndpointDetailPath(r.URL.Path)
+		if !ok || action != "config" {
+			respondError(w, shared.NotFound("integration endpoint route not found"))
+			return
+		}
+		view, err := integrationSvc.ValidateEndpointConfig(endpointKey)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, view)
+	})
+
+	mux.HandleFunc("PUT /admin/api/integrations/endpoints/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.manage", "", "module.manage"); !ok {
+			return
+		}
+		endpointKey, action, ok := adminIntegrationEndpointDetailPath(r.URL.Path)
+		if !ok || action != "config" {
+			respondError(w, shared.NotFound("integration endpoint route not found"))
+			return
+		}
+		var req struct {
+			Settings map[string]any `json:"settings"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid request body"))
+			return
+		}
+		record, view, err := integrationSvc.UpdateEndpointSettings(endpointKey, req.Settings)
+		if err != nil {
+			respondIntegrationError(w, err, view)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": record, "config": view})
+	})
+
+	mux.HandleFunc("GET /admin/api/integrations/submissions/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		submissionID, detail, ok := adminIntegrationSubmissionDetailPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("integration submission route not found"))
+			return
+		}
+		switch detail {
+		case "":
+			record, ok := integrationSvc.GetSubmission(submissionID)
+			if !ok {
+				respondError(w, shared.NotFound("integration submission not found"))
+				return
+			}
+			respondJSON(w, http.StatusOK, record)
+		case "attempts":
+			respondJSON(w, http.StatusOK, map[string]any{"items": integrationSvc.ListSubmissionAttempts(submissionID)})
+		default:
+			respondError(w, shared.NotFound("integration submission route not found"))
+		}
+	})
+
 	mux.HandleFunc("GET /admin/api/feature-flags/definitions", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
@@ -476,6 +627,23 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 		respondJSON(w, http.StatusOK, map[string]any{
 			"items": flags.ResolveAllWithOperatingUnit(strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")), strings.TrimSpace(r.URL.Query().Get("operating_unit_id")), time.Now().UTC()),
 		})
+	})
+
+	mux.HandleFunc("GET /admin/api/feature-flags/targeting", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		flagKey := strings.TrimSpace(r.URL.Query().Get("flag_key"))
+		if flagKey == "" {
+			respondError(w, shared.Validation("flag_key is required"))
+			return
+		}
+		view, ok := flags.TargetingView(flagKey, strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")), strings.TrimSpace(r.URL.Query().Get("operating_unit_id")), time.Now().UTC())
+		if !ok {
+			respondError(w, shared.NotFound("feature flag definition not found"))
+			return
+		}
+		respondJSON(w, http.StatusOK, view)
 	})
 
 	mux.HandleFunc("GET /admin/api/operating-units", func(w http.ResponseWriter, r *http.Request) {
@@ -880,7 +1048,7 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 			return idempotency.Outcome{StatusCode: status, Response: response}, nil
 		})
 		if err != nil {
-			respondError(w, err)
+			respondIntegrationError(w, err, nil)
 			return
 		}
 		respondJSON(w, outcome.StatusCode, outcome.Response)
@@ -975,6 +1143,31 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("GET /admin/api/config/compare", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		items := cfg.CompareContexts(
+			config.CompareContext{
+				Label:          "left",
+				OrganizationID: strings.TrimSpace(r.URL.Query().Get("left_organization_id")),
+				LocationID:     strings.TrimSpace(r.URL.Query().Get("left_location_id")),
+			},
+			config.CompareContext{
+				Label:          "right",
+				OrganizationID: strings.TrimSpace(r.URL.Query().Get("right_organization_id")),
+				LocationID:     strings.TrimSpace(r.URL.Query().Get("right_location_id")),
+			},
+		)
+		for i := range items {
+			if def, ok := cfg.Definition(items[i].Key); ok {
+				items[i].Left.Value = redactValue(def, items[i].Left.Value)
+				items[i].Right.Value = redactValue(def, items[i].Right.Value)
+			}
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
 	mux.HandleFunc("GET /admin/api/config/effective", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
@@ -988,6 +1181,175 @@ func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *feature
 			}
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("POST /admin/api/config/bundles/export", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read")
+		if !ok {
+			return
+		}
+		var req configBundleRequest
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid config bundle export payload"))
+				return
+			}
+		}
+		bundle := exportConfigBundle(cfg, flags, req, principalActorID(p))
+		respondJSON(w, http.StatusOK, map[string]any{"bundle": bundle})
+	})
+
+	mux.HandleFunc("POST /admin/api/config/bundles/validate", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage"); !ok {
+			return
+		}
+		var req struct {
+			Bundle configBundle `json:"bundle"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid config bundle payload"))
+			return
+		}
+		respondJSON(w, http.StatusOK, validateConfigBundle(cfg, flags, modules, req.Bundle))
+	})
+
+	mux.HandleFunc("POST /admin/api/config/bundles/apply", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		var req struct {
+			Bundle configBundle `json:"bundle"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid config bundle payload"))
+			return
+		}
+		validation := validateConfigBundle(cfg, flags, modules, req.Bundle)
+		if !validation.Valid {
+			respondJSON(w, http.StatusConflict, validation)
+			return
+		}
+		appliedConfig := make([]config.EffectiveValue, 0, len(req.Bundle.ConfigEntries))
+		for _, entry := range req.Bundle.ConfigEntries {
+			def, ok := cfg.Definition(entry.Key)
+			if !ok {
+				continue
+			}
+			effective, err := saveConfigEntry(cfg, modules, auditSvc, def, configUpdateRequest{Scope: entry.Scope, ScopeID: entry.ScopeID, Value: entry.Value}, principalActorID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			appliedConfig = append(appliedConfig, effective)
+		}
+		appliedFlags := make([]featureflags.EffectiveValue, 0, len(req.Bundle.FeatureFlags))
+		for _, value := range req.Bundle.FeatureFlags {
+			if err := flags.UpsertValue(featureflags.Value{
+				FlagKey:       value.FlagKey,
+				Scope:         value.Scope,
+				ScopeID:       value.ScopeID,
+				Enabled:       value.Enabled,
+				Status:        value.Status,
+				UpdatedBy:     principalActorID(p),
+				EffectiveFrom: value.EffectiveFrom,
+				EffectiveTo:   value.EffectiveTo,
+			}); err != nil {
+				respondError(w, err)
+				return
+			}
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:feature_flag:bundle_apply:" + value.FlagKey + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+				Action:        "feature_flag.bundle_apply",
+				TargetType:    "feature_flag",
+				TargetID:      value.FlagKey,
+				ActorID:       principalActorID(p),
+				OccurredAt:    time.Now().UTC(),
+				CorrelationID: "feature-flag:bundle-apply:" + value.FlagKey,
+				Metadata:      map[string]any{"scope": value.Scope, "scope_id": value.ScopeID, "enabled": value.Enabled, "status": value.Status},
+			})
+			effective, _ := flags.ResolveWithOperatingUnit(value.FlagKey, scopeIDForFeatureFlag(value.Scope, value.ScopeID, "organization"), scopeIDForFeatureFlag(value.Scope, value.ScopeID, "location"), scopeIDForFeatureFlag(value.Scope, value.ScopeID, "operating_unit"), time.Now().UTC())
+			appliedFlags = append(appliedFlags, effective)
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:config:bundle_apply:" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "configuration.bundle_apply",
+			TargetType:    "configuration_bundle",
+			TargetID:      strings.TrimSpace(req.Bundle.Name),
+			ActorID:       principalActorID(p),
+			OccurredAt:    time.Now().UTC(),
+			Metadata:      map[string]any{"config_entries": len(req.Bundle.ConfigEntries), "feature_flags": len(req.Bundle.FeatureFlags)},
+			CorrelationID: "configuration:bundle-apply",
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"config_entries": appliedConfig, "feature_flags": appliedFlags, "validation": validation})
+	})
+
+	mux.HandleFunc("GET /admin/api/security/role-permission-matrix", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, buildRolePermissionMatrix(ident))
+	})
+
+	mux.HandleFunc("PUT /admin/api/security/roles/", func(w http.ResponseWriter, r *http.Request) {
+		roleID, permissionKey, ok := adminRolePermissionPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("role permission route not found"))
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users")
+		if !ok {
+			return
+		}
+		if err := ident.GrantRolePermission(identity.RolePermission{RoleID: roleID, PermissionKey: permissionKey}); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:identity:role_permission:grant:" + roleID + ":" + permissionKey + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "identity.role_permission.grant",
+			TargetType:    "role_permission",
+			TargetID:      roleID + ":" + permissionKey,
+			ActorID:       principalActorID(p),
+			OccurredAt:    time.Now().UTC(),
+			Metadata:      map[string]any{"role_id": roleID, "permission_key": permissionKey},
+			CorrelationID: "identity:role-permission:grant:" + roleID,
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"role_id": roleID, "permission_key": permissionKey})
+	})
+
+	mux.HandleFunc("DELETE /admin/api/security/roles/", func(w http.ResponseWriter, r *http.Request) {
+		roleID, permissionKey, ok := adminRolePermissionPath(r.URL.Path)
+		if !ok {
+			respondError(w, shared.NotFound("role permission route not found"))
+			return
+		}
+		p, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users")
+		if !ok {
+			return
+		}
+		if err := ident.RevokeRolePermission(roleID, permissionKey); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:identity:role_permission:revoke:" + roleID + ":" + permissionKey + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "identity.role_permission.revoke",
+			TargetType:    "role_permission",
+			TargetID:      roleID + ":" + permissionKey,
+			ActorID:       principalActorID(p),
+			OccurredAt:    time.Now().UTC(),
+			Metadata:      map[string]any{"role_id": roleID, "permission_key": permissionKey},
+			CorrelationID: "identity:role-permission:revoke:" + roleID,
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"role_id": roleID, "permission_key": permissionKey})
+	})
+
+	mux.HandleFunc("GET /admin/api/readiness", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
+			return
+		}
+		respondJSON(w, http.StatusOK, buildAdminReadinessReport(cfg, modules, health))
 	})
 
 	mux.HandleFunc("GET /admin/api/auth/settings", func(w http.ResponseWriter, r *http.Request) {
@@ -1090,6 +1452,14 @@ func adminConfigKeyPath(path string) (string, bool) {
 	return strings.TrimSpace(parts[4]), parts[4] != ""
 }
 
+func adminRolePermissionPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 8 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "security" || parts[3] != "roles" || parts[5] != "permissions" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[4]), strings.TrimSpace(parts[6]), parts[4] != "" && parts[6] != "" && parts[7] == "value"
+}
+
 func adminPolicyHookPath(path string) (string, bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) != 5 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "security" || parts[3] != "policy-hooks" {
@@ -1120,6 +1490,53 @@ func adminIntegrationSubmissionActionPath(path string) (string, string, bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(parts[4]), strings.TrimSpace(parts[6]), parts[4] != "" && parts[6] != ""
+}
+
+func adminIntegrationSubmissionDetailPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 5 || len(parts) > 6 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "integrations" || parts[3] != "submissions" {
+		return "", "", false
+	}
+	detail := ""
+	if len(parts) == 6 {
+		detail = strings.TrimSpace(parts[5])
+	}
+	return strings.TrimSpace(parts[4]), detail, parts[4] != ""
+}
+
+func adminIntegrationSystemDetailPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 6 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "integrations" || parts[3] != "systems" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[4]), strings.TrimSpace(parts[5]), parts[4] != "" && parts[5] != ""
+}
+
+func adminIntegrationEndpointDetailPath(path string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 6 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "integrations" || parts[3] != "endpoints" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[4]), strings.TrimSpace(parts[5]), parts[4] != "" && parts[5] != ""
+}
+
+func respondIntegrationError(w http.ResponseWriter, err error, payload any) {
+	var validationErr integration.ValidationError
+	if errors.As(err, &validationErr) {
+		response := map[string]any{
+			"error": map[string]any{
+				"kind":    shared.KindValidation,
+				"message": validationErr.Error(),
+			},
+			"issues": validationErr.Issues,
+		}
+		if payload != nil {
+			response["payload"] = payload
+		}
+		respondJSON(w, http.StatusBadRequest, response)
+		return
+	}
+	respondError(w, err)
 }
 
 func adminFeatureFlagPath(path string) (string, bool) {
@@ -1412,6 +1829,39 @@ func workflowRoutingPreview(ident *identity.Service, def workflow.Definition, in
 	return preview
 }
 
+func workflowPolicyRuntimeIssues(policySvc *policy.Service, _ workflow.Definition, organizationID, locationID string) []string {
+	if policySvc == nil {
+		return nil
+	}
+	requiredHooks := []string{
+		"documents.workflow.transition",
+		"documents.workflow.assignment",
+		"documents.workflow.sla",
+	}
+	issues := make([]string, 0, len(requiredHooks))
+	for _, hookKey := range requiredHooks {
+		runtime, ok := policySvc.Runtime(hookKey, organizationID, locationID)
+		if !ok {
+			issues = append(issues, "policy hook "+hookKey+" is not registered")
+			continue
+		}
+		if runtime.Engine == policy.EngineRego {
+			if !runtime.CompileValid {
+				issues = append(issues, "policy hook "+hookKey+" compile invalid: "+firstNonEmpty(runtime.CompileError, "rego source is not configured"))
+				continue
+			}
+			if !runtime.EvalValid {
+				issues = append(issues, "policy hook "+hookKey+" runtime invalid: "+firstNonEmpty(runtime.EvalError, "rego policy must return a decision object"))
+			}
+			continue
+		}
+		if !runtime.EvalValid {
+			issues = append(issues, "policy hook "+hookKey+" runtime invalid: "+firstNonEmpty(runtime.EvalError, "policy evaluator is not configured"))
+		}
+	}
+	return issues
+}
+
 func workflowTransitionForAdmin(def workflow.Definition, currentState, action string) (workflow.Transition, error) {
 	for _, rule := range def.Actions {
 		if rule.Action == action && rule.FromState == currentState {
@@ -1524,6 +1974,15 @@ func saveConfigEntry(cfg *config.Service, modules *module.Service, auditSvc *aud
 	if current, ok := cfg.Resolve(def.Key, scopeIDIfOrganization(scope, scopeID), scopeIDIfLocation(scope, scopeID)); ok {
 		existing = current.Value
 	}
+	previousRedacted := redactValue(def, existing)
+	validation := cfg.ValidateEntry(config.Entry{
+		Key:       def.Key,
+		ModuleKey: def.ModuleKey,
+		Category:  def.Category,
+		Scope:     scope,
+		ScopeID:   scopeID,
+		Value:     preserveSensitiveValues(def, req.Value, existing),
+	})
 	entry := config.Entry{
 		Key:         def.Key,
 		ModuleKey:   def.ModuleKey,
@@ -1547,6 +2006,7 @@ func saveConfigEntry(cfg *config.Service, modules *module.Service, auditSvc *aud
 		})
 		return config.EffectiveValue{}, err
 	}
+	newRedacted := redactValue(def, entry.Value)
 	recordAudit(auditSvc, audit.Event{
 		ID:            "audit:config:update:" + def.Key + ":" + time.Now().UTC().Format("20060102150405.000000000"),
 		Action:        "configuration.update",
@@ -1556,8 +2016,13 @@ func saveConfigEntry(cfg *config.Service, modules *module.Service, auditSvc *aud
 		OccurredAt:    time.Now().UTC(),
 		CorrelationID: "configuration:update:" + def.Key,
 		Metadata: map[string]any{
-			"scope":    entry.Scope,
-			"scope_id": entry.ScopeID,
+			"scope":             entry.Scope,
+			"scope_id":          entry.ScopeID,
+			"previous_value":    previousRedacted,
+			"new_value":         newRedacted,
+			"changed_fields":    configChangedFields(previousRedacted, newRedacted),
+			"validation_valid":  validation.Valid,
+			"validation_issues": validation.Issues,
 		},
 	})
 	orgID := ""
@@ -1574,6 +2039,30 @@ func saveConfigEntry(cfg *config.Service, modules *module.Service, auditSvc *aud
 	}
 	effective.Value = redactValue(def, effective.Value)
 	return effective, nil
+}
+
+func configChangedFields(left, right map[string]any) []string {
+	if left == nil {
+		left = map[string]any{}
+	}
+	if right == nil {
+		right = map[string]any{}
+	}
+	seen := map[string]struct{}{}
+	for key := range left {
+		seen[key] = struct{}{}
+	}
+	for key := range right {
+		seen[key] = struct{}{}
+	}
+	fields := make([]string, 0, len(seen))
+	for key := range seen {
+		if stringifyAny(left[key]) != stringifyAny(right[key]) {
+			fields = append(fields, key)
+		}
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 func scopeIDIfOrganization(scope, scopeID string) string {
@@ -1852,6 +2341,10 @@ const adminConsoleHTML = `<!doctype html>
           <label class="field"><span id="template-report-key-label">Preview Target Key</span><input id="template-render-target-key" placeholder="document_reporting"></label>
           <label class="field"><span id="template-render-mode-label">Preview Mode</span><select id="template-render-mode"><option value="sample">sample</option><option value="live">live</option></select></label>
         </div>
+        <div class="admin-row">
+          <label class="field"><span>Fixture</span><select id="template-fixture-key"><option value="">none</option></select></label>
+          <label class="field"><span>Draft Workflow</span><div class="actions"><button id="duplicate-template-draft" class="secondary" type="button">Duplicate to Draft</button><button id="reset-template-draft" class="secondary" type="button">Reset Draft</button><button id="compare-template-version" class="secondary" type="button">Compare Draft</button></div></label>
+        </div>
         <div class="actions">
           <button id="load-template-definition" class="secondary">Load Template</button>
           <button id="save-template-draft">Save Draft</button>
@@ -1897,12 +2390,15 @@ const adminConsoleHTML = `<!doctype html>
         <section class="card">
           <h2 id="template-preview-heading">Template Preview</h2>
           <div id="template-preview" class="template-preview-frame"></div>
+          <div id="template-preview-diagnostics" class="list"></div>
         </section>
         <section class="card">
           <h3 id="template-versions-heading">Versions</h3>
           <div id="template-versions" class="list"></div>
           <h3 id="template-bindings-heading">Bindings</h3>
           <div id="template-bindings" class="list"></div>
+          <h3>Binding Resolution</h3>
+          <div id="template-binding-debug" class="list"></div>
         </section>
       </div>
     </div>
@@ -2361,7 +2857,7 @@ const adminConsoleHTML = `<!doctype html>
         saved_config: 'Menyimpan'
       }
     };
-    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' } };
+    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateFixtures: [], templatePreview: null, templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' } };
     function normalizeLocale(locale) {
       const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-');
       if (value === 'id' || value.indexOf('id-') === 0) return 'id';
@@ -3350,6 +3846,47 @@ const adminConsoleHTML = `<!doctype html>
       const payload = await getJSON('/admin/api/template-bindings?template_key=' + encodeURIComponent(templateKey));
       adminState.templateBindings = payload.items || [];
     }
+    async function loadTemplateFixtures(templateKey, targetKind) {
+      const payload = await getJSON('/admin/api/template-fixtures?template_key=' + encodeURIComponent(templateKey) + '&target_kind=' + encodeURIComponent(targetKind || ''));
+      adminState.templateFixtures = payload.items || [];
+    }
+    function renderTemplateFixtureOptions() {
+      const select = document.getElementById('template-fixture-key');
+      if (!select) return;
+      const currentValue = select.value;
+      const items = adminState.templateFixtures || [];
+      select.innerHTML = '<option value="">none</option>' + items.map((item) => '<option value="' + escapeHTML(item.fixture_key) + '">' + escapeHTML((item.name || item.fixture_key) + ' (' + item.source_type + ')') + '</option>').join('');
+      if (currentValue && items.some((item) => item.fixture_key === currentValue)) {
+        select.value = currentValue;
+      }
+    }
+    function renderTemplatePreviewDiagnostics() {
+      const diagnostics = document.getElementById('template-preview-diagnostics');
+      const bindingDebug = document.getElementById('template-binding-debug');
+      const preview = adminState.templatePreview;
+      if (diagnostics) {
+        if (!preview) {
+          diagnostics.innerHTML = '<p class="status">-</p>';
+        } else {
+          const warnings = preview.warnings || [];
+          const issues = preview.issues || [];
+          diagnostics.innerHTML = ''
+            + '<article class="card"><strong>Render</strong><div class="muted">' + escapeHTML((preview.mode || '-') + ' · ' + (preview.data_source || '-') + ' · ' + (preview.render_id || '-')) + '</div></article>'
+            + '<article class="card"><strong>Warnings</strong><div class="status">' + escapeHTML(warnings.map((item) => item.message || item.code).join('; ') || '-') + '</div></article>'
+            + '<article class="card"><strong>Issues</strong><div class="status">' + escapeHTML(issues.map((item) => item.message || item.code).join('; ') || '-') + '</div></article>';
+        }
+      }
+      if (bindingDebug) {
+        const debug = preview && preview.binding_resolution;
+        if (!debug) {
+          bindingDebug.innerHTML = '<p class="status">-</p>';
+        } else {
+          const scopePath = (debug.scope_path || []).map((item) => item.scope_type + (item.scope_id ? ':' + item.scope_id : '')).join(' → ');
+          const matched = debug.matched_binding ? (debug.matched_binding.template_key + ' @ ' + debug.matched_binding.scope_type + (debug.matched_binding.scope_id ? ':' + debug.matched_binding.scope_id : '')) : 'module default';
+          bindingDebug.innerHTML = '<article class="card"><strong>' + escapeHTML(debug.definition_key || '-') + '</strong><div class="muted">' + escapeHTML('v' + (debug.version || '-')) + '</div><div class="status">' + escapeHTML('Path: ' + (scopePath || '-')) + '</div><div class="status">' + escapeHTML('Matched: ' + matched) + '</div></article>';
+        }
+      }
+    }
     function renderTemplateBindingScopeOptions(scopeType, selectedValue) {
       const select = document.getElementById('template-binding-scope-id');
       if (!select) return;
@@ -3929,6 +4466,7 @@ const adminConsoleHTML = `<!doctype html>
         await loadTemplateVersions(current.key);
       }
       await loadTemplateBindings(current.key);
+      await loadTemplateFixtures(current.key, current.target_kind);
       const currentBinding = (adminState.templateBindings || []).find((item) => item.template_key === current.key) || null;
       const draft = (adminState.templateVersions || []).find((item) => item.status === 'draft') || (adminState.templateVersions || []).slice(-1)[0];
       document.getElementById('template-body').value = (draft && draft.body) || current.default_body || '';
@@ -3941,10 +4479,12 @@ const adminConsoleHTML = `<!doctype html>
       document.getElementById('template-render-target-key').value = current.target_key || '';
       document.getElementById('template-render-target-id').value = '';
       document.getElementById('template-render-mode').value = 'sample';
+      renderTemplateFixtureOptions();
       document.getElementById('template-status').textContent = t('loaded_template') + ' · ' + current.key;
-      document.getElementById('template-versions').innerHTML = (adminState.templateVersions || []).map((item) => '<article class="card"><strong>v' + item.version + '</strong><div class="muted">' + escapeHTML(item.status) + ' · ' + escapeHTML(item.renderer_kind) + '</div></article>').join('');
+      document.getElementById('template-versions').innerHTML = (adminState.templateVersions || []).map((item) => '<article class="card"><strong>v' + item.version + '</strong><div class="muted">' + escapeHTML(item.status) + ' · ' + escapeHTML(item.renderer_kind) + '</div><div class="status">' + escapeHTML((item.change_note || '-') + (item.last_render_status ? ' · ' + item.last_render_status : '')) + '</div></article>').join('');
       renderTemplateBindingScopeOptions(document.getElementById('template-binding-scope').value, currentBinding && currentBinding.scope_id);
       renderTemplateBindings();
+      renderTemplatePreviewDiagnostics();
       adminState.templateDesigner.layout = parseTemplateDesignerBody(current, document.getElementById('template-body').value);
       adminState.templateDesigner.sectionID = 'body';
       adminState.templateDesigner.selectedBlockID = '';
@@ -3954,6 +4494,9 @@ const adminConsoleHTML = `<!doctype html>
       document.getElementById('template-definition').onchange = () => { void renderTemplates(true); };
       document.getElementById('save-template-draft').onclick = saveTemplateDraft;
       document.getElementById('publish-template-version').onclick = publishTemplateDraft;
+      document.getElementById('duplicate-template-draft').onclick = duplicateTemplateDraft;
+      document.getElementById('reset-template-draft').onclick = resetTemplateDraft;
+      document.getElementById('compare-template-version').onclick = compareTemplateDraft;
       document.getElementById('save-template-binding').onclick = saveTemplateBinding;
       document.getElementById('preview-template-render').onclick = previewTemplateRender;
       document.getElementById('template-binding-scope').onchange = () => {
@@ -4004,6 +4547,43 @@ const adminConsoleHTML = `<!doctype html>
       document.getElementById('template-status').textContent = t('saved_template_draft') + ' · ' + key;
       await renderTemplates(true);
     }
+    async function duplicateTemplateDraft() {
+      const current = selectedTemplateDefinition();
+      if (!current) return;
+      const source = selectedTemplateDraft() || ((adminState.templateVersions || []).find((item) => item.status === 'published')) || null;
+      const csrf = getCookie('orbyte_csrf');
+      await getJSON('/admin/api/templates/' + encodeURIComponent(current.key) + '/actions/duplicate-draft', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+        body: JSON.stringify({from_version: source ? source.version : 0})
+      });
+      document.getElementById('template-status').textContent = 'Draft duplicated · ' + current.key;
+      await renderTemplates(true);
+    }
+    async function resetTemplateDraft() {
+      const current = selectedTemplateDefinition();
+      if (!current) return;
+      const csrf = getCookie('orbyte_csrf');
+      await getJSON('/admin/api/templates/' + encodeURIComponent(current.key) + '/actions/reset-draft', {
+        method:'POST',
+        headers:{'X-CSRF-Token':csrf}
+      });
+      document.getElementById('template-status').textContent = 'Draft reset · ' + current.key;
+      await renderTemplates(true);
+    }
+    async function compareTemplateDraft() {
+      const current = selectedTemplateDefinition();
+      if (!current) return;
+      const draft = (adminState.templateVersions || []).find((item) => item.status === 'draft');
+      const published = (adminState.templateVersions || []).find((item) => item.status === 'published');
+      if (!draft || !published) {
+        document.getElementById('template-status').textContent = 'Draft and published versions are required for compare';
+        return;
+      }
+      const payload = await getJSON('/admin/api/templates/compare?template_key=' + encodeURIComponent(current.key) + '&left=' + encodeURIComponent(String(published.version)) + '&right=' + encodeURIComponent(String(draft.version)));
+      const comparison = payload.comparison || {};
+      document.getElementById('template-status').textContent = 'Compare · ' + current.key + ' · ' + ((comparison.changed_fields || []).join(', ') || 'no differences');
+    }
     async function publishTemplateDraft() {
       const key = document.getElementById('template-definition').value;
       const draft = (adminState.templateVersions || []).find((item) => item.status === 'draft');
@@ -4052,7 +4632,7 @@ const adminConsoleHTML = `<!doctype html>
       if (!current) return;
       if ((current.renderer_kind || '').toLowerCase() === 'visual') syncTemplateDesignerBody();
       const csrf = getCookie('orbyte_csrf');
-      const payload = await getJSON('/outputs/render', {
+      const payload = await getJSON('/admin/api/templates/preview', {
         method:'POST',
         headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
         body: JSON.stringify({
@@ -4061,7 +4641,8 @@ const adminConsoleHTML = `<!doctype html>
           target_key: document.getElementById('template-render-target-key').value || current.target_key,
           target_id: document.getElementById('template-render-target-id').value,
           sample: document.getElementById('template-render-mode').value === 'sample',
-          format: 'html',
+          fixture_key: document.getElementById('template-fixture-key').value,
+          draft: true,
           purpose: document.getElementById('template-purpose').value,
           channel: document.getElementById('template-channel').value,
           body: document.getElementById('template-body').value,
@@ -4069,7 +4650,10 @@ const adminConsoleHTML = `<!doctype html>
           renderer_kind: current.renderer_kind
         })
       });
-      document.getElementById('template-preview').innerHTML = payload.output.html || '';
+      adminState.templatePreview = payload.preview || null;
+      const htmlPreview = ((adminState.templatePreview && adminState.templatePreview.outputs) || []).find((item) => item.format === 'html') || {};
+      document.getElementById('template-preview').innerHTML = htmlPreview.html || '';
+      renderTemplatePreviewDiagnostics();
     }
     function routeOptions(surface) {
       const actions = surface === 'admin'

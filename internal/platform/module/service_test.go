@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/document"
 )
 
 func TestRegisterValidatesFrontendContracts(t *testing.T) {
@@ -190,6 +191,49 @@ func TestCompatibilityReportIncludesLifecycleState(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsMissingKernelCapability(t *testing.T) {
+	svc := NewService()
+	svc.SetKernelCapabilities(map[string]bool{CapabilityGenericUI: true})
+	err := svc.Register(Manifest{
+		Key:                  "search_mod",
+		Version:              "1.0.0",
+		KernelVersionRange:   ">=1.0.0,<2.0.0",
+		RequiredCapabilities: []string{CapabilitySearchRuntime},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected missing kernel capability to block register")
+	}
+}
+
+func TestCompatibilityReportIncludesKernelDiagnostics(t *testing.T) {
+	svc := NewService()
+	svc.SetKernelCapabilities(map[string]bool{CapabilityGenericUI: true})
+	if err := svc.Register(Manifest{
+		Key:                "platform.core",
+		Version:            "1.0.0",
+		KernelVersionRange: ">=1.0.0,<2.0.0",
+	}, "system"); err != nil {
+		t.Fatalf("register platform failed: %v", err)
+	}
+	svc.manifests["compat_mod"] = Manifest{
+		Key:                  "compat_mod",
+		Version:              "1.0.0",
+		KernelVersionRange:   ">=2.0.0,<3.0.0",
+		RequiredCapabilities: []string{CapabilitySearchRuntime},
+	}
+	_ = svc.repo.Save(InstalledModule{Key: "compat_mod", Enabled: true})
+	items := svc.CompatibilityReport()
+	for _, item := range items {
+		if item.Manifest.Key == "compat_mod" {
+			if len(item.KernelDiagnostics) == 0 || item.LifecycleState != "blocked" {
+				t.Fatalf("expected kernel diagnostics to block module, got %+v", item)
+			}
+			return
+		}
+	}
+	t.Fatal("expected compat_mod detail")
+}
+
 func TestServiceAccessorsExposeRegisteredContracts(t *testing.T) {
 	svc := NewService()
 	manifest := Manifest{
@@ -348,6 +392,11 @@ func TestSelfServiceAPIAccessorsAndValidation(t *testing.T) {
 	manifest := Manifest{
 		Key:                "documents",
 		OwnedDocumentTypes: []string{"generic_request"},
+		Documents: []document.Definition{{
+			Type:          "generic_request",
+			DisplayName:   "Generic Request",
+			SchemaVersion: "v1",
+		}},
 		Frontend: FrontendDefinition{
 			DocumentFlows: []DocumentFlowDefinition{{
 				Key:                 "documents.self_service.requests.intake",

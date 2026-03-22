@@ -121,12 +121,12 @@ func (s *Service) ResolveWithOperatingUnit(key, organizationID, locationID, oper
 		sourceScopeID = candidate.scopeID
 	}
 	return EffectiveValue{
-		Key:           def.Key,
-		Enabled:       effective,
-		SourceScope:   sourceScope,
-		SourceScopeID: sourceScopeID,
+		Key:             def.Key,
+		Enabled:         effective,
+		SourceScope:     sourceScope,
+		SourceScopeID:   sourceScopeID,
 		OperatingUnitID: operatingUnitID,
-		ResolvedAt:    at,
+		ResolvedAt:      at,
 	}, true
 }
 
@@ -144,6 +144,37 @@ func (s *Service) ResolveAllWithOperatingUnit(organizationID, locationID, operat
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
+}
+
+func (s *Service) TargetingView(key, organizationID, locationID, operatingUnitID string, at time.Time) (TargetingView, bool) {
+	def, ok := s.repo.GetDefinition(strings.TrimSpace(key))
+	if !ok {
+		return TargetingView{}, false
+	}
+	effective, ok := s.ResolveWithOperatingUnit(def.Key, organizationID, locationID, operatingUnitID, at)
+	if !ok {
+		return TargetingView{}, false
+	}
+	values := make([]Value, 0)
+	for _, item := range s.repo.ListValues() {
+		if item.FlagKey == def.Key {
+			values = append(values, item)
+		}
+	}
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].Scope == values[j].Scope {
+			if values[i].ScopeID == values[j].ScopeID {
+				return values[i].UpdatedAt.After(values[j].UpdatedAt)
+			}
+			return values[i].ScopeID < values[j].ScopeID
+		}
+		return values[i].Scope < values[j].Scope
+	})
+	return TargetingView{
+		Definition: def,
+		Values:     values,
+		Effective:  effective,
+	}, true
 }
 
 func containsScope(scopes []string, candidate string) bool {

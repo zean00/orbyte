@@ -1,0 +1,19 @@
+{
+  "action": {
+    "key": "sdk.queue",
+    "kind": "",
+    "label": "SDK Queue",
+    "render_mode": "generic",
+    "route_path": "/sdk/queue",
+    "surface": "worklist",
+    "view_key": "sdk.queue"
+  },
+  "fallback_path": "/worklist",
+  "module_key": "sdkgolden",
+  "path": "/sdk/queue",
+  "render_mode": "generic",
+  "requested_path": "/sdk/queue",
+  "resolved_path": "/sdk/queue",
+  "status": "ok",
+  "surface": "worklist"
+}

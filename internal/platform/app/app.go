@@ -314,9 +314,13 @@ func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service
 }
 
 func validateBusinessManifests(builtIn []module.Manifest, business []module.Manifest) error {
+	svc := module.NewService()
 	known := make(map[string]module.Manifest, len(builtIn)+len(business))
 	for _, manifest := range builtIn {
 		known[manifest.Key] = manifest
+		if err := svc.Register(manifest, "system"); err != nil {
+			return err
+		}
 	}
 	for _, manifest := range business {
 		if strings.TrimSpace(manifest.Key) == "" {
@@ -326,6 +330,9 @@ func validateBusinessManifests(builtIn []module.Manifest, business []module.Mani
 			return fmt.Errorf("duplicate module key %q in selected manifests", manifest.Key)
 		}
 		known[manifest.Key] = manifest
+		if err := svc.Register(manifest, "system"); err != nil {
+			return err
+		}
 	}
 	for _, manifest := range business {
 		for _, requirement := range manifest.DependencyRequirements {
@@ -2161,6 +2168,10 @@ func builtInModuleManifests() []module.Manifest {
 			},
 		},
 	}
+}
+
+func BuiltInModuleManifests() []module.Manifest {
+	return append([]module.Manifest(nil), builtInModuleManifests()...)
 }
 
 func (a *App) Address() string {

@@ -1435,6 +1435,21 @@ func (s *Service) GrantRolePermission(grant RolePermission) error {
 	return s.repo.SaveRolePermission(grant)
 }
 
+func (s *Service) RevokeRolePermission(roleID, permissionKey string) error {
+	roleID = strings.TrimSpace(roleID)
+	permissionKey = strings.TrimSpace(permissionKey)
+	if roleID == "" || permissionKey == "" {
+		return shared.Validation("role permission revoke is invalid")
+	}
+	if !s.roleExists(roleID) {
+		return shared.NotFound("role not found")
+	}
+	if !s.permissionExists(permissionKey) {
+		return shared.NotFound("permission not found")
+	}
+	return s.repo.DeleteRolePermission(roleID, permissionKey)
+}
+
 func (s *Service) SetRoleBindingPriority(bindingID string, priority int) (RoleBinding, error) {
 	if priority < 0 {
 		return RoleBinding{}, shared.Validation("priority must be zero or greater")

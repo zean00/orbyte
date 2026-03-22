@@ -51,12 +51,19 @@ func TestBootstrapRememberAndCapabilityFilters(t *testing.T) {
 	if len(bootstrap.References) != 0 || len(bootstrap.Projections) != 1 || len(bootstrap.Documents) != 1 || len(bootstrap.Models) != 1 {
 		t.Fatalf("unexpected bootstrap payload: %+v", bootstrap)
 	}
+	if bootstrap.SchemaVersion != BootstrapSchemaVersion || bootstrap.PackageManifestVersion != PackageManifestVersion || bootstrap.CacheToken == "" {
+		t.Fatalf("expected enriched bootstrap metadata, got %+v", bootstrap)
+	}
+	if bootstrap.SyncCapabilities.QueueModel != SyncQueueModelClient || len(bootstrap.SyncCapabilities.ResultStatuses) == 0 {
+		t.Fatalf("expected sync capabilities, got %+v", bootstrap.SyncCapabilities)
+	}
 
-	result := SyncResultItem{IdempotencyKey: "idem-1", Status: "accepted", Kind: "document", Operation: "create", TargetID: "doc_1"}
-	svc.RememberSyncResult("idem-1", result)
-	got, ok := svc.SyncResult("idem-1")
-	if !ok || got.TargetID != "doc_1" {
-		t.Fatalf("expected remembered sync result, got ok=%v result=%+v", ok, got)
+	batch := svc.StartBatch("corr-1", "user-1", "device-1", 1)
+	result := SyncResultItem{IdempotencyKey: "idem-1", Status: StatusAccepted, Kind: "document", Operation: "create", TargetID: "doc_1", ProcessedAt: time.Now().UTC()}
+	svc.RecordOutcome(&batch, result)
+	got := svc.BatchOutcomes(batch.ID)
+	if len(got) != 1 || got[0].TargetID != "doc_1" {
+		t.Fatalf("expected recorded sync result, got %+v", got)
 	}
 
 	allowedDocs := FilterDocumentCapabilities(bootstrap.Documents, func(perms []string) bool { return len(perms) == 2 })
@@ -100,13 +107,12 @@ func TestProjectionNormalizationAndSignatures(t *testing.T) {
 
 func TestSyncResultEmptyKeyAndBootstrapTimestamp(t *testing.T) {
 	svc := NewService(nil, nil, nil)
-	svc.RememberSyncResult("", SyncResultItem{Status: "accepted"})
-	if _, ok := svc.SyncResult(""); ok {
-		t.Fatal("expected empty key lookup to fail")
-	}
 	boot := svc.Bootstrap()
 	if time.Since(boot.GeneratedAt) > time.Minute {
 		t.Fatalf("expected recent bootstrap timestamp, got %s", boot.GeneratedAt)
+	}
+	if boot.SchemaVersion != BootstrapSchemaVersion {
+		t.Fatalf("expected schema version, got %q", boot.SchemaVersion)
 	}
 }
 
@@ -180,6 +186,11 @@ func TestReferenceAndProjectionPackages(t *testing.T) {
 	})
 
 	svc := NewService(modules, referenceSvc, searchSvc)
+	bootstrap := svc.Bootstrap()
+	manifest := svc.BuildPackageManifest("org_default", "loc_hq", bootstrap.References, bootstrap.Projections)
+	if len(manifest) != 2 {
+		t.Fatalf("expected package manifest entries, got %+v", manifest)
+	}
 	refPkg, err := svc.ReferencePackage("request_status", "org_default", "loc_hq", time.Time{})
 	if err != nil {
 		t.Fatalf("reference package failed: %v", err)
@@ -197,6 +208,46 @@ func TestReferenceAndProjectionPackages(t *testing.T) {
 	}
 	if projPkg.Query.Filters["title"] != "Offline Ready" {
 		t.Fatalf("expected default title filter, got %+v", projPkg.Query.Filters)
+	}
+}
+
+func TestSyncBatchAndSummary(t *testing.T) {
+	svc := NewService(nil, nil, nil)
+	batch := svc.StartBatch("corr-sync", "user-1", "device-1", 3)
+	svc.RecordOutcome(&batch, SyncResultItem{
+		IdempotencyKey: "sync-1",
+		Status:         StatusAccepted,
+		Kind:           "document",
+		Operation:      "create",
+		ProcessedAt:    time.Now().UTC(),
+	})
+	svc.RecordOutcome(&batch, SyncResultItem{
+		IdempotencyKey: "sync-2",
+		Status:         StatusConflict,
+		Kind:           "document",
+		Operation:      "update",
+		ProcessedAt:    time.Now().UTC(),
+	})
+	svc.RecordOutcome(&batch, SyncResultItem{
+		IdempotencyKey: "sync-3",
+		Status:         StatusFailedRetryable,
+		Kind:           "model",
+		Operation:      "update",
+		ErrorCode:      "sync_retryable",
+		ProcessedAt:    time.Now().UTC(),
+	})
+	batches := svc.RecentBatches(10)
+	if len(batches) != 1 || batches[0].AcceptedCount != 1 || batches[0].ConflictCount != 1 || batches[0].RetryableCount != 1 {
+		t.Fatalf("unexpected batch summary: %+v", batches)
+	}
+	outcomes := svc.RecentOutcomes(10)
+	if len(outcomes) != 3 {
+		t.Fatalf("expected recent outcomes, got %+v", outcomes)
+	}
+	summary := svc.SyncSummary()
+	byStatus, _ := summary["by_status"].(map[string]int)
+	if byStatus[StatusAccepted] != 1 || byStatus[StatusConflict] != 1 || byStatus[StatusFailedRetryable] != 1 {
+		t.Fatalf("unexpected sync summary: %+v", summary)
 	}
 }
 

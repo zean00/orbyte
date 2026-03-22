@@ -99,6 +99,44 @@ func TestBlackBoxDocumentAuditAndProjectionFlow(t *testing.T) {
 		t.Fatal("expected created document id")
 	}
 
+	h.waitFor(5*time.Second, func() error {
+		result := h.requestJSON(http.MethodGet, "/ops/search/indexes/documents.requests.search/consistency", nil)
+		if result.status != http.StatusOK {
+			return fmt.Errorf("search consistency returned %d", result.status)
+		}
+		var payload struct {
+			Status       string `json:"status"`
+			MissingCount int    `json:"missing_count"`
+		}
+		if err := json.Unmarshal(result.body, &payload); err != nil {
+			return err
+		}
+		if payload.Status != "ok" || payload.MissingCount != 0 {
+			return fmt.Errorf("search consistency not healthy yet: status=%s missing=%d", payload.Status, payload.MissingCount)
+		}
+		return nil
+	})
+
+	h.waitFor(5*time.Second, func() error {
+		result := h.requestJSON(http.MethodGet, "/ops/projections/status", nil)
+		if result.status != http.StatusOK {
+			return fmt.Errorf("projection status returned %d", result.status)
+		}
+		var payload struct {
+			Coverage struct {
+				Status       string `json:"status"`
+				MissingCount int    `json:"missing_count"`
+			} `json:"coverage"`
+		}
+		if err := json.Unmarshal(result.body, &payload); err != nil {
+			return err
+		}
+		if payload.Coverage.Status != "ok" || payload.Coverage.MissingCount != 0 {
+			return fmt.Errorf("projection coverage not healthy yet: status=%s missing=%d", payload.Coverage.Status, payload.Coverage.MissingCount)
+		}
+		return nil
+	})
+
 	updated := h.requestJSON(http.MethodPut, "/documents/"+record.Header.ID, map[string]any{
 		"payload": map[string]any{
 			"title": "E2E Audited Request V2",
@@ -241,6 +279,56 @@ func TestBlackBoxAdminControlPlaneFlow(t *testing.T) {
 	}
 	if !bytes.Contains(list.body, []byte("e2e_projection_worker")) {
 		t.Fatalf("expected service principal list to include created principal, got %s", string(list.body))
+	}
+}
+
+func TestBlackBoxWorkflowPolicyRuntimeValidation(t *testing.T) {
+	h := newHarness(t)
+
+	created := h.requestJSON(http.MethodPost, "/documents", map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload": map[string]any{
+			"title": "Policy Runtime Validation",
+		},
+	})
+	if created.status != http.StatusCreated {
+		t.Fatalf("expected document create to succeed, got %d body=%s", created.status, string(created.body))
+	}
+
+	var record document.Record
+	if err := json.Unmarshal(created.body, &record); err != nil {
+		t.Fatalf("decode created document failed: %v", err)
+	}
+
+	update := h.requestJSON(http.MethodPut, "/admin/api/security/policy-hooks/documents.workflow.transition/rego", map[string]any{
+		"scope":  "deployment",
+		"source": "package orbyte.policy.documents.workflow.transition\n\nimport rego.v1\n\ndecision := true",
+	})
+	if update.status != http.StatusOK {
+		t.Fatalf("expected rego policy update to succeed, got %d body=%s", update.status, string(update.body))
+	}
+	if !bytes.Contains(update.body, []byte(`"eval_valid":false`)) {
+		t.Fatalf("expected runtime response to report invalid evaluation shape, got %s", string(update.body))
+	}
+
+	validate := h.requestJSON(http.MethodPost, "/admin/api/workflows/generic_request_flow/versions/1/validate", nil)
+	if validate.status != http.StatusOK {
+		t.Fatalf("expected workflow validate to succeed, got %d body=%s", validate.status, string(validate.body))
+	}
+	if !bytes.Contains(validate.body, []byte(`"valid":false`)) || !bytes.Contains(validate.body, []byte("documents.workflow.transition")) {
+		t.Fatalf("expected workflow validation to include runtime issue, got %s", string(validate.body))
+	}
+
+	submit := h.requestJSON(http.MethodPost, "/documents/"+record.Header.ID+"/actions", map[string]any{
+		"action": "submit",
+	})
+	if submit.status != http.StatusForbidden {
+		t.Fatalf("expected submit to fail closed on invalid policy runtime, got %d body=%s", submit.status, string(submit.body))
+	}
+	if !bytes.Contains(submit.body, []byte("workflow policy runtime invalid for documents.workflow.transition")) {
+		t.Fatalf("expected submit failure to identify the invalid hook, got %s", string(submit.body))
 	}
 }
 

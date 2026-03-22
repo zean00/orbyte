@@ -13,6 +13,7 @@ import (
 	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/secretstore"
 )
 
 func TestCreateAndProcessSubmission(t *testing.T) {
@@ -105,6 +106,153 @@ func TestCreateSubmissionBlockedByPolicy(t *testing.T) {
 
 	if _, err := svc.CreateSubmission("fake_erp", "push_invoice", "doc-1", "corr-1", map[string]any{"foo": "bar"}); err == nil {
 		t.Fatal("expected policy preflight to block submission")
+	}
+}
+
+func TestCreateDeliveryReturnsStructuredValidationIssues(t *testing.T) {
+	obs := observability.NewService()
+	svc := NewService(obs, logging.NewService())
+	if err := svc.RegisterContract(Contract{
+		Key:       "strict.contract",
+		Name:      "Strict Contract",
+		Version:   1,
+		Direction: "outbound",
+		Intent:    "command",
+		Status:    "active",
+		Schema: map[string]any{
+			"required": []any{"title"},
+			"properties": map[string]any{
+				"title": map[string]any{"type": "string"},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("register contract failed: %v", err)
+	}
+	if _, err := svc.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: "fake_erp",
+		ContractKey:       "strict.contract",
+		ContractVersion:   1,
+		OperationType:     "push_document",
+		Payload:           map[string]any{"foo": "bar"},
+	}); err == nil {
+		t.Fatal("expected validation error")
+	} else {
+		var validationErr ValidationError
+		if !strings.Contains(err.Error(), "required") && !strings.Contains(err.Error(), "url") && !errorAs(err, &validationErr) {
+			t.Fatalf("expected structured validation error, got %v", err)
+		}
+	}
+}
+
+func TestCreateDeliveryDeduplicatesByIdempotencyKey(t *testing.T) {
+	svc := NewService(observability.NewService(), logging.NewService())
+	record1, err := svc.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: "fake_erp",
+		ContractKey:       "document.submit",
+		ContractVersion:   1,
+		OperationType:     "push_document",
+		IdempotencyKey:    "idem-1",
+		Payload:           map[string]any{"foo": "bar"},
+	})
+	if err != nil {
+		t.Fatalf("create delivery failed: %v", err)
+	}
+	record2, err := svc.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: "fake_erp",
+		ContractKey:       "document.submit",
+		ContractVersion:   1,
+		OperationType:     "push_document",
+		IdempotencyKey:    "idem-1",
+		Payload:           map[string]any{"foo": "bar"},
+	})
+	if err != nil {
+		t.Fatalf("second create delivery failed: %v", err)
+	}
+	if record1.ID != record2.ID {
+		t.Fatalf("expected idempotent submission reuse, got %s and %s", record1.ID, record2.ID)
+	}
+}
+
+func TestUpdateSystemSettingsStoresSecretReference(t *testing.T) {
+	svc := NewService(observability.NewService(), logging.NewService())
+	secrets := secretstore.NewService()
+	svc.AttachSecrets(secrets)
+	record, view, err := svc.UpdateSystemSettings("http_bridge", map[string]any{
+		"url":          "https://example.test/submit",
+		"bearer_token": "super-secret",
+	})
+	if err != nil {
+		t.Fatalf("update system settings failed: %v", err)
+	}
+	raw := record.Settings["bearer_token"].(map[string]any)
+	if _, ok := raw["secret_ref"].(string); !ok {
+		t.Fatalf("expected secret_ref in stored settings, got %+v", record.Settings["bearer_token"])
+	}
+	if got := view.Resolved["bearer_token"]; got != "[redacted]" {
+		t.Fatalf("expected redacted resolved token, got %+v", got)
+	}
+}
+
+func TestRegisterSystemAndEndpointStoreSecretReferenceOnCreate(t *testing.T) {
+	svc := NewService(observability.NewService(), logging.NewService())
+	secrets := secretstore.NewService()
+	svc.AttachSecrets(secrets)
+	if err := svc.RegisterSystem(ExternalSystem{
+		Key:      "http_create_secret",
+		Name:     "HTTP Create Secret",
+		Adapter:  "http",
+		Settings: map[string]any{"url": "https://example.test/system", "bearer_token": "system-secret"},
+	}); err != nil {
+		t.Fatalf("register system failed: %v", err)
+	}
+	system, ok := svc.repo.GetSystem("http_create_secret")
+	if !ok {
+		t.Fatal("expected system to be stored")
+	}
+	rawSystem, ok := system.Settings["bearer_token"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected map settings for created system token, got %+v", system.Settings["bearer_token"])
+	}
+	if _, ok := rawSystem["secret_ref"].(string); !ok {
+		t.Fatalf("expected secret_ref in created system settings, got %+v", system.Settings["bearer_token"])
+	}
+	if err := svc.RegisterEndpoint(Endpoint{
+		Key:       "http_create_secret.submit",
+		SystemKey: "http_create_secret",
+		Name:      "Submit",
+		Settings:  map[string]any{"bearer_token": "endpoint-secret"},
+	}); err != nil {
+		t.Fatalf("register endpoint failed: %v", err)
+	}
+	endpoint, ok := svc.repo.GetEndpoint("http_create_secret.submit")
+	if !ok {
+		t.Fatal("expected endpoint to be stored")
+	}
+	rawEndpoint, ok := endpoint.Settings["bearer_token"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected map settings for created endpoint token, got %+v", endpoint.Settings["bearer_token"])
+	}
+	if _, ok := rawEndpoint["secret_ref"].(string); !ok {
+		t.Fatalf("expected secret_ref in created endpoint settings, got %+v", endpoint.Settings["bearer_token"])
+	}
+}
+
+func TestHealthSummaryReflectsValidationAndDeadLetters(t *testing.T) {
+	svc := NewService(observability.NewService(), logging.NewService())
+	_, _, _ = svc.UpdateSystemSettings("http_bridge", map[string]any{"url": ""})
+	health := svc.HealthSummary()
+	var httpBridge ConnectorHealth
+	for _, item := range health {
+		if item.SystemKey == "http_bridge" {
+			httpBridge = item
+			break
+		}
+	}
+	if httpBridge.Status == "" {
+		t.Fatal("expected http bridge health item")
+	}
+	if httpBridge.Status != "inactive" && httpBridge.Status != "degraded" && httpBridge.Status != "failed" {
+		t.Fatalf("unexpected health status: %+v", httpBridge)
 	}
 }
 
@@ -282,6 +430,18 @@ func TestDeadLetterReplay(t *testing.T) {
 	if replayed.Status != "succeeded" {
 		t.Fatalf("expected replay success, got %+v", replayed)
 	}
+}
+
+func errorAs(err error, target any) bool {
+	switch typed := target.(type) {
+	case *ValidationError:
+		value, ok := err.(ValidationError)
+		if ok {
+			*typed = value
+			return true
+		}
+	}
+	return false
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

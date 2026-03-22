@@ -143,6 +143,26 @@ func TestResolveSpecAppliesIntegrationFirstProfile(t *testing.T) {
 	}
 }
 
+func TestResolveSpecAppliesStarterPackAlias(t *testing.T) {
+	spec, err := ResolveSpec(Spec{}, Options{
+		Root:         t.TempDir(),
+		StarterPack:  "document-workflow",
+		Key:          "requests",
+		Name:         "Requests",
+		DomainFamily: "business",
+		Kind:         string(KindDocument),
+	})
+	if err != nil {
+		t.Fatalf("resolve spec failed: %v", err)
+	}
+	if spec.StarterPack != "document-workflow" {
+		t.Fatalf("expected starter pack to be preserved, got %q", spec.StarterPack)
+	}
+	if !spec.Features.UI || !spec.Features.Search || !spec.Features.Policy {
+		t.Fatalf("expected document workflow starter pack to enable ui/search/policy, got %+v", spec.Features)
+	}
+}
+
 func TestResolveSpecProfileAllowsCLIOverride(t *testing.T) {
 	spec, err := ResolveSpec(Spec{}, Options{
 		Root:              t.TempDir(),
@@ -272,7 +292,7 @@ func TestPlanModuleCreatesFilesAndPatchesRegistry(t *testing.T) {
 		switch {
 		case strings.HasSuffix(file.Path, "manifest.go"):
 			foundManifest = true
-			if !strings.Contains(file.Content, `Key:          "sales"`) {
+			if !strings.Contains(file.Content, `Key:                "sales"`) {
 				t.Fatalf("expected manifest content to include module key, got %s", file.Content)
 			}
 		case strings.HasSuffix(file.Path, "observability.go"):

@@ -76,6 +76,16 @@ type userNavigationPreferencesRequest struct {
 	PreferredAdminRoute string `json:"preferred_admin_route"`
 }
 
+type uiPreferencesRequest struct {
+	Surface     string         `json:"surface"`
+	RoutePath   string         `json:"route_path"`
+	ViewKey     string         `json:"view_key"`
+	Filters     map[string]any `json:"filters"`
+	Columns     []string       `json:"columns"`
+	ColumnOrder []string       `json:"column_order"`
+	Density     string         `json:"density"`
+}
+
 type roleNavigationDefaultsRequest struct {
 	DefaultUserRoute  string `json:"default_user_route"`
 	DefaultAdminRoute string `json:"default_admin_route"`
@@ -117,7 +127,7 @@ type delegationActivateRequest struct {
 	GrantID string `json:"grant_id"`
 }
 
-func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, auditSvc *audit.Service) {
+func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, auditSvc *audit.Service, uiPrefs *UIPreferencesService) {
 	mux.HandleFunc("GET /users", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users"); !ok {
 			return
@@ -1120,6 +1130,55 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 		respondJSON(w, http.StatusOK, user)
+	})
+
+	mux.HandleFunc("GET /me/preferences/ui", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		surface := strings.TrimSpace(r.URL.Query().Get("surface"))
+		routePath := normalizeUIRoutePath(r.URL.Query().Get("route_path"))
+		if surface == "" || routePath == "" {
+			respondError(w, shared.Validation("surface and route_path are required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, uiPrefs.Get(p.userID, surface, routePath))
+	})
+
+	mux.HandleFunc("PUT /me/preferences/ui", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal || p.userID == "" {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req uiPreferencesRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid ui preference payload"))
+			return
+		}
+		if strings.TrimSpace(req.Surface) == "" || normalizeUIRoutePath(req.RoutePath) == "" {
+			respondError(w, shared.Validation("surface and route_path are required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, uiPrefs.Put(p.userID, UIPreferences{
+			Surface:     req.Surface,
+			RoutePath:   req.RoutePath,
+			ViewKey:     req.ViewKey,
+			Filters:     req.Filters,
+			Columns:     req.Columns,
+			ColumnOrder: req.ColumnOrder,
+			Density:     req.Density,
+		}))
 	})
 
 	mux.HandleFunc("POST /sessions/", func(w http.ResponseWriter, r *http.Request) {

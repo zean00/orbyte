@@ -202,6 +202,27 @@ func TestDefaultRoutePrefersUserOverrideThenHighestPriorityRole(t *testing.T) {
 	}
 }
 
+func TestRevokeRolePermission(t *testing.T) {
+	svc := NewService(organization.NewService())
+	if err := svc.UpsertRole(Role{ID: "role_ops", Key: "ops", Name: "Ops", ScopeType: "deployment"}); err != nil {
+		t.Fatalf("upsert role failed: %v", err)
+	}
+	if err := svc.UpsertPermission(Permission{Key: "ops.read", Module: "ops", Action: "read", Resource: "ops"}); err != nil {
+		t.Fatalf("upsert permission failed: %v", err)
+	}
+	if err := svc.GrantRolePermission(RolePermission{RoleID: "role_ops", PermissionKey: "ops.read"}); err != nil {
+		t.Fatalf("grant role permission failed: %v", err)
+	}
+	if err := svc.RevokeRolePermission("role_ops", "ops.read"); err != nil {
+		t.Fatalf("revoke role permission failed: %v", err)
+	}
+	for _, grant := range svc.RolePermissions() {
+		if grant.RoleID == "role_ops" && grant.PermissionKey == "ops.read" {
+			t.Fatalf("expected permission grant to be removed, got %+v", grant)
+		}
+	}
+}
+
 func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	svc := NewService(organization.NewService())
 	session, err := svc.AuthenticatePassword("admin", "admin123!", "loc_hq", map[string]any{"source": "test"}, time.Hour)

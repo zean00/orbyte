@@ -287,6 +287,91 @@ func TestRefreshModelSearchAppliesFieldSecurity(t *testing.T) {
 	}
 }
 
+func TestIndexRuntimeConsistencyRepairAndSchemaLifecycle(t *testing.T) {
+	docs := document.NewService()
+	recordA, err := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "First"})
+	if err != nil {
+		t.Fatalf("create document A failed: %v", err)
+	}
+	recordB, err := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "Second"})
+	if err != nil {
+		t.Fatalf("create document B failed: %v", err)
+	}
+
+	svc := NewService()
+	svc.AttachSources(docs, nil)
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "documents.requests.runtime",
+		Title:             "Requests Runtime",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"keyword", "vector", "hybrid"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"title"},
+		Fields:            []IndexFieldDefinition{{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true}},
+		VectorFields:      []VectorFieldDefinition{{Key: "semantic", SourcePaths: []string{"body.payload.title"}, EmbeddingMode: "external", Dimensions: 8}},
+	}); err != nil {
+		t.Fatalf("register index failed: %v", err)
+	}
+
+	svc.RefreshDocument(recordA)
+	report, err := svc.ConsistencyReport("documents.requests.runtime")
+	if err != nil {
+		t.Fatalf("consistency report failed: %v", err)
+	}
+	if report.MissingCount != 1 || report.Status != "missing_records" {
+		t.Fatalf("expected missing record report, got %+v", report)
+	}
+	runtime, ok := svc.IndexRuntime("documents.requests.runtime")
+	if !ok {
+		t.Fatal("expected index runtime")
+	}
+	if runtime.RuntimeStatus != "degraded" || !runtime.BackendCapabilities.Hybrid {
+		t.Fatalf("expected degraded hybrid-capable runtime, got %+v", runtime)
+	}
+
+	repairResult, err := svc.RepairIndex("documents.requests.runtime", "repair_missing", "")
+	if err != nil {
+		t.Fatalf("repair failed: %v", err)
+	}
+	if repairResult["repaired"].(int) != 1 {
+		t.Fatalf("expected one repaired record, got %+v", repairResult)
+	}
+	report, err = svc.ConsistencyReport("documents.requests.runtime")
+	if err != nil {
+		t.Fatalf("consistency report after repair failed: %v", err)
+	}
+	if report.MissingCount != 0 || report.Status != "ok" {
+		t.Fatalf("expected healthy report after repair, got %+v", report)
+	}
+
+	runtime, err = svc.PlanIndexSchemaVersion("documents.requests.runtime", "v2")
+	if err != nil {
+		t.Fatalf("plan schema version failed: %v", err)
+	}
+	if runtime.CandidateSchemaVersion != "v2" || runtime.LifecycleState != "cutover_pending" {
+		t.Fatalf("expected candidate version planned, got %+v", runtime)
+	}
+	runtime, err = svc.BuildCandidateIndex("documents.requests.runtime")
+	if err != nil {
+		t.Fatalf("build candidate failed: %v", err)
+	}
+	if runtime.LifecycleState != "validating" || runtime.RuntimeStatus != "candidate_built" {
+		t.Fatalf("expected built candidate runtime, got %+v", runtime)
+	}
+	runtime, err = svc.ActivateCandidateIndex("documents.requests.runtime")
+	if err != nil {
+		t.Fatalf("activate candidate failed: %v", err)
+	}
+	if runtime.ActiveSchemaVersion != "v2" || runtime.CandidateSchemaVersion != "" || runtime.LifecycleState != "active" {
+		t.Fatalf("expected activated candidate version, got %+v", runtime)
+	}
+
+	if recordB.Header.ID == "" {
+		t.Fatal("expected second document id")
+	}
+}
+
 func TestRegisterIndexRejectsInvalidFilterField(t *testing.T) {
 	svc := NewService()
 	err := svc.RegisterIndex(IndexDefinition{

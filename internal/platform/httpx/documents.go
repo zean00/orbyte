@@ -14,6 +14,7 @@ import (
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
 )
@@ -57,7 +58,7 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, auditSvc *audit.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
 		if !ok {
@@ -132,6 +133,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, err)
 			return
 		}
+		refreshDocumentSearch(searchSvc, record)
 		recordAudit(auditSvc, principalAuditEvent(p, audit.Event{
 			ID:             "audit:document:create:" + record.Header.ID + ":" + record.Header.ETag,
 			Action:         "document.create",
@@ -252,7 +254,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 				respondError(w, err)
 				return
 			}
-			record, err := docActions.UpdateExtension(documentID, moduleKey, principalActingContext(p), req.Payload, req.ExpectedVersion, req.ExpectedETag)
+			record, err := docActions.UpdateExtension(documentID, moduleKey, requestActingContext(r, p), req.Payload, req.ExpectedVersion, req.ExpectedETag)
 			if err != nil {
 				incActionMetric(obs, "update_extension", "error")
 				respondError(w, err)
@@ -290,7 +292,7 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, err)
 			return
 		}
-		record, err := docActions.UpdateDraft(documentID, principalActingContext(p), req.Payload, req.ExpectedVersion, req.ExpectedETag)
+		record, err := docActions.UpdateDraft(documentID, requestActingContext(r, p), req.Payload, req.ExpectedVersion, req.ExpectedETag)
 		if err != nil {
 			incActionMetric(obs, "update", "error")
 			respondError(w, err)
@@ -389,15 +391,15 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		var record document.Record
 		switch req.Action {
 		case "submit":
-			record, err = docActions.Submit(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Submit(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
 		case "approve":
-			record, err = docActions.Approve(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Approve(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
 		case "reject":
-			record, err = docActions.Reject(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Reject(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
 		case "reopen":
-			record, err = docActions.Reopen(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Reopen(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
 		case "cancel":
-			record, err = docActions.Cancel(documentID, principalActingContext(p), req.ExpectedVersion, req.ExpectedETag)
+			record, err = docActions.Cancel(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
 		}
 		if err != nil {
 			incActionMetric(obs, req.Action, "error")
@@ -445,6 +447,13 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 		}
 		http.NotFound(w, r)
 	})
+}
+
+func refreshDocumentSearch(searchSvc *search.Service, record document.Record) {
+	if searchSvc == nil {
+		return
+	}
+	searchSvc.RefreshDocument(record)
 }
 
 func documentLinkCollectionPath(path string) (string, bool) {

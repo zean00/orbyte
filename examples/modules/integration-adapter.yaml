@@ -1,0 +1,7 @@
+module:
+  key: starter_integration
+  name: Starter Integration
+  version: 1.0.0
+  domain_family: examples
+  kind: integration
+starter_pack: integration-adapter

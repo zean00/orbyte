@@ -1,0 +1,32 @@
+{
+  "action": {
+    "key": "sdk.items.form",
+    "kind": "",
+    "label": "SDK Form",
+    "render_mode": "generic",
+    "route_path": "/sdk/items/new",
+    "view_key": "sdk.items.form"
+  },
+  "fallback_path": "/sdk/items",
+  "module_key": "sdkgolden",
+  "path": "/sdk/items/new",
+  "render_mode": "generic",
+  "requested_path": "/sdk/items/new",
+  "resolved_path": "/sdk/items/new",
+  "status": "ok",
+  "surface": "backoffice",
+  "view": {
+    "document_type": "sdk_item",
+    "fields": [
+      {
+        "key": "title",
+        "label": "Title",
+        "path": "payload.title",
+        "type": "string"
+      }
+    ],
+    "key": "sdk.items.form",
+    "kind": "form",
+    "title": "New SDK Item"
+  }
+}

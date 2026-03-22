@@ -27,6 +27,62 @@ type IndexDefinition struct {
 	VectorFields        []VectorFieldDefinition `json:"vector_fields,omitempty"`
 }
 
+type BackendCapabilities struct {
+	Keyword            bool   `json:"keyword"`
+	Vector             bool   `json:"vector"`
+	Hybrid             bool   `json:"hybrid"`
+	ExternalEmbedding  bool   `json:"external_embedding"`
+	InBackendEmbedding bool   `json:"in_backend_embedding"`
+	BackendKind        string `json:"backend_kind,omitempty"`
+}
+
+type IndexRuntime struct {
+	IndexKey               string              `json:"index_key"`
+	ProjectionKey          string              `json:"projection_key,omitempty"`
+	SourceKind             string              `json:"source_kind"`
+	RuntimeStatus          string              `json:"runtime_status"`
+	LastSuccessAt          time.Time           `json:"last_success_at,omitempty"`
+	LastFailureAt          time.Time           `json:"last_failure_at,omitempty"`
+	LastError              string              `json:"last_error,omitempty"`
+	LastRebuildStartedAt   time.Time           `json:"last_rebuild_started_at,omitempty"`
+	LastRebuildFinishedAt  time.Time           `json:"last_rebuild_finished_at,omitempty"`
+	LastRepairAt           time.Time           `json:"last_repair_at,omitempty"`
+	LastRepairMode         string              `json:"last_repair_mode,omitempty"`
+	LastRepairCount        int                 `json:"last_repair_count"`
+	LastLagSeconds         int64               `json:"last_lag_seconds"`
+	SourceCount            int                 `json:"source_count"`
+	IndexedCount           int                 `json:"indexed_count"`
+	MissingCount           int                 `json:"missing_count"`
+	StaleCount             int                 `json:"stale_count"`
+	ConsistencyStatus      string              `json:"consistency_status"`
+	ActiveSchemaVersion    string              `json:"active_schema_version"`
+	CandidateSchemaVersion string              `json:"candidate_schema_version,omitempty"`
+	LifecycleState         string              `json:"lifecycle_state"`
+	BackendCapabilities    BackendCapabilities `json:"backend_capabilities"`
+}
+
+type ConsistencyIssue struct {
+	Kind       string `json:"kind"`
+	SourceID   string `json:"source_id,omitempty"`
+	Message    string `json:"message,omitempty"`
+	SourceKind string `json:"source_kind,omitempty"`
+}
+
+type ConsistencyReport struct {
+	IndexKey            string             `json:"index_key"`
+	ProjectionKey       string             `json:"projection_key,omitempty"`
+	SourceKind          string             `json:"source_kind"`
+	Status              string             `json:"status"`
+	SourceCount         int                `json:"source_count"`
+	IndexedCount        int                `json:"indexed_count"`
+	MissingCount        int                `json:"missing_count"`
+	StaleCount          int                `json:"stale_count"`
+	LagSeconds          int64              `json:"lag_seconds"`
+	LastSourceUpdatedAt time.Time          `json:"last_source_updated_at,omitempty"`
+	LastIndexedAt       time.Time          `json:"last_indexed_at,omitempty"`
+	Issues              []ConsistencyIssue `json:"issues,omitempty"`
+}
+
 type IndexFieldDefinition struct {
 	Key        string `json:"key"`
 	Path       string `json:"path"`

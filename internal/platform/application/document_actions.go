@@ -81,7 +81,7 @@ func (a *DocumentActions) Submit(documentID string, acting ActingContext, expect
 	record.Header.SubmittedBy = acting.EffectiveActorID()
 	record.Header.SubmittedAt = now
 
-	correlationID := fmt.Sprintf("doc-submit:%s:%d", record.Header.ID, record.Header.Version)
+	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-submit:%s:%d", record.Header.ID, record.Header.Version))
 	auditEvent := audit.Event{
 		ID:                fmt.Sprintf("audit:%s", correlationID),
 		Action:            "document.submit",
@@ -116,6 +116,7 @@ func (a *DocumentActions) Submit(documentID string, acting ActingContext, expect
 		AggregateType:  "document",
 		AggregateID:    record.Header.ID,
 		ActorID:        acting.ActorID,
+		CorrelationID:  correlationID,
 		OrganizationID: record.Header.OrganizationID,
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
@@ -146,7 +147,7 @@ func (a *DocumentActions) Submit(documentID string, acting ActingContext, expect
 	if err != nil {
 		return document.Record{}, err
 	}
-	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), transitionDecision, assignmentDecision, now))
+	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
@@ -178,7 +179,7 @@ func (a *DocumentActions) UpdateDraft(documentID string, acting ActingContext, p
 	record.Body.Payload = mergeBasePayload(record.Body.Payload, payload)
 	record.Body.ContentHash = document.ContentHash(record.Body.Payload)
 
-	correlationID := fmt.Sprintf("doc-update:%s:%d", record.Header.ID, record.Header.Version)
+	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-update:%s:%d", record.Header.ID, record.Header.Version))
 	auditEvent := audit.Event{
 		ID:                fmt.Sprintf("audit:%s", correlationID),
 		Action:            "document.update",
@@ -207,6 +208,7 @@ func (a *DocumentActions) UpdateDraft(documentID string, acting ActingContext, p
 		AggregateType:  "document",
 		AggregateID:    record.Header.ID,
 		ActorID:        acting.ActorID,
+		CorrelationID:  correlationID,
 		OrganizationID: record.Header.OrganizationID,
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
@@ -261,7 +263,7 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey string, acting A
 	record.Body.Payload = document.SetExtensionPayload(record.Body.Payload, moduleKey, extensionPayload)
 	record.Body.ContentHash = document.ContentHash(record.Body.Payload)
 
-	correlationID := fmt.Sprintf("doc-extension-update:%s:%s:%d", moduleKey, record.Header.ID, record.Header.Version)
+	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-extension-update:%s:%s:%d", moduleKey, record.Header.ID, record.Header.Version))
 	auditEvent := audit.Event{
 		ID:                fmt.Sprintf("audit:%s", correlationID),
 		Action:            "document.extension.update",
@@ -291,6 +293,7 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey string, acting A
 		AggregateType:  "document",
 		AggregateID:    record.Header.ID,
 		ActorID:        acting.ActorID,
+		CorrelationID:  correlationID,
 		OrganizationID: record.Header.OrganizationID,
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
@@ -358,7 +361,7 @@ func (a *DocumentActions) Approve(documentID string, acting ActingContext, expec
 	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
 
-	correlationID := fmt.Sprintf("doc-approve:%s:%d", record.Header.ID, record.Header.Version)
+	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-approve:%s:%d", record.Header.ID, record.Header.Version))
 	auditEvent := audit.Event{
 		ID:                fmt.Sprintf("audit:%s", correlationID),
 		Action:            "document.approve",
@@ -393,6 +396,7 @@ func (a *DocumentActions) Approve(documentID string, acting ActingContext, expec
 		AggregateType:  "document",
 		AggregateID:    record.Header.ID,
 		ActorID:        acting.ActorID,
+		CorrelationID:  correlationID,
 		OrganizationID: record.Header.OrganizationID,
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
@@ -423,7 +427,7 @@ func (a *DocumentActions) Approve(documentID string, acting ActingContext, expec
 	if err != nil {
 		return document.Record{}, err
 	}
-	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), transitionDecision, assignmentDecision, now))
+	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
@@ -510,7 +514,7 @@ func (a *DocumentActions) transitionDocument(documentID string, acting ActingCon
 	record.Header.UpdatedBy = acting.EffectiveActorID()
 	record.Header.UpdatedAt = now
 
-	correlationID := fmt.Sprintf("doc-%s:%s:%d", action, record.Header.ID, record.Header.Version)
+	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-%s:%s:%d", action, record.Header.ID, record.Header.Version))
 	auditEvent := audit.Event{
 		ID:                fmt.Sprintf("audit:%s", correlationID),
 		Action:            "document." + action,
@@ -545,6 +549,7 @@ func (a *DocumentActions) transitionDocument(documentID string, acting ActingCon
 		AggregateType:  "document",
 		AggregateID:    record.Header.ID,
 		ActorID:        acting.ActorID,
+		CorrelationID:  correlationID,
 		OrganizationID: record.Header.OrganizationID,
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
@@ -565,7 +570,7 @@ func (a *DocumentActions) transitionDocument(documentID string, acting ActingCon
 		},
 	}
 	outboxRecord := eventing.OutboxRecord{ID: domainEvent.ID + ":outbox", EventID: domainEvent.ID, EventType: domainEvent.Type, Status: "pending", CreatedAt: now}
-	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), transitionDecision, assignmentDecision, now))
+	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
 	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
 		return document.Record{}, err
 	}
@@ -588,6 +593,9 @@ func (a *DocumentActions) ensureTransitionAllowed(record document.Record, actorI
 	if a.policy == nil {
 		return nil
 	}
+	if err := a.ensureWorkflowPolicyRuntime(record, "documents.workflow.transition"); err != nil {
+		return err
+	}
 	decision := a.policy.Evaluate(policy.Request{
 		HookKey:        "documents.workflow.transition",
 		ActorID:        actorID,
@@ -604,6 +612,31 @@ func (a *DocumentActions) ensureTransitionAllowed(record document.Record, actorI
 	})
 	if !decision.Allowed {
 		return shared.Forbidden(firstNonEmpty(decision.Reason, "workflow transition denied by policy"))
+	}
+	return nil
+}
+
+func (a *DocumentActions) ensureWorkflowPolicyRuntime(record document.Record, hookKeys ...string) error {
+	if a.policy == nil {
+		return nil
+	}
+	for _, hookKey := range hookKeys {
+		runtime, ok := a.policy.Runtime(hookKey, record.Header.OrganizationID, record.Header.LocationID)
+		if !ok {
+			return shared.Forbidden("workflow policy runtime is not configured for " + hookKey)
+		}
+		if runtime.Engine == policy.EngineRego {
+			if !runtime.CompileValid {
+				return shared.Forbidden("workflow policy runtime invalid for " + hookKey + ": " + firstNonEmpty(runtime.CompileError, "rego source is not configured"))
+			}
+			if !runtime.EvalValid {
+				return shared.Forbidden("workflow policy runtime invalid for " + hookKey + ": " + firstNonEmpty(runtime.EvalError, "rego policy must return a decision object"))
+			}
+			continue
+		}
+		if !runtime.EvalValid {
+			return shared.Forbidden("workflow policy runtime invalid for " + hookKey + ": " + firstNonEmpty(runtime.EvalError, "policy evaluator is not configured"))
+		}
 	}
 	return nil
 }
@@ -851,6 +884,9 @@ func (a *DocumentActions) applyWorkflowRuntimeDecisions(record document.Record, 
 	if a.policy == nil {
 		return transitionDecision, assignmentDecision, slaDecision, nil
 	}
+	if err := a.ensureWorkflowPolicyRuntime(record, "documents.workflow.transition", "documents.workflow.assignment", "documents.workflow.sla"); err != nil {
+		return transitionDecision, assignmentDecision, slaDecision, err
+	}
 	transitionDecision = a.policy.Evaluate(policy.Request{
 		HookKey:        "documents.workflow.transition",
 		ActorID:        actorID,
@@ -983,7 +1019,7 @@ func appendWorkflowHistory(mutation *workflow.Mutation, event workflow.HistoryEv
 	mutation.History = append(mutation.History, event)
 }
 
-func buildWorkflowHistoryEvent(record document.Record, transition workflow.Transition, actorID string, transitionDecision, assignmentDecision policy.Decision, now time.Time) workflow.HistoryEvent {
+func buildWorkflowHistoryEvent(record document.Record, transition workflow.Transition, actorID string, correlationID string, transitionDecision, assignmentDecision policy.Decision, now time.Time) workflow.HistoryEvent {
 	return workflow.HistoryEvent{
 		ID:              fmt.Sprintf("workflow-history:%s:%s:%d", record.Header.ID, transition.Action, record.Header.Version),
 		WorkflowKey:     transition.WorkflowKey,
@@ -1006,8 +1042,9 @@ func buildWorkflowHistoryEvent(record document.Record, transition workflow.Trans
 			"assignment_policy":   decisionSummary(assignmentDecision),
 		},
 		Metadata: map[string]any{
-			"document_type": record.Header.Type,
-			"status":        record.Header.Status,
+			"document_type":  record.Header.Type,
+			"status":         record.Header.Status,
+			"correlation_id": correlationID,
 		},
 	}
 }

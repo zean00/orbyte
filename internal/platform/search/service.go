@@ -42,18 +42,18 @@ type ProjectionConsistency struct {
 }
 
 type ProjectionStatus struct {
-	ProjectionKey        string    `json:"projection_key"`
-	LastRefreshStatus    string    `json:"last_refresh_status"`
-	LastSuccessAt        time.Time `json:"last_success_at,omitempty"`
-	LastFailureAt        time.Time `json:"last_failure_at,omitempty"`
-	LastError            string    `json:"last_error,omitempty"`
-	LastRebuildStartedAt time.Time `json:"last_rebuild_started_at,omitempty"`
+	ProjectionKey         string    `json:"projection_key"`
+	LastRefreshStatus     string    `json:"last_refresh_status"`
+	LastSuccessAt         time.Time `json:"last_success_at,omitempty"`
+	LastFailureAt         time.Time `json:"last_failure_at,omitempty"`
+	LastError             string    `json:"last_error,omitempty"`
+	LastRebuildStartedAt  time.Time `json:"last_rebuild_started_at,omitempty"`
 	LastRebuildFinishedAt time.Time `json:"last_rebuild_finished_at,omitempty"`
-	LastRebuildCount     int       `json:"last_rebuild_count"`
-	SourceCount          int       `json:"source_count"`
-	ProjectionCount      int       `json:"projection_count"`
-	StaleCount           int       `json:"stale_count"`
-	MissingCount         int       `json:"missing_count"`
+	LastRebuildCount      int       `json:"last_rebuild_count"`
+	SourceCount           int       `json:"source_count"`
+	ProjectionCount       int       `json:"projection_count"`
+	StaleCount            int       `json:"stale_count"`
+	MissingCount          int       `json:"missing_count"`
 }
 
 type Service struct {
@@ -65,8 +65,9 @@ type Service struct {
 	jobs      *jobs.Service
 	fields    *securityfields.Service
 
-	mu      sync.RWMutex
-	indexes map[string]IndexDefinition
+	mu       sync.RWMutex
+	indexes  map[string]IndexDefinition
+	runtimes map[string]IndexRuntime
 }
 
 func NewService() *Service {
@@ -79,6 +80,7 @@ func NewServiceWithRepository(repo Repository) *Service {
 		backend:  NewMemoryBackend(),
 		embedder: NewHashEmbedder(),
 		indexes:  map[string]IndexDefinition{},
+		runtimes: map[string]IndexRuntime{},
 	}
 }
 
@@ -86,7 +88,14 @@ func (s *Service) SetBackend(backend Backend) {
 	if backend == nil {
 		return
 	}
+	s.mu.Lock()
 	s.backend = backend
+	for key, def := range s.indexes {
+		runtime := s.runtimes[key]
+		runtime.BackendCapabilities = backend.Capabilities(def)
+		s.runtimes[key] = runtime
+	}
+	s.mu.Unlock()
 }
 
 func (s *Service) SetEmbedder(embedder Embedder) {
@@ -186,6 +195,16 @@ func (s *Service) RegisterIndex(def IndexDefinition) error {
 		return shared.Conflict("search index key already registered")
 	}
 	s.indexes[def.Key] = def
+	s.runtimes[def.Key] = IndexRuntime{
+		IndexKey:            def.Key,
+		ProjectionKey:       projectionKeyForDefinition(def),
+		SourceKind:          def.SourceKind,
+		RuntimeStatus:       "ready",
+		ConsistencyStatus:   "unknown",
+		ActiveSchemaVersion: "v1",
+		LifecycleState:      "active",
+		BackendCapabilities: s.backend.Capabilities(def),
+	}
 	return nil
 }
 
@@ -205,6 +224,94 @@ func (s *Service) IndexDefinition(key string) (IndexDefinition, bool) {
 	defer s.mu.RUnlock()
 	def, ok := s.indexes[key]
 	return def, ok
+}
+
+func (s *Service) IndexRuntime(key string) (IndexRuntime, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	item, ok := s.runtimes[key]
+	return item, ok
+}
+
+func (s *Service) IndexRuntimes() []IndexRuntime {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]IndexRuntime, 0, len(s.runtimes))
+	for _, item := range s.runtimes {
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].IndexKey < items[j].IndexKey })
+	return items
+}
+
+func (s *Service) PlanIndexSchemaVersion(key, version string) (IndexRuntime, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	runtime, ok := s.runtimes[key]
+	if !ok {
+		return IndexRuntime{}, shared.NotFound("search index not found")
+	}
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return IndexRuntime{}, shared.Validation("schema version is required")
+	}
+	runtime.CandidateSchemaVersion = version
+	runtime.LifecycleState = "cutover_pending"
+	s.runtimes[key] = runtime
+	return runtime, nil
+}
+
+func (s *Service) BuildCandidateIndex(key string) (IndexRuntime, error) {
+	s.mu.Lock()
+	runtime, ok := s.runtimes[key]
+	if !ok {
+		s.mu.Unlock()
+		return IndexRuntime{}, shared.NotFound("search index not found")
+	}
+	if runtime.CandidateSchemaVersion == "" {
+		s.mu.Unlock()
+		return IndexRuntime{}, shared.Validation("candidate schema version is not planned")
+	}
+	runtime.LifecycleState = "building"
+	runtime.RuntimeStatus = "building_candidate"
+	runtime.LastRebuildStartedAt = time.Now().UTC()
+	s.runtimes[key] = runtime
+	s.mu.Unlock()
+	def, _ := s.IndexDefinition(key)
+	if _, err := s.RebuildIndex(key); err != nil {
+		s.updateRuntime(key, func(current *IndexRuntime) {
+			current.RuntimeStatus = "failed"
+			current.LastFailureAt = time.Now().UTC()
+			current.LastError = err.Error()
+		})
+		return IndexRuntime{}, err
+	}
+	s.updateRuntime(key, func(current *IndexRuntime) {
+		current.LifecycleState = "validating"
+		current.RuntimeStatus = "candidate_built"
+		current.LastRebuildFinishedAt = time.Now().UTC()
+		current.BackendCapabilities = s.backend.Capabilities(def)
+	})
+	runtime, _ = s.IndexRuntime(key)
+	return runtime, nil
+}
+
+func (s *Service) ActivateCandidateIndex(key string) (IndexRuntime, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	runtime, ok := s.runtimes[key]
+	if !ok {
+		return IndexRuntime{}, shared.NotFound("search index not found")
+	}
+	if runtime.CandidateSchemaVersion == "" {
+		return IndexRuntime{}, shared.Validation("candidate schema version is not planned")
+	}
+	runtime.ActiveSchemaVersion = runtime.CandidateSchemaVersion
+	runtime.CandidateSchemaVersion = ""
+	runtime.LifecycleState = "active"
+	runtime.RuntimeStatus = "ready"
+	s.runtimes[key] = runtime
+	return runtime, nil
 }
 
 func (s *Service) RefreshDocument(record document.Record) {
@@ -308,9 +415,21 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 	}
 	if err != nil {
 		s.markRebuildFailure(projectionKey, err)
+		s.updateRuntime(key, func(runtime *IndexRuntime) {
+			runtime.RuntimeStatus = "failed"
+			runtime.LastFailureAt = time.Now().UTC()
+			runtime.LastError = err.Error()
+		})
 		return nil, err
 	}
 	s.markRebuildSuccess(projectionKey, intValue(result["reindexed"]))
+	s.updateRuntime(key, func(runtime *IndexRuntime) {
+		runtime.RuntimeStatus = "ready"
+		runtime.LastSuccessAt = time.Now().UTC()
+		runtime.LastRebuildStartedAt = time.Now().UTC()
+		runtime.LastRebuildFinishedAt = time.Now().UTC()
+		runtime.LastError = ""
+	})
 	return result, nil
 }
 

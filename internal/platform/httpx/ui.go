@@ -23,7 +23,7 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
+func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService) {
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(uiShellHTML))
@@ -62,6 +62,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 		menus, actions, views, _, flows := visibleUIContracts(ident, modules, p, surface)
 		adminMenus, adminActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
 		defaultPath := defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
+		fallbackPaths := fallbackPathsForSurfaces(ident, modules, p)
 		adminPath := "/admin"
 		if len(adminMenus) > 0 {
 			for _, action := range adminActions {
@@ -72,6 +73,7 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			}
 		}
 		respondJSON(w, http.StatusOK, map[string]any{
+			"shell_kind":         "workspace",
 			"surface":            surface,
 			"available_surfaces": availableUISurfaces(ident, modules, p),
 			"menus":              menus,
@@ -80,10 +82,21 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			"flows":              flows,
 			"self_service_apis":  visibleSelfServiceAPIs(ident, modules, p),
 			"default_path":       defaultPath,
+			"preferred_path":     ident.PreferredRoute(p.userID, uiSurfacePreference(surface)),
+			"fallback_paths":     fallbackPaths,
 			"admin_access":       len(adminMenus) > 0,
 			"admin_path":         adminPath,
-			"locale":             localeFromRequest(r, ident),
-			"supported_locales":  i18n.SupportedLocales(),
+			"capabilities": map[string]any{
+				"ui_preferences":     uiPrefs != nil,
+				"saved_filters":      true,
+				"column_preferences": true,
+				"density_modes":      []string{"comfortable", "compact"},
+				"keyboard_shortcuts": true,
+				"offline_cache":      true,
+				"shell_recovery":     true,
+			},
+			"locale":            localeFromRequest(r, ident),
+			"supported_locales": i18n.SupportedLocales(),
 			"auth_context": map[string]any{
 				"actor_user_id":       p.userID,
 				"effective_user_id":   principalEffectiveUserID(p),
@@ -183,28 +196,9 @@ func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *modu
 			respondError(w, shared.Validation("path is required"))
 			return
 		}
-		resolution, ok := modules.ResolveRouteForSurface(path, requestedUISurface(r))
-		if !ok {
-			respondError(w, shared.NotFound("route not found"))
-			return
-		}
-		if !principalAllowsAll(ident, p, resolution.Action.RequiredPermissions) {
-			respondError(w, shared.Forbidden("route is not allowed"))
-			return
-		}
-		if resolution.View != nil && !principalAllowsAll(ident, p, resolution.View.RequiredPermissions) {
-			respondError(w, shared.Forbidden("view is not allowed"))
-			return
-		}
-		if resolution.CustomEntry != nil && !principalAllowsAll(ident, p, resolution.CustomEntry.RequiredPermissions) {
-			respondError(w, shared.Forbidden("route is not allowed"))
-			return
-		}
-		if resolution.Flow != nil && !principalAllowsAll(ident, p, resolution.Flow.RequiredPermissions) {
-			respondError(w, shared.Forbidden("route is not allowed"))
-			return
-		}
-		respondJSON(w, http.StatusOK, resolution)
+		surface := requestedUISurface(r)
+		response := resolveUIRoute(ident, modules, p, surface, path)
+		respondJSON(w, http.StatusOK, response)
 	})
 
 	mux.HandleFunc("GET /ui/document-flows/", func(w http.ResponseWriter, r *http.Request) {
@@ -866,6 +860,96 @@ type uiWorklistApproval struct {
 	Metadata        map[string]any `json:"metadata,omitempty"`
 }
 
+type uiRouteResolutionResponse struct {
+	Status           string                         `json:"status"`
+	RequestedPath    string                         `json:"requested_path"`
+	ResolvedPath     string                         `json:"resolved_path,omitempty"`
+	Surface          module.UISurface               `json:"surface"`
+	SuggestedSurface module.UISurface               `json:"suggested_surface,omitempty"`
+	FallbackPath     string                         `json:"fallback_path,omitempty"`
+	Message          string                         `json:"message,omitempty"`
+	Path             string                         `json:"path,omitempty"`
+	ModuleKey        string                         `json:"module_key,omitempty"`
+	RenderMode       module.ActionRenderMode        `json:"render_mode,omitempty"`
+	Action           module.ActionDefinition        `json:"action,omitempty"`
+	View             *module.ViewDefinition         `json:"view,omitempty"`
+	CustomEntry      *module.CustomEntryDefinition  `json:"custom_entry,omitempty"`
+	Flow             *module.DocumentFlowDefinition `json:"flow,omitempty"`
+}
+
+func resolveUIRoute(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, path string) uiRouteResolutionResponse {
+	response := uiRouteResolutionResponse{
+		Status:        "not_found",
+		RequestedPath: path,
+		Surface:       surface,
+		FallbackPath:  fallbackPathForSurface(ident, modules, p, surface),
+		Message:       "route not found",
+	}
+	resolution, ok := modules.ResolveRouteForSurface(path, surface)
+	if !ok {
+		for _, candidate := range availableUISurfaces(ident, modules, p) {
+			candidateSurface := module.UISurface(candidate)
+			if candidateSurface == surface {
+				continue
+			}
+			if _, found := modules.ResolveRouteForSurface(path, candidateSurface); found {
+				response.Status = "surface_mismatch"
+				response.SuggestedSurface = candidateSurface
+				response.FallbackPath = fallbackPathForSurface(ident, modules, p, candidateSurface)
+				response.Message = "route belongs to a different surface"
+				return response
+			}
+		}
+		return response
+	}
+	if !principalAllowsAll(ident, p, resolution.Action.RequiredPermissions) {
+		response.Status = "forbidden"
+		response.Message = "route is not allowed"
+		return response
+	}
+	if resolution.View != nil && !principalAllowsAll(ident, p, resolution.View.RequiredPermissions) {
+		response.Status = "forbidden"
+		response.Message = "view is not allowed"
+		return response
+	}
+	if resolution.CustomEntry != nil && !principalAllowsAll(ident, p, resolution.CustomEntry.RequiredPermissions) {
+		response.Status = "forbidden"
+		response.Message = "route is not allowed"
+		return response
+	}
+	if resolution.Flow != nil && !principalAllowsAll(ident, p, resolution.Flow.RequiredPermissions) {
+		response.Status = "forbidden"
+		response.Message = "route is not allowed"
+		return response
+	}
+	response.Status = "ok"
+	response.ResolvedPath = resolution.Path
+	response.Path = resolution.Path
+	response.ModuleKey = resolution.ModuleKey
+	response.RenderMode = resolution.RenderMode
+	response.Action = resolution.Action
+	response.View = resolution.View
+	response.CustomEntry = resolution.CustomEntry
+	response.Flow = resolution.Flow
+	response.Message = ""
+	return response
+}
+
+func fallbackPathsForSurfaces(ident *identity.Service, modules *module.Service, p principal) map[string]string {
+	items := map[string]string{}
+	for _, surface := range availableUISurfaces(ident, modules, p) {
+		if path := fallbackPathForSurface(ident, modules, p, module.UISurface(surface)); path != "" {
+			items[surface] = path
+		}
+	}
+	return items
+}
+
+func fallbackPathForSurface(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) string {
+	menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, surface)
+	return defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
+}
+
 func visibleSelfServiceAPIs(ident *identity.Service, modules *module.Service, p principal) []module.SelfServiceAPIDefinition {
 	items := make([]module.SelfServiceAPIDefinition, 0)
 	for _, item := range modules.SelfServiceAPIs() {
@@ -1250,6 +1334,13 @@ const uiShellHTML = `<!doctype html>
   <link rel="manifest" href="/ui/manifest.webmanifest">
   <title>Orbyte Platform UI</title>
   <link rel="stylesheet" href="/ui/assets/platform.css?v=` + platformAssetVersion + `">
+  <style>
+    [data-density="compact"] .data-table th,
+    [data-density="compact"] .data-table td { padding: .55rem .65rem; font-size: .8125rem; }
+    [data-density="compact"] .toolbar-row { gap: .5rem; }
+    [data-density="compact"] .control-tile { min-width: 140px; }
+    [data-route-focus]:focus, button:focus, a:focus, input:focus, select:focus, textarea:focus { outline: 2px solid #1f6f5f; outline-offset: 2px; }
+  </style>
 </head>
 <body>
   <div class="shell" id="shell-root">
@@ -1374,11 +1465,30 @@ const uiShellHTML = `<!doctype html>
         draft_updated: 'Draft updated through manifest-driven form.',
         ui_bootstrap_failed: 'UI bootstrap failed',
         ui_bootstrap_failed_status: 'Failed to bootstrap module UI.',
+        route_not_found: 'Route unavailable',
+        route_forbidden: 'Route not allowed',
+        surface_mismatch: 'This page belongs to another surface.',
+        session_expired: 'Your session expired. Sign in again to continue.',
+        recovery_retry: 'Retry',
+        recovery_go_default: 'Go to Default',
+        recovery_switch_surface: 'Switch Surface',
+        recovery_sign_in: 'Sign In',
+        recovery_offline: 'Open Cached View',
+        keyboard_shortcuts: 'Keyboard Shortcuts',
+        shortcut_focus_filters: 'Focus filters',
+        shortcut_go_default: 'Go to default page',
+        shortcut_open_selected: 'Open current page action',
+        density: 'Density',
+        density_comfortable: 'Comfortable',
+        density_compact: 'Compact',
+        columns: 'Columns',
+        preferences_saved: 'View preferences saved.',
         no_routes: 'No permitted routes are available for this principal.',
         resolved_from_module: 'Resolved from module',
         using_rendering: 'using',
         sync_pending: 'pending',
         sync_conflict: 'conflict',
+        sync_failed: 'failed',
         value_active: 'Active',
         value_inactive: 'Inactive',
         value_blocked: 'Blocked',
@@ -1499,11 +1609,30 @@ const uiShellHTML = `<!doctype html>
         draft_updated: 'Draf diperbarui melalui formulir berbasis manifest.',
         ui_bootstrap_failed: 'Bootstrap UI gagal',
         ui_bootstrap_failed_status: 'Gagal melakukan bootstrap UI modul.',
+        route_not_found: 'Rute tidak tersedia',
+        route_forbidden: 'Rute tidak diizinkan',
+        surface_mismatch: 'Halaman ini milik surface lain.',
+        session_expired: 'Sesi Anda berakhir. Masuk kembali untuk melanjutkan.',
+        recovery_retry: 'Coba Lagi',
+        recovery_go_default: 'Ke Rute Default',
+        recovery_switch_surface: 'Ganti Surface',
+        recovery_sign_in: 'Masuk',
+        recovery_offline: 'Buka Versi Cache',
+        keyboard_shortcuts: 'Pintasan Keyboard',
+        shortcut_focus_filters: 'Fokus ke filter',
+        shortcut_go_default: 'Ke halaman default',
+        shortcut_open_selected: 'Buka aksi halaman saat ini',
+        density: 'Kepadatan',
+        density_comfortable: 'Nyaman',
+        density_compact: 'Rapat',
+        columns: 'Kolom',
+        preferences_saved: 'Preferensi tampilan disimpan.',
         no_routes: 'Tidak ada rute yang diizinkan untuk principal ini.',
         resolved_from_module: 'Diselesaikan dari modul',
         using_rendering: 'menggunakan',
         sync_pending: 'tertunda',
         sync_conflict: 'konflik',
+        sync_failed: 'gagal',
         value_active: 'Aktif',
         value_inactive: 'Tidak Aktif',
         value_blocked: 'Diblokir',
@@ -1553,7 +1682,10 @@ const uiShellHTML = `<!doctype html>
       cacheWarm: false,
       locale: 'en',
       supportedLocales: defaultSupportedLocales,
-      surface: 'backoffice'
+      surface: 'backoffice',
+      shellKind: 'workspace',
+      routeState: 'booting',
+      routeFocusSelector: ''
     };
 
     function normalizeLocale(locale) {
@@ -1745,6 +1877,16 @@ const uiShellHTML = `<!doctype html>
       });
     }
 
+    async function idbClear(storeName) {
+      const db = await openOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error || new Error('indexeddb clear failed')); };
+      });
+    }
+
     async function idbEntries(storeName) {
       const db = await openOfflineDB();
       return new Promise((resolve, reject) => {
@@ -1852,13 +1994,17 @@ const uiShellHTML = `<!doctype html>
       return '/ui/bootstrap?surface=' + encodeURIComponent(currentSurface());
     }
 
+    function preferenceStorageKey(pathname) {
+      return 'orbyte:ui-prefs:' + currentSurface() + ':' + pathname;
+    }
+
     function worklistFilterStorageKey(pathname, source) {
       return 'orbyte:worklist-filter:' + currentSurface() + ':' + pathname + ':' + source;
     }
 
-    function readSavedWorklistFilter(pathname, source) {
+    function readLocalUIPreferences(pathname) {
       try {
-        const raw = window.localStorage.getItem(worklistFilterStorageKey(pathname, source));
+        const raw = window.localStorage.getItem(preferenceStorageKey(pathname));
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return parsed && typeof parsed === 'object' ? parsed : null;
@@ -1867,18 +2013,64 @@ const uiShellHTML = `<!doctype html>
       }
     }
 
-    function writeSavedWorklistFilter(pathname, source, params) {
+    function writeLocalUIPreferences(pathname, prefs) {
       try {
-        const payload = {};
-        Object.keys(params || {}).forEach((key) => {
-          if (params[key]) payload[key] = params[key];
-        });
-        if (!Object.keys(payload).length) {
-          window.localStorage.removeItem(worklistFilterStorageKey(pathname, source));
+        const payload = Object.assign({surface: currentSurface(), route_path: pathname}, prefs || {});
+        const hasColumns = Array.isArray(payload.columns) && payload.columns.length > 0;
+        const hasColumnOrder = Array.isArray(payload.column_order) && payload.column_order.length > 0;
+        if ((!payload.filters || !Object.keys(payload.filters).length) && !hasColumns && !hasColumnOrder && !payload.density) {
+          window.localStorage.removeItem(preferenceStorageKey(pathname));
           return;
         }
-        window.localStorage.setItem(worklistFilterStorageKey(pathname, source), JSON.stringify(payload));
+        window.localStorage.setItem(preferenceStorageKey(pathname), JSON.stringify(payload));
       } catch (_) {}
+    }
+
+    function readSavedWorklistFilter(pathname, source) {
+      const prefs = readLocalUIPreferences(pathname);
+      const filters = prefs && prefs.filters && prefs.filters[source];
+      return filters && typeof filters === 'object' ? filters : null;
+    }
+
+    async function loadUIPreferences(pathname, viewKey) {
+      const routePath = pathname || currentPath();
+      if (!routePath) return {surface: currentSurface(), route_path: routePath, filters: {}, columns: [], column_order: [], density: 'comfortable'};
+      try {
+        const payload = await api('/me/preferences/ui?surface=' + encodeURIComponent(currentSurface()) + '&route_path=' + encodeURIComponent(routePath));
+        const merged = Object.assign({filters: {}, columns: [], column_order: [], density: 'comfortable'}, payload || {});
+        if (viewKey && !merged.view_key) merged.view_key = viewKey;
+        writeLocalUIPreferences(routePath, merged);
+        return merged;
+      } catch (_) {
+        const local = readLocalUIPreferences(routePath);
+        return Object.assign({surface: currentSurface(), route_path: routePath, view_key: viewKey || '', filters: {}, columns: [], column_order: [], density: 'comfortable'}, local || {});
+      }
+    }
+
+    async function saveUIPreferences(pathname, nextPrefs) {
+      const routePath = pathname || currentPath();
+      const payload = Object.assign({surface: currentSurface(), route_path: routePath, filters: {}, columns: [], column_order: [], density: 'comfortable'}, nextPrefs || {});
+      writeLocalUIPreferences(routePath, payload);
+      try {
+        await api('/me/preferences/ui', {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+      } catch (_) {}
+      setStatus(t('preferences_saved'));
+      return payload;
+    }
+
+    async function saveWorklistFilterPreference(pathname, source, params, viewKey) {
+      const current = await loadUIPreferences(pathname, viewKey);
+      const filters = Object.assign({}, current.filters || {});
+      const next = {};
+      Object.keys(params || {}).forEach((key) => {
+        if (params[key]) next[key] = params[key];
+      });
+      if (Object.keys(next).length) filters[source] = next; else delete filters[source];
+      return saveUIPreferences(pathname, Object.assign({}, current, {view_key: viewKey || current.view_key || '', filters}));
     }
 
     function paramsFromObject(values) {
@@ -1907,13 +2099,85 @@ const uiShellHTML = `<!doctype html>
       document.getElementById('route-status').textContent = text;
     }
 
+    function setRouteState(kind, focusSelector) {
+      state.routeState = kind;
+      state.routeFocusSelector = focusSelector || '';
+    }
+
+    function focusRecoveryTarget(selector) {
+      window.requestAnimationFrame(() => {
+        const node = document.querySelector(selector || state.routeFocusSelector || '[data-route-focus]');
+        if (!node) return;
+        if (!node.hasAttribute('tabindex')) node.setAttribute('tabindex', '-1');
+        node.focus();
+      });
+    }
+
+    function routeFallbackPath(surface) {
+      const targetSurface = surface || currentSurface();
+      const paths = (state.bootstrap && state.bootstrap.fallback_paths) || {};
+      return paths[targetSurface] || (targetSurface === state.surface ? state.bootstrap && state.bootstrap.default_path : '');
+    }
+
+    async function navigateToSurface(surface, preferredPath) {
+      const params = new URLSearchParams(window.location.search);
+      params.set('surface', surface || 'backoffice');
+      const targetPath = preferredPath || ((state.bootstrap && state.bootstrap.fallback_paths && state.bootstrap.fallback_paths[surface]) || '');
+      const target = '/ui?' + params.toString() + (targetPath ? '#' + targetPath : '');
+      window.location.assign(target);
+    }
+
+    async function resolveCurrentRoute() {
+      const path = currentPath() || (state.bootstrap && state.bootstrap.default_path) || '';
+      if (!path) {
+        return {status: 'not_found', requested_path: '', surface: currentSurface(), fallback_path: routeFallbackPath(currentSurface()), message: t('no_routes')};
+      }
+      return api('/ui/routes/resolve?path=' + encodeURIComponent(path) + '&surface=' + encodeURIComponent(state.surface || currentSurface()));
+    }
+
     function refreshOfflineStatus() {
       const networkNode = document.getElementById('network-status');
       const syncNode = document.getElementById('sync-status');
       const cacheNode = document.getElementById('cache-status');
       if (networkNode) networkNode.textContent = navigator.onLine ? t('online') : t('offline');
-      if (syncNode) syncNode.textContent = state.syncStats.pending + ' ' + t('sync_pending') + ' / ' + state.syncStats.conflict + ' ' + t('sync_conflict');
+      if (syncNode) syncNode.textContent = state.syncStats.pending + ' ' + t('sync_pending') + ' / ' + state.syncStats.conflict + ' ' + t('sync_conflict') + ' / ' + state.syncStats.failed + ' ' + t('sync_failed');
       if (cacheNode) cacheNode.textContent = state.cacheWarm ? t('cache_warm') : t('cache_cold');
+    }
+
+    function renderRecoveryPanel(title, message, actions) {
+      const root = document.getElementById('view-root');
+      root.innerHTML = '<section class="page-panel" aria-live="polite"><div class="page-header"><div><h3 data-route-focus>' + escapeHTML(title) + '</h3><p class="status">' + escapeHTML(message) + '</p></div></div><div class="page-actions" id="route-recovery-actions"></div></section>';
+      const zone = document.getElementById('route-recovery-actions');
+      (actions || []).forEach((action, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        if (action.secondary) button.className = 'secondary';
+        button.textContent = action.label;
+        button.onclick = action.onClick;
+        if (index === 0) button.dataset.routeFocus = '1';
+        zone.appendChild(button);
+      });
+      setRouteState('recovery', '[data-route-focus]');
+      focusRecoveryTarget('[data-route-focus]');
+    }
+
+    function bindGlobalShortcuts() {
+      document.addEventListener('keydown', (event) => {
+        if ((event.target && /input|textarea|select/i.test(event.target.tagName)) || event.defaultPrevented) return;
+        if (event.key === '/') {
+          const target = document.querySelector('[data-primary-filter]');
+          if (target) {
+            event.preventDefault();
+            target.focus();
+          }
+          return;
+        }
+        if (event.key === 'g' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          event.preventDefault();
+          const fallback = routeFallbackPath(currentSurface());
+          if (fallback) window.location.hash = '#' + fallback;
+        }
+      });
     }
 
     function authErrorFromQuery() {
@@ -1990,10 +2254,28 @@ const uiShellHTML = `<!doctype html>
       return 'queue:' + idempotencyKey;
     }
 
+    async function offlineDeviceID() {
+      let deviceID = '';
+      try {
+        deviceID = window.localStorage.getItem('orbyte.offline.device_id') || '';
+      } catch (_) {}
+      if (!deviceID) {
+        deviceID = 'offline-device-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        try {
+          window.localStorage.setItem('orbyte.offline.device_id', deviceID);
+        } catch (_) {}
+      }
+      return deviceID;
+    }
+
     async function queueSyncItem(item) {
       const idempotencyKey = item.idempotency_key || ('sync-' + Date.now() + '-' + Math.random().toString(36).slice(2));
       item.idempotency_key = idempotencyKey;
-      await idbPut('sync_queue', queueKey(idempotencyKey), Object.assign({queued_at: new Date().toISOString()}, item));
+      await idbPut('sync_queue', queueKey(idempotencyKey), Object.assign({
+        queued_at: new Date().toISOString(),
+        attempt_count: Number(item.attempt_count || 0),
+        next_retry_at: item.next_retry_at || ''
+      }, item));
       await refreshSyncStats();
       return item;
     }
@@ -2003,7 +2285,7 @@ const uiShellHTML = `<!doctype html>
       const drafts = await idbEntries('drafts');
       state.syncStats.pending = queued.length;
       state.syncStats.conflict = drafts.filter((item) => item && item.status === 'conflict').length;
-      state.syncStats.failed = drafts.filter((item) => item && item.status === 'failed').length;
+      state.syncStats.failed = drafts.filter((item) => item && (item.status === 'failed' || item.status === 'failed_retryable' || item.status === 'failed_terminal' || item.status === 'forbidden')).length;
       refreshOfflineStatus();
     }
 
@@ -2040,12 +2322,19 @@ const uiShellHTML = `<!doctype html>
     }
 
     async function loadOfflineBootstrap() {
+      const cached = await idbGet('app_meta', 'offline_bootstrap');
       try {
         state.offlineBootstrap = await api('/offline/bootstrap');
+        if (cached && (cached.cache_token !== state.offlineBootstrap.cache_token || cached.schema_version !== state.offlineBootstrap.schema_version)) {
+          await Promise.all([
+            idbClear('reference_packages'),
+            idbClear('projection_packages')
+          ]);
+        }
         await idbPut('app_meta', 'offline_bootstrap', state.offlineBootstrap);
         await prefetchOfflinePackages();
       } catch (err) {
-        state.offlineBootstrap = await idbGet('app_meta', 'offline_bootstrap');
+        state.offlineBootstrap = cached;
       }
       return state.offlineBootstrap;
     }
@@ -2086,15 +2375,22 @@ const uiShellHTML = `<!doctype html>
         await refreshSyncStats();
         return;
       }
-      const queued = await idbEntries('sync_queue');
+      const now = Date.now();
+      const queued = (await idbEntries('sync_queue')).filter((item) => {
+        if (!item) return false;
+        if (!item.next_retry_at) return true;
+        const retryAt = Date.parse(item.next_retry_at);
+        return Number.isNaN(retryAt) || retryAt <= now;
+      });
       if (!queued.length) {
         await refreshSyncStats();
         return;
       }
       try {
+        const deviceID = await offlineDeviceID();
         const payload = await api('/offline/sync', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {'Content-Type': 'application/json', 'X-Offline-Device-ID': deviceID},
           body: JSON.stringify({items: queued})
         });
         const results = payload.items || [];
@@ -2110,6 +2406,8 @@ const uiShellHTML = `<!doctype html>
               draft.target_id = result.target_id || draft.target_id || '';
               draft.version = result.version || draft.version || 0;
               draft.etag = result.etag || draft.etag || '';
+              draft.last_error = '';
+              draft.conflict = null;
               await saveDraft(queueItem.kind, targetKey, draft.target_id || queueItem.target_id, draft);
             }
             await idbDelete('sync_queue', key);
@@ -2117,15 +2415,30 @@ const uiShellHTML = `<!doctype html>
             if (draft) {
               draft.status = 'conflict';
               draft.conflict = result.conflict || {};
+              draft.last_error = result.error || '';
               await saveDraft(queueItem.kind, targetKey, queueItem.target_id, draft);
             }
             await idbDelete('sync_queue', key);
-          } else {
+          } else if (result.status === 'failed_retryable') {
+            queueItem.attempt_count = Number(result.attempt_count || queueItem.attempt_count || 0);
+            queueItem.next_retry_at = result.retry_after || '';
+            queueItem.last_error = result.error || 'sync failed';
+            queueItem.last_result_status = result.status;
+            await idbPut('sync_queue', key, queueItem);
             if (draft) {
-              draft.status = 'failed';
+              draft.status = 'failed_retryable';
               draft.last_error = result.error || 'sync failed';
+              draft.retry_after = result.retry_after || '';
               await saveDraft(queueItem.kind, targetKey, queueItem.target_id, draft);
             }
+          } else {
+            if (draft) {
+              draft.status = result.status || 'failed_terminal';
+              draft.last_error = result.error || 'sync failed';
+              draft.retry_after = result.retry_after || '';
+              await saveDraft(queueItem.kind, targetKey, queueItem.target_id, draft);
+            }
+            await idbDelete('sync_queue', key);
           }
           await idbPut('sync_results', result.idempotency_key, result);
         }
@@ -2184,6 +2497,7 @@ const uiShellHTML = `<!doctype html>
             });
             state.surface = currentSurface();
             state.bootstrap = await api(bootstrapURL());
+            state.shellKind = state.bootstrap.shell_kind || 'workspace';
             state.surface = state.bootstrap.surface || state.surface;
             state.supportedLocales = state.bootstrap.supported_locales || defaultSupportedLocales;
             if (state.bootstrap.locale) {
@@ -2247,15 +2561,8 @@ const uiShellHTML = `<!doctype html>
       container.hidden = false;
       container.innerHTML = items.map((surface) => '<button type="button" class="' + (state.surface === surface ? '' : 'secondary') + '" data-surface="' + escapeHTML(surface) + '">' + escapeHTML(t('surface_' + surface)) + '</button>').join('');
       container.querySelectorAll('[data-surface]').forEach((button) => {
-        button.addEventListener('click', () => {
-          const params = new URLSearchParams(window.location.search);
-          params.set('surface', button.dataset.surface || 'backoffice');
-          const target = '/ui?' + params.toString();
-          if (window.location.hash) {
-            window.location.assign(target + window.location.hash);
-            return;
-          }
-          window.location.assign(target);
+        button.addEventListener('click', async () => {
+          await navigateToSurface(button.dataset.surface || 'backoffice');
         });
       });
     }
@@ -2426,14 +2733,16 @@ const uiShellHTML = `<!doctype html>
       if (view.kind === 'queue') {
         const source = (view.projection_key || '').indexOf('approval') >= 0 ? 'approvals' : 'tasks';
         const params = currentParams();
+        const viewPrefs = await loadUIPreferences(currentPath(), view.key);
         if (![...params.keys()].length) {
-          const saved = readSavedWorklistFilter(currentPath(), source);
+          const saved = (viewPrefs.filters && viewPrefs.filters[source]) || readSavedWorklistFilter(currentPath(), source);
           if (saved && Object.keys(saved).length) {
             window.location.hash = '#' + currentPath() + '?' + paramsFromObject(saved).toString();
             setStatus(t('queue_saved_filter'));
             return;
           }
         }
+        const density = viewPrefs.density || 'comfortable';
         const query = new URLSearchParams();
         if (params.get('status')) query.set('status', params.get('status'));
         if (params.get('due')) query.set('due', params.get('due'));
@@ -2455,6 +2764,7 @@ const uiShellHTML = `<!doctype html>
             ? '<label class="control-tile"><span class="meta">' + t('queue_assignee') + '</span><select data-worklist-filter="mine"><option value="">' + t('queue_assignee_any') + '</option><option value="1"' + (params.get('mine') === '1' ? ' selected' : '') + '>' + t('queue_assignee_mine') + '</option></select></label>'
             : '<label class="control-tile"><span class="meta">' + t('queue_assignee') + '</span><select data-worklist-filter="requested_by_me"><option value="">' + t('queue_assignee_any') + '</option><option value="1"' + (params.get('requested_by_me') === '1' ? ' selected' : '') + '>' + t('queue_requested_by_me') + '</option></select></label>')
           + '<label class="control-tile"><span class="meta">' + t('queue_workflow') + '</span><select data-worklist-filter="workflow_key"><option value="">' + t('all') + ' ' + t('queue_workflow') + '</option>' + workflowOptions.map((key) => '<option value="' + escapeHTML(key) + '"' + (params.get('workflow_key') === key ? ' selected' : '') + '>' + escapeHTML(humanizeToken(key)) + '</option>').join('') + '</select></label>'
+          + '<label class="control-tile"><span class="meta">' + t('density') + '</span><select data-density-mode="1"><option value="comfortable"' + (density === 'comfortable' ? ' selected' : '') + '>' + t('density_comfortable') + '</option><option value="compact"' + (density === 'compact' ? ' selected' : '') + '>' + t('density_compact') + '</option></select></label>'
           + '<button type="button" class="secondary" data-save-worklist-filter="1">' + t('queue_save_filter') + '</button>'
           + '<button type="button" class="secondary" data-reset-worklist-filter="1">' + t('queue_reset_filter') + '</button>'
           + '</div>';
@@ -2468,7 +2778,7 @@ const uiShellHTML = `<!doctype html>
         const summaryMarkup = source === 'approvals'
           ? '<div class="metric-grid"><article class="metric-card"><span class="meta">' + t('queue_approvals_label') + '</span><strong>' + escapeHTML(String(queueSummary.pending || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_due_overdue') + '</span><strong>' + escapeHTML(String(queueSummary.overdue || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_requested_by_me') + '</span><strong>' + escapeHTML(String(queueSummary.requested_by_me || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_workflows_label') + '</span><strong>' + escapeHTML(String(queueSummary.workflows || 0)) + '</strong></article></div>'
           : '<div class="metric-grid"><article class="metric-card"><span class="meta">' + t('queue_tasks_label') + '</span><strong>' + escapeHTML(String(queueSummary.open || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_due_overdue') + '</span><strong>' + escapeHTML(String(queueSummary.overdue || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_mine_label') + '</span><strong>' + escapeHTML(String(queueSummary.mine || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_workflows_label') + '</span><strong>' + escapeHTML(String(queueSummary.workflows || 0)) + '</strong></article></div>';
-        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || 'Operational queue for workflow-driven work.') + '</p></div></div><div class="page-body">' + summaryMarkup + filterBar + '<div class="table-shell"><table class="data-table"><thead><tr><th>' + t('queue_target') + '</th><th>' + t('queue_status') + '</th><th>' + t('queue_assignment') + '</th><th>' + t('queue_due') + '</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5"><div class="row-secondary">' + escapeHTML(t('no_records')) + '</div></td></tr>') + '</tbody></table></div></div></section>';
+        root.innerHTML = '<section class="page-panel" data-density="' + escapeHTML(density) + '"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || 'Operational queue for workflow-driven work.') + '</p></div></div><div class="page-body">' + summaryMarkup + filterBar + '<div class="table-shell"><table class="data-table"><thead><tr><th>' + t('queue_target') + '</th><th>' + t('queue_status') + '</th><th>' + t('queue_assignment') + '</th><th>' + t('queue_due') + '</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5"><div class="row-secondary">' + escapeHTML(t('no_records')) + '</div></td></tr>') + '</tbody></table></div></div></section>';
         root.querySelectorAll('[data-worklist-filter]').forEach((input) => {
           input.addEventListener('change', () => {
             const next = currentParams();
@@ -2477,17 +2787,23 @@ const uiShellHTML = `<!doctype html>
           });
         });
         root.querySelectorAll('[data-save-worklist-filter]').forEach((button) => {
-          button.addEventListener('click', () => {
+          button.addEventListener('click', async () => {
             const next = currentParams();
-            writeSavedWorklistFilter(currentPath(), source, Object.fromEntries(next.entries()));
+            await saveWorklistFilterPreference(currentPath(), source, Object.fromEntries(next.entries()), view.key);
             setStatus(t('queue_filter_saved'));
           });
         });
         root.querySelectorAll('[data-reset-worklist-filter]').forEach((button) => {
-          button.addEventListener('click', () => {
-            writeSavedWorklistFilter(currentPath(), source, {});
+          button.addEventListener('click', async () => {
+            await saveWorklistFilterPreference(currentPath(), source, {}, view.key);
             setStatus(t('queue_filter_cleared'));
             window.location.hash = '#' + currentPath();
+          });
+        });
+        root.querySelectorAll('[data-density-mode]').forEach((input) => {
+          input.addEventListener('change', async () => {
+            await saveUIPreferences(currentPath(), Object.assign({}, viewPrefs, {view_key: view.key, density: input.value || 'comfortable'}));
+            await renderRoute();
           });
         });
         root.querySelectorAll('[data-open-workitem]').forEach((button) => {
@@ -2503,6 +2819,7 @@ const uiShellHTML = `<!doctype html>
       }
       if (view.kind === 'list') {
         const params = currentParams();
+        const viewPrefs = await loadUIPreferences(currentPath(), view.key);
         const query = new URLSearchParams();
         if (view.document_type) query.set('type', view.document_type);
         if (view.model_key) query.set('model', view.model_key);
@@ -2523,17 +2840,27 @@ const uiShellHTML = `<!doctype html>
         }
         const pagedItems = payload.items || [];
         const newRoute = view.model_key ? routeForModel(view.model_key, 'form') : routeForDocumentCreate(view.document_type);
+        const density = viewPrefs.density || 'comfortable';
+        const configuredColumns = view.columns || [];
+        const preferredColumns = (viewPrefs.columns || []).filter((key) => configuredColumns.some((column) => column.key === key));
+        const visibleColumns = (preferredColumns.length ? preferredColumns : configuredColumns.map((column) => column.key))
+          .map((key) => configuredColumns.find((column) => column.key === key))
+          .filter(Boolean);
         const filterBar = '<div class="toolbar-row">' +
           ((view.filters || []).map((filter) => {
             if (filter.type !== 'enum') return '';
             const options = ['<option value="">' + t('all') + ' ' + escapeHTML(pickText(filter, 'label')) + '</option>'].concat((filter.options || []).map((option) => '<option value="' + option + '"' + (params.get(filter.key) === option ? ' selected' : '') + '>' + escapeHTML(displayValue(option)) + '</option>'));
             return '<label class="control-tile"><span class="meta">' + escapeHTML(pickText(filter, 'label')) + '</span><select data-filter="' + filter.key + '">' + options.join('') + '</select></label>';
           }).join('')) +
-          (view.model_key ? '<label class="control-tile grow"><span class="meta">' + t('search') + '</span><input data-filter="name" value="' + escapeHTML(params.get('name') || '') + '" placeholder="' + escapeHTML(t('search')) + '"></label>' : '') +
+          (view.model_key ? '<label class="control-tile grow"><span class="meta">' + t('search') + '</span><input data-primary-filter="1" data-filter="name" value="' + escapeHTML(params.get('name') || '') + '" placeholder="' + escapeHTML(t('search')) + '"></label>' : '') +
           '<label class="control-tile"><span class="meta">' + t('sort') + '</span><select data-filter="sort"><option value="">' + t('sort_document') + '</option><option value="updated_at"' + (params.get('sort') === 'updated_at' ? ' selected' : '') + '>' + t('sort_updated') + '</option><option value="status"' + (params.get('sort') === 'status' ? ' selected' : '') + '>' + t('sort_status') + '</option><option value="name"' + (params.get('sort') === 'name' ? ' selected' : '') + '>' + t('sort_name') + '</option></select></label>' +
+          '<label class="control-tile"><span class="meta">' + t('density') + '</span><select data-density-mode="1"><option value="comfortable"' + (density === 'comfortable' ? ' selected' : '') + '>' + t('density_comfortable') + '</option><option value="compact"' + (density === 'compact' ? ' selected' : '') + '>' + t('density_compact') + '</option></select></label>' +
           (newRoute ? '<button type="button" data-new="1">' + t('new') + '</button>' : '') +
           '</div>';
-        const columnDefs = view.columns || [];
+        const columnDefs = visibleColumns;
+        const columnChooser = configuredColumns.length
+          ? '<div class="toolbar-row">' + configuredColumns.map((column) => '<label class="control-tile"><input type="checkbox" data-column-toggle="' + escapeHTML(column.key) + '"' + (columnDefs.some((visible) => visible.key === column.key) ? ' checked' : '') + '> <span class="meta">' + escapeHTML(pickText(column, 'label')) + '</span></label>').join('') + '</div>'
+          : '';
         const rows = pagedItems.map((item) => {
           const openID = item.id || (item.header && item.header.id) || '';
           const cells = columnDefs.map((column, index) => {
@@ -2551,7 +2878,7 @@ const uiShellHTML = `<!doctype html>
           ? '<div class="table-shell"><table class="data-table"><thead><tr>' + tableHeader + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="table-shell"><div class="page-body"><p class="status">' + t('no_records') + '</p></div></div>';
         const pagination = '<div class="pagination-bar"><span class="status">' + t('page') + ' ' + page + ' / ' + Math.max(1, Math.ceil(total / pageSize)) + '</span><div class="actions"><button class="secondary" data-page="' + Math.max(1, page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>' + t('previous') + '</button><button class="secondary" data-page="' + (page + 1) + '"' + (page * pageSize >= total ? ' disabled' : '') + '>' + t('next') + '</button></div></div>';
-        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || t('standard_list')) + '</p></div></div><div class="page-body">' + filterBar + tableMarkup + pagination + '</div></section>';
+        root.innerHTML = '<section class="page-panel" data-density="' + escapeHTML(density) + '"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || t('standard_list')) + '</p></div></div><div class="page-body">' + filterBar + columnChooser + tableMarkup + pagination + '</div></section>';
         root.querySelectorAll('[data-filter]').forEach((input) => {
           input.addEventListener('change', () => {
             const next = currentParams();
@@ -2566,6 +2893,19 @@ const uiShellHTML = `<!doctype html>
             next.set('page', button.dataset.page);
             next.set('page_size', String(pageSize));
             window.location.hash = '#' + currentPath() + '?' + next.toString();
+          });
+        });
+        root.querySelectorAll('[data-density-mode]').forEach((input) => {
+          input.addEventListener('change', async () => {
+            await saveUIPreferences(currentPath(), Object.assign({}, viewPrefs, {view_key: view.key, density: input.value || 'comfortable'}));
+            await renderRoute();
+          });
+        });
+        root.querySelectorAll('[data-column-toggle]').forEach((input) => {
+          input.addEventListener('change', async () => {
+            const columns = Array.from(root.querySelectorAll('[data-column-toggle]')).filter((item) => item.checked).map((item) => item.dataset.columnToggle);
+            await saveUIPreferences(currentPath(), Object.assign({}, viewPrefs, {view_key: view.key, columns, column_order: columns}));
+            await renderRoute();
           });
         });
         root.querySelectorAll('[data-open]').forEach((button) => {
@@ -3577,27 +3917,70 @@ const uiShellHTML = `<!doctype html>
         return;
       }
       renderMenus();
-      const path = currentPath() || state.bootstrap.default_path;
-      if (!path) {
+      const route = await resolveCurrentRoute();
+      state.route = route;
+      const path = route.requested_path || currentPath() || state.bootstrap.default_path;
+      if (!path && route.status !== 'ok') {
         setStatus(t('no_routes'));
         document.getElementById('view-root').innerHTML = '';
         return;
       }
-      const route = await api('/ui/routes/resolve?path=' + encodeURIComponent(path) + '&surface=' + encodeURIComponent(state.surface || currentSurface()));
-      state.route = route;
+      if (route.status !== 'ok') {
+        const recoveryActions = [];
+        if (route.status === 'surface_mismatch') {
+          recoveryActions.push({
+            label: t('recovery_switch_surface'),
+            onClick: async () => {
+              const targetSurface = route.suggested_surface || currentSurface();
+              const fallback = route.fallback_path || routeFallbackPath(targetSurface);
+              await navigateToSurface(targetSurface, fallback);
+            }
+          });
+        }
+        if (route.fallback_path) {
+          recoveryActions.push({
+            label: t('recovery_go_default'),
+            secondary: route.status === 'surface_mismatch',
+            onClick: () => { window.location.hash = '#' + route.fallback_path; }
+          });
+        }
+        if (navigator.onLine) {
+          recoveryActions.push({
+            label: t('recovery_retry'),
+            secondary: true,
+            onClick: () => { void renderRoute(); }
+          });
+        }
+        if (!navigator.onLine) {
+          recoveryActions.push({
+            label: t('recovery_offline'),
+            secondary: true,
+            onClick: () => { void renderRoute(); }
+          });
+        }
+        const titleKey = route.status === 'forbidden' ? 'route_forbidden' : (route.status === 'surface_mismatch' ? 'surface_mismatch' : 'route_not_found');
+        document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(t(titleKey)) + '</h2>';
+        setStatus(route.message || t(titleKey));
+        renderRecoveryPanel(t(titleKey), route.message || t(titleKey), recoveryActions);
+        return;
+      }
       document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(pickText(route.action, 'label') || route.path) + '</h2>';
       setStatus(t('resolved_from_module') + ' ' + route.module_key + ' ' + t('using_rendering') + ' ' + route.render_mode + ' rendering.');
+      setRouteState('route_ready', '#route-title h2');
       if (route.render_mode === 'custom') {
         await renderCustom(route);
+        focusRecoveryTarget('#route-title h2');
         return;
       }
       if (route.render_mode === 'flow') {
         await renderFlow(route);
         renderMenus();
+        focusRecoveryTarget('#route-title h2');
         return;
       }
       await renderGeneric(route);
       renderMenus();
+      focusRecoveryTarget('#route-title h2');
     }
 
     function readCookie(name) {
@@ -3889,6 +4272,7 @@ const uiShellHTML = `<!doctype html>
         state.authOptions = await api('/auth/options');
         state.surface = currentSurface();
         state.bootstrap = await api(bootstrapURL());
+        state.shellKind = state.bootstrap.shell_kind || 'workspace';
         state.surface = state.bootstrap.surface || state.surface;
         state.supportedLocales = state.bootstrap.supported_locales || defaultSupportedLocales;
         if (state.bootstrap.locale) {
@@ -3907,10 +4291,10 @@ const uiShellHTML = `<!doctype html>
         if (err.message === 'authentication required' || err.message === 'session not found' || err.message === 'session not active' || err.message === 'session revoked' || err.message === 'session expired') {
           renderLocaleSwitcher();
           applyLocale();
-          renderLogin('');
+          renderLogin(t('session_expired'));
           return;
         }
-        document.getElementById('view-root').innerHTML = '<section class="panel"><h3>' + escapeHTML(t('ui_bootstrap_failed')) + '</h3><p class="status">' + escapeHTML(err.message) + '</p></section>';
+        renderRecoveryPanel(t('ui_bootstrap_failed'), err.message, [{label: t('recovery_retry'), onClick: () => { void bootstrap(); }}]);
         setStatus(t('ui_bootstrap_failed_status'));
       }
     }
@@ -3922,12 +4306,13 @@ const uiShellHTML = `<!doctype html>
     });
     window.addEventListener('hashchange', () => { void renderRoute(); });
     document.getElementById('logout-button').addEventListener('click', () => { void performLogout(); });
+    bindGlobalShortcuts();
     void bootstrap();
   </script>
 </body>
 </html>`
 
-const uiServiceWorkerJS = `const CACHE_NAME = 'orbyte-ui-shell-v1';
+const uiServiceWorkerJS = `const CACHE_NAME = 'orbyte-ui-shell-v2';
 const PRECACHE_URLS = ['/ui', '/ui/manifest.webmanifest', '/ui/assets/platform.css?v=` + platformAssetVersion + `'];
 
 self.addEventListener('install', (event) => {

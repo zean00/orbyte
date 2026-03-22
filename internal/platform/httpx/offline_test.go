@@ -15,9 +15,14 @@ func TestOfflineBootstrapFiltersCapabilities(t *testing.T) {
 	}
 
 	var payload struct {
-		References  []map[string]any `json:"references"`
-		Projections []map[string]any `json:"projections"`
-		Documents   []map[string]any `json:"documents"`
+		SchemaVersion          string           `json:"schema_version"`
+		PackageManifestVersion string           `json:"package_manifest_version"`
+		CacheToken             string           `json:"cache_token"`
+		References             []map[string]any `json:"references"`
+		Projections            []map[string]any `json:"projections"`
+		Documents              []map[string]any `json:"documents"`
+		PackageManifest        []map[string]any `json:"package_manifest"`
+		SyncCapabilities       map[string]any   `json:"sync_capabilities"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode bootstrap: %v", err)
@@ -30,6 +35,12 @@ func TestOfflineBootstrapFiltersCapabilities(t *testing.T) {
 	}
 	if len(payload.Documents) == 0 {
 		t.Fatal("expected offline documents")
+	}
+	if payload.SchemaVersion == "" || payload.PackageManifestVersion == "" || payload.CacheToken == "" {
+		t.Fatalf("expected enriched bootstrap metadata, got %+v", payload)
+	}
+	if len(payload.PackageManifest) == 0 || payload.SyncCapabilities["queue_model"] == nil {
+		t.Fatalf("expected package manifest and sync capabilities, got %+v", payload)
 	}
 }
 
@@ -120,11 +131,13 @@ func TestOfflineSyncCreateAndConflict(t *testing.T) {
 	}
 
 	var createPayload struct {
-		Items []struct {
+		BatchID string `json:"batch_id"`
+		Items   []struct {
 			Status   string `json:"status"`
 			TargetID string `json:"target_id"`
 			Version  int    `json:"version"`
 			ETag     string `json:"etag"`
+			BatchID  string `json:"batch_id"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(create.Body.Bytes(), &createPayload); err != nil {
@@ -132,6 +145,9 @@ func TestOfflineSyncCreateAndConflict(t *testing.T) {
 	}
 	if len(createPayload.Items) != 1 || createPayload.Items[0].Status != "accepted" {
 		t.Fatalf("expected accepted sync result, got %+v", createPayload.Items)
+	}
+	if createPayload.BatchID == "" || createPayload.Items[0].BatchID == "" {
+		t.Fatalf("expected batch metadata, got %+v", createPayload)
 	}
 
 	conflict := h.request(http.MethodPost, "/offline/sync", mustJSON(t, map[string]any{
@@ -152,8 +168,12 @@ func TestOfflineSyncCreateAndConflict(t *testing.T) {
 
 	var conflictPayload struct {
 		Items []struct {
-			Status   string         `json:"status"`
-			Conflict map[string]any `json:"conflict"`
+			Status   string `json:"status"`
+			Conflict struct {
+				Current           map[string]any `json:"current"`
+				Attempted         map[string]any `json:"attempted"`
+				ResolutionOptions []string       `json:"resolution_options"`
+			} `json:"conflict"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(conflict.Body.Bytes(), &conflictPayload); err != nil {
@@ -162,8 +182,11 @@ func TestOfflineSyncCreateAndConflict(t *testing.T) {
 	if len(conflictPayload.Items) != 1 || conflictPayload.Items[0].Status != "conflict" {
 		t.Fatalf("expected conflict sync result, got %+v", conflictPayload.Items)
 	}
-	if conflictPayload.Items[0].Conflict["id"] == nil {
+	if conflictPayload.Items[0].Conflict.Current["id"] == nil {
 		t.Fatal("expected conflict metadata")
+	}
+	if conflictPayload.Items[0].Conflict.Attempted["payload"] == nil || len(conflictPayload.Items[0].Conflict.ResolutionOptions) == 0 {
+		t.Fatalf("expected structured conflict details, got %+v", conflictPayload.Items[0].Conflict)
 	}
 }
 

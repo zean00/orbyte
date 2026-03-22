@@ -20,6 +20,15 @@ type Snapshot struct {
 	At       time.Time         `json:"at"`
 }
 
+type LogRecord struct {
+	Key         string         `json:"key"`
+	Category    string         `json:"category,omitempty"`
+	Severity    string         `json:"severity,omitempty"`
+	Fields      map[string]any `json:"fields,omitempty"`
+	OccurredAt  time.Time      `json:"occurred_at"`
+	Correlation string         `json:"correlation_id,omitempty"`
+}
+
 type MetricDefinition struct {
 	Key         string   `json:"key"`
 	Type        string   `json:"type"`
@@ -54,13 +63,14 @@ type ContractStatus struct {
 }
 
 type Service struct {
-	mu       sync.RWMutex
-	counters map[string]int64
-	timings  map[string]timingState
-	metrics  map[string]MetricDefinition
-	logs     map[string]LogEventDefinition
-	events   map[string]DomainEventDefinition
-	statuses map[string]ContractStatus
+	mu         sync.RWMutex
+	counters   map[string]int64
+	timings    map[string]timingState
+	metrics    map[string]MetricDefinition
+	logs       map[string]LogEventDefinition
+	events     map[string]DomainEventDefinition
+	statuses   map[string]ContractStatus
+	logRecords []LogRecord
 }
 
 type timingState struct {
@@ -70,12 +80,13 @@ type timingState struct {
 
 func NewService() *Service {
 	return &Service{
-		counters: map[string]int64{},
-		timings:  map[string]timingState{},
-		metrics:  map[string]MetricDefinition{},
-		logs:     map[string]LogEventDefinition{},
-		events:   map[string]DomainEventDefinition{},
-		statuses: map[string]ContractStatus{},
+		counters:   map[string]int64{},
+		timings:    map[string]timingState{},
+		metrics:    map[string]MetricDefinition{},
+		logs:       map[string]LogEventDefinition{},
+		events:     map[string]DomainEventDefinition{},
+		statuses:   map[string]ContractStatus{},
+		logRecords: []LogRecord{},
 	}
 }
 
@@ -190,6 +201,32 @@ func (s *Service) ContractStatuses() []ContractStatus {
 	return items
 }
 
+func (s *Service) ListLogRecords() []LogRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]LogRecord, 0, len(s.logRecords))
+	for _, item := range s.logRecords {
+		items = append(items, cloneLogRecord(item))
+	}
+	return items
+}
+
+func (s *Service) QueryLogRecords(key, correlationID string) []LogRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]LogRecord, 0, len(s.logRecords))
+	for _, item := range s.logRecords {
+		if key != "" && item.Key != key {
+			continue
+		}
+		if correlationID != "" && item.Correlation != correlationID {
+			continue
+		}
+		items = append(items, cloneLogRecord(item))
+	}
+	return items
+}
+
 func (s *Service) RecordMetric(key string, labels map[string]string, delta int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -257,6 +294,18 @@ func (s *Service) EmitLogEvent(key string, fields map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	def, ok := s.logs[key]
+	record := LogRecord{
+		Key:         key,
+		Category:    def.Category,
+		Severity:    def.Severity,
+		Fields:      cloneAnyMap(fields),
+		OccurredAt:  time.Now().UTC(),
+		Correlation: stringValue(fields["correlation_id"]),
+	}
+	s.logRecords = append(s.logRecords, record)
+	if len(s.logRecords) > 500 {
+		s.logRecords = append([]LogRecord(nil), s.logRecords[len(s.logRecords)-500:]...)
+	}
 	if !ok {
 		return s.logFailure(key, "", fmt.Errorf("log definition not registered: %s", key))
 	}
@@ -334,6 +383,27 @@ func contains(items []string, candidate string) bool {
 		}
 	}
 	return false
+}
+
+func cloneAnyMap(input map[string]any) map[string]any {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneLogRecord(item LogRecord) LogRecord {
+	item.Fields = cloneAnyMap(item.Fields)
+	return item
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return strings.TrimSpace(text)
 }
 
 func (s *Service) RenderPrometheus() string {

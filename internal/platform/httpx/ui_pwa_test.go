@@ -61,7 +61,7 @@ func TestUIManifestAndServiceWorkerRoutes(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", sw.Code, sw.Body.String())
 	}
 	swBody := sw.Body.String()
-	if !strings.Contains(swBody, "CACHE_NAME = 'orbyte-ui-shell-v1'") {
+	if !strings.Contains(swBody, "CACHE_NAME = 'orbyte-ui-shell-v2'") {
 		t.Fatal("expected service worker cache name")
 	}
 	if !strings.Contains(swBody, "caches.match('/ui')") {

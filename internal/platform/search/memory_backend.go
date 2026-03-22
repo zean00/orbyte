@@ -133,6 +133,44 @@ func (b *MemoryBackend) Search(def IndexDefinition, organizationID string, req Q
 	return QueryResult{IndexKey: def.Key, Mode: mode, Total: total, Page: page, PageSize: pageSize, Hits: filtered[start:end]}, nil
 }
 
+func (b *MemoryBackend) List(def IndexDefinition, organizationID string) ([]IndexedRecord, error) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	items := make([]IndexedRecord, 0, len(b.collections[collectionKey(def.Key, organizationID)]))
+	for _, item := range b.collections[collectionKey(def.Key, organizationID)] {
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].UpdatedAt.Before(items[j].UpdatedAt)
+	})
+	return items, nil
+}
+
+func (b *MemoryBackend) Capabilities(def IndexDefinition) BackendCapabilities {
+	caps := BackendCapabilities{Keyword: true, BackendKind: "memory"}
+	for _, mode := range def.Modes {
+		switch strings.TrimSpace(mode) {
+		case "vector":
+			caps.Vector = true
+		case "hybrid":
+			caps.Hybrid = true
+			caps.Vector = true
+		}
+	}
+	for _, field := range def.VectorFields {
+		if field.EmbeddingMode == "external" {
+			caps.ExternalEmbedding = true
+		}
+		if field.EmbeddingMode == "typesense_auto" {
+			caps.InBackendEmbedding = true
+		}
+	}
+	return caps
+}
+
 func collectionKey(indexKey, organizationID string) string {
 	org := strings.TrimSpace(organizationID)
 	if org == "" {

@@ -11,6 +11,7 @@ const (
 )
 
 func routerDeps(graph *serviceGraph) httpx.RouterDeps {
+	uiPreferences := graph.uiPreferences
 	return httpx.RouterDeps{
 		Platform: httpx.PlatformDeps{
 			Config:       graph.config,
@@ -21,9 +22,10 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Workflows:    graph.workflows,
 		},
 		Auth: httpx.AuthDeps{
-			Config:   graph.config,
-			Identity: graph.identity,
-			Audit:    graph.audit,
+			Config:        graph.config,
+			Identity:      graph.identity,
+			Audit:         graph.audit,
+			UIPreferences: uiPreferences,
 		},
 		Models: httpx.ModelDeps{
 			Identity:      graph.identity,
@@ -39,6 +41,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Documents:     graph.documents,
 			Actions:       graph.docActions,
 			Policy:        graph.policy,
+			Search:        graph.search,
 			FieldSecurity: graph.fieldSecurity,
 			Observability: graph.observability,
 			Idempotency:   graph.idempotency,
@@ -47,6 +50,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Identity:      graph.identity,
 			Audit:         graph.audit,
 			Eventing:      graph.eventing,
+			Offline:       graph.offline,
 			Documents:     graph.documents,
 			Search:        graph.search,
 			Workflows:     graph.workflows,
@@ -96,6 +100,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			DocumentActions: graph.docActions,
 			Models:          graph.models,
 			ModelActions:    graph.modelActions,
+			Search:          graph.search,
 			FieldSecurity:   graph.fieldSecurity,
 			Idempotency:     graph.idempotency,
 		},
@@ -112,6 +117,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Monitoring:    graph.monitoring,
 			Policy:        graph.policy,
 			FieldSecurity: graph.fieldSecurity,
+			UIPreferences: uiPreferences,
 		},
 		CrossCutting: httpx.CrossCuttingDeps{
 			Config:        graph.config,

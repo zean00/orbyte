@@ -1,0 +1,1185 @@
+{
+  "actions": [
+    {
+      "custom_entry_key": "analytics.cockpit",
+      "key": "analytics.cockpit",
+      "kind": "navigate",
+      "label": "Analytics Cockpit",
+      "label_i18n": {
+        "en": "Analytics Cockpit",
+        "id": "Kokpit Analitik"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "analytics.read"
+      ],
+      "route_path": "/analytics/cockpit"
+    },
+    {
+      "flow_key": "documents.requests.intake",
+      "key": "documents.requests.create",
+      "kind": "navigate",
+      "label": "New Request",
+      "label_i18n": {
+        "en": "New Request",
+        "id": "Permintaan Baru"
+      },
+      "render_mode": "flow",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/documents/new"
+    },
+    {
+      "key": "documents.requests.detail",
+      "kind": "navigate",
+      "label": "Request Detail",
+      "label_i18n": {
+        "en": "Request Detail",
+        "id": "Detail Permintaan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/documents/detail",
+      "view_key": "documents.requests.detail"
+    },
+    {
+      "key": "documents.requests.list",
+      "kind": "navigate",
+      "label": "Requests",
+      "label_i18n": {
+        "en": "Requests",
+        "id": "Permintaan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/documents",
+      "view_key": "documents.requests.list"
+    },
+    {
+      "key": "masterdata.parties.detail",
+      "kind": "navigate",
+      "label": "Party Detail",
+      "label_i18n": {
+        "en": "Party Detail",
+        "id": "Detail Pihak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.read"
+      ],
+      "route_path": "/masterdata/parties/detail",
+      "view_key": "masterdata.parties.detail"
+    },
+    {
+      "key": "masterdata.parties.form",
+      "kind": "navigate",
+      "label": "Party Form",
+      "label_i18n": {
+        "en": "Party Form",
+        "id": "Form Pihak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.update"
+      ],
+      "route_path": "/masterdata/parties/form",
+      "view_key": "masterdata.parties.form"
+    },
+    {
+      "key": "masterdata.parties.list",
+      "kind": "navigate",
+      "label": "Parties",
+      "label_i18n": {
+        "en": "Parties",
+        "id": "Pihak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.list"
+      ],
+      "route_path": "/masterdata/parties",
+      "view_key": "masterdata.parties.list"
+    },
+    {
+      "key": "monitoring.overview",
+      "kind": "navigate",
+      "label": "Monitoring Overview",
+      "label_i18n": {
+        "en": "Monitoring Overview",
+        "id": "Ikhtisar Pemantauan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "monitoring.read"
+      ],
+      "route_path": "/monitoring",
+      "view_key": "monitoring.overview"
+    },
+    {
+      "key": "sdk.items.detail",
+      "kind": "",
+      "label": "SDK Detail",
+      "render_mode": "generic",
+      "route_path": "/sdk/items/detail",
+      "view_key": "sdk.items.detail"
+    },
+    {
+      "key": "sdk.items.form",
+      "kind": "",
+      "label": "SDK Form",
+      "render_mode": "generic",
+      "route_path": "/sdk/items/new",
+      "view_key": "sdk.items.form"
+    },
+    {
+      "key": "sdk.items.list",
+      "kind": "",
+      "label": "SDK Items",
+      "render_mode": "generic",
+      "route_path": "/sdk/items",
+      "view_key": "sdk.items.list"
+    }
+  ],
+  "admin_access": true,
+  "admin_path": "/admin#/admin/modules",
+  "auth_context": {
+    "actor_user_id": "user_admin",
+    "delegation_active": false,
+    "delegation_grant_id": "",
+    "effective_user_id": "user_admin"
+  },
+  "available_surfaces": [
+    "backoffice",
+    "worklist",
+    "self_service"
+  ],
+  "capabilities": {
+    "column_preferences": true,
+    "density_modes": [
+      "comfortable",
+      "compact"
+    ],
+    "keyboard_shortcuts": true,
+    "offline_cache": true,
+    "saved_filters": true,
+    "shell_recovery": true,
+    "ui_preferences": true
+  },
+  "default_path": "/sdk/items",
+  "fallback_paths": {
+    "backoffice": "/sdk/items",
+    "self_service": "/self-service/requests",
+    "worklist": "/worklist"
+  },
+  "flows": [
+    {
+      "key": "documents.requests.intake",
+      "primary_document_type": "generic_request",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/documents/new",
+      "steps": [
+        {
+          "documents": [
+            {
+              "document_type": "generic_request",
+              "key": "request",
+              "primary_output": true,
+              "sections": [
+                {
+                  "fields": [
+                    {
+                      "key": "title",
+                      "label": "Title",
+                      "label_i18n": {
+                        "en": "Title",
+                        "id": "Judul"
+                      },
+                      "path": "body.payload.title",
+                      "placeholder": "Enter request title",
+                      "placeholder_i18n": {
+                        "en": "Enter request title",
+                        "id": "Masukkan judul permintaan"
+                      },
+                      "type": "string",
+                      "widget": "text"
+                    },
+                    {
+                      "key": "request_kind",
+                      "label": "Request Kind",
+                      "label_i18n": {
+                        "en": "Request Kind",
+                        "id": "Jenis Permintaan"
+                      },
+                      "options": [
+                        "review",
+                        "followup"
+                      ],
+                      "path": "body.payload.request_kind",
+                      "type": "string",
+                      "widget": "select"
+                    }
+                  ],
+                  "key": "request_core",
+                  "title": "Request Details",
+                  "title_i18n": {
+                    "en": "Request Details",
+                    "id": "Detail Permintaan"
+                  }
+                }
+              ],
+              "title": "Request",
+              "title_i18n": {
+                "en": "Request",
+                "id": "Permintaan"
+              }
+            }
+          ],
+          "key": "intake",
+          "next_rules": [
+            {
+              "equals": "review",
+              "next_step_key": "review_packet",
+              "path": "documents.request.payload.request_kind"
+            },
+            {
+              "equals": "followup",
+              "next_step_key": "followup_plan",
+              "path": "documents.request.payload.request_kind"
+            }
+          ],
+          "title": "Primary Request",
+          "title_i18n": {
+            "en": "Primary Request",
+            "id": "Permintaan Utama"
+          }
+        },
+        {
+          "documents": [
+            {
+              "document_type": "generic_request",
+              "key": "review_note",
+              "link_type": "related_to",
+              "sections": [
+                {
+                  "fields": [
+                    {
+                      "key": "title",
+                      "label": "Title",
+                      "label_i18n": {
+                        "en": "Title",
+                        "id": "Judul"
+                      },
+                      "path": "body.payload.title",
+                      "type": "string",
+                      "widget": "text"
+                    },
+                    {
+                      "key": "notes",
+                      "label": "Notes",
+                      "label_i18n": {
+                        "en": "Notes",
+                        "id": "Catatan"
+                      },
+                      "path": "body.payload.notes",
+                      "type": "string",
+                      "widget": "textarea"
+                    }
+                  ],
+                  "key": "review_note",
+                  "title": "Review Note",
+                  "title_i18n": {
+                    "en": "Review Note",
+                    "id": "Catatan Tinjauan"
+                  }
+                }
+              ],
+              "title": "Review Note",
+              "title_i18n": {
+                "en": "Review Note",
+                "id": "Catatan Tinjauan"
+              }
+            },
+            {
+              "document_type": "generic_request",
+              "key": "review_checklist",
+              "link_type": "related_to",
+              "sections": [
+                {
+                  "fields": [
+                    {
+                      "key": "title",
+                      "label": "Title",
+                      "label_i18n": {
+                        "en": "Title",
+                        "id": "Judul"
+                      },
+                      "path": "body.payload.title",
+                      "type": "string",
+                      "widget": "text"
+                    },
+                    {
+                      "key": "owner",
+                      "label": "Owner",
+                      "label_i18n": {
+                        "en": "Owner",
+                        "id": "Penanggung Jawab"
+                      },
+                      "path": "body.payload.owner",
+                      "type": "string",
+                      "widget": "text"
+                    }
+                  ],
+                  "key": "review_checklist",
+                  "title": "Checklist",
+                  "title_i18n": {
+                    "en": "Checklist",
+                    "id": "Daftar Periksa"
+                  }
+                }
+              ],
+              "title": "Review Checklist",
+              "title_i18n": {
+                "en": "Review Checklist",
+                "id": "Daftar Periksa Tinjauan"
+              }
+            }
+          ],
+          "key": "review_packet",
+          "title": "Review Packet",
+          "title_i18n": {
+            "en": "Review Packet",
+            "id": "Paket Tinjauan"
+          }
+        },
+        {
+          "documents": [
+            {
+              "document_type": "generic_request",
+              "key": "followup_plan",
+              "link_type": "related_to",
+              "sections": [
+                {
+                  "fields": [
+                    {
+                      "key": "title",
+                      "label": "Title",
+                      "label_i18n": {
+                        "en": "Title",
+                        "id": "Judul"
+                      },
+                      "path": "body.payload.title",
+                      "type": "string",
+                      "widget": "text"
+                    },
+                    {
+                      "key": "next_action",
+                      "label": "Next Action",
+                      "label_i18n": {
+                        "en": "Next Action",
+                        "id": "Tindak Lanjut"
+                      },
+                      "path": "body.payload.next_action",
+                      "type": "string",
+                      "widget": "textarea"
+                    }
+                  ],
+                  "key": "followup_plan",
+                  "title": "Plan",
+                  "title_i18n": {
+                    "en": "Plan",
+                    "id": "Rencana"
+                  }
+                }
+              ],
+              "title": "Follow-up Plan",
+              "title_i18n": {
+                "en": "Follow-up Plan",
+                "id": "Rencana Tindak Lanjut"
+              }
+            }
+          ],
+          "key": "followup_plan",
+          "title": "Follow-up Plan",
+          "title_i18n": {
+            "en": "Follow-up Plan",
+            "id": "Rencana Tindak Lanjut"
+          }
+        }
+      ],
+      "title": "Request Intake",
+      "title_i18n": {
+        "en": "Request Intake",
+        "id": "Intake Permintaan"
+      }
+    }
+  ],
+  "locale": "en",
+  "menus": [
+    {
+      "action_key": "sdk.items.list",
+      "key": "sdk.items.menu",
+      "label": "SDK Items"
+    },
+    {
+      "action_key": "masterdata.parties.list",
+      "key": "masterdata.parties",
+      "label": "Parties",
+      "label_i18n": {
+        "en": "Parties",
+        "id": "Pihak"
+      },
+      "order": 5,
+      "required_permissions": [
+        "party.list"
+      ]
+    },
+    {
+      "action_key": "documents.requests.list",
+      "key": "documents.requests",
+      "label": "Requests",
+      "label_i18n": {
+        "en": "Requests",
+        "id": "Permintaan"
+      },
+      "order": 10,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "analytics.cockpit",
+      "key": "analytics.cockpit",
+      "label": "Analytics Cockpit",
+      "label_i18n": {
+        "en": "Analytics Cockpit",
+        "id": "Kokpit Analitik"
+      },
+      "order": 20,
+      "required_permissions": [
+        "analytics.read"
+      ]
+    },
+    {
+      "action_key": "monitoring.overview",
+      "key": "monitoring.overview",
+      "label": "Monitoring",
+      "label_i18n": {
+        "en": "Monitoring",
+        "id": "Pemantauan"
+      },
+      "order": 30,
+      "required_permissions": [
+        "monitoring.read"
+      ]
+    }
+  ],
+  "preferred_path": "",
+  "self_service_apis": [
+    {
+      "audience_kinds": [
+        "customer",
+        "employee",
+        "patient"
+      ],
+      "document_type": "generic_request",
+      "flow_key": "documents.self_service.requests.intake",
+      "handler_kind": "flow_commit",
+      "idempotent": true,
+      "key": "documents.self_service.requests.create",
+      "method": "POST",
+      "request_contract_key": "documents.generic_request.create",
+      "required_permissions": [
+        "document.create"
+      ],
+      "response_contract_key": "documents.generic_request.detail",
+      "route_path": "/document-flows/documents.self_service.requests.intake/commit",
+      "title": "Create Self-Service Request",
+      "title_i18n": {
+        "en": "Create Self-Service Request",
+        "id": "Buat Permintaan Self-Service"
+      }
+    },
+    {
+      "audience_kinds": [
+        "customer",
+        "employee",
+        "patient"
+      ],
+      "document_type": "generic_request",
+      "handler_kind": "ui_data",
+      "key": "documents.self_service.requests.get",
+      "method": "GET",
+      "required_permissions": [
+        "document.read"
+      ],
+      "response_contract_key": "documents.generic_request.detail",
+      "route_path": "/ui/data/documents/{documentID}",
+      "title": "Get Self-Service Request",
+      "title_i18n": {
+        "en": "Get Self-Service Request",
+        "id": "Lihat Permintaan Self-Service"
+      }
+    },
+    {
+      "audience_kinds": [
+        "customer",
+        "employee",
+        "patient"
+      ],
+      "document_type": "generic_request",
+      "handler_kind": "ui_data",
+      "key": "documents.self_service.requests.list",
+      "method": "GET",
+      "required_permissions": [
+        "document.list"
+      ],
+      "response_contract_key": "documents.generic_request.list",
+      "route_path": "/ui/data/documents?type=generic_request",
+      "title": "List Self-Service Requests",
+      "title_i18n": {
+        "en": "List Self-Service Requests",
+        "id": "Daftar Permintaan Self-Service"
+      }
+    },
+    {
+      "audience_kinds": [
+        "customer",
+        "employee",
+        "patient"
+      ],
+      "document_type": "generic_request",
+      "handler_kind": "document_action",
+      "idempotent": true,
+      "key": "documents.self_service.requests.submit",
+      "method": "POST",
+      "request_contract_key": "documents.generic_request.action.submit",
+      "required_permissions": [
+        "document.submit"
+      ],
+      "response_contract_key": "documents.generic_request.detail",
+      "route_path": "/documents/{documentID}/actions",
+      "title": "Submit Self-Service Request",
+      "title_i18n": {
+        "en": "Submit Self-Service Request",
+        "id": "Ajukan Permintaan Self-Service"
+      }
+    }
+  ],
+  "shell_kind": "workspace",
+  "supported_locales": [
+    "en",
+    "id"
+  ],
+  "surface": "backoffice",
+  "views": [
+    {
+      "action_placements": [
+        {
+          "action_key": "submit",
+          "zone": "primary"
+        },
+        {
+          "action_key": "approve",
+          "zone": "primary"
+        },
+        {
+          "action_key": "reject",
+          "style": "warn",
+          "zone": "secondary"
+        },
+        {
+          "action_key": "reopen",
+          "zone": "secondary"
+        },
+        {
+          "action_key": "cancel",
+          "style": "warn",
+          "zone": "secondary"
+        }
+      ],
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "generic_request",
+      "key": "documents.requests.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "related_views": [
+        {
+          "empty_state": "No lines",
+          "empty_state_i18n": {
+            "en": "No lines",
+            "id": "Belum ada baris"
+          },
+          "key": "lines",
+          "source": "lines",
+          "title": "Lines",
+          "title_i18n": {
+            "en": "Lines",
+            "id": "Baris"
+          }
+        },
+        {
+          "empty_state": "No links",
+          "empty_state_i18n": {
+            "en": "No links",
+            "id": "Belum ada tautan"
+          },
+          "key": "links",
+          "source": "links",
+          "title": "Links",
+          "title_i18n": {
+            "en": "Links",
+            "id": "Tautan"
+          }
+        },
+        {
+          "empty_state": "No attachments",
+          "empty_state_i18n": {
+            "en": "No attachments",
+            "id": "Belum ada lampiran"
+          },
+          "key": "attachments",
+          "source": "attachments",
+          "title": "Attachments",
+          "title_i18n": {
+            "en": "Attachments",
+            "id": "Lampiran"
+          }
+        }
+      ],
+      "required_permissions": [
+        "document.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "doc_id",
+                  "label": "Document ID",
+                  "label_i18n": {
+                    "en": "Document ID",
+                    "id": "ID Dokumen"
+                  },
+                  "path": "header.id",
+                  "read_only": true,
+                  "type": "string"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "path": "header.status",
+                  "read_only": true,
+                  "type": "string"
+                },
+                {
+                  "key": "updated_by",
+                  "label": "Updated By",
+                  "label_i18n": {
+                    "en": "Updated By",
+                    "id": "Diperbarui Oleh"
+                  },
+                  "path": "header.updated_by",
+                  "read_only": true,
+                  "type": "string"
+                }
+              ],
+              "key": "header",
+              "title": "Header",
+              "title_i18n": {
+                "en": "Header",
+                "id": "Header"
+              }
+            },
+            {
+              "fields": [
+                {
+                  "key": "title",
+                  "label": "Title",
+                  "label_i18n": {
+                    "en": "Title",
+                    "id": "Judul"
+                  },
+                  "path": "body.payload.title",
+                  "type": "string"
+                }
+              ],
+              "key": "payload",
+              "title": "Payload",
+              "title_i18n": {
+                "en": "Payload",
+                "id": "Payload"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        },
+        {
+          "key": "extensions",
+          "sections": [
+            {
+              "extension_slot_key": "analytics",
+              "key": "analytics_extension",
+              "title": "Analytics Extension",
+              "title_i18n": {
+                "en": "Analytics Extension",
+                "id": "Ekstensi Analitik"
+              }
+            }
+          ],
+          "title": "Extensions",
+          "title_i18n": {
+            "en": "Extensions",
+            "id": "Ekstensi"
+          }
+        }
+      ],
+      "title": "Request Detail",
+      "title_i18n": {
+        "en": "Request Detail",
+        "id": "Detail Permintaan"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "id",
+          "label": "Document",
+          "label_i18n": {
+            "en": "Document",
+            "id": "Dokumen"
+          },
+          "path": "header.id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        },
+        {
+          "key": "updated_at",
+          "label": "Updated",
+          "label_i18n": {
+            "en": "Updated",
+            "id": "Diperbarui"
+          },
+          "path": "header.updated_at"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "generic_request",
+      "empty_state": "No governed request documents exist yet.",
+      "empty_state_i18n": {
+        "en": "No governed request documents exist yet.",
+        "id": "Belum ada dokumen permintaan yang dikelola."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "documents.requests.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Requests",
+      "title_i18n": {
+        "en": "Requests",
+        "id": "Permintaan"
+      }
+    },
+    {
+      "key": "masterdata.parties.detail",
+      "kind": "detail",
+      "model_key": "party",
+      "related_views": [
+        {
+          "empty_state": "No activity yet",
+          "empty_state_i18n": {
+            "en": "No activity yet",
+            "id": "Belum ada aktivitas"
+          },
+          "key": "timeline",
+          "source": "timeline",
+          "title": "Timeline",
+          "title_i18n": {
+            "en": "Timeline",
+            "id": "Linimasa"
+          }
+        },
+        {
+          "empty_state": "No related contacts",
+          "empty_state_i18n": {
+            "en": "No related contacts",
+            "id": "Belum ada kontak terkait"
+          },
+          "key": "contacts",
+          "source": "contacts",
+          "title": "Contacts",
+          "title_i18n": {
+            "en": "Contacts",
+            "id": "Kontak"
+          }
+        }
+      ],
+      "required_permissions": [
+        "party.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "name",
+                  "label": "Name",
+                  "label_i18n": {
+                    "en": "Name",
+                    "id": "Nama"
+                  },
+                  "path": "values.name",
+                  "type": "string"
+                },
+                {
+                  "key": "display_name",
+                  "label": "Display Name",
+                  "label_i18n": {
+                    "en": "Display Name",
+                    "id": "Nama Tampil"
+                  },
+                  "path": "values.display_name",
+                  "type": "string"
+                },
+                {
+                  "key": "email",
+                  "label": "Email",
+                  "label_i18n": {
+                    "en": "Email",
+                    "id": "Email"
+                  },
+                  "path": "values.email",
+                  "type": "string"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "path": "values.status",
+                  "type": "string"
+                }
+              ],
+              "key": "core",
+              "title": "Core Fields",
+              "title_i18n": {
+                "en": "Core Fields",
+                "id": "Field Utama"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Party Detail",
+      "title_i18n": {
+        "en": "Party Detail",
+        "id": "Detail Pihak"
+      }
+    },
+    {
+      "key": "masterdata.parties.form",
+      "kind": "form",
+      "model_key": "party",
+      "related_views": [
+        {
+          "empty_state": "No related contacts",
+          "empty_state_i18n": {
+            "en": "No related contacts",
+            "id": "Belum ada kontak terkait"
+          },
+          "key": "contacts",
+          "source": "contacts",
+          "title": "Contacts",
+          "title_i18n": {
+            "en": "Contacts",
+            "id": "Kontak"
+          }
+        }
+      ],
+      "required_permissions": [
+        "party.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "placeholder": "Party name",
+              "placeholder_i18n": {
+                "en": "Party name",
+                "id": "Nama pihak"
+              },
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "email",
+              "label": "Email",
+              "label_i18n": {
+                "en": "Email",
+                "id": "Email"
+              },
+              "path": "values.email",
+              "placeholder": "Email address",
+              "placeholder_i18n": {
+                "en": "Email address",
+                "id": "Alamat email"
+              },
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive",
+                "blocked"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit Party",
+          "title_i18n": {
+            "en": "Edit Party",
+            "id": "Ubah Pihak"
+          }
+        }
+      ],
+      "title": "Party Form",
+      "title_i18n": {
+        "en": "Party Form",
+        "id": "Form Pihak"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "label_i18n": {
+            "en": "Email",
+            "id": "Email"
+          },
+          "path": "values.email"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No parties registered yet.",
+      "empty_state_i18n": {
+        "en": "No parties registered yet.",
+        "id": "Belum ada pihak terdaftar."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "blocked"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "masterdata.parties.list",
+      "kind": "list",
+      "model_key": "party",
+      "required_permissions": [
+        "party.list"
+      ],
+      "title": "Parties",
+      "title_i18n": {
+        "en": "Parties",
+        "id": "Pihak"
+      }
+    },
+    {
+      "cards": [
+        {
+          "key": "documents_total",
+          "label": "Documents",
+          "label_i18n": {
+            "en": "Documents",
+            "id": "Dokumen"
+          },
+          "path": "documents.total"
+        },
+        {
+          "key": "outbox_pending",
+          "label": "Outbox Pending",
+          "label_i18n": {
+            "en": "Outbox Pending",
+            "id": "Outbox Tertunda"
+          },
+          "path": "outbox.pending"
+        },
+        {
+          "key": "pending_approvals",
+          "label": "Pending Approvals",
+          "label_i18n": {
+            "en": "Pending Approvals",
+            "id": "Persetujuan Tertunda"
+          },
+          "path": "workflow.pending_approvals"
+        },
+        {
+          "key": "projections",
+          "label": "Document Summaries",
+          "label_i18n": {
+            "en": "Document Summaries",
+            "id": "Ringkasan Dokumen"
+          },
+          "path": "projections.document_summaries"
+        }
+      ],
+      "key": "monitoring.overview",
+      "kind": "dashboard",
+      "projection_key": "monitoring.summary",
+      "required_permissions": [
+        "monitoring.read"
+      ],
+      "title": "Monitoring Overview",
+      "title_i18n": {
+        "en": "Monitoring Overview",
+        "id": "Ikhtisar Pemantauan"
+      }
+    },
+    {
+      "document_type": "sdk_item",
+      "fields": [
+        {
+          "key": "title",
+          "label": "Title",
+          "path": "payload.title",
+          "type": "string"
+        }
+      ],
+      "key": "sdk.items.detail",
+      "kind": "detail",
+      "title": "SDK Item Detail"
+    },
+    {
+      "document_type": "sdk_item",
+      "fields": [
+        {
+          "key": "title",
+          "label": "Title",
+          "path": "payload.title",
+          "type": "string"
+        }
+      ],
+      "key": "sdk.items.form",
+      "kind": "form",
+      "title": "New SDK Item"
+    },
+    {
+      "columns": [
+        {
+          "key": "title",
+          "label": "Title",
+          "path": "payload.title"
+        }
+      ],
+      "document_type": "sdk_item",
+      "key": "sdk.items.list",
+      "kind": "list",
+      "title": "SDK Items"
+    }
+  ]
+}

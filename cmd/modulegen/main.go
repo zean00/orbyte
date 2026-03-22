@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -8,6 +9,9 @@ import (
 	"strings"
 
 	"orbyte/internal/modulegen"
+	"orbyte/internal/modules"
+	"orbyte/internal/platform/app"
+	platformmodule "orbyte/internal/platform/module"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -20,6 +24,7 @@ type explainDependencyRequirement struct {
 
 type explainSpec struct {
 	Module                 modulegen.ModuleIdentity       `yaml:"module"`
+	StarterPack            string                         `yaml:"starter_pack,omitempty"`
 	Features               modulegen.FeatureOptions       `yaml:"features"`
 	Scaffold               modulegen.ScaffoldOptions      `yaml:"scaffold"`
 	Manifest               modulegen.ManifestOptions      `yaml:"manifest"`
@@ -31,12 +36,18 @@ type explainSpec struct {
 
 func main() {
 	if len(os.Args) < 3 || os.Args[1] != "module" {
-		fatalf("usage: modulegen module <init|plan|validate|explain> [flags]")
+		fatalf("usage: modulegen module <init|plan|validate|lint|explain> [flags]")
 	}
 	command := os.Args[2]
 	opts, err := parseOptions(os.Args[3:])
 	if err != nil {
 		fatalf("%v", err)
+	}
+	if command == "lint" {
+		if err := lintModules(opts); err != nil {
+			fatalf("%v", err)
+		}
+		return
 	}
 	spec, err := modulegen.LoadSpec(opts.SpecPath)
 	if err != nil {
@@ -60,12 +71,23 @@ func main() {
 		if err != nil {
 			fatalf("plan module: %v", err)
 		}
+		if opts.JSON {
+			rendered, err := json.MarshalIndent(plan, "", "  ")
+			if err != nil {
+				fatalf("render plan json: %v", err)
+			}
+			fmt.Println(string(rendered))
+			return
+		}
 		fmt.Printf("module: %s (%s)\n", plan.Spec.Module.Key, plan.Spec.Module.Kind)
 		for _, file := range plan.Files {
 			rel, _ := filepath.Rel(modulegenRoot(opts.Root), file.Path)
 			fmt.Printf("- %s\n", rel)
 		}
 	case "init":
+		if err := writeSpecFile(opts, resolved); err != nil {
+			fatalf("write spec: %v", err)
+		}
 		plan, err := modulegen.Scaffold(opts.Root, resolved)
 		if err != nil {
 			fatalf("scaffold module: %v", err)
@@ -86,6 +108,7 @@ func parseOptions(args []string) (modulegen.Options, error) {
 	fs.StringVar(&opts.Root, "root", ".", "repository root")
 	fs.StringVar(&opts.SpecPath, "spec", "", "path to yaml spec")
 	fs.StringVar(&opts.Profile, "profile", "", "generator profile: minimal|backoffice|search-heavy|integration-first")
+	fs.StringVar(&opts.StarterPack, "starter-pack", "", "starter pack: minimal|document-workflow|masterdata-search|integration-adapter")
 	fs.StringVar(&opts.Key, "key", "", "module key")
 	fs.StringVar(&opts.Name, "name", "", "module name")
 	fs.StringVar(&opts.Version, "version", "", "module version")
@@ -110,6 +133,7 @@ func parseOptions(args []string) (modulegen.Options, error) {
 	fs.Var(&opts.WithObservabilityStub, "with-observability-stub", "generate observability manifest stub")
 	fs.Var(&opts.WithGenericUIStub, "with-generic-ui-stub", "generate generic UI manifest stubs")
 	fs.Var(&opts.WithCustomUIStub, "with-custom-ui-stub", "generate custom UI action and bundle stubs in the manifest")
+	fs.BoolVar(&opts.JSON, "json", false, "emit machine-readable json output where supported")
 	if err := fs.Parse(args); err != nil {
 		return modulegen.Options{}, err
 	}
@@ -132,6 +156,7 @@ func fatalf(format string, args ...any) {
 func toExplainSpec(spec modulegen.Spec) explainSpec {
 	out := explainSpec{
 		Module:       spec.Module,
+		StarterPack:  spec.StarterPack,
 		Features:     spec.Features,
 		Scaffold:     spec.Scaffold,
 		Manifest:     spec.Manifest,
@@ -150,4 +175,59 @@ func toExplainSpec(spec modulegen.Spec) explainSpec {
 		}
 	}
 	return out
+}
+
+func lintModules(opts modulegen.Options) error {
+	manifests, err := modules.ForProfile(firstNonEmpty(opts.Profile, modules.ProfileAll))
+	if err != nil {
+		return err
+	}
+	manifests = append(app.BuiltInModuleManifests(), manifests...)
+	svc := platformmodule.NewService()
+	report := svc.Lint(manifests)
+	if opts.JSON {
+		rendered, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(rendered))
+	} else {
+		if len(report.Diagnostics) == 0 {
+			fmt.Println("lint clean")
+		}
+		for _, diagnostic := range report.Diagnostics {
+			fmt.Printf("%s %s %s: %s\n", diagnostic.Severity, diagnostic.ModuleKey, diagnostic.Code, diagnostic.Message)
+		}
+	}
+	if !report.Valid() {
+		return report.Error()
+	}
+	return nil
+}
+
+func writeSpecFile(opts modulegen.Options, spec modulegen.Spec) error {
+	path := strings.TrimSpace(opts.SpecPath)
+	if path == "" {
+		path = filepath.Join(modulegenRoot(opts.Root), spec.Module.Key+".module.yaml")
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	rendered, err := yaml.Marshal(toExplainSpec(spec))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, rendered, 0o644)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
