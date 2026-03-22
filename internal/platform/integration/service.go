@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"orbyte/contracts"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/observability"
@@ -98,13 +99,11 @@ func NewServiceWithRepository(repo Repository, obs *observability.Service, logge
 		Version:     1,
 		Direction:   "outbound",
 		Intent:      "command",
+		SchemaRef:   contracts.IntegrationSchemaPath("document.submit", 1),
 		Status:      "active",
 		Description: "Default canonical contract for document submission.",
-		Schema: map[string]any{
-			"type": "object",
-		},
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	})
 	_ = svc.RegisterEndpoint(Endpoint{
 		Key:         "fake_erp.default",
@@ -260,6 +259,27 @@ func (s *Service) RegisterEndpoint(endpoint Endpoint) error {
 func (s *Service) RegisterContract(contract Contract) error {
 	if strings.TrimSpace(contract.Key) == "" || contract.Version <= 0 {
 		return shared.Validation("integration contract key and version are required")
+	}
+	if strings.TrimSpace(contract.SchemaRef) == "" {
+		defaultRef := contracts.IntegrationSchemaPath(strings.TrimSpace(contract.Key), contract.Version)
+		if contracts.Exists(defaultRef) {
+			contract.SchemaRef = defaultRef
+		}
+	}
+	if strings.TrimSpace(contract.SchemaRef) != "" {
+		schema, err := contracts.Load(strings.TrimSpace(contract.SchemaRef))
+		if err != nil {
+			return shared.Validation("integration contract schema_ref could not be loaded")
+		}
+		if len(contract.Schema) == 0 {
+			contract.Schema = schema
+		}
+	}
+	if len(contract.Schema) == 0 {
+		return shared.Validation("integration contract schema is required")
+	}
+	if err := contracts.ValidateIntegrationContract(contract.SchemaRef, strings.TrimSpace(contract.Key), contract.Version, contract.Schema); err != nil {
+		return shared.Validation(err.Error())
 	}
 	now := time.Now().UTC()
 	if contract.CreatedAt.IsZero() {
@@ -961,59 +981,17 @@ func validateContractPayload(contract Contract, payload map[string]any) []Valida
 	if len(contract.Schema) == 0 {
 		return nil
 	}
-	issues := make([]ValidationIssue, 0)
-	required, _ := contract.Schema["required"].([]any)
-	for _, raw := range required {
-		field, _ := raw.(string)
-		if strings.TrimSpace(field) == "" {
-			continue
-		}
-		if _, ok := payload[field]; !ok {
-			issues = append(issues, ValidationIssue{Code: "required", Field: field, Severity: "error", Message: "required contract field is missing"})
-		}
-	}
-	properties, _ := contract.Schema["properties"].(map[string]any)
-	for field, raw := range properties {
-		spec, _ := raw.(map[string]any)
-		if spec == nil {
-			continue
-		}
-		expectedType, _ := spec["type"].(string)
-		if expectedType == "" {
-			continue
-		}
-		value, ok := payload[field]
-		if !ok {
-			continue
-		}
-		if !valueMatchesType(value, expectedType) {
-			issues = append(issues, ValidationIssue{Code: "invalid_type", Field: field, Severity: "error", Message: "payload field does not match contract type"})
-		}
+	schemaIssues := contracts.ValidateObject(contract.Schema, payload)
+	issues := make([]ValidationIssue, 0, len(schemaIssues))
+	for _, issue := range schemaIssues {
+		issues = append(issues, ValidationIssue{
+			Code:     firstNonEmptyString(strings.TrimSpace(issue.Code), "validation_error"),
+			Field:    strings.TrimSpace(issue.Field),
+			Severity: "error",
+			Message:  firstNonEmptyString(strings.TrimSpace(issue.Message), "contract validation failed"),
+		})
 	}
 	return issues
-}
-
-func valueMatchesType(value any, expected string) bool {
-	switch expected {
-	case "string":
-		_, ok := value.(string)
-		return ok
-	case "number":
-		switch value.(type) {
-		case float64, float32, int, int32, int64:
-			return true
-		}
-	case "boolean":
-		_, ok := value.(bool)
-		return ok
-	case "object":
-		_, ok := value.(map[string]any)
-		return ok
-	case "array":
-		_, ok := value.([]any)
-		return ok
-	}
-	return true
 }
 
 func mergeSettings(base, overrides map[string]any) map[string]any {

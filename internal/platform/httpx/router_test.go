@@ -2289,6 +2289,17 @@ func TestAdminConfigBundleCompareMatrixAndReadinessRoutes(t *testing.T) {
 	if readiness.Code != http.StatusOK {
 		t.Fatalf("expected admin readiness to succeed, got %d body=%s", readiness.Code, readiness.Body.String())
 	}
+	var payload map[string]any
+	if err := json.Unmarshal(readiness.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode readiness payload failed: %v", err)
+	}
+	if blocked, _ := payload["blocked_for_apply"].(bool); blocked {
+		t.Fatalf("expected healthy compatibility diagnostics to remain non-blocking, got %s", readiness.Body.String())
+	}
+	health, _ := payload["health"].(map[string]any)
+	if ready, _ := health["ready"].(bool); !ready {
+		t.Fatalf("expected admin readiness health snapshot to be ready, got %s", readiness.Body.String())
+	}
 }
 
 func TestProjectionStatusRoute(t *testing.T) {

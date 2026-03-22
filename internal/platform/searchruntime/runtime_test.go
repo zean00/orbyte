@@ -57,6 +57,10 @@ func TestAttachWiresServicesAndHandlers(t *testing.T) {
 		AggregateType: "document",
 		AggregateID:   record.Header.ID,
 		OccurredAt:    record.Header.UpdatedAt,
+		Payload: map[string]any{
+			"document_id": record.Header.ID,
+			"status":      record.Header.Status,
+		},
 	}); err != nil {
 		t.Fatalf("record event failed: %v", err)
 	}

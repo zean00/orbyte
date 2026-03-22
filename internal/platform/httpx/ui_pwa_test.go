@@ -78,6 +78,20 @@ func TestUIManifestAndServiceWorkerRoutes(t *testing.T) {
 	if !strings.Contains(css.Body.String(), ".menu-link") {
 		t.Fatal("expected generated platform stylesheet")
 	}
+	for _, selector := range []string{
+		".panel",
+		".brand",
+		".subtitle",
+		".menu-list",
+		".surface-switcher",
+		".org-chart-shell",
+		".preview-dialog",
+		".pagination-bar",
+	} {
+		if !strings.Contains(css.Body.String(), selector) {
+			t.Fatalf("expected stylesheet compatibility selector %q", selector)
+		}
+	}
 }
 
 func TestLocalePreferencePersistsThroughBootstrap(t *testing.T) {

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orbyte/contracts/events/document.updated.v1.schema.json",
+  "title": "document.updated.v1",
+  "type": "object",
+  "required": ["type", "schema_version", "aggregate_id", "occurred_at", "payload"],
+  "properties": {
+    "type": {
+      "const": "document.updated"
+    },
+    "schema_version": {
+      "const": "v1"
+    },
+    "aggregate_id": {
+      "type": "string"
+    },
+    "correlation_id": {
+      "type": "string"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object",
+      "required": ["document_id", "status"],
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "document_type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

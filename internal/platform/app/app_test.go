@@ -1,7 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -245,6 +250,101 @@ func TestNewAppBootstrapsClinicProfileBusinessSlice(t *testing.T) {
 	if keys := app.BusinessModuleKeys(); len(keys) == 0 || keys[0] != "clinic_registration" {
 		t.Fatalf("expected clinic business module keys, got %+v", keys)
 	}
+}
+
+func TestNewAppWiresAdminReadinessAndDevDocs(t *testing.T) {
+	t.Setenv("APP_JWT_SECRET", "test-secret")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("APP_BOOTSTRAP_ADMIN_PASSWORD", "admin123!")
+
+	app, err := New(Options{Profile: modules.ProfileAll})
+	if err != nil {
+		t.Fatalf("unexpected startup error: %v", err)
+	}
+	defer func() {
+		if err := app.Close(); err != nil {
+			t.Fatalf("unexpected close error: %v", err)
+		}
+	}()
+	app.StartBackground(context.Background())
+
+	server := httptest.NewServer(app.Handler())
+	defer server.Close()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("create cookie jar failed: %v", err)
+	}
+	client := &http.Client{Jar: jar}
+
+	loginReq, err := http.NewRequest(http.MethodPost, server.URL+"/auth/login", bytes.NewReader([]byte(`{"username":"admin","password":"admin123!","location_id":"loc_hq"}`)))
+	if err != nil {
+		t.Fatalf("build login request failed: %v", err)
+	}
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := client.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login request failed: %v", err)
+	}
+	_ = loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected login to succeed, got %d", loginResp.StatusCode)
+	}
+
+	readinessResp, err := client.Get(server.URL + "/admin/api/readiness")
+	if err != nil {
+		t.Fatalf("admin readiness request failed: %v", err)
+	}
+	defer readinessResp.Body.Close()
+	if readinessResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected admin readiness to succeed, got %d", readinessResp.StatusCode)
+	}
+	var readiness map[string]any
+	if err := json.NewDecoder(readinessResp.Body).Decode(&readiness); err != nil {
+		t.Fatalf("decode admin readiness failed: %v", err)
+	}
+	if blocked, _ := readiness["blocked_for_apply"].(bool); blocked {
+		t.Fatalf("expected healthy app not to be blocked for apply, got %+v", readiness)
+	}
+	health, _ := readiness["health"].(map[string]any)
+	if ready, _ := health["ready"].(bool); !ready {
+		t.Fatalf("expected admin readiness to reuse runtime health snapshot, got %+v", readiness)
+	}
+
+	openapiResp, err := client.Get(server.URL + "/dev/openapi.json")
+	if err != nil {
+		t.Fatalf("openapi request failed: %v", err)
+	}
+	defer openapiResp.Body.Close()
+	if openapiResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected openapi route to succeed, got %d", openapiResp.StatusCode)
+	}
+	var openapi map[string]any
+	if err := json.NewDecoder(openapiResp.Body).Decode(&openapi); err != nil {
+		t.Fatalf("decode openapi failed: %v", err)
+	}
+	runtimeMeta, _ := openapi["x-orbyte-runtime"].(map[string]any)
+	if !containsStringAny(runtimeMeta["registered_modules"], "platform.core") {
+		t.Fatalf("expected runtime modules metadata, got %+v", runtimeMeta)
+	}
+	if !containsStringAny(runtimeMeta["document_types"], "generic_request") {
+		t.Fatalf("expected runtime document metadata, got %+v", runtimeMeta)
+	}
+	if !containsStringAny(runtimeMeta["search_indexes"], "documents.requests.search") {
+		t.Fatalf("expected runtime search metadata, got %+v", runtimeMeta)
+	}
+}
+
+func containsStringAny(raw any, expected string) bool {
+	items, _ := raw.([]any)
+	for _, item := range items {
+		if value, ok := item.(string); ok && value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultBootstrapSessionTTL() time.Duration {

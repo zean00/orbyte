@@ -144,6 +144,55 @@ func TestCreateDeliveryReturnsStructuredValidationIssues(t *testing.T) {
 	}
 }
 
+func TestCreateDeliveryValidatesNestedContractSchema(t *testing.T) {
+	svc := NewService(observability.NewService(), logging.NewService())
+	if err := svc.RegisterContract(Contract{
+		Key:       "nested.contract",
+		Name:      "Nested Contract",
+		Version:   1,
+		Direction: "outbound",
+		Intent:    "command",
+		Status:    "active",
+		Schema: map[string]any{
+			"type":     "object",
+			"required": []any{"payload"},
+			"properties": map[string]any{
+				"payload": map[string]any{
+					"type":     "object",
+					"required": []any{"document_id"},
+					"properties": map[string]any{
+						"document_id": map[string]any{"type": "string"},
+						"mode":        map[string]any{"const": "submit"},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("register contract failed: %v", err)
+	}
+	_, err := svc.CreateDelivery(SubmissionRecord{
+		ExternalSystemKey: "fake_erp",
+		ContractKey:       "nested.contract",
+		ContractVersion:   1,
+		OperationType:     "push_document",
+		Payload: map[string]any{
+			"payload": map[string]any{
+				"mode": "draft",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected nested schema validation error")
+	}
+	var validationErr ValidationError
+	if !errorAs(err, &validationErr) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if len(validationErr.Issues) == 0 {
+		t.Fatal("expected validation issues")
+	}
+}
+
 func TestCreateDeliveryDeduplicatesByIdempotencyKey(t *testing.T) {
 	svc := NewService(observability.NewService(), logging.NewService())
 	record1, err := svc.CreateDelivery(SubmissionRecord{

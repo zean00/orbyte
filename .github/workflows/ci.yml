@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: orbyte
+          POSTGRES_USER: orbyte
+          POSTGRES_PASSWORD: orbyte
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orbyte -d orbyte"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://orbyte:orbyte@127.0.0.1:5432/orbyte?sslmode=disable
+      APP_JWT_SECRET: ci-secret
+      APP_BOOTSTRAP_ADMIN_PASSWORD: admin123!
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install UI dependencies
+        run: npm ci
+
+      - name: Build UI assets
+        run: make ui-build
+
+      - name: Run tests
+        run: make test
+
+      - name: Verify contracts
+        run: make contracts
+
+      - name: Run migrations
+        run: make migrate-up
+
+      - name: Check migration status
+        run: make migrate-status
+
+      - name: Postgres Boot Smoke Test
+        run: make smoke-postgres
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.2
+          args: ./...

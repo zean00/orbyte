@@ -67,7 +67,7 @@ func TestDispatchPendingRunsRegisteredHandler(t *testing.T) {
 	}
 	svc := NewService()
 	svc.RegisterHandler("document.updated", NewDocumentProjectionHandler(docs, searchSvc))
-	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: record.Header.ID, OccurredAt: time.Now().UTC()}); err != nil {
+	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: record.Header.ID, OccurredAt: time.Now().UTC(), Payload: map[string]any{"document_id": record.Header.ID, "status": record.Header.Status}}); err != nil {
 		t.Fatalf("record failed: %v", err)
 	}
 	count, err := svc.DispatchPending(10)
@@ -149,7 +149,7 @@ func TestDispatcherStartStop(t *testing.T) {
 func TestDispatchPendingRetriesThenDeadLetters(t *testing.T) {
 	svc := NewService()
 	svc.RegisterHandler("document.updated", failingHandler{})
-	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: "d1", OccurredAt: time.Now().UTC()}); err != nil {
+	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: "d1", OccurredAt: time.Now().UTC(), Payload: map[string]any{"document_id": "d1", "status": "draft"}}); err != nil {
 		t.Fatalf("record failed: %v", err)
 	}
 	for i := 0; i < 3; i++ {
@@ -173,7 +173,7 @@ func TestDispatchPendingRetriesThenDeadLetters(t *testing.T) {
 func TestDispatcherReportsFailureWhenDeliveriesFail(t *testing.T) {
 	svc := NewService()
 	svc.RegisterHandler("document.updated", failingHandler{})
-	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: "d1", OccurredAt: time.Now().UTC()}); err != nil {
+	if err := svc.Record(Event{ID: "e1", Type: "document.updated", Version: 1, AggregateType: "document", AggregateID: "d1", OccurredAt: time.Now().UTC(), Payload: map[string]any{"document_id": "d1", "status": "draft"}}); err != nil {
 		t.Fatalf("record failed: %v", err)
 	}
 	dispatcher := NewDispatcher(svc, 10*time.Millisecond, 10)
@@ -226,5 +226,23 @@ func TestDispatchPendingPublishesToBrokerSink(t *testing.T) {
 func TestNewNATSPublisherRejectsInvalidURL(t *testing.T) {
 	if _, err := NewNATSPublisher("://bad-url", time.Second); err == nil {
 		t.Fatal("expected invalid nats url to fail")
+	}
+}
+
+func TestRecordRejectsKnownEventSchemaViolations(t *testing.T) {
+	svc := NewService()
+	err := svc.Record(Event{
+		ID:            "e1",
+		Type:          "document.updated",
+		Version:       1,
+		AggregateType: "document",
+		AggregateID:   "d1",
+		OccurredAt:    time.Now().UTC(),
+		Payload: map[string]any{
+			"document_id": "d1",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected event schema validation to fail")
 	}
 }

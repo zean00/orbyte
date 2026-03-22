@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"orbyte/contracts"
 	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/observability"
 )
@@ -78,6 +79,19 @@ func (s *Service) RegisterBrokerSink(name string, publisher Publisher, routes ma
 func (s *Service) Record(event Event) error {
 	if event.SchemaVersion == "" {
 		event.SchemaVersion = "v1"
+	}
+	envelope := map[string]any{
+		"type":           event.Type,
+		"schema_version": event.SchemaVersion,
+		"aggregate_id":   event.AggregateID,
+		"correlation_id": event.CorrelationID,
+		"occurred_at":    event.OccurredAt.Format(time.RFC3339Nano),
+		"payload":        event.Payload,
+	}
+	if issues, err := contracts.ValidateEventSchema("", event.Type, event.SchemaVersion, envelope); err != nil {
+		return err
+	} else if len(issues) > 0 {
+		return fmt.Errorf("event schema validation failed: %s %s", issues[0].Field, issues[0].Message)
 	}
 	if err := s.repo.SaveEvent(event); err != nil {
 		return err

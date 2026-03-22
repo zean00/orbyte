@@ -10,6 +10,16 @@ go run ./cmd/migrate up
 go run ./cmd/server
 ```
 
+Repo-native workflow commands:
+
+```bash
+make test
+make lint
+make coverage
+make run
+make run-postgres
+```
+
 To regenerate coverage locally:
 
 ```bash
@@ -177,3 +187,9 @@ curl -X POST "http://localhost:8080/ops/analytics/report-deliveries/retry?artifa
 - `POST /ops/outbox/deliveries/{delivery_id}/retry`
 - `GET /admin/api/config/validate`
 - `GET /metrics`
+
+## Development Docs
+
+- [Development Workflow](docs/development.md)
+- [Release Policy](docs/release-policy.md)
+- [Contract Governance](docs/contracts.md)

@@ -59,6 +59,7 @@ type Contract struct {
 	Version     int            `json:"version"`
 	Direction   string         `json:"direction"`
 	Intent      string         `json:"intent"`
+	SchemaRef   string         `json:"schema_ref,omitempty"`
 	Schema      map[string]any `json:"schema,omitempty"`
 	Status      string         `json:"status"`
 	Description string         `json:"description,omitempty"`

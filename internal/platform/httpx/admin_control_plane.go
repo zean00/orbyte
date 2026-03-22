@@ -153,7 +153,7 @@ func buildAdminReadinessReport(cfg *config.Service, modules *module.Service, hea
 		report.Health = health.Snapshot(context.Background())
 	}
 	for _, issue := range modules.CompatibilityReport() {
-		if len(issue.DependencyDiagnostics) == 0 && len(issue.KernelDiagnostics) == 0 {
+		if !moduleCompatibilityBlocksApply(issue) {
 			continue
 		}
 		report.ModuleCompatibility = append(report.ModuleCompatibility, issue)
@@ -171,6 +171,27 @@ func buildAdminReadinessReport(cfg *config.Service, modules *module.Service, hea
 		report.Status = "blocked_for_apply"
 	}
 	return report
+}
+
+func moduleCompatibilityBlocksApply(detail module.Detail) bool {
+	if !detail.Installed.Enabled {
+		return false
+	}
+	switch detail.LifecycleState {
+	case "", "healthy", "disabled":
+		return false
+	}
+	for _, diagnostic := range detail.DependencyDiagnostics {
+		if !diagnostic.Enabled || !diagnostic.Compatible {
+			return true
+		}
+	}
+	for _, diagnostic := range detail.KernelDiagnostics {
+		if diagnostic.Severity == module.SeverityError {
+			return true
+		}
+	}
+	return detail.LifecycleState == "blocked"
 }
 
 func filteredConfigEntries(entries []config.Entry, keys, scopes []string) []config.Entry {

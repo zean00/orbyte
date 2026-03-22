@@ -120,22 +120,23 @@ func (r *PostgresRepository) SaveContract(contract Contract) error {
 	schema, _ := json.Marshal(contract.Schema)
 	const query = `
 		INSERT INTO integration_contracts (
-			contract_key, version, name, direction, intent, status, description, schema_json, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10)
+			contract_key, version, name, direction, intent, status, description, schema_ref, schema_json, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),NULLIF($8,''),$9,$10,$11)
 		ON CONFLICT (contract_key, version) DO UPDATE SET
 			name = EXCLUDED.name,
 			direction = EXCLUDED.direction,
 			intent = EXCLUDED.intent,
 			status = EXCLUDED.status,
 			description = EXCLUDED.description,
+			schema_ref = EXCLUDED.schema_ref,
 			schema_json = EXCLUDED.schema_json,
 			updated_at = EXCLUDED.updated_at`
-	_, err := r.db.ExecContext(context.Background(), query, contract.Key, contract.Version, contract.Name, contract.Direction, contract.Intent, contract.Status, contract.Description, schema, contract.CreatedAt, contract.UpdatedAt)
+	_, err := r.db.ExecContext(context.Background(), query, contract.Key, contract.Version, contract.Name, contract.Direction, contract.Intent, contract.Status, contract.Description, contract.SchemaRef, schema, contract.CreatedAt, contract.UpdatedAt)
 	return err
 }
 
 func (r *PostgresRepository) ListContracts() []Contract {
-	const query = `SELECT contract_key, version, name, direction, intent, status, COALESCE(description,''), schema_json, created_at, updated_at FROM integration_contracts ORDER BY contract_key ASC, version ASC`
+	const query = `SELECT contract_key, version, name, direction, intent, status, COALESCE(description,''), COALESCE(schema_ref,''), schema_json, created_at, updated_at FROM integration_contracts ORDER BY contract_key ASC, version ASC`
 	rows, err := r.db.QueryContext(context.Background(), query)
 	if err != nil {
 		return nil
@@ -145,7 +146,7 @@ func (r *PostgresRepository) ListContracts() []Contract {
 	for rows.Next() {
 		var item Contract
 		var schema []byte
-		if err := rows.Scan(&item.Key, &item.Version, &item.Name, &item.Direction, &item.Intent, &item.Status, &item.Description, &schema, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.Key, &item.Version, &item.Name, &item.Direction, &item.Intent, &item.Status, &item.Description, &item.SchemaRef, &schema, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			continue
 		}
 		_ = json.Unmarshal(schema, &item.Schema)
@@ -155,10 +156,10 @@ func (r *PostgresRepository) ListContracts() []Contract {
 }
 
 func (r *PostgresRepository) GetContract(key string, version int) (Contract, bool) {
-	const query = `SELECT contract_key, version, name, direction, intent, status, COALESCE(description,''), schema_json, created_at, updated_at FROM integration_contracts WHERE contract_key = $1 AND version = $2`
+	const query = `SELECT contract_key, version, name, direction, intent, status, COALESCE(description,''), COALESCE(schema_ref,''), schema_json, created_at, updated_at FROM integration_contracts WHERE contract_key = $1 AND version = $2`
 	var item Contract
 	var schema []byte
-	if err := r.db.QueryRowContext(context.Background(), query, key, version).Scan(&item.Key, &item.Version, &item.Name, &item.Direction, &item.Intent, &item.Status, &item.Description, &schema, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := r.db.QueryRowContext(context.Background(), query, key, version).Scan(&item.Key, &item.Version, &item.Name, &item.Direction, &item.Intent, &item.Status, &item.Description, &item.SchemaRef, &schema, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return Contract{}, false
 	}
 	_ = json.Unmarshal(schema, &item.Schema)

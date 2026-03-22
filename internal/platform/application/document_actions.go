@@ -121,6 +121,7 @@ func (a *DocumentActions) Submit(documentID string, acting ActingContext, expect
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
 		Payload: map[string]any{
+			"document_id":          record.Header.ID,
 			"document_type":        record.Header.Type,
 			"from_state":           transition.FromState,
 			"to_state":             transition.ToState,
@@ -213,6 +214,7 @@ func (a *DocumentActions) UpdateDraft(documentID string, acting ActingContext, p
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
 		Payload: map[string]any{
+			"document_id":          record.Header.ID,
 			"document_type":        record.Header.Type,
 			"status":               record.Header.Status,
 			"version":              record.Header.Version,
@@ -298,6 +300,7 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey string, acting A
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
 		Payload: map[string]any{
+			"document_id":          record.Header.ID,
 			"document_type":        record.Header.Type,
 			"module_key":           moduleKey,
 			"status":               record.Header.Status,
@@ -401,6 +404,7 @@ func (a *DocumentActions) Approve(documentID string, acting ActingContext, expec
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
 		Payload: map[string]any{
+			"document_id":          record.Header.ID,
 			"document_type":        record.Header.Type,
 			"from_state":           transition.FromState,
 			"to_state":             transition.ToState,
@@ -554,6 +558,7 @@ func (a *DocumentActions) transitionDocument(documentID string, acting ActingCon
 		LocationID:     record.Header.LocationID,
 		OccurredAt:     now,
 		Payload: map[string]any{
+			"document_id":          record.Header.ID,
 			"document_type":        record.Header.Type,
 			"from_state":           transition.FromState,
 			"to_state":             transition.ToState,

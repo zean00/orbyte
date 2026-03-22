@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orbyte/contracts/integration/integration.submission.v1.schema.json",
+  "title": "integration.submission.v1",
+  "type": "object",
+  "required": ["contract_key", "contract_version", "external_system_key", "operation_type", "payload"],
+  "properties": {
+    "contract_key": {
+      "const": "integration.submission"
+    },
+    "contract_version": {
+      "const": 1
+    },
+    "external_system_key": {
+      "type": "string"
+    },
+    "endpoint_key": {
+      "type": "string"
+    },
+    "operation_type": {
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "correlation_id": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

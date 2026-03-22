@@ -79,6 +79,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Integration:   graph.integration,
 			Reference:     graph.reference,
 			Idempotency:   graph.idempotency,
+			Health:        graph.runtimeHealth,
 		},
 		Templates: httpx.TemplateDeps{
 			Identity:  graph.identity,
@@ -103,6 +104,13 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Search:          graph.search,
 			FieldSecurity:   graph.fieldSecurity,
 			Idempotency:     graph.idempotency,
+		},
+		Docs: httpx.DocsDeps{
+			Config:    graph.config,
+			Modules:   graph.modules,
+			Models:    graph.models,
+			Documents: graph.documents,
+			Search:    graph.search,
 		},
 		UI: httpx.UIDeps{
 			Identity:      graph.identity,
