@@ -13,6 +13,7 @@ import (
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
@@ -255,6 +256,97 @@ func TestServerAnalyticsAuthoringAndAdHocQueryFlow(t *testing.T) {
 	contents := resp.Result.(map[string]any)["contents"].([]ResourceContent)
 	if len(contents) != 1 || !strings.Contains(contents[0].Text, "Analytics Studio") {
 		t.Fatalf("expected analytics studio app html, got %+v", contents)
+	}
+}
+
+func TestServerDataOpsFlow(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "configuration.read" || permissionKey == "configuration.manage"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	names := make([]string, 0, len(tools))
+	for _, item := range tools {
+		names = append(names, item.Name)
+	}
+	for _, name := range []string{"dataops.backup.plan", "dataops.restore.run", "dataops.migration.register"} {
+		if !contains(names, name) {
+			t.Fatalf("expected tool %s in %v", name, names)
+		}
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "dataops.backup.plan",
+			"arguments": map[string]any{
+				"selected_data_classes": []string{"configuration"},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("backup plan failed: %+v", resp.Error)
+	}
+	plan := resp.Result.(map[string]any)["structuredContent"].(dataops.BackupPlan)
+	if plan.ArtifactType != dataops.ArtifactTypeBackup {
+		t.Fatalf("expected backup artifact type, got %+v", plan.ArtifactType)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "dataops.backup.run",
+			"arguments": map[string]any{
+				"selected_data_classes": []string{"configuration"},
+				"confirm_apply":         true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("backup run failed: %+v", resp.Error)
+	}
+	result := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	run := result["run"].(dataops.OperationRun)
+	job := result["job"].(jobs.Job)
+	if strings.TrimSpace(run.ID) == "" || strings.TrimSpace(job.ID) == "" {
+		t.Fatal("expected queued run and job from backup run")
+	}
+}
+
+func TestServerDataOpsBackupRunRequiresManagePermission(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID: "user_viewer",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "configuration.read"
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      99,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "dataops.backup.run",
+			"arguments": map[string]any{
+				"selected_data_classes": []string{"configuration"},
+				"confirm_apply":         true,
+			},
+		}),
+	}, actor)
+	if resp.Error == nil {
+		t.Fatal("expected backup run without configuration.manage to fail")
 	}
 }
 
@@ -862,7 +954,7 @@ func TestServerControlPlaneToolsAndResources(t *testing.T) {
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      12,
-		Method: "tools/call",
+		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
 			"name": "implementation.session.create",
 			"arguments": map[string]any{
@@ -882,7 +974,7 @@ func TestServerControlPlaneToolsAndResources(t *testing.T) {
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      13,
-		Method: "tools/call",
+		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
 			"name": "implementation.plan.build",
 			"arguments": map[string]any{
@@ -1020,7 +1112,7 @@ func TestImplementationStageCommitDoesNotPartiallyApplyOnValidationFailure(t *te
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
-		Method: "tools/call",
+		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
 			"name": "implementation.plan.build",
 			"arguments": map[string]any{
@@ -1196,7 +1288,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	unavailable := NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -1253,7 +1345,7 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -1312,7 +1404,9 @@ func newTestServer(t *testing.T) *Server {
 	obsSvc := observability.NewService()
 	analyticsSvc := analytics.NewService(documents, flows, eventingSvc, searchSvc, audit.NewService(), obsSvc)
 	offlineSvc := offline.NewService(modules, nil, searchSvc)
-	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	dataopsSvc := dataops.NewService(cfg, flags, modules, referenceSvc, ident, documents, integrationSvc)
+	dataopsSvc.AttachJobs(jobSvc)
+	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -1336,7 +1430,7 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -1352,7 +1446,7 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -1368,7 +1462,7 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 }
 
 func newTestIdentity(t *testing.T) *identity.Service {

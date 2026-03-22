@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"orbyte/internal/platform/shared"
@@ -87,6 +88,13 @@ func (s *Service) ExtensionDefinitions(documentType string) []ExtensionDefinitio
 
 func (s *Service) Save(record Record) error {
 	return s.repo.SaveRecord(record)
+}
+
+func (s *Service) Delete(documentID string) error {
+	if strings.TrimSpace(documentID) == "" {
+		return shared.Validation("document id is required")
+	}
+	return s.repo.DeleteRecord(documentID)
 }
 
 func (s *Service) Create(documentType, organizationID, locationID, actorID string, payload map[string]any) (Record, error) {

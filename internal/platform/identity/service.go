@@ -1407,6 +1407,28 @@ func (s *Service) UpsertRole(role Role) error {
 	return s.repo.SaveRole(role)
 }
 
+func (s *Service) UpsertUser(user User) error {
+	if strings.TrimSpace(user.ID) == "" || strings.TrimSpace(user.Username) == "" {
+		return shared.Validation("user id and username are required")
+	}
+	status := strings.TrimSpace(strings.ToLower(user.Status))
+	if status == "" {
+		status = "active"
+	}
+	switch status {
+	case "active", "disabled":
+	default:
+		return shared.Validation("user status must be active or disabled")
+	}
+	user.Status = status
+	now := time.Now().UTC()
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = now
+	}
+	user.UpdatedAt = now
+	return s.repo.SaveUser(user)
+}
+
 func (s *Service) SetRoleDefaultRoutes(roleID, userRoute, adminRoute string) (Role, error) {
 	role, ok := s.findRole(roleID)
 	if !ok {
@@ -1433,6 +1455,45 @@ func (s *Service) GrantRolePermission(grant RolePermission) error {
 		return shared.Validation("role permission grant is invalid")
 	}
 	return s.repo.SaveRolePermission(grant)
+}
+
+func (s *Service) UpsertRoleBinding(binding RoleBinding) error {
+	if strings.TrimSpace(binding.ID) == "" || strings.TrimSpace(binding.UserID) == "" || strings.TrimSpace(binding.RoleID) == "" {
+		return shared.Validation("role binding id, user_id, and role_id are required")
+	}
+	if _, ok := s.repo.FindUser(binding.UserID); !ok {
+		return shared.NotFound("user not found")
+	}
+	if !s.roleExists(binding.RoleID) {
+		return shared.NotFound("role not found")
+	}
+	scopeType := strings.TrimSpace(binding.ScopeType)
+	switch scopeType {
+	case "", "deployment":
+		scopeType = "deployment"
+	case "organization", "location", "operating_unit":
+	default:
+		return shared.Validation("role binding scope_type is invalid")
+	}
+	binding.ScopeType = scopeType
+	if scopeType != "deployment" && strings.TrimSpace(binding.ScopeID) == "" {
+		return shared.Validation("role binding scope_id is required")
+	}
+	status := strings.TrimSpace(strings.ToLower(binding.Status))
+	if status == "" {
+		status = "active"
+	}
+	if status != "active" && status != "inactive" {
+		return shared.Validation("role binding status must be active or inactive")
+	}
+	binding.Status = status
+	if binding.EffectiveFrom.IsZero() {
+		binding.EffectiveFrom = time.Now().UTC()
+	}
+	if !binding.EffectiveTo.IsZero() && binding.EffectiveTo.Before(binding.EffectiveFrom) {
+		return shared.Validation("role binding effective_to must be after effective_from")
+	}
+	return s.repo.SaveRoleBinding(binding)
 }
 
 func (s *Service) RevokeRolePermission(roleID, permissionKey string) error {

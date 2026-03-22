@@ -13,6 +13,7 @@ import (
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
@@ -48,6 +49,8 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
 	analyticsStream := mcp.NewAnalyticsStream()
 	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
+	dataopsSvc := dataops.NewService(cfg, flags, modules, referenceSvc, ident, docs, integrationSvc)
+	dataopsSvc.AttachJobs(jobSvc)
 	templateSvc := templateoutput.NewService(docs, reportingSvc)
 	uiPreferences := NewUIPreferencesService()
 	if modules != nil {
@@ -123,7 +126,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 		MCP: MCPDeps{
 			Identity:         ident,
 			Audit:            auditSvc,
-			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
 			Analytics:        analyticsSvc,
 			AnalyticsStream:  analyticsStream,
 			StreamPath:       analyticsMCPStreamPath,

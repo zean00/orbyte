@@ -13,6 +13,7 @@ import (
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
@@ -33,24 +34,27 @@ import (
 const ProtocolVersion = "2024-11-05"
 
 const (
-	templateDesignerResourceURI = "orbyte://apps/template.designer"
-	templateDesignerAppKey      = "template.designer"
-	analyticsStudioResourceURI  = "orbyte://apps/analytics.studio"
-	analyticsStudioAppKey       = "analytics.studio"
-	workflowManagerResourceURI  = "orbyte://apps/workflow.manager"
-	workflowManagerAppKey       = "workflow.manager"
-	configCatalogResourceURI     = "orbyte://control-plane/config.catalog"
-	flagCatalogResourceURI       = "orbyte://control-plane/feature-flags.catalog"
-	roleMatrixResourceURI        = "orbyte://control-plane/role-matrix"
-	moduleCompatResourceURI      = "orbyte://control-plane/module-compatibility"
-	integrationHealthResourceURI = "orbyte://control-plane/integration-health"
-	readinessResourceURI         = "orbyte://control-plane/readiness"
-	runbooksResourceURI          = "orbyte://control-plane/runbooks"
-	searchRuntimeResourceURI     = "orbyte://control-plane/search-runtime"
-	offlineOpsResourceURI        = "orbyte://control-plane/offline-sync"
-	policyRuntimeResourceURI     = "orbyte://control-plane/policy-runtime"
-	referenceCatalogResourceURI  = "orbyte://control-plane/reference-catalog"
-	implementationBlueprintsURI  = "orbyte://control-plane/implementation-blueprints"
+	templateDesignerResourceURI   = "orbyte://apps/template.designer"
+	templateDesignerAppKey        = "template.designer"
+	analyticsStudioResourceURI    = "orbyte://apps/analytics.studio"
+	analyticsStudioAppKey         = "analytics.studio"
+	workflowManagerResourceURI    = "orbyte://apps/workflow.manager"
+	workflowManagerAppKey         = "workflow.manager"
+	configCatalogResourceURI      = "orbyte://control-plane/config.catalog"
+	flagCatalogResourceURI        = "orbyte://control-plane/feature-flags.catalog"
+	roleMatrixResourceURI         = "orbyte://control-plane/role-matrix"
+	moduleCompatResourceURI       = "orbyte://control-plane/module-compatibility"
+	integrationHealthResourceURI  = "orbyte://control-plane/integration-health"
+	readinessResourceURI          = "orbyte://control-plane/readiness"
+	runbooksResourceURI           = "orbyte://control-plane/runbooks"
+	searchRuntimeResourceURI      = "orbyte://control-plane/search-runtime"
+	offlineOpsResourceURI         = "orbyte://control-plane/offline-sync"
+	policyRuntimeResourceURI      = "orbyte://control-plane/policy-runtime"
+	referenceCatalogResourceURI   = "orbyte://control-plane/reference-catalog"
+	implementationBlueprintsURI   = "orbyte://control-plane/implementation-blueprints"
+	dataopsCatalogResourceURI     = "orbyte://control-plane/dataops/catalog"
+	dataopsArtifactsResourceURI   = "orbyte://control-plane/dataops/artifacts"
+	dataopsCheckpointsResourceURI = "orbyte://control-plane/dataops/checkpoints"
 )
 
 const (
@@ -92,12 +96,13 @@ type Server struct {
 	audit                     *audit.Service
 	observability             *observability.Service
 	offline                   *offline.Service
+	dataops                   *dataops.Service
 	implementation            *ImplementationService
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
+func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
 	return &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
@@ -116,6 +121,7 @@ func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templat
 		audit:                     auditSvc,
 		observability:             obs,
 		offline:                   offlineSvc,
+		dataops:                   dataopsSvc,
 		implementation:            NewImplementationService(),
 		analyticsStreamPath:       analyticsStreamPath,
 		analyticsScopedStreamPath: analyticsScopedStreamPath,
@@ -544,6 +550,27 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 			builtInTool{name: "integration.dead_letter.replay", title: "Replay Integration Dead Letter", description: "Replay one integration dead letter. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dead_letter_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"dead_letter_id", "confirm_apply"}}},
 		)
 	}
+	if s != nil && s.dataops != nil {
+		defs = append(defs,
+			builtInTool{name: "dataops.artifact.list", title: "List Data Operation Artifacts", description: "List backup, archive, export, and migration artifacts.", permission: "configuration.read"},
+			builtInTool{name: "dataops.artifact.get", title: "Get Data Operation Artifact", description: "Get one managed data operation artifact.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}}, "required": []string{"artifact_id"}}},
+			builtInTool{name: "dataops.operation.get", title: "Get Data Operation Run", description: "Get one data operation execution run.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"operation_id": map[string]any{"type": "string"}}, "required": []string{"operation_id"}}},
+			builtInTool{name: "dataops.checkpoint.list", title: "List Data Operation Checkpoints", description: "List incremental checkpoints by adapter and data class.", permission: "configuration.read"},
+			builtInTool{name: "dataops.backup.plan", title: "Plan Backup", description: "Plan a class-selective backup, including incremental mode.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "incremental": map[string]any{"type": "boolean"}, "name": map[string]any{"type": "string"}}, "required": []string{"selected_data_classes"}}},
+			builtInTool{name: "dataops.backup.run", title: "Run Backup", description: "Run a managed backup artifact creation. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "incremental": map[string]any{"type": "boolean"}, "name": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"selected_data_classes", "confirm_apply"}}},
+			builtInTool{name: "dataops.restore.plan", title: "Plan Restore", description: "Build a restore plan from a managed backup or archive artifact.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"artifact_id"}}},
+			builtInTool{name: "dataops.restore.validate", title: "Validate Restore", description: "Validate a restore plan without applying it.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"artifact_id"}}},
+			builtInTool{name: "dataops.restore.run", title: "Run Restore", description: "Run a class-selective restore. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"artifact_id", "confirm_apply"}}},
+			builtInTool{name: "dataops.archive.plan", title: "Plan Archive", description: "Plan a transactional archive operation.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "document_types": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "statuses": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "created_before": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}}, "required": []string{"selected_data_classes"}}},
+			builtInTool{name: "dataops.archive.run", title: "Run Archive", description: "Archive transactional data and remove it from live storage. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "document_types": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "statuses": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "created_before": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"selected_data_classes", "confirm_apply"}}},
+			builtInTool{name: "dataops.export.plan", title: "Plan Export", description: "Plan a structured external export by data class.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "name": map[string]any{"type": "string"}}, "required": []string{"selected_data_classes"}}},
+			builtInTool{name: "dataops.export.run", title: "Run Export", description: "Create a structured external export artifact. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "name": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"selected_data_classes", "confirm_apply"}}},
+			builtInTool{name: "dataops.migration.register", title: "Register Migration Input", description: "Register structured migration input as a managed artifact.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "segments": map[string]any{"type": "array", "items": map[string]any{"type": "object"}}}, "required": []string{"selected_data_classes", "segments"}}},
+			builtInTool{name: "dataops.migration.plan", title: "Plan Migration", description: "Build a migration apply plan from a registered migration artifact.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"artifact_id"}}},
+			builtInTool{name: "dataops.migration.validate", title: "Validate Migration", description: "Validate a migration artifact without applying it.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"artifact_id"}}},
+			builtInTool{name: "dataops.migration.run", title: "Run Migration", description: "Apply a validated migration artifact. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "selected_data_classes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"artifact_id", "confirm_apply"}}},
+		)
+	}
 	if s != nil && (s.health != nil || s.audit != nil) {
 		defs = append(defs,
 			builtInTool{name: "readiness.get", title: "Get Implementation Readiness", description: "Get readiness for applying customer configuration.", permission: "configuration.read"},
@@ -658,6 +685,13 @@ func (s *Server) listBuiltInResources(actor ActorContext) []ResourceDescriptor {
 	if s != nil && s.health != nil && allowsAll(actor.PermissionChecker, []string{"ops.read"}) {
 		items = append(items, ResourceDescriptor{URI: runbooksResourceURI, Name: "Runbooks", Description: "Runtime health runbooks and operator hints.", MIMEType: "application/json"})
 	}
+	if s != nil && s.dataops != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		items = append(items,
+			ResourceDescriptor{URI: dataopsCatalogResourceURI, Name: "DataOps Catalog", Description: "Data class catalog and adapter capability matrix.", MIMEType: "application/json"},
+			ResourceDescriptor{URI: dataopsArtifactsResourceURI, Name: "DataOps Artifacts", Description: "Managed backup, archive, export, and migration artifacts.", MIMEType: "application/json"},
+			ResourceDescriptor{URI: dataopsCheckpointsResourceURI, Name: "DataOps Checkpoints", Description: "Latest incremental checkpoints by data class and adapter.", MIMEType: "application/json"},
+		)
+	}
 	return items
 }
 
@@ -695,6 +729,12 @@ func (s *Server) readBuiltInResource(actor ActorContext, uri string) ([]Resource
 			return s.readJSONControlResource(actor, uri, "configuration.read", s.implementationBlueprintResource)
 		case "/runbooks":
 			return s.readJSONControlResource(actor, uri, "ops.read", s.runbooksResource)
+		case "/dataops/catalog":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.dataopsCatalogResource)
+		case "/dataops/artifacts":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.dataopsArtifactsResource)
+		case "/dataops/checkpoints":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.dataopsCheckpointsResource)
 		default:
 			return nil, false, nil
 		}
@@ -1080,6 +1120,40 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 		return s.integrationDeadLetterList(actor, arguments)
 	case "integration.dead_letter.replay":
 		return s.integrationDeadLetterReplay(actor, arguments)
+	case "dataops.artifact.list":
+		return s.dataopsArtifactList(actor, arguments)
+	case "dataops.artifact.get":
+		return s.dataopsArtifactGet(actor, arguments)
+	case "dataops.operation.get":
+		return s.dataopsOperationGet(actor, arguments)
+	case "dataops.checkpoint.list":
+		return s.dataopsCheckpointList(actor, arguments)
+	case "dataops.backup.plan":
+		return s.dataopsBackupPlan(actor, arguments)
+	case "dataops.backup.run":
+		return s.dataopsBackupRun(actor, arguments)
+	case "dataops.restore.plan":
+		return s.dataopsRestorePlan(actor, arguments)
+	case "dataops.restore.validate":
+		return s.dataopsRestoreValidate(actor, arguments)
+	case "dataops.restore.run":
+		return s.dataopsRestoreRun(actor, arguments)
+	case "dataops.archive.plan":
+		return s.dataopsArchivePlan(actor, arguments)
+	case "dataops.archive.run":
+		return s.dataopsArchiveRun(actor, arguments)
+	case "dataops.export.plan":
+		return s.dataopsExportPlan(actor, arguments)
+	case "dataops.export.run":
+		return s.dataopsExportRun(actor, arguments)
+	case "dataops.migration.register":
+		return s.dataopsMigrationRegister(actor, arguments)
+	case "dataops.migration.plan":
+		return s.dataopsMigrationPlan(actor, arguments)
+	case "dataops.migration.validate":
+		return s.dataopsMigrationValidate(actor, arguments)
+	case "dataops.migration.run":
+		return s.dataopsMigrationRun(actor, arguments)
 	case "readiness.get":
 		return s.readinessGet(actor, arguments)
 	case "ops.health.get":

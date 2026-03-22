@@ -104,6 +104,25 @@ func (r *PostgresRepository) ListDefinitions() []Definition {
 	return defs
 }
 
+func (r *PostgresRepository) DeleteRecord(documentID string) error {
+	tx, err := r.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, query := range []string{
+		`DELETE FROM document_lines WHERE document_id = $1`,
+		`DELETE FROM document_links WHERE document_id = $1`,
+		`DELETE FROM document_attachments WHERE document_id = $1`,
+		`DELETE FROM document_records WHERE document_id = $1`,
+	} {
+		if _, err := tx.ExecContext(context.Background(), query, documentID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (r *PostgresRepository) SaveExtensionDefinition(def ExtensionDefinition) error {
 	const query = `
 		INSERT INTO document_extension_definitions (

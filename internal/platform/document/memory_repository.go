@@ -99,6 +99,14 @@ func (r *MemoryRepository) ListRecords() []Record {
 	return records
 }
 
+func (r *MemoryRepository) DeleteRecord(documentID string) error {
+	delete(r.records, documentID)
+	delete(r.lines, documentID)
+	delete(r.links, documentID)
+	delete(r.attachments, documentID)
+	return nil
+}
+
 func (r *MemoryRepository) SaveLines(documentID string, lines []Line) error {
 	items := append([]Line(nil), lines...)
 	sort.Slice(items, func(i, j int) bool { return items[i].LineNo < items[j].LineNo })

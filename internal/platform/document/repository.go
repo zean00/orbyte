@@ -9,6 +9,7 @@ type Repository interface {
 	SaveRecord(record Record) error
 	GetRecord(documentID string) (Record, bool)
 	ListRecords() []Record
+	DeleteRecord(documentID string) error
 	SaveLines(documentID string, lines []Line) error
 	ListLines(documentID string) []Line
 	SaveLinks(documentID string, links []Link) error

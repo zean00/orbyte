@@ -413,6 +413,35 @@ func (s *Service) Save(entry Entry) error {
 	return s.repo.Save(entry)
 }
 
+func (s *Service) SaveStored(entry Entry) error {
+	def, ok := s.Definition(entry.Key)
+	if !ok {
+		return shared.Validation("configuration key is not registered")
+	}
+	if entry.Scope == "" {
+		entry.Scope = "deployment"
+	}
+	if !containsScope(def.AllowedScopes, entry.Scope) {
+		return shared.Validation("configuration scope is not allowed")
+	}
+	if entry.ModuleKey == "" {
+		entry.ModuleKey = def.ModuleKey
+	}
+	if entry.Category == "" {
+		entry.Category = def.Category
+	}
+	if entry.UpdatedAt.IsZero() {
+		entry.UpdatedAt = time.Now().UTC()
+	}
+	if entry.UpdatedBy == "" {
+		entry.UpdatedBy = "system"
+	}
+	if entry.Value == nil {
+		entry.Value = map[string]any{}
+	}
+	return s.repo.Save(entry)
+}
+
 func (s *Service) Resolve(key, organizationID, locationID string) (EffectiveValue, bool) {
 	def, ok := s.Definition(key)
 	if !ok {

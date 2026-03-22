@@ -9,6 +9,7 @@ import (
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
@@ -64,6 +65,7 @@ type serviceGraph struct {
 	offline           *offline.Service
 	monitoring        *monitoring.Service
 	templates         *templateoutput.Service
+	dataops           *dataops.Service
 	idempotency       *idempotency.Service
 	uiPreferences     *httpx.UIPreferencesService
 	runtimeHealth     *runtimehealth.Tracker
@@ -159,6 +161,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)
 	graph.offline = offline.NewService(graph.modules, graph.reference, graph.search)
 	graph.monitoring = monitoring.NewService(graph.documents, graph.eventing, graph.workflows, graph.search, graph.observability)
+	graph.dataops = dataops.NewService(graph.config, graph.flags, graph.modules, graph.reference, graph.identity, graph.documents, graph.integration)
 	configureDatabaseHealth(graph.runtimeHealth, postgres)
 	return graph
 }
