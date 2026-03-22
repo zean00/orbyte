@@ -11,6 +11,7 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/engagement"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/httpx"
@@ -66,6 +67,7 @@ type serviceGraph struct {
 	monitoring        *monitoring.Service
 	templates         *templateoutput.Service
 	dataops           *dataops.Service
+	engagement        *engagement.Service
 	idempotency       *idempotency.Service
 	uiPreferences     *httpx.UIPreferencesService
 	runtimeHealth     *runtimehealth.Tracker
@@ -146,6 +148,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
 		graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), graph.observability, graph.logger)
 		graph.idempotency = idempotency.NewServiceWithRepository(idempotency.NewPostgresRepository(postgres.DB))
+		graph.engagement = engagement.NewServiceWithRepository(engagement.NewPostgresRepository(postgres.DB))
 		graph.integration.AttachPolicy(graph.policy)
 		graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
 		graph.search.AttachSources(graph.documents, graph.models)
@@ -162,6 +165,9 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.offline = offline.NewService(graph.modules, graph.reference, graph.search)
 	graph.monitoring = monitoring.NewService(graph.documents, graph.eventing, graph.workflows, graph.search, graph.observability)
 	graph.dataops = dataops.NewService(graph.config, graph.flags, graph.modules, graph.reference, graph.identity, graph.documents, graph.integration)
+	if graph.engagement == nil {
+		graph.engagement = engagement.NewService()
+	}
 	configureDatabaseHealth(graph.runtimeHealth, postgres)
 	return graph
 }

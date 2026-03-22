@@ -332,6 +332,148 @@ func TestBlackBoxWorkflowPolicyRuntimeValidation(t *testing.T) {
 	}
 }
 
+func TestBlackBoxEngagementFlow(t *testing.T) {
+	h := newHarness(t)
+
+	programKey := fmt.Sprintf("e2e_loyalty_%d", time.Now().UTC().UnixNano())
+
+	createProgram := h.mcpCall("engagement.program.create", map[string]any{
+		"program_key":   programKey,
+		"name":          "E2E Loyalty",
+		"subject_type":  "user",
+		"confirm_apply": true,
+	})
+	if createProgram.status != http.StatusOK {
+		t.Fatalf("expected engagement program create to succeed, got %d body=%s", createProgram.status, string(createProgram.body))
+	}
+
+	createVersion := h.mcpCall("engagement.program.version.create", map[string]any{
+		"program_key":   programKey,
+		"confirm_apply": true,
+	})
+	if createVersion.status != http.StatusOK {
+		t.Fatalf("expected engagement version create to succeed, got %d body=%s", createVersion.status, string(createVersion.body))
+	}
+	version := h.mcpStructuredValue(createVersion, "version")
+	versionNumber, ok := version.(float64)
+	if !ok || int(versionNumber) <= 0 {
+		t.Fatalf("expected engagement version number, got %#v", version)
+	}
+
+	saveVersion := h.mcpCall("engagement.program.version.save", map[string]any{
+		"program_key":   programKey,
+		"version":       int(versionNumber),
+		"confirm_apply": true,
+		"rules": []map[string]any{
+			{
+				"key":                "submit_points",
+				"action":             "credit_points",
+				"source_event_types": []string{"document.submitted"},
+				"subject_source":     "actor_id",
+				"account_key":        "points",
+				"fixed_amount":       10,
+			},
+			{
+				"key":                "bronze_tier",
+				"action":             "set_tier",
+				"source_event_types": []string{"document.submitted"},
+				"subject_source":     "actor_id",
+				"account_key":        "points",
+				"threshold":          10,
+				"tier_key":           "bronze",
+			},
+		},
+	})
+	if saveVersion.status != http.StatusOK {
+		t.Fatalf("expected engagement version save to succeed, got %d body=%s", saveVersion.status, string(saveVersion.body))
+	}
+
+	publishVersion := h.mcpCall("engagement.program.version.publish", map[string]any{
+		"program_key":   programKey,
+		"version":       int(versionNumber),
+		"confirm_apply": true,
+	})
+	if publishVersion.status != http.StatusOK {
+		t.Fatalf("expected engagement version publish to succeed, got %d body=%s", publishVersion.status, string(publishVersion.body))
+	}
+
+	created := h.requestJSON(http.MethodPost, "/documents", map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload": map[string]any{
+			"title": "Engagement E2E Request",
+		},
+	})
+	if created.status != http.StatusCreated {
+		t.Fatalf("expected document create to succeed, got %d body=%s", created.status, string(created.body))
+	}
+
+	var record document.Record
+	if err := json.Unmarshal(created.body, &record); err != nil {
+		t.Fatalf("decode created document failed: %v", err)
+	}
+
+	submit := h.requestJSON(http.MethodPost, "/documents/"+record.Header.ID+"/actions", map[string]any{
+		"action":           "submit",
+		"expected_version": record.Header.Version,
+		"expected_etag":    record.Header.ETag,
+	})
+	if submit.status != http.StatusOK {
+		t.Fatalf("expected submit to succeed, got %d body=%s", submit.status, string(submit.body))
+	}
+
+	h.waitFor(5*time.Second, func() error {
+		balance := h.mcpCall("engagement.balance.get", map[string]any{
+			"program_key": programKey,
+			"subject_id":  "user_admin",
+			"account_key": "points",
+		})
+		if balance.status != http.StatusOK {
+			return fmt.Errorf("balance call returned %d", balance.status)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(balance.body, &payload); err != nil {
+			return err
+		}
+		if rpcErr, ok := payload["error"]; ok && rpcErr != nil {
+			return fmt.Errorf("balance not ready yet: %v", rpcErr)
+		}
+		result, _ := payload["result"].(map[string]any)
+		structured, _ := result["structuredContent"].(map[string]any)
+		value := structured["balance"]
+		number, ok := value.(float64)
+		if !ok || int(number) != 10 {
+			return fmt.Errorf("balance not ready yet: %#v", value)
+		}
+		return nil
+	})
+
+	qualification := h.mcpCall("engagement.qualification.get", map[string]any{
+		"program_key": programKey,
+		"subject_id":  "user_admin",
+	})
+	if qualification.status != http.StatusOK {
+		t.Fatalf("expected qualification read to succeed, got %d body=%s", qualification.status, string(qualification.body))
+	}
+	if tier, _ := h.mcpStructuredValue(qualification, "tier_key").(string); tier != "bronze" {
+		t.Fatalf("expected bronze tier, got %#v", h.mcpStructuredValue(qualification, "tier_key"))
+	}
+
+	journal := h.mcpCall("engagement.journal.list", map[string]any{
+		"program_key": programKey,
+		"subject_id":  "user_admin",
+		"account_key": "points",
+	})
+	if journal.status != http.StatusOK {
+		t.Fatalf("expected journal list to succeed, got %d body=%s", journal.status, string(journal.body))
+	}
+	items := h.mcpStructuredItems(journal)
+	if len(items) != 1 {
+		t.Fatalf("expected one journal entry, got %d body=%s", len(items), string(journal.body))
+	}
+}
+
 func (h *harness) login(username, password, locationID string) {
 	h.testingT.Helper()
 	result := h.requestJSON(http.MethodPost, "/auth/login", map[string]any{
@@ -380,6 +522,54 @@ func (h *harness) requestJSON(method, path string, payload any) response {
 		h.testingT.Fatalf("read response failed: %v", err)
 	}
 	return response{status: resp.StatusCode, body: raw, header: resp.Header.Clone()}
+}
+
+func (h *harness) mcpCall(name string, arguments map[string]any) response {
+	h.testingT.Helper()
+	return h.requestJSON(http.MethodPost, "/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      name,
+			"arguments": arguments,
+		},
+	})
+}
+
+func (h *harness) mcpStructuredValue(resp response, key string) any {
+	h.testingT.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(resp.body, &payload); err != nil {
+		h.testingT.Fatalf("decode mcp response failed: %v body=%s", err, string(resp.body))
+	}
+	if rpcErr, ok := payload["error"]; ok && rpcErr != nil {
+		h.testingT.Fatalf("unexpected mcp error: %v body=%s", rpcErr, string(resp.body))
+	}
+	result, _ := payload["result"].(map[string]any)
+	structured, _ := result["structuredContent"].(map[string]any)
+	return structured[key]
+}
+
+func (h *harness) mcpStructuredItems(resp response) []map[string]any {
+	h.testingT.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(resp.body, &payload); err != nil {
+		h.testingT.Fatalf("decode mcp response failed: %v body=%s", err, string(resp.body))
+	}
+	if rpcErr, ok := payload["error"]; ok && rpcErr != nil {
+		h.testingT.Fatalf("unexpected mcp error: %v body=%s", rpcErr, string(resp.body))
+	}
+	result, _ := payload["result"].(map[string]any)
+	structured, _ := result["structuredContent"].(map[string]any)
+	rawItems, _ := structured["items"].([]any)
+	items := make([]map[string]any, 0, len(rawItems))
+	for _, item := range rawItems {
+		if mapped, ok := item.(map[string]any); ok {
+			items = append(items, mapped)
+		}
+	}
+	return items
 }
 
 func (h *harness) csrfToken() string {
