@@ -55,6 +55,7 @@ type testHarness struct {
 	ident     *identity.Service
 	audit     *audit.Service
 	cfg       *config.Service
+	modules   *module.Service
 	policy    *policy.Service
 	search    *search.Service
 	workflows *workflow.Service
@@ -313,6 +314,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		ident:     ident,
 		audit:     auditSvc,
 		cfg:       cfg,
+		modules:   modules,
 		policy:    policySvc,
 		search:    searchSvc,
 		workflows: flows,
@@ -3763,6 +3765,77 @@ func TestAdminRoutesHandleFailureCases(t *testing.T) {
 	}
 	if !strings.Contains(disableRR.Body.String(), "enabled dependents") {
 		t.Fatalf("expected dependent-module conflict, got %s", disableRR.Body.String())
+	}
+}
+
+func TestAdminModuleLocalExtensionAPIs(t *testing.T) {
+	h := newTestHarness(t)
+	if err := h.modules.Register(module.Manifest{
+		Key:  "finance.base",
+		Role: module.ModuleRoleBase,
+	}, "system"); err != nil {
+		t.Fatalf("register base module failed: %v", err)
+	}
+	if err := h.modules.Register(module.Manifest{
+		Key:  "finance.local.id",
+		Role: module.ModuleRoleLocalExtension,
+		LocalExtension: module.LocalExtensionDefinition{
+			BaseModuleKey: "finance.base",
+			LocalityType:  "country",
+			LocalityCode:  "ID",
+			LocalityLabel: "Indonesia",
+		},
+		DependencyRequirements: []module.DependencyRequirement{{
+			ModuleKey: "finance.base", Kind: module.DependencyKindRequired,
+		}},
+	}, "system"); err != nil {
+		t.Fatalf("register local extension failed: %v", err)
+	}
+
+	rr := h.request(http.MethodGet, "/admin/api/modules/local-extensions?base_module_key=finance.base", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected local extension list endpoint to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"base_module_key":      "finance.base",
+		"extension_module_key": "finance.local.id",
+		"scope":                "organization",
+		"scope_id":             "org_default",
+	})
+	rr = h.request(http.MethodPut, "/admin/api/modules/local-extensions/activation", body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected local extension activation to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/modules?organization_id=org_default", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected scoped module list to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode module list failed: %v", err)
+	}
+	found := false
+	for _, raw := range payload["items"].([]any) {
+		item := raw.(map[string]any)
+		manifest := item["manifest"].(map[string]any)
+		if manifest["key"] != "finance.local.id" {
+			continue
+		}
+		state := item["local_extension_state"].(map[string]any)
+		if active, _ := state["active"].(bool); !active {
+			t.Fatalf("expected local extension state to be active, got %+v", state)
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("expected local extension module in scoped module list")
+	}
+
+	rr = h.request(http.MethodDelete, "/admin/api/modules/local-extensions/activation?base_module_key=finance.base&scope=organization&scope_id=org_default", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected local extension deactivation to succeed, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

@@ -7,7 +7,184 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/workflow"
 )
+
+func TestRegisterLocalExtensionRequiresBaseAndAdditiveContracts(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Manifest{
+		Key:  "ledger.base",
+		Role: ModuleRoleBase,
+	}, "system"); err != nil {
+		t.Fatalf("register base module failed: %v", err)
+	}
+
+	err := svc.Register(Manifest{
+		Key:  "ledger.local.id",
+		Role: ModuleRoleLocalExtension,
+		LocalExtension: LocalExtensionDefinition{
+			BaseModuleKey: "ledger.base",
+			LocalityType:  "country",
+			LocalityCode:  "ID",
+		},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected missing required dependency to fail")
+	}
+
+	err = svc.Register(Manifest{
+		Key:  "ledger.local.id",
+		Role: ModuleRoleLocalExtension,
+		LocalExtension: LocalExtensionDefinition{
+			BaseModuleKey: "ledger.base",
+			LocalityType:  "country",
+			LocalityCode:  "ID",
+		},
+		DependencyRequirements: []DependencyRequirement{{
+			ModuleKey: "ledger.base", Kind: DependencyKindRequired,
+		}},
+		Documents: []document.Definition{{
+			Type: "ledger_entry", DisplayName: "Ledger Entry", SchemaVersion: "v1",
+		}},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected canonical document definition to fail")
+	}
+
+	err = svc.Register(Manifest{
+		Key:  "ledger.local.id",
+		Role: ModuleRoleLocalExtension,
+		LocalExtension: LocalExtensionDefinition{
+			BaseModuleKey: "ledger.base",
+			LocalityType:  "country",
+			LocalityCode:  "ID",
+			LocalityLabel: "Indonesia",
+		},
+		DependencyRequirements: []DependencyRequirement{{
+			ModuleKey: "ledger.base", Kind: DependencyKindRequired,
+		}},
+		DocumentExtensions: []DocumentExtension{{
+			DocumentType: "ledger_entry", SchemaVersion: "v1", DisplayName: "Localized Ledger Entry",
+		}},
+		ReferenceTypes: []reference.TypeDefinition{{
+			Key: "tax_code", DisplayName: "Tax Code",
+		}},
+		ReferenceRecords: []reference.Record{{
+			TypeKey: "tax_code", Key: "vat11", DisplayName: "VAT 11%",
+		}},
+		Workflows: []workflow.Definition{{
+			Key: "ledger.local.id.review", States: []string{"draft"},
+		}},
+		OwnedWorkflowKeys: []string{"ledger.local.id.review"},
+		Frontend: FrontendDefinition{
+			Views: []ViewDefinition{{Key: "ledger.local.id.report", Title: "Localized Report", Kind: "list"}},
+		},
+	}, "system")
+	if err != nil {
+		t.Fatalf("register valid local extension failed: %v", err)
+	}
+}
+
+func TestLocalExtensionActivationAndScopedResolution(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Manifest{Key: "ledger.base", Role: ModuleRoleBase}, "system"); err != nil {
+		t.Fatalf("register base failed: %v", err)
+	}
+	for _, item := range []Manifest{
+		{
+			Key:  "ledger.local.default",
+			Role: ModuleRoleLocalExtension,
+			LocalExtension: LocalExtensionDefinition{
+				BaseModuleKey: "ledger.base",
+				LocalityType:  "country",
+				LocalityCode:  "DEFAULT",
+			},
+			DependencyRequirements: []DependencyRequirement{{ModuleKey: "ledger.base", Kind: DependencyKindRequired}},
+		},
+		{
+			Key:  "ledger.local.id",
+			Role: ModuleRoleLocalExtension,
+			LocalExtension: LocalExtensionDefinition{
+				BaseModuleKey: "ledger.base",
+				LocalityType:  "country",
+				LocalityCode:  "ID",
+			},
+			DependencyRequirements: []DependencyRequirement{{ModuleKey: "ledger.base", Kind: DependencyKindRequired}},
+		},
+	} {
+		if err := svc.Register(item, "system"); err != nil {
+			t.Fatalf("register local extension failed: %v", err)
+		}
+	}
+
+	if _, err := svc.ActivateLocalExtension("ledger.base", "ledger.local.default", "deployment", "", "system"); err != nil {
+		t.Fatalf("activate deployment local extension failed: %v", err)
+	}
+	if _, err := svc.ActivateLocalExtension("ledger.base", "ledger.local.id", "organization", "org_default", "system"); err != nil {
+		t.Fatalf("activate org local extension failed: %v", err)
+	}
+
+	resolved, ok := svc.ResolveActiveLocalExtension("ledger.base", "org_default", "", "")
+	if !ok || resolved.ExtensionModuleKey != "ledger.local.id" || resolved.Scope != "organization" {
+		t.Fatalf("expected organization-scoped extension, got %+v %v", resolved, ok)
+	}
+	resolved, ok = svc.ResolveActiveLocalExtension("ledger.base", "org_other", "", "")
+	if !ok || resolved.ExtensionModuleKey != "ledger.local.default" || resolved.Scope != "deployment" {
+		t.Fatalf("expected deployment-scoped fallback, got %+v %v", resolved, ok)
+	}
+
+	detail, ok := svc.GetForScope("ledger.local.id", "org_default", "", "")
+	if !ok || detail.LocalExtensionState == nil || !detail.LocalExtensionState.Active {
+		t.Fatalf("expected active local extension state, got %+v %v", detail, ok)
+	}
+}
+
+func TestDisableRejectsActiveLocalExtensionBinding(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Manifest{Key: "ledger.base", Role: ModuleRoleBase}, "system"); err != nil {
+		t.Fatalf("register base failed: %v", err)
+	}
+	if err := svc.Register(Manifest{
+		Key:  "ledger.local.id",
+		Role: ModuleRoleLocalExtension,
+		LocalExtension: LocalExtensionDefinition{
+			BaseModuleKey: "ledger.base",
+			LocalityType:  "country",
+			LocalityCode:  "ID",
+		},
+		DependencyRequirements: []DependencyRequirement{{ModuleKey: "ledger.base", Kind: DependencyKindRequired}},
+	}, "system"); err != nil {
+		t.Fatalf("register local extension failed: %v", err)
+	}
+	if _, err := svc.ActivateLocalExtension("ledger.base", "ledger.local.id", "deployment", "", "system"); err != nil {
+		t.Fatalf("activate local extension failed: %v", err)
+	}
+	if _, err := svc.Disable("ledger.local.id", "system"); err == nil {
+		t.Fatal("expected active local extension binding to block disable")
+	}
+}
+
+func TestRegisterAllowsLocalExtensionBeforeBaseRegistration(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Manifest{
+		Key:  "ledger.local.id",
+		Role: ModuleRoleLocalExtension,
+		LocalExtension: LocalExtensionDefinition{
+			BaseModuleKey: "ledger.base",
+			LocalityType:  "country",
+			LocalityCode:  "ID",
+		},
+		DependencyRequirements: []DependencyRequirement{{ModuleKey: "ledger.base", Kind: DependencyKindRequired}},
+	}, "system"); err != nil {
+		t.Fatalf("expected local extension registration to tolerate out-of-order base, got %v", err)
+	}
+	if err := svc.Register(Manifest{
+		Key:  "ledger.base",
+		Role: ModuleRoleBase,
+	}, "system"); err != nil {
+		t.Fatalf("register base module failed: %v", err)
+	}
+}
 
 func TestRegisterValidatesFrontendContracts(t *testing.T) {
 	svc := NewService()

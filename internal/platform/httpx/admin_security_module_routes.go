@@ -79,12 +79,100 @@ func registerAdminSecurityModuleRoutes(mux *http.ServeMux, ident *identity.Servi
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
 			return
 		}
-		item, found := modules.Get(moduleKey)
+		item, found := modules.GetForScope(
+			moduleKey,
+			strings.TrimSpace(r.URL.Query().Get("organization_id")),
+			strings.TrimSpace(r.URL.Query().Get("location_id")),
+			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+		)
 		if !found {
 			respondError(w, shared.NotFound("module not found"))
 			return
 		}
 		respondJSON(w, http.StatusOK, item)
+	})
+
+	mux.HandleFunc("GET /admin/api/modules/local-extensions", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		baseModuleKey := strings.TrimSpace(r.URL.Query().Get("base_module_key"))
+		if baseModuleKey == "" {
+			respondError(w, shared.Validation("base_module_key is required"))
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": modules.ListLocalExtensions(baseModuleKey)})
+	})
+
+	mux.HandleFunc("PUT /admin/api/modules/local-extensions/activation", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "module.manage", "", "module.manage")
+		if !ok {
+			return
+		}
+		var req struct {
+			BaseModuleKey      string `json:"base_module_key"`
+			ExtensionModuleKey string `json:"extension_module_key"`
+			Scope              string `json:"scope"`
+			ScopeID            string `json:"scope_id,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid request body"))
+			return
+		}
+		item, err := modules.ActivateLocalExtension(strings.TrimSpace(req.BaseModuleKey), strings.TrimSpace(req.ExtensionModuleKey), strings.TrimSpace(req.Scope), strings.TrimSpace(req.ScopeID), principalActorID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:module:local-extension:activate:" + item.BaseModuleKey + ":" + item.Scope + ":" + item.ScopeID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "module.local_extension.activate",
+			TargetType:    "module_local_extension",
+			TargetID:      item.BaseModuleKey + ":" + item.Scope + ":" + item.ScopeID,
+			ActorID:       principalActorID(p),
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: "module:local-extension:activate:" + item.BaseModuleKey,
+			Metadata: map[string]any{
+				"base_module_key":      item.BaseModuleKey,
+				"extension_module_key": item.ExtensionModuleKey,
+				"scope":                item.Scope,
+				"scope_id":             item.ScopeID,
+			},
+		})
+		respondJSON(w, http.StatusOK, item)
+	})
+
+	mux.HandleFunc("DELETE /admin/api/modules/local-extensions/activation", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "module.manage", "", "module.manage")
+		if !ok {
+			return
+		}
+		baseModuleKey := strings.TrimSpace(r.URL.Query().Get("base_module_key"))
+		scope := strings.TrimSpace(r.URL.Query().Get("scope"))
+		scopeID := strings.TrimSpace(r.URL.Query().Get("scope_id"))
+		if baseModuleKey == "" {
+			respondError(w, shared.Validation("base_module_key is required"))
+			return
+		}
+		if err := modules.DeactivateLocalExtension(baseModuleKey, scope, scopeID); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:module:local-extension:deactivate:" + baseModuleKey + ":" + scope + ":" + scopeID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "module.local_extension.deactivate",
+			TargetType:    "module_local_extension",
+			TargetID:      baseModuleKey + ":" + scope + ":" + scopeID,
+			ActorID:       principalActorID(p),
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: "module:local-extension:deactivate:" + baseModuleKey,
+			Metadata: map[string]any{
+				"base_module_key": baseModuleKey,
+				"scope":           scope,
+				"scope_id":        scopeID,
+			},
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"base_module_key": baseModuleKey, "scope": scope, "scope_id": scopeID, "status": "deactivated"})
 	})
 
 	mux.HandleFunc("GET /admin/api/security/policy-hooks/", func(w http.ResponseWriter, r *http.Request) {

@@ -211,6 +211,58 @@ func TestValidateBusinessManifestsRejectsMissingDependencies(t *testing.T) {
 	}
 }
 
+func TestValidateBusinessManifestsAllowsLocalExtensionBeforeBase(t *testing.T) {
+	builtIn := []module.Manifest{{Key: "platform.core", Role: module.ModuleRoleBase}}
+	err := validateBusinessManifests(builtIn, []module.Manifest{
+		{
+			Key:  "ledger.local.id",
+			Role: module.ModuleRoleLocalExtension,
+			LocalExtension: module.LocalExtensionDefinition{
+				BaseModuleKey: "ledger.base",
+				LocalityType:  "country",
+				LocalityCode:  "ID",
+			},
+			DependencyRequirements: []module.DependencyRequirement{{
+				ModuleKey: "ledger.base",
+				Kind:      module.DependencyKindRequired,
+			}},
+		},
+		{
+			Key:  "ledger.base",
+			Role: module.ModuleRoleBase,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected out-of-order local extension manifests to validate, got %v", err)
+	}
+}
+
+func TestValidateBusinessManifestsRejectsLocalExtensionTargetingNonBaseRole(t *testing.T) {
+	builtIn := []module.Manifest{{Key: "platform.core", Role: module.ModuleRoleBase}}
+	err := validateBusinessManifests(builtIn, []module.Manifest{
+		{
+			Key:  "ledger.local.id",
+			Role: module.ModuleRoleLocalExtension,
+			LocalExtension: module.LocalExtensionDefinition{
+				BaseModuleKey: "ledger.base",
+				LocalityType:  "country",
+				LocalityCode:  "ID",
+			},
+			DependencyRequirements: []module.DependencyRequirement{{
+				ModuleKey: "ledger.base",
+				Kind:      module.DependencyKindRequired,
+			}},
+		},
+		{
+			Key:  "ledger.base",
+			Role: module.ModuleRoleStandard,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected non-base target role to fail validation")
+	}
+}
+
 func TestNewAppBootstrapsClinicProfileBusinessSlice(t *testing.T) {
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("DATABASE_URL", "")

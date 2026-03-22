@@ -17,6 +17,8 @@ type Manifest struct {
 	Name                   string                     `json:"name"`
 	NameI18n               i18n.LocalizedText         `json:"name_i18n,omitempty"`
 	Version                string                     `json:"version"`
+	Role                   ModuleRole                 `json:"role,omitempty"`
+	LocalExtension         LocalExtensionDefinition   `json:"local_extension,omitempty"`
 	KernelVersionRange     string                     `json:"kernel_version_range,omitempty"`
 	RequiredCapabilities   []string                   `json:"required_capabilities,omitempty"`
 	DomainFamily           string                     `json:"domain_family"`
@@ -49,6 +51,22 @@ type Manifest struct {
 	Bundles                []BundleDefinition         `json:"-"`
 }
 
+type ModuleRole string
+
+const (
+	ModuleRoleStandard       ModuleRole = "standard"
+	ModuleRoleBase           ModuleRole = "base"
+	ModuleRoleExtension      ModuleRole = "extension"
+	ModuleRoleLocalExtension ModuleRole = "local_extension"
+)
+
+type LocalExtensionDefinition struct {
+	BaseModuleKey string `json:"base_module_key,omitempty"`
+	LocalityType  string `json:"locality_type,omitempty"`
+	LocalityCode  string `json:"locality_code,omitempty"`
+	LocalityLabel string `json:"locality_label,omitempty"`
+}
+
 type DocumentExtension struct {
 	DocumentType       string             `json:"document_type"`
 	SchemaVersion      string             `json:"schema_version"`
@@ -65,6 +83,15 @@ type InstalledModule struct {
 	UpdatedBy string    `json:"updated_by"`
 }
 
+type LocalExtensionActivation struct {
+	BaseModuleKey      string    `json:"base_module_key"`
+	ExtensionModuleKey string    `json:"extension_module_key"`
+	Scope              string    `json:"scope"`
+	ScopeID            string    `json:"scope_id,omitempty"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	UpdatedBy          string    `json:"updated_by"`
+}
+
 type Detail struct {
 	Manifest              Manifest               `json:"manifest"`
 	Installed             InstalledModule        `json:"installed"`
@@ -72,6 +99,24 @@ type Detail struct {
 	DependencyDiagnostics []DependencyDiagnostic `json:"dependency_diagnostics,omitempty"`
 	KernelDiagnostics     []Diagnostic           `json:"kernel_diagnostics,omitempty"`
 	LifecycleState        string                 `json:"lifecycle_state,omitempty"`
+}
+
+type ScopedDetail struct {
+	Detail
+	LocalExtensionState *LocalExtensionState `json:"local_extension_state,omitempty"`
+}
+
+type LocalExtensionState struct {
+	Eligible             bool   `json:"eligible"`
+	Active               bool   `json:"active"`
+	BaseModuleKey        string `json:"base_module_key,omitempty"`
+	LocalityType         string `json:"locality_type,omitempty"`
+	LocalityCode         string `json:"locality_code,omitempty"`
+	LocalityLabel        string `json:"locality_label,omitempty"`
+	SourceScope          string `json:"source_scope,omitempty"`
+	SourceScopeID        string `json:"source_scope_id,omitempty"`
+	ActivatedModuleKey   string `json:"activated_module_key,omitempty"`
+	ActivationConsistent bool   `json:"activation_consistent,omitempty"`
 }
 
 type DiagnosticSeverity string

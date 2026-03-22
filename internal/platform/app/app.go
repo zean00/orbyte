@@ -343,6 +343,16 @@ func validateBusinessManifests(builtIn []module.Manifest, business []module.Mani
 				return fmt.Errorf("module %q requires %q but it is not included in the selected profile", manifest.Key, requirement.ModuleKey)
 			}
 		}
+		if manifest.Role == module.ModuleRoleLocalExtension {
+			baseModuleKey := strings.TrimSpace(manifest.LocalExtension.BaseModuleKey)
+			baseManifest, ok := known[baseModuleKey]
+			if !ok {
+				return fmt.Errorf("module %q targets base module %q but it is not included in the selected profile", manifest.Key, baseModuleKey)
+			}
+			if baseManifest.Role != module.ModuleRoleBase {
+				return fmt.Errorf("module %q targets base module %q but that module does not use role base", manifest.Key, baseModuleKey)
+			}
+		}
 	}
 	return nil
 }

@@ -33,7 +33,13 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": modules.List()})
+		respondJSON(w, http.StatusOK, map[string]any{
+			"items": modules.ListForScope(
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			),
+		})
 	})
 
 	mux.HandleFunc("GET /admin/api/modules/compatibility", func(w http.ResponseWriter, r *http.Request) {

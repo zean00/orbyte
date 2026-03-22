@@ -35,6 +35,9 @@ func (s *Service) Register(manifest Manifest, actorID string) error {
 	if manifest.Key == "" {
 		return shared.Validation("module key is required")
 	}
+	if manifest.Role == "" {
+		manifest.Role = ModuleRoleStandard
+	}
 	if err := validateManifest(s.manifests, manifest); err != nil {
 		return err
 	}
@@ -77,6 +80,90 @@ func (s *Service) Get(key string) (Detail, bool) {
 		return Detail{}, false
 	}
 	return s.detail(manifest, item), true
+}
+
+func (s *Service) ListForScope(organizationID, locationID, operatingUnitID string) []ScopedDetail {
+	items := s.List()
+	result := make([]ScopedDetail, 0, len(items))
+	for _, item := range items {
+		result = append(result, ScopedDetail{
+			Detail:              item,
+			LocalExtensionState: s.localExtensionState(item.Manifest, organizationID, locationID, operatingUnitID),
+		})
+	}
+	return result
+}
+
+func (s *Service) GetForScope(key, organizationID, locationID, operatingUnitID string) (ScopedDetail, bool) {
+	item, ok := s.Get(key)
+	if !ok {
+		return ScopedDetail{}, false
+	}
+	return ScopedDetail{
+		Detail:              item,
+		LocalExtensionState: s.localExtensionState(item.Manifest, organizationID, locationID, operatingUnitID),
+	}, true
+}
+
+func (s *Service) ListLocalExtensions(baseModuleKey string) []Detail {
+	items := make([]Detail, 0)
+	for _, item := range s.List() {
+		if item.Manifest.Role == ModuleRoleLocalExtension && item.Manifest.LocalExtension.BaseModuleKey == baseModuleKey {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Manifest.Key < items[j].Manifest.Key })
+	return items
+}
+
+func (s *Service) ResolveActiveLocalExtension(baseModuleKey, organizationID, locationID, operatingUnitID string) (LocalExtensionActivation, bool) {
+	for _, candidate := range localExtensionScopeCandidates(organizationID, locationID, operatingUnitID) {
+		item, ok := s.repo.GetActivation(baseModuleKey, candidate.scope, candidate.scopeID)
+		if !ok {
+			continue
+		}
+		if !s.localExtensionActivationEligible(item.BaseModuleKey, item.ExtensionModuleKey) {
+			continue
+		}
+		return item, true
+	}
+	return LocalExtensionActivation{}, false
+}
+
+func (s *Service) ActivateLocalExtension(baseModuleKey, extensionModuleKey, scope, scopeID, actorID string) (LocalExtensionActivation, error) {
+	scope, scopeID, err := normalizeLocalExtensionScope(scope, scopeID)
+	if err != nil {
+		return LocalExtensionActivation{}, err
+	}
+	if err := s.validateLocalExtensionActivation(baseModuleKey, extensionModuleKey, scope, scopeID); err != nil {
+		return LocalExtensionActivation{}, err
+	}
+	if actorID == "" {
+		actorID = "system"
+	}
+	item := LocalExtensionActivation{
+		BaseModuleKey:      baseModuleKey,
+		ExtensionModuleKey: extensionModuleKey,
+		Scope:              scope,
+		ScopeID:            scopeID,
+		UpdatedAt:          time.Now().UTC(),
+		UpdatedBy:          actorID,
+	}
+	if err := s.repo.SaveActivation(item); err != nil {
+		return LocalExtensionActivation{}, err
+	}
+	return item, nil
+}
+
+func (s *Service) DeactivateLocalExtension(baseModuleKey, scope, scopeID string) error {
+	scope, scopeID, err := normalizeLocalExtensionScope(scope, scopeID)
+	if err != nil {
+		return err
+	}
+	if _, ok := s.repo.GetActivation(baseModuleKey, scope, scopeID); !ok {
+		return shared.NotFound("local extension activation not found")
+	}
+	return s.repo.DeleteActivation(baseModuleKey, scope, scopeID)
 }
 
 func (s *Service) CompatibilityReport() []Detail {
@@ -651,6 +738,9 @@ func (s *Service) validateSetEnabled(key string, enabled bool) (InstalledModule,
 			}
 		}
 	} else {
+		if s.hasActiveLocalExtensionBindings(key) {
+			return InstalledModule{}, shared.Conflict("module has active local extension bindings")
+		}
 		for moduleKey, manifest := range s.manifests {
 			if moduleKey == key || !s.IsEnabled(moduleKey) {
 				continue
@@ -720,6 +810,17 @@ func (s *Service) detail(manifest Manifest, item InstalledModule) Detail {
 func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	if strings.TrimSpace(manifest.Key) == "" {
 		return shared.Validation("module key is required")
+	}
+	if manifest.Role == "" {
+		manifest.Role = ModuleRoleStandard
+	}
+	switch manifest.Role {
+	case ModuleRoleStandard, ModuleRoleBase, ModuleRoleExtension, ModuleRoleLocalExtension:
+	default:
+		return shared.Validation("module role is invalid")
+	}
+	if err := validateLocalExtensionManifest(existing, manifest); err != nil {
+		return err
 	}
 	actions := map[string]string{}
 	views := map[string]string{}
@@ -1326,6 +1427,199 @@ func lifecycleState(enabled bool, diagnostics []DependencyDiagnostic, kernelDiag
 		}
 	}
 	return "healthy"
+}
+
+func validateLocalExtensionManifest(existing map[string]Manifest, manifest Manifest) error {
+	if manifest.Role != ModuleRoleLocalExtension {
+		if strings.TrimSpace(manifest.LocalExtension.BaseModuleKey) != "" || strings.TrimSpace(manifest.LocalExtension.LocalityType) != "" || strings.TrimSpace(manifest.LocalExtension.LocalityCode) != "" || strings.TrimSpace(manifest.LocalExtension.LocalityLabel) != "" {
+			return shared.Validation("local extension metadata requires module role local_extension")
+		}
+		return nil
+	}
+	baseModuleKey := strings.TrimSpace(manifest.LocalExtension.BaseModuleKey)
+	if baseModuleKey == "" {
+		return shared.Validation("local extension base_module_key is required")
+	}
+	if baseModuleKey == manifest.Key {
+		return shared.Validation("local extension base_module_key must differ from module key")
+	}
+	if strings.TrimSpace(manifest.LocalExtension.LocalityType) == "" {
+		return shared.Validation("local extension locality_type is required")
+	}
+	if strings.TrimSpace(manifest.LocalExtension.LocalityCode) == "" {
+		return shared.Validation("local extension locality_code is required")
+	}
+	baseManifest, ok := existing[baseModuleKey]
+	if ok && baseManifest.Role != ModuleRoleBase {
+		return shared.Validation("local extension base module must use role base")
+	}
+	requiredDependency := false
+	for _, dependency := range manifestDependencies(manifest) {
+		if dependency.ModuleKey == baseModuleKey && dependency.Kind == DependencyKindRequired {
+			requiredDependency = true
+			break
+		}
+	}
+	if !requiredDependency {
+		return shared.Validation("local extension must declare a required dependency on its base module")
+	}
+	switch {
+	case len(manifest.OwnedDocumentTypes) > 0:
+		return shared.Validation("local extension cannot own document types")
+	case len(manifest.OwnedEntityTypes) > 0:
+		return shared.Validation("local extension cannot own entity types")
+	case len(manifest.Documents) > 0:
+		return shared.Validation("local extension cannot define canonical documents")
+	case len(manifest.Models) > 0:
+		return shared.Validation("local extension cannot define canonical models")
+	case len(manifest.SearchIndexes) > 0:
+		return shared.Validation("local extension cannot define canonical search indexes")
+	case len(manifest.Datasets) > 0:
+		return shared.Validation("local extension cannot define canonical datasets")
+	case len(manifest.Security.Permissions) > 0:
+		return shared.Validation("local extension cannot define canonical permissions")
+	case len(manifest.Security.RoleTemplates) > 0:
+		return shared.Validation("local extension cannot define role templates")
+	case len(manifest.Observability.Projections) > 0:
+		return shared.Validation("local extension cannot define projections")
+	case len(manifest.Observability.Metrics) > 0:
+		return shared.Validation("local extension cannot define metrics")
+	case len(manifest.Observability.LogEvents) > 0:
+		return shared.Validation("local extension cannot define log events")
+	case len(manifest.Observability.DomainEvents) > 0:
+		return shared.Validation("local extension cannot define domain events")
+	}
+	return nil
+}
+
+func (s *Service) localExtensionState(manifest Manifest, organizationID, locationID, operatingUnitID string) *LocalExtensionState {
+	if manifest.Role != ModuleRoleLocalExtension {
+		return nil
+	}
+	state := &LocalExtensionState{
+		Eligible:      s.localExtensionActivationEligible(manifest.LocalExtension.BaseModuleKey, manifest.Key),
+		BaseModuleKey: manifest.LocalExtension.BaseModuleKey,
+		LocalityType:  manifest.LocalExtension.LocalityType,
+		LocalityCode:  manifest.LocalExtension.LocalityCode,
+		LocalityLabel: manifest.LocalExtension.LocalityLabel,
+	}
+	activation, ok := s.ResolveActiveLocalExtension(manifest.LocalExtension.BaseModuleKey, organizationID, locationID, operatingUnitID)
+	if !ok {
+		return state
+	}
+	state.SourceScope = activation.Scope
+	state.SourceScopeID = activation.ScopeID
+	state.ActivatedModuleKey = activation.ExtensionModuleKey
+	state.Active = activation.ExtensionModuleKey == manifest.Key
+	state.ActivationConsistent = state.Active && state.Eligible
+	return state
+}
+
+func (s *Service) localExtensionActivationEligible(baseModuleKey, extensionModuleKey string) bool {
+	baseManifest, ok := s.manifests[baseModuleKey]
+	if !ok || baseManifest.Role != ModuleRoleBase || !s.IsEnabled(baseModuleKey) {
+		return false
+	}
+	manifest, ok := s.manifests[extensionModuleKey]
+	if !ok || manifest.Role != ModuleRoleLocalExtension || !s.IsEnabled(extensionModuleKey) {
+		return false
+	}
+	if manifest.LocalExtension.BaseModuleKey != baseModuleKey {
+		return false
+	}
+	for _, dependency := range manifestDependencies(manifest) {
+		if dependency.Kind == DependencyKindOptional {
+			continue
+		}
+		if !s.IsEnabled(dependency.ModuleKey) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) validateLocalExtensionActivation(baseModuleKey, extensionModuleKey, scope, scopeID string) error {
+	baseManifest, ok := s.manifests[baseModuleKey]
+	if !ok {
+		return shared.NotFound("base module not found")
+	}
+	if baseManifest.Role != ModuleRoleBase {
+		return shared.Validation("base module must use role base")
+	}
+	if !s.IsEnabled(baseModuleKey) {
+		return shared.Conflict("base module is disabled")
+	}
+	manifest, ok := s.manifests[extensionModuleKey]
+	if !ok {
+		return shared.NotFound("local extension module not found")
+	}
+	if manifest.Role != ModuleRoleLocalExtension {
+		return shared.Validation("module is not a local extension")
+	}
+	if manifest.LocalExtension.BaseModuleKey != baseModuleKey {
+		return shared.Validation("local extension does not target the requested base module")
+	}
+	if !s.IsEnabled(extensionModuleKey) {
+		return shared.Conflict("local extension module is disabled")
+	}
+	if _, err := s.validateSetEnabled(extensionModuleKey, true); err != nil {
+		return err
+	}
+	if current, ok := s.repo.GetActivation(baseModuleKey, scope, scopeID); ok && current.ExtensionModuleKey == extensionModuleKey {
+		return nil
+	}
+	return nil
+}
+
+func (s *Service) hasActiveLocalExtensionBindings(moduleKey string) bool {
+	for _, item := range s.repo.ListActivations() {
+		if item.BaseModuleKey == moduleKey || item.ExtensionModuleKey == moduleKey {
+			return true
+		}
+	}
+	return false
+}
+
+func localExtensionScopeCandidates(organizationID, locationID, operatingUnitID string) []struct {
+	scope   string
+	scopeID string
+} {
+	candidates := []struct {
+		scope   string
+		scopeID string
+	}{
+		{scope: "operating_unit", scopeID: strings.TrimSpace(operatingUnitID)},
+		{scope: "location", scopeID: strings.TrimSpace(locationID)},
+		{scope: "organization", scopeID: strings.TrimSpace(organizationID)},
+		{scope: "deployment", scopeID: ""},
+	}
+	filtered := make([]struct {
+		scope   string
+		scopeID string
+	}, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.scope != "deployment" && candidate.scopeID == "" {
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
+	return filtered
+}
+
+func normalizeLocalExtensionScope(scope, scopeID string) (string, string, error) {
+	scope = strings.TrimSpace(scope)
+	scopeID = strings.TrimSpace(scopeID)
+	switch scope {
+	case "deployment":
+		return scope, "", nil
+	case "organization", "location", "operating_unit":
+		if scopeID == "" {
+			return "", "", shared.Validation("scope_id is required")
+		}
+		return scope, scopeID, nil
+	default:
+		return "", "", shared.Validation("scope is invalid")
+	}
 }
 
 func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views, customEntries, flows, bundles, menus map[string]string) {
