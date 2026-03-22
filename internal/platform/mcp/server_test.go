@@ -12,13 +12,21 @@ import (
 
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/integration"
+	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -675,6 +683,397 @@ func TestServerWorkflowHierarchyAndRuntimeTools(t *testing.T) {
 	}
 }
 
+func TestServerControlPlaneToolsAndResources(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "configuration.read", "configuration.manage", "identity.manage_users", "ops.read", "search.manage", "module.manage":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "config.definition.list", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("config.definition.list failed: %+v", resp.Error)
+	}
+	if len(resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]config.Definition)) == 0 {
+		t.Fatal("expected config definitions")
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "config.bundle.validate",
+			"arguments": map[string]any{
+				"bundle": map[string]any{
+					"name": "mcp-bundle",
+					"config_entries": []map[string]any{{
+						"key":   "identity.auth",
+						"scope": "deployment",
+						"value": map[string]any{
+							"providers": map[string]any{
+								"password": map[string]any{"enabled": true},
+								"google":   map[string]any{"enabled": false, "client_id": "", "client_secret": ""},
+							},
+							"login_rate_limit_attempts": 3,
+						},
+					}},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("config.bundle.validate failed: %+v", resp.Error)
+	}
+	validation := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["validation"].(configBundleValidation)
+	if !validation.Valid {
+		t.Fatalf("expected valid bundle, got %+v", validation)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "feature_flag.targeting.get",
+			"arguments": map[string]any{
+				"flag_key":    "platform.admin_console",
+				"location_id": "loc_hq",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("feature_flag.targeting.get failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "identity.role_permission_matrix.get", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("identity.role_permission_matrix.get failed: %+v", resp.Error)
+	}
+	matrix := resp.Result.(map[string]any)["structuredContent"].(rolePermissionMatrix)
+	if len(matrix.Roles) == 0 || len(matrix.Permissions) == 0 {
+		t.Fatalf("expected populated role matrix, got %+v", matrix)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      5,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "identity.role_permission.grant",
+			"arguments": map[string]any{
+				"role_id":        "role_admin",
+				"permission_key": "audit.read",
+				"confirm_apply":  true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("identity.role_permission.grant failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      6,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "integration.adapter.list", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("integration.adapter.list failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      7,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "readiness.get", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("readiness.get failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      8,
+		Method:  "resources/read",
+		Params:  mustJSON(t, map[string]any{"uri": "orbyte://control-plane/config.catalog"}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("config catalog resource failed: %+v", resp.Error)
+	}
+	if len(resp.Result.(map[string]any)["contents"].([]ResourceContent)) != 1 {
+		t.Fatalf("expected control-plane resource content, got %+v", resp.Result)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      9,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "implementation.tenant.inspect",
+			"arguments": map[string]any{
+				"location_id": "loc_hq",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.tenant.inspect failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      10,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "search.runtime.list", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("search.runtime.list failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      11,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "offline.sync.list", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("offline.sync.list failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      12,
+		Method: "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "implementation.session.create",
+			"arguments": map[string]any{
+				"name":        "Tenant rollout",
+				"location_id": "loc_hq",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.session.create failed: %+v", resp.Error)
+	}
+	session := resp.Result.(map[string]any)["structuredContent"].(ImplementationSession)
+	if session.ID == "" {
+		t.Fatalf("expected session id, got %+v", session)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      13,
+		Method: "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "implementation.plan.build",
+			"arguments": map[string]any{
+				"session_id": session.ID,
+				"plan": map[string]any{
+					"bundle": map[string]any{
+						"config_entries": []map[string]any{{
+							"key":   "identity.auth",
+							"scope": "deployment",
+							"value": map[string]any{
+								"providers": map[string]any{
+									"password": map[string]any{"enabled": true},
+									"google":   map[string]any{"enabled": false, "client_id": "", "client_secret": ""},
+								},
+								"login_rate_limit_attempts": 5,
+							},
+						}},
+					},
+					"module_actions": []map[string]any{{
+						"module_key": "analytics",
+						"enabled":    false,
+					}},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.plan.build failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      14,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.plan.validate", "arguments": map[string]any{"session_id": session.ID}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.plan.validate failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      15,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.stage.commit", "arguments": map[string]any{"session_id": session.ID, "confirm_apply": true}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.stage.commit failed: %+v", resp.Error)
+	}
+	commit := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if commit["change_set"] == nil {
+		t.Fatalf("expected change-set in commit result, got %+v", commit)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      16,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.rollback.plan", "arguments": map[string]any{"session_id": session.ID}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.rollback.plan failed: %+v", resp.Error)
+	}
+}
+
+func TestServerRejectsMalformedImplementationBundleArguments(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "configuration.manage":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.config.plan", "arguments": map[string]any{"bundle": "bad-shape"}}),
+	}, actor)
+	if resp.Error == nil {
+		t.Fatal("expected malformed bundle to return an error")
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.config.apply", "arguments": map[string]any{"bundle": "bad-shape", "confirm_apply": true}}),
+	}, actor)
+	if resp.Error == nil {
+		t.Fatal("expected malformed apply bundle to return an error")
+	}
+}
+
+func TestImplementationStageCommitDoesNotPartiallyApplyOnValidationFailure(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "configuration.read", "configuration.manage", "module.manage":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	before, found := findConfigEntry(server.config, "identity.auth", "deployment", "")
+	if !found {
+		t.Fatal("expected seeded identity.auth config")
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.session.create", "arguments": map[string]any{"name": "partial-apply-test", "location_id": "loc_hq"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.session.create failed: %+v", resp.Error)
+	}
+	sessionID := resp.Result.(map[string]any)["structuredContent"].(ImplementationSession).ID
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method: "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "implementation.plan.build",
+			"arguments": map[string]any{
+				"session_id": sessionID,
+				"plan": map[string]any{
+					"bundle": map[string]any{
+						"config_entries": []map[string]any{{
+							"key":   "identity.auth",
+							"scope": "deployment",
+							"value": map[string]any{
+								"providers": map[string]any{
+									"password": map[string]any{"enabled": true},
+									"google":   map[string]any{"enabled": false, "client_id": "", "client_secret": ""},
+								},
+								"login_rate_limit_attempts": 9,
+							},
+						}},
+					},
+					"system_config_updates": []map[string]any{{
+						"key":      "missing_system",
+						"settings": map[string]any{"base_url": "https://invalid.example"},
+					}},
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.plan.build failed: %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "implementation.stage.commit", "arguments": map[string]any{"session_id": sessionID, "confirm_apply": true}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("implementation.stage.commit returned transport error: %+v", resp.Error)
+	}
+	report := resp.Result.(map[string]any)["structuredContent"].(ImplementationVerificationReport)
+	if report.Passed {
+		t.Fatal("expected failed validation report")
+	}
+
+	after, found := findConfigEntry(server.config, "identity.auth", "deployment", "")
+	if !found {
+		t.Fatal("expected identity.auth config to remain present")
+	}
+	if after.Value["login_rate_limit_attempts"] != before.Value["login_rate_limit_attempts"] {
+		t.Fatalf("expected config to remain unchanged, before=%v after=%v", before.Value["login_rate_limit_attempts"], after.Value["login_rate_limit_attempts"])
+	}
+}
+
 func TestServerCallsAnalyticsToolAndReadsAppResource(t *testing.T) {
 	server := newTestServer(t)
 	resp := server.Handle(context.Background(), JSONRPCRequest{
@@ -797,7 +1196,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, nil, nil, nil, "", "")
+	unavailable := NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -854,7 +1253,7 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "", "")
+	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -898,11 +1297,22 @@ func newTestServer(t *testing.T) *Server {
 	documents := document.NewService()
 	flows := workflow.NewService()
 	ident := newTestIdentity(t)
+	cfg := config.NewService()
+	flags := featureflags.NewService()
+	policySvc := policy.NewServiceWithConfig(cfg)
+	health := runtimehealth.NewTracker()
+	health.SetBootstrapped(true)
+	health.SetBackgroundStarted(true)
+	integrationSvc := integration.NewService(observability.NewService(), nil)
+	auditSvc := audit.NewService()
 	eventingSvc := eventing.NewService()
 	searchSvc := search.NewService()
+	jobSvc := jobs.NewService()
+	referenceSvc := reference.NewService()
 	obsSvc := observability.NewService()
 	analyticsSvc := analytics.NewService(documents, flows, eventingSvc, searchSvc, audit.NewService(), obsSvc)
-	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	offlineSvc := offline.NewService(modules, nil, searchSvc)
+	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -926,7 +1336,7 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot")
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -942,7 +1352,7 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -958,7 +1368,7 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), "", "")
+	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "")
 }
 
 func newTestIdentity(t *testing.T) *identity.Service {

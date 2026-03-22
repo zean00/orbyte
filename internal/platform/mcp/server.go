@@ -11,8 +11,20 @@ import (
 	"strings"
 
 	"orbyte/internal/platform/analytics"
+	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/eventing"
+	"orbyte/internal/platform/featureflags"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/integration"
+	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/offline"
+	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/reference"
+	"orbyte/internal/platform/runtimehealth"
+	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -27,6 +39,18 @@ const (
 	analyticsStudioAppKey       = "analytics.studio"
 	workflowManagerResourceURI  = "orbyte://apps/workflow.manager"
 	workflowManagerAppKey       = "workflow.manager"
+	configCatalogResourceURI     = "orbyte://control-plane/config.catalog"
+	flagCatalogResourceURI       = "orbyte://control-plane/feature-flags.catalog"
+	roleMatrixResourceURI        = "orbyte://control-plane/role-matrix"
+	moduleCompatResourceURI      = "orbyte://control-plane/module-compatibility"
+	integrationHealthResourceURI = "orbyte://control-plane/integration-health"
+	readinessResourceURI         = "orbyte://control-plane/readiness"
+	runbooksResourceURI          = "orbyte://control-plane/runbooks"
+	searchRuntimeResourceURI     = "orbyte://control-plane/search-runtime"
+	offlineOpsResourceURI        = "orbyte://control-plane/offline-sync"
+	policyRuntimeResourceURI     = "orbyte://control-plane/policy-runtime"
+	referenceCatalogResourceURI  = "orbyte://control-plane/reference-catalog"
+	implementationBlueprintsURI  = "orbyte://control-plane/implementation-blueprints"
 )
 
 const (
@@ -56,17 +80,43 @@ type Server struct {
 	templates                 *templateoutput.Service
 	workflows                 *workflow.Service
 	identity                  *identity.Service
+	config                    *config.Service
+	flags                     *featureflags.Service
+	integration               *integration.Service
+	reference                 *reference.Service
+	search                    *search.Service
+	policy                    *policy.Service
+	eventing                  *eventing.Service
+	jobs                      *jobs.Service
+	health                    *runtimehealth.Tracker
+	audit                     *audit.Service
+	observability             *observability.Service
+	offline                   *offline.Service
+	implementation            *ImplementationService
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
+func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
 	return &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
 		templates:                 templates,
 		workflows:                 workflows,
 		identity:                  identitySvc,
+		config:                    configSvc,
+		flags:                     flagsSvc,
+		integration:               integrationSvc,
+		reference:                 referenceSvc,
+		search:                    searchSvc,
+		policy:                    policySvc,
+		eventing:                  eventingSvc,
+		jobs:                      jobSvc,
+		health:                    health,
+		audit:                     auditSvc,
+		observability:             obs,
+		offline:                   offlineSvc,
+		implementation:            NewImplementationService(),
 		analyticsStreamPath:       analyticsStreamPath,
 		analyticsScopedStreamPath: analyticsScopedStreamPath,
 	}
@@ -408,6 +458,127 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 			builtInTool{name: "workflow.reporting_line.save", title: "Save Reporting Line", description: "Create or update a reporting line for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"reporting_line": map[string]any{"type": "object"}}, "required": []string{"reporting_line"}}},
 		)
 	}
+	if s != nil && s.config != nil {
+		defs = append(defs,
+			builtInTool{name: "config.definition.list", title: "List Config Definitions", description: "List configuration definitions and allowed scopes.", permission: "configuration.read"},
+			builtInTool{name: "config.entry.list", title: "List Config Entries", description: "List stored configuration entries.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"config_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "config_scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}}},
+			builtInTool{name: "config.effective.get", title: "Get Effective Config", description: "Get effective configuration for a context.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "config.compare", title: "Compare Config Contexts", description: "Compare effective configuration across two contexts.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"left": map[string]any{"type": "object"}, "right": map[string]any{"type": "object"}}}},
+			builtInTool{name: "config.bundle.export", title: "Export Config Bundle", description: "Export config and feature flag values into a promotion bundle.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "config_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "config_scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "include_flags": map[string]any{"type": "boolean"}, "flag_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "flag_scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}}},
+			builtInTool{name: "config.bundle.validate", title: "Validate Config Bundle", description: "Validate a configuration bundle without applying it.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"bundle": map[string]any{"type": "object"}}, "required": []string{"bundle"}}},
+			builtInTool{name: "config.bundle.apply", title: "Apply Config Bundle", description: "Apply a validated configuration bundle. Requires explicit confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"bundle": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"bundle", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.flags != nil {
+		defs = append(defs,
+			builtInTool{name: "feature_flag.definition.list", title: "List Feature Flag Definitions", description: "List feature flag definitions.", permission: "configuration.read"},
+			builtInTool{name: "feature_flag.value.list", title: "List Feature Flag Values", description: "List stored feature flag values.", permission: "configuration.read"},
+			builtInTool{name: "feature_flag.targeting.get", title: "Get Feature Flag Targeting", description: "Inspect raw overrides and effective resolution for one feature flag.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"flag_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}, "required": []string{"flag_key"}}},
+			builtInTool{name: "feature_flag.value.upsert", title: "Upsert Feature Flag Value", description: "Create or update a feature flag override. Requires explicit confirmation when activating changes.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"value", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.identity != nil {
+		defs = append(defs,
+			builtInTool{name: "identity.role_permission_matrix.get", title: "Get Role Permission Matrix", description: "Get roles, permissions, grants, and bindings in matrix form.", permission: "identity.manage_users"},
+			builtInTool{name: "identity.role_permission.grant", title: "Grant Role Permission", description: "Grant a permission to an existing role. Requires confirmation.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"role_id": map[string]any{"type": "string"}, "permission_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"role_id", "permission_key", "confirm_apply"}}},
+			builtInTool{name: "identity.role_permission.revoke", title: "Revoke Role Permission", description: "Revoke a permission from an existing role. Requires confirmation.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"role_id": map[string]any{"type": "string"}, "permission_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"role_id", "permission_key", "confirm_apply"}}},
+			builtInTool{name: "identity.role_binding.list", title: "List Role Bindings", description: "List current role bindings.", permission: "identity.manage_users"},
+			builtInTool{name: "identity.role_binding.priority.set", title: "Set Role Binding Priority", description: "Set role binding priority. Requires confirmation.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"binding_id": map[string]any{"type": "string"}, "priority": map[string]any{"type": "integer"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"binding_id", "priority", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.modules != nil {
+		defs = append(defs,
+			builtInTool{name: "module.list", title: "List Modules", description: "List installed modules and lifecycle state.", permission: "configuration.read"},
+			builtInTool{name: "module.compatibility.list", title: "List Module Compatibility", description: "List module compatibility diagnostics.", permission: "configuration.read"},
+			builtInTool{name: "module.enable", title: "Enable Module", description: "Enable one module. Requires confirmation.", permission: "module.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"module_key", "confirm_apply"}}},
+			builtInTool{name: "module.disable", title: "Disable Module", description: "Disable one module. Requires confirmation.", permission: "module.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"module_key", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.search != nil {
+		defs = append(defs,
+			builtInTool{name: "search.runtime.list", title: "List Search Runtime", description: "List search indexes and runtime status.", permission: "search.manage"},
+			builtInTool{name: "search.runtime.get", title: "Get Search Runtime", description: "Get runtime state for one search index.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}}, "required": []string{"index_key"}}},
+			builtInTool{name: "search.consistency.get", title: "Get Search Consistency", description: "Get consistency report for one search index.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}}, "required": []string{"index_key"}}},
+			builtInTool{name: "search.rebuild", title: "Rebuild Search Index", description: "Rebuild one search index. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.repair", title: "Repair Search Index", description: "Repair one search index. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.reconcile", title: "Reconcile Search Index", description: "Run a consistency scan for one search index. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.schema.plan", title: "Plan Search Schema", description: "Plan a candidate schema version for one index.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "string"}}, "required": []string{"index_key", "version"}}},
+			builtInTool{name: "search.schema.build", title: "Build Search Schema", description: "Build the candidate search schema. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.schema.activate", title: "Activate Search Schema", description: "Activate the candidate search schema. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.offline != nil {
+		defs = append(defs,
+			builtInTool{name: "offline.sync.list", title: "List Offline Sync Batches", description: "List offline sync batches and recent outcomes.", permission: "ops.read"},
+			builtInTool{name: "offline.sync.get", title: "Get Offline Sync Batch", description: "Get one offline sync batch and its outcomes.", permission: "ops.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"batch_id": map[string]any{"type": "string"}}, "required": []string{"batch_id"}}},
+			builtInTool{name: "offline.conflict.list", title: "List Offline Conflicts", description: "List offline sync conflicts.", permission: "ops.read"},
+		)
+	}
+	if s != nil && s.policy != nil {
+		defs = append(defs,
+			builtInTool{name: "policy.hook.list", title: "List Policy Hook Runtime", description: "List policy hook runtimes.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "policy.hook.get", title: "Get Policy Hook Runtime", description: "Get one policy hook runtime.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"hook_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"hook_key"}}},
+			builtInTool{name: "policy.module.upsert", title: "Update Policy Module", description: "Update Rego source for a policy hook. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"hook_key": map[string]any{"type": "string"}, "scope": map[string]any{"type": "string"}, "scope_id": map[string]any{"type": "string"}, "source": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"hook_key", "source", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.reference != nil {
+		defs = append(defs,
+			builtInTool{name: "reference.type.list", title: "List Reference Types", description: "List reference data types.", permission: "configuration.read"},
+			builtInTool{name: "reference.record.list", title: "List Reference Records", description: "List records for one reference type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}}, "required": []string{"type_key"}}},
+			builtInTool{name: "reference.resolve", title: "Resolve Reference Records", description: "Resolve effective records for one reference type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"type_key"}}},
+			builtInTool{name: "reference.record.upsert", title: "Upsert Reference Record", description: "Create or update a reference record. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"record": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"record", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.integration != nil {
+		defs = append(defs,
+			builtInTool{name: "integration.adapter.list", title: "List Integration Adapters", description: "List registered integration adapters and config schema.", permission: "configuration.read"},
+			builtInTool{name: "integration.system.list", title: "List Integration Systems", description: "List integration systems.", permission: "configuration.read"},
+			builtInTool{name: "integration.system.config.get", title: "Get Integration System Config", description: "Inspect one integration system config.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"system_key": map[string]any{"type": "string"}}, "required": []string{"system_key"}}},
+			builtInTool{name: "integration.system.config.update", title: "Update Integration System Config", description: "Update integration system config. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"system_key": map[string]any{"type": "string"}, "settings": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"system_key", "settings", "confirm_apply"}}},
+			builtInTool{name: "integration.endpoint.list", title: "List Integration Endpoints", description: "List integration endpoints.", permission: "configuration.read"},
+			builtInTool{name: "integration.endpoint.config.get", title: "Get Integration Endpoint Config", description: "Inspect one integration endpoint config.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"endpoint_key": map[string]any{"type": "string"}}, "required": []string{"endpoint_key"}}},
+			builtInTool{name: "integration.endpoint.config.update", title: "Update Integration Endpoint Config", description: "Update integration endpoint config. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"endpoint_key": map[string]any{"type": "string"}, "settings": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"endpoint_key", "settings", "confirm_apply"}}},
+			builtInTool{name: "integration.submission.list", title: "List Integration Submissions", description: "List integration submissions.", permission: "configuration.read"},
+			builtInTool{name: "integration.submission.get", title: "Get Integration Submission", description: "Inspect one integration submission.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"submission_id": map[string]any{"type": "string"}}, "required": []string{"submission_id"}}},
+			builtInTool{name: "integration.dead_letter.list", title: "List Integration Dead Letters", description: "List integration dead letters.", permission: "configuration.read"},
+			builtInTool{name: "integration.dead_letter.replay", title: "Replay Integration Dead Letter", description: "Replay one integration dead letter. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dead_letter_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"dead_letter_id", "confirm_apply"}}},
+		)
+	}
+	if s != nil && (s.health != nil || s.audit != nil) {
+		defs = append(defs,
+			builtInTool{name: "readiness.get", title: "Get Implementation Readiness", description: "Get readiness for applying customer configuration.", permission: "configuration.read"},
+			builtInTool{name: "ops.health.get", title: "Get Runtime Health", description: "Get runtime health snapshot and subsystem status.", permission: "ops.read"},
+			builtInTool{name: "ops.audit.correlation.get", title: "Get Audit Events By Correlation", description: "Get correlated audit events for one correlation id.", permission: "ops.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"correlation_id": map[string]any{"type": "string"}}, "required": []string{"correlation_id"}}},
+			builtInTool{name: "ops.trace.get", title: "Get Operational Trace", description: "Get a stitched trace summary for one correlation id.", permission: "ops.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"correlation_id": map[string]any{"type": "string"}}, "required": []string{"correlation_id"}}},
+		)
+	}
+	if s != nil && s.config != nil {
+		defs = append(defs,
+			builtInTool{name: "implementation.tenant.inspect", title: "Inspect Tenant Implementation State", description: "Aggregate config, flags, modules, integrations, and readiness for implementation work.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "implementation.config.plan", title: "Plan Implementation Config Changes", description: "Dry-run desired config, flags, and role grants into a normalized plan.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"bundle": map[string]any{"type": "object"}, "role_grants": map[string]any{"type": "array", "items": map[string]any{"type": "object"}}}}},
+			builtInTool{name: "implementation.config.apply", title: "Apply Implementation Plan", description: "Apply a validated implementation plan. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"bundle": map[string]any{"type": "object"}, "role_grants": map[string]any{"type": "array", "items": map[string]any{"type": "object"}}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"confirm_apply"}}},
+			builtInTool{name: "implementation.readiness.check", title: "Check Implementation Readiness", description: "Return readiness, validation warnings, and operator hints before apply.", permission: "configuration.read"},
+			builtInTool{name: "implementation.rollback.inspect", title: "Inspect Recent Implementation Changes", description: "Inspect recent config, feature flag, RBAC, and integration audit trail for rollback planning.", permission: "configuration.read"},
+			builtInTool{name: "implementation.session.create", title: "Create Implementation Session", description: "Create an implementation session for staged rollout work.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "implementation.session.list", title: "List Implementation Sessions", description: "List implementation sessions.", permission: "configuration.read"},
+			builtInTool{name: "implementation.session.get", title: "Get Implementation Session", description: "Get one implementation session.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.session.close", title: "Close Implementation Session", description: "Close one implementation session. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"session_id", "confirm_apply"}}},
+			builtInTool{name: "implementation.plan.build", title: "Build Implementation Plan", description: "Stage a normalized implementation plan onto a session.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "plan": map[string]any{"type": "object"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.plan.validate", title: "Validate Implementation Plan", description: "Validate the currently staged implementation plan for a session.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.stage.diff", title: "Diff Staged Implementation", description: "Compare staged session changes against current runtime state.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.stage.discard", title: "Discard Staged Implementation", description: "Discard the staged plan for a session. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"session_id", "confirm_apply"}}},
+			builtInTool{name: "implementation.stage.commit", title: "Commit Staged Implementation", description: "Apply the staged plan and record a change-set. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"session_id", "confirm_apply"}}},
+			builtInTool{name: "implementation.verify.state", title: "Verify Implementation State", description: "Verify current runtime state for a session or context.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "implementation.verify.readiness", title: "Verify Implementation Readiness", description: "Verify readiness and runtime validity for a session or context.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "implementation.verify.diff", title: "Verify Implementation Diff", description: "Return the staged diff for verification workflows.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.verify.smoke", title: "Smoke Verify Implementation", description: "Run a high-signal verification sweep for a session or context.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "implementation.checkpoint.create", title: "Create Implementation Checkpoint", description: "Create a checkpoint tied to the latest committed change-set.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.checkpoint.list", title: "List Implementation Checkpoints", description: "List checkpoints for a session.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.checkpoint.restore", title: "Restore Implementation Checkpoint", description: "Apply rollback for a checkpoint when reversible. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "checkpoint_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"session_id", "checkpoint_id", "confirm_apply"}}},
+			builtInTool{name: "implementation.rollback.plan", title: "Plan Implementation Rollback", description: "Build a rollback plan for a change-set.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "change_set_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}},
+			builtInTool{name: "implementation.rollback.apply", title: "Apply Implementation Rollback", description: "Apply a reversible rollback plan. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}, "change_set_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"session_id", "confirm_apply"}}},
+		)
+	}
 	items := make([]ToolDescriptor, 0, len(defs))
 	for _, def := range defs {
 		if !scopeMatches(actor.EndpointScope, builtInToolScope(def.name)) {
@@ -428,7 +599,7 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 }
 
 func (s *Server) listBuiltInResources(actor ActorContext) []ResourceDescriptor {
-	items := make([]ResourceDescriptor, 0, 2)
+	items := make([]ResourceDescriptor, 0, 9)
 	if s != nil && s.templates != nil && scopeMatches(actor.EndpointScope, "template") && allowsAll(actor.PermissionChecker, []string{"template.read"}) {
 		items = append(items, ResourceDescriptor{
 			URI:         templateDesignerResourceURI,
@@ -457,6 +628,36 @@ func (s *Server) listBuiltInResources(actor ActorContext) []ResourceDescriptor {
 			MIMEType:    "text/html",
 		})
 	}
+	if s != nil && s.config != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		items = append(items,
+			ResourceDescriptor{URI: configCatalogResourceURI, Name: "Config Catalog", Description: "Configuration definitions, entries, and effective values.", MIMEType: "application/json"},
+			ResourceDescriptor{URI: flagCatalogResourceURI, Name: "Feature Flag Catalog", Description: "Feature flag definitions and stored values.", MIMEType: "application/json"},
+			ResourceDescriptor{URI: moduleCompatResourceURI, Name: "Module Compatibility", Description: "Installed module and kernel compatibility state.", MIMEType: "application/json"},
+			ResourceDescriptor{URI: readinessResourceURI, Name: "Implementation Readiness", Description: "Readiness and validation snapshot for control-plane applies.", MIMEType: "application/json"},
+			ResourceDescriptor{URI: implementationBlueprintsURI, Name: "Implementation Blueprints", Description: "Domain-agnostic implementation blueprint and desired-state guidance.", MIMEType: "application/json"},
+		)
+	}
+	if s != nil && s.identity != nil && allowsAll(actor.PermissionChecker, []string{"identity.manage_users"}) {
+		items = append(items, ResourceDescriptor{URI: roleMatrixResourceURI, Name: "Role Matrix", Description: "Roles, permissions, grants, and bindings.", MIMEType: "application/json"})
+	}
+	if s != nil && s.integration != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		items = append(items, ResourceDescriptor{URI: integrationHealthResourceURI, Name: "Integration Health", Description: "Integration connector health and submission summary.", MIMEType: "application/json"})
+	}
+	if s != nil && s.search != nil && allowsAll(actor.PermissionChecker, []string{"search.manage"}) {
+		items = append(items, ResourceDescriptor{URI: searchRuntimeResourceURI, Name: "Search Runtime", Description: "Search index runtime and consistency status.", MIMEType: "application/json"})
+	}
+	if s != nil && s.offline != nil && allowsAll(actor.PermissionChecker, []string{"ops.read"}) {
+		items = append(items, ResourceDescriptor{URI: offlineOpsResourceURI, Name: "Offline Sync", Description: "Offline sync batches, outcomes, and conflicts.", MIMEType: "application/json"})
+	}
+	if s != nil && s.policy != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		items = append(items, ResourceDescriptor{URI: policyRuntimeResourceURI, Name: "Policy Runtime", Description: "Policy hook runtime, compile, and evaluation status.", MIMEType: "application/json"})
+	}
+	if s != nil && s.reference != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		items = append(items, ResourceDescriptor{URI: referenceCatalogResourceURI, Name: "Reference Catalog", Description: "Reference data types and records.", MIMEType: "application/json"})
+	}
+	if s != nil && s.health != nil && allowsAll(actor.PermissionChecker, []string{"ops.read"}) {
+		items = append(items, ResourceDescriptor{URI: runbooksResourceURI, Name: "Runbooks", Description: "Runtime health runbooks and operator hints.", MIMEType: "application/json"})
+	}
 	return items
 }
 
@@ -465,7 +666,40 @@ func (s *Server) readBuiltInResource(actor ActorContext, uri string) ([]Resource
 	if err != nil {
 		return nil, true, err
 	}
-	if parsed.Scheme != "orbyte" || parsed.Host != "apps" {
+	if parsed.Scheme != "orbyte" {
+		return nil, false, nil
+	}
+	if parsed.Host == "control-plane" {
+		switch parsed.Path {
+		case "/config.catalog":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.configCatalogResource)
+		case "/feature-flags.catalog":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.flagCatalogResource)
+		case "/role-matrix":
+			return s.readJSONControlResource(actor, uri, "identity.manage_users", s.roleMatrixResource)
+		case "/module-compatibility":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.moduleCompatibilityResource)
+		case "/integration-health":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.integrationHealthResource)
+		case "/readiness":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.readinessResource)
+		case "/search-runtime":
+			return s.readJSONControlResource(actor, uri, "search.manage", s.searchRuntimeResource)
+		case "/offline-sync":
+			return s.readJSONControlResource(actor, uri, "ops.read", s.offlineSyncResource)
+		case "/policy-runtime":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.policyRuntimeResource)
+		case "/reference-catalog":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.referenceCatalogResource)
+		case "/implementation-blueprints":
+			return s.readJSONControlResource(actor, uri, "configuration.read", s.implementationBlueprintResource)
+		case "/runbooks":
+			return s.readJSONControlResource(actor, uri, "ops.read", s.runbooksResource)
+		default:
+			return nil, false, nil
+		}
+	}
+	if parsed.Host != "apps" {
 		return nil, false, nil
 	}
 	switch parsed.Path {
@@ -746,6 +980,160 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 			return nil, false, nil
 		}
 		return s.workflowReportingLineSave(actor, arguments)
+	case "config.definition.list":
+		return s.configDefinitionList(actor, arguments)
+	case "config.entry.list":
+		return s.configEntryList(actor, arguments)
+	case "config.effective.get":
+		return s.configEffectiveGet(actor, arguments)
+	case "config.compare":
+		return s.configCompare(actor, arguments)
+	case "config.bundle.export":
+		return s.configBundleExport(actor, arguments)
+	case "config.bundle.validate":
+		return s.configBundleValidate(actor, arguments)
+	case "config.bundle.apply":
+		return s.configBundleApply(actor, arguments)
+	case "feature_flag.definition.list":
+		return s.featureFlagDefinitionList(actor, arguments)
+	case "feature_flag.value.list":
+		return s.featureFlagValueList(actor, arguments)
+	case "feature_flag.targeting.get":
+		return s.featureFlagTargetingGet(actor, arguments)
+	case "feature_flag.value.upsert":
+		return s.featureFlagValueUpsert(actor, arguments)
+	case "identity.role_permission_matrix.get":
+		return s.identityRolePermissionMatrixGet(actor, arguments)
+	case "identity.role_permission.grant":
+		return s.identityRolePermissionGrant(actor, arguments)
+	case "identity.role_permission.revoke":
+		return s.identityRolePermissionRevoke(actor, arguments)
+	case "module.list":
+		return s.moduleList(actor, arguments)
+	case "module.compatibility.list":
+		return s.moduleCompatibilityList(actor, arguments)
+	case "module.enable":
+		return s.moduleEnable(actor, arguments)
+	case "module.disable":
+		return s.moduleDisable(actor, arguments)
+	case "search.runtime.list":
+		return s.searchIndexList(actor, arguments)
+	case "search.runtime.get":
+		return s.searchRuntimeGet(actor, arguments)
+	case "search.consistency.get":
+		return s.searchConsistencyGet(actor, arguments)
+	case "search.rebuild":
+		return s.searchRebuild(actor, arguments)
+	case "search.repair":
+		return s.searchRepair(actor, arguments)
+	case "search.reconcile":
+		return s.searchReconcile(actor, arguments)
+	case "search.schema.plan":
+		return s.searchSchemaPlan(actor, arguments)
+	case "search.schema.build":
+		return s.searchSchemaBuild(actor, arguments)
+	case "search.schema.activate":
+		return s.searchSchemaActivate(actor, arguments)
+	case "offline.sync.list":
+		return s.offlineSyncList(actor, arguments)
+	case "offline.sync.get":
+		return s.offlineSyncGet(actor, arguments)
+	case "offline.conflict.list":
+		return s.offlineConflictList(actor, arguments)
+	case "policy.hook.list":
+		return s.policyHookList(actor, arguments)
+	case "policy.hook.get":
+		return s.policyHookGet(actor, arguments)
+	case "policy.module.upsert":
+		return s.policyModuleUpsert(actor, arguments)
+	case "identity.role_binding.list":
+		return s.identityRoleBindingList(actor, arguments)
+	case "identity.role_binding.priority.set":
+		return s.identityRoleBindingPrioritySet(actor, arguments)
+	case "reference.type.list":
+		return s.referenceTypeList(actor, arguments)
+	case "reference.record.list":
+		return s.referenceRecordList(actor, arguments)
+	case "reference.resolve":
+		return s.referenceResolve(actor, arguments)
+	case "reference.record.upsert":
+		return s.referenceRecordUpsert(actor, arguments)
+	case "integration.adapter.list":
+		return s.integrationAdapterList(actor, arguments)
+	case "integration.system.list":
+		return s.integrationSystemList(actor, arguments)
+	case "integration.system.config.get":
+		return s.integrationSystemConfigGet(actor, arguments)
+	case "integration.system.config.update":
+		return s.integrationSystemConfigUpdate(actor, arguments)
+	case "integration.endpoint.list":
+		return s.integrationEndpointList(actor, arguments)
+	case "integration.endpoint.config.get":
+		return s.integrationEndpointConfigGet(actor, arguments)
+	case "integration.endpoint.config.update":
+		return s.integrationEndpointConfigUpdate(actor, arguments)
+	case "integration.submission.list":
+		return s.integrationSubmissionList(actor, arguments)
+	case "integration.submission.get":
+		return s.integrationSubmissionGet(actor, arguments)
+	case "integration.dead_letter.list":
+		return s.integrationDeadLetterList(actor, arguments)
+	case "integration.dead_letter.replay":
+		return s.integrationDeadLetterReplay(actor, arguments)
+	case "readiness.get":
+		return s.readinessGet(actor, arguments)
+	case "ops.health.get":
+		return s.opsHealthGet(actor, arguments)
+	case "ops.audit.correlation.get":
+		return s.opsAuditCorrelationGet(actor, arguments)
+	case "ops.trace.get":
+		return s.opsTraceGet(actor, arguments)
+	case "implementation.tenant.inspect":
+		return s.implementationTenantInspect(actor, arguments)
+	case "implementation.config.plan":
+		return s.implementationConfigPlan(actor, arguments)
+	case "implementation.config.apply":
+		return s.implementationConfigApply(actor, arguments)
+	case "implementation.readiness.check":
+		return s.implementationReadinessCheck(actor, arguments)
+	case "implementation.rollback.inspect":
+		return s.implementationRollbackInspect(actor, arguments)
+	case "implementation.session.create":
+		return s.implementationSessionCreate(actor, arguments)
+	case "implementation.session.list":
+		return s.implementationSessionList(actor, arguments)
+	case "implementation.session.get":
+		return s.implementationSessionGet(actor, arguments)
+	case "implementation.session.close":
+		return s.implementationSessionClose(actor, arguments)
+	case "implementation.plan.build":
+		return s.implementationPlanBuild(actor, arguments)
+	case "implementation.plan.validate":
+		return s.implementationPlanValidate(actor, arguments)
+	case "implementation.stage.diff":
+		return s.implementationStageDiff(actor, arguments)
+	case "implementation.stage.discard":
+		return s.implementationStageDiscard(actor, arguments)
+	case "implementation.stage.commit":
+		return s.implementationStageCommit(actor, arguments)
+	case "implementation.verify.state":
+		return s.implementationVerifyState(actor, arguments)
+	case "implementation.verify.readiness":
+		return s.implementationVerifyReadiness(actor, arguments)
+	case "implementation.verify.diff":
+		return s.implementationVerifyDiff(actor, arguments)
+	case "implementation.verify.smoke":
+		return s.implementationVerifySmoke(actor, arguments)
+	case "implementation.checkpoint.create":
+		return s.implementationCheckpointCreate(actor, arguments)
+	case "implementation.checkpoint.list":
+		return s.implementationCheckpointList(actor, arguments)
+	case "implementation.checkpoint.restore":
+		return s.implementationCheckpointRestore(actor, arguments)
+	case "implementation.rollback.plan":
+		return s.implementationRollbackPlan(actor, arguments)
+	case "implementation.rollback.apply":
+		return s.implementationRollbackApply(actor, arguments)
 	default:
 		return nil, false, nil
 	}

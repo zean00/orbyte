@@ -520,6 +520,29 @@ func (s *Service) ValidateSystemConfig(key string) (ConnectorConfigView, error) 
 	}, nil
 }
 
+func (s *Service) ValidateSystemSettings(key string, settings map[string]any) (ConnectorConfigView, error) {
+	system, ok := s.repo.GetSystem(strings.TrimSpace(key))
+	if !ok {
+		return ConnectorConfigView{}, shared.NotFound("integration system not found")
+	}
+	adapter, ok := s.adapters[system.Adapter]
+	if !ok {
+		return ConnectorConfigView{}, shared.NotFound("integration adapter not found")
+	}
+	raw := s.prepareStoredSettings("integration.system."+system.Key, system.Settings, settings, adapter.Descriptor())
+	resolved := s.resolveSettings(raw)
+	view := ConnectorConfigView{
+		Raw:              redactSettings(adapter.Descriptor(), raw),
+		Resolved:         redactSettings(adapter.Descriptor(), resolved),
+		Effective:        redactSettings(adapter.Descriptor(), resolved),
+		ValidationIssues: adapter.ValidateConfig(system, resolved),
+	}
+	if len(view.ValidationIssues) > 0 {
+		return view, ValidationError{Issues: view.ValidationIssues}
+	}
+	return view, nil
+}
+
 func (s *Service) ValidateEndpointConfig(key string) (ConnectorConfigView, error) {
 	endpoint, ok := s.repo.GetEndpoint(strings.TrimSpace(key))
 	if !ok {
@@ -543,6 +566,33 @@ func (s *Service) ValidateEndpointConfig(key string) (ConnectorConfigView, error
 	}, nil
 }
 
+func (s *Service) ValidateEndpointSettings(key string, settings map[string]any) (ConnectorConfigView, error) {
+	endpoint, ok := s.repo.GetEndpoint(strings.TrimSpace(key))
+	if !ok {
+		return ConnectorConfigView{}, shared.NotFound("integration endpoint not found")
+	}
+	system, ok := s.repo.GetSystem(endpoint.SystemKey)
+	if !ok {
+		return ConnectorConfigView{}, shared.NotFound("integration system not found")
+	}
+	adapter, ok := s.adapters[system.Adapter]
+	if !ok {
+		return ConnectorConfigView{}, shared.NotFound("integration adapter not found")
+	}
+	raw := s.prepareStoredSettings("integration.endpoint."+endpoint.Key, endpoint.Settings, settings, adapter.Descriptor())
+	resolved := mergeSettings(s.resolveSettings(system.Settings), s.resolveSettings(raw))
+	view := ConnectorConfigView{
+		Raw:              redactSettings(adapter.Descriptor(), raw),
+		Resolved:         redactSettings(adapter.Descriptor(), resolved),
+		Effective:        redactSettings(adapter.Descriptor(), resolved),
+		ValidationIssues: adapter.ValidateConfig(system, resolved),
+	}
+	if len(view.ValidationIssues) > 0 {
+		return view, ValidationError{Issues: view.ValidationIssues}
+	}
+	return view, nil
+}
+
 func (s *Service) UpdateSystemSettings(key string, settings map[string]any) (ExternalSystem, ConnectorConfigView, error) {
 	system, ok := s.repo.GetSystem(strings.TrimSpace(key))
 	if !ok {
@@ -554,14 +604,14 @@ func (s *Service) UpdateSystemSettings(key string, settings map[string]any) (Ext
 	}
 	system.Settings = s.prepareStoredSettings("integration.system."+system.Key, system.Settings, settings, adapter.Descriptor())
 	system.UpdatedAt = time.Now().UTC()
-	issues := adapter.ValidateConfig(system, s.resolveSettings(system.Settings))
-	if len(issues) > 0 {
-		return ExternalSystem{}, ConnectorConfigView{Raw: redactSettings(adapter.Descriptor(), system.Settings), Resolved: redactSettings(adapter.Descriptor(), s.resolveSettings(system.Settings)), Effective: redactSettings(adapter.Descriptor(), s.resolveSettings(system.Settings)), ValidationIssues: issues}, ValidationError{Issues: issues}
+	view, err := s.ValidateSystemSettings(key, settings)
+	if err != nil {
+		return ExternalSystem{}, view, err
 	}
 	if err := s.repo.SaveSystem(system); err != nil {
 		return ExternalSystem{}, ConnectorConfigView{}, err
 	}
-	view, _ := s.ValidateSystemConfig(system.Key)
+	view, _ = s.ValidateSystemConfig(system.Key)
 	return system, view, nil
 }
 
@@ -580,15 +630,14 @@ func (s *Service) UpdateEndpointSettings(key string, settings map[string]any) (E
 	}
 	endpoint.Settings = s.prepareStoredSettings("integration.endpoint."+endpoint.Key, endpoint.Settings, settings, adapter.Descriptor())
 	endpoint.UpdatedAt = time.Now().UTC()
-	resolved := mergeSettings(s.resolveSettings(system.Settings), s.resolveSettings(endpoint.Settings))
-	issues := adapter.ValidateConfig(system, resolved)
-	if len(issues) > 0 {
-		return Endpoint{}, ConnectorConfigView{Raw: redactSettings(adapter.Descriptor(), endpoint.Settings), Resolved: redactSettings(adapter.Descriptor(), resolved), Effective: redactSettings(adapter.Descriptor(), resolved), ValidationIssues: issues}, ValidationError{Issues: issues}
+	view, err := s.ValidateEndpointSettings(key, settings)
+	if err != nil {
+		return Endpoint{}, view, err
 	}
 	if err := s.repo.SaveEndpoint(endpoint); err != nil {
 		return Endpoint{}, ConnectorConfigView{}, err
 	}
-	view, _ := s.ValidateEndpointConfig(endpoint.Key)
+	view, _ = s.ValidateEndpointConfig(endpoint.Key)
 	return endpoint, view, nil
 }
 

@@ -237,6 +237,42 @@ func (s *Service) UpsertModule(hookKey, scope, scopeID, actorID, source string) 
 	})
 }
 
+func (s *Service) ValidateModuleSource(hookKey, source string) error {
+	def, ok := s.defs[hookKey]
+	if !ok {
+		return shared.NotFound("policy hook not found")
+	}
+	if def.Engine != EngineRego {
+		return shared.Validation("policy hook is not Rego-backed")
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return shared.Validation("rego source is required")
+	}
+	if _, err := s.prepare(def, source); err != nil {
+		return shared.Validation(fmt.Sprintf("invalid rego source: %v", err))
+	}
+	return nil
+}
+
+func (s *Service) ValidateModuleRuntimeSource(hookKey, source string) error {
+	def, ok := s.defs[hookKey]
+	if !ok {
+		return shared.NotFound("policy hook not found")
+	}
+	if def.Engine != EngineRego {
+		return shared.Validation("policy hook is not Rego-backed")
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return shared.Validation("rego source is required")
+	}
+	if err := s.validateRegoSource(def, source); err != nil {
+		return shared.Validation(fmt.Sprintf("invalid rego source: %v", err))
+	}
+	return nil
+}
+
 func (s *Service) ResolveModule(hookKey, organizationID, locationID string) (config.EffectiveValue, bool) {
 	def, ok := s.defs[hookKey]
 	if !ok || def.Engine != EngineRego {

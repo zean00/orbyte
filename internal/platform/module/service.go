@@ -596,7 +596,29 @@ func (s *Service) Disable(key, actorID string) (InstalledModule, error) {
 	return s.setEnabled(key, actorID, false)
 }
 
+func (s *Service) ValidateSetEnabled(key string, enabled bool) error {
+	_, err := s.validateSetEnabled(key, enabled)
+	return err
+}
+
 func (s *Service) setEnabled(key, actorID string, enabled bool) (InstalledModule, error) {
+	item, err := s.validateSetEnabled(key, enabled)
+	if err != nil {
+		return InstalledModule{}, err
+	}
+	if actorID == "" {
+		actorID = "system"
+	}
+	item.Enabled = enabled
+	item.UpdatedAt = time.Now().UTC()
+	item.UpdatedBy = actorID
+	if err := s.repo.Save(item); err != nil {
+		return InstalledModule{}, err
+	}
+	return item, nil
+}
+
+func (s *Service) validateSetEnabled(key string, enabled bool) (InstalledModule, error) {
 	item, ok := s.repo.Get(key)
 	if !ok {
 		return InstalledModule{}, shared.NotFound("module not found")
@@ -642,15 +664,6 @@ func (s *Service) setEnabled(key, actorID string, enabled bool) (InstalledModule
 				}
 			}
 		}
-	}
-	if actorID == "" {
-		actorID = "system"
-	}
-	item.Enabled = enabled
-	item.UpdatedAt = time.Now().UTC()
-	item.UpdatedBy = actorID
-	if err := s.repo.Save(item); err != nil {
-		return InstalledModule{}, err
 	}
 	return item, nil
 }
