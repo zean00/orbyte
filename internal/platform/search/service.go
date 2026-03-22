@@ -379,12 +379,15 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 			if def.DocumentType != "" && record.Header.Type != def.DocumentType {
 				continue
 			}
-			if err := s.indexDocument(def, record); err != nil {
-				return nil, err
+			if indexErr := s.indexDocument(def, record); indexErr != nil {
+				err = indexErr
+				break
 			}
 			count++
 		}
-		result = map[string]any{"index_key": key, "reindexed": count}
+		if err == nil {
+			result = map[string]any{"index_key": key, "reindexed": count}
+		}
 	case "model":
 		if s.models == nil {
 			return nil, shared.Validation("model source is not configured")
@@ -392,24 +395,30 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 		items := s.models.Repository().ListRecords(def.ModelKey)
 		count := 0
 		for _, record := range items {
-			if err := s.indexModel(def, record); err != nil {
-				return nil, err
+			if indexErr := s.indexModel(def, record); indexErr != nil {
+				err = indexErr
+				break
 			}
 			count++
 		}
-		result = map[string]any{"index_key": key, "reindexed": count}
+		if err == nil {
+			result = map[string]any{"index_key": key, "reindexed": count}
+		}
 	case "projection":
 		if def.ProjectionKey != "document_summary" {
 			return nil, shared.Validation("projection rebuild is not supported for this projection")
 		}
 		count := 0
 		for _, summary := range s.ListDocuments() {
-			if err := s.indexProjectionSummary(def, summary); err != nil {
-				return nil, err
+			if indexErr := s.indexProjectionSummary(def, summary); indexErr != nil {
+				err = indexErr
+				break
 			}
 			count++
 		}
-		result = map[string]any{"index_key": key, "reindexed": count}
+		if err == nil {
+			result = map[string]any{"index_key": key, "reindexed": count}
+		}
 	default:
 		err = shared.Validation("search index source_kind is invalid")
 	}

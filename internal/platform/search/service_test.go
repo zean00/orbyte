@@ -527,7 +527,176 @@ func TestRefreshDocumentFallsBackWhenJobEnqueueFails(t *testing.T) {
 	}
 }
 
+func TestIndexRuntimesProjectionStatusesAndRebuildWrappers(t *testing.T) {
+	svc := NewService()
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "z.documents.search",
+		Title:             "Documents",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"title"},
+		Fields:            []IndexFieldDefinition{{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true}},
+	}); err != nil {
+		t.Fatalf("register document index failed: %v", err)
+	}
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "a.summary.search",
+		Title:             "Summary",
+		SourceKind:        "projection",
+		ProjectionKey:     "document_summary",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"status"},
+		Fields:            []IndexFieldDefinition{{Key: "status", Path: "status", Type: "string", Searchable: true, Sort: true}},
+	}); err != nil {
+		t.Fatalf("register projection index failed: %v", err)
+	}
+
+	recordA := document.Record{
+		Header: document.Header{ID: "d1", Type: "generic_request", Status: "submitted", Version: 1, ETag: "d1:1", OrganizationID: "org_default", UpdatedAt: time.Now().UTC()},
+		Body:   document.Body{Payload: map[string]any{"title": "first"}},
+	}
+	recordB := document.Record{
+		Header: document.Header{ID: "d2", Type: "generic_request", Status: "approved", Version: 1, ETag: "d2:1", OrganizationID: "org_default", UpdatedAt: time.Now().UTC()},
+		Body:   document.Body{Payload: map[string]any{"title": "second"}},
+	}
+
+	svc.RebuildDocument(recordA)
+	svc.RebuildAll([]document.Record{recordB})
+
+	runtimes := svc.IndexRuntimes()
+	if len(runtimes) != 2 || runtimes[0].IndexKey != "a.summary.search" || runtimes[1].IndexKey != "z.documents.search" {
+		t.Fatalf("expected sorted runtimes, got %+v", runtimes)
+	}
+
+	statuses := svc.ProjectionStatuses([]document.Record{recordA, recordB})
+	if len(statuses) == 0 || statuses[0].ProjectionKey != "document_summary" {
+		t.Fatalf("expected projection status for document summary, got %+v", statuses)
+	}
+	if statuses[0].ProjectionCount != 2 || statuses[0].MissingCount != 0 {
+		t.Fatalf("unexpected projection status values: %+v", statuses[0])
+	}
+}
+
+func TestRebuildFailurePathsAndCandidateBuildFailure(t *testing.T) {
+	svc := NewService()
+	svc.SetBackend(failingSearchBackend{upsertErr: errors.New("upsert failed")})
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "documents.fail.search",
+		Title:             "Documents Fail",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"title"},
+		Fields:            []IndexFieldDefinition{{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true}},
+	}); err != nil {
+		t.Fatalf("register document index failed: %v", err)
+	}
+	svc.AttachSources(document.NewService(), nil)
+	record, err := svc.documents.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "boom"})
+	if err != nil {
+		t.Fatalf("create document failed: %v", err)
+	}
+	if _, err := svc.RebuildIndex("documents.fail.search"); err == nil {
+		t.Fatal("expected rebuild to fail")
+	}
+	runtime, ok := svc.IndexRuntime("documents.fail.search")
+	if !ok || runtime.RuntimeStatus != "failed" || runtime.LastError == "" {
+		t.Fatalf("expected failed runtime after rebuild, got %+v", runtime)
+	}
+	statuses := svc.repo.ListProjectionStatuses()
+	if len(statuses) == 0 || statuses[0].LastRefreshStatus != "failed" || statuses[0].LastError == "" {
+		t.Fatalf("expected failed projection status, got %+v", statuses)
+	}
+
+	if _, err := svc.PlanIndexSchemaVersion("documents.fail.search", "v2"); err != nil {
+		t.Fatalf("plan schema version failed: %v", err)
+	}
+	if _, err := svc.BuildCandidateIndex("documents.fail.search"); err == nil {
+		t.Fatal("expected candidate build to fail")
+	}
+	runtime, _ = svc.IndexRuntime("documents.fail.search")
+	if runtime.RuntimeStatus != "failed" || runtime.LastFailureAt.IsZero() {
+		t.Fatalf("expected failed candidate runtime, got %+v", runtime)
+	}
+
+	if record.Header.ID == "" {
+		t.Fatal("expected created document id")
+	}
+}
+
+func TestQueryVectorAndModelRefreshValidationFailures(t *testing.T) {
+	svc := NewService()
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "documents.keyword.only",
+		Title:             "Keyword Only",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"keyword"},
+		OrganizationSplit: true,
+		QuerySortFields:   []string{"title"},
+		Fields:            []IndexFieldDefinition{{Key: "title", Path: "body.payload.title", Type: "string", Searchable: true, Sort: true}},
+	}); err != nil {
+		t.Fatalf("register keyword-only index failed: %v", err)
+	}
+	if _, err := svc.Query("documents.keyword.only", "org_default", "", QueryRequest{Mode: "vector", VectorText: "urgent"}); err == nil {
+		t.Fatal("expected vector query without vector field to fail")
+	}
+
+	svc = NewService()
+	svc.SetEmbedder(failingEmbedder{})
+	if err := svc.RegisterIndex(IndexDefinition{
+		Key:               "documents.vector.fail",
+		Title:             "Vector Fail",
+		SourceKind:        "document",
+		DocumentType:      "generic_request",
+		Modes:             []string{"vector"},
+		OrganizationSplit: true,
+		VectorFields:      []VectorFieldDefinition{{Key: "semantic", SourcePaths: []string{"body.payload.title"}, EmbeddingMode: "external", Dimensions: 4}},
+	}); err != nil {
+		t.Fatalf("register vector index failed: %v", err)
+	}
+	if _, err := svc.Query("documents.vector.fail", "org_default", "", QueryRequest{Mode: "vector", VectorText: "urgent"}); err == nil {
+		t.Fatal("expected embedder failure to surface")
+	}
+	if err := svc.RefreshModelByID("party", "missing"); err == nil {
+		t.Fatal("expected model refresh without model source to fail")
+	}
+}
+
 type failingJobRepository struct{}
+
+type failingSearchBackend struct {
+	upsertErr error
+	searchErr error
+}
+
+func (f failingSearchBackend) EnsureIndex(IndexDefinition, string) error { return nil }
+
+func (f failingSearchBackend) Upsert(IndexDefinition, string, IndexedRecord) error {
+	return f.upsertErr
+}
+
+func (f failingSearchBackend) Delete(IndexDefinition, string, string) error { return nil }
+
+func (f failingSearchBackend) Search(IndexDefinition, string, QueryRequest) (QueryResult, error) {
+	return QueryResult{}, f.searchErr
+}
+
+func (f failingSearchBackend) List(IndexDefinition, string) ([]IndexedRecord, error) { return nil, nil }
+
+func (f failingSearchBackend) Capabilities(IndexDefinition) BackendCapabilities {
+	return BackendCapabilities{Keyword: true, Vector: true, Hybrid: true, BackendKind: "failing"}
+}
+
+type failingEmbedder struct{}
+
+func (failingEmbedder) Embed([]string, int) ([][]float32, error) {
+	return nil, errors.New("embed failed")
+}
 
 func (failingJobRepository) Enqueue(job jobs.Job) (jobs.Job, bool, error) {
 	return jobs.Job{}, false, errors.New("enqueue failed")

@@ -5,6 +5,8 @@ import (
 
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/reference"
+	"orbyte/internal/platform/search"
 )
 
 func TestRegisterValidatesFrontendContracts(t *testing.T) {
@@ -308,6 +310,117 @@ func TestSurfaceAwareFrontendAccessors(t *testing.T) {
 	}
 	if route, ok := svc.ResolveRouteForSurface("/admin/modules", UISurfaceAdmin); !ok || route.Action.Key != "admin.action" {
 		t.Fatalf("expected admin route to resolve for admin surface, got %+v %v", route, ok)
+	}
+}
+
+func TestServiceExposesDocumentFlowTemplateOfflineAndMCPContracts(t *testing.T) {
+	svc := NewService()
+	manifest := Manifest{
+		Key: "platform.contracts",
+		Documents: []document.Definition{{
+			Type: "generic_request", DisplayName: "Generic Request", SchemaVersion: "v1",
+		}},
+		Frontend: FrontendDefinition{
+			CustomEntries: []CustomEntryDefinition{{
+				Key: "analytics.studio.entry", RoutePath: "/analytics/studio", BundleKey: "analytics-bundle", ComponentExport: "render",
+			}},
+			DocumentFlows: []DocumentFlowDefinition{
+				{
+					Key: "intake.user", Title: "Intake User", RoutePath: "/flows/intake", PrimaryDocumentType: "generic_request",
+					Steps: []DocumentFlowStepDefinition{{
+						Key: "capture", Title: "Capture",
+						Documents: []DocumentFlowDocumentDefinition{{
+							Key: "primary", Title: "Primary Request", DocumentType: "generic_request", PrimaryOutput: true,
+						}},
+					}},
+				},
+				{
+					Key: "intake.admin", Title: "Intake Admin", Surface: UISurfaceAdmin, RoutePath: "/admin/flows/intake", PrimaryDocumentType: "generic_request",
+					Steps: []DocumentFlowStepDefinition{{
+						Key: "capture", Title: "Capture",
+						Documents: []DocumentFlowDocumentDefinition{{
+							Key: "primary", Title: "Primary Request", DocumentType: "generic_request", PrimaryOutput: true,
+						}},
+					}},
+				},
+			},
+		},
+		Templates: []TemplateDefinition{{
+			Key:          "documents.generic_request.official",
+			Title:        "Official Request",
+			TargetKind:   "document",
+			TargetKey:    "generic_request",
+			RendererKind: "html",
+			DefaultBody:  "<p>request</p>",
+		}},
+		MCP: MCPDefinition{
+			Tools:     []MCPToolDefinition{{Key: "analytics.query.execute", Title: "Execute Query", Operation: "analytics.query.execute"}},
+			Resources: []MCPResourceDefinition{{Key: "analytics.snapshot", Title: "Analytics Snapshot", URI: "orbyte://analytics/snapshot/current"}},
+			Apps:      []MCPAppDefinition{{Key: "analytics.studio", Title: "Analytics Studio", ResourceKey: "analytics.snapshot", CustomEntryKey: "analytics.studio.entry"}},
+		},
+		Observability: ObservabilityDefinition{
+			Projections: []ProjectionDefinition{{Key: "document_summary"}},
+		},
+		ReferenceTypes: []reference.TypeDefinition{{Key: "country", DisplayName: "Country"}},
+		SearchIndexes: []search.IndexDefinition{{
+			Key:           "documents.summary",
+			Title:         "Document Summary",
+			SourceKind:    "projection",
+			ProjectionKey: "document_summary",
+			Modes:         []string{"keyword"},
+			Fields:        []search.IndexFieldDefinition{{Key: "status", Path: "status", Type: "string"}},
+		}},
+		Offline: OfflineDefinition{
+			References:  []OfflineReferenceDefinition{{TypeKey: "country", Title: "Countries"}},
+			Projections: []OfflineProjectionDefinition{{IndexKey: "documents.summary", Title: "Document Summary"}},
+		},
+		Bundles: []BundleDefinition{{Key: "analytics-bundle", Script: "console.log('analytics')"}},
+	}
+	if err := svc.Register(manifest, "system"); err != nil {
+		t.Fatalf("register manifest failed: %v", err)
+	}
+
+	if len(svc.DocumentFlows()) != 2 {
+		t.Fatalf("expected both document flows, got %+v", svc.DocumentFlows())
+	}
+	if len(svc.DocumentFlowsForSurface(UISurfaceUser)) != 1 || len(svc.DocumentFlowsForSurface(UISurfaceAdmin)) != 1 {
+		t.Fatalf("unexpected surface-filtered flows: user=%+v admin=%+v", svc.DocumentFlowsForSurface(UISurfaceUser), svc.DocumentFlowsForSurface(UISurfaceAdmin))
+	}
+	if flow, ok := svc.DocumentFlow("intake.user"); !ok || flow.Key != "intake.user" {
+		t.Fatalf("expected document flow lookup, got %+v %v", flow, ok)
+	}
+	if flow, ok := svc.DocumentFlowForSurface("intake.admin", UISurfaceAdmin); !ok || flow.Key != "intake.admin" {
+		t.Fatalf("expected surface-scoped document flow lookup, got %+v %v", flow, ok)
+	}
+	if _, ok := svc.DocumentFlowForSurface("intake.admin", UISurfaceUser); ok {
+		t.Fatal("expected admin flow to be hidden from user surface")
+	}
+
+	if len(svc.Templates()) != 1 {
+		t.Fatalf("expected template list, got %+v", svc.Templates())
+	}
+	if tpl, ok := svc.Template("documents.generic_request.official"); !ok || tpl.Key != "documents.generic_request.official" {
+		t.Fatalf("expected template lookup, got %+v %v", tpl, ok)
+	}
+
+	if len(svc.MCPTools()) != 1 || len(svc.MCPResources()) != 1 || len(svc.MCPApps()) != 1 {
+		t.Fatalf("expected mcp definitions, got %+v %+v %+v", svc.MCPTools(), svc.MCPResources(), svc.MCPApps())
+	}
+	if tool, ok := svc.MCPTool("analytics.query.execute"); !ok || tool.Key != "analytics.query.execute" {
+		t.Fatalf("expected mcp tool lookup, got %+v %v", tool, ok)
+	}
+	if resource, ok := svc.MCPResourceByKey("analytics.snapshot"); !ok || resource.URI != "orbyte://analytics/snapshot/current" {
+		t.Fatalf("expected mcp resource-by-key lookup, got %+v %v", resource, ok)
+	}
+	if _, ok := svc.MCPResourceByURI("orbyte://analytics/snapshot/current"); !ok {
+		t.Fatal("expected mcp resource-by-uri lookup")
+	}
+	if app, ok := svc.MCPApp("analytics.studio"); !ok || app.ResourceKey != "analytics.snapshot" {
+		t.Fatalf("expected mcp app lookup, got %+v %v", app, ok)
+	}
+
+	if len(svc.OfflineReferences()) != 1 || len(svc.OfflineProjections()) != 1 {
+		t.Fatalf("expected offline definitions, got %+v %+v", svc.OfflineReferences(), svc.OfflineProjections())
 	}
 }
 

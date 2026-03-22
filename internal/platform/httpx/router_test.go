@@ -1061,6 +1061,45 @@ func TestAdminWorkflowSimulationIncludesRoutingPreview(t *testing.T) {
 	}
 }
 
+func TestAdminWorkflowDraftLifecycleAndErrorRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	versions := h.request(http.MethodGet, "/admin/api/workflows/generic_request_flow/versions", nil, true)
+	if versions.Code != http.StatusOK {
+		t.Fatalf("expected workflow versions to succeed, got %d body=%s", versions.Code, versions.Body.String())
+	}
+
+	createDraft := h.request(http.MethodPost, "/admin/api/workflows/generic_request_flow/drafts", nil, true)
+	if createDraft.Code != http.StatusCreated {
+		t.Fatalf("expected workflow draft create to succeed, got %d body=%s", createDraft.Code, createDraft.Body.String())
+	}
+
+	validate := h.request(http.MethodPost, "/admin/api/workflows/generic_request_flow/versions/1/validate", nil, true)
+	if validate.Code != http.StatusOK {
+		t.Fatalf("expected workflow validate to succeed, got %d body=%s", validate.Code, validate.Body.String())
+	}
+
+	invalidSim := h.request(http.MethodPost, "/admin/api/workflows/generic_request_flow/versions/1/simulate", []byte("{"), true)
+	if invalidSim.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid simulation request to fail, got %d body=%s", invalidSim.Code, invalidSim.Body.String())
+	}
+
+	invalidDraft := h.request(http.MethodPut, "/admin/api/workflows/generic_request_flow/versions/2", []byte("{"), true)
+	if invalidDraft.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid workflow draft body to fail, got %d body=%s", invalidDraft.Code, invalidDraft.Body.String())
+	}
+
+	publish := h.request(http.MethodPost, "/admin/api/workflows/generic_request_flow/versions/2/publish", nil, true)
+	if publish.Code != http.StatusOK {
+		t.Fatalf("expected workflow publish to succeed, got %d body=%s", publish.Code, publish.Body.String())
+	}
+
+	notFound := h.request(http.MethodGet, "/admin/api/workflows/generic_request_flow/versions/2/unknown", nil, true)
+	if notFound.Code != http.StatusNotFound {
+		t.Fatalf("expected unknown workflow route to fail, got %d body=%s", notFound.Code, notFound.Body.String())
+	}
+}
+
 func TestRootRedirectsToUI(t *testing.T) {
 	h := newTestHarness(t)
 
@@ -3184,6 +3223,48 @@ func TestIntegrationSubmissionDetailRoutes(t *testing.T) {
 	}
 }
 
+func TestIntegrationAdminListingAndErrorRoutes(t *testing.T) {
+	h := newTestHarness(t)
+
+	for _, path := range []string{
+		"/admin/api/integrations/systems",
+		"/admin/api/integrations/endpoints",
+		"/admin/api/integrations/contracts",
+		"/admin/api/integrations/mappings",
+		"/admin/api/integrations/submissions",
+	} {
+		rr := h.request(http.MethodGet, path, nil, true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected %s to succeed, got %d body=%s", path, rr.Code, rr.Body.String())
+		}
+	}
+
+	missingSubmission := h.request(http.MethodGet, "/admin/api/integrations/submissions/sub-missing", nil, true)
+	if missingSubmission.Code != http.StatusNotFound {
+		t.Fatalf("expected missing submission detail to fail, got %d body=%s", missingSubmission.Code, missingSubmission.Body.String())
+	}
+
+	unknownSubmissionDetail := h.request(http.MethodGet, "/admin/api/integrations/submissions/sub-missing/unknown", nil, true)
+	if unknownSubmissionDetail.Code != http.StatusNotFound {
+		t.Fatalf("expected unknown submission detail route to fail, got %d body=%s", unknownSubmissionDetail.Code, unknownSubmissionDetail.Body.String())
+	}
+
+	invalidSystemUpdate := h.request(http.MethodPut, "/admin/api/integrations/systems/http_bridge/config", []byte("{"), true)
+	if invalidSystemUpdate.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid system config body to fail, got %d body=%s", invalidSystemUpdate.Code, invalidSystemUpdate.Body.String())
+	}
+
+	invalidEndpointUpdate := h.request(http.MethodPut, "/admin/api/integrations/endpoints/http_bridge_submit/config", []byte("{"), true)
+	if invalidEndpointUpdate.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid endpoint config body to fail, got %d body=%s", invalidEndpointUpdate.Code, invalidEndpointUpdate.Body.String())
+	}
+
+	notFoundConfig := h.request(http.MethodGet, "/admin/api/integrations/systems/http_bridge/unknown", nil, true)
+	if notFoundConfig.Code != http.StatusNotFound {
+		t.Fatalf("expected unknown integration system route to fail, got %d body=%s", notFoundConfig.Code, notFoundConfig.Body.String())
+	}
+}
+
 func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	h := newTestHarness(t)
 
@@ -3304,6 +3385,25 @@ func TestAdminModuleAndConfigRoutes(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &templatePayload)
 	if len(templatePayload["items"].([]any)) == 0 {
 		t.Fatal("expected template definitions in admin payload")
+	}
+}
+
+func TestAdminHierarchySummaryChainAndUpdateErrors(t *testing.T) {
+	h := newTestHarness(t)
+
+	summary := h.request(http.MethodGet, "/admin/api/hierarchy/summary", nil, true)
+	if summary.Code != http.StatusOK {
+		t.Fatalf("expected hierarchy summary to succeed, got %d body=%s", summary.Code, summary.Body.String())
+	}
+
+	chain := h.request(http.MethodGet, "/admin/api/hierarchy/chain", nil, true)
+	if chain.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing hierarchy chain user_id to fail, got %d body=%s", chain.Code, chain.Body.String())
+	}
+
+	invalidUpdate := h.request(http.MethodPut, "/admin/api/reporting-lines/line-1", []byte("{"), true)
+	if invalidUpdate.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid reporting line update to fail, got %d body=%s", invalidUpdate.Code, invalidUpdate.Body.String())
 	}
 }
 
@@ -4465,6 +4565,60 @@ func TestUIDocumentDetailReturnsFlowInstanceForPrimaryAndSecondary(t *testing.T)
 	}
 	if flowInstance["active_document_key"] != "review_note" {
 		t.Fatalf("expected secondary tab to be active, got %+v", flowInstance)
+	}
+}
+
+func TestUIDocumentListProjectionAndNotFoundBranches(t *testing.T) {
+	h := newTestHarness(t)
+
+	for _, body := range []map[string]any{
+		{
+			"type":            "generic_request",
+			"organization_id": "org_default",
+			"location_id":     "loc_hq",
+			"payload":         map[string]any{"title": "Generic One"},
+		},
+		{
+			"type":            "generic_request",
+			"organization_id": "org_default",
+			"location_id":     "loc_hq",
+			"payload":         map[string]any{"title": "Generic Two"},
+		},
+	} {
+		created := h.request(http.MethodPost, "/documents", mustJSON(t, body), true)
+		if created.Code != http.StatusCreated {
+			t.Fatalf("expected document create to succeed, got %d body=%s", created.Code, created.Body.String())
+		}
+	}
+
+	filtered := h.request(http.MethodGet, "/ui/data/documents?type=generic_request&sort=updated_at", nil, true)
+	if filtered.Code != http.StatusOK {
+		t.Fatalf("expected filtered ui document list to succeed, got %d body=%s", filtered.Code, filtered.Body.String())
+	}
+	var payload struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(filtered.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode filtered documents failed: %v", err)
+	}
+	if len(payload.Items) == 0 {
+		t.Fatalf("expected filtered documents, got %s", filtered.Body.String())
+	}
+	for _, item := range payload.Items {
+		header := item["header"].(map[string]any)
+		if header["type"] != "generic_request" {
+			t.Fatalf("expected only generic_request items, got %+v", payload.Items)
+		}
+	}
+
+	projections := h.request(http.MethodGet, "/ui/data/projections/documents", nil, true)
+	if projections.Code != http.StatusOK {
+		t.Fatalf("expected ui document projections to succeed, got %d body=%s", projections.Code, projections.Body.String())
+	}
+
+	missing := h.request(http.MethodGet, "/ui/data/documents/", nil, true)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("expected empty ui document id to fail, got %d body=%s", missing.Code, missing.Body.String())
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 	"github.com/xuri/excelize/v2"
+
+	"orbyte/internal/platform/shared"
 )
 
 func (s *Service) ExportDocumentReportingCSV(query FactQuery, dimension string) ([]byte, error) {
@@ -134,6 +136,9 @@ func (s *Service) CreateReportDefinition(def ReportDefinition) (ReportDefinition
 		def.NextRunAt = nextRun(def.Schedule, time.Now().UTC())
 	}
 	def.Enabled = true
+	if s == nil || s.repo == nil {
+		return ReportDefinition{}, shared.Conflict("analytics repository is not configured")
+	}
 	if err := s.repo.SaveReportDefinition(def); err != nil {
 		return ReportDefinition{}, err
 	}

@@ -1,8 +1,12 @@
 package templateoutput
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/jung-kurt/gofpdf"
+	"golang.org/x/net/html"
 
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
@@ -392,4 +396,148 @@ func TestServicePreviewDuplicateResetAndFixtures(t *testing.T) {
 	if !compare.HasDifferences && draft.Body != reset.Body {
 		t.Fatalf("expected compare to report differences: %+v", compare)
 	}
+}
+
+func TestServiceValidateAndBindingDebugBranches(t *testing.T) {
+	svc := NewService(document.NewService(), reporting.NewService(model.NewService()))
+	if issues := svc.Validate(RenderRequest{TemplateKey: "missing"}); len(issues) != 1 || issues[0].Code != "template_definition_not_found" {
+		t.Fatalf("expected missing template validation issue, got %+v", issues)
+	}
+	if err := svc.RegisterDefinition(Definition{
+		Key:          "documents.generic_request.validate",
+		Title:        "Validate Request",
+		TargetKind:   "document",
+		TargetKey:    "generic_request",
+		RendererKind: "html",
+		DefaultBody:  `<p>{{ .document.Header.Type }}</p>`,
+	}); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+
+	issues := svc.Validate(RenderRequest{
+		TemplateKey:  "documents.generic_request.validate",
+		RendererKind: "html",
+		Body:         `{{ if }}`,
+	})
+	if len(issues) == 0 || issues[0].Code != "html_template_invalid" {
+		t.Fatalf("expected html template validation failure, got %+v", issues)
+	}
+
+	if issues := svc.validateVersion(Definition{Key: "invalid"}, Version{RendererKind: "markdown", Body: "hello"}); len(issues) == 0 || issues[0].Code != "renderer_kind_invalid" {
+		t.Fatalf("expected invalid renderer issue, got %+v", issues)
+	}
+
+	debug, err := svc.ResolveBindingDebug(RenderRequest{
+		TargetKind:     "document",
+		TargetKey:      "generic_request",
+		OrganizationID: "org_default",
+		LocationID:     "loc_hq",
+	})
+	if err != nil {
+		t.Fatalf("resolve binding debug failed: %v", err)
+	}
+	if debug.DefinitionKey != "documents.generic_request.validate" || debug.Version != 1 {
+		t.Fatalf("expected definition fallback in binding debug, got %+v", debug)
+	}
+	if len(debug.ScopePath) == 0 {
+		t.Fatalf("expected scope path to be recorded, got %+v", debug)
+	}
+
+	if _, err := svc.ResolveBindingDebug(RenderRequest{TargetKind: "document", TargetKey: "unknown"}); err == nil {
+		t.Fatal("expected unresolved binding debug to fail")
+	}
+}
+
+func TestTemplateValidationHelpersAndFixtureBranches(t *testing.T) {
+	visual := VisualTemplate{
+		SchemaVersion: "visual-grid/v2",
+		Sections: []VisualSection{
+			{
+				ID: "empty",
+			},
+			{
+				ID: "body",
+				Rows: []VisualRow{
+					{},
+					{Columns: []VisualCell{
+						{Span: 13, Blocks: []VisualBlock{{Type: "field"}}},
+						{Span: 6, Blocks: []VisualBlock{{Type: "table"}, {Type: "totals", RowsPath: "rows"}, {Type: "mystery"}}},
+					}},
+				},
+			},
+		},
+	}
+	issues := validateVisualTemplate(visual)
+	if len(filterIssues(issues, "error")) == 0 {
+		t.Fatalf("expected visual validation errors, got %+v", issues)
+	}
+	if len(filterIssues(issues, "warning")) == 0 {
+		t.Fatalf("expected visual validation warnings, got %+v", issues)
+	}
+	if !strings.Contains(joinIssueMessages(issues), "column span must be between 1 and 12") {
+		t.Fatalf("expected joined issue message to include error text, got %+v", issues)
+	}
+
+	svc := NewService(document.NewService(), reporting.NewService(model.NewService()))
+	if _, err := svc.SaveFixture(TemplateFixture{}); err == nil {
+		t.Fatal("expected fixture target kind validation error")
+	}
+	if _, err := svc.SaveFixture(TemplateFixture{TemplateKey: "missing"}); err == nil {
+		t.Fatal("expected fixture save for missing definition to fail")
+	}
+	if _, err := svc.SaveBinding(Binding{TemplateKey: "missing"}); err == nil {
+		t.Fatal("expected binding save for missing definition to fail")
+	}
+	if _, err := svc.CompareVersions("missing", 1, 2); err == nil {
+		t.Fatal("expected compare versions to fail for missing versions")
+	}
+}
+
+func TestTemplatePDFAndHTMLHelperPaths(t *testing.T) {
+	lines := htmlToPDFLines(`<style>p{}</style><h1>Title</h1><p>Hello<br>world</p><table><tr><td>A</td></tr></table>`)
+	if len(lines) == 0 || lines[0] != "Title" {
+		t.Fatalf("expected html to pdf lines to retain readable content, got %+v", lines)
+	}
+
+	doc, err := html.Parse(strings.NewReader(`<dl><dt>Label</dt><dd>Value</dd></dl><table><tr><th>H1</th><th>H2</th></tr><tr><td>A</td><td>B</td></tr></table><ul><li>First</li></ul><ol><li>Second</li></ol>`))
+	if err != nil {
+		t.Fatalf("parse html failed: %v", err)
+	}
+	pdfBytes, err := pdfFromHTML(Version{RendererKind: "html"}, `<h1>Title</h1><p>Paragraph</p><dl><dt>Term</dt><dd>Definition</dd></dl><table><tr><th>A</th></tr><tr><td>B</td></tr></table><ul><li>Bullet</li></ul>`)
+	if err != nil {
+		t.Fatalf("pdfFromHTML failed: %v", err)
+	}
+	if len(pdfBytes) < 4 || !strings.HasPrefix(string(pdfBytes[:4]), "%PDF") {
+		t.Fatalf("expected pdf bytes, got %q", string(pdfBytes))
+	}
+
+	rows := extractHTMLTableRows(doc)
+	if len(rows) != 2 || !rows[0].Header || rows[1].Cells[0] != "A" {
+		t.Fatalf("unexpected extracted table rows: %+v", rows)
+	}
+
+	if text := collectNodeText(doc); !strings.Contains(text, "Label") || !strings.Contains(text, "Second") {
+		t.Fatalf("expected collected node text, got %q", text)
+	}
+
+	pdf := newTestPDF()
+	renderDefinitionList(pdf, 100, doc)
+	renderHTMLTablePDF(pdf, 100, doc)
+	renderHTMLListPDF(pdf, 100, doc, false)
+	renderHTMLListPDF(pdf, 100, doc, true)
+	renderHTMLNodesToPDF(pdf, doc, 10, 10, 10, 10)
+
+	var out bytes.Buffer
+	if err := pdf.Output(&out); err != nil {
+		t.Fatalf("pdf output failed: %v", err)
+	}
+	if out.Len() == 0 {
+		t.Fatal("expected rendered helper pdf output")
+	}
+}
+
+func newTestPDF() *gofpdf.Fpdf {
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	return pdf
 }
