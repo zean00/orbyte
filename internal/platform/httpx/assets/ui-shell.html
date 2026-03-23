@@ -16,29 +16,52 @@
   </style>
 </head>
 <body>
-  <div class="shell" id="shell-root">
-    <aside class="sidebar" id="shell-sidebar">
-      <div class="toolbar">
+  <header class="shell-bar" id="shell-bar">
+    <div class="shell-bar-primary">
+      <button type="button" id="shell-nav-toggle" class="shell-icon-button" aria-expanded="true" aria-controls="shell-sidebar">Menu</button>
+      <div class="shell-brand-cluster">
+        <div class="shell-eyebrow" id="shell-eyebrow">Workspace</div>
         <div>
           <h1 class="brand" id="shell-brand">Orbyte Platform UI</h1>
           <p class="subtitle" id="shell-subtitle">Manifest-driven shell with generic pages and module custom entries.</p>
         </div>
-        <div class="actions">
-          <div id="surface-switcher" class="surface-switcher" hidden></div>
-          <label class="locale-switch">
-            <span id="locale-label">Language</span>
-            <select id="locale-switcher"></select>
-          </label>
-          <button type="button" id="agent-toggle-button" class="secondary" hidden>Agent</button>
-          <a id="admin-link-button" class="button secondary" href="/admin" hidden>Admin</a>
-          <button type="button" id="logout-button" class="secondary" hidden>Log out</button>
-        </div>
       </div>
-      <nav id="menu" class="menu-list"></nav>
+    </div>
+    <div class="shell-bar-actions">
+      <form id="shell-command-form" class="shell-command" role="search">
+        <input id="shell-command-input" name="shell_command" aria-label="Search pages or jump to a route" list="shell-route-options" placeholder="Search pages or jump to a route">
+        <datalist id="shell-route-options"></datalist>
+        <button type="submit" class="secondary" id="shell-command-submit">Go</button>
+      </form>
+      <div class="shell-user-chip" id="shell-user-chip">user</div>
+      <label class="locale-switch">
+        <span id="locale-label">Language</span>
+        <select id="locale-switcher" name="locale"></select>
+      </label>
+      <button type="button" id="agent-toggle-button" class="secondary" hidden>Agent</button>
+      <a id="admin-link-button" class="button secondary" href="/admin" hidden>Admin</a>
+      <button type="button" id="logout-button" class="secondary" hidden>Log out</button>
+    </div>
+  </header>
+  <div class="shell-backdrop" id="shell-backdrop" hidden></div>
+  <div class="shell workspace-shell" id="shell-root">
+    <aside class="sidebar" id="shell-sidebar">
+      <div class="sidebar-section sidebar-intro">
+        <div class="sidebar-heading">Surfaces</div>
+        <div id="surface-switcher" class="surface-switcher" hidden></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Navigation</div>
+        <nav id="menu" class="menu-list" aria-label="Workspace navigation"></nav>
+      </div>
     </aside>
     <main class="content">
       <div class="route-panel" id="route-panel">
         <div class="route-copy">
+          <div class="route-meta">
+            <span class="badge subtle" id="route-floorplan">worklist</span>
+            <span class="badge subtle" id="route-module">module</span>
+          </div>
           <div id="route-title"><h2>Loading…</h2></div>
           <p class="status" id="route-status">Resolving module UI registry.</p>
         </div>
@@ -60,6 +83,12 @@
       en: {
         shell_brand: 'Orbyte Platform UI',
         shell_subtitle: 'Manifest-driven shell with generic pages and module custom entries.',
+        shell_eyebrow: 'Workspace',
+        shell_search_placeholder: 'Search pages or jump to a route',
+        shell_search_go: 'Go',
+        shell_user_chip: 'Signed in',
+        navigation: 'Navigation',
+        surfaces: 'Surfaces',
         locale_label: 'Language',
         surface_backoffice: 'Backoffice',
         surface_worklist: 'Worklist',
@@ -204,6 +233,12 @@
       id: {
         shell_brand: 'UI Platform Orbyte',
         shell_subtitle: 'Shell berbasis manifest dengan halaman generik dan entri modul kustom.',
+        shell_eyebrow: 'Workspace',
+        shell_search_placeholder: 'Cari halaman atau lompat ke rute',
+        shell_search_go: 'Buka',
+        shell_user_chip: 'Masuk',
+        navigation: 'Navigasi',
+        surfaces: 'Surface',
         locale_label: 'Bahasa',
         surface_backoffice: 'Backoffice',
         surface_worklist: 'Worklist',
@@ -359,6 +394,7 @@
       supportedLocales: defaultSupportedLocales,
       surface: 'backoffice',
       shellKind: 'workspace',
+      navCollapsed: false,
       routeState: 'booting',
       routeFocusSelector: '',
       agent: {
@@ -440,24 +476,137 @@
       return String(value == null ? '' : value).replace(/[&<>"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]));
     }
 
+    function enhanceControlAccessibility(root) {
+      const scope = root || document;
+      scope.querySelectorAll('input, select, textarea').forEach((field, index) => {
+        if (!field.name) {
+          field.name = field.id || field.dataset.path || field.dataset.filter || field.dataset.worklistFilter || field.dataset.columnToggle || ('field_' + index);
+        }
+        if (field.getAttribute('aria-label')) return;
+        const wrappingLabel = field.closest('label');
+        let labelText = '';
+        if (wrappingLabel) labelText = wrappingLabel.textContent || '';
+        if (!labelText && field.id) {
+          const explicitLabel = scope.querySelector('label[for="' + field.id + '"]');
+          if (explicitLabel) labelText = explicitLabel.textContent || '';
+        }
+        if (!labelText && field.placeholder) labelText = field.placeholder;
+        if (!labelText && field.dataset.filter) labelText = field.dataset.filter.replace(/_/g, ' ');
+        if (!labelText && field.dataset.worklistFilter) labelText = field.dataset.worklistFilter.replace(/_/g, ' ');
+        if (!labelText && field.dataset.path) labelText = field.dataset.path.split('.').pop();
+        if (labelText) field.setAttribute('aria-label', labelText.replace(/\s+/g, ' ').trim());
+      });
+    }
+
     function applyLocale() {
       document.documentElement.lang = state.locale;
       document.title = t('shell_brand');
+      const eyebrow = document.getElementById('shell-eyebrow');
       const brand = document.getElementById('shell-brand');
       const subtitle = document.getElementById('shell-subtitle');
       const localeLabel = document.getElementById('locale-label');
       const adminLinkButton = document.getElementById('admin-link-button');
       const logoutButton = document.getElementById('logout-button');
+      const commandInput = document.getElementById('shell-command-input');
+      const commandSubmit = document.getElementById('shell-command-submit');
+      const userChip = document.getElementById('shell-user-chip');
       const routeTitle = document.getElementById('route-title');
       const routeStatus = document.getElementById('route-status');
+      if (eyebrow) eyebrow.textContent = t('shell_eyebrow');
       if (brand) brand.textContent = t('shell_brand');
       if (subtitle) subtitle.textContent = t('shell_subtitle');
       if (localeLabel) localeLabel.textContent = t('locale_label');
       if (adminLinkButton) adminLinkButton.textContent = t('admin_link');
       if (logoutButton) logoutButton.textContent = t('logout');
+      if (commandInput) commandInput.placeholder = t('shell_search_placeholder');
+      if (commandSubmit) commandSubmit.textContent = t('shell_search_go');
+      if (userChip) userChip.textContent = state.bootstrap && state.bootstrap.auth_context ? (t('shell_user_chip') + ' · ' + (state.bootstrap.auth_context.effective_user_id || state.bootstrap.auth_context.actor_user_id || 'user')) : t('shell_user_chip');
       if (routeTitle && !state.route) routeTitle.innerHTML = '<h2>' + escapeHTML(t('loading')) + '</h2>';
       if (routeStatus && !state.route) routeStatus.textContent = t('route_resolving');
       refreshOfflineStatus();
+    }
+
+    function loadShellPrefs() {
+      try {
+        const stored = window.localStorage.getItem('orbyte.ui.navCollapsed');
+        state.navCollapsed = stored == null ? window.innerWidth < 1024 : stored === '1';
+      } catch (_) {
+        state.navCollapsed = window.innerWidth < 1024;
+      }
+    }
+
+    function persistShellPrefs() {
+      try {
+        window.localStorage.setItem('orbyte.ui.navCollapsed', state.navCollapsed ? '1' : '0');
+      } catch (_) {}
+    }
+
+    function applyWorkspaceNavState() {
+      const shell = document.getElementById('shell-root');
+      const sidebar = document.getElementById('shell-sidebar');
+      const toggle = document.getElementById('shell-nav-toggle');
+      const backdrop = document.getElementById('shell-backdrop');
+      if (shell) shell.classList.toggle('nav-collapsed', !!state.navCollapsed);
+      if (sidebar) sidebar.classList.toggle('open', !state.navCollapsed);
+      if (toggle) toggle.setAttribute('aria-expanded', String(!state.navCollapsed));
+      if (backdrop) backdrop.hidden = state.navCollapsed || window.innerWidth >= 1024;
+    }
+
+    function bindWorkspaceShellControls() {
+      const toggle = document.getElementById('shell-nav-toggle');
+      const backdrop = document.getElementById('shell-backdrop');
+      const commandForm = document.getElementById('shell-command-form');
+      const commandInput = document.getElementById('shell-command-input');
+      if (toggle && !toggle.dataset.bound) {
+        toggle.dataset.bound = '1';
+        toggle.addEventListener('click', () => {
+          state.navCollapsed = !state.navCollapsed;
+          persistShellPrefs();
+          applyWorkspaceNavState();
+        });
+      }
+      if (backdrop && !backdrop.dataset.bound) {
+        backdrop.dataset.bound = '1';
+        backdrop.addEventListener('click', () => {
+          state.navCollapsed = true;
+          persistShellPrefs();
+          applyWorkspaceNavState();
+        });
+      }
+      if (commandForm && !commandForm.dataset.bound) {
+        commandForm.dataset.bound = '1';
+        commandForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const raw = (commandInput && commandInput.value || '').trim();
+          if (!raw) return;
+          const staticRoutes = [];
+          if (state.bootstrap && state.bootstrap.acp && state.bootstrap.acp.enabled) {
+            staticRoutes.push({label: 'Agent Workspace', route_path: '/agent/workspace'});
+          }
+          const match = (((state.bootstrap || {}).actions) || []).find((item) => item.route_path === raw || pickText(item, 'label').toLowerCase() === raw.toLowerCase()) ||
+            staticRoutes.find((item) => item.route_path === raw || item.label.toLowerCase() === raw.toLowerCase());
+          const target = match ? match.route_path : raw;
+          window.location.hash = target.startsWith('#') ? target : ('#' + target);
+          if (window.innerWidth < 1024) {
+            state.navCollapsed = true;
+            persistShellPrefs();
+            applyWorkspaceNavState();
+          }
+        });
+      }
+      window.addEventListener('resize', applyWorkspaceNavState, {passive: true});
+    }
+
+    function renderRouteJumpOptions() {
+      const datalist = document.getElementById('shell-route-options');
+      if (!datalist) return;
+      const options = ((state.bootstrap && state.bootstrap.actions) || [])
+        .filter((item) => item && item.route_path)
+        .map((item) => '<option value="' + escapeHTML(item.route_path) + '">' + escapeHTML(pickText(item, 'label')) + '</option>');
+      if (state.bootstrap && state.bootstrap.acp && state.bootstrap.acp.enabled) {
+        options.push('<option value="/agent/workspace">Agent Workspace</option>');
+      }
+      datalist.innerHTML = options.join('');
     }
 
     function applyShellLayout(authenticated) {
@@ -465,6 +614,7 @@
       const sidebar = document.getElementById('shell-sidebar');
       const routePanel = document.getElementById('route-panel');
       const content = document.querySelector('.content');
+      const shellBar = document.getElementById('shell-bar');
       if (authenticated) {
         if (shell) {
           shell.classList.remove('login-mode');
@@ -476,6 +626,8 @@
           content.classList.remove('login-mode');
           content.classList.add('workspace-mode');
         }
+        if (shellBar) shellBar.hidden = false;
+        applyWorkspaceNavState();
         return;
       }
       if (shell) {
@@ -488,6 +640,7 @@
         content.classList.remove('workspace-mode');
         content.classList.add('login-mode');
       }
+      if (shellBar) shellBar.hidden = true;
     }
 
     function renderLocaleSwitcher() {
@@ -780,6 +933,30 @@
 
     function setStatus(text) {
       document.getElementById('route-status').textContent = text;
+    }
+
+    function floorplanForRoute(route) {
+      if (!route) return 'workspace';
+      if (route.render_mode === 'flow') return 'editor';
+      const view = route.view || {};
+      if (view.kind === 'list' || view.kind === 'queue') return 'worklist';
+      if (view.kind === 'detail') return 'object';
+      if (view.kind === 'form') return 'editor';
+      if (view.kind === 'dashboard') return 'dashboard';
+      if (route.render_mode === 'custom') return 'dashboard';
+      return 'workspace';
+    }
+
+    function renderFilterChips(params, keys) {
+      const chips = keys.filter((key) => params.get(key)).map((key) => '<button type="button" class="filter-chip" data-clear-filter="' + escapeHTML(key) + '">' + escapeHTML(key.replace(/_/g, ' ')) + ': ' + escapeHTML(params.get(key)) + ' ×</button>');
+      return chips.length ? '<div class="filter-chip-row">' + chips.join('') + '</div>' : '';
+    }
+
+    function updateRoutePanel(route) {
+      const floorplanNode = document.getElementById('route-floorplan');
+      const moduleNode = document.getElementById('route-module');
+      if (floorplanNode) floorplanNode.textContent = floorplanForRoute(route);
+      if (moduleNode) moduleNode.textContent = (route && route.module_key) || ((state.bootstrap && state.bootstrap.shell_kind) || 'workspace');
     }
 
     function setRouteState(kind, focusSelector) {
@@ -1171,6 +1348,7 @@
       const divider = passwordEnabled && googleEnabled ? '<div class="divider">' + escapeHTML(t('or')) + '</div>' : '';
       const googleAction = googleEnabled ? '<div class="actions"><button type="button" id="google-login" class="google">' + escapeHTML(googleButtonLabel()) + '</button></div>' : '';
       root.innerHTML = '<section class="login-shell"><div class="panel"><h3>' + escapeHTML(loginTitle()) + '</h3><p class="status">' + escapeHTML(statusMessage) + '</p>' + passwordForm + divider + googleAction + emptyState + '</div></section>';
+      enhanceControlAccessibility(root);
       const form = document.getElementById('login-form');
       if (form) {
         form.addEventListener('submit', async (event) => {
@@ -1193,6 +1371,7 @@
             }
             renderLocaleSwitcher();
             applyLocale();
+            renderRouteJumpOptions();
             await bootstrapAgent();
             await loadOfflineBootstrap();
             await processSyncQueue();
@@ -1218,6 +1397,7 @@
       const container = document.getElementById('menu');
       container.innerHTML = '';
       renderSurfaceSwitcher();
+      renderRouteJumpOptions();
       if (!state.bootstrap) {
         document.getElementById('admin-link-button').hidden = true;
         document.getElementById('logout-button').hidden = true;
@@ -1234,8 +1414,16 @@
         link.className = 'menu-link' + (currentPath() === action.route_path ? ' active' : '');
         link.href = '#' + action.route_path;
         link.textContent = pickText(menu, 'label');
+        link.addEventListener('click', () => {
+          if (window.innerWidth < 1024) {
+            state.navCollapsed = true;
+            persistShellPrefs();
+            applyWorkspaceNavState();
+          }
+        });
         container.appendChild(link);
       }
+      enhanceControlAccessibility(document.getElementById('shell-bar'));
     }
 
     function renderSurfaceSwitcher() {
@@ -1467,7 +1655,8 @@
         const summaryMarkup = source === 'approvals'
           ? '<div class="metric-grid"><article class="metric-card"><span class="meta">' + t('queue_approvals_label') + '</span><strong>' + escapeHTML(String(queueSummary.pending || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_due_overdue') + '</span><strong>' + escapeHTML(String(queueSummary.overdue || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_requested_by_me') + '</span><strong>' + escapeHTML(String(queueSummary.requested_by_me || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_workflows_label') + '</span><strong>' + escapeHTML(String(queueSummary.workflows || 0)) + '</strong></article></div>'
           : '<div class="metric-grid"><article class="metric-card"><span class="meta">' + t('queue_tasks_label') + '</span><strong>' + escapeHTML(String(queueSummary.open || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_due_overdue') + '</span><strong>' + escapeHTML(String(queueSummary.overdue || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_mine_label') + '</span><strong>' + escapeHTML(String(queueSummary.mine || 0)) + '</strong></article><article class="metric-card"><span class="meta">' + t('queue_workflows_label') + '</span><strong>' + escapeHTML(String(queueSummary.workflows || 0)) + '</strong></article></div>';
-        root.innerHTML = '<section class="page-panel" data-density="' + escapeHTML(density) + '"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || 'Operational queue for workflow-driven work.') + '</p></div></div><div class="page-body">' + summaryMarkup + filterBar + '<div class="table-shell"><table class="data-table"><thead><tr><th>' + t('queue_target') + '</th><th>' + t('queue_status') + '</th><th>' + t('queue_assignment') + '</th><th>' + t('queue_due') + '</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5"><div class="row-secondary">' + escapeHTML(t('no_records')) + '</div></td></tr>') + '</tbody></table></div></div></section>';
+        const activeChips = renderFilterChips(params, ['status', 'due', 'mine', 'requested_by_me', 'workflow_key']);
+        root.innerHTML = '<section class="page-panel floorplan-worklist" data-density="' + escapeHTML(density) + '"><div class="page-header"><div><div class="page-eyebrow">Worklist</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || 'Operational queue for workflow-driven work.') + '</p></div><div class="page-header-actions"><span class="badge subtle">items ' + escapeHTML(String(items.length)) + '</span></div></div><div class="page-body">' + summaryMarkup + filterBar + activeChips + '<div class="table-shell"><table class="data-table"><thead><tr><th>' + t('queue_target') + '</th><th>' + t('queue_status') + '</th><th>' + t('queue_assignment') + '</th><th>' + t('queue_due') + '</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5"><div class="empty-state-inline">' + escapeHTML(t('no_records')) + '</div></td></tr>') + '</tbody></table></div></div></section>';
         root.querySelectorAll('[data-worklist-filter]').forEach((input) => {
           input.addEventListener('change', () => {
             const next = currentParams();
@@ -1487,6 +1676,13 @@
             await saveWorklistFilterPreference(currentPath(), source, {}, view.key);
             setStatus(t('queue_filter_cleared'));
             window.location.hash = '#' + currentPath();
+          });
+        });
+        root.querySelectorAll('[data-clear-filter]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const next = currentParams();
+            next.delete(button.dataset.clearFilter);
+            window.location.hash = '#' + currentPath() + (next.toString() ? '?' + next.toString() : '');
           });
         });
         root.querySelectorAll('[data-density-mode]').forEach((input) => {
@@ -1544,7 +1740,6 @@
           (view.model_key ? '<label class="control-tile grow"><span class="meta">' + t('search') + '</span><input data-primary-filter="1" data-filter="name" value="' + escapeHTML(params.get('name') || '') + '" placeholder="' + escapeHTML(t('search')) + '"></label>' : '') +
           '<label class="control-tile"><span class="meta">' + t('sort') + '</span><select data-filter="sort"><option value="">' + t('sort_document') + '</option><option value="updated_at"' + (params.get('sort') === 'updated_at' ? ' selected' : '') + '>' + t('sort_updated') + '</option><option value="status"' + (params.get('sort') === 'status' ? ' selected' : '') + '>' + t('sort_status') + '</option><option value="name"' + (params.get('sort') === 'name' ? ' selected' : '') + '>' + t('sort_name') + '</option></select></label>' +
           '<label class="control-tile"><span class="meta">' + t('density') + '</span><select data-density-mode="1"><option value="comfortable"' + (density === 'comfortable' ? ' selected' : '') + '>' + t('density_comfortable') + '</option><option value="compact"' + (density === 'compact' ? ' selected' : '') + '>' + t('density_compact') + '</option></select></label>' +
-          (newRoute ? '<button type="button" data-new="1">' + t('new') + '</button>' : '') +
           '</div>';
         const columnDefs = visibleColumns;
         const columnChooser = configuredColumns.length
@@ -1565,9 +1760,10 @@
         const tableHeader = columnDefs.map((column) => '<th>' + escapeHTML(pickText(column, 'label')) + '</th>').join('') + '<th></th>';
         const tableMarkup = rows
           ? '<div class="table-shell"><table class="data-table"><thead><tr>' + tableHeader + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-          : '<div class="table-shell"><div class="page-body"><p class="status">' + t('no_records') + '</p></div></div>';
+          : '<div class="table-shell"><div class="empty-state-block"><h4>' + escapeHTML(pickText(view, 'title')) + '</h4><p class="status">' + escapeHTML(pickText(view, 'empty_state') || t('no_records')) + '</p>' + (newRoute ? '<button type="button" data-new="1">' + t('new') + '</button>' : '') + '</div></div>';
         const pagination = '<div class="pagination-bar"><span class="status">' + t('page') + ' ' + page + ' / ' + Math.max(1, Math.ceil(total / pageSize)) + '</span><div class="actions"><button class="secondary" data-page="' + Math.max(1, page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>' + t('previous') + '</button><button class="secondary" data-page="' + (page + 1) + '"' + (page * pageSize >= total ? ' disabled' : '') + '>' + t('next') + '</button></div></div>';
-        root.innerHTML = '<section class="page-panel" data-density="' + escapeHTML(density) + '"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || t('standard_list')) + '</p></div></div><div class="page-body">' + filterBar + columnChooser + tableMarkup + pagination + '</div></section>';
+        const activeChips = renderFilterChips(params, ['status', 'name', 'sort']);
+        root.innerHTML = '<section class="page-panel floorplan-worklist" data-density="' + escapeHTML(density) + '"><div class="page-header"><div><div class="page-eyebrow">Worklist</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(pickText(view, 'empty_state') || t('standard_list')) + '</p></div><div class="page-header-actions"><span class="badge subtle">items ' + escapeHTML(String(total)) + '</span>' + (newRoute ? '<button type="button" data-new="1">' + t('new') + '</button>' : '') + '</div></div><div class="page-body">' + filterBar + activeChips + '<details class="page-tools"><summary>Columns</summary>' + columnChooser + '</details>' + tableMarkup + pagination + '</div></section>';
         root.querySelectorAll('[data-filter]').forEach((input) => {
           input.addEventListener('change', () => {
             const next = currentParams();
@@ -1610,6 +1806,14 @@
             window.location.hash = '#' + newRoute;
           });
         });
+        root.querySelectorAll('[data-clear-filter]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const next = currentParams();
+            next.delete(button.dataset.clearFilter);
+            next.set('page', '1');
+            window.location.hash = '#' + currentPath() + (next.toString() ? '?' + next.toString() : '');
+          });
+        });
         return;
       }
       if (view.kind === 'detail') {
@@ -1628,7 +1832,7 @@
           }).join('');
           const sectionMarkup = (view.sections || []).map((section) => renderModelSection(section, record)).join('');
           const relatedViews = (view.related_views || []).map((item) => renderRelatedView(item, payload, view)).join('');
-          root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(record.id + ' · v' + record.version) + '</p></div></div><div class="page-body"><div class="section-stack">' + (tabMarkup || sectionMarkup) + '</div></div></section>' + relatedViews;
+          root.innerHTML = '<section class="page-panel floorplan-object"><div class="page-header"><div><div class="page-eyebrow">Object</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(record.id + ' · v' + record.version) + '</p></div><div class="page-header-actions"><span class="badge subtle">' + escapeHTML(view.model_key || 'model') + '</span></div></div><div class="page-body"><div class="section-stack">' + (tabMarkup || sectionMarkup) + '</div></div></section>' + relatedViews;
           root.querySelectorAll('[data-related-save]').forEach((button) => {
             button.addEventListener('click', async () => {
               const sourceKey = button.dataset.relatedSave;
@@ -1687,7 +1891,7 @@
           detailMarkup = renderWorkflowContextPanel(workflowContext, workItemKind, workItemID) + detailMarkup;
         }
         const actionZones = renderActionZones(view);
-        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(activeRecord.header.id + ' · v' + activeRecord.header.version + ' · ' + displayValue(activeRecord.header.status)) + '</p></div></div><div class="page-body">' + detailMarkup + '</div><div class="page-actions">' + actionZones + '</div></section>' + relatedViews;
+        root.innerHTML = '<section class="page-panel floorplan-object"><div class="page-header"><div><div class="page-eyebrow">Object</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(activeRecord.header.id + ' · v' + activeRecord.header.version + ' · ' + displayValue(activeRecord.header.status)) + '</p></div><div class="page-header-actions"><span class="badge subtle">' + escapeHTML(activeRecord.header.type || '') + '</span><span class="badge">' + escapeHTML(displayValue(activeRecord.header.status)) + '</span></div></div><div class="page-body">' + detailMarkup + '</div><div class="page-actions">' + actionZones + '</div></section>' + relatedViews;
         root.querySelectorAll('[data-flow-detail-tab]').forEach((button) => {
           button.addEventListener('click', () => {
             const params = currentParams();
@@ -1849,7 +2053,7 @@
           const relationViews = (view.related_views && view.related_views.length) ? view.related_views : deriveRelatedViews(payload.definition);
           const relationEditors = relationViews.map((item) => renderRelationEditor(item, payload)).join('');
           const offlineCapable = !!offlineModelCapability(view.model_key);
-          root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(documentID ? record.id + ' · v' + record.version : t('record_created')) + '</p></div></div><div class="page-body"><div class="section-stack">' + formSections + relationEditors + '</div><p class="status" id="form-status"></p></div><div class="page-actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? t('queue_sync') : (documentID ? t('save') : t('create'))) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>' + t('save_local') + '</button></div></section>';
+          root.innerHTML = '<section class="page-panel floorplan-editor"><div class="page-header"><div><div class="page-eyebrow">Editor</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(documentID ? record.id + ' · v' + record.version : t('record_created')) + '</p></div><div class="page-header-actions"><span class="badge subtle">' + escapeHTML(view.model_key || 'model') + '</span></div></div><div class="page-body"><div class="section-stack">' + formSections + relationEditors + '</div><p class="status" id="form-status"></p></div><div class="page-actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? t('queue_sync') : (documentID ? t('save') : t('create'))) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>' + t('save_local') + '</button></div></section>';
           bindRelationRemove(root);
           root.querySelectorAll('[data-relation-add]').forEach((button) => {
             button.addEventListener('click', () => appendRelationRow(button.dataset.relationAdd, payload));
@@ -1961,7 +2165,7 @@
         const formSections = (view.sections || []).length > 0
           ? (view.sections || []).map((section) => renderFormSection(section, record)).join('')
           : '<div class="form-grid">' + (view.fields || []).map((field) => renderEditableField(field, record)).join('') + '</div>';
-        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(displayValue(record.header.status || 'draft')) + '</p></div></div><div class="page-body"><div class="section-stack">' + formSections + '</div><p class="status" id="form-status"></p></div><div class="page-actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? t('queue_sync') : t('save_draft')) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>' + t('save_local') + '</button></div></section>';
+        root.innerHTML = '<section class="page-panel floorplan-editor"><div class="page-header"><div><div class="page-eyebrow">Editor</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3><p class="status">' + escapeHTML(displayValue(record.header.status || 'draft')) + '</p></div><div class="page-header-actions"><span class="badge subtle">' + escapeHTML(view.document_type || '') + '</span></div></div><div class="page-body"><div class="section-stack">' + formSections + '</div><p class="status" id="form-status"></p></div><div class="page-actions"><button id="save-form">' + ((offlineCapable && !navigator.onLine) ? t('queue_sync') : t('save_draft')) + '</button><button id="save-local" class="secondary"' + (offlineCapable ? '' : ' disabled') + '>' + t('save_local') + '</button></div></section>';
         const saveLocalButton = root.querySelector('#save-local');
         if (saveLocalButton) {
           saveLocalButton.addEventListener('click', async () => {
@@ -2037,7 +2241,7 @@
           ? await api('/ui/data/monitoring/summary')
           : await api('/ui/data/analytics/snapshot'));
         const summary = (view.cards || []).map((card) => ({card, value: resolvePath(source, card.path)}));
-        root.innerHTML = '<section class="page-panel"><div class="page-header"><div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3></div></div><div class="page-body"><div class="metric-grid">' + summary.map((item) => {
+        root.innerHTML = '<section class="page-panel floorplan-dashboard"><div class="page-header"><div><div class="page-eyebrow">Dashboard</div><h3>' + escapeHTML(pickText(view, 'title')) + '</h3></div><div class="page-header-actions"><span class="badge subtle">' + escapeHTML(view.dataset_key || view.projection_key || 'analytics') + '</span></div></div><div class="page-body"><div class="metric-grid">' + summary.map((item) => {
           if (item.card.widget === 'json') {
             return '<article class="metric-card"><span class="meta">' + escapeHTML(pickText(item.card, 'label')) + '</span><pre>' + escapeHTML(JSON.stringify(item.value, null, 2)) + '</pre></article>';
           }
@@ -2718,6 +2922,7 @@
         ? session.messages.map((item) => '<article class="agent-bubble ' + escapeHTML(item.role) + '"><div class="meta">' + escapeHTML(item.role) + '</div><div>' + escapeHTML(item.content || '') + '</div></article>').join('')
         : '<p class="status">Start a session to interact with an ACP agent.</p>';
       root.innerHTML = '<section class="agent-shell-page"><div class="page-header"><div><h3>Agent Workspace</h3><p class="status">Review ACP sessions, prompts, and streamed responses.</p></div><div class="actions"><button type="button" id="agent-panel-open" class="secondary">Open Panel</button></div></div><div class="page-body"><div class="agent-workspace-grid"><section class="panel"><h3>Sessions</h3><div class="agent-session-list">' + sessionsMarkup + '</div></section><section class="panel"><h3>Conversation</h3><div class="agent-thread">' + threadMarkup + '</div></section></div></div></section>';
+      enhanceControlAccessibility(root);
       document.querySelectorAll('[data-agent-session]').forEach((node) => {
         node.addEventListener('click', () => {
           state.agent.currentSessionId = node.dataset.agentSession;
@@ -2749,6 +2954,7 @@
         ? session.messages.map((item) => '<article class="agent-bubble ' + escapeHTML(item.role) + '"><div class="meta">' + escapeHTML(item.role) + '</div><div>' + escapeHTML(item.content || '') + '</div></article>').join('')
         : '<p class="status">' + (providers.length ? 'No conversation yet.' : 'ACP is not configured for this deployment.') + '</p>';
       panel.innerHTML = '<div class="agent-panel-header"><div class="agent-panel-title"><strong>Agent</strong><span class="status">' + escapeHTML((session && session.provider_name) || (providers[0] && providers[0].name) || 'Unavailable') + '</span></div><div class="actions"><button type="button" id="agent-open-workspace" class="secondary">Workspace</button><button type="button" id="agent-close-panel" class="secondary">Close</button></div></div><div class="agent-context-list">' + contextBlocks.map((item) => '<label class="agent-context-item"><input type="checkbox" ' + (item.selected ? 'checked' : '') + ' id="agent-context-toggle"> <strong>' + escapeHTML(item.label) + '</strong><div class="status">' + escapeHTML(item.value.route_path || '') + '</div></label>').join('') + '</div><div class="agent-panel-body"><div class="agent-session-list">' + sessionMarkup + '</div><div class="agent-thread">' + threadMarkup + '</div></div><div class="agent-composer"><textarea id="agent-composer-input" placeholder="Ask the agent about this page or current task."></textarea><div class="agent-panel-actions"><button type="button" id="agent-send-button"' + (providers.length ? '' : ' disabled') + '>Send</button></div></div>';
+      enhanceControlAccessibility(panel);
       const closeButton = document.getElementById('agent-close-panel');
       if (closeButton) closeButton.onclick = () => { state.agent.open = false; renderAgentPanel(); };
       const workspaceButton = document.getElementById('agent-open-workspace');
@@ -2791,6 +2997,7 @@
       if (currentPath() === '/agent/workspace') {
         document.getElementById('route-title').innerHTML = '<h2>Agent Workspace</h2>';
         setStatus('ACP session history and contextual agent workspace.');
+        updateRoutePanel({module_key: 'acp', render_mode: 'custom', view: {kind: 'dashboard'}});
         renderAgentWorkspace(document.getElementById('view-root'));
         renderAgentPanel();
         return;
@@ -2839,25 +3046,30 @@
         const titleKey = route.status === 'forbidden' ? 'route_forbidden' : (route.status === 'surface_mismatch' ? 'surface_mismatch' : 'route_not_found');
         document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(t(titleKey)) + '</h2>';
         setStatus(route.message || t(titleKey));
+        updateRoutePanel(route);
         renderRecoveryPanel(t(titleKey), route.message || t(titleKey), recoveryActions);
         return;
       }
       document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(pickText(route.action, 'label') || route.path) + '</h2>';
       setStatus(t('resolved_from_module') + ' ' + route.module_key + ' ' + t('using_rendering') + ' ' + route.render_mode + ' rendering.');
+      updateRoutePanel(route);
       setRouteState('route_ready', '#route-title h2');
       if (route.render_mode === 'custom') {
         await renderCustom(route);
+        enhanceControlAccessibility(document.getElementById('view-root'));
         focusRecoveryTarget('#route-title h2');
         return;
       }
       if (route.render_mode === 'flow') {
         await renderFlow(route);
         renderMenus();
+        enhanceControlAccessibility(document.getElementById('view-root'));
         focusRecoveryTarget('#route-title h2');
         return;
       }
       await renderGeneric(route);
       renderMenus();
+      enhanceControlAccessibility(document.getElementById('view-root'));
       focusRecoveryTarget('#route-title h2');
     }
 
@@ -2889,20 +3101,21 @@
     function renderFieldInput(field, value) {
       const readonly = field.read_only ? ' readonly disabled' : '';
       const current = value == null ? '' : value;
+      const name = ' name="' + escapeHTML(String(field.path || field.key || 'field').replace(/[^a-zA-Z0-9_.-]+/g, '_')) + '"';
       if (field.widget === 'textarea') {
-        return '<textarea data-path="' + field.path + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">' + escapeHTML(String(current)) + '</textarea>';
+        return '<textarea data-path="' + field.path + '"' + name + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">' + escapeHTML(String(current)) + '</textarea>';
       }
       if (field.widget === 'select' || (field.options || []).length > 0) {
         const options = (field.options || []).map((option) => '<option value="' + option + '"' + (String(current) === option ? ' selected' : '') + '>' + escapeHTML(displayValue(option)) + '</option>').join('');
-        return '<select data-path="' + field.path + '"' + readonly + '>' + options + '</select>';
+        return '<select data-path="' + field.path + '"' + name + readonly + '>' + options + '</select>';
       }
       if (field.type === 'bool') {
-        return '<input type="checkbox" data-path="' + field.path + '"' + (current ? ' checked' : '') + readonly + '>';
+        return '<input type="checkbox" data-path="' + field.path + '"' + name + (current ? ' checked' : '') + readonly + '>';
       }
       if (field.type === 'int' || field.type === 'number') {
-        return '<input type="number" data-path="' + field.path + '" value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">';
+        return '<input type="number" data-path="' + field.path + '"' + name + ' value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">';
       }
-      return '<input data-path="' + field.path + '" value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">';
+      return '<input data-path="' + field.path + '"' + name + ' value="' + escapeHTML(String(current)) + '"' + readonly + ' placeholder="' + escapeHTML(pickText(field, 'placeholder')) + '">';
     }
 
     function renderRelatedView(def, payload, view) {
@@ -3143,6 +3356,7 @@
       } catch (_) {}
       renderLocaleSwitcher();
       applyLocale();
+      renderRouteJumpOptions();
       refreshOfflineStatus();
       await registerServiceWorker();
       await refreshSyncStats();
@@ -3158,6 +3372,7 @@
         }
         renderLocaleSwitcher();
         applyLocale();
+        renderRouteJumpOptions();
         await bootstrapAgent();
         await loadOfflineBootstrap();
         await processSyncQueue();
@@ -3178,6 +3393,8 @@
       }
     }
 
+    loadShellPrefs();
+    bindWorkspaceShellControls();
     window.addEventListener('online', () => { refreshOfflineStatus(); void processSyncQueue(); });
     window.addEventListener('offline', () => { refreshOfflineStatus(); });
     document.addEventListener('visibilitychange', () => {

@@ -26,6 +26,13 @@ func buildWorkspaceBootstrapPayload(r *http.Request, ident *identity.Service, mo
 	return map[string]any{
 		"shell_kind":         "workspace",
 		"surface":            surface,
+		"shell": map[string]any{
+			"nav_mode":         "collapsible",
+			"command_mode":     "route_jump",
+			"agent_surface":    "panel",
+			"supports_nav_pin": true,
+		},
+		"page_floorplans": []string{"worklist", "object", "dashboard", "editor"},
 		"available_surfaces": availableUISurfaces(ident, modules, p),
 		"menus":              menus,
 		"actions":            actions,

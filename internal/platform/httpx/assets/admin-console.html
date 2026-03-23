@@ -7,25 +7,43 @@
   <link rel="stylesheet" href="/admin/assets/platform.css?v={{PLATFORM_ASSET_VERSION}}">
 </head>
 <body>
-  <header class="header-shell">
-    <div class="toolbar">
-      <div>
-        <h1 id="admin-title">Platform Admin</h1>
-        <p class="status" id="admin-subtitle">Modules, scoped configuration, and effective runtime settings.</p>
-      </div>
-      <div class="actions">
-        <label class="locale-switch">
-          <span id="admin-locale-label">Language</span>
-          <select id="admin-locale-switcher"></select>
-        </label>
-        <button type="button" id="admin-agent-toggle-button" class="secondary" hidden>Agent</button>
-        <a id="admin-ui-link" class="button secondary" href="/ui" hidden>Workspace</a>
-        <button type="button" id="admin-logout-button" class="secondary">Log out</button>
+  <header class="shell-bar shell-bar-admin">
+    <div class="shell-bar-primary">
+      <button type="button" id="admin-nav-toggle" class="shell-icon-button" aria-expanded="true" aria-controls="admin-nav">Menu</button>
+      <div class="shell-brand-cluster">
+        <div class="shell-eyebrow" id="admin-eyebrow">Operations Console</div>
+        <div>
+          <h1 id="admin-title">Platform Admin</h1>
+          <p class="status" id="admin-subtitle">Modules, scoped configuration, and effective runtime settings.</p>
+        </div>
       </div>
     </div>
+    <div class="shell-bar-actions">
+      <form id="admin-command-form" class="shell-command" role="search">
+        <input id="admin-command-input" name="admin_command" aria-label="Search admin sections or jump to a route" list="admin-route-options" placeholder="Search admin sections or jump to a route">
+        <datalist id="admin-route-options"></datalist>
+        <button type="submit" class="secondary" id="admin-command-submit">Go</button>
+      </form>
+      <div class="shell-user-chip" id="admin-user-chip">admin</div>
+      <label class="locale-switch">
+        <span id="admin-locale-label">Language</span>
+        <select id="admin-locale-switcher" name="admin_locale"></select>
+      </label>
+      <button type="button" id="admin-agent-toggle-button" class="secondary" hidden>Agent</button>
+      <a id="admin-ui-link" class="button secondary" href="/ui" hidden>Workspace</a>
+      <button type="button" id="admin-logout-button" class="secondary">Log out</button>
+    </div>
   </header>
-  <main class="admin-main">
-    <nav id="admin-nav" class="admin-tabs" aria-label="Admin sections"></nav>
+  <div class="shell-backdrop" id="admin-shell-backdrop" hidden></div>
+  <main class="admin-shell" id="admin-shell-root">
+    <aside class="admin-sidebar" id="admin-sidebar">
+      <div class="sidebar-section sidebar-intro">
+        <div class="sidebar-heading">Admin domains</div>
+        <p class="status">Runtime, security, configuration, workflow, and organizational controls.</p>
+      </div>
+      <nav id="admin-nav" class="admin-tabs admin-nav-groups" aria-label="Admin sections"></nav>
+    </aside>
+    <section class="admin-main">
     <div class="admin-grid" data-admin-route="/admin/modules">
       <section class="card">
         <h2 id="modules-heading">Modules</h2>
@@ -83,14 +101,14 @@
       <section class="card">
         <h2 id="config-heading">Config Editor</h2>
         <div class="admin-row">
-          <div class="field"><label id="config-key-label">Config Key</label><select id="config-key"></select></div>
-          <div class="field"><label id="config-scope-label">Scope</label><select id="config-scope"><option value="deployment">deployment</option><option value="organization">organization</option><option value="location">location</option></select></div>
+          <div class="field"><label id="config-key-label" for="config-key">Config Key</label><select id="config-key"></select></div>
+          <div class="field"><label id="config-scope-label" for="config-scope">Scope</label><select id="config-scope"><option value="deployment">deployment</option><option value="organization">organization</option><option value="location">location</option></select></div>
         </div>
         <div class="admin-row">
-          <div class="field"><label id="organization-label">Organization</label><select id="organization-id"></select></div>
-          <div class="field"><label id="location-label">Location</label><select id="location-id"></select></div>
+          <div class="field"><label id="organization-label" for="organization-id">Organization</label><select id="organization-id"></select></div>
+          <div class="field"><label id="location-label" for="location-id">Location</label><select id="location-id"></select></div>
         </div>
-        <div class="field"><label id="config-value-label">Value JSON</label><textarea id="config-value"></textarea></div>
+        <div class="field"><label id="config-value-label" for="config-value">Value JSON</label><textarea id="config-value"></textarea></div>
         <div class="actions">
           <button id="load-effective" class="secondary">Load Effective</button>
           <button id="save-config">Save Entry</button>
@@ -357,6 +375,7 @@
       <h2 id="observability-heading">Observability Contracts</h2>
       <pre id="observability-contracts"></pre>
     </section>
+    </section>
   </main>
   <aside id="admin-agent-panel" class="agent-panel hidden" aria-live="polite"></aside>
   <script>
@@ -368,6 +387,10 @@
         workspace_link: 'Workspace',
         logout: 'Log out',
         modules: 'Modules',
+        admin_eyebrow: 'Operations Console',
+        admin_search_placeholder: 'Search admin sections or jump to a route',
+        admin_search_go: 'Go',
+        admin_user_chip: 'Signed in',
         auth_settings: 'Authentication Settings',
         config_editor: 'Config Editor',
         org_chart: 'Org Chart',
@@ -582,6 +605,10 @@
         workspace_link: 'Workspace',
         logout: 'Keluar',
         modules: 'Modul',
+        admin_eyebrow: 'Konsol Operasi',
+        admin_search_placeholder: 'Cari bagian admin atau lompat ke rute',
+        admin_search_go: 'Buka',
+        admin_user_chip: 'Masuk',
         auth_settings: 'Pengaturan Autentikasi',
         config_editor: 'Editor Konfigurasi',
         org_chart: 'Bagan Organisasi',
@@ -790,7 +817,7 @@
         saved_config: 'Menyimpan'
       }
     };
-    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateFixtures: [], templatePreview: null, templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' }, agent: { open: false, providers: [], sessions: [], currentSessionId: '', attachContext: true, stream: null } };
+    const adminState = { bootstrap: null, locale: 'en', supportedLocales: ['en', 'id'], navCollapsed: false, users: [], bindings: [], navigationManageAllowed: false, reportingLines: [], hierarchyGraph: {nodes: [], edges: [], summary: {}}, hierarchyChain: [], hierarchySelectedUserID: '', hierarchySelectedLineID: '', workflows: [], workflowVersions: [], workflowCurrent: null, workflowSimulation: null, templateDefinitions: [], templateBindings: [], templateVersions: [], templateFixtures: [], templatePreview: null, templateDesigner: { layout: null, sectionID: 'body', selectedBlockID: '' }, agent: { open: false, providers: [], sessions: [], currentSessionId: '', attachContext: true, stream: null } };
     function normalizeLocale(locale) {
       const value = String(locale || '').trim().toLowerCase().replace(/_/g, '-');
       if (value === 'id' || value.indexOf('id-') === 0) return 'id';
@@ -807,9 +834,137 @@
       }
       return item[baseField] || '';
     }
+    function enhanceAdminControlAccessibility(root) {
+      const scope = root || document;
+      scope.querySelectorAll('input, select, textarea').forEach((field, index) => {
+        if (!field.name) {
+          field.name = field.id || field.dataset.workflowField || field.dataset.templateColumnLabel || field.dataset.templateColumnPath || ('admin_field_' + index);
+        }
+        if (field.getAttribute('aria-label')) return;
+        const wrappingLabel = field.closest('label');
+        let labelText = '';
+        if (wrappingLabel) labelText = wrappingLabel.textContent || '';
+        if (!labelText && field.id) {
+          const explicitLabel = scope.querySelector('label[for="' + field.id + '"]');
+          if (explicitLabel) labelText = explicitLabel.textContent || '';
+        }
+        if (!labelText && field.placeholder) labelText = field.placeholder;
+        if (!labelText && field.dataset.workflowField) labelText = field.dataset.workflowField.replace(/_/g, ' ');
+        if (!labelText && field.dataset.templateColumnLabel != null) labelText = 'template column label';
+        if (!labelText && field.dataset.templateColumnPath != null) labelText = 'template column path';
+        if (labelText) field.setAttribute('aria-label', labelText.replace(/\s+/g, ' ').trim());
+      });
+    }
     function adminCurrentPath() {
       const raw = window.location.hash.replace(/^#/, '').trim();
       return raw || ((adminState.bootstrap && adminState.bootstrap.default_path) || '/admin/modules');
+    }
+    function loadAdminShellPrefs() {
+      try {
+        const stored = window.localStorage.getItem('orbyte.admin.navCollapsed');
+        adminState.navCollapsed = stored == null ? window.innerWidth < 1024 : stored === '1';
+      } catch (_) {
+        adminState.navCollapsed = window.innerWidth < 1024;
+      }
+    }
+    function persistAdminShellPrefs() {
+      try {
+        window.localStorage.setItem('orbyte.admin.navCollapsed', adminState.navCollapsed ? '1' : '0');
+      } catch (_) {}
+    }
+    function applyAdminShellState() {
+      const root = document.getElementById('admin-shell-root');
+      const sidebar = document.getElementById('admin-sidebar');
+      const toggle = document.getElementById('admin-nav-toggle');
+      const backdrop = document.getElementById('admin-shell-backdrop');
+      if (root) root.classList.toggle('nav-collapsed', !!adminState.navCollapsed);
+      if (sidebar) sidebar.classList.toggle('open', !adminState.navCollapsed);
+      if (toggle) toggle.setAttribute('aria-expanded', String(!adminState.navCollapsed));
+      if (backdrop) backdrop.hidden = adminState.navCollapsed || window.innerWidth >= 1024;
+    }
+    function bindAdminShellControls() {
+      const toggle = document.getElementById('admin-nav-toggle');
+      const backdrop = document.getElementById('admin-shell-backdrop');
+      const commandForm = document.getElementById('admin-command-form');
+      const commandInput = document.getElementById('admin-command-input');
+      if (toggle && !toggle.dataset.bound) {
+        toggle.dataset.bound = '1';
+        toggle.addEventListener('click', () => {
+          adminState.navCollapsed = !adminState.navCollapsed;
+          persistAdminShellPrefs();
+          applyAdminShellState();
+        });
+      }
+      if (backdrop && !backdrop.dataset.bound) {
+        backdrop.dataset.bound = '1';
+        backdrop.addEventListener('click', () => {
+          adminState.navCollapsed = true;
+          persistAdminShellPrefs();
+          applyAdminShellState();
+        });
+      }
+      if (commandForm && !commandForm.dataset.bound) {
+        commandForm.dataset.bound = '1';
+        commandForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const raw = (commandInput && commandInput.value || '').trim();
+          if (!raw) return;
+          const actions = (adminState.bootstrap && adminState.bootstrap.actions) || [];
+          const staticMenus = [
+            {label: t('org_chart'), route_path: '/admin/org'},
+            {label: t('workflow_routing'), route_path: '/admin/workflows'}
+          ];
+          if (adminState.bootstrap && adminState.bootstrap.acp && adminState.bootstrap.acp.enabled) staticMenus.push({label: 'Agent', route_path: '/admin/agent'});
+          const match = actions.find((item) => item.route_path === raw || pickText(item, 'label').toLowerCase() === raw.toLowerCase()) ||
+            staticMenus.find((item) => item.route_path === raw || item.label.toLowerCase() === raw.toLowerCase());
+          const target = match ? match.route_path : raw;
+          window.location.hash = target.startsWith('#') ? target : ('#' + target);
+          if (window.innerWidth < 1024) {
+            adminState.navCollapsed = true;
+            persistAdminShellPrefs();
+            applyAdminShellState();
+          }
+        });
+      }
+      window.addEventListener('resize', applyAdminShellState, {passive: true});
+    }
+    function renderAdminRouteOptions() {
+      const datalist = document.getElementById('admin-route-options');
+      if (!datalist) return;
+      const actions = (adminState.bootstrap && adminState.bootstrap.actions) || [];
+      const staticMenus = [
+        {label: t('org_chart'), route_path: '/admin/org'},
+        {label: t('workflow_routing'), route_path: '/admin/workflows'}
+      ];
+      if (adminState.bootstrap && adminState.bootstrap.acp && adminState.bootstrap.acp.enabled) staticMenus.push({label: 'Agent', route_path: '/admin/agent'});
+      datalist.innerHTML = actions.map((item) => '<option value="' + escapeHTML(item.route_path) + '">' + escapeHTML(pickText(item, 'label')) + '</option>').join('') + staticMenus.map((item) => '<option value="' + escapeHTML(item.route_path) + '">' + escapeHTML(item.label) + '</option>').join('');
+    }
+    function adminNavGroups(items) {
+      const groups = [
+        {key: 'runtime', label: 'Runtime', routes: ['/admin/modules', '/admin/observability']},
+        {key: 'security', label: 'Security', routes: ['/admin/auth', '/admin/security']},
+        {key: 'configuration', label: 'Configuration', routes: ['/admin/config', '/admin/definitions']},
+        {key: 'workflow', label: 'Workflow', routes: ['/admin/workflows', '/admin/templates']},
+        {key: 'organization', label: 'Organization', routes: ['/admin/org']},
+        {key: 'agent', label: 'Agent', routes: ['/admin/agent']}
+      ];
+      const routeToGroup = (routePath, label) => {
+        if (groups.some((group) => group.routes.includes(routePath))) return groups.find((group) => group.routes.includes(routePath)).key;
+        const value = ((label || '') + ' ' + (routePath || '')).toLowerCase();
+        if (value.indexOf('auth') >= 0 || value.indexOf('security') >= 0) return 'security';
+        if (value.indexOf('workflow') >= 0 || value.indexOf('template') >= 0) return 'workflow';
+        if (value.indexOf('config') >= 0 || value.indexOf('definition') >= 0) return 'configuration';
+        if (value.indexOf('org') >= 0) return 'organization';
+        if (value.indexOf('agent') >= 0) return 'agent';
+        return 'runtime';
+      };
+      const grouped = {};
+      groups.forEach((group) => { grouped[group.key] = []; });
+      items.forEach((item) => {
+        const key = routeToGroup(item.route_path, item.label);
+        grouped[key].push(item);
+      });
+      return groups.map((group) => ({label: group.label, items: grouped[group.key]})).filter((group) => group.items.length);
     }
     function renderAdminMenus() {
       const container = document.getElementById('admin-nav');
@@ -824,16 +979,17 @@
       if (adminState.bootstrap && adminState.bootstrap.acp && adminState.bootstrap.acp.enabled) {
         staticMenus.push({label: 'Agent', route_path: '/admin/agent'});
       }
-      container.innerHTML = menus.map((menu) => {
+      const dynamicMenus = menus.map((menu) => {
         const action = actions.find((item) => item.key === menu.action_key);
-        if (!action) return '';
-        const selected = action.route_path === path ? 'true' : 'false';
-        const classes = action.route_path === path ? 'admin-tab active' : 'admin-tab';
-        return '<a class="' + classes + '" role="tab" aria-selected="' + selected + '" href="#' + action.route_path + '">' + escapeHTML(pickText(menu, 'label')) + '</a>';
-      }).join('') + staticMenus.map((item) => {
-        const selected = item.route_path === path ? 'true' : 'false';
-        const classes = item.route_path === path ? 'admin-tab active' : 'admin-tab';
-        return '<a class="' + classes + '" role="tab" aria-selected="' + selected + '" href="#' + item.route_path + '">' + escapeHTML(item.label) + '</a>';
+        if (!action) return null;
+        return {label: pickText(menu, 'label'), route_path: action.route_path};
+      }).filter(Boolean).concat(staticMenus);
+      container.innerHTML = adminNavGroups(dynamicMenus).map((group) => {
+        return '<section class="nav-group"><div class="nav-group-title">' + escapeHTML(group.label) + '</div><div class="nav-group-items">' + group.items.map((item) => {
+          const selected = item.route_path === path ? 'true' : 'false';
+          const classes = item.route_path === path ? 'admin-tab active' : 'admin-tab';
+          return '<a class="' + classes + '" aria-current="' + (item.route_path === path ? 'page' : 'false') + '" href="#' + item.route_path + '">' + escapeHTML(item.label) + '</a>';
+        }).join('') + '</div></section>';
       }).join('');
     }
     function applyAdminRoute() {
@@ -844,6 +1000,7 @@
       renderAdminMenus();
       if (path === '/admin/agent') renderAdminAgentWorkspace();
       renderAdminAgentPanel();
+      enhanceAdminControlAccessibility(document.querySelector('[data-admin-route="' + path + '"]') || document);
     }
     async function persistLocale(locale) {
       try {
@@ -880,6 +1037,14 @@
     function renderAdminChrome() {
       document.documentElement.lang = adminState.locale;
       document.title = t('admin_title');
+      const eyebrow = document.getElementById('admin-eyebrow');
+      const commandInput = document.getElementById('admin-command-input');
+      const commandSubmit = document.getElementById('admin-command-submit');
+      const userChip = document.getElementById('admin-user-chip');
+      if (eyebrow) eyebrow.textContent = t('admin_eyebrow');
+      if (commandInput) commandInput.placeholder = t('admin_search_placeholder');
+      if (commandSubmit) commandSubmit.textContent = t('admin_search_go');
+      if (userChip) userChip.textContent = t('admin_user_chip') + ' · ' + (((adminState.bootstrap || {}).current_user_id) || 'admin');
       const pairs = {
         'admin-title': 'admin_title',
         'admin-subtitle': 'admin_subtitle',
@@ -1190,6 +1355,7 @@
         return '<button type="button" class="' + classes + '" data-agent-session="' + escapeHTML(item.id) + '"><div class="meta">' + escapeHTML(item.provider_name || item.provider_key) + '</div><strong>' + escapeHTML(item.title || item.route_path || item.id) + '</strong><div class="status">' + escapeHTML(item.status || 'ready') + '</div></button>';
       }).join('') || '<p class="status">No agent sessions yet.</p>';
       root.innerHTML = '<div class="agent-workspace-grid"><section class="panel"><h3>Sessions</h3><div class="agent-session-list">' + sessionsMarkup + '</div></section><section class="panel"><h3>Conversation</h3><div class="agent-thread">' + adminAgentThreadMarkup(session) + '</div><div class="agent-composer"><textarea id="admin-agent-workspace-composer-input" placeholder="Ask the agent about this admin context."></textarea><div class="agent-panel-actions"><button type="button" id="admin-agent-workspace-send-button"' + ((((adminState.bootstrap || {}).acp || {}).enabled ? '' : ' disabled')) + '>Send</button></div></div></section></div>';
+      enhanceAdminControlAccessibility(root);
       const openPanel = document.getElementById('admin-agent-open-panel');
       if (openPanel) openPanel.onclick = () => { adminState.agent.open = true; renderAdminAgentPanel(); };
       const sendButton = document.getElementById('admin-agent-workspace-send-button');
@@ -1212,6 +1378,7 @@
         return '<button type="button" class="' + classes + '" data-agent-session="' + escapeHTML(item.id) + '">' + escapeHTML(item.title || item.route_path || item.id) + '</button>';
       }).join('');
       panel.innerHTML = '<div class="agent-panel-header"><div class="agent-panel-title"><strong>Agent</strong><span class="status">' + escapeHTML((session && session.provider_name) || (providers[0] && providers[0].name) || 'Unavailable') + '</span></div><div class="actions"><button type="button" id="admin-agent-go-workspace" class="secondary">Workspace</button><button type="button" id="admin-agent-close-panel" class="secondary">Close</button></div></div><div class="agent-context-list">' + contextBlocks.map((item) => '<label class="agent-context-item"><input type="checkbox" ' + (item.selected ? 'checked' : '') + ' id="admin-agent-context-toggle"> <strong>' + escapeHTML(item.label) + '</strong><div class="status">' + escapeHTML(item.value.route_path || '') + '</div></label>').join('') + '</div><div class="agent-panel-body"><div class="agent-session-list">' + sessionMarkup + '</div><div class="agent-thread">' + adminAgentThreadMarkup(session) + '</div></div><div class="agent-composer"><textarea id="admin-agent-panel-composer-input" placeholder="Ask the agent about this admin context."></textarea><div class="agent-panel-actions"><button type="button" id="admin-agent-panel-send-button"' + (providers.length ? '' : ' disabled') + '>Send</button></div></div>';
+      enhanceAdminControlAccessibility(panel);
       const closeButton = document.getElementById('admin-agent-close-panel');
       if (closeButton) closeButton.onclick = () => { adminState.agent.open = false; renderAdminAgentPanel(); };
       const workspaceButton = document.getElementById('admin-agent-go-workspace');
@@ -1275,7 +1442,10 @@
       await bootstrapAdminAgent();
       renderLocaleSwitcher();
       renderAdminChrome();
+      renderAdminRouteOptions();
       renderAdminMenus();
+      applyAdminShellState();
+      enhanceAdminControlAccessibility(document);
       document.getElementById('organization-id').innerHTML = '<option value="">' + t('default_option') + '</option><option value="' + bootstrap.organization.id + '">' + bootstrap.organization.name + '</option>';
       document.getElementById('location-id').innerHTML = '<option value="">' + t('default_option') + '</option>' + bootstrap.locations.map(loc => '<option value="' + loc.id + '">' + loc.name + '</option>').join('');
       renderModules(modules.items);
@@ -1445,11 +1615,20 @@
       await loadAuthSettingsValidation();
     }
     function renderModules(items) {
-      document.getElementById('modules').innerHTML = '<table><thead><tr><th>' + t('module_col') + '</th><th>' + t('status_col') + '</th><th>' + t('deps_col') + '</th><th></th></tr></thead><tbody>' + items.map(item => {
+      const enabledCount = items.filter((item) => item.installed && item.installed.enabled).length;
+      const disabledCount = items.length - enabledCount;
+      const blockedCount = items.filter((item) => (item.dependency_diagnostics || []).some((dep) => !dep.compatible)).length;
+      document.getElementById('modules').innerHTML = '<div class="metric-grid module-summary-grid">'
+        + '<article class="metric-card"><span class="meta">Installed</span><strong>' + items.length + '</strong></article>'
+        + '<article class="metric-card"><span class="meta">Enabled</span><strong>' + enabledCount + '</strong></article>'
+        + '<article class="metric-card"><span class="meta">Disabled</span><strong>' + disabledCount + '</strong></article>'
+        + '<article class="metric-card"><span class="meta">Needs Attention</span><strong>' + blockedCount + '</strong></article>'
+        + '</div><div class="table-shell"><table class="data-table"><thead><tr><th>' + t('module_col') + '</th><th>' + t('status_col') + '</th><th>' + t('deps_col') + '</th><th></th></tr></thead><tbody>' + items.map(item => {
         const enabled = item.installed.enabled;
         const deps = (item.dependency_diagnostics || []).map(dep => dep.module_key + ':' + (dep.compatible ? 'ok' : dep.reason || 'blocked')).join(', ');
-        return '<tr><td><strong>' + pickText(item.manifest, 'name') + '</strong><div class="muted">' + item.manifest.key + ' · ' + item.manifest.version + '</div></td><td><span class="pill ' + (enabled ? '' : 'off') + '">' + (enabled ? t('enabled') : t('disabled')) + '</span></td><td class="muted">' + (deps || t('none')) + '</td><td><button data-key="' + item.manifest.key + '" data-action="' + (enabled ? 'disable' : 'enable') + '" class="' + (enabled ? 'warn' : '') + '">' + (enabled ? t('disable') : t('enable')) + '</button></td></tr>';
-      }).join('') + '</tbody></table>';
+        return '<tr><td><div class="row-primary">' + pickText(item.manifest, 'name') + '</div><div class="row-secondary">' + item.manifest.key + ' · ' + item.manifest.version + '</div></td><td><span class="pill ' + (enabled ? '' : 'off') + '">' + (enabled ? t('enabled') : t('disabled')) + '</span></td><td class="row-secondary">' + (deps || t('none')) + '</td><td><button data-key="' + item.manifest.key + '" data-action="' + (enabled ? 'disable' : 'enable') + '" class="' + (enabled ? 'warn' : '') + '">' + (enabled ? t('disable') : t('enable')) + '</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+      enhanceAdminControlAccessibility(document.getElementById('modules'));
       document.querySelectorAll('#modules button[data-key]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const csrf = getCookie('orbyte_csrf');
@@ -3001,6 +3180,8 @@
     function escapeHTML(value) {
       return String(value == null ? '' : value).replace(/[&<>"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]));
     }
+    loadAdminShellPrefs();
+    bindAdminShellControls();
     window.addEventListener('hashchange', applyAdminRoute);
     document.getElementById('admin-logout-button').addEventListener('click', () => { void logoutAdmin(); });
     boot().catch(err => {

@@ -25,6 +25,13 @@ func buildAdminBootstrapPayload(r *http.Request, org *organization.Service, iden
 	}
 	return map[string]any{
 		"shell_kind":      "admin",
+		"shell": map[string]any{
+			"nav_mode":         "grouped_sidebar",
+			"command_mode":     "route_jump",
+			"agent_surface":    "panel",
+			"supports_nav_pin": true,
+		},
+		"page_floorplans": []string{"admin_editor", "dashboard", "object", "worklist"},
 		"organization":    org.Root(),
 		"locations":       org.Locations(),
 		"operating_units": org.OperatingUnits(),

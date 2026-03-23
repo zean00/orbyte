@@ -35,3 +35,79 @@
 .agent-workspace-grid{display:grid;gap:1rem}
 @media (min-width:1280px){.agent-workspace-grid{grid-template-columns:minmax(280px,360px) minmax(0,1fr)}}
 @media (max-width:767px){.agent-panel{left:1rem;top:auto;height:min(75vh,720px);width:auto}}
+
+/* Shell foundation and floorplan refresh */
+:root{
+  --orby-space-1:8px;
+  --orby-space-2:12px;
+  --orby-space-3:16px;
+  --orby-space-4:24px;
+  --orby-space-5:32px;
+  --orby-shell-height:72px;
+  --orby-sidebar-width:280px;
+  --orby-sidebar-width-collapsed:88px;
+  --orby-border:rgb(217 222 232);
+  --orby-text-muted:rgb(102 112 133);
+  --orby-surface:#fff;
+  --orby-surface-alt:rgb(248 250 252);
+  --orby-accent:rgb(59 92 204);
+  --orby-accent-soft:rgb(232 238 255);
+}
+.shell-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:var(--orby-space-3);padding:var(--orby-space-3) var(--orby-space-4);border-bottom:1px solid var(--orby-border);background:rgba(255,255,255,.95);backdrop-filter:blur(14px)}
+.shell-bar-primary,.shell-bar-actions{display:flex;align-items:center;gap:var(--orby-space-3)}
+.shell-brand-cluster{display:flex;align-items:center;gap:var(--orby-space-3);min-width:0}
+.shell-brand-cluster .brand{font-size:1.125rem;line-height:1.25;font-weight:700}
+.shell-brand-cluster .subtitle{margin-top:.15rem;max-width:40rem}
+.shell-eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.18em;color:var(--orby-text-muted)}
+.shell-icon-button{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:.65rem .8rem;border:1px solid var(--orby-border);border-radius:.8rem;background:#fff;color:rgb(31 41 55)}
+.shell-command{display:flex;align-items:center;gap:.5rem;min-width:min(34rem,48vw)}
+.shell-command input{min-width:18rem}
+.shell-user-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.55rem .85rem;border:1px solid var(--orby-border);border-radius:999px;background:var(--orby-surface-alt);font-size:.85rem;color:rgb(31 41 55)}
+.shell-backdrop{position:fixed;inset:var(--orby-shell-height) 0 0 0;background:rgba(15,23,42,.28);z-index:35}
+.workspace-shell{align-items:start;grid-template-columns:var(--orby-sidebar-width) minmax(0,1fr);transition:grid-template-columns .2s ease}
+.workspace-shell.nav-collapsed{grid-template-columns:var(--orby-sidebar-width-collapsed) minmax(0,1fr)}
+.workspace-shell .sidebar,.admin-sidebar{position:sticky;top:calc(var(--orby-shell-height) + 1px);align-self:start;height:calc(100vh - var(--orby-shell-height) - 1px);overflow:auto;padding:var(--orby-space-3);border-right:1px solid var(--orby-border);background:rgba(255,255,255,.88)}
+.workspace-shell.nav-collapsed .sidebar .sidebar-heading,.workspace-shell.nav-collapsed .sidebar .status,.workspace-shell.nav-collapsed .sidebar .menu-link,.workspace-shell.nav-collapsed .sidebar .surface-switcher{display:none}
+.sidebar-section{display:grid;gap:.75rem;margin-bottom:1.25rem}
+.sidebar-heading{font-size:.74rem;text-transform:uppercase;letter-spacing:.16em;color:var(--orby-text-muted)}
+.surface-switcher{display:flex;flex-wrap:wrap;gap:.5rem}
+.menu-list,.nav-group-items{display:grid;gap:.35rem}
+.menu-link,.admin-tab{display:block;padding:.78rem .9rem;border:1px solid transparent;border-radius:.85rem;font-weight:600}
+.menu-link.active,.admin-tab.active{background:var(--orby-accent-soft);border-color:rgba(59,92,204,.22);color:var(--orby-accent)}
+.content,.admin-main{padding:var(--orby-space-4)}
+.route-panel{height:auto;min-height:88px}
+.route-meta{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.6rem}
+.badge.subtle{background:var(--orby-surface-alt);color:rgb(71 85 105);border:1px solid var(--orby-border)}
+.page-eyebrow{margin-bottom:.35rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.18em;color:var(--orby-text-muted)}
+.page-header-actions{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.page-tools{padding:.75rem 1rem;border:1px solid var(--orby-border);border-radius:.85rem;background:var(--orby-surface-alt)}
+.page-tools summary{cursor:pointer;font-weight:600}
+.filter-chip-row{display:flex;flex-wrap:wrap;gap:.5rem}
+.filter-chip{padding:.4rem .7rem;border:1px solid var(--orby-border);border-radius:999px;background:var(--orby-surface-alt);color:rgb(31 41 55)}
+.empty-state-block{display:grid;justify-items:start;gap:.6rem;padding:2rem 1.5rem}
+.empty-state-inline{padding:1rem 0;color:var(--orby-text-muted)}
+.floorplan-worklist .toolbar-row{align-items:end}
+.floorplan-worklist .table-shell thead th,.module-summary-grid+.table-shell thead th{position:sticky;top:0;background:var(--orby-surface-alt);z-index:1}
+.floorplan-object .page-header,.floorplan-editor .page-header,.floorplan-dashboard .page-header{align-items:center}
+.floorplan-dashboard .metric-card,.module-summary-grid .metric-card{min-height:110px}
+.admin-shell{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:calc(100vh - var(--orby-shell-height))}
+.admin-shell.nav-collapsed{grid-template-columns:96px minmax(0,1fr)}
+.admin-shell.nav-collapsed .admin-sidebar .status,.admin-shell.nav-collapsed .admin-sidebar .nav-group-title,.admin-shell.nav-collapsed .admin-sidebar .admin-tab{display:none}
+.admin-nav-groups{display:grid;gap:1rem}
+.nav-group{display:grid;gap:.45rem}
+.nav-group-title{padding:0 .4rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.16em;color:var(--orby-text-muted)}
+.module-summary-grid{margin-bottom:1rem}
+.admin-main .card,.admin-main .page-panel{overflow:hidden}
+table.data-table{width:100%}
+.data-table th,.data-table td{vertical-align:top}
+label input,label select,label textarea,button,.menu-link,.admin-tab,.shell-icon-button{min-height:44px}
+@media (max-width:1023px){
+  .shell-bar{padding:var(--orby-space-3)}
+  .shell-bar,.shell-bar-actions{flex-wrap:wrap}
+  .shell-command{min-width:100%;order:3}
+  .workspace-shell,.workspace-shell.nav-collapsed,.admin-shell,.admin-shell.nav-collapsed{grid-template-columns:minmax(0,1fr)}
+  .workspace-shell .sidebar,.admin-sidebar{position:fixed;top:var(--orby-shell-height);left:0;bottom:0;width:min(88vw,320px);height:auto;transform:translateX(-105%);transition:transform .2s ease;z-index:45;box-shadow:0 24px 80px rgba(15,23,42,.22)}
+  .workspace-shell .sidebar.open,.admin-sidebar.open{transform:translateX(0)}
+  .content,.admin-main{padding:var(--orby-space-3)}
+  .route-panel .status-bar{flex-wrap:wrap}
+}

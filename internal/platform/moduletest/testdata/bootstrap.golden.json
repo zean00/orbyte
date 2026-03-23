@@ -484,6 +484,12 @@
       ]
     }
   ],
+  "page_floorplans": [
+    "worklist",
+    "object",
+    "dashboard",
+    "editor"
+  ],
   "preferred_path": "",
   "self_service_apis": [
     {
@@ -576,6 +582,12 @@
       }
     }
   ],
+  "shell": {
+    "agent_surface": "panel",
+    "command_mode": "route_jump",
+    "nav_mode": "collapsible",
+    "supports_nav_pin": true
+  },
   "shell_kind": "workspace",
   "supported_locales": [
     "en",
