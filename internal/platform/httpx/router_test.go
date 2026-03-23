@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -124,6 +125,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		eventingSvc.RegisterHandler(eventType, eventing.NewDocumentProjectionHandler(docs, searchSvc))
 	}
 	actions := application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	actions.AttachActivities(activities)
 	modelActions := application.NewMemoryModelActions(models, activities, auditSvc, eventingSvc)
 	tokenManager := identity.NewTokenManagerFromEnv()
 	token, err := tokenManager.IssueSessionToken(ident.Sessions()[0])
@@ -925,6 +927,342 @@ func findCookieByName(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func createSubmittedGenericRequest(t *testing.T, h testHarness) (document.Record, workflow.Approval) {
+	t.Helper()
+	create := h.request(http.MethodPost, "/documents", mustJSON(t, map[string]any{
+		"type":            "generic_request",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"payload":         map[string]any{"title": "Approval Link Request"},
+	}), true)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create document failed: %d body=%s", create.Code, create.Body.String())
+	}
+	var created document.Record
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created document: %v", err)
+	}
+	submit := h.request(http.MethodPost, "/documents/"+created.Header.ID+"/actions", mustJSON(t, map[string]any{
+		"action":           "submit",
+		"expected_version": created.Header.Version,
+		"expected_etag":    created.Header.ETag,
+	}), true)
+	if submit.Code != http.StatusOK {
+		t.Fatalf("submit document failed: %d body=%s", submit.Code, submit.Body.String())
+	}
+	var submitted document.Record
+	if err := json.Unmarshal(submit.Body.Bytes(), &submitted); err != nil {
+		t.Fatalf("decode submitted document: %v", err)
+	}
+	approvals := h.workflows.ListApprovals()
+	if len(approvals) == 0 {
+		t.Fatal("expected workflow approval after submit")
+	}
+	return submitted, approvals[len(approvals)-1]
+}
+
+func TestWorkflowApprovalDeepLinkExchangeAndApprove(t *testing.T) {
+	h := newTestHarness(t)
+	record, approval := createSubmittedGenericRequest(t, h)
+	grant, err := h.ident.SaveDeepLinkGrant(identity.DeepLinkGrant{
+		ID:                    "link:workflow-approval",
+		UserID:                "user_admin",
+		Kind:                  "workflow_approval",
+		Status:                "pending",
+		TargetType:            "workflow_approval",
+		TargetID:              approval.ID,
+		LocationID:            record.Header.LocationID,
+		AllowedPermissionKeys: []string{"document.read", "document.approve"},
+		AllowedActions:        []string{"approve"},
+		OneTime:               true,
+		Title:                 record.Header.ID,
+		Message:               "Approve this request",
+		StartsAt:              time.Now().UTC(),
+		ExpiresAt:             time.Now().UTC().Add(30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	token, err := identity.NewTokenManagerFromEnv().IssueDeepLinkToken(grant)
+	if err != nil {
+		t.Fatalf("issue deep link token failed: %v", err)
+	}
+
+	exchange := h.request(http.MethodGet, "/link/workflow/approval/"+url.PathEscape(approval.ID)+"?token="+url.QueryEscape(token), nil, false)
+	if exchange.Code != http.StatusFound {
+		t.Fatalf("expected redirect after token exchange, got %d body=%s", exchange.Code, exchange.Body.String())
+	}
+	if location := exchange.Result().Header.Get("Location"); location != "/link/workflow/approval/"+approval.ID {
+		t.Fatalf("expected clean approval redirect, got %q", location)
+	}
+	linkCookie := findCookieByName(exchange.Result().Cookies(), deepLinkCookieName)
+	if linkCookie == nil || linkCookie.Value == "" {
+		t.Fatal("expected deep link cookie after token exchange")
+	}
+
+	landing := h.requestWithCookies(http.MethodGet, "/link/workflow/approval/"+approval.ID, nil, linkCookie)
+	if landing.Code != http.StatusOK {
+		t.Fatalf("expected landing page, got %d body=%s", landing.Code, landing.Body.String())
+	}
+	if !strings.Contains(landing.Body.String(), "Workflow approval") {
+		t.Fatalf("expected workflow approval copy, got %s", landing.Body.String())
+	}
+
+	act := h.requestWithCookies(http.MethodPost, "/link/workflow/approval/"+approval.ID+"/actions/approve", nil, linkCookie)
+	if act.Code != http.StatusOK {
+		t.Fatalf("expected approve action success, got %d body=%s", act.Code, act.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(act.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode action response: %v", err)
+	}
+	if payload["status"] != "completed" || payload["action"] != "approve" {
+		t.Fatalf("expected completed approve response, got %+v", payload)
+	}
+	if grantAfter, ok := h.ident.FindDeepLinkGrant(grant.ID); !ok || grantAfter.Status != "consumed" {
+		t.Fatalf("expected consumed deep link grant after approve, got %+v ok=%v", grantAfter, ok)
+	}
+}
+
+func TestWorkflowApprovalCommunicationPayloadIncludesActionLink(t *testing.T) {
+	h := newTestHarness(t)
+	record, approval := createSubmittedGenericRequest(t, h)
+	grant, err := h.ident.SaveDeepLinkGrant(identity.DeepLinkGrant{
+		ID:                    "link:workflow-communication",
+		UserID:                "user_admin",
+		Kind:                  "workflow_approval",
+		Status:                "pending",
+		TargetType:            "workflow_approval",
+		TargetID:              approval.ID,
+		LocationID:            record.Header.LocationID,
+		AllowedPermissionKeys: []string{"document.read", "document.approve", "document.reject"},
+		AllowedActions:        []string{"approve", "reject"},
+		OneTime:               true,
+		Title:                 record.Header.ID,
+		Message:               "Review pending approval",
+		StartsAt:              time.Now().UTC(),
+		ExpiresAt:             time.Now().UTC().Add(30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	if _, err := h.ident.ActivateDeepLinkGrant(grant.ID, "user_admin", "workflow_approval", approval.ID, time.Now().UTC()); err != nil {
+		t.Fatalf("activate deep link grant failed: %v", err)
+	}
+	communication := h.request(http.MethodGet, "/ops/workflow/approvals/"+approval.ID+"/communication", nil, true)
+	if communication.Code != http.StatusOK {
+		t.Fatalf("expected communication payload, got %d body=%s", communication.Code, communication.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(communication.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode communication payload: %v", err)
+	}
+	actionLink, _ := payload["action_link_url"].(string)
+	if !strings.Contains(actionLink, "/link/workflow/approval/"+approval.ID+"?token=") {
+		t.Fatalf("expected tokenized action link, got %#v", payload["action_link_url"])
+	}
+	if payload["recipient_user_id"] != "user_admin" {
+		t.Fatalf("expected assignee recipient, got %#v", payload["recipient_user_id"])
+	}
+}
+
+func TestWorkflowApprovalDeepLinkRedirectsToLoginResumePath(t *testing.T) {
+	h := newTestHarness(t)
+	_, approval := createSubmittedGenericRequest(t, h)
+	rr := h.request(http.MethodGet, "/link/workflow/approval/"+approval.ID, nil, false)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("expected unauthenticated deep link to redirect, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	location := rr.Result().Header.Get("Location")
+	expected := "/ui?next=%2Flink%2Fworkflow%2Fapproval%2F" + url.QueryEscape(approval.ID)
+	if location != expected {
+		t.Fatalf("expected login resume redirect %q, got %q", expected, location)
+	}
+}
+
+func TestWorkflowApprovalDeepLinkRequiresStepUpForAction(t *testing.T) {
+	h := newTestHarness(t)
+	record, approval := createSubmittedGenericRequest(t, h)
+	grant, err := h.ident.SaveDeepLinkGrant(identity.DeepLinkGrant{
+		ID:                    "link:workflow-step-up",
+		UserID:                "user_admin",
+		Kind:                  "workflow_approval",
+		Status:                "pending",
+		TargetType:            "workflow_approval",
+		TargetID:              approval.ID,
+		LocationID:            record.Header.LocationID,
+		AllowedPermissionKeys: []string{"document.read", "document.approve"},
+		AllowedActions:        []string{"approve"},
+		RequireStepUp:         true,
+		OneTime:               true,
+		StartsAt:              time.Now().UTC(),
+		ExpiresAt:             time.Now().UTC().Add(30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	token, err := identity.NewTokenManagerFromEnv().IssueDeepLinkToken(grant)
+	if err != nil {
+		t.Fatalf("issue deep link token failed: %v", err)
+	}
+	exchange := h.request(http.MethodGet, "/link/workflow/approval/"+url.PathEscape(approval.ID)+"?token="+url.QueryEscape(token), nil, false)
+	linkCookie := findCookieByName(exchange.Result().Cookies(), deepLinkCookieName)
+	if linkCookie == nil {
+		t.Fatal("expected deep link cookie after exchange")
+	}
+	act := h.requestWithCookies(http.MethodPost, "/link/workflow/approval/"+approval.ID+"/actions/approve", nil, linkCookie)
+	if act.Code != http.StatusForbidden {
+		t.Fatalf("expected step-up protected action to be forbidden, got %d body=%s", act.Code, act.Body.String())
+	}
+}
+
+func TestWorkflowApprovalDeepLinkOverridesExistingSessionOnLinkRoutes(t *testing.T) {
+	h := newTestHarness(t)
+	record, approval := createSubmittedGenericRequest(t, h)
+	otherUser, err := h.ident.CreateUser("deep-link-other", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create other user failed: %v", err)
+	}
+	otherSession, err := h.ident.AuthenticatePassword("deep-link-other", "Password123!", "loc_hq", nil, 8*time.Hour)
+	if err != nil {
+		t.Fatalf("authenticate other user failed: %v", err)
+	}
+	sessionToken, err := identity.NewTokenManagerFromEnv().IssueSessionToken(otherSession)
+	if err != nil {
+		t.Fatalf("issue session token failed: %v", err)
+	}
+	sessionCookie := buildSessionCookie(sessionToken, otherSession.ExpiresAt)
+	sessionCSRF, err := buildCSRFCookie(otherSession.ID)
+	if err != nil {
+		t.Fatalf("build csrf cookie failed: %v", err)
+	}
+	grant, err := h.ident.SaveDeepLinkGrant(identity.DeepLinkGrant{
+		ID:                    "link:workflow-precedence",
+		UserID:                "user_admin",
+		Kind:                  "workflow_approval",
+		Status:                "pending",
+		TargetType:            "workflow_approval",
+		TargetID:              approval.ID,
+		LocationID:            record.Header.LocationID,
+		AllowedPermissionKeys: []string{"document.read", "document.approve"},
+		AllowedActions:        []string{"approve"},
+		OneTime:               true,
+		StartsAt:              time.Now().UTC(),
+		ExpiresAt:             time.Now().UTC().Add(30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	linkToken, err := identity.NewTokenManagerFromEnv().IssueDeepLinkToken(grant)
+	if err != nil {
+		t.Fatalf("issue deep link token failed: %v", err)
+	}
+	exchange := h.requestWithCookies(http.MethodGet, "/link/workflow/approval/"+url.PathEscape(approval.ID)+"?token="+url.QueryEscape(linkToken), nil, sessionCookie, sessionCSRF)
+	if exchange.Code != http.StatusFound {
+		t.Fatalf("expected redirect after token exchange, got %d body=%s", exchange.Code, exchange.Body.String())
+	}
+	linkCookie := findCookieByName(exchange.Result().Cookies(), deepLinkCookieName)
+	if linkCookie == nil || linkCookie.Value == "" {
+		t.Fatal("expected deep link cookie from exchange")
+	}
+	landing := h.requestWithCookies(http.MethodGet, "/link/workflow/approval/"+approval.ID, nil, sessionCookie, sessionCSRF, linkCookie)
+	if landing.Code != http.StatusOK {
+		t.Fatalf("expected link landing to prefer deep link principal, got %d body=%s", landing.Code, landing.Body.String())
+	}
+	if strings.Contains(strings.ToLower(landing.Body.String()), "not assigned to the current user") {
+		t.Fatalf("expected deep link principal to override conflicting session user %s", otherUser.ID)
+	}
+}
+
+func TestWorkflowApprovalCommunicationReissueAndRevoke(t *testing.T) {
+	h := newTestHarness(t)
+	record, approval := createSubmittedGenericRequest(t, h)
+	grant, err := h.ident.SaveDeepLinkGrant(identity.DeepLinkGrant{
+		ID:                    "link:workflow-ops",
+		UserID:                "user_admin",
+		Kind:                  "workflow_approval",
+		Status:                "pending",
+		TargetType:            "workflow_approval",
+		TargetID:              approval.ID,
+		LocationID:            record.Header.LocationID,
+		AllowedPermissionKeys: []string{"document.read", "document.approve", "document.reject"},
+		AllowedActions:        []string{"approve", "reject"},
+		OneTime:               true,
+		StartsAt:              time.Now().UTC(),
+		ExpiresAt:             time.Now().UTC().Add(30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	if _, err := h.ident.ActivateDeepLinkGrant(grant.ID, "user_admin", "workflow_approval", approval.ID, time.Now().UTC()); err != nil {
+		t.Fatalf("activate deep link grant failed: %v", err)
+	}
+	reissue := h.request(http.MethodPost, "/ops/workflow/approvals/"+approval.ID+"/communication/actions/reissue", nil, true)
+	if reissue.Code != http.StatusOK {
+		t.Fatalf("expected reissue success, got %d body=%s", reissue.Code, reissue.Body.String())
+	}
+	var reissuePayload map[string]any
+	if err := json.Unmarshal(reissue.Body.Bytes(), &reissuePayload); err != nil {
+		t.Fatalf("decode reissue payload: %v", err)
+	}
+	if reissuePayload["status"] != "reissued" {
+		t.Fatalf("expected reissued status, got %+v", reissuePayload)
+	}
+	actionLink, _ := reissuePayload["action_link_url"].(string)
+	if !strings.Contains(actionLink, "/link/workflow/approval/"+approval.ID+"?token=") {
+		t.Fatalf("expected reissued action link, got %+v", reissuePayload)
+	}
+	oldGrant, ok := h.ident.FindDeepLinkGrant(grant.ID)
+	if !ok || oldGrant.Status != "revoked" {
+		t.Fatalf("expected original grant revoked after reissue, got %+v ok=%v", oldGrant, ok)
+	}
+	revoke := h.request(http.MethodPost, "/ops/workflow/approvals/"+approval.ID+"/communication/actions/revoke", nil, true)
+	if revoke.Code != http.StatusOK {
+		t.Fatalf("expected revoke success, got %d body=%s", revoke.Code, revoke.Body.String())
+	}
+	var revokePayload map[string]any
+	if err := json.Unmarshal(revoke.Body.Bytes(), &revokePayload); err != nil {
+		t.Fatalf("decode revoke payload: %v", err)
+	}
+	if revokePayload["status"] != "revoked" {
+		t.Fatalf("expected revoked status, got %+v", revokePayload)
+	}
+}
+
+func TestWorkflowApprovalCommunicationDispatchEmailToOutbox(t *testing.T) {
+	h := newTestHarness(t)
+	_, approval := createSubmittedGenericRequest(t, h)
+	outboxDir := t.TempDir()
+	t.Setenv("WORKFLOW_EMAIL_OUTBOX_DIR", outboxDir)
+	rr := h.request(http.MethodPost, "/ops/workflow/approvals/"+approval.ID+"/communication/actions/dispatch-email?recipient=user@example.com", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected dispatch email success, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode dispatch payload: %v", err)
+	}
+	if payload["status"] != "dispatched" {
+		t.Fatalf("expected dispatched status, got %+v", payload)
+	}
+	delivery, _ := payload["delivery"].(map[string]any)
+	if delivery["mode"] != "outbox" {
+		t.Fatalf("expected outbox delivery mode, got %+v", delivery)
+	}
+	path, _ := delivery["path"].(string)
+	if path == "" {
+		t.Fatalf("expected outbox file path, got %+v", delivery)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read outbox email: %v", err)
+	}
+	body := string(content)
+	if !strings.Contains(body, "Open approval link:") && !strings.Contains(body, "Open in app:") {
+		t.Fatalf("expected approval link in email content, got %s", body)
+	}
 }
 
 func TestLoginLogoutAndSessionRevocation(t *testing.T) {
@@ -2935,6 +3273,28 @@ func TestTrustedOriginProtectionForBrowserMutations(t *testing.T) {
 	h.router.ServeHTTP(allowedRR, req)
 	if allowedRR.Code != http.StatusOK {
 		t.Fatalf("expected trusted origin logout to succeed, got %d body=%s", allowedRR.Code, allowedRR.Body.String())
+	}
+}
+
+func TestLogoutClearsDeepLinkCookie(t *testing.T) {
+	h := newTestHarness(t)
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.AddCookie(h.cookie)
+	req.AddCookie(h.csrf)
+	req.AddCookie(&http.Cookie{Name: deepLinkCookieName, Value: "active-link-token", Path: "/"})
+	req.Header.Set("X-CSRF-Token", h.csrf.Value)
+	rr := httptest.NewRecorder()
+	h.router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected logout to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	cleared := findCookieByName(rr.Result().Cookies(), deepLinkCookieName)
+	if cleared == nil {
+		t.Fatal("expected logout to clear deep link cookie")
+	}
+	if cleared.MaxAge != -1 || cleared.Value != "" {
+		t.Fatalf("expected cleared deep link cookie, got %+v", cleared)
 	}
 }
 

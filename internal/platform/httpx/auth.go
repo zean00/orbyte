@@ -16,6 +16,8 @@ import (
 const sessionCookieName = "orbyte_session"
 const csrfCookieName = "orbyte_csrf"
 const delegationCookieName = "orbyte_delegation"
+const deepLinkCookieName = "orbyte_link"
+const deepLinkStepUpCookieName = "orbyte_link_stepup"
 
 type principalKind string
 
@@ -34,8 +36,10 @@ type principal struct {
 	authMethod        string
 	stepUpVerified    bool
 	delegationGrantID string
+	deepLinkGrantID   string
 	onBehalfOfUserID  string
 	delegation        *identity.DelegationGrant
+	deepLink          *identity.DeepLinkGrant
 }
 
 type authContextKey string
@@ -89,6 +93,12 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 		}
 	}
 
+	if shouldPreferDeepLinkAuthentication(r) {
+		if p, handled, err := authenticateDeepLinkPrincipal(r, w, ident, tokenManager); handled {
+			return p, err
+		}
+	}
+
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		claims, parseErr := tokenManager.Parse(cookie.Value)
 		if parseErr != nil {
@@ -114,6 +124,10 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 			stepUpVerified:    stepUpVerified(r),
 		}
 		return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
+	}
+
+	if p, handled, err := authenticateDeepLinkPrincipal(r, w, ident, tokenManager); handled {
+		return p, err
 	}
 
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
@@ -166,6 +180,49 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 		}
 	}
 	return nil, nil
+}
+
+func shouldPreferDeepLinkAuthentication(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, "/link/")
+}
+
+func authenticateDeepLinkPrincipal(r *http.Request, w http.ResponseWriter, ident *identity.Service, tokenManager *identity.TokenManager) (*principal, bool, error) {
+	cookie, err := r.Cookie(deepLinkCookieName)
+	if err != nil || cookie.Value == "" {
+		return nil, false, nil
+	}
+	claims, parseErr := tokenManager.Parse(cookie.Value)
+	if parseErr != nil {
+		http.SetCookie(w, clearedDeepLinkCookie())
+		return nil, true, nil
+	}
+	if claims.Kind != "link" || claims.DeepLinkGrantID == "" {
+		http.SetCookie(w, clearedDeepLinkCookie())
+		return nil, true, nil
+	}
+	grant, ok := ident.FindDeepLinkGrant(claims.DeepLinkGrantID)
+	if !ok || grant.UserID != claims.Subject {
+		http.SetCookie(w, clearedDeepLinkCookie())
+		return nil, true, nil
+	}
+	if !grant.ExpiresAt.IsZero() && !time.Now().UTC().Before(grant.ExpiresAt) {
+		http.SetCookie(w, clearedDeepLinkCookie())
+		return nil, true, nil
+	}
+	if !grant.RevokedAt.IsZero() || !grant.ConsumedAt.IsZero() {
+		http.SetCookie(w, clearedDeepLinkCookie())
+		return nil, true, nil
+	}
+	return &principal{
+		kind:              userPrincipal,
+		userID:            grant.UserID,
+		effectiveUserID:   grant.UserID,
+		currentLocationID: grant.LocationID,
+		authMethod:        "link",
+		stepUpVerified:    !grant.RequireStepUp || deepLinkStepUpVerified(r, tokenManager, grant),
+		deepLinkGrantID:   grant.ID,
+		deepLink:          &grant,
+	}, true, nil
 }
 
 func validateAuthenticatedSession(session identity.Session) error {
@@ -230,7 +287,12 @@ func requireAuthorizationWithOptions(w http.ResponseWriter, r *http.Request, ide
 		if locationID == "" {
 			locationID = p.currentLocationID
 		}
-		decision := ident.DecideActingSession(p.sessionID, principalEffectiveUserID(p), opts.UserPermission, locationID, p.delegation)
+		decision := identity.Decision{Allowed: false, Reason: "authentication required"}
+		if p.authMethod == "link" && p.deepLink != nil {
+			decision = ident.DecideDeepLinkGrant(*p.deepLink, principalEffectiveUserID(p), opts.UserPermission, locationID, time.Now().UTC())
+		} else {
+			decision = ident.DecideActingSession(p.sessionID, principalEffectiveUserID(p), opts.UserPermission, locationID, p.delegation)
+		}
 		if !decision.Allowed {
 			respondError(w, shared.Forbidden(decision.Reason))
 			return principal{}, false
@@ -257,6 +319,21 @@ func stepUpVerified(r *http.Request) bool {
 	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Step-Up-Verified")), "true")
 }
 
+func deepLinkStepUpVerified(r *http.Request, tokenManager *identity.TokenManager, grant identity.DeepLinkGrant) bool {
+	if stepUpVerified(r) {
+		return true
+	}
+	cookie, err := r.Cookie(deepLinkStepUpCookieName)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" || tokenManager == nil {
+		return false
+	}
+	claims, err := tokenManager.Parse(cookie.Value)
+	if err != nil {
+		return false
+	}
+	return claims.Kind == "link_step_up" && claims.DeepLinkGrantID == grant.ID && claims.Subject == grant.UserID
+}
+
 func principalEffectiveUserID(p principal) string {
 	if strings.TrimSpace(p.effectiveUserID) != "" {
 		return p.effectiveUserID
@@ -279,6 +356,10 @@ func principalDelegationGrantID(p principal) string {
 	return strings.TrimSpace(p.delegationGrantID)
 }
 
+func principalDeepLinkGrantID(p principal) string {
+	return strings.TrimSpace(p.deepLinkGrantID)
+}
+
 func principalActingContext(p principal) application.ActingContext {
 	return application.ActingContext{
 		ActorID:           principalActorID(p),
@@ -286,6 +367,7 @@ func principalActingContext(p principal) application.ActingContext {
 		EffectiveUserID:   principalEffectiveUserID(p),
 		OnBehalfOfUserID:  principalOnBehalfOfUserID(p),
 		DelegationGrantID: principalDelegationGrantID(p),
+		DeepLinkGrantID:   principalDeepLinkGrantID(p),
 	}
 }
 
@@ -307,6 +389,9 @@ func principalAllowsPermission(ident *identity.Service, p principal, permissionK
 	}
 	switch p.kind {
 	case userPrincipal:
+		if p.authMethod == "link" && p.deepLink != nil {
+			return ident.DecideDeepLinkGrant(*p.deepLink, principalEffectiveUserID(p), permissionKey, locationID, time.Now().UTC()).Allowed
+		}
 		return ident.DecideActingSession(p.sessionID, principalEffectiveUserID(p), permissionKey, locationID, p.delegation).Allowed
 	case servicePrincipal:
 		return ident.DecideServicePrincipal(p.serviceID, permissionKey).Allowed

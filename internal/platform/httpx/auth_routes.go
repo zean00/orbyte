@@ -734,6 +734,8 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		http.SetCookie(w, clearedSessionCookie())
 		http.SetCookie(w, clearedCSRFCookie())
 		http.SetCookie(w, clearedDelegationCookie())
+		http.SetCookie(w, clearedDeepLinkCookie())
+		http.SetCookie(w, clearedDeepLinkStepUpCookie())
 		recordAudit(auditSvc, audit.Event{
 			ID:            "audit:auth:logout:" + session.ID,
 			Action:        "auth.logout",
@@ -1562,6 +1564,32 @@ func buildDelegationCookie(token string, expiresAt time.Time) *http.Cookie {
 	}
 }
 
+func buildDeepLinkCookie(token string, expiresAt time.Time) *http.Cookie {
+	secure := buildSessionCookie("", time.Now().UTC()).Secure
+	return &http.Cookie{
+		Name:     deepLinkCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt.UTC(),
+	}
+}
+
+func buildDeepLinkStepUpCookie(token string, expiresAt time.Time) *http.Cookie {
+	secure := buildSessionCookie("", time.Now().UTC()).Secure
+	return &http.Cookie{
+		Name:     deepLinkStepUpCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt.UTC(),
+	}
+}
+
 func clearedSessionCookie() *http.Cookie {
 	return &http.Cookie{
 		Name:     sessionCookieName,
@@ -1578,6 +1606,32 @@ func clearedSessionCookie() *http.Cookie {
 func clearedDelegationCookie() *http.Cookie {
 	return &http.Cookie{
 		Name:     delegationCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   buildSessionCookie("", time.Now().UTC()).Secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0).UTC(),
+		MaxAge:   -1,
+	}
+}
+
+func clearedDeepLinkCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     deepLinkCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   buildSessionCookie("", time.Now().UTC()).Secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0).UTC(),
+		MaxAge:   -1,
+	}
+}
+
+func clearedDeepLinkStepUpCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     deepLinkStepUpCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
