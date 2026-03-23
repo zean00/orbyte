@@ -223,6 +223,20 @@ func TestRevokeRolePermission(t *testing.T) {
 	}
 }
 
+func TestDefaultBootstrapDataDefinesPermissionsForAllAdminGrants(t *testing.T) {
+	now := time.Now().UTC()
+	data := defaultBootstrapData(now, "bootstrap-123!")
+	permissions := make(map[string]struct{}, len(data.permissions))
+	for _, permission := range data.permissions {
+		permissions[permission.Key] = struct{}{}
+	}
+	for _, grant := range data.grants {
+		if _, ok := permissions[grant.PermissionKey]; !ok {
+			t.Fatalf("bootstrap grant %q is missing a matching permission definition", grant.PermissionKey)
+		}
+	}
+}
+
 func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	svc := NewService(organization.NewService())
 	session, err := svc.AuthenticatePassword("admin", "admin123!", "loc_hq", map[string]any{"source": "test"}, time.Hour)

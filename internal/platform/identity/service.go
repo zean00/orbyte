@@ -177,6 +177,31 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 		Action:   "manage",
 		Resource: "configuration",
 	}, {
+		Key:      "template.read",
+		Module:   "platform",
+		Action:   "read",
+		Resource: "template",
+	}, {
+		Key:      "template.manage",
+		Module:   "platform",
+		Action:   "manage",
+		Resource: "template",
+	}, {
+		Key:      "template.publish",
+		Module:   "platform",
+		Action:   "publish",
+		Resource: "template",
+	}, {
+		Key:      "template.bind",
+		Module:   "platform",
+		Action:   "bind",
+		Resource: "template",
+	}, {
+		Key:      "template.render",
+		Module:   "platform",
+		Action:   "render",
+		Resource: "template_output",
+	}, {
 		Key:      "identity.manage_sessions",
 		Module:   "identity",
 		Action:   "manage",
