@@ -28,6 +28,7 @@ import (
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
+	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
@@ -70,6 +71,7 @@ type serviceGraph struct {
 	mcpAnalytics      *mcp.AnalyticsStream
 	offline           *offline.Service
 	monitoring        *monitoring.Service
+	notifications     *notification.Service
 	templates         *templateoutput.Service
 	dataops           *dataops.Service
 	engagement        *engagement.Service
@@ -102,6 +104,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		uiPreferences:     httpx.NewUIPreferencesService(),
 		runtimeHealth:     runtimehealth.NewTracker(),
 		analyticsRepo:     analytics.NewMemoryRepository(),
+		notifications:     notification.NewService(),
 		businessManifests: append([]module.Manifest(nil), businessManifests...),
 	}
 	graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewMemoryRepository(nil), graph.secrets)
@@ -205,9 +208,13 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.reporting.AttachDocumentSources(graph.documents, graph.search)
 		graph.submitStore = application.NewPostgresSubmitStoreWithDB(submitDB)
 		graph.modelActions = application.NewPostgresModelActionsWithDB(modelActionsDB, graph.models, graph.activities, graph.audit, graph.eventing)
+		notificationsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "notification", "repository")
+		graph.notifications = notification.NewServiceWithRepository(notification.NewPostgresRepositoryWithDB(notificationsDB))
 	}
 
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
+	graph.docActions.AttachActivities(graph.activities)
+	graph.docActions.AttachNotifications(graph.notifications)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)

@@ -5,14 +5,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/communication"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/store"
@@ -29,6 +33,8 @@ type DocumentActions struct {
 	workflows *workflow.Service
 	identity  *identity.Service
 	policy    *policy.Service
+	activity  *activity.Service
+	notifications *notification.Service
 	store     SubmitStore
 	runner    *KernelCommandRunner
 }
@@ -39,6 +45,20 @@ func NewDocumentActions(documents *document.Service, workflows *workflow.Service
 		actions.runner = NewKernelCommandRunner(provider.TransactionManager())
 	}
 	return actions
+}
+
+func (a *DocumentActions) AttachActivities(activities *activity.Service) {
+	if a == nil {
+		return
+	}
+	a.activity = activities
+}
+
+func (a *DocumentActions) AttachNotifications(notifications *notification.Service) {
+	if a == nil {
+		return
+	}
+	a.notifications = notifications
 }
 
 func (a *DocumentActions) Submit(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
@@ -449,12 +469,21 @@ func (a *DocumentActions) persistDocument(previousVersion int, record document.R
 			outboxRecord:     outboxRecord,
 			workflowMutation: workflowMutation,
 		})
+		if err == nil && !draft {
+			a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, time.Now().UTC())
+			a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, time.Now().UTC())
+		}
 		return err
 	}
 	if draft {
 		return a.store.UpdateDraft(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
 	}
-	return a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
+	err := a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
+	if err == nil {
+		a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, time.Now().UTC())
+		a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, time.Now().UTC())
+	}
+	return err
 }
 
 func (a *DocumentActions) Reject(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
@@ -871,6 +900,380 @@ func applyApprovalAssignmentSnapshot(approval *workflow.Approval, resolution ass
 	if len(resolution.CandidateUserIDs) > 0 {
 		approval.Metadata["resolved_candidate_user_ids"] = append([]string(nil), resolution.CandidateUserIDs...)
 	}
+}
+
+func (a *DocumentActions) issueWorkflowDeepLinks(record document.Record, approvals []workflow.Approval, now time.Time) {
+	if a == nil || a.identity == nil || len(approvals) == 0 {
+		return
+	}
+	tokenManager := identity.NewTokenManagerFromEnv()
+	for _, approval := range approvals {
+		mode := strings.TrimSpace(strings.ToLower(metadataString(approval.Metadata, "link_mode")))
+		if mode != "tokenized" {
+			continue
+		}
+		userID := strings.TrimSpace(metadataString(approval.Metadata, "resolved_assignee_user_id"))
+		if userID == "" {
+			continue
+		}
+		if _, ok := a.identity.FindActiveDeepLinkGrant("workflow_approval", approval.ID, userID, now); ok {
+			continue
+		}
+		ttlSeconds := metadataInt(approval.Metadata, "link_ttl_seconds", 15*60)
+		if ttlSeconds <= 0 {
+			ttlSeconds = 15 * 60
+		}
+		reviewOnly := metadataBool(approval.Metadata, "link_review_only")
+		requireStepUp := metadataBool(approval.Metadata, "link_require_step_up")
+		allowedActions := metadataStrings(approval.Metadata, "link_allowed_actions")
+		allowedPermissions := []string{"document.read"}
+		if !reviewOnly {
+			for _, action := range allowedActions {
+				switch strings.TrimSpace(action) {
+				case "approve":
+					allowedPermissions = append(allowedPermissions, "document.approve")
+				case "reject":
+					allowedPermissions = append(allowedPermissions, "document.reject")
+				case "reopen":
+					allowedPermissions = append(allowedPermissions, "document.reopen")
+				case "cancel":
+					allowedPermissions = append(allowedPermissions, "document.cancel")
+				}
+			}
+		}
+		title := firstNonEmpty(strings.TrimSpace(record.Header.Number), strings.TrimSpace(record.Header.Type), record.Header.ID)
+		message := firstNonEmpty(strings.TrimSpace(approval.StageKey), strings.TrimSpace(approval.WorkflowKey), "workflow approval")
+		grant, _ := a.identity.SaveDeepLinkGrant(identity.DeepLinkGrant{
+			Kind:                  "workflow_approval",
+			UserID:                userID,
+			Status:                "pending",
+			TargetType:            "workflow_approval",
+			TargetID:              approval.ID,
+			LocationID:            record.Header.LocationID,
+			AllowedPermissionKeys: uniqueStrings(allowedPermissions),
+			AllowedActions:        uniqueStrings(allowedActions),
+			ReviewOnly:            reviewOnly,
+			RequireStepUp:         requireStepUp,
+			OneTime:               true,
+			Title:                 title,
+			Message:               message,
+			StartsAt:              now,
+			ExpiresAt:             now.Add(time.Duration(ttlSeconds) * time.Second),
+			Metadata: map[string]any{
+				"document_id":    record.Header.ID,
+				"document_type":  record.Header.Type,
+				"workflow_key":   approval.WorkflowKey,
+				"workflow_stage": approval.StageKey,
+				"approval_id":    approval.ID,
+			},
+		})
+		if a.activity != nil {
+			_, _ = a.activity.AddMessage("document", record.Header.ID, "system", "Workflow approval link issued", map[string]any{
+				"kind":              "workflow_communication",
+				"approval_id":       approval.ID,
+				"workflow_key":      approval.WorkflowKey,
+				"workflow_stage":    approval.StageKey,
+				"recipient_user_id": userID,
+				"grant_id":          grant.ID,
+				"grant_kind":        grant.Kind,
+				"grant_target_type": grant.TargetType,
+				"grant_target_id":   grant.TargetID,
+				"deep_link_path":    fmt.Sprintf("/link/workflow/approval/%s", approval.ID),
+				"review_only":       reviewOnly,
+				"require_step_up":   requireStepUp,
+				"expires_at":        grant.ExpiresAt,
+			})
+		}
+		a.autoDispatchWorkflowApprovalEmail(record, approval, grant, tokenManager)
+	}
+}
+
+func (a *DocumentActions) issueWorkflowNotifications(record document.Record, tasks []workflow.Task, approvals []workflow.Approval, now time.Time) {
+	if a == nil || a.notifications == nil {
+		return
+	}
+	tokenManager := identity.NewTokenManagerFromEnv()
+	for _, approval := range approvals {
+		userID := strings.TrimSpace(metadataString(approval.Metadata, "resolved_assignee_user_id"))
+		if userID == "" {
+			continue
+		}
+		recipient := ""
+		if user, ok := a.identity.FindUser(userID); ok {
+			recipient = strings.TrimSpace(user.Username)
+		}
+		actionLink, deepLink := approvalNotificationPaths(a.identity, approval, tokenManager, now)
+		_, _ = a.notifications.Save(notification.Item{
+			UserID:         userID,
+			Category:       "workflow_approval",
+			Channel:        "in_app",
+			Status:         "unread",
+			Title:          firstNonEmpty(strings.TrimSpace(record.Header.Number), strings.TrimSpace(record.Header.Type), record.Header.ID),
+			Body:           firstNonEmpty(strings.TrimSpace(approval.StageKey), "Workflow approval pending"),
+			TargetType:     "workflow_approval",
+			TargetID:       approval.ID,
+			DeepLinkPath:   deepLink,
+			ActionLinkPath: actionLink,
+			CreatedAt:      now,
+			Metadata: map[string]any{
+				"document_id":       record.Header.ID,
+				"document_type":     record.Header.Type,
+				"workflow_key":      approval.WorkflowKey,
+				"workflow_stage":    approval.StageKey,
+				"recipient_user_id": userID,
+				"recipient":         recipient,
+				"ops_path":          fmt.Sprintf("/ops/workflow/approvals/%s/communication", approval.ID),
+			},
+		})
+	}
+	for _, task := range tasks {
+		userID := strings.TrimSpace(task.AssigneeUserID)
+		if userID == "" {
+			userID = strings.TrimSpace(metadataString(task.Metadata, "resolved_assignee_user_id"))
+		}
+		if userID == "" {
+			continue
+		}
+		recipient := ""
+		if user, ok := a.identity.FindUser(userID); ok {
+			recipient = strings.TrimSpace(user.Username)
+		}
+		_, _ = a.notifications.Save(notification.Item{
+			UserID:       userID,
+			Category:     "workflow_task",
+			Channel:      "in_app",
+			Status:       "unread",
+			Title:        firstNonEmpty(strings.TrimSpace(record.Header.Number), strings.TrimSpace(record.Header.Type), record.Header.ID),
+			Body:         firstNonEmpty(strings.TrimSpace(task.TaskType), "Workflow task assigned"),
+			TargetType:   "workflow_task",
+			TargetID:     task.ID,
+			DeepLinkPath: workflowTaskDeepLink(task.ID),
+			CreatedAt:    now,
+			Metadata: map[string]any{
+				"document_id":       record.Header.ID,
+				"document_type":     record.Header.Type,
+				"workflow_key":      task.WorkflowKey,
+				"task_type":         task.TaskType,
+				"recipient_user_id": userID,
+				"recipient":         recipient,
+			},
+		})
+	}
+}
+
+func approvalNotificationPaths(ident *identity.Service, approval workflow.Approval, tokenManager *identity.TokenManager, now time.Time) (string, string) {
+	deepLink := workflowApprovalDeepLinkPath(approval.ID)
+	if ident == nil {
+		return "", deepLink
+	}
+	userID := strings.TrimSpace(metadataString(approval.Metadata, "resolved_assignee_user_id"))
+	if userID == "" {
+		return "", deepLink
+	}
+	grant, ok := ident.FindActiveDeepLinkGrant("workflow_approval", approval.ID, userID, now)
+	if !ok || tokenManager == nil {
+		return "", deepLink
+	}
+	token, err := tokenManager.IssueDeepLinkToken(grant)
+	if err != nil {
+		return "", deepLink
+	}
+	return deepLink + "?token=" + token, deepLink
+}
+
+func workflowApprovalDeepLinkPath(approvalID string) string {
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return "/link/workflow/approval"
+	}
+	return "/link/workflow/approval/" + approvalID
+}
+
+func workflowTaskDeepLink(taskID string) string {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return "/link/workflow/task"
+	}
+	return "/link/workflow/task/" + taskID
+}
+
+func (a *DocumentActions) autoDispatchWorkflowApprovalEmail(record document.Record, approval workflow.Approval, grant identity.DeepLinkGrant, tokenManager *identity.TokenManager) {
+	if a == nil || !workflowEmailAutoDispatchEnabled() {
+		return
+	}
+	user, ok := a.identity.FindUser(strings.TrimSpace(grant.UserID))
+	if !ok {
+		a.recordWorkflowCommunicationMessage(record.Header.ID, "Workflow approval email skipped", map[string]any{
+			"kind":              "workflow_communication",
+			"approval_id":       approval.ID,
+			"recipient_user_id": grant.UserID,
+			"reason":            "recipient_user_not_found",
+		})
+		return
+	}
+	recipient := strings.TrimSpace(user.Username)
+	if recipient == "" {
+		a.recordWorkflowCommunicationMessage(record.Header.ID, "Workflow approval email skipped", map[string]any{
+			"kind":              "workflow_communication",
+			"approval_id":       approval.ID,
+			"recipient_user_id": grant.UserID,
+			"reason":            "recipient_email_missing",
+		})
+		return
+	}
+	actionLink := workflowApprovalActionLink(grant, tokenManager)
+	deepLink := workflowApprovalDeepLink(grant.TargetID)
+	subject := "Approval needed: " + firstNonEmpty(strings.TrimSpace(grant.Title), strings.TrimSpace(record.Header.Number), record.Header.ID)
+	body := buildWorkflowApprovalCommunicationBody(grant, actionLink, deepLink)
+	delivery, err := communication.SendPlainTextEmail(subject, body, recipient)
+	if err != nil {
+		a.recordWorkflowCommunicationMessage(record.Header.ID, "Workflow approval email skipped", map[string]any{
+			"kind":              "workflow_communication",
+			"approval_id":       approval.ID,
+			"recipient_user_id": grant.UserID,
+			"recipient":         recipient,
+			"reason":            err.Error(),
+		})
+		return
+	}
+	a.recordWorkflowCommunicationMessage(record.Header.ID, "Workflow approval email dispatched", map[string]any{
+		"kind":              "workflow_communication",
+		"approval_id":       approval.ID,
+		"recipient_user_id": grant.UserID,
+		"recipient":         recipient,
+		"delivery": map[string]any{
+			"channel": delivery.Channel,
+			"mode":    delivery.Mode,
+			"path":    delivery.Path,
+			"address": delivery.Address,
+		},
+		"deep_link_path": deepLink,
+		"expires_at":     grant.ExpiresAt,
+	})
+}
+
+func (a *DocumentActions) recordWorkflowCommunicationMessage(documentID, body string, metadata map[string]any) {
+	if a == nil || a.activity == nil {
+		return
+	}
+	_, _ = a.activity.AddMessage("document", documentID, "system", body, metadata)
+}
+
+func workflowEmailAutoDispatchEnabled() bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv("WORKFLOW_EMAIL_AUTO_DISPATCH")))
+	return value == "1" || value == "true" || value == "yes"
+}
+
+func workflowApprovalActionLink(grant identity.DeepLinkGrant, tokenManager *identity.TokenManager) string {
+	if tokenManager == nil || grant.ID == "" {
+		return workflowApprovalDeepLink(grant.TargetID)
+	}
+	token, err := tokenManager.IssueDeepLinkToken(grant)
+	if err != nil {
+		return workflowApprovalDeepLink(grant.TargetID)
+	}
+	return workflowApprovalDeepLink(grant.TargetID) + "?token=" + token
+}
+
+func workflowApprovalDeepLink(approvalID string) string {
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return "/link/workflow/approval"
+	}
+	return "/link/workflow/approval/" + approvalID
+}
+
+func buildWorkflowApprovalCommunicationBody(grant identity.DeepLinkGrant, actionLink, deepLink string) string {
+	var body strings.Builder
+	if title := strings.TrimSpace(grant.Title); title != "" {
+		body.WriteString(title)
+		body.WriteString("\n\n")
+	}
+	if message := strings.TrimSpace(grant.Message); message != "" {
+		body.WriteString(message)
+		body.WriteString("\n\n")
+	}
+	if link := strings.TrimSpace(actionLink); link != "" {
+		body.WriteString("Open approval link:\n")
+		body.WriteString(link)
+		body.WriteString("\n\n")
+	}
+	if link := strings.TrimSpace(deepLink); link != "" {
+		body.WriteString("Open in app:\n")
+		body.WriteString(link)
+		body.WriteString("\n")
+	}
+	return body.String()
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, _ := metadata[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func metadataInt(metadata map[string]any, key string, fallback int) int {
+	if metadata == nil {
+		return fallback
+	}
+	switch value := metadata[key].(type) {
+	case int:
+		return value
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return fallback
+	}
+}
+
+func metadataBool(metadata map[string]any, key string) bool {
+	if metadata == nil {
+		return false
+	}
+	value, _ := metadata[key].(bool)
+	return value
+}
+
+func metadataStrings(metadata map[string]any, key string) []string {
+	if metadata == nil {
+		return nil
+	}
+	switch value := metadata[key].(type) {
+	case []string:
+		return append([]string(nil), value...)
+	case []any:
+		items := make([]string, 0, len(value))
+		for _, item := range value {
+			text, _ := item.(string)
+			text = strings.TrimSpace(text)
+			if text != "" {
+				items = append(items, text)
+			}
+		}
+		return items
+	default:
+		return nil
+	}
+}
+
+func uniqueStrings(items []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	return out
 }
 
 func (a *DocumentActions) applyWorkflowRuntimeDecisions(record document.Record, actorID, action string, transition *workflow.Transition) (policy.Decision, policy.Decision, policy.Decision, error) {

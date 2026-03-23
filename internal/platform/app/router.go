@@ -56,6 +56,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Workflows:     graph.workflows,
 			Analytics:     graph.analytics,
 			Monitoring:    graph.monitoring,
+			Notifications: graph.notifications,
 			Observability: graph.observability,
 			Integration:   graph.integration,
 			Jobs:          graph.jobs,
@@ -118,6 +119,12 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Documents: graph.documents,
 			Search:    graph.search,
 		},
+		Notifications: httpx.NotificationDeps{
+			Identity:      graph.identity,
+			Notifications: graph.notifications,
+			Workflows:     graph.workflows,
+			Documents:     graph.documents,
+		},
 		UI: httpx.UIDeps{
 			Identity:      graph.identity,
 			Modules:       graph.modules,
@@ -133,6 +140,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			FieldSecurity: graph.fieldSecurity,
 			UIPreferences: uiPreferences,
 			ACP:           graph.acp,
+			Notifications: graph.notifications,
 		},
 		CrossCutting: httpx.CrossCuttingDeps{
 			Config:        graph.config,

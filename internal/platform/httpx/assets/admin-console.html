@@ -50,6 +50,13 @@
         <div id="modules"></div>
       </section>
     </div>
+    <div class="admin-grid" data-admin-route="/admin/communications">
+      <section class="card">
+        <h2>Communications</h2>
+        <p class="status">Workflow notifications, deep-link delivery state, and communication actions.</p>
+        <div id="admin-communications"></div>
+      </section>
+    </div>
     <section class="card" data-admin-route="/admin/auth">
       <h2 id="auth-heading">Authentication Settings</h2>
       <div class="admin-row">
@@ -911,6 +918,7 @@
           if (!raw) return;
           const actions = (adminState.bootstrap && adminState.bootstrap.actions) || [];
           const staticMenus = [
+            {label: 'Communications', route_path: '/admin/communications'},
             {label: t('org_chart'), route_path: '/admin/org'},
             {label: t('workflow_routing'), route_path: '/admin/workflows'}
           ];
@@ -933,6 +941,7 @@
       if (!datalist) return;
       const actions = (adminState.bootstrap && adminState.bootstrap.actions) || [];
       const staticMenus = [
+        {label: 'Communications', route_path: '/admin/communications'},
         {label: t('org_chart'), route_path: '/admin/org'},
         {label: t('workflow_routing'), route_path: '/admin/workflows'}
       ];
@@ -942,6 +951,7 @@
     function adminNavGroups(items) {
       const groups = [
         {key: 'runtime', label: 'Runtime', routes: ['/admin/modules', '/admin/observability']},
+        {key: 'communications', label: 'Communications', routes: ['/admin/communications']},
         {key: 'security', label: 'Security', routes: ['/admin/auth', '/admin/security']},
         {key: 'configuration', label: 'Configuration', routes: ['/admin/config', '/admin/definitions']},
         {key: 'workflow', label: 'Workflow', routes: ['/admin/workflows', '/admin/templates']},
@@ -952,6 +962,7 @@
         if (groups.some((group) => group.routes.includes(routePath))) return groups.find((group) => group.routes.includes(routePath)).key;
         const value = ((label || '') + ' ' + (routePath || '')).toLowerCase();
         if (value.indexOf('auth') >= 0 || value.indexOf('security') >= 0) return 'security';
+        if (value.indexOf('communication') >= 0 || value.indexOf('notification') >= 0) return 'communications';
         if (value.indexOf('workflow') >= 0 || value.indexOf('template') >= 0) return 'workflow';
         if (value.indexOf('config') >= 0 || value.indexOf('definition') >= 0) return 'configuration';
         if (value.indexOf('org') >= 0) return 'organization';
@@ -973,6 +984,7 @@
       const actions = (adminState.bootstrap && adminState.bootstrap.actions) || [];
       const path = adminCurrentPath();
       const staticMenus = [
+        {label: 'Communications', route_path: '/admin/communications'},
         {label: t('org_chart'), route_path: '/admin/org'},
         {label: t('workflow_routing'), route_path: '/admin/workflows'}
       ];
@@ -992,12 +1004,45 @@
         }).join('') + '</div></section>';
       }).join('');
     }
+    async function renderAdminCommunications() {
+      const root = document.getElementById('admin-communications');
+      if (!root) return;
+      const payload = await getJSON('/admin/api/notifications?category=' + encodeURIComponent('workflow_approval'));
+      const items = payload.items || [];
+      root.innerHTML = '<div class="table-shell"><table class="data-table"><thead><tr><th>Message</th><th>User</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>' + (items.map((item) => {
+        const meta = item.metadata || {};
+        const approvalID = meta.approval_id || item.target_id || '';
+        const recipient = meta.recipient || meta.recipient_user_id || item.user_id || '';
+        return '<tr><td><div class="row-primary">' + escapeHTML(item.title || approvalID || item.id) + '</div><div class="row-secondary">' + escapeHTML(item.body || '') + '</div></td><td>' + escapeHTML(recipient) + '</td><td>' + escapeHTML(item.status || 'unread') + '</td><td>' + escapeHTML(item.created_at || '') + '</td><td><div class="toolbar-row">' + (approvalID ? '<button type="button" class="secondary" data-comm-reissue="' + escapeHTML(approvalID) + '">Reissue</button><button type="button" class="secondary" data-comm-revoke="' + escapeHTML(approvalID) + '">Revoke</button><button type="button" class="secondary" data-comm-dispatch="' + escapeHTML(approvalID) + '" data-comm-recipient="' + escapeHTML(recipient) + '">Dispatch Email</button>' : '') + '</div></td></tr>';
+      }).join('')) + (items.length ? '' : '<tr><td colspan="5"><div class="empty-state-inline">No workflow communications yet.</div></td></tr>') + '</tbody></table></div>';
+      root.querySelectorAll('[data-comm-reissue]').forEach((button) => {
+        button.onclick = async () => {
+          await getJSON('/ops/workflow/approvals/' + encodeURIComponent(button.dataset.commReissue || '') + '/communication/actions/reissue', {method: 'POST', headers: {'X-CSRF-Token': getCookie('orbyte_csrf')}});
+          await renderAdminCommunications();
+        };
+      });
+      root.querySelectorAll('[data-comm-revoke]').forEach((button) => {
+        button.onclick = async () => {
+          await getJSON('/ops/workflow/approvals/' + encodeURIComponent(button.dataset.commRevoke || '') + '/communication/actions/revoke', {method: 'POST', headers: {'X-CSRF-Token': getCookie('orbyte_csrf')}});
+          await renderAdminCommunications();
+        };
+      });
+      root.querySelectorAll('[data-comm-dispatch]').forEach((button) => {
+        button.onclick = async () => {
+          const recipient = button.dataset.commRecipient || '';
+          const suffix = recipient ? ('?recipient=' + encodeURIComponent(recipient)) : '';
+          await getJSON('/ops/workflow/approvals/' + encodeURIComponent(button.dataset.commDispatch || '') + '/communication/actions/dispatch-email' + suffix, {method: 'POST', headers: {'X-CSRF-Token': getCookie('orbyte_csrf')}});
+          await renderAdminCommunications();
+        };
+      });
+    }
     function applyAdminRoute() {
       const path = adminCurrentPath();
       document.querySelectorAll('[data-admin-route]').forEach((node) => {
         node.style.display = node.dataset.adminRoute === path ? '' : 'none';
       });
       renderAdminMenus();
+      if (path === '/admin/communications') void renderAdminCommunications();
       if (path === '/admin/agent') renderAdminAgentWorkspace();
       renderAdminAgentPanel();
       enhanceAdminControlAccessibility(document.querySelector('[data-admin-route="' + path + '"]') || document);

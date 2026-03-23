@@ -1,8 +1,12 @@
 package application
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
@@ -298,5 +302,148 @@ func TestApproveCreatesManagerChainApprovalSnapshot(t *testing.T) {
 	}
 	if record.Header.Status != "pending_manager" {
 		t.Fatalf("expected pending_manager status, got %s", record.Header.Status)
+	}
+}
+
+func TestSubmitIssuesWorkflowCommunicationActivity(t *testing.T) {
+	org := organization.NewService()
+	ident := identity.NewService(org)
+	requester, err := ident.CreateUser("requester2", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create requester failed: %v", err)
+	}
+	manager, err := ident.CreateUser("manager2", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create manager failed: %v", err)
+	}
+	if _, err := ident.UpsertReportingLine(identity.ReportingLine{SubjectUserID: requester.ID, ManagerUserID: manager.ID, RelationshipType: "primary_manager", Status: "active"}); err != nil {
+		t.Fatalf("save reporting line failed: %v", err)
+	}
+
+	docs := document.NewService()
+	if err := docs.Register(document.Definition{Type: "linked_request", DisplayName: "Linked Request", SchemaVersion: "v1", WorkflowKey: "linked_request_flow"}); err != nil {
+		t.Fatalf("register document definition failed: %v", err)
+	}
+	flows := workflow.NewService()
+	_ = flows.Register(workflow.Definition{
+		Key:    "linked_request_flow",
+		States: []string{"draft", "submitted", "approved"},
+		Actions: []workflow.ActionRule{
+			{Action: "submit", FromState: "draft", ToState: "submitted", CreateApproval: true, TaskType: "review", AssignmentStrategy: "requester_manager", LinkMode: "tokenized", LinkTTLSeconds: 3600, LinkAllowedActions: []string{"approve"}},
+			{Action: "approve", FromState: "submitted", ToState: "approved"},
+		},
+	})
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	activitySvc := activity.NewService()
+	actions := NewDocumentActions(docs, flows, ident, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	actions.AttachActivities(activitySvc)
+
+	record, err := docs.Create("linked_request", "org_default", "loc_hq", requester.ID, map[string]any{"title": "Activity Link"})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	record, err = actions.Submit(record.Header.ID, testActing(requester.ID), record.Header.Version, record.Header.ETag)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	timeline := activitySvc.Timeline("document", record.Header.ID)
+	if len(timeline) == 0 {
+		t.Fatal("expected workflow communication activity")
+	}
+	found := false
+	for _, item := range timeline {
+		if item.Kind != "message" {
+			continue
+		}
+		if item.Payload["body"] != "Workflow approval link issued" {
+			continue
+		}
+		meta, _ := item.Payload["metadata"].(map[string]any)
+		if meta["recipient_user_id"] == manager.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected workflow communication message in timeline, got %+v", timeline)
+	}
+}
+
+func TestSubmitAutoDispatchesWorkflowApprovalEmail(t *testing.T) {
+	t.Setenv("APP_JWT_SECRET", "test-secret")
+	t.Setenv("WORKFLOW_EMAIL_AUTO_DISPATCH", "true")
+	outboxDir := t.TempDir()
+	t.Setenv("WORKFLOW_EMAIL_OUTBOX_DIR", outboxDir)
+
+	org := organization.NewService()
+	ident := identity.NewService(org)
+	requester, err := ident.CreateUser("requester", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create requester failed: %v", err)
+	}
+	manager, err := ident.CreateUser("manager@example.com", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create manager failed: %v", err)
+	}
+	if _, err := ident.UpsertReportingLine(identity.ReportingLine{SubjectUserID: requester.ID, ManagerUserID: manager.ID, RelationshipType: "primary_manager", Status: "active"}); err != nil {
+		t.Fatalf("save reporting line failed: %v", err)
+	}
+
+	docs := document.NewService()
+	if err := docs.Register(document.Definition{Type: "linked_request", DisplayName: "Linked Request", SchemaVersion: "v1", WorkflowKey: "linked_request_flow"}); err != nil {
+		t.Fatalf("register document definition failed: %v", err)
+	}
+	flows := workflow.NewService()
+	_ = flows.Register(workflow.Definition{
+		Key:    "linked_request_flow",
+		States: []string{"draft", "submitted", "approved"},
+		Actions: []workflow.ActionRule{
+			{Action: "submit", FromState: "draft", ToState: "submitted", CreateApproval: true, TaskType: "review", AssignmentStrategy: "requester_manager", LinkMode: "tokenized", LinkTTLSeconds: 3600, LinkAllowedActions: []string{"approve"}},
+			{Action: "approve", FromState: "submitted", ToState: "approved"},
+		},
+	})
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	activitySvc := activity.NewService()
+	actions := NewDocumentActions(docs, flows, ident, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	actions.AttachActivities(activitySvc)
+
+	record, err := docs.Create("linked_request", "org_default", "loc_hq", requester.ID, map[string]any{"title": "Auto Dispatch"})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	record, err = actions.Submit(record.Header.ID, testActing(requester.ID), record.Header.Version, record.Header.ETag)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	entries, err := os.ReadDir(outboxDir)
+	if err != nil {
+		t.Fatalf("read outbox: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one email in outbox, got %d", len(entries))
+	}
+	message, err := os.ReadFile(filepath.Join(outboxDir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("read outbox message: %v", err)
+	}
+	if got := string(message); !strings.Contains(got, "/link/workflow/approval/") || !strings.Contains(got, "?token=") {
+		t.Fatalf("expected approval email to contain tokenized link, got %q", got)
+	}
+	timeline := activitySvc.Timeline("document", record.Header.ID)
+	found := false
+	for _, item := range timeline {
+		if item.Kind != "message" || item.Payload["body"] != "Workflow approval email dispatched" {
+			continue
+		}
+		meta, _ := item.Payload["metadata"].(map[string]any)
+		if meta["recipient"] == manager.Username {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected email dispatch activity in timeline, got %+v", timeline)
 	}
 }

@@ -127,7 +127,7 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 				Key:    "clinic_registration_flow",
 				States: []string{"draft", "submitted", "approved", "cancelled"},
 				Actions: []platformworkflow.ActionRule{
-					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "registration_review", CreateApproval: true, AssignmentMode: "role_queue", AssigneeRoleKey: "clinic_reviewer", CandidateRoleKeys: []string{"clinic_reviewer"}, ApprovalStageKey: "registration_review"},
+					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "registration_review", CreateApproval: true, AssignmentMode: "role_queue", AssigneeRoleKey: "clinic_reviewer", CandidateRoleKeys: []string{"clinic_reviewer"}, ApprovalStageKey: "registration_review", LinkMode: "tokenized", LinkTTLSeconds: 24 * 60 * 60, LinkAllowedActions: []string{"approve", "reject"}},
 					{Action: "approve", FromState: "submitted", ToState: "approved", PermissionKey: "document.approve"},
 					{Action: "reject", FromState: "submitted", ToState: "draft", PermissionKey: "document.reject"},
 					{Action: "reopen", FromState: "approved", ToState: "draft", PermissionKey: "document.reopen"},

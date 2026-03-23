@@ -38,6 +38,7 @@
         <span id="locale-label">Language</span>
         <select id="locale-switcher" name="locale"></select>
       </label>
+      <button type="button" id="notifications-button" class="secondary" hidden>Notifications</button>
       <button type="button" id="agent-toggle-button" class="secondary" hidden>Agent</button>
       <a id="admin-link-button" class="button secondary" href="/admin" hidden>Admin</a>
       <button type="button" id="logout-button" class="secondary" hidden>Log out</button>
@@ -95,6 +96,12 @@
         surface_self_service: 'Self-Service',
         surface_pos: 'POS',
         admin_link: 'Admin',
+        notifications: 'Notifications',
+        notifications_status: 'Workflow messages and communication history.',
+        notifications_empty: 'No notifications yet.',
+        mark_read: 'Mark Read',
+        dismiss: 'Dismiss',
+        open_link: 'Open',
         logout: 'Log out',
         loading: 'Loading…',
         online: 'online',
@@ -245,6 +252,12 @@
         surface_self_service: 'Layanan Mandiri',
         surface_pos: 'POS',
         admin_link: 'Admin',
+        notifications: 'Notifikasi',
+        notifications_status: 'Pesan workflow dan riwayat komunikasi.',
+        notifications_empty: 'Belum ada notifikasi.',
+        mark_read: 'Tandai Dibaca',
+        dismiss: 'Sembunyikan',
+        open_link: 'Buka',
         logout: 'Keluar',
         loading: 'Memuat…',
         online: 'online',
@@ -580,6 +593,7 @@
           const raw = (commandInput && commandInput.value || '').trim();
           if (!raw) return;
           const staticRoutes = [];
+          staticRoutes.push({label: t('notifications'), route_path: '/notifications'});
           if (state.bootstrap && state.bootstrap.acp && state.bootstrap.acp.enabled) {
             staticRoutes.push({label: 'Agent Workspace', route_path: '/agent/workspace'});
           }
@@ -603,6 +617,7 @@
       const options = ((state.bootstrap && state.bootstrap.actions) || [])
         .filter((item) => item && item.route_path)
         .map((item) => '<option value="' + escapeHTML(item.route_path) + '">' + escapeHTML(pickText(item, 'label')) + '</option>');
+      options.push('<option value="/notifications">' + escapeHTML(t('notifications')) + '</option>');
       if (state.bootstrap && state.bootstrap.acp && state.bootstrap.acp.enabled) {
         options.push('<option value="/agent/workspace">Agent Workspace</option>');
       }
@@ -1067,9 +1082,20 @@
       return currentPath();
     }
 
+    function requestedNextPath() {
+      const query = new URLSearchParams(window.location.search);
+      const next = String(query.get('next') || '').trim();
+      if (!next || next[0] !== '/') return '';
+      if (next.startsWith('//')) return '';
+      return next;
+    }
+
     function requestedUIHref() {
+      const next = requestedNextPath();
+      if (next) return next;
       const path = requestedUIRoute();
       const query = new URLSearchParams(window.location.search);
+      query.delete('next');
       query.set('surface', currentSurface());
       const base = '/ui' + (query.toString() ? '?' + query.toString() : '');
       if (!path) return base;
@@ -1375,6 +1401,11 @@
             await bootstrapAgent();
             await loadOfflineBootstrap();
             await processSyncQueue();
+            const nextPath = requestedNextPath();
+            if (nextPath) {
+              window.location.assign(nextPath);
+              return;
+            }
             if (!window.location.hash && state.bootstrap.default_path) {
               window.location.hash = '#' + state.bootstrap.default_path;
             }
@@ -1406,6 +1437,12 @@
       applyShellLayout(true);
       document.getElementById('admin-link-button').hidden = !state.bootstrap || !state.bootstrap.admin_access;
       document.getElementById('admin-link-button').href = state.bootstrap && state.bootstrap.admin_path ? state.bootstrap.admin_path : '/admin';
+      const notificationsButton = document.getElementById('notifications-button');
+      if (notificationsButton) {
+        notificationsButton.hidden = !state.bootstrap;
+        notificationsButton.textContent = t('notifications');
+        notificationsButton.onclick = () => { window.location.hash = '#/notifications'; };
+      }
       document.getElementById('logout-button').hidden = !state.bootstrap;
       for (const menu of state.bootstrap.menus) {
         const action = state.bootstrap.actions.find((item) => item.key === menu.action_key);
@@ -2994,6 +3031,13 @@
       }
       renderMenus();
       renderAgentPanel();
+      if (currentPath() === '/notifications') {
+        document.getElementById('route-title').innerHTML = '<h2>' + escapeHTML(t('notifications')) + '</h2>';
+        setStatus(t('notifications_status'));
+        updateRoutePanel({module_key: 'notification', render_mode: 'custom', view: {kind: 'worklist'}});
+        await renderNotificationsWorkspace(document.getElementById('view-root'));
+        return;
+      }
       if (currentPath() === '/agent/workspace') {
         document.getElementById('route-title').innerHTML = '<h2>Agent Workspace</h2>';
         setStatus('ACP session history and contextual agent workspace.');
@@ -3071,6 +3115,44 @@
       renderMenus();
       enhanceControlAccessibility(document.getElementById('view-root'));
       focusRecoveryTarget('#route-title h2');
+    }
+
+    async function renderNotificationsWorkspace(root) {
+      const payload = await api('/ui/data/notifications');
+      const items = payload.items || [];
+      root.innerHTML = '<section class="page-panel floorplan-worklist"><div class="page-header"><div><div class="page-eyebrow">Inbox</div><h3>' + escapeHTML(t('notifications')) + '</h3><p class="status">' + escapeHTML(t('notifications_status')) + '</p></div><div class="page-header-actions"><span class="badge subtle">items ' + escapeHTML(String(items.length)) + '</span></div></div><div class="page-body"><div class="table-shell"><table class="data-table"><thead><tr><th>Message</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>' + (items.map(function (item) {
+        const target = (item.document && (item.document.number || item.document.id)) || item.target_id || '';
+        return '<tr><td><div class="row-primary">' + escapeHTML(item.title || target || item.id) + '</div><div class="row-secondary">' + escapeHTML((item.body || '') + (target ? ' · ' + target : '')) + '</div></td><td>' + escapeHTML(displayValue(item.status || 'unread')) + '</td><td>' + escapeHTML(item.created_at || '') + '</td><td><div class="toolbar-row"><button type="button" class="secondary" data-notification-open="' + escapeHTML(item.id) + '">' + escapeHTML(t('open_link')) + '</button><button type="button" class="secondary" data-notification-read="' + escapeHTML(item.id) + '">' + escapeHTML(t('mark_read')) + '</button><button type="button" class="secondary" data-notification-dismiss="' + escapeHTML(item.id) + '">' + escapeHTML(t('dismiss')) + '</button></div></td></tr>';
+      }).join('') || '<tr><td colspan="4"><div class="empty-state-inline">' + escapeHTML(t('notifications_empty')) + '</div></td></tr>') + '</tbody></table></div></div></section>';
+      root.querySelectorAll('[data-notification-read]').forEach(function (button) {
+        button.onclick = async function () {
+          await api('/ui/data/notifications/' + encodeURIComponent(button.dataset.notificationRead || '') + '/actions/read', {method: 'POST', headers: {'X-CSRF-Token': readCookie('orbyte_csrf')}});
+          await renderNotificationsWorkspace(root);
+        };
+      });
+      root.querySelectorAll('[data-notification-dismiss]').forEach(function (button) {
+        button.onclick = async function () {
+          await api('/ui/data/notifications/' + encodeURIComponent(button.dataset.notificationDismiss || '') + '/actions/dismiss', {method: 'POST', headers: {'X-CSRF-Token': readCookie('orbyte_csrf')}});
+          await renderNotificationsWorkspace(root);
+        };
+      });
+      root.querySelectorAll('[data-notification-open]').forEach(function (button) {
+        button.onclick = async function () {
+          const item = items.find(function (entry) { return entry.id === (button.dataset.notificationOpen || ''); });
+          if (!item) return;
+          await api('/ui/data/notifications/' + encodeURIComponent(item.id) + '/actions/read', {method: 'POST', headers: {'X-CSRF-Token': readCookie('orbyte_csrf')}});
+          const target = item.action_link_path || item.deep_link_path || '';
+          if (!target) {
+            await renderNotificationsWorkspace(root);
+            return;
+          }
+          if (target.indexOf('/ui#') === 0 || target.indexOf('#/') === 0) {
+            window.location.assign(target);
+            return;
+          }
+          window.location.assign(target);
+        };
+      });
     }
 
     function readCookie(name) {

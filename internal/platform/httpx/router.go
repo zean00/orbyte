@@ -27,6 +27,7 @@ import (
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
+	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
@@ -55,6 +56,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 	templateSvc := templateoutput.NewService(docs, reportingSvc)
 	uiPreferences := NewUIPreferencesService()
 	acpSvc := acp.NewService(cfg)
+	notificationSvc := notification.NewService()
 	if modules != nil {
 		for _, def := range modules.Templates() {
 			_ = templateSvc.RegisterDefinition(templateoutput.FromModule(def, ""))
@@ -103,6 +105,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Workflows:     flows,
 			Analytics:     analyticsSvc,
 			Monitoring:    monitoringSvc,
+			Notifications: notificationSvc,
 			Observability: obsSvc,
 			Integration:   integrationSvc,
 			Jobs:          jobSvc,
@@ -159,6 +162,19 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			Documents: docs,
 			Search:    searchSvc,
 		},
+		DeepLinks: DeepLinkDeps{
+			Identity:  ident,
+			Documents: docs,
+			Workflows: flows,
+			Actions:   docActions,
+			Audit:     auditSvc,
+		},
+		Notifications: NotificationDeps{
+			Identity:      ident,
+			Notifications: notificationSvc,
+			Workflows:     flows,
+			Documents:     docs,
+		},
 		UI: UIDeps{
 			Identity:      ident,
 			Modules:       modules,
@@ -174,6 +190,7 @@ func NewRouter(cfg *config.Service, flags *featureflags.Service, org *organizati
 			FieldSecurity: fieldSecurity,
 			UIPreferences: uiPreferences,
 			ACP:           acpSvc,
+			Notifications: notificationSvc,
 		},
 		CrossCutting: CrossCuttingDeps{
 			Config:        cfg,
@@ -208,6 +225,8 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerMCPRoutesWithDeps(mux, deps.MCP)
 	registerOfflineRoutesWithDeps(mux, deps.Offline)
 	registerDocsRoutesWithDeps(mux, deps.Docs)
+	registerDeepLinkRoutesWithDeps(mux, deps.DeepLinks)
+	registerNotificationRoutesWithDeps(mux, deps.Notifications)
 	registerLocaleRoutes(mux, deps.CrossCutting.Identity)
 	registerUIRoutesWithDeps(mux, deps.UI)
 

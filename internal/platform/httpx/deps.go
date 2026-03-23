@@ -21,6 +21,7 @@ import (
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
+	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
@@ -48,6 +49,8 @@ type RouterDeps struct {
 	Templates    TemplateDeps
 	UI           UIDeps
 	Docs         DocsDeps
+	DeepLinks    DeepLinkDeps
+	Notifications NotificationDeps
 	CrossCutting CrossCuttingDeps
 }
 
@@ -99,6 +102,7 @@ type OpsDeps struct {
 	Workflows     *workflow.Service
 	Analytics     *analytics.Service
 	Monitoring    *monitoring.Service
+	Notifications *notification.Service
 	Observability *observability.Service
 	Integration   *integration.Service
 	Jobs          *jobs.Service
@@ -148,6 +152,7 @@ type UIDeps struct {
 	FieldSecurity *securityfields.Service
 	UIPreferences *UIPreferencesService
 	ACP           *acp.Service
+	Notifications *notification.Service
 }
 
 type ACPDeps struct {
@@ -193,6 +198,21 @@ type DocsDeps struct {
 	Models    *model.Service
 	Documents *document.Service
 	Search    *search.Service
+}
+
+type DeepLinkDeps struct {
+	Identity  *identity.Service
+	Documents *document.Service
+	Workflows *workflow.Service
+	Actions   *application.DocumentActions
+	Audit     *audit.Service
+}
+
+type NotificationDeps struct {
+	Identity      *identity.Service
+	Notifications *notification.Service
+	Workflows     *workflow.Service
+	Documents     *document.Service
 }
 
 func registerPlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runtimehealth.Tracker) {
@@ -246,4 +266,12 @@ func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {
 
 func registerDocsRoutesWithDeps(mux *http.ServeMux, deps DocsDeps) {
 	registerDocsRoutes(mux, deps.Config, deps.Modules, deps.Models, deps.Documents, deps.Search)
+}
+
+func registerDeepLinkRoutesWithDeps(mux *http.ServeMux, deps DeepLinkDeps) {
+	registerDeepLinkRoutes(mux, deps.Identity, deps.Documents, deps.Workflows, deps.Actions, deps.Audit)
+}
+
+func registerNotificationRoutesWithDeps(mux *http.ServeMux, deps NotificationDeps) {
+	registerNotificationRoutes(mux, deps.Identity, deps.Notifications, deps.Workflows, deps.Documents)
 }

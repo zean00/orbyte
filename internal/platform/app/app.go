@@ -1350,7 +1350,7 @@ func builtInModuleManifests() []module.Manifest {
 				Key:    "generic_request_flow",
 				States: []string{"draft", "submitted", "approved", "rejected", "cancelled"},
 				Actions: []workflow.ActionRule{
-					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true},
+					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true, LinkMode: "tokenized", LinkTTLSeconds: 24 * 60 * 60, LinkAllowedActions: []string{"approve", "reject"}},
 					{Action: "approve", FromState: "submitted", ToState: "approved", PermissionKey: "document.approve"},
 					{Action: "reject", FromState: "submitted", ToState: "rejected", PermissionKey: "document.reject"},
 					{Action: "reopen", FromState: "rejected", ToState: "draft", PermissionKey: "document.reopen"},

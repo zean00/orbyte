@@ -18,7 +18,7 @@ func NewService() *Service {
 		Key:    "generic_request_flow",
 		States: []string{"draft", "submitted", "approved", "rejected", "cancelled"},
 		Actions: []ActionRule{
-			{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true, AssignmentMode: "role_queue", AssigneeRoleKey: "approver", CandidateRoleKeys: []string{"approver"}, ApprovalStageKey: "review", DueAfterSeconds: 24 * 60 * 60, EscalateAfterSeconds: 48 * 60 * 60},
+			{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit", TaskType: "review", CreateApproval: true, AssignmentMode: "role_queue", AssigneeRoleKey: "approver", CandidateRoleKeys: []string{"approver"}, ApprovalStageKey: "review", DueAfterSeconds: 24 * 60 * 60, EscalateAfterSeconds: 48 * 60 * 60, LinkMode: "tokenized", LinkTTLSeconds: 24 * 60 * 60, LinkAllowedActions: []string{"approve", "reject"}},
 			{Action: "approve", FromState: "submitted", ToState: "approved", PermissionKey: "document.approve"},
 			{Action: "reject", FromState: "submitted", ToState: "rejected", PermissionKey: "document.reject"},
 			{Action: "reopen", FromState: "rejected", ToState: "draft", PermissionKey: "document.reopen"},
@@ -154,8 +154,28 @@ func (s *Service) ListTasks() []Task {
 	return s.repo.ListTasks()
 }
 
+func (s *Service) Task(id string) (Task, bool) {
+	id = strings.TrimSpace(id)
+	for _, item := range s.repo.ListTasks() {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return Task{}, false
+}
+
 func (s *Service) ListApprovals() []Approval {
 	return s.repo.ListApprovals()
+}
+
+func (s *Service) Approval(id string) (Approval, bool) {
+	id = strings.TrimSpace(id)
+	for _, item := range s.repo.ListApprovals() {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return Approval{}, false
 }
 
 func (s *Service) ListHistory(targetType, targetID string) []HistoryEvent {
@@ -200,6 +220,10 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 		})
 	}
 	if transition.CreateApproval {
+		allowedActions := append([]string(nil), transition.LinkAllowedActions...)
+		if len(allowedActions) == 0 && !transition.LinkReviewOnly {
+			allowedActions = []string{"approve", "reject"}
+		}
 		mutation.Approvals = append(mutation.Approvals, Approval{
 			ID:                fmt.Sprintf("approval:%s:%s", targetID, transition.Action),
 			WorkflowKey:       transition.WorkflowKey,
@@ -216,6 +240,11 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 				"action":                   transition.Action,
 				"requires_different_actor": transition.RequiresDifferentActor,
 				"step_up_required":         transition.StepUpRequired,
+				"link_mode":                strings.TrimSpace(transition.LinkMode),
+				"link_ttl_seconds":         transition.LinkTTLSeconds,
+				"link_review_only":         transition.LinkReviewOnly,
+				"link_require_step_up":     transition.LinkRequireStepUp,
+				"link_allowed_actions":     allowedActions,
 			},
 		})
 	}
@@ -329,6 +358,11 @@ func transitionForDefinition(def Definition, currentState, action string) (Trans
 				EscalateAfterSeconds:   rule.EscalateAfterSeconds,
 				RequiresDifferentActor: rule.RequiresDifferentActor,
 				StepUpRequired:         rule.StepUpRequired,
+				LinkMode:               rule.LinkMode,
+				LinkTTLSeconds:         rule.LinkTTLSeconds,
+				LinkReviewOnly:         rule.LinkReviewOnly,
+				LinkRequireStepUp:      rule.LinkRequireStepUp,
+				LinkAllowedActions:     append([]string(nil), rule.LinkAllowedActions...),
 			}, nil
 		}
 	}

@@ -32,6 +32,11 @@ type ActionRule struct {
 	EscalateAfterSeconds   int      `json:"escalate_after_seconds,omitempty"`
 	RequiresDifferentActor bool     `json:"requires_different_actor,omitempty"`
 	StepUpRequired         bool     `json:"step_up_required,omitempty"`
+	LinkMode               string   `json:"link_mode,omitempty"`
+	LinkTTLSeconds         int      `json:"link_ttl_seconds,omitempty"`
+	LinkReviewOnly         bool     `json:"link_review_only,omitempty"`
+	LinkRequireStepUp      bool     `json:"link_require_step_up,omitempty"`
+	LinkAllowedActions     []string `json:"link_allowed_actions,omitempty"`
 }
 
 type Transition struct {
@@ -53,6 +58,11 @@ type Transition struct {
 	EscalateAfterSeconds   int      `json:"escalate_after_seconds,omitempty"`
 	RequiresDifferentActor bool     `json:"requires_different_actor,omitempty"`
 	StepUpRequired         bool     `json:"step_up_required,omitempty"`
+	LinkMode               string   `json:"link_mode,omitempty"`
+	LinkTTLSeconds         int      `json:"link_ttl_seconds,omitempty"`
+	LinkReviewOnly         bool     `json:"link_review_only,omitempty"`
+	LinkRequireStepUp      bool     `json:"link_require_step_up,omitempty"`
+	LinkAllowedActions     []string `json:"link_allowed_actions,omitempty"`
 }
 
 type Task struct {
