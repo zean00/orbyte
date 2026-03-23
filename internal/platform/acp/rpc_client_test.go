@@ -72,16 +72,14 @@ func TestCallAndReadLoopDispatch(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		var req bytes.Buffer
-		tmp := make([]byte, 1024)
-		n, err := stdinR.Read(tmp)
+		reader := bufio.NewReader(stdinR)
+		payload, err := readRPCPayload(reader)
 		if err != nil {
 			done <- err
 			return
 		}
-		req.Write(tmp[:n])
-		if !bytes.Contains(req.Bytes(), []byte(`"method":"initialize"`)) {
-			done <- fmt.Errorf("unexpected outbound request %q", req.String())
+		if !bytes.Contains(payload, []byte(`"method":"initialize"`)) {
+			done <- fmt.Errorf("unexpected outbound request %q", string(payload))
 			return
 		}
 		if _, err := io.WriteString(stdoutW, framedPayload(`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}`)); err != nil {
