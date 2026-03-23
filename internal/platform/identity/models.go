@@ -96,6 +96,32 @@ type DelegationGrant struct {
 	UpdatedAt             time.Time `json:"updated_at"`
 }
 
+type DeepLinkGrant struct {
+	ID                    string         `json:"id"`
+	Kind                  string         `json:"kind"`
+	UserID                string         `json:"user_id"`
+	Status                string         `json:"status"`
+	TargetType            string         `json:"target_type"`
+	TargetID              string         `json:"target_id"`
+	LocationID            string         `json:"location_id,omitempty"`
+	AllowedPermissionKeys []string       `json:"allowed_permission_keys,omitempty"`
+	AllowedActions        []string       `json:"allowed_actions,omitempty"`
+	ReviewOnly            bool           `json:"review_only,omitempty"`
+	RequireStepUp         bool           `json:"require_step_up,omitempty"`
+	OneTime               bool           `json:"one_time,omitempty"`
+	Title                 string         `json:"title,omitempty"`
+	Message               string         `json:"message,omitempty"`
+	StartsAt              time.Time      `json:"starts_at"`
+	ExpiresAt             time.Time      `json:"expires_at"`
+	ActivatedAt           time.Time      `json:"activated_at,omitempty"`
+	ConsumedAt            time.Time      `json:"consumed_at,omitempty"`
+	ConsumedByAction      string         `json:"consumed_by_action,omitempty"`
+	RevokedAt             time.Time      `json:"revoked_at,omitempty"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	Metadata              map[string]any `json:"metadata,omitempty"`
+}
+
 type SessionReview struct {
 	ConcurrentActiveSessions int      `json:"concurrent_active_sessions"`
 	Flags                    []string `json:"flags,omitempty"`

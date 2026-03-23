@@ -6,6 +6,7 @@ type ActingContext struct {
 	EffectiveUserID   string
 	OnBehalfOfUserID  string
 	DelegationGrantID string
+	DeepLinkGrantID   string
 	CorrelationID     string
 }
 

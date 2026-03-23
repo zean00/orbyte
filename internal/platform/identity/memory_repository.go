@@ -12,6 +12,7 @@ type MemoryRepository struct {
 	sessions          []Session
 	servicePrincipals []ServicePrincipal
 	delegationGrants  []DelegationGrant
+	deepLinkGrants    []DeepLinkGrant
 	reportingLines    []ReportingLine
 	loginFailures     map[string][]time.Time
 }
@@ -27,6 +28,7 @@ func NewMemoryRepository(users []User, roles []Role, permissions []Permission, b
 		sessions:          append([]Session(nil), sessions...),
 		servicePrincipals: append([]ServicePrincipal(nil), servicePrincipals...),
 		delegationGrants:  []DelegationGrant{},
+		deepLinkGrants:    []DeepLinkGrant{},
 		reportingLines:    []ReportingLine{},
 		loginFailures:     make(map[string][]time.Time),
 	}
@@ -70,6 +72,10 @@ func (r *MemoryRepository) DelegationGrants() []DelegationGrant {
 
 func (r *MemoryRepository) ReportingLines() []ReportingLine {
 	return append([]ReportingLine(nil), r.reportingLines...)
+}
+
+func (r *MemoryRepository) DeepLinkGrants() []DeepLinkGrant {
+	return append([]DeepLinkGrant(nil), r.deepLinkGrants...)
 }
 
 func (r *MemoryRepository) SaveUser(user User) error {
@@ -202,6 +208,15 @@ func (r *MemoryRepository) FindDelegationGrant(id string) (DelegationGrant, bool
 	return DelegationGrant{}, false
 }
 
+func (r *MemoryRepository) FindDeepLinkGrant(id string) (DeepLinkGrant, bool) {
+	for _, grant := range r.deepLinkGrants {
+		if grant.ID == id {
+			return grant, true
+		}
+	}
+	return DeepLinkGrant{}, false
+}
+
 func (r *MemoryRepository) SaveServicePrincipal(principal ServicePrincipal) error {
 	for i, current := range r.servicePrincipals {
 		if current.ID == principal.ID {
@@ -221,6 +236,17 @@ func (r *MemoryRepository) SaveDelegationGrant(grant DelegationGrant) error {
 		}
 	}
 	r.delegationGrants = append(r.delegationGrants, grant)
+	return nil
+}
+
+func (r *MemoryRepository) SaveDeepLinkGrant(grant DeepLinkGrant) error {
+	for i, current := range r.deepLinkGrants {
+		if current.ID == grant.ID {
+			r.deepLinkGrants[i] = grant
+			return nil
+		}
+	}
+	r.deepLinkGrants = append(r.deepLinkGrants, grant)
 	return nil
 }
 

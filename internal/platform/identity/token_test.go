@@ -84,3 +84,28 @@ func TestTokenManagerRejectsTamperedToken(t *testing.T) {
 		t.Fatal("expected tampered token parse failure")
 	}
 }
+
+func TestTokenManagerIssueAndParseDeepLinkToken(t *testing.T) {
+	manager := &TokenManager{
+		secret: []byte("test-secret"),
+		issuer: "test-issuer",
+		now:    func() time.Time { return time.Unix(1700000000, 0).UTC() },
+	}
+	token, err := manager.IssueDeepLinkToken(DeepLinkGrant{
+		ID:         "link:1",
+		UserID:     "u1",
+		TargetType: "workflow_approval",
+		TargetID:   "approval:1",
+		ExpiresAt:  time.Unix(1700001800, 0).UTC(),
+	})
+	if err != nil {
+		t.Fatalf("issue deep link token failed: %v", err)
+	}
+	claims, err := manager.Parse(token)
+	if err != nil {
+		t.Fatalf("parse deep link token failed: %v", err)
+	}
+	if claims.Kind != "link" || claims.DeepLinkGrantID != "link:1" || claims.Subject != "u1" || claims.TargetID != "approval:1" {
+		t.Fatalf("unexpected deep link claims: %+v", claims)
+	}
+}

@@ -736,6 +736,44 @@ func (s *Service) FindDelegationGrant(id string) (DelegationGrant, bool) {
 	return s.repo.FindDelegationGrant(id)
 }
 
+func (s *Service) FindDeepLinkGrant(id string) (DeepLinkGrant, bool) {
+	grant, ok := s.repo.FindDeepLinkGrant(id)
+	if !ok {
+		return DeepLinkGrant{}, false
+	}
+	return s.normalizeDeepLinkGrant(grant), true
+}
+
+func (s *Service) DeepLinkGrants() []DeepLinkGrant {
+	items := make([]DeepLinkGrant, 0, len(s.repo.DeepLinkGrants()))
+	for _, item := range s.repo.DeepLinkGrants() {
+		items = append(items, s.normalizeDeepLinkGrant(item))
+	}
+	return items
+}
+
+func (s *Service) FindActiveDeepLinkGrant(targetType, targetID, userID string, now time.Time) (DeepLinkGrant, bool) {
+	for _, item := range s.DeepLinkGrants() {
+		if item.TargetType != strings.TrimSpace(targetType) || item.TargetID != strings.TrimSpace(targetID) || item.UserID != strings.TrimSpace(userID) {
+			continue
+		}
+		if item.Status != "pending" && item.Status != "active" {
+			continue
+		}
+		if !item.StartsAt.IsZero() && now.Before(item.StartsAt) {
+			continue
+		}
+		if !item.ExpiresAt.IsZero() && !now.Before(item.ExpiresAt) {
+			continue
+		}
+		if !item.RevokedAt.IsZero() || !item.ConsumedAt.IsZero() {
+			continue
+		}
+		return item, true
+	}
+	return DeepLinkGrant{}, false
+}
+
 func (s *Service) ListOutgoingDelegationGrants(userID string) []DelegationGrant {
 	items := make([]DelegationGrant, 0)
 	for _, item := range s.DelegationGrants() {
@@ -744,6 +782,146 @@ func (s *Service) ListOutgoingDelegationGrants(userID string) []DelegationGrant 
 		}
 	}
 	return items
+}
+
+func (s *Service) SaveDeepLinkGrant(grant DeepLinkGrant) (DeepLinkGrant, error) {
+	now := time.Now().UTC()
+	grant.ID = strings.TrimSpace(grant.ID)
+	if grant.ID == "" {
+		grant.ID = fmt.Sprintf("link:%d", now.UnixNano())
+	}
+	grant.Kind = strings.TrimSpace(strings.ToLower(grant.Kind))
+	if grant.Kind == "" {
+		grant.Kind = "workflow_approval"
+	}
+	grant.UserID = strings.TrimSpace(grant.UserID)
+	grant.TargetType = strings.TrimSpace(grant.TargetType)
+	grant.TargetID = strings.TrimSpace(grant.TargetID)
+	grant.Status = strings.TrimSpace(strings.ToLower(grant.Status))
+	if grant.Status == "" {
+		grant.Status = "pending"
+	}
+	switch grant.Status {
+	case "pending", "active", "consumed", "revoked", "expired":
+	default:
+		return DeepLinkGrant{}, shared.Validation("deep link grant status is invalid")
+	}
+	if grant.UserID == "" || grant.TargetType == "" || grant.TargetID == "" {
+		return DeepLinkGrant{}, shared.Validation("deep link grant target and user are required")
+	}
+	if grant.StartsAt.IsZero() {
+		grant.StartsAt = now
+	}
+	if grant.ExpiresAt.IsZero() || !grant.ExpiresAt.After(grant.StartsAt) {
+		return DeepLinkGrant{}, shared.Validation("deep link grant expiry is invalid")
+	}
+	if grant.Metadata == nil {
+		grant.Metadata = map[string]any{}
+	}
+	if existing, ok := s.repo.FindDeepLinkGrant(grant.ID); ok {
+		grant.CreatedAt = existing.CreatedAt
+	}
+	if grant.CreatedAt.IsZero() {
+		grant.CreatedAt = now
+	}
+	grant.UpdatedAt = now
+	if err := s.repo.SaveDeepLinkGrant(grant); err != nil {
+		return DeepLinkGrant{}, err
+	}
+	return s.normalizeDeepLinkGrant(grant), nil
+}
+
+func (s *Service) ActivateDeepLinkGrant(grantID, userID, targetType, targetID string, now time.Time) (DeepLinkGrant, error) {
+	grant, ok := s.repo.FindDeepLinkGrant(strings.TrimSpace(grantID))
+	if !ok {
+		return DeepLinkGrant{}, shared.NotFound("deep link grant not found")
+	}
+	grant = s.normalizeDeepLinkGrantAt(grant, now)
+	if grant.UserID != strings.TrimSpace(userID) {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant is not assigned to the current user")
+	}
+	if grant.TargetType != strings.TrimSpace(targetType) || grant.TargetID != strings.TrimSpace(targetID) {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant target mismatch")
+	}
+	if grant.Status == "revoked" || !grant.RevokedAt.IsZero() {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant is revoked")
+	}
+	if grant.Status == "consumed" || !grant.ConsumedAt.IsZero() {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant has already been used")
+	}
+	if !grant.StartsAt.IsZero() && now.Before(grant.StartsAt) {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant is not active yet")
+	}
+	if !grant.ExpiresAt.IsZero() && !now.Before(grant.ExpiresAt) {
+		grant.Status = "expired"
+		grant.UpdatedAt = now
+		_ = s.repo.SaveDeepLinkGrant(grant)
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant expired")
+	}
+	if grant.OneTime && grant.Status == "active" && !grant.ActivatedAt.IsZero() {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant has already been used")
+	}
+	grant.Status = "active"
+	if grant.ActivatedAt.IsZero() {
+		grant.ActivatedAt = now
+	}
+	grant.UpdatedAt = now
+	if err := s.repo.SaveDeepLinkGrant(grant); err != nil {
+		return DeepLinkGrant{}, err
+	}
+	return s.normalizeDeepLinkGrant(grant), nil
+}
+
+func (s *Service) ConsumeDeepLinkGrant(grantID, userID, action string, now time.Time) (DeepLinkGrant, error) {
+	grant, ok := s.repo.FindDeepLinkGrant(strings.TrimSpace(grantID))
+	if !ok {
+		return DeepLinkGrant{}, shared.NotFound("deep link grant not found")
+	}
+	grant = s.normalizeDeepLinkGrantAt(grant, now)
+	if grant.UserID != strings.TrimSpace(userID) {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant is not assigned to the current user")
+	}
+	if grant.Status == "revoked" || !grant.RevokedAt.IsZero() {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant is revoked")
+	}
+	if grant.Status == "consumed" || !grant.ConsumedAt.IsZero() {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant has already been used")
+	}
+	if !grant.ExpiresAt.IsZero() && !now.Before(grant.ExpiresAt) {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant expired")
+	}
+	if len(grant.AllowedActions) > 0 && !containsString(grant.AllowedActions, strings.TrimSpace(action)) {
+		return DeepLinkGrant{}, shared.Forbidden("deep link grant does not allow this action")
+	}
+	grant.Status = "consumed"
+	grant.ConsumedAt = now
+	grant.ConsumedByAction = strings.TrimSpace(action)
+	grant.UpdatedAt = now
+	if err := s.repo.SaveDeepLinkGrant(grant); err != nil {
+		return DeepLinkGrant{}, err
+	}
+	return s.normalizeDeepLinkGrant(grant), nil
+}
+
+func (s *Service) RevokeDeepLinkGrant(grantID string, now time.Time) (DeepLinkGrant, error) {
+	grant, ok := s.repo.FindDeepLinkGrant(strings.TrimSpace(grantID))
+	if !ok {
+		return DeepLinkGrant{}, shared.NotFound("deep link grant not found")
+	}
+	grant = s.normalizeDeepLinkGrantAt(grant, now)
+	if grant.Status == "consumed" || !grant.ConsumedAt.IsZero() {
+		return DeepLinkGrant{}, shared.Conflict("deep link grant has already been consumed")
+	}
+	if grant.Status == "revoked" || !grant.RevokedAt.IsZero() {
+		return s.normalizeDeepLinkGrant(grant), nil
+	}
+	grant.Status = "revoked"
+	grant.RevokedAt = now
+	grant.UpdatedAt = now
+	if err := s.repo.SaveDeepLinkGrant(grant); err != nil {
+		return DeepLinkGrant{}, err
+	}
+	return s.normalizeDeepLinkGrant(grant), nil
 }
 
 func (s *Service) ListIncomingDelegationGrants(userID string) []DelegationGrant {
@@ -1764,6 +1942,39 @@ func (s *Service) DecideActingServicePrincipal(principalID, effectiveUserID, per
 	return s.Decide(actingUserID, permissionKey, grant.LocationID)
 }
 
+func (s *Service) DecideDeepLinkGrant(grant DeepLinkGrant, userID, permissionKey, locationID string, now time.Time) Decision {
+	grant = s.normalizeDeepLinkGrantAt(grant, now)
+	if strings.TrimSpace(grant.UserID) != strings.TrimSpace(userID) {
+		return Decision{Allowed: false, Reason: "deep link grant does not match user"}
+	}
+	if grant.Status != "pending" && grant.Status != "active" {
+		return Decision{Allowed: false, Reason: "deep link grant is not active"}
+	}
+	if !grant.StartsAt.IsZero() && now.Before(grant.StartsAt) {
+		return Decision{Allowed: false, Reason: "deep link grant not active yet"}
+	}
+	if !grant.ExpiresAt.IsZero() && !now.Before(grant.ExpiresAt) {
+		return Decision{Allowed: false, Reason: "deep link grant expired"}
+	}
+	if !grant.RevokedAt.IsZero() {
+		return Decision{Allowed: false, Reason: "deep link grant is revoked"}
+	}
+	if !grant.ConsumedAt.IsZero() {
+		return Decision{Allowed: false, Reason: "deep link grant has already been used"}
+	}
+	if permissionKey != "" && len(grant.AllowedPermissionKeys) > 0 && !containsString(grant.AllowedPermissionKeys, permissionKey) {
+		return Decision{Allowed: false, Reason: "deep link grant does not allow permission"}
+	}
+	if locationID != "" && grant.LocationID != "" && grant.LocationID != locationID {
+		return Decision{Allowed: false, Reason: "deep link grant location mismatch"}
+	}
+	resolvedLocationID := strings.TrimSpace(locationID)
+	if resolvedLocationID == "" {
+		resolvedLocationID = strings.TrimSpace(grant.LocationID)
+	}
+	return s.Decide(userID, permissionKey, resolvedLocationID)
+}
+
 func (s *Service) DecideServicePrincipal(principalID, operationType string) Decision {
 	if principalID == "" {
 		return Decision{Allowed: false, Reason: "missing service principal"}
@@ -1869,6 +2080,34 @@ func (s *Service) requireDelegationGrant(grantID string) (DelegationGrant, error
 		return DelegationGrant{}, shared.NotFound("delegation grant not found")
 	}
 	return grant, nil
+}
+
+func (s *Service) normalizeDeepLinkGrant(grant DeepLinkGrant) DeepLinkGrant {
+	return s.normalizeDeepLinkGrantAt(grant, time.Now().UTC())
+}
+
+func (s *Service) normalizeDeepLinkGrantAt(grant DeepLinkGrant, now time.Time) DeepLinkGrant {
+	grant.Kind = strings.TrimSpace(strings.ToLower(grant.Kind))
+	if grant.Kind == "" {
+		grant.Kind = "workflow_approval"
+	}
+	grant.Status = strings.TrimSpace(strings.ToLower(grant.Status))
+	if grant.Status == "" {
+		grant.Status = "pending"
+	}
+	if !grant.RevokedAt.IsZero() {
+		grant.Status = "revoked"
+	}
+	if !grant.ConsumedAt.IsZero() {
+		grant.Status = "consumed"
+	}
+	if grant.Status != "revoked" && grant.Status != "consumed" && !grant.ExpiresAt.IsZero() && !now.Before(grant.ExpiresAt) {
+		grant.Status = "expired"
+	}
+	if grant.Metadata == nil {
+		grant.Metadata = map[string]any{}
+	}
+	return grant
 }
 
 func (s *Service) normalizeDelegationGrant(grant DelegationGrant) DelegationGrant {

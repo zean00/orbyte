@@ -22,7 +22,10 @@ type TokenClaims struct {
 	SessionID         string `json:"session_id,omitempty"`
 	ServicePrincipal  string `json:"service_principal_id,omitempty"`
 	DelegationGrantID string `json:"delegation_grant_id,omitempty"`
+	DeepLinkGrantID   string `json:"deep_link_grant_id,omitempty"`
 	EffectiveUserID   string `json:"effective_user_id,omitempty"`
+	TargetType        string `json:"target_type,omitempty"`
+	TargetID          string `json:"target_id,omitempty"`
 	Kind              string `json:"kind"`
 	IssuedAt          int64  `json:"iat"`
 	ExpiresAt         int64  `json:"exp"`
@@ -98,6 +101,51 @@ func (m *TokenManager) IssueDelegationToken(grant DelegationGrant) (string, erro
 		IssuedAt:          now.Unix(),
 		ExpiresAt:         expiresAt.Unix(),
 		Issuer:            m.issuer,
+	})
+}
+
+func (m *TokenManager) IssueDeepLinkToken(grant DeepLinkGrant) (string, error) {
+	if grant.ID == "" || grant.UserID == "" || grant.TargetType == "" || grant.TargetID == "" {
+		return "", errors.New("invalid deep link token subject")
+	}
+	now := m.now()
+	expiresAt := grant.ExpiresAt
+	if expiresAt.IsZero() {
+		expiresAt = now.Add(15 * time.Minute)
+	}
+	return m.issue(TokenClaims{
+		Subject:         grant.UserID,
+		DeepLinkGrantID: grant.ID,
+		TargetType:      grant.TargetType,
+		TargetID:        grant.TargetID,
+		Kind:            "link",
+		IssuedAt:        now.Unix(),
+		ExpiresAt:       expiresAt.Unix(),
+		Issuer:          m.issuer,
+	})
+}
+
+func (m *TokenManager) IssueDeepLinkStepUpToken(grant DeepLinkGrant, ttl time.Duration) (string, error) {
+	if grant.ID == "" || grant.UserID == "" {
+		return "", errors.New("invalid deep link step-up token subject")
+	}
+	now := m.now()
+	if ttl <= 0 {
+		ttl = 10 * time.Minute
+	}
+	expiresAt := now.Add(ttl)
+	if !grant.ExpiresAt.IsZero() && grant.ExpiresAt.Before(expiresAt) {
+		expiresAt = grant.ExpiresAt
+	}
+	return m.issue(TokenClaims{
+		Subject:         grant.UserID,
+		DeepLinkGrantID: grant.ID,
+		TargetType:      grant.TargetType,
+		TargetID:        grant.TargetID,
+		Kind:            "link_step_up",
+		IssuedAt:        now.Unix(),
+		ExpiresAt:       expiresAt.Unix(),
+		Issuer:          m.issuer,
 	})
 }
 

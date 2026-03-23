@@ -223,6 +223,78 @@ func TestRevokeRolePermission(t *testing.T) {
 	}
 }
 
+func TestDeepLinkGrantLifecycleAndDecision(t *testing.T) {
+	svc := NewService(organization.NewService())
+	now := time.Now().UTC()
+	grant, err := svc.SaveDeepLinkGrant(DeepLinkGrant{
+		ID:                    "link:test",
+		UserID:                "user_admin",
+		Kind:                  "workflow_approval",
+		TargetType:            "workflow_approval",
+		TargetID:              "approval:1",
+		LocationID:            "loc_hq",
+		AllowedPermissionKeys: []string{"document.read", "document.approve"},
+		AllowedActions:        []string{"approve"},
+		OneTime:               true,
+		StartsAt:              now,
+		ExpiresAt:             now.Add(30 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	if grant.Status != "pending" {
+		t.Fatalf("expected pending grant, got %+v", grant)
+	}
+	activated, err := svc.ActivateDeepLinkGrant(grant.ID, "user_admin", "workflow_approval", "approval:1", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("activate deep link grant failed: %v", err)
+	}
+	if activated.Status != "active" || activated.ActivatedAt.IsZero() {
+		t.Fatalf("expected active grant, got %+v", activated)
+	}
+	decision := svc.DecideDeepLinkGrant(activated, "user_admin", "document.approve", "loc_hq", now.Add(2*time.Minute))
+	if !decision.Allowed {
+		t.Fatalf("expected approve decision from deep link grant, got %+v", decision)
+	}
+	if svc.DecideDeepLinkGrant(activated, "user_admin", "document.reject", "loc_hq", now.Add(2*time.Minute)).Allowed {
+		t.Fatal("expected reject to be denied by deep link permissions")
+	}
+	consumed, err := svc.ConsumeDeepLinkGrant(grant.ID, "user_admin", "approve", now.Add(3*time.Minute))
+	if err != nil {
+		t.Fatalf("consume deep link grant failed: %v", err)
+	}
+	if consumed.Status != "consumed" || consumed.ConsumedByAction != "approve" {
+		t.Fatalf("expected consumed deep link grant, got %+v", consumed)
+	}
+	if _, err := svc.ActivateDeepLinkGrant(grant.ID, "user_admin", "workflow_approval", "approval:1", now.Add(4*time.Minute)); err == nil {
+		t.Fatal("expected consumed deep link grant to reject reactivation")
+	}
+}
+
+func TestRevokeDeepLinkGrant(t *testing.T) {
+	svc := NewService(organization.NewService())
+	now := time.Now().UTC()
+	grant, err := svc.SaveDeepLinkGrant(DeepLinkGrant{
+		ID:         "link:revoke",
+		UserID:     "user_admin",
+		Kind:       "workflow_approval",
+		TargetType: "workflow_approval",
+		TargetID:   "approval:revoke",
+		StartsAt:   now,
+		ExpiresAt:  now.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("save deep link grant failed: %v", err)
+	}
+	revoked, err := svc.RevokeDeepLinkGrant(grant.ID, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("revoke deep link grant failed: %v", err)
+	}
+	if revoked.Status != "revoked" || revoked.RevokedAt.IsZero() {
+		t.Fatalf("expected revoked grant, got %+v", revoked)
+	}
+}
+
 func TestDefaultBootstrapDataDefinesPermissionsForAllAdminGrants(t *testing.T) {
 	now := time.Now().UTC()
 	data := defaultBootstrapData(now, "bootstrap-123!")

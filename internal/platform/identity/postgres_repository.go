@@ -396,6 +396,77 @@ func (r *PostgresRepository) DelegationGrants() []DelegationGrant {
 	return items
 }
 
+func (r *PostgresRepository) DeepLinkGrants() []DeepLinkGrant {
+	const query = `
+		SELECT deep_link_grant_id, grant_kind, user_id, status, target_type, target_id, COALESCE(location_id, ''),
+		       COALESCE(allowed_permission_keys_json, '[]'::jsonb),
+		       COALESCE(allowed_actions_json, '[]'::jsonb),
+		       review_only, require_step_up, one_time, COALESCE(title, ''), COALESCE(message, ''),
+		       starts_at, expires_at, activated_at, consumed_at, COALESCE(consumed_by_action, ''), revoked_at,
+		       created_at, updated_at, COALESCE(metadata_json, '{}'::jsonb)
+		FROM deep_link_grants
+		ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	items := make([]DeepLinkGrant, 0)
+	for rows.Next() {
+		var (
+			item               DeepLinkGrant
+			allowedPermissions []byte
+			allowedActions     []byte
+			metadataJSON       []byte
+			activatedAt        sql.NullTime
+			consumedAt         sql.NullTime
+			revokedAt          sql.NullTime
+		)
+		if err := rows.Scan(
+			&item.ID,
+			&item.Kind,
+			&item.UserID,
+			&item.Status,
+			&item.TargetType,
+			&item.TargetID,
+			&item.LocationID,
+			&allowedPermissions,
+			&allowedActions,
+			&item.ReviewOnly,
+			&item.RequireStepUp,
+			&item.OneTime,
+			&item.Title,
+			&item.Message,
+			&item.StartsAt,
+			&item.ExpiresAt,
+			&activatedAt,
+			&consumedAt,
+			&item.ConsumedByAction,
+			&revokedAt,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+			&metadataJSON,
+		); err != nil {
+			continue
+		}
+		if activatedAt.Valid {
+			item.ActivatedAt = activatedAt.Time
+		}
+		if consumedAt.Valid {
+			item.ConsumedAt = consumedAt.Time
+		}
+		if revokedAt.Valid {
+			item.RevokedAt = revokedAt.Time
+		}
+		_ = json.Unmarshal(allowedPermissions, &item.AllowedPermissionKeys)
+		_ = json.Unmarshal(allowedActions, &item.AllowedActions)
+		_ = json.Unmarshal(metadataJSON, &item.Metadata)
+		items = append(items, item)
+	}
+	return items
+}
+
 func (r *PostgresRepository) ReportingLines() []ReportingLine {
 	const query = `
 		SELECT reporting_line_id, subject_user_id, manager_user_id, relationship_type,
@@ -661,6 +732,68 @@ func (r *PostgresRepository) FindDelegationGrant(id string) (DelegationGrant, bo
 	return item, true
 }
 
+func (r *PostgresRepository) FindDeepLinkGrant(id string) (DeepLinkGrant, bool) {
+	const query = `
+		SELECT deep_link_grant_id, grant_kind, user_id, status, target_type, target_id, COALESCE(location_id, ''),
+		       COALESCE(allowed_permission_keys_json, '[]'::jsonb),
+		       COALESCE(allowed_actions_json, '[]'::jsonb),
+		       review_only, require_step_up, one_time, COALESCE(title, ''), COALESCE(message, ''),
+		       starts_at, expires_at, activated_at, consumed_at, COALESCE(consumed_by_action, ''), revoked_at,
+		       created_at, updated_at, COALESCE(metadata_json, '{}'::jsonb)
+		FROM deep_link_grants
+		WHERE deep_link_grant_id = $1`
+	var (
+		item               DeepLinkGrant
+		allowedPermissions []byte
+		allowedActions     []byte
+		metadataJSON       []byte
+		activatedAt        sql.NullTime
+		consumedAt         sql.NullTime
+		revokedAt          sql.NullTime
+	)
+	err := r.db.QueryRowContext(context.Background(), query, id).Scan(
+		&item.ID,
+		&item.Kind,
+		&item.UserID,
+		&item.Status,
+		&item.TargetType,
+		&item.TargetID,
+		&item.LocationID,
+		&allowedPermissions,
+		&allowedActions,
+		&item.ReviewOnly,
+		&item.RequireStepUp,
+		&item.OneTime,
+		&item.Title,
+		&item.Message,
+		&item.StartsAt,
+		&item.ExpiresAt,
+		&activatedAt,
+		&consumedAt,
+		&item.ConsumedByAction,
+		&revokedAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&metadataJSON,
+	)
+	if err != nil {
+		return DeepLinkGrant{}, false
+	}
+	if activatedAt.Valid {
+		item.ActivatedAt = activatedAt.Time
+	}
+	if consumedAt.Valid {
+		item.ConsumedAt = consumedAt.Time
+	}
+	if revokedAt.Valid {
+		item.RevokedAt = revokedAt.Time
+	}
+	_ = json.Unmarshal(allowedPermissions, &item.AllowedPermissionKeys)
+	_ = json.Unmarshal(allowedActions, &item.AllowedActions)
+	_ = json.Unmarshal(metadataJSON, &item.Metadata)
+	return item, true
+}
+
 func (r *PostgresRepository) SaveServicePrincipal(principal ServicePrincipal) error {
 	const query = `
 		INSERT INTO service_principals (
@@ -754,6 +887,90 @@ func (r *PostgresRepository) SaveDelegationGrant(grant DelegationGrant) error {
 		grant.RevokedByUserID,
 		grant.CreatedAt,
 		grant.UpdatedAt,
+	)
+	return err
+}
+
+func (r *PostgresRepository) SaveDeepLinkGrant(grant DeepLinkGrant) error {
+	const query = `
+		INSERT INTO deep_link_grants (
+			deep_link_grant_id, grant_kind, user_id, status, target_type, target_id, location_id,
+			allowed_permission_keys_json, allowed_actions_json, review_only, require_step_up, one_time,
+			title, message, starts_at, expires_at, activated_at, consumed_at, consumed_by_action, revoked_at,
+			created_at, updated_at, metadata_json
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8::jsonb, $9::jsonb, $10, $11, $12, NULLIF($13, ''), NULLIF($14, ''), $15, $16, $17, $18, NULLIF($19, ''), $20, $21, $22, $23::jsonb)
+		ON CONFLICT (deep_link_grant_id) DO UPDATE SET
+			grant_kind = EXCLUDED.grant_kind,
+			user_id = EXCLUDED.user_id,
+			status = EXCLUDED.status,
+			target_type = EXCLUDED.target_type,
+			target_id = EXCLUDED.target_id,
+			location_id = EXCLUDED.location_id,
+			allowed_permission_keys_json = EXCLUDED.allowed_permission_keys_json,
+			allowed_actions_json = EXCLUDED.allowed_actions_json,
+			review_only = EXCLUDED.review_only,
+			require_step_up = EXCLUDED.require_step_up,
+			one_time = EXCLUDED.one_time,
+			title = EXCLUDED.title,
+			message = EXCLUDED.message,
+			starts_at = EXCLUDED.starts_at,
+			expires_at = EXCLUDED.expires_at,
+			activated_at = EXCLUDED.activated_at,
+			consumed_at = EXCLUDED.consumed_at,
+			consumed_by_action = EXCLUDED.consumed_by_action,
+			revoked_at = EXCLUDED.revoked_at,
+			updated_at = EXCLUDED.updated_at,
+			metadata_json = EXCLUDED.metadata_json`
+	allowedPermissionsJSON, err := json.Marshal(grant.AllowedPermissionKeys)
+	if err != nil {
+		return err
+	}
+	allowedActionsJSON, err := json.Marshal(grant.AllowedActions)
+	if err != nil {
+		return err
+	}
+	metadataJSON, err := json.Marshal(grant.Metadata)
+	if err != nil {
+		return err
+	}
+	var activatedAt any
+	if !grant.ActivatedAt.IsZero() {
+		activatedAt = grant.ActivatedAt
+	}
+	var consumedAt any
+	if !grant.ConsumedAt.IsZero() {
+		consumedAt = grant.ConsumedAt
+	}
+	var revokedAt any
+	if !grant.RevokedAt.IsZero() {
+		revokedAt = grant.RevokedAt
+	}
+	_, err = r.db.ExecContext(
+		context.Background(),
+		query,
+		grant.ID,
+		grant.Kind,
+		grant.UserID,
+		grant.Status,
+		grant.TargetType,
+		grant.TargetID,
+		grant.LocationID,
+		string(allowedPermissionsJSON),
+		string(allowedActionsJSON),
+		grant.ReviewOnly,
+		grant.RequireStepUp,
+		grant.OneTime,
+		grant.Title,
+		grant.Message,
+		grant.StartsAt,
+		grant.ExpiresAt,
+		activatedAt,
+		consumedAt,
+		grant.ConsumedByAction,
+		revokedAt,
+		grant.CreatedAt,
+		grant.UpdatedAt,
+		string(metadataJSON),
 	)
 	return err
 }
