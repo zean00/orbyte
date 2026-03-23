@@ -23,6 +23,9 @@ type Harness struct {
 func NewHarness(t testing.TB, manifests ...module.Manifest) *Harness {
 	t.Helper()
 	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	// Golden/UI harnesses should stay storage-agnostic and not inherit CI's
+	// Postgres test environment, which may not be migrated yet.
+	t.Setenv("DATABASE_URL", "")
 	application, err := app.New(app.Options{BusinessManifests: manifests})
 	if err != nil {
 		t.Fatalf("build app: %v", err)
