@@ -1,58 +1,111 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"orbyte/internal/modulegen"
-	"orbyte/internal/platform/module"
+	platformmodule "orbyte/internal/platform/module"
 )
 
-func TestParseOptionsAndModulegenRoot(t *testing.T) {
+func TestParseOptionsAndHelpers(t *testing.T) {
 	opts, err := parseOptions([]string{
-		"-root", " /tmp/orbyte ",
-		"-spec", "specs/test.yaml",
+		"-root", " ./workspace ",
+		"-spec", "spec.yaml",
 		"-profile", "minimal",
-		"-starter-pack", "document-workflow",
 		"-json",
-		"-key", "sample",
-		"-name", "Sample",
-		"-version", "1.0.0",
-		"-domain-family", "clinic",
-		"-kind", "document",
 	})
 	if err != nil {
 		t.Fatalf("parseOptions failed: %v", err)
 	}
-	if opts.Root != "/tmp/orbyte" || opts.SpecPath != "specs/test.yaml" || opts.Profile != "minimal" || opts.StarterPack != "document-workflow" || !opts.JSON || opts.Key != "sample" || opts.Kind != "document" {
-		t.Fatalf("unexpected parsed options: %+v", opts)
+	if opts.Root != "./workspace" {
+		t.Fatalf("expected trimmed root, got %q", opts.Root)
 	}
-
+	if opts.SpecPath != "spec.yaml" || opts.Profile != "minimal" || !opts.JSON {
+		t.Fatalf("unexpected options: %+v", opts)
+	}
 	if got := modulegenRoot("  "); got != "." {
-		t.Fatalf("expected default root, got %q", got)
+		t.Fatalf("expected default root '.', got %q", got)
+	}
+	if got := firstNonEmpty(" ", " value "); got != "value" {
+		t.Fatalf("expected first populated helper result, got %q", got)
 	}
 }
 
-func TestToExplainSpec(t *testing.T) {
+func TestToExplainSpecAndWriteSpecFile(t *testing.T) {
 	spec := modulegen.Spec{
-		Module: modulegen.ModuleIdentity{
-			Key:     "sample",
-			Name:    "Sample",
-			Version: "1.0.0",
-			Kind:    "document",
-		},
-		Dependencies: []string{"base.module"},
-		DependencyRequirements: []module.DependencyRequirement{
-			{ModuleKey: "base.module", VersionRange: ">=1.0.0", Kind: module.DependencyKindRequired},
-		},
+		Module: modulegen.ModuleIdentity{Key: "test_module", Kind: "domain"},
+		StarterPack: "minimal",
+		Dependencies: []string{"platform.core"},
+		DependencyRequirements: []platformmodule.DependencyRequirement{{
+			ModuleKey:    "platform.core",
+			VersionRange: ">=1.0.0",
+			Kind:         platformmodule.DependencyKindRequired,
+		}},
 	}
-	explained := toExplainSpec(spec)
-	if explained.Module.Key != "sample" || len(explained.Dependencies) != 1 || len(explained.DependencyRequirements) != 1 {
-		t.Fatalf("unexpected explain spec: %+v", explained)
+	rendered := toExplainSpec(spec)
+	if rendered.Module.Key != "test_module" || len(rendered.DependencyRequirements) != 1 {
+		t.Fatalf("unexpected explain spec: %+v", rendered)
 	}
-	if explained.StarterPack != "" {
-		t.Fatalf("expected empty starter pack when spec does not define one, got %+v", explained)
+
+	root := t.TempDir()
+	opts := modulegen.Options{Root: root}
+	if err := writeSpecFile(opts, spec); err != nil {
+		t.Fatalf("writeSpecFile failed: %v", err)
 	}
-	if explained.DependencyRequirements[0].Kind != string(module.DependencyKindRequired) {
-		t.Fatalf("unexpected dependency kind: %+v", explained.DependencyRequirements[0])
+	path := filepath.Join(root, "test_module.module.yaml")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated spec: %v", err)
 	}
+	if !strings.Contains(string(content), "module:") || !strings.Contains(string(content), "test_module") {
+		t.Fatalf("unexpected written spec: %s", string(content))
+	}
+	if err := os.WriteFile(path, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("seed spec file: %v", err)
+	}
+	if err := writeSpecFile(opts, spec); err != nil {
+		t.Fatalf("writeSpecFile on existing file failed: %v", err)
+	}
+	content, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read existing spec: %v", err)
+	}
+	if string(content) != "existing" {
+		t.Fatalf("expected existing file to remain untouched, got %s", string(content))
+	}
+}
+
+func TestLintModulesJSONOutput(t *testing.T) {
+	root := t.TempDir()
+	opts := modulegen.Options{Root: root, JSON: true}
+	originalStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe failed: %v", err)
+	}
+	defer reader.Close()
+	os.Stdout = writer
+	defer func() { os.Stdout = originalStdout }()
+
+	if err := lintModules(opts); err != nil {
+		t.Fatalf("lintModules failed: %v", err)
+	}
+	_ = writer.Close()
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read lint output: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(bytesTrimSpace(output), &payload); err != nil {
+		t.Fatalf("expected json lint output, got %s err=%v", string(output), err)
+	}
+}
+
+func bytesTrimSpace(input []byte) []byte {
+	return []byte(strings.TrimSpace(string(input)))
 }

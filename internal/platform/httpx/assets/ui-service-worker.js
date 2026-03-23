@@ -1,5 +1,11 @@
 const CACHE_NAME = 'orbyte-ui-shell-v2';
-const PRECACHE_URLS = ['/ui', '/ui/manifest.webmanifest', '/ui/assets/platform.css?v={{PLATFORM_ASSET_VERSION}}'];
+const PRECACHE_URLS = [
+  '/ui',
+  '/ui/manifest.webmanifest',
+  '/ui/assets/platform.css?v={{PLATFORM_ASSET_VERSION}}',
+  '/ui/assets/ui-shell-inline.css?v={{PLATFORM_ASSET_VERSION}}',
+  '/ui/assets/ui-shell.js?v={{PLATFORM_ASSET_VERSION}}'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting()));
@@ -12,6 +18,8 @@ self.addEventListener('activate', (event) => {
 function shouldCache(requestURL) {
   return requestURL.pathname === '/ui' ||
     requestURL.pathname === '/ui/assets/platform.css' ||
+    requestURL.pathname === '/ui/assets/ui-shell-inline.css' ||
+    requestURL.pathname === '/ui/assets/ui-shell.js' ||
     requestURL.pathname === '/auth/options' ||
     requestURL.pathname === '/ui/bootstrap' ||
     requestURL.pathname.indexOf('/ui/routes/resolve') === 0 ||

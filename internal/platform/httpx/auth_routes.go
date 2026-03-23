@@ -347,6 +347,32 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		})
 	})
 
+	mux.HandleFunc("GET /auth/session", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := currentPrincipal(r)
+		err := authError(r)
+		payload := map[string]any{
+			"authenticated": ok && err == nil,
+		}
+		if err != nil {
+			payload["auth_error"] = err.Error()
+		}
+		if ok && err == nil {
+			payload["principal_kind"] = string(p.kind)
+			payload["auth_method"] = p.authMethod
+			payload["current_location_id"] = p.currentLocationID
+			switch p.kind {
+			case userPrincipal:
+				payload["user_id"] = p.userID
+				payload["effective_user_id"] = p.effectiveUserID
+			case servicePrincipal:
+				payload["service_id"] = p.serviceID
+			}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Vary", "Cookie, Authorization")
+		respondJSON(w, http.StatusOK, payload)
+	})
+
 	mux.HandleFunc("POST /auth/login", func(w http.ResponseWriter, r *http.Request) {
 		policy := cfg.AuthPolicy()
 		if !policy.PasswordEnabled {

@@ -53,7 +53,7 @@ func registerMCPJSONRPCRoute(mux *http.ServeMux, pattern string, ident *identity
 			return
 		}
 		resp := server.Handle(r.Context(), req, actor)
-		recordMCPTrail(auditSvc, req, actor, resp)
+		recordMCPTrail(auditSvc, server, req, actor, resp)
 		respondJSON(w, http.StatusOK, resp)
 	})
 }
@@ -138,6 +138,7 @@ func mcpActorContext(r *http.Request, ident *identity.Service, p principal, endp
 		EffectiveUserID:    principalEffectiveUserID(p),
 		OnBehalfOfUserID:   principalOnBehalfOfUserID(p),
 		DelegationGrantID:  principalDelegationGrantID(p),
+		DeepLinkGrantID:    principalDeepLinkGrantID(p),
 		LocationID:         p.currentLocationID,
 		EndpointScope:      strings.TrimSpace(endpointScope),
 	}
@@ -172,7 +173,7 @@ func mcpActorContext(r *http.Request, ident *identity.Service, p principal, endp
 	}
 }
 
-func recordMCPTrail(auditSvc *audit.Service, req mcp.JSONRPCRequest, actor mcp.ActorContext, resp mcp.JSONRPCResponse) {
+func recordMCPTrail(auditSvc *audit.Service, server *mcp.Server, req mcp.JSONRPCRequest, actor mcp.ActorContext, resp mcp.JSONRPCResponse) {
 	if auditSvc == nil {
 		return
 	}
@@ -189,6 +190,17 @@ func recordMCPTrail(auditSvc *audit.Service, req mcp.JSONRPCRequest, actor mcp.A
 		targetType = "mcp_tool"
 		targetID = strings.TrimSpace(params.Name)
 		metadata["tool_name"] = targetID
+		if server != nil {
+			if descriptor, ok := server.ToolDescriptor(targetID, actor); ok {
+				metadata["contract_version"] = descriptor.Contract.Version
+				metadata["side_effect_class"] = descriptor.Contract.SideEffectClass
+				metadata["idempotency"] = descriptor.Contract.Idempotency
+				metadata["required_scopes"] = descriptor.Contract.RequiredScopes
+				metadata["required_permissions"] = descriptor.Contract.RequiredPermissions
+				metadata["audit_action"] = descriptor.Contract.AuditAction
+				metadata["stability"] = descriptor.Contract.Stability
+			}
+		}
 	case "resources/read":
 		var params struct {
 			URI string `json:"uri"`
@@ -197,9 +209,23 @@ func recordMCPTrail(auditSvc *audit.Service, req mcp.JSONRPCRequest, actor mcp.A
 		targetType = "mcp_resource"
 		targetID = strings.TrimSpace(params.URI)
 		metadata["resource_uri"] = targetID
+		if server != nil {
+			if descriptor, ok := server.ResourceDescriptor(targetID, actor); ok {
+				metadata["contract_version"] = descriptor.Contract.Version
+				metadata["side_effect_class"] = descriptor.Contract.SideEffectClass
+				metadata["idempotency"] = descriptor.Contract.Idempotency
+				metadata["required_scopes"] = descriptor.Contract.RequiredScopes
+				metadata["required_permissions"] = descriptor.Contract.RequiredPermissions
+				metadata["audit_action"] = descriptor.Contract.AuditAction
+				metadata["stability"] = descriptor.Contract.Stability
+			}
+		}
 	}
 	metadata["jsonrpc_method"] = req.Method
 	metadata["endpoint_scope"] = actor.EndpointScope
+	metadata["effective_user_id"] = actor.EffectiveUserID
+	metadata["deep_link_grant_id"] = actor.DeepLinkGrantID
+	metadata["contract_version"] = defaultString(metadata["contract_version"], mcp.ContractVersion)
 	metadata["status"] = "ok"
 	if resp.Error != nil {
 		metadata["status"] = "error"
@@ -218,6 +244,13 @@ func recordMCPTrail(auditSvc *audit.Service, req mcp.JSONRPCRequest, actor mcp.A
 		OccurredAt:        time.Now().UTC(),
 		Metadata:          metadata,
 	})
+}
+
+func defaultString(value any, fallback string) string {
+	if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
+		return text
+	}
+	return fallback
 }
 
 func writeAnalyticsEvent(w http.ResponseWriter, event string, snapshot analytics.Snapshot) error {

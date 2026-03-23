@@ -40,19 +40,62 @@ func NewService(cfg *config.Service) *Service {
 func (s *Service) Providers() []ProviderInfo {
 	providers, err := s.providerConfigs()
 	if err != nil {
-		return []ProviderInfo{{Key: "invalid", Name: "Invalid ACP Configuration", Available: false, Error: err.Error()}}
+		return []ProviderInfo{{
+			Key:             "invalid",
+			Name:            "Invalid ACP Configuration",
+			Available:       false,
+			ContractVersion: "2026-03-23",
+			Stability:       "experimental",
+			SessionLifecycle: []string{
+				"starting",
+				"ready",
+				"running",
+				"error",
+			},
+			Error: err.Error(),
+		}}
 	}
 	items := make([]ProviderInfo, 0, len(providers))
 	for _, provider := range providers {
 		items = append(items, ProviderInfo{
-			Key:         provider.Key,
-			Name:        provider.Name,
-			Description: provider.Description,
-			Available:   strings.TrimSpace(provider.Command) != "",
+			Key:               provider.Key,
+			Name:              provider.Name,
+			Description:       provider.Description,
+			Available:         strings.TrimSpace(provider.Command) != "",
+			ContractVersion:   "2026-03-23",
+			Stability:         "experimental",
+			SupportsApprovals: true,
+			SupportsStreaming: true,
+			SessionLifecycle: []string{
+				"starting",
+				"ready",
+				"running",
+				"error",
+			},
 		})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
+}
+
+func (s *Service) ContractMetadata() map[string]any {
+	return map[string]any{
+		"contract_version": "2026-03-23",
+		"stability":        "experimental",
+		"session_lifecycle": []string{
+			"starting",
+			"ready",
+			"running",
+			"error",
+		},
+		"approval_lifecycle": []string{
+			"pending",
+			"approved",
+			"rejected",
+		},
+		"supports_streaming": true,
+		"supports_approvals": true,
+	}
 }
 
 func (s *Service) Enabled() bool {

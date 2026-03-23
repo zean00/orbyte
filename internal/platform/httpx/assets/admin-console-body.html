@@ -1,0 +1,379 @@
+
+  <header class="shell-bar shell-bar-admin">
+    <div class="shell-bar-primary">
+      <button type="button" id="admin-nav-toggle" class="shell-icon-button" aria-expanded="true" aria-controls="admin-nav">Menu</button>
+      <div class="shell-brand-cluster">
+        <div class="shell-eyebrow" id="admin-eyebrow">Operations Console</div>
+        <div>
+          <h1 id="admin-title">Platform Admin</h1>
+          <p class="status" id="admin-subtitle">Modules, scoped configuration, and effective runtime settings.</p>
+        </div>
+      </div>
+    </div>
+    <div class="shell-bar-actions">
+      <form id="admin-command-form" class="shell-command" role="search">
+        <input id="admin-command-input" name="admin_command" aria-label="Search admin sections or jump to a route" list="admin-route-options" placeholder="Search admin sections or jump to a route" autocomplete="off">
+        <datalist id="admin-route-options"></datalist>
+        <button type="submit" class="secondary" id="admin-command-submit">Go</button>
+      </form>
+      <div class="shell-user-chip" id="admin-user-chip">admin</div>
+      <label class="locale-switch">
+        <span id="admin-locale-label">Language</span>
+        <select id="admin-locale-switcher" name="admin_locale"></select>
+      </label>
+      <button type="button" id="admin-agent-toggle-button" class="secondary" hidden>Agent</button>
+      <a id="admin-ui-link" class="button secondary" href="/ui" hidden>Workspace</a>
+      <button type="button" id="admin-logout-button" class="secondary">Log out</button>
+    </div>
+  </header>
+  <div class="shell-backdrop" id="admin-shell-backdrop" hidden></div>
+  <main class="admin-shell" id="admin-shell-root">
+    <aside class="admin-sidebar" id="admin-sidebar">
+      <div class="sidebar-section sidebar-intro">
+        <div class="sidebar-heading">Admin domains</div>
+        <p class="status">Runtime, security, configuration, workflow, and organizational controls.</p>
+      </div>
+      <nav id="admin-nav" class="admin-tabs admin-nav-groups" aria-label="Admin sections"></nav>
+    </aside>
+    <section class="admin-main">
+    <div class="admin-grid" data-admin-route="/admin/modules">
+      <section class="card">
+        <h2 id="modules-heading">Modules</h2>
+        <div id="modules"></div>
+      </section>
+    </div>
+    <div class="admin-grid" data-admin-route="/admin/communications">
+      <section class="card">
+        <h2>Communications</h2>
+        <p class="status">Workflow notifications, deep-link delivery state, and communication actions.</p>
+        <div id="admin-communications"></div>
+      </section>
+    </div>
+    <section class="card" data-admin-route="/admin/auth">
+      <h2 id="auth-heading">Authentication Settings</h2>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-password-enabled">Password Login</span><select id="auth-password-enabled"><option value="true">enabled</option><option value="false">disabled</option></select></label>
+        <label class="field"><span id="label-auth-google-enabled">Google Login</span><select id="auth-google-enabled"><option value="true">enabled</option><option value="false">disabled</option></select></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-login-title">Login Title</span><input id="auth-login-title"></label>
+        <label class="field"><span id="label-auth-google-button-label">Google Button Label</span><input id="auth-google-button-label"></label>
+      </div>
+      <label class="field"><span id="label-auth-login-subtitle">Login Subtitle</span><input id="auth-login-subtitle"></label>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-client-id">Google Client ID</span><input id="auth-google-client-id"></label>
+        <label class="field"><span id="label-auth-google-client-secret">Google Client Secret</span><input id="auth-google-client-secret" placeholder="[redacted]"></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-redirect-url">Google Redirect URL</span><input id="auth-google-redirect-url"></label>
+        <label class="field"><span id="label-auth-google-hosted-domain">Google Hosted Domain</span><input id="auth-google-hosted-domain"></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-auth-url">Google Auth URL</span><input id="auth-google-auth-url"></label>
+        <label class="field"><span id="label-auth-google-token-url">Google Token URL</span><input id="auth-google-token-url"></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-jwks-url">Google JWKS URL</span><input id="auth-google-jwks-url"></label>
+        <label class="field"><span id="label-auth-google-issuer">Google Issuer</span><input id="auth-google-issuer"></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-timeout-seconds">Google Timeout Seconds</span><input id="auth-google-timeout-seconds" type="number"></label>
+        <label class="field"><span id="label-auth-google-auto-provision-enabled">Provision New Users</span><select id="auth-google-auto-provision-enabled"><option value="true">enabled</option><option value="false">disabled</option></select></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-auto-provision-role-id">Provision Role</span><select id="auth-google-auto-provision-role-id"></select></label>
+        <label class="field"><span id="label-auth-google-auto-provision-default-location-id">Provision Default Location</span><select id="auth-google-auto-provision-default-location-id"></select></label>
+      </div>
+      <div class="admin-row">
+        <label class="field"><span id="label-auth-google-auto-provision-scope-type">Provision Scope Type</span><select id="auth-google-auto-provision-scope-type"><option value="deployment">deployment</option><option value="organization">organization</option><option value="location">location</option></select></label>
+        <label class="field"><span id="label-auth-google-auto-provision-scope-id">Provision Scope ID</span><select id="auth-google-auto-provision-scope-id"></select></label>
+      </div>
+      <label class="field"><span id="label-auth-google-auto-provision-allowed-domains">Provision Allowed Domains</span><input id="auth-google-auto-provision-allowed-domains" placeholder="example.com, example.org"></label>
+      <div class="actions">
+        <button id="load-auth-settings" class="secondary">Load Auth Settings</button>
+        <button id="save-auth-settings">Save Auth Settings</button>
+      </div>
+      <p id="auth-settings-status" class="muted"></p>
+      <pre id="auth-settings-validation"></pre>
+    </section>
+    <div class="admin-grid" data-admin-route="/admin/config">
+      <section class="card">
+        <h2 id="config-heading">Config Editor</h2>
+        <div class="admin-row">
+          <div class="field"><label id="config-key-label" for="config-key">Config Key</label><select id="config-key"></select></div>
+          <div class="field"><label id="config-scope-label" for="config-scope">Scope</label><select id="config-scope"><option value="deployment">deployment</option><option value="organization">organization</option><option value="location">location</option></select></div>
+        </div>
+        <div class="admin-row">
+          <div class="field"><label id="organization-label" for="organization-id">Organization</label><select id="organization-id"></select></div>
+          <div class="field"><label id="location-label" for="location-id">Location</label><select id="location-id"></select></div>
+        </div>
+        <div class="field"><label id="config-value-label" for="config-value">Value JSON</label><textarea id="config-value"></textarea></div>
+        <div class="actions">
+          <button id="load-effective" class="secondary">Load Effective</button>
+          <button id="save-config">Save Entry</button>
+        </div>
+        <p id="config-status" class="muted"></p>
+      </section>
+    </div>
+    <div class="section-stack" data-admin-route="/admin/org">
+      <section class="page-panel">
+        <div class="page-header">
+          <div>
+            <h3 id="org-heading">Org Chart</h3>
+            <p class="status" id="org-subtitle">Browse reporting lines, spot gaps, and update managers from one place.</p>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="toolbar-row">
+            <label class="control-tile">
+              <span class="meta" id="org-location-label">Location</span>
+              <select id="org-location-filter"></select>
+            </label>
+            <label class="control-tile">
+              <span class="meta" id="org-status-label">Line Status</span>
+              <select id="org-status-filter"><option value="">all</option><option value="active">active</option><option value="inactive">inactive</option></select>
+            </label>
+            <label class="control-tile grow">
+              <span class="meta" id="org-user-label">Focus User</span>
+              <select id="org-focus-user"></select>
+            </label>
+            <div class="actions">
+              <button id="org-refresh" class="secondary">Refresh</button>
+              <button id="org-new-line">New Reporting Line</button>
+            </div>
+          </div>
+          <div id="org-summary" class="metric-grid"></div>
+        </div>
+      </section>
+      <div class="admin-shell-grid">
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="org-chart-heading">Hierarchy Explorer</h3>
+              <p class="status" id="org-chart-status">Select a user card to inspect the chain and edit reporting lines.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div id="org-chart" class="org-chart-shell"></div>
+            <div id="org-chain" class="list"></div>
+          </div>
+        </section>
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="org-editor-heading">Reporting Line Editor</h3>
+              <p class="status" id="org-editor-status">Choose a user or line, then save changes.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div id="org-selected-user" class="detail-grid"></div>
+            <div id="org-user-lines" class="list"></div>
+            <div class="form-grid">
+              <label class="field"><span id="org-form-subject-label">Subject User</span><select id="org-form-subject"></select></label>
+              <label class="field"><span id="org-form-manager-label">Manager User</span><select id="org-form-manager"></select></label>
+              <label class="field"><span id="org-form-type-label">Relationship Type</span><select id="org-form-type"><option value="primary_manager">primary_manager</option><option value="acting_manager">acting_manager</option></select></label>
+              <label class="field"><span id="org-form-status-label">Status</span><select id="org-form-status"><option value="active">active</option><option value="inactive">inactive</option></select></label>
+              <label class="field"><span id="org-form-priority-label">Priority</span><input id="org-form-priority" type="number" min="0" step="1" value="0"></label>
+              <label class="field"><span id="org-form-location-label">Scope Location</span><select id="org-form-location"></select></label>
+              <label class="field"><span id="org-form-effective-from-label">Effective From</span><input id="org-form-effective-from" type="datetime-local"></label>
+              <label class="field"><span id="org-form-effective-to-label">Effective To</span><input id="org-form-effective-to" type="datetime-local"></label>
+            </div>
+          </div>
+          <div class="page-actions">
+            <button id="org-save-line">Save Reporting Line</button>
+            <button id="org-reset-line" class="secondary">Reset</button>
+            <span id="org-form-message" class="status"></span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="section-stack" data-admin-route="/admin/workflows">
+      <section class="page-panel">
+        <div class="page-header">
+          <div>
+            <h3 id="workflow-heading">Workflow Routing</h3>
+            <p class="status" id="workflow-subtitle">Edit draft transitions and inspect assignment resolution before publishing.</p>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="toolbar-row">
+            <label class="control-tile grow">
+              <span class="meta" id="workflow-key-label">Workflow</span>
+              <select id="workflow-key-select"></select>
+            </label>
+            <label class="control-tile">
+              <span class="meta" id="workflow-version-label">Version</span>
+              <select id="workflow-version-select"></select>
+            </label>
+            <div class="actions">
+              <button id="workflow-create-draft" class="secondary">Create Draft</button>
+              <button id="workflow-validate" class="secondary">Validate</button>
+              <button id="workflow-publish">Publish Draft</button>
+            </div>
+          </div>
+          <div id="workflow-summary" class="detail-grid"></div>
+          <p id="workflow-message" class="status"></p>
+        </div>
+      </section>
+      <div class="admin-shell-grid">
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="workflow-editor-heading">Draft Editor</h3>
+              <p class="status" id="workflow-editor-status">Update states and assignment rules in a structured table, then save the draft.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <label class="field"><span id="workflow-states-label">States</span><input id="workflow-states-input" placeholder="draft, submitted, approved"></label>
+            <div id="workflow-actions-editor" class="table-shell"></div>
+          </div>
+          <div class="page-actions">
+            <button id="workflow-add-action" class="secondary">Add Action</button>
+            <button id="workflow-save-draft">Save Draft</button>
+          </div>
+        </section>
+        <section class="page-panel">
+          <div class="page-header">
+            <div>
+              <h3 id="workflow-inspector-heading">Routing Inspector</h3>
+              <p class="status" id="workflow-inspector-status">Simulate manager-chain and fallback routing for the selected transition.</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div class="form-grid">
+              <label class="field"><span id="workflow-sim-state-label">Current State</span><input id="workflow-sim-state"></label>
+              <label class="field"><span id="workflow-sim-action-label">Action</span><input id="workflow-sim-action"></label>
+              <label class="field"><span id="workflow-sim-requester-label">Requester</span><select id="workflow-sim-requester"></select></label>
+              <label class="field"><span id="workflow-sim-previous-approver-label">Previous Approver</span><select id="workflow-sim-previous-approver"></select></label>
+              <label class="field"><span id="workflow-sim-location-label">Location</span><select id="workflow-sim-location"></select></label>
+            </div>
+            <div class="actions">
+              <button id="workflow-simulate">Simulate Routing</button>
+            </div>
+            <div id="workflow-simulation" class="list"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="template-stack" data-admin-route="/admin/templates">
+      <section class="card">
+        <h2 id="templates-heading">Template Library</h2>
+        <div class="admin-row">
+          <label class="field"><span id="template-definition-label">Template</span><select id="template-definition"></select></label>
+          <label class="field"><span id="template-binding-scope-label">Binding Scope</span><select id="template-binding-scope"><option value="deployment">deployment</option><option value="organization">organization</option><option value="location">location</option></select></label>
+        </div>
+        <div class="admin-row">
+          <label class="field"><span id="template-binding-scope-id-label">Binding Scope ID</span><select id="template-binding-scope-id"><option value="">deployment</option></select></label>
+          <label class="field"><span id="template-purpose-label">Purpose</span><input id="template-purpose" placeholder="official"></label>
+        </div>
+        <div class="admin-row">
+          <label class="field"><span id="template-channel-label">Channel</span><input id="template-channel" placeholder="print"></label>
+          <label class="field"><span id="template-binding-flags-label">Binding Flags</span><div class="actions"><label><input id="template-binding-default" type="checkbox" checked> <span id="template-binding-default-label">Default</span></label><label><input id="template-binding-official" type="checkbox"> <span id="template-binding-official-label">Official</span></label></div></label>
+        </div>
+        <div class="admin-row">
+          <label class="field"><span id="template-paper-preset-label">Paper Preset</span><select id="template-paper-preset"><option value="a4">A4 Portrait</option><option value="a4-landscape">A4 Landscape</option><option value="receipt-80">Receipt 80mm</option><option value="receipt-58">Receipt 58mm</option></select></label>
+          <label class="field"><span id="template-render-target-label">Preview Target ID</span><input id="template-render-target-id" placeholder="doc_..."></label>
+        </div>
+        <div class="admin-row">
+          <label class="field"><span id="template-report-key-label">Preview Target Key</span><input id="template-render-target-key" placeholder="document_reporting"></label>
+          <label class="field"><span id="template-render-mode-label">Preview Mode</span><select id="template-render-mode"><option value="sample">sample</option><option value="live">live</option></select></label>
+        </div>
+        <div class="admin-row">
+          <label class="field"><span>Fixture</span><select id="template-fixture-key"><option value="">none</option></select></label>
+          <label class="field"><span>Draft Workflow</span><div class="actions"><button id="duplicate-template-draft" class="secondary" type="button">Duplicate to Draft</button><button id="reset-template-draft" class="secondary" type="button">Reset Draft</button><button id="compare-template-version" class="secondary" type="button">Compare Draft</button></div></label>
+        </div>
+        <div class="actions">
+          <button id="load-template-definition" class="secondary">Load Template</button>
+          <button id="save-template-draft">Save Draft</button>
+          <button id="publish-template-version" class="secondary">Publish Current Draft</button>
+          <button id="save-template-binding" class="secondary">Save Binding</button>
+          <button id="preview-template-render">Preview</button>
+        </div>
+        <p id="template-status" class="muted"></p>
+      </section>
+      <div class="template-admin-grid">
+        <section class="card">
+          <h3 id="template-palette-heading">Block Palette</h3>
+          <div id="template-block-palette" class="template-palette"></div>
+          <div class="actions">
+            <button id="template-add-row" class="secondary">Add Row</button>
+            <button id="template-add-column" class="secondary">Add Column</button>
+          </div>
+          <p class="status" id="template-active-section">Body</p>
+        </section>
+        <section class="card template-designer-shell">
+          <div class="toolbar">
+            <div>
+              <h3 id="template-canvas-heading">Designer Canvas</h3>
+              <p class="status" id="template-canvas-status">Drag blocks into header, body, or footer rows.</p>
+            </div>
+            <div class="template-section-tabs" id="template-section-tabs"></div>
+          </div>
+          <div id="template-canvas" class="template-canvas"></div>
+          <details>
+            <summary id="template-expert-heading">Expert Source</summary>
+            <div class="admin-row">
+              <label class="field"><span id="template-body-label">Template Body</span><textarea id="template-body"></textarea></label>
+              <label class="field"><span id="template-style-label">Template Style</span><textarea id="template-style"></textarea></label>
+            </div>
+          </details>
+        </section>
+        <section class="card">
+          <h3 id="template-inspector-heading">Inspector</h3>
+          <div id="template-inspector" class="list"></div>
+        </section>
+      </div>
+      <div class="admin-grid">
+        <section class="card">
+          <h2 id="template-preview-heading">Template Preview</h2>
+          <div id="template-preview" class="template-preview-frame"></div>
+          <div id="template-preview-diagnostics" class="list"></div>
+        </section>
+        <section class="card">
+          <h3 id="template-versions-heading">Versions</h3>
+          <div id="template-versions" class="list"></div>
+          <h3 id="template-bindings-heading">Bindings</h3>
+          <div id="template-bindings" class="list"></div>
+          <h3>Binding Resolution</h3>
+          <div id="template-binding-debug" class="list"></div>
+        </section>
+      </div>
+    </div>
+    <section class="card" data-admin-route="/admin/agent">
+      <div class="page-header">
+        <div>
+          <h3>Agent Workspace</h3>
+          <p class="status">Review ACP sessions, approvals, and streamed responses in admin context.</p>
+        </div>
+        <div class="actions">
+          <button type="button" id="admin-agent-open-panel" class="secondary">Open Panel</button>
+        </div>
+      </div>
+      <div id="admin-agent-workspace"></div>
+    </section>
+    <section class="card" data-admin-route="/admin/definitions">
+      <h2 id="definitions-heading">Definitions</h2>
+      <div id="definitions" class="list"></div>
+    </section>
+    <div class="admin-grid" data-admin-route="/admin/security">
+      <section class="card">
+        <h2 id="navigation-heading">Navigation Defaults</h2>
+        <div id="navigation-settings-status" class="muted"></div>
+        <div id="navigation-settings" class="list"></div>
+      </section>
+      <section class="card">
+        <h2 id="role-templates-heading">Role Templates</h2>
+        <pre id="role-templates"></pre>
+      </section>
+      <section class="card">
+        <h2 id="policy-hooks-heading">Policy Hooks</h2>
+        <pre id="policy-hooks"></pre>
+      </section>
+    </div>
+    <section class="card" data-admin-route="/admin/observability">
+      <h2 id="observability-heading">Observability Contracts</h2>
+      <pre id="observability-contracts"></pre>
+    </section>
+    </section>
+  </main>
+  <aside id="admin-agent-panel" class="agent-panel hidden" aria-live="polite"></aside>

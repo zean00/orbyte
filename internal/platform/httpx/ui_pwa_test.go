@@ -21,22 +21,36 @@ func TestUIShellRegistersPWAAndOfflineRuntime(t *testing.T) {
 	for _, fragment := range []string{
 		`rel="manifest" href="/ui/manifest.webmanifest"`,
 		`rel="stylesheet" href="/ui/assets/platform.css?v=` + platformAssetVersion + `"`,
-		`navigator.serviceWorker.register('/ui/sw.js'`,
-		`indexedDB.open(offlineDBName, offlineDBVersion)`,
-		`headers['X-CSRF-Token'] = csrf`,
 		`id="shell-root"`,
 		`id="shell-sidebar"`,
 		`id="route-panel"`,
-		`ensurePreviewOverlay()`,
 		`id="locale-switcher"`,
 		`id="admin-link-button"`,
 		`id="logout-button"`,
+		`/ui/assets/ui-shell-inline.css?v=` + platformAssetVersion + `"`,
+		`/ui/assets/ui-shell.js?v=` + platformAssetVersion + `"`,
+	} {
+		if !strings.Contains(body, fragment) {
+			t.Fatalf("expected UI shell to contain %q", fragment)
+		}
+	}
+
+	script := h.request(http.MethodGet, "/ui/assets/ui-shell.js", nil, false)
+	if script.Code != http.StatusOK {
+		t.Fatalf("expected 200 from shell js route, got %d body=%s", script.Code, script.Body.String())
+	}
+	scriptBody := script.Body.String()
+	for _, fragment := range []string{
+		`navigator.serviceWorker.register('/ui/sw.js'`,
+		`indexedDB.open(offlineDBName, offlineDBVersion)`,
+		`headers['X-CSRF-Token'] = csrf`,
+		`ensurePreviewOverlay()`,
 		`/offline/bootstrap`,
 		`/offline/sync`,
 		`/auth/logout`,
 	} {
-		if !strings.Contains(body, fragment) {
-			t.Fatalf("expected UI shell to contain %q", fragment)
+		if !strings.Contains(scriptBody, fragment) {
+			t.Fatalf("expected shell js to contain %q", fragment)
 		}
 	}
 }
@@ -70,6 +84,12 @@ func TestUIManifestAndServiceWorkerRoutes(t *testing.T) {
 	if !strings.Contains(swBody, "/ui/assets/platform.css") {
 		t.Fatal("expected stylesheet in service worker cache list")
 	}
+	if !strings.Contains(swBody, "/ui/assets/ui-shell.js") {
+		t.Fatal("expected shell script in service worker cache list")
+	}
+	if !strings.Contains(swBody, "/ui/assets/ui-shell-inline.css") {
+		t.Fatal("expected shell inline stylesheet in service worker cache list")
+	}
 
 	css := h.request(http.MethodGet, "/ui/assets/platform.css", nil, false)
 	if css.Code != http.StatusOK {
@@ -91,6 +111,14 @@ func TestUIManifestAndServiceWorkerRoutes(t *testing.T) {
 		if !strings.Contains(css.Body.String(), selector) {
 			t.Fatalf("expected stylesheet compatibility selector %q", selector)
 		}
+	}
+
+	shellCSS := h.request(http.MethodGet, "/ui/assets/ui-shell-inline.css", nil, false)
+	if shellCSS.Code != http.StatusOK {
+		t.Fatalf("expected 200 from shell inline stylesheet route, got %d body=%s", shellCSS.Code, shellCSS.Body.String())
+	}
+	if !strings.Contains(shellCSS.Body.String(), `[data-density="compact"] .data-table th`) {
+		t.Fatal("expected extracted shell inline stylesheet content")
 	}
 }
 
@@ -155,14 +183,19 @@ func TestUIShellIncludesIndonesianValueTranslations(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
 	body := rr.Body.String()
+	script := h.request(http.MethodGet, "/ui/assets/ui-shell.js", nil, false)
+	if script.Code != http.StatusOK {
+		t.Fatalf("expected 200 from shell js route, got %d body=%s", script.Code, script.Body.String())
+	}
+	scriptBody := script.Body.String()
 	for _, fragment := range []string{
 		`value_approved: 'Disetujui'`,
 		`value_active: 'Aktif'`,
 		`action_submit: 'Ajukan'`,
 		`/locale?locale=`,
 	} {
-		if !strings.Contains(body, fragment) {
-			t.Fatalf("expected UI shell to contain %q", fragment)
+		if !strings.Contains(body, fragment) && !strings.Contains(scriptBody, fragment) {
+			t.Fatalf("expected extracted shell assets to contain %q", fragment)
 		}
 	}
 }
@@ -175,14 +208,19 @@ func TestShellAssetsIncludeACPEntryPoints(t *testing.T) {
 		t.Fatalf("expected 200 from ui shell, got %d", rr.Code)
 	}
 	uiBody := rr.Body.String()
+	uiScript := h.request(http.MethodGet, "/ui/assets/ui-shell.js", nil, false)
+	if uiScript.Code != http.StatusOK {
+		t.Fatalf("expected 200 from ui shell js, got %d", uiScript.Code)
+	}
+	uiScriptBody := uiScript.Body.String()
 	for _, fragment := range []string{
 		`id="agent-toggle-button"`,
 		`id="agent-panel"`,
 		`/agent/api/sessions`,
 		`#/agent/workspace`,
 	} {
-		if !strings.Contains(uiBody, fragment) {
-			t.Fatalf("expected UI shell to contain %q", fragment)
+		if !strings.Contains(uiBody, fragment) && !strings.Contains(uiScriptBody, fragment) {
+			t.Fatalf("expected ui shell assets to contain %q", fragment)
 		}
 	}
 
@@ -191,14 +229,19 @@ func TestShellAssetsIncludeACPEntryPoints(t *testing.T) {
 		t.Fatalf("expected 200 from admin shell, got %d", rr.Code)
 	}
 	adminBody := rr.Body.String()
+	adminScript := h.request(http.MethodGet, "/admin/assets/admin-console.js", nil, true)
+	if adminScript.Code != http.StatusOK {
+		t.Fatalf("expected 200 from admin shell js, got %d body=%s", adminScript.Code, adminScript.Body.String())
+	}
+	adminScriptBody := adminScript.Body.String()
 	for _, fragment := range []string{
 		`id="admin-agent-toggle-button"`,
 		`id="admin-agent-panel"`,
 		`data-admin-route="/admin/agent"`,
 		`/agent/api/sessions`,
 	} {
-		if !strings.Contains(adminBody, fragment) {
-			t.Fatalf("expected admin shell to contain %q", fragment)
+		if !strings.Contains(adminBody, fragment) && !strings.Contains(adminScriptBody, fragment) {
+			t.Fatalf("expected admin shell assets to contain %q", fragment)
 		}
 	}
 }
@@ -235,5 +278,20 @@ func TestAuthenticatedLocalePreferencePersistsPerUser(t *testing.T) {
 	}
 	if payload["locale"] != "id" {
 		t.Fatalf("expected authenticated bootstrap to prefer per-user locale, got %+v", payload["locale"])
+	}
+}
+
+func TestAuthSessionIsNotCacheable(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/auth/session", nil, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from auth session, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Result().Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("expected no-store auth session response, got %q", got)
+	}
+	if got := rr.Result().Header.Get("Vary"); got != "Cookie, Authorization" {
+		t.Fatalf("expected auth session vary header, got %q", got)
 	}
 }

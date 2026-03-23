@@ -82,6 +82,48 @@ func TestWorkflowValidationSimulationAndFallbackBranches(t *testing.T) {
 		t.Fatalf("expected invalid simulation result, got %+v", simulated)
 	}
 
+	transitionFailure := svc.Simulate(Definition{
+		Key:     "simple",
+		States:  []string{"draft", "submitted"},
+		Actions: []ActionRule{{Action: "submit", FromState: "draft", ToState: "submitted"}},
+	}, SimulationInput{CurrentState: "submitted", Action: "submit"})
+	if transitionFailure.Valid || len(transitionFailure.Issues) == 0 || !strings.Contains(transitionFailure.Issues[0], "not allowed") {
+		t.Fatalf("expected transition failure issues, got %+v", transitionFailure)
+	}
+
+	validSimulation := svc.Simulate(Definition{
+		Key:    "simulated",
+		States: []string{"draft", "submitted"},
+		Actions: []ActionRule{{
+			Action:               "submit",
+			FromState:            "draft",
+			ToState:              "submitted",
+			TaskType:             "review",
+			CreateApproval:       true,
+			AssignmentMode:       "role_queue",
+			AssigneeRoleKey:      "approver",
+			CandidateRoleKeys:    []string{"approver"},
+			ApprovalStageKey:     "review",
+			DueAfterSeconds:      60,
+			EscalateAfterSeconds: 120,
+		}},
+	}, SimulationInput{CurrentState: "draft", Action: "submit", ActorID: "actor-1"})
+	if !validSimulation.Valid {
+		t.Fatalf("expected valid simulation, got %+v", validSimulation)
+	}
+	if validSimulation.Transition.ToState != "submitted" {
+		t.Fatalf("expected simulated transition to submitted, got %+v", validSimulation.Transition)
+	}
+	if validSimulation.PlannedTask == nil || validSimulation.PlannedTask.TargetID != "simulation" {
+		t.Fatalf("expected planned task for fallback simulation target, got %+v", validSimulation.PlannedTask)
+	}
+	if validSimulation.PlannedApproval == nil || validSimulation.PlannedApproval.Status != "pending" {
+		t.Fatalf("expected pending approval, got %+v", validSimulation.PlannedApproval)
+	}
+	if got := validSimulation.AppliedAssignments["action"]; got != "submit" {
+		t.Fatalf("expected assignment metadata action, got %+v", validSimulation.AppliedAssignments)
+	}
+
 	transition, err := svc.ExecuteVersion("generic_request_flow", 0, "draft", "submit")
 	if err != nil || transition.ToState != "submitted" {
 		t.Fatalf("expected version fallback to Execute, got transition=%+v err=%v", transition, err)
@@ -150,5 +192,54 @@ func TestWorkflowListDefinitionsAndHelper(t *testing.T) {
 	}
 	if got := firstNonEmpty("", "doc-1", "doc-2"); got != "doc-1" {
 		t.Fatalf("expected firstNonEmpty to return first populated value, got %q", got)
+	}
+	if got := firstNonEmpty("   ", "\t", ""); got != "" {
+		t.Fatalf("expected blank helper result, got %q", got)
+	}
+	if got := firstNonEmpty("  doc-3  "); got != "doc-3" {
+		t.Fatalf("expected trimmed helper result, got %q", got)
+	}
+}
+
+func TestValidateDefinitionReturnsExpandedIssues(t *testing.T) {
+	err := validateDefinition(Definition{
+		Key:    " ",
+		States: []string{"draft", " "},
+		Actions: []ActionRule{{
+			Action:    " ",
+			FromState: "missing",
+			ToState:   "other-missing",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	message := err.Error()
+	for _, expected := range []string{
+		"workflow key is required",
+		"workflow state may not be blank",
+		"workflow action is required",
+		`unknown from_state "missing"`,
+		`unknown to_state "other-missing"`,
+	} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("expected validation message %q in %q", expected, message)
+		}
+	}
+}
+
+func TestValidateDefinitionRejectsMissingStatesAndActions(t *testing.T) {
+	err := validateDefinition(Definition{Key: "empty"})
+	if err == nil {
+		t.Fatal("expected validation error for missing states and actions")
+	}
+	message := err.Error()
+	for _, expected := range []string{
+		"workflow must define at least one state",
+		"workflow must define at least one action",
+	} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("expected validation message %q in %q", expected, message)
+		}
 	}
 }

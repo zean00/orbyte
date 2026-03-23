@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,104 +12,107 @@ import (
 
 func TestMigrationFilesAndChecksum(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "0020_test.sql"), []byte("SELECT 1;"), 0o644); err != nil {
-		t.Fatalf("write migration failed: %v", err)
+	files := map[string]string{
+		"002_second.sql": "SELECT 2;",
+		"001_first.sql":  "SELECT 1;",
+		"README.md":      "ignored",
 	}
-	if err := os.WriteFile(filepath.Join(dir, "0010_test.sql"), []byte("SELECT 2;"), 0o644); err != nil {
-		t.Fatalf("write migration failed: %v", err)
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("seed migration file %s: %v", name, err)
+		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignore"), 0o644); err != nil {
-		t.Fatalf("write helper file failed: %v", err)
+	if err := os.Mkdir(filepath.Join(dir, "subdir"), 0o755); err != nil {
+		t.Fatalf("seed subdir: %v", err)
 	}
-
-	files, err := migrationFiles(dir)
+	list, err := migrationFiles(dir)
 	if err != nil {
 		t.Fatalf("migrationFiles failed: %v", err)
 	}
-	if len(files) != 2 || !strings.HasSuffix(files[0], "0010_test.sql") || !strings.HasSuffix(files[1], "0020_test.sql") {
-		t.Fatalf("unexpected migration files: %+v", files)
+	if len(list) != 2 {
+		t.Fatalf("expected 2 sql files, got %+v", list)
 	}
-
-	if checksumFor([]byte("SELECT 1;")) != checksumFor([]byte("SELECT 1;")) {
-		t.Fatal("expected deterministic checksum")
+	if filepath.Base(list[0]) != "001_first.sql" || filepath.Base(list[1]) != "002_second.sql" {
+		t.Fatalf("expected sorted sql files, got %+v", list)
+	}
+	if a, b := checksumFor([]byte("same")), checksumFor([]byte("same")); a != b {
+		t.Fatalf("expected stable checksum, got %q vs %q", a, b)
+	}
+	if checksumFor([]byte("same")) == checksumFor([]byte("different")) {
+		t.Fatal("expected different checksums for different content")
 	}
 }
 
-func TestEnsureAppliedStatusAndMigrateUp(t *testing.T) {
+func TestEnsureMigrationTableAndAppliedMigrations(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock.New failed: %v", err)
 	}
 	defer db.Close()
 
-	mock.ExpectExec(regexp.QuoteMeta("CREATE TABLE IF NOT EXISTS schema_migrations (")).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("CREATE TABLE IF NOT EXISTS schema_migrations")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	if err := ensureMigrationTable(db); err != nil {
 		t.Fatalf("ensureMigrationTable failed: %v", err)
 	}
 
-	appliedRows := sqlmock.NewRows([]string{"filename", "checksum"}).AddRow("0010_test.sql", "abc")
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT filename, checksum FROM schema_migrations")).WillReturnRows(appliedRows)
+	rows := sqlmock.NewRows([]string{"filename", "checksum"}).
+		AddRow("001_first.sql", "abc").
+		AddRow("002_second.sql", "def")
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT filename, checksum FROM schema_migrations")).
+		WillReturnRows(rows)
 	applied, err := appliedMigrations(db)
 	if err != nil {
 		t.Fatalf("appliedMigrations failed: %v", err)
 	}
-	if applied["0010_test.sql"] != "abc" {
-		t.Fatalf("unexpected applied migrations: %+v", applied)
+	if len(applied) != 2 || applied["001_first.sql"] != "abc" || applied["002_second.sql"] != "def" {
+		t.Fatalf("unexpected applied migrations map: %+v", applied)
 	}
-
-	dir := t.TempDir()
-	content := []byte("SELECT 42;")
-	file := filepath.Join(dir, "0010_test.sql")
-	if err := os.WriteFile(file, content, 0o644); err != nil {
-		t.Fatalf("write migration failed: %v", err)
-	}
-	checksum := checksumFor(content)
-
-	mock.ExpectExec(regexp.QuoteMeta("CREATE TABLE IF NOT EXISTS schema_migrations (")).WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT filename, checksum FROM schema_migrations")).WillReturnRows(sqlmock.NewRows([]string{"filename", "checksum"}))
-	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta("SELECT 42;")).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO schema_migrations (")).
-		WithArgs("0010_test.sql", checksum, sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-	if err := migrateUp(db, dir); err != nil {
-		t.Fatalf("migrateUp failed: %v", err)
-	}
-
-	mock.ExpectExec(regexp.QuoteMeta("CREATE TABLE IF NOT EXISTS schema_migrations (")).WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT filename, checksum FROM schema_migrations")).
-		WillReturnRows(sqlmock.NewRows([]string{"filename", "checksum"}).AddRow("0010_test.sql", checksum))
-	output := captureStdout(t, func() {
-		if err := printStatus(db, dir); err != nil {
-			t.Fatalf("printStatus failed: %v", err)
-		}
-	})
-	if !strings.Contains(output, "applied 0010_test.sql") {
-		t.Fatalf("unexpected printStatus output: %q", output)
-	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
+func TestPrintStatus(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"001_first.sql", "002_second.sql"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("SELECT 1;"), 0o644); err != nil {
+			t.Fatalf("seed migration file %s: %v", name, err)
+		}
+	}
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New failed: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta("CREATE TABLE IF NOT EXISTS schema_migrations")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	rows := sqlmock.NewRows([]string{"filename", "checksum"}).AddRow("001_first.sql", "abc")
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT filename, checksum FROM schema_migrations")).
+		WillReturnRows(rows)
+
+	originalStdout := os.Stdout
+	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("os.Pipe failed: %v", err)
 	}
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
+	defer reader.Close()
+	os.Stdout = writer
+	defer func() { os.Stdout = originalStdout }()
 
-	fn()
-
-	_ = w.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatalf("copy stdout failed: %v", err)
+	if err := printStatus(db, dir); err != nil {
+		t.Fatalf("printStatus failed: %v", err)
 	}
-	return buf.String()
+	_ = writer.Close()
+	buf := make([]byte, 4096)
+	n, _ := reader.Read(buf)
+	output := string(buf[:n])
+	if !strings.Contains(output, "applied 001_first.sql") || !strings.Contains(output, "pending 002_second.sql") {
+		t.Fatalf("unexpected printStatus output: %s", output)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
 }

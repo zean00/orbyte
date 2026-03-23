@@ -23,7 +23,7 @@ func registerAdminShellRoutes(mux *http.ServeMux, ident *identity.Service) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(assetTemplateWithVersion(adminConsoleHTMLTemplate)))
+		_, _ = w.Write([]byte(assetTemplateWithVersion(adminConsoleHTMLDocument())))
 	})
 
 	mux.HandleFunc("GET /admin/assets/platform.css", func(w http.ResponseWriter, r *http.Request) {
@@ -33,5 +33,14 @@ func registerAdminShellRoutes(mux *http.ServeMux, ident *identity.Service) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		_, _ = w.Write(platformCSS)
+	})
+
+	mux.HandleFunc("GET /admin/assets/admin-console.js", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "private, no-store")
+		_, _ = w.Write([]byte(assetTemplateWithVersion(adminConsoleScriptTemplate())))
 	})
 }

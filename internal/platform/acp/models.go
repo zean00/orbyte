@@ -17,9 +17,14 @@ type ProviderInfo struct {
 	Name              string         `json:"name"`
 	Description       string         `json:"description,omitempty"`
 	Available         bool           `json:"available"`
+	ContractVersion   string         `json:"contract_version,omitempty"`
+	Stability         string         `json:"stability,omitempty"`
 	ProtocolVersion   int            `json:"protocol_version,omitempty"`
 	AgentInfo         map[string]any `json:"agent_info,omitempty"`
 	AgentCapabilities map[string]any `json:"agent_capabilities,omitempty"`
+	SupportsApprovals bool           `json:"supports_approvals,omitempty"`
+	SupportsStreaming bool           `json:"supports_streaming,omitempty"`
+	SessionLifecycle  []string       `json:"session_lifecycle,omitempty"`
 	Error             string         `json:"error,omitempty"`
 }
 

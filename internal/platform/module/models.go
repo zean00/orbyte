@@ -382,6 +382,17 @@ type MCPDefinition struct {
 	Apps      []MCPAppDefinition      `json:"apps,omitempty"`
 }
 
+type MCPContractMetadata struct {
+	Version         string   `json:"version,omitempty"`
+	Stability       string   `json:"stability,omitempty"`
+	SideEffectClass string   `json:"side_effect_class,omitempty"`
+	Idempotency     string   `json:"idempotency,omitempty"`
+	AuditAction     string   `json:"audit_action,omitempty"`
+	RequiredScopes  []string `json:"required_scopes,omitempty"`
+	Deprecated      bool     `json:"deprecated,omitempty"`
+	DeprecationNote string   `json:"deprecation_note,omitempty"`
+}
+
 type TemplateDefinition struct {
 	Key                 string             `json:"key"`
 	Title               string             `json:"title"`
@@ -402,41 +413,44 @@ type TemplateDefinition struct {
 }
 
 type MCPToolDefinition struct {
-	Key                 string             `json:"key"`
-	Title               string             `json:"title"`
-	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
-	Description         string             `json:"description,omitempty"`
-	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
-	Operation           string             `json:"operation"`
-	RequiredPermissions []string           `json:"required_permissions,omitempty"`
-	InputSchema         map[string]any     `json:"input_schema,omitempty"`
-	OutputSchema        map[string]any     `json:"output_schema,omitempty"`
-	AppKey              string             `json:"app_key,omitempty"`
+	Key                 string              `json:"key"`
+	Title               string              `json:"title"`
+	TitleI18n           i18n.LocalizedText  `json:"title_i18n,omitempty"`
+	Description         string              `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText  `json:"description_i18n,omitempty"`
+	Operation           string              `json:"operation"`
+	RequiredPermissions []string            `json:"required_permissions,omitempty"`
+	InputSchema         map[string]any      `json:"input_schema,omitempty"`
+	OutputSchema        map[string]any      `json:"output_schema,omitempty"`
+	AppKey              string              `json:"app_key,omitempty"`
+	Contract            MCPContractMetadata `json:"contract,omitempty"`
 }
 
 type MCPResourceDefinition struct {
-	Key                 string             `json:"key"`
-	Title               string             `json:"title"`
-	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
-	Description         string             `json:"description,omitempty"`
-	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
-	URI                 string             `json:"uri"`
-	MIMEType            string             `json:"mime_type,omitempty"`
-	Provider            string             `json:"provider,omitempty"`
-	RequiredPermissions []string           `json:"required_permissions,omitempty"`
-	AppKey              string             `json:"app_key,omitempty"`
+	Key                 string              `json:"key"`
+	Title               string              `json:"title"`
+	TitleI18n           i18n.LocalizedText  `json:"title_i18n,omitempty"`
+	Description         string              `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText  `json:"description_i18n,omitempty"`
+	URI                 string              `json:"uri"`
+	MIMEType            string              `json:"mime_type,omitempty"`
+	Provider            string              `json:"provider,omitempty"`
+	RequiredPermissions []string            `json:"required_permissions,omitempty"`
+	AppKey              string              `json:"app_key,omitempty"`
+	Contract            MCPContractMetadata `json:"contract,omitempty"`
 }
 
 type MCPAppDefinition struct {
-	Key                 string             `json:"key"`
-	Title               string             `json:"title"`
-	TitleI18n           i18n.LocalizedText `json:"title_i18n,omitempty"`
-	Description         string             `json:"description,omitempty"`
-	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
-	ResourceKey         string             `json:"resource_key"`
-	ViewKey             string             `json:"view_key,omitempty"`
-	CustomEntryKey      string             `json:"custom_entry_key,omitempty"`
-	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	Key                 string              `json:"key"`
+	Title               string              `json:"title"`
+	TitleI18n           i18n.LocalizedText  `json:"title_i18n,omitempty"`
+	Description         string              `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText  `json:"description_i18n,omitempty"`
+	ResourceKey         string              `json:"resource_key"`
+	ViewKey             string              `json:"view_key,omitempty"`
+	CustomEntryKey      string              `json:"custom_entry_key,omitempty"`
+	RequiredPermissions []string            `json:"required_permissions,omitempty"`
+	Contract            MCPContractMetadata `json:"contract,omitempty"`
 }
 
 type MenuDefinition struct {

@@ -15,11 +15,12 @@ import (
 
 func buildACPBootstrap(service *acp.Service) map[string]any {
 	if service == nil {
-		return map[string]any{"enabled": false, "providers": []any{}}
+		return map[string]any{"enabled": false, "providers": []any{}, "contract": map[string]any{}}
 	}
 	return map[string]any{
 		"enabled":   service.Enabled(),
 		"providers": service.Providers(),
+		"contract":  service.ContractMetadata(),
 	}
 }
 
@@ -75,9 +76,10 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			ActorID:    p.userID,
 			OccurredAt: time.Now().UTC(),
 			Metadata: map[string]any{
-				"provider_key": item.ProviderKey,
-				"shell":        item.Shell,
-				"route_path":   item.RoutePath,
+				"provider_key":     item.ProviderKey,
+				"shell":            item.Shell,
+				"route_path":       item.RoutePath,
+				"contract_version": "2026-03-23",
 			},
 		})
 		respondJSON(w, http.StatusOK, item)
@@ -143,7 +145,7 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 				TargetID:   sessionID,
 				ActorID:    p.userID,
 				OccurredAt: time.Now().UTC(),
-				Metadata:   map[string]any{"shell": item.Shell, "route_path": item.RoutePath},
+				Metadata:   map[string]any{"shell": item.Shell, "route_path": item.RoutePath, "provider_key": item.ProviderKey, "contract_version": "2026-03-23"},
 			})
 			respondJSON(w, http.StatusOK, updated)
 		case strings.HasSuffix(tail, "/approve"):
@@ -153,6 +155,15 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 				respondError(w, err)
 				return
 			}
+			recordAudit(auditSvc, audit.Event{
+				ID:         fmt.Sprintf("audit:acp:approval:approve:%s:%s:%d", sessionID, approvalID, time.Now().UTC().UnixNano()),
+				Action:     "acp.session.approval.approve",
+				TargetType: "acp_approval",
+				TargetID:   approvalID,
+				ActorID:    p.userID,
+				OccurredAt: time.Now().UTC(),
+				Metadata:   map[string]any{"session_id": sessionID, "provider_key": item.ProviderKey, "contract_version": "2026-03-23"},
+			})
 			respondJSON(w, http.StatusOK, approval)
 		case strings.HasSuffix(tail, "/reject"):
 			approvalID := strings.TrimSuffix(strings.TrimPrefix(tail, "/approvals/"), "/reject")
@@ -161,6 +172,15 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 				respondError(w, err)
 				return
 			}
+			recordAudit(auditSvc, audit.Event{
+				ID:         fmt.Sprintf("audit:acp:approval:reject:%s:%s:%d", sessionID, approvalID, time.Now().UTC().UnixNano()),
+				Action:     "acp.session.approval.reject",
+				TargetType: "acp_approval",
+				TargetID:   approvalID,
+				ActorID:    p.userID,
+				OccurredAt: time.Now().UTC(),
+				Metadata:   map[string]any{"session_id": sessionID, "provider_key": item.ProviderKey, "contract_version": "2026-03-23"},
+			})
 			respondJSON(w, http.StatusOK, approval)
 		default:
 			respondError(w, shared.NotFound("acp session action not found"))

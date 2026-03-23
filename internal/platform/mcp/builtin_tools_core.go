@@ -1,0 +1,273 @@
+package mcp
+
+func (s *Server) appendBuiltInCoreTools(defs []builtInTool) []builtInTool {
+	if s != nil && s.templates != nil {
+		defs = append(defs,
+			builtInTool{
+				name:        "template.definition.list",
+				title:       "List Template Definitions",
+				description: "List available print template definitions.",
+				permission:  "template.read",
+			},
+			builtInTool{
+				name:        "template.definition.get",
+				title:       "Get Template Definition",
+				description: "Get one template definition and version metadata.",
+				permission:  "template.read",
+				inputSchema: map[string]any{"type": "object", "properties": map[string]any{"template_key": map[string]any{"type": "string"}}, "required": []string{"template_key"}},
+			},
+			builtInTool{
+				name:        "template.draft.get",
+				title:       "Get Template Draft",
+				description: "Load the latest draft or defaults for a template.",
+				permission:  "template.read",
+				inputSchema: map[string]any{"type": "object", "properties": map[string]any{"template_key": map[string]any{"type": "string"}}, "required": []string{"template_key"}},
+			},
+			builtInTool{
+				name:        "template.draft.save",
+				title:       "Save Template Draft",
+				description: "Create or update a template draft.",
+				permission:  "template.manage",
+				inputSchema: map[string]any{"type": "object", "properties": map[string]any{"template_key": map[string]any{"type": "string"}}, "required": []string{"template_key"}},
+			},
+			builtInTool{
+				name:        "template.render.preview",
+				title:       "Preview Template Render",
+				description: "Render a template preview in HTML or the requested output format.",
+				permission:  "template.render",
+				inputSchema: map[string]any{"type": "object", "properties": map[string]any{"template_key": map[string]any{"type": "string"}}},
+			},
+		)
+	}
+	if s != nil && s.analytics != nil {
+		defs = append(defs,
+			builtInTool{name: "analytics.dashboard.list", title: "List Dashboards", description: "List runtime analytics dashboards.", permission: "analytics.read"},
+			builtInTool{name: "analytics.dashboard.get", title: "Get Dashboard", description: "Get one runtime analytics dashboard.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dashboard_id": map[string]any{"type": "string"}}, "required": []string{"dashboard_id"}}},
+			builtInTool{name: "analytics.dashboard.save", title: "Save Dashboard", description: "Create or update a runtime analytics dashboard.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dashboard": map[string]any{"type": "object"}}, "required": []string{"dashboard"}}},
+			builtInTool{name: "analytics.dashboard.delete", title: "Delete Dashboard", description: "Delete a runtime analytics dashboard.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dashboard_id": map[string]any{"type": "string"}}, "required": []string{"dashboard_id"}}},
+			builtInTool{name: "analytics.metric.list", title: "List Saved Metrics", description: "List runtime analytics saved metrics.", permission: "analytics.read"},
+			builtInTool{name: "analytics.metric.get", title: "Get Saved Metric", description: "Get one runtime analytics saved metric.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"metric_id": map[string]any{"type": "string"}}, "required": []string{"metric_id"}}},
+			builtInTool{name: "analytics.metric.save", title: "Save Saved Metric", description: "Create or update a runtime analytics saved metric.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"metric": map[string]any{"type": "object"}}, "required": []string{"metric"}}},
+			builtInTool{name: "analytics.metric.delete", title: "Delete Saved Metric", description: "Delete a runtime analytics saved metric.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"metric_id": map[string]any{"type": "string"}}, "required": []string{"metric_id"}}},
+			builtInTool{name: "analytics.query.list", title: "List Saved Queries", description: "List runtime analytics saved queries.", permission: "analytics.read"},
+			builtInTool{name: "analytics.query.get", title: "Get Saved Query", description: "Get one runtime analytics saved query.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query_id": map[string]any{"type": "string"}}, "required": []string{"query_id"}}},
+			builtInTool{name: "analytics.query.save", title: "Save Saved Query", description: "Create or update a runtime analytics saved query.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "object"}}, "required": []string{"query"}}},
+			builtInTool{name: "analytics.query.delete", title: "Delete Saved Query", description: "Delete a runtime analytics saved query.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query_id": map[string]any{"type": "string"}}, "required": []string{"query_id"}}},
+			builtInTool{name: "analytics.query.execute", title: "Execute Analytics Query", description: "Run an ad hoc analytics query and return table plus chart data.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "object"}}, "required": []string{"query"}}},
+			builtInTool{name: "analytics.chart.generate", title: "Generate Analytics Chart", description: "Generate a normalized chart spec from a query or execution result.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "object"}, "result": map[string]any{"type": "object"}}}},
+			builtInTool{name: "analytics.report.definition.list", title: "List Report Definitions", description: "List analytics report definitions.", permission: "analytics.read"},
+			builtInTool{name: "analytics.report.definition.get", title: "Get Report Definition", description: "Get one analytics report definition.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"report_id": map[string]any{"type": "string"}}, "required": []string{"report_id"}}},
+			builtInTool{name: "analytics.report.definition.save", title: "Save Report Definition", description: "Create or update an analytics report definition.", permission: "analytics.manage_reports", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"report": map[string]any{"type": "object"}}, "required": []string{"report"}}},
+			builtInTool{name: "analytics.report.definition.delete", title: "Delete Report Definition", description: "Delete an analytics report definition.", permission: "analytics.manage_reports", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"report_id": map[string]any{"type": "string"}}, "required": []string{"report_id"}}},
+			builtInTool{name: "analytics.report.run", title: "Run Analytics Report", description: "Run a stored analytics report definition.", permission: "analytics.manage_reports", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"report_id": map[string]any{"type": "string"}}, "required": []string{"report_id"}}},
+			builtInTool{name: "analytics.report.deliver", title: "Deliver Analytics Report", description: "Deliver a report artifact or run a report and deliver it.", permission: "analytics.deliver_reports", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"artifact_id": map[string]any{"type": "string"}, "report_id": map[string]any{"type": "string"}, "channel": map[string]any{"type": "string"}, "recipient": map[string]any{"type": "string"}}}},
+		)
+	}
+	if s != nil && s.workflows != nil {
+		defs = append(defs,
+			builtInTool{name: "workflow.definition.list", title: "List Workflow Definitions", description: "List workflow definitions and published versions.", permission: "configuration.read"},
+			builtInTool{name: "workflow.definition.get", title: "Get Workflow Definition", description: "Get one workflow definition plus versions and current draft.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.version.list", title: "List Workflow Versions", description: "List all workflow versions for a definition.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.draft.create", title: "Create Workflow Draft", description: "Create a new workflow draft from the current published version.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.draft.get", title: "Get Workflow Draft", description: "Load the current workflow draft or a draft version.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}}, "required": []string{"workflow_key"}}},
+			builtInTool{name: "workflow.draft.save", title: "Save Workflow Draft", description: "Create or update a workflow draft definition.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow": map[string]any{"type": "object"}}, "required": []string{"workflow"}}},
+			builtInTool{name: "workflow.draft.validate", title: "Validate Workflow Draft", description: "Validate a workflow draft or draft version.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow": map[string]any{"type": "object"}, "workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}}}},
+			builtInTool{name: "workflow.draft.simulate", title: "Simulate Workflow Draft", description: "Simulate a workflow transition and preview routing.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow": map[string]any{"type": "object"}, "workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "input": map[string]any{"type": "object"}}}},
+			builtInTool{name: "workflow.draft.publish", title: "Publish Workflow Draft", description: "Publish a workflow draft version. Requires explicit confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "confirm_publish": map[string]any{"type": "boolean"}}, "required": []string{"workflow_key", "version", "confirm_publish"}}},
+			builtInTool{name: "workflow.runtime.tasks.list", title: "List Workflow Tasks", description: "List read-only workflow tasks.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "assignee_user_id": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.runtime.approvals.list", title: "List Workflow Approvals", description: "List read-only workflow approvals.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"workflow_key": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}, "stage_key": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.runtime.history.get", title: "Get Workflow History", description: "Get workflow history for one target.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"target_type": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}}, "required": []string{"target_type", "target_id"}}},
+			builtInTool{name: "workflow.hierarchy.graph.get", title: "Get Workflow Hierarchy Graph", description: "Get the reporting-line graph for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.hierarchy.chain.get", title: "Get Workflow Hierarchy Chain", description: "Get the manager chain for a user.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"user_id": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}, "required": []string{"user_id"}}},
+			builtInTool{name: "workflow.hierarchy.summary.get", title: "Get Workflow Hierarchy Summary", description: "Get hierarchy coverage and exception summary.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.reporting_line.list", title: "List Reporting Lines", description: "List reporting lines used for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"subject_user_id": map[string]any{"type": "string"}, "manager_user_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}},
+			builtInTool{name: "workflow.reporting_line.save", title: "Save Reporting Line", description: "Create or update a reporting line for workflow routing.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"reporting_line": map[string]any{"type": "object"}}, "required": []string{"reporting_line"}}},
+		)
+	}
+	if s != nil && s.config != nil {
+		defs = append(defs,
+			builtInTool{name: "config.definition.list", title: "List Config Definitions", description: "List configuration definitions and allowed scopes.", permission: "configuration.read"},
+			builtInTool{name: "config.entry.list", title: "List Config Entries", description: "List stored configuration entries.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"config_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "config_scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}}},
+			builtInTool{name: "config.effective.get", title: "Get Effective Config", description: "Get effective configuration for a context.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "config.compare", title: "Compare Config Contexts", description: "Compare effective configuration across two contexts.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"left": map[string]any{"type": "object"}, "right": map[string]any{"type": "object"}}}},
+			builtInTool{name: "config.bundle.export", title: "Export Config Bundle", description: "Export config and feature flag values into a promotion bundle.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "config_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "config_scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "include_flags": map[string]any{"type": "boolean"}, "flag_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "flag_scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}}},
+			builtInTool{name: "config.bundle.validate", title: "Validate Config Bundle", description: "Validate a configuration bundle without applying it.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"bundle": map[string]any{"type": "object"}}, "required": []string{"bundle"}}},
+			builtInTool{name: "config.bundle.apply", title: "Apply Config Bundle", description: "Apply a validated configuration bundle. Requires explicit confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"bundle": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"bundle", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.flags != nil {
+		defs = append(defs,
+			builtInTool{name: "feature_flag.definition.list", title: "List Feature Flag Definitions", description: "List feature flag definitions.", permission: "configuration.read"},
+			builtInTool{name: "feature_flag.value.list", title: "List Feature Flag Values", description: "List stored feature flag values.", permission: "configuration.read"},
+			builtInTool{name: "feature_flag.targeting.get", title: "Get Feature Flag Targeting", description: "Inspect raw overrides and effective resolution for one feature flag.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"flag_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "operating_unit_id": map[string]any{"type": "string"}}, "required": []string{"flag_key"}}},
+			builtInTool{name: "feature_flag.value.upsert", title: "Upsert Feature Flag Value", description: "Create or update a feature flag override. Requires explicit confirmation when activating changes.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"value", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.identity != nil {
+		defs = append(defs,
+			builtInTool{name: "identity.role_permission_matrix.get", title: "Get Role Permission Matrix", description: "Get roles, permissions, grants, and bindings in matrix form.", permission: "identity.manage_users"},
+			builtInTool{name: "identity.role_permission.grant", title: "Grant Role Permission", description: "Grant a permission to an existing role. Requires confirmation.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"role_id": map[string]any{"type": "string"}, "permission_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"role_id", "permission_key", "confirm_apply"}}},
+			builtInTool{name: "identity.role_permission.revoke", title: "Revoke Role Permission", description: "Revoke a permission from an existing role. Requires confirmation.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"role_id": map[string]any{"type": "string"}, "permission_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"role_id", "permission_key", "confirm_apply"}}},
+			builtInTool{name: "identity.role_binding.list", title: "List Role Bindings", description: "List current role bindings.", permission: "identity.manage_users"},
+			builtInTool{name: "identity.role_binding.priority.set", title: "Set Role Binding Priority", description: "Set role binding priority. Requires confirmation.", permission: "identity.manage_users", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"binding_id": map[string]any{"type": "string"}, "priority": map[string]any{"type": "integer"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"binding_id", "priority", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.modules != nil {
+		defs = append(defs,
+			builtInTool{name: "module.list", title: "List Modules", description: "List installed modules and lifecycle state.", permission: "configuration.read"},
+			builtInTool{name: "module.compatibility.list", title: "List Module Compatibility", description: "List module compatibility diagnostics.", permission: "configuration.read"},
+			builtInTool{name: "module.enable", title: "Enable Module", description: "Enable one module. Requires confirmation.", permission: "module.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"module_key", "confirm_apply"}}},
+			builtInTool{name: "module.disable", title: "Disable Module", description: "Disable one module. Requires confirmation.", permission: "module.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"module_key", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.search != nil {
+		defs = append(defs,
+			builtInTool{name: "search.runtime.list", title: "List Search Runtime", description: "List search indexes and runtime status.", permission: "search.manage"},
+			builtInTool{name: "search.runtime.get", title: "Get Search Runtime", description: "Get runtime state for one search index.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}}, "required": []string{"index_key"}}},
+			builtInTool{name: "search.consistency.get", title: "Get Search Consistency", description: "Get consistency report for one search index.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}}, "required": []string{"index_key"}}},
+			builtInTool{name: "search.rebuild", title: "Rebuild Search Index", description: "Rebuild one search index. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.repair", title: "Repair Search Index", description: "Repair one search index. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"}, "target_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.reconcile", title: "Reconcile Search Index", description: "Run a consistency scan for one search index. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.schema.plan", title: "Plan Search Schema", description: "Plan a candidate schema version for one index.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "version": map[string]any{"type": "string"}}, "required": []string{"index_key", "version"}}},
+			builtInTool{name: "search.schema.build", title: "Build Search Schema", description: "Build the candidate search schema. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+			builtInTool{name: "search.schema.activate", title: "Activate Search Schema", description: "Activate the candidate search schema. Requires confirmation.", permission: "search.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"index_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"index_key", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.offline != nil {
+		defs = append(defs,
+			builtInTool{name: "offline.sync.list", title: "List Offline Sync Batches", description: "List offline sync batches and recent outcomes.", permission: "ops.read"},
+			builtInTool{name: "offline.sync.get", title: "Get Offline Sync Batch", description: "Get one offline sync batch and its outcomes.", permission: "ops.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"batch_id": map[string]any{"type": "string"}}, "required": []string{"batch_id"}}},
+			builtInTool{name: "offline.conflict.list", title: "List Offline Conflicts", description: "List offline sync conflicts.", permission: "ops.read"},
+		)
+	}
+	if s != nil && s.policy != nil {
+		defs = append(defs,
+			builtInTool{name: "policy.hook.list", title: "List Policy Hook Runtime", description: "List policy hook runtimes.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}},
+			builtInTool{name: "policy.hook.get", title: "Get Policy Hook Runtime", description: "Get one policy hook runtime.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"hook_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"hook_key"}}},
+			builtInTool{name: "policy.module.upsert", title: "Update Policy Module", description: "Update Rego source for a policy hook. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"hook_key": map[string]any{"type": "string"}, "scope": map[string]any{"type": "string"}, "scope_id": map[string]any{"type": "string"}, "source": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"hook_key", "source", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.reference != nil {
+		defs = append(defs,
+			builtInTool{name: "reference.type.list", title: "List Reference Types", description: "List reference data types.", permission: "configuration.read"},
+			builtInTool{name: "reference.record.list", title: "List Reference Records", description: "List records for one reference type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}}, "required": []string{"type_key"}}},
+			builtInTool{name: "reference.resolve", title: "Resolve Reference Records", description: "Resolve effective records for one reference type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"type_key"}}},
+			builtInTool{name: "reference.record.upsert", title: "Upsert Reference Record", description: "Create or update a reference record. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"record": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"record", "confirm_apply"}}},
+		)
+	}
+	if s != nil && s.integration != nil {
+		defs = append(defs,
+			builtInTool{name: "integration.adapter.list", title: "List Integration Adapters", description: "List registered integration adapters and config schema.", permission: "configuration.read"},
+			builtInTool{name: "integration.system.list", title: "List Integration Systems", description: "List integration systems.", permission: "configuration.read"},
+			builtInTool{name: "integration.system.config.get", title: "Get Integration System Config", description: "Inspect one integration system config.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"system_key": map[string]any{"type": "string"}}, "required": []string{"system_key"}}},
+			builtInTool{name: "integration.system.config.update", title: "Update Integration System Config", description: "Update integration system config. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"system_key": map[string]any{"type": "string"}, "settings": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"system_key", "settings", "confirm_apply"}}},
+			builtInTool{name: "integration.endpoint.list", title: "List Integration Endpoints", description: "List integration endpoints.", permission: "configuration.read"},
+			builtInTool{name: "integration.endpoint.config.get", title: "Get Integration Endpoint Config", description: "Inspect one integration endpoint config.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"endpoint_key": map[string]any{"type": "string"}}, "required": []string{"endpoint_key"}}},
+			builtInTool{name: "integration.endpoint.config.update", title: "Update Integration Endpoint Config", description: "Update integration endpoint config. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"endpoint_key": map[string]any{"type": "string"}, "settings": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"endpoint_key", "settings", "confirm_apply"}}},
+			builtInTool{name: "integration.submission.list", title: "List Integration Submissions", description: "List integration submissions.", permission: "configuration.read"},
+			builtInTool{name: "integration.submission.get", title: "Get Integration Submission", description: "Inspect one integration submission.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"submission_id": map[string]any{"type": "string"}}, "required": []string{"submission_id"}}},
+			builtInTool{name: "integration.dead_letter.list", title: "List Integration Dead Letters", description: "List integration dead letters.", permission: "configuration.read"},
+			builtInTool{name: "integration.dead_letter.replay", title: "Replay Integration Dead Letter", description: "Replay one integration dead letter. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dead_letter_id": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"dead_letter_id", "confirm_apply"}}},
+		)
+	}
+	return defs
+}
+
+func (s *Server) builtInCoreToolHandlers() map[string]builtInToolHandler {
+	return map[string]builtInToolHandler{
+		"template.definition.list": func(s *Server, actor ActorContext, _ map[string]any) (map[string]any, bool, error) {
+			return s.templateDefinitionList(actor), true, nil
+		},
+		"template.definition.get":             (*Server).templateDefinitionGet,
+		"template.draft.get":                  (*Server).templateDraftGet,
+		"template.draft.save":                 (*Server).templateDraftSave,
+		"template.render.preview":             (*Server).templateRenderPreview,
+		"analytics.dashboard.list":            (*Server).analyticsDashboardList,
+		"analytics.dashboard.get":             (*Server).analyticsDashboardGet,
+		"analytics.dashboard.save":            (*Server).analyticsDashboardSave,
+		"analytics.dashboard.delete":          (*Server).analyticsDashboardDelete,
+		"analytics.metric.list":               (*Server).analyticsMetricList,
+		"analytics.metric.get":                (*Server).analyticsMetricGet,
+		"analytics.metric.save":               (*Server).analyticsMetricSave,
+		"analytics.metric.delete":             (*Server).analyticsMetricDelete,
+		"analytics.query.list":                (*Server).analyticsQueryList,
+		"analytics.query.get":                 (*Server).analyticsQueryGet,
+		"analytics.query.save":                (*Server).analyticsQuerySave,
+		"analytics.query.delete":              (*Server).analyticsQueryDelete,
+		"analytics.query.execute":             (*Server).analyticsQueryExecute,
+		"analytics.chart.generate":            (*Server).analyticsChartGenerate,
+		"analytics.report.definition.list":    (*Server).analyticsReportDefinitionList,
+		"analytics.report.definition.get":     (*Server).analyticsReportDefinitionGet,
+		"analytics.report.definition.save":    (*Server).analyticsReportDefinitionSave,
+		"analytics.report.definition.delete":  (*Server).analyticsReportDefinitionDelete,
+		"analytics.report.run":                (*Server).analyticsReportRun,
+		"analytics.report.deliver":            (*Server).analyticsReportDeliver,
+		"workflow.definition.list":            (*Server).workflowDefinitionList,
+		"workflow.definition.get":             (*Server).workflowDefinitionGet,
+		"workflow.version.list":               (*Server).workflowVersionList,
+		"workflow.draft.create":               (*Server).workflowDraftCreate,
+		"workflow.draft.get":                  (*Server).workflowDraftGet,
+		"workflow.draft.save":                 (*Server).workflowDraftSave,
+		"workflow.draft.validate":             (*Server).workflowDraftValidate,
+		"workflow.draft.simulate":             (*Server).workflowDraftSimulate,
+		"workflow.draft.publish":              (*Server).workflowDraftPublish,
+		"workflow.runtime.tasks.list":         (*Server).workflowRuntimeTasksList,
+		"workflow.runtime.approvals.list":     (*Server).workflowRuntimeApprovalsList,
+		"workflow.runtime.history.get":        (*Server).workflowRuntimeHistoryGet,
+		"workflow.hierarchy.graph.get":        (*Server).workflowHierarchyGraphGet,
+		"workflow.hierarchy.chain.get":        (*Server).workflowHierarchyChainGet,
+		"workflow.hierarchy.summary.get":      (*Server).workflowHierarchySummaryGet,
+		"workflow.reporting_line.list":        (*Server).workflowReportingLineList,
+		"workflow.reporting_line.save":        (*Server).workflowReportingLineSave,
+		"config.definition.list":              (*Server).configDefinitionList,
+		"config.entry.list":                   (*Server).configEntryList,
+		"config.effective.get":                (*Server).configEffectiveGet,
+		"config.compare":                      (*Server).configCompare,
+		"config.bundle.export":                (*Server).configBundleExport,
+		"config.bundle.validate":              (*Server).configBundleValidate,
+		"config.bundle.apply":                 (*Server).configBundleApply,
+		"feature_flag.definition.list":        (*Server).featureFlagDefinitionList,
+		"feature_flag.value.list":             (*Server).featureFlagValueList,
+		"feature_flag.targeting.get":          (*Server).featureFlagTargetingGet,
+		"feature_flag.value.upsert":           (*Server).featureFlagValueUpsert,
+		"identity.role_permission_matrix.get": (*Server).identityRolePermissionMatrixGet,
+		"identity.role_permission.grant":      (*Server).identityRolePermissionGrant,
+		"identity.role_permission.revoke":     (*Server).identityRolePermissionRevoke,
+		"module.list":                         (*Server).moduleList,
+		"module.compatibility.list":           (*Server).moduleCompatibilityList,
+		"module.enable":                       (*Server).moduleEnable,
+		"module.disable":                      (*Server).moduleDisable,
+		"search.runtime.list":                 (*Server).searchIndexList,
+		"search.runtime.get":                  (*Server).searchRuntimeGet,
+		"search.consistency.get":              (*Server).searchConsistencyGet,
+		"search.rebuild":                      (*Server).searchRebuild,
+		"search.repair":                       (*Server).searchRepair,
+		"search.reconcile":                    (*Server).searchReconcile,
+		"search.schema.plan":                  (*Server).searchSchemaPlan,
+		"search.schema.build":                 (*Server).searchSchemaBuild,
+		"search.schema.activate":              (*Server).searchSchemaActivate,
+		"offline.sync.list":                   (*Server).offlineSyncList,
+		"offline.sync.get":                    (*Server).offlineSyncGet,
+		"offline.conflict.list":               (*Server).offlineConflictList,
+		"policy.hook.list":                    (*Server).policyHookList,
+		"policy.hook.get":                     (*Server).policyHookGet,
+		"policy.module.upsert":                (*Server).policyModuleUpsert,
+		"identity.role_binding.list":          (*Server).identityRoleBindingList,
+		"identity.role_binding.priority.set":  (*Server).identityRoleBindingPrioritySet,
+		"reference.type.list":                 (*Server).referenceTypeList,
+		"reference.record.list":               (*Server).referenceRecordList,
+		"reference.resolve":                   (*Server).referenceResolve,
+		"reference.record.upsert":             (*Server).referenceRecordUpsert,
+		"integration.adapter.list":            (*Server).integrationAdapterList,
+		"integration.system.list":             (*Server).integrationSystemList,
+		"integration.system.config.get":       (*Server).integrationSystemConfigGet,
+		"integration.system.config.update":    (*Server).integrationSystemConfigUpdate,
+		"integration.endpoint.list":           (*Server).integrationEndpointList,
+		"integration.endpoint.config.get":     (*Server).integrationEndpointConfigGet,
+		"integration.endpoint.config.update":  (*Server).integrationEndpointConfigUpdate,
+		"integration.submission.list":         (*Server).integrationSubmissionList,
+		"integration.submission.get":          (*Server).integrationSubmissionGet,
+		"integration.dead_letter.list":        (*Server).integrationDeadLetterList,
+		"integration.dead_letter.replay":      (*Server).integrationDeadLetterReplay,
+	}
+}

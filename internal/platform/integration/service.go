@@ -120,6 +120,26 @@ func NewServiceWithRepository(repo Repository, obs *observability.Service, logge
 	return svc
 }
 
+func (s *Service) AdapterDescriptors() []AdapterDescriptor {
+	items := make([]AdapterDescriptor, 0, len(s.adapters))
+	for _, adapter := range s.adapters {
+		desc := adapter.Descriptor()
+		if strings.TrimSpace(desc.ContractVersion) == "" {
+			desc.ContractVersion = "2026-03-23"
+		}
+		if strings.TrimSpace(desc.Stability) == "" {
+			desc.Stability = "stable"
+		}
+		items = append(items, desc)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) RetryPolicy() RetryPolicy {
+	return s.retryPolicy
+}
+
 func defaultHTTPClient() *http.Client {
 	return &http.Client{Timeout: envDurationSeconds("APP_INTEGRATION_HTTP_TIMEOUT_SECONDS", 15*time.Second)}
 }
@@ -1257,9 +1277,15 @@ func (FakeAdapter) Descriptor() AdapterDescriptor {
 	return AdapterDescriptor{
 		Key:                 "fake",
 		Name:                "Fake Adapter",
+		ContractVersion:     "2026-03-23",
+		Stability:           "stable",
 		SupportedDirections: []string{"outbound"},
 		SupportedModes:      []string{"sync"},
 		SupportsHealthCheck: true,
+		SupportsRetry:       true,
+		SupportsDeadLetter:  true,
+		SupportsReplay:      true,
+		SupportsIdempotency: true,
 	}
 }
 
@@ -1296,9 +1322,16 @@ func (a HTTPAdapter) Descriptor() AdapterDescriptor {
 	return AdapterDescriptor{
 		Key:                 "http",
 		Name:                "HTTP Adapter",
+		ContractVersion:     "2026-03-23",
+		Stability:           "stable",
 		SupportedDirections: []string{"outbound"},
 		SupportedModes:      []string{"sync"},
 		SupportsHealthCheck: true,
+		SupportsRetry:       true,
+		SupportsDeadLetter:  true,
+		SupportsReplay:      true,
+		SupportsSecrets:     true,
+		SupportsIdempotency: true,
 		ConfigFields: []ConfigFieldDefinition{
 			{Key: "url", Label: "URL", Type: "string", Required: true},
 			{Key: "method", Label: "Method", Type: "string"},

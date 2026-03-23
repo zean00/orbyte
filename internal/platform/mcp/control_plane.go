@@ -123,7 +123,7 @@ func (s *Server) moduleCompatibilityResource(actor ActorContext) (map[string]any
 		return nil, fmt.Errorf("modules are unavailable")
 	}
 	return map[string]any{
-		"items": s.modules.List(),
+		"items":         s.modules.List(),
 		"compatibility": s.modules.CompatibilityReport(),
 	}, nil
 }
@@ -134,9 +134,11 @@ func (s *Server) integrationHealthResource(actor ActorContext) (map[string]any, 
 		return nil, fmt.Errorf("integrations are unavailable")
 	}
 	return map[string]any{
-		"health":       s.integration.HealthSummary(),
-		"submissions":  s.integration.ListSubmissions(),
-		"dead_letters": s.integration.ListDeadLetters(),
+		"health":              s.integration.HealthSummary(),
+		"submissions":         s.integration.ListSubmissions(),
+		"dead_letters":        s.integration.ListDeadLetters(),
+		"adapter_descriptors": s.integration.AdapterDescriptors(),
+		"retry_policy":        s.integration.RetryPolicy(),
 	}, nil
 }
 
@@ -827,10 +829,10 @@ func (s *Server) implementationConfigApply(actor ActorContext, arguments map[str
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Applied implementation plan with %d role grants.", len(appliedRoleGrants))}},
 		"structuredContent": map[string]any{
-			"executed":          true,
-			"config_result":     configResult["structuredContent"],
+			"executed":            true,
+			"config_result":       configResult["structuredContent"],
 			"applied_role_grants": appliedRoleGrants,
-			"validation":        validation,
+			"validation":          validation,
 		},
 	}, true, nil
 }

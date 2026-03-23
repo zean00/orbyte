@@ -33,9 +33,16 @@ type ConfigFieldDefinition struct {
 type AdapterDescriptor struct {
 	Key                 string                  `json:"key"`
 	Name                string                  `json:"name"`
+	ContractVersion     string                  `json:"contract_version,omitempty"`
+	Stability           string                  `json:"stability,omitempty"`
 	SupportedDirections []string                `json:"supported_directions,omitempty"`
 	SupportedModes      []string                `json:"supported_modes,omitempty"`
 	SupportsHealthCheck bool                    `json:"supports_health_check,omitempty"`
+	SupportsRetry       bool                    `json:"supports_retry,omitempty"`
+	SupportsDeadLetter  bool                    `json:"supports_dead_letter,omitempty"`
+	SupportsReplay      bool                    `json:"supports_replay,omitempty"`
+	SupportsSecrets     bool                    `json:"supports_secrets,omitempty"`
+	SupportsIdempotency bool                    `json:"supports_idempotency,omitempty"`
 	ConfigFields        []ConfigFieldDefinition `json:"config_fields,omitempty"`
 }
 

@@ -216,7 +216,12 @@ func (s *Server) searchRuntimeResource(actor ActorContext) (map[string]any, erro
 	if s == nil || s.search == nil {
 		return nil, fmt.Errorf("search is unavailable")
 	}
-	return map[string]any{"items": s.search.IndexDefinitions(), "runtime_items": s.search.IndexRuntimes()}, nil
+	return map[string]any{
+		"items":          s.search.IndexDefinitions(),
+		"runtime_items":  s.search.IndexRuntimes(),
+		"embedding":      s.search.EmbeddingRuntime(),
+		"contract_notes": []string{"Semantic retrieval is provider-ready.", "Deterministic hash embedding is intended as a development fallback only."},
+	}, nil
 }
 
 func (s *Server) offlineSyncResource(actor ActorContext) (map[string]any, error) {
@@ -247,9 +252,9 @@ func (s *Server) implementationBlueprintResource(actor ActorContext) (map[string
 	_ = actor
 	return map[string]any{
 		"desired_operating_model": map[string]any{
-			"organization_model":  []string{"organization", "location", "operating_unit"},
-			"identity_model":      []string{"roles", "role_bindings", "reporting_lines"},
-			"control_plane":       []string{"config", "feature_flags", "modules", "integrations", "policy"},
+			"organization_model":   []string{"organization", "location", "operating_unit"},
+			"identity_model":       []string{"roles", "role_bindings", "reporting_lines"},
+			"control_plane":        []string{"config", "feature_flags", "modules", "integrations", "policy"},
 			"verification_targets": []string{"readiness", "policy_runtime", "integration_health", "search_runtime", "offline_sync"},
 		},
 		"implementation_steps": []string{"inspect", "stage", "validate", "commit", "verify", "checkpoint", "rollback"},

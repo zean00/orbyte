@@ -1,5 +1,22 @@
 {
   "acp": {
+    "contract": {
+      "approval_lifecycle": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "contract_version": "2026-03-23",
+      "session_lifecycle": [
+        "starting",
+        "ready",
+        "running",
+        "error"
+      ],
+      "stability": "experimental",
+      "supports_approvals": true,
+      "supports_streaming": true
+    },
     "enabled": false,
     "providers": []
   },

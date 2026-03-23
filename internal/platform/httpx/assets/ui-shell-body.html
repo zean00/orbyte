@@ -1,0 +1,61 @@
+
+  <header class="shell-bar" id="shell-bar">
+    <div class="shell-bar-primary">
+      <button type="button" id="shell-nav-toggle" class="shell-icon-button" aria-expanded="true" aria-controls="shell-sidebar">Menu</button>
+      <div class="shell-brand-cluster">
+        <div class="shell-eyebrow" id="shell-eyebrow">Workspace</div>
+        <div>
+          <h1 class="brand" id="shell-brand">Orbyte Platform UI</h1>
+          <p class="subtitle" id="shell-subtitle">Manifest-driven shell with generic pages and module custom entries.</p>
+        </div>
+      </div>
+    </div>
+    <div class="shell-bar-actions">
+      <form id="shell-command-form" class="shell-command" role="search">
+        <input id="shell-command-input" name="shell_command" aria-label="Search pages or jump to a route" list="shell-route-options" placeholder="Search pages or jump to a route" autocomplete="off">
+        <datalist id="shell-route-options"></datalist>
+        <button type="submit" class="secondary" id="shell-command-submit">Go</button>
+      </form>
+      <div class="shell-user-chip" id="shell-user-chip">user</div>
+      <label class="locale-switch">
+        <span id="locale-label">Language</span>
+        <select id="locale-switcher" name="locale"></select>
+      </label>
+      <button type="button" id="notifications-button" class="secondary" hidden>Notifications</button>
+      <button type="button" id="agent-toggle-button" class="secondary" hidden>Agent</button>
+      <a id="admin-link-button" class="button secondary" href="/admin" hidden>Admin</a>
+      <button type="button" id="logout-button" class="secondary" hidden>Log out</button>
+    </div>
+  </header>
+  <div class="shell-backdrop" id="shell-backdrop" hidden></div>
+  <div class="shell workspace-shell" id="shell-root">
+    <aside class="sidebar" id="shell-sidebar">
+      <div class="sidebar-section sidebar-intro">
+        <div class="sidebar-heading">Surfaces</div>
+        <div id="surface-switcher" class="surface-switcher" hidden></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Navigation</div>
+        <nav id="menu" class="menu-list" aria-label="Workspace navigation"></nav>
+      </div>
+    </aside>
+    <main class="content">
+      <div class="route-panel" id="route-panel">
+        <div class="route-copy">
+          <div class="route-meta">
+            <span class="badge subtle" id="route-floorplan">worklist</span>
+            <span class="badge subtle" id="route-module">module</span>
+          </div>
+          <div id="route-title"><h2>Loading…</h2></div>
+          <p class="status" id="route-status">Resolving module UI registry.</p>
+        </div>
+        <div class="status-bar">
+          <span class="badge"><strong id="network-status">online</strong></span>
+          <span class="badge">sync <strong id="sync-status">0 pending</strong></span>
+          <span class="badge">cache <strong id="cache-status">cold</strong></span>
+        </div>
+      </div>
+      <div id="view-root"></div>
+    </main>
+  </div>
+  <aside id="agent-panel" class="agent-panel hidden" aria-live="polite"></aside>

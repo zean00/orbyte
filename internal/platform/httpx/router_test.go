@@ -2127,8 +2127,16 @@ func TestUIShellAccessibleWithoutAuthentication(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected unauthenticated ui shell to load, got %d body=%s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "Platform Access") && !strings.Contains(rr.Body.String(), "Continue with Google") {
-		t.Fatalf("expected login-capable ui shell, got %s", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), `/ui/assets/ui-shell.js?v=`+platformAssetVersion) {
+		t.Fatalf("expected ui shell to load extracted shell script, got %s", rr.Body.String())
+	}
+
+	script := h.request(http.MethodGet, "/ui/assets/ui-shell.js", nil, false)
+	if script.Code != http.StatusOK {
+		t.Fatalf("expected unauthenticated ui shell script to load, got %d body=%s", script.Code, script.Body.String())
+	}
+	if !strings.Contains(script.Body.String(), "Platform Access") && !strings.Contains(script.Body.String(), "Continue with Google") {
+		t.Fatalf("expected login-capable ui shell script, got %s", script.Body.String())
 	}
 
 	rr = h.request(http.MethodGet, "/ui/bootstrap", nil, false)
@@ -4034,6 +4042,17 @@ func TestAdminShellIncludesNavigationDefaultsUI(t *testing.T) {
 		t.Fatalf("expected authenticated admin shell, got %d body=%s", rr.Code, rr.Body.String())
 	}
 	body := rr.Body.String()
+	if !strings.Contains(body, `/admin/assets/admin-console.js?v=`+platformAssetVersion) {
+		t.Fatalf("expected admin shell to load extracted admin console script, body=%s", body)
+	}
+	script := h.request(http.MethodGet, "/admin/assets/admin-console.js", nil, true)
+	if script.Code != http.StatusOK {
+		t.Fatalf("expected admin console script, got %d body=%s", script.Code, script.Body.String())
+	}
+	if got := script.Result().Header.Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("expected private admin script cache policy, got %q", got)
+	}
+	scriptBody := script.Body.String()
 	for _, expected := range []string{
 		`id="navigation-heading"`,
 		`id="navigation-settings"`,
@@ -4044,8 +4063,8 @@ func TestAdminShellIncludesNavigationDefaultsUI(t *testing.T) {
 		`save-role-navigation`,
 		`save-binding-priority`,
 	} {
-		if !strings.Contains(body, expected) {
-			t.Fatalf("expected admin shell to include %q, body=%s", expected, body)
+		if !strings.Contains(body, expected) && !strings.Contains(scriptBody, expected) {
+			t.Fatalf("expected admin shell assets to include %q, body=%s script=%s", expected, body, scriptBody)
 		}
 	}
 }

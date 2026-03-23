@@ -78,7 +78,7 @@ func NewServiceWithRepository(repo Repository) *Service {
 	return &Service{
 		repo:     repo,
 		backend:  NewMemoryBackend(),
-		embedder: NewHashEmbedder(),
+		embedder: NewDevelopmentHashEmbedder(8),
 		indexes:  map[string]IndexDefinition{},
 		runtimes: map[string]IndexRuntime{},
 	}
@@ -103,6 +103,18 @@ func (s *Service) SetEmbedder(embedder Embedder) {
 		return
 	}
 	s.embedder = embedder
+}
+
+func (s *Service) EmbeddingRuntime() EmbedderDescriptor {
+	if aware, ok := s.embedder.(DescriptorAwareEmbedder); ok {
+		return aware.Descriptor()
+	}
+	return EmbedderDescriptor{
+		Provider:        "custom",
+		RuntimeProvider: "custom",
+		Semantic:        true,
+		Description:     "Custom embedder attached at runtime.",
+	}
 }
 
 func (s *Service) AttachSources(documents *document.Service, models *model.Service) {

@@ -1,0 +1,6 @@
+    [data-density="compact"] .data-table th,
+    [data-density="compact"] .data-table td { padding: .55rem .65rem; font-size: .8125rem; }
+    [data-density="compact"] .toolbar-row { gap: .5rem; }
+    [data-density="compact"] .control-tile { min-width: 140px; }
+    [data-route-focus]:focus, button:focus, a:focus, input:focus, select:focus, textarea:focus { outline: 2px solid #1f6f5f; outline-offset: 2px; }
+  

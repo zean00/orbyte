@@ -126,6 +126,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.jobs.AttachObservability(graph.observability)
 	graph.eventing = eventing.NewServiceWithRepository(eventing.NewMemoryRepository(), graph.observability, graph.logger)
 	graph.search = search.NewService()
+	configureSearchEmbedding(graph.search, graph.config)
 	graph.search.AttachSources(graph.documents, graph.models)
 	graph.search.AttachFieldSecurity(graph.fieldSecurity)
 	graph.reporting.AttachDocumentSources(graph.documents, graph.search)
@@ -193,6 +194,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.jobs = jobs.NewServiceWithRepository(jobs.NewPostgresRepositoryWithDB(jobsDB))
 		graph.jobs.AttachObservability(graph.observability)
 		graph.search = search.NewServiceWithRepository(search.NewPostgresRepositoryWithDB(searchDB))
+		configureSearchEmbedding(graph.search, graph.config)
 		analyticsRepo := analytics.NewPostgresRepositoryWithDB(analyticsDB)
 		analyticsRepo.SetReadStrategyResolver(func(operation string) string {
 			return dbPolicy.ReadStrategies[operation]
@@ -250,6 +252,24 @@ func configureDatabaseHealth(health *runtimehealth.Tracker, postgres *store.Post
 			MaxLifetimeClosed:  stats.MaxLifetimeClosed,
 		}
 	})
+}
+
+func configureSearchEmbedding(searchSvc *search.Service, configSvc *config.Service) {
+	if searchSvc == nil {
+		return
+	}
+	policy := config.EmbeddingPolicy{Provider: "hash", Dimensions: 8}
+	if configSvc != nil {
+		policy = configSvc.EmbeddingPolicy()
+	}
+	switch strings.ToLower(strings.TrimSpace(policy.Provider)) {
+	case "", "hash", "development_hash":
+		searchSvc.SetEmbedder(search.NewDevelopmentHashEmbedder(policy.Dimensions))
+	case "disabled", "none":
+		searchSvc.SetEmbedder(search.NewDisabledEmbedder())
+	default:
+		searchSvc.SetEmbedder(search.NewFallbackEmbedder(strings.ToLower(strings.TrimSpace(policy.Provider)), policy.Dimensions))
+	}
 }
 
 type dbInstrumentationConfig struct {
