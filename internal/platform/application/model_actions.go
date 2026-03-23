@@ -27,8 +27,12 @@ func NewMemoryModelActions(models *model.Service, activities *activity.Service, 
 }
 
 func NewPostgresModelActions(db *sql.DB, models *model.Service, activities *activity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service) *ModelActions {
-	txm := store.NewPostgresTransactionManager(db)
-	return &ModelActions{models: models, activities: activities, audit: auditSvc, eventing: eventingSvc, txm: txm, runner: NewKernelCommandRunner(NewPostgresTransactionManager(db))}
+	return NewPostgresModelActionsWithDB(store.UninstrumentedDB(db), models, activities, auditSvc, eventingSvc)
+}
+
+func NewPostgresModelActionsWithDB(db store.DB, models *model.Service, activities *activity.Service, auditSvc *audit.Service, eventingSvc *eventing.Service) *ModelActions {
+	txm := store.NewPostgresTransactionManagerWithDB(db)
+	return &ModelActions{models: models, activities: activities, audit: auditSvc, eventing: eventingSvc, txm: txm, runner: NewKernelCommandRunner(NewPostgresTransactionManagerWithDB(db))}
 }
 
 func (a *ModelActions) CreateComposite(modelKey string, acting ActingContext, mutation model.CompositeMutation) (model.Record, map[string][]model.Record, error) {
@@ -85,7 +89,7 @@ func (a *ModelActions) afterActivities(action string, record model.Record, relat
 	return record
 }
 
-func saveModelRuntimeArtifactsTx(tx *sql.Tx, action string, record model.Record, related map[string][]model.Record, acting ActingContext) error {
+func saveModelRuntimeArtifactsTx(tx store.Tx, action string, record model.Record, related map[string][]model.Record, acting ActingContext) error {
 	if err := saveAuditEventTx(tx, buildModelAuditEvent(action, record, related, acting)); err != nil {
 		return err
 	}

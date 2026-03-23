@@ -5,13 +5,19 @@ import (
 	"database/sql"
 	"sort"
 	"time"
+
+	"orbyte/internal/platform/store"
 )
 
 type PostgresRepository struct {
-	db *sql.DB
+	db store.DB
 }
 
 func NewPostgresRepository(db *sql.DB) *PostgresRepository {
+	return NewPostgresRepositoryWithDB(store.UninstrumentedDB(db))
+}
+
+func NewPostgresRepositoryWithDB(db store.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 

@@ -29,6 +29,10 @@ func NewPostgresKernelActions(db *sql.DB, documents *document.Service, models *m
 	return &KernelActions{documents: documents, models: models, audit: auditSvc, eventing: eventingSvc, txm: store.NewPostgresTransactionManager(db)}
 }
 
+func NewPostgresKernelActionsWithDB(db store.DB, documents *document.Service, models *model.Service, auditSvc *audit.Service, eventingSvc *eventing.Service) *KernelActions {
+	return &KernelActions{documents: documents, models: models, audit: auditSvc, eventing: eventingSvc, txm: store.NewPostgresTransactionManagerWithDB(db)}
+}
+
 func (a *KernelActions) CreateDocumentAndModelBundle(record document.Record, modelKey, actorID string, mutation model.CompositeMutation) (document.Record, model.Record, map[string][]model.Record, error) {
 	if a.txm == nil {
 		if err := a.documents.Save(record); err != nil {
@@ -52,11 +56,11 @@ func (a *KernelActions) CreateDocumentAndModelBundle(record document.Record, mod
 		modelRecord model.Record
 		related     map[string][]model.Record
 	)
-	err := a.txm.WithinTx(context.Background(), func(tx *sql.Tx) error {
+	err := a.txm.WithinTx(context.Background(), func(tx store.Tx) error {
 		if err := saveDocumentRecordUpsertTx(tx, record); err != nil {
 			return err
 		}
-		svc := a.models.WithRepository(model.NewTxRepository(tx))
+		svc := a.models.WithRepository(model.NewTxRepositoryWithTx(tx))
 		var err error
 		modelRecord, related, err = svc.CreateComposite(modelKey, actorID, mutation)
 		if err != nil {

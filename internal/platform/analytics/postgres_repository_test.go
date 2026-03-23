@@ -145,3 +145,88 @@ func TestPostgresRepositorySaveAndListSnapshots(t *testing.T) {
 		t.Fatal("expected reporting rows")
 	}
 }
+
+func TestPostgresRepositoryReadStrategies(t *testing.T) {
+	repo := NewPostgresRepositoryWithDB(nil)
+	if got := repo.snapshotReadSource(); got != "analytics_snapshots" {
+		t.Fatalf("expected base snapshot source, got %s", got)
+	}
+	if got := repo.rollupReadSource(); got != "analytics_rollups" {
+		t.Fatalf("expected base rollup source, got %s", got)
+	}
+
+	repo.SetReadStrategyResolver(func(operation string) string {
+		switch operation {
+		case "analytics.query_snapshots":
+			return "db_view"
+		case "analytics.query_rollups":
+			return "materialized_view"
+		default:
+			return ""
+		}
+	})
+	if got := repo.snapshotReadSource(); got != "analytics_snapshot_reads_v" {
+		t.Fatalf("expected view-backed snapshot source, got %s", got)
+	}
+	if got := repo.rollupReadSource(); got != "analytics_rollup_reads_mv" {
+		t.Fatalf("expected materialized-view-backed rollup source, got %s", got)
+	}
+}
+
+func TestPostgresRepositoryMaterializedViewStrategyQueries(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	repo := NewPostgresRepository(db)
+	repo.SetReadStrategyResolver(func(operation string) string {
+		return "materialized_view"
+	})
+
+	now := time.Now().UTC()
+	snap := Snapshot{ID: "s1", GeneratedAt: now, Window: "current_state", Metrics: map[string]float64{"x": 1}}
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO analytics_snapshots (snapshot_id, generated_at, window_key, payload_json) VALUES ($1, $2, $3, $4)")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("REFRESH MATERIALIZED VIEW analytics_snapshot_reads_mv")).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	if err := repo.SaveSnapshot(snap); err != nil {
+		t.Fatalf("save snapshot failed: %v", err)
+	}
+
+	queryRows := sqlmock.NewRows([]string{"payload_json"}).AddRow([]byte(`{"id":"s1","generated_at":"` + now.Format(time.RFC3339Nano) + `","window":"current_state","documents":{"created":0,"draft":0,"submitted":0,"approved":0,"rejected":0,"cancelled":0},"segments":{"by_document_type":{},"by_location":{}},"workflow":{"open_tasks":0,"pending_approvals":0,"completed_tasks":0,"approval_rate":0,"rejection_rate":0},"reliability":{"outbox_pending":0,"outbox_dead_letters":0,"dispatch_success":0,"dispatch_retries":0,"dead_letter_rate":0},"coverage":{"document_summaries":0,"projection_coverage":0,"audit_events":0},"metrics":{}}`))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT payload_json FROM analytics_snapshot_reads_mv ORDER BY generated_at ASC")).
+		WillReturnRows(queryRows)
+	if len(repo.ListSnapshots()) != 1 {
+		t.Fatal("expected listed analytics snapshots from materialized view")
+	}
+
+	recentRows := sqlmock.NewRows([]string{"payload_json"}).AddRow([]byte(`{"id":"s1","generated_at":"` + now.Format(time.RFC3339Nano) + `","window":"current_state","documents":{"created":0,"draft":0,"submitted":0,"approved":0,"rejected":0,"cancelled":0},"segments":{"by_document_type":{},"by_location":{}},"workflow":{"open_tasks":0,"pending_approvals":0,"completed_tasks":0,"approval_rate":0,"rejection_rate":0},"reliability":{"outbox_pending":0,"outbox_dead_letters":0,"dispatch_success":0,"dispatch_retries":0,"dead_letter_rate":0},"coverage":{"document_summaries":0,"projection_coverage":0,"audit_events":0},"metrics":{}}`))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT payload_json FROM analytics_snapshot_reads_mv ORDER BY generated_at DESC LIMIT $1")).
+		WithArgs(1).
+		WillReturnRows(recentRows)
+	if len(repo.ListRecent(1)) != 1 {
+		t.Fatal("expected recent analytics snapshots from materialized view")
+	}
+
+	queryRows = sqlmock.NewRows([]string{"payload_json"}).AddRow([]byte(`{"id":"s1","generated_at":"` + now.Format(time.RFC3339Nano) + `","window":"current_state","documents":{"created":0,"draft":0,"submitted":0,"approved":0,"rejected":0,"cancelled":0},"segments":{"by_document_type":{},"by_location":{}},"workflow":{"open_tasks":0,"pending_approvals":0,"completed_tasks":0,"approval_rate":0,"rejection_rate":0},"reliability":{"outbox_pending":0,"outbox_dead_letters":0,"dispatch_success":0,"dispatch_retries":0,"dead_letter_rate":0},"coverage":{"document_summaries":0,"projection_coverage":0,"audit_events":0},"metrics":{}}`))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT payload_json FROM analytics_snapshot_reads_mv WHERE window_key = $1 AND generated_at >= $2 AND generated_at <= $3 ORDER BY generated_at ASC LIMIT $4")).
+		WithArgs("current_state", now.Add(-time.Hour), now.Add(time.Hour), 5).
+		WillReturnRows(queryRows)
+	if len(repo.QuerySnapshots(Query{Window: "current_state", From: now.Add(-time.Hour), To: now.Add(time.Hour), Limit: 5})) != 1 {
+		t.Fatal("expected queried analytics snapshot from materialized view")
+	}
+
+	rollupRows := sqlmock.NewRows([]string{"payload_json"}).AddRow([]byte(`{"id":"daily:1","granularity":"daily","bucket_start":"` + now.Format(time.RFC3339Nano) + `","bucket_end":"` + now.Add(24*time.Hour).Format(time.RFC3339Nano) + `","snapshot_count":1,"documents":{"created":0,"draft":0,"submitted":0,"approved":0,"rejected":0,"cancelled":0},"segments":{"by_document_type":{},"by_location":{}},"workflow":{"open_tasks":0,"pending_approvals":0,"completed_tasks":0,"approval_rate":0,"rejection_rate":0},"reliability":{"outbox_pending":0,"outbox_dead_letters":0,"dispatch_success":0,"dispatch_retries":0,"dead_letter_rate":0}}`))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT payload_json FROM analytics_rollup_reads_mv WHERE granularity = $1 ORDER BY bucket_start ASC LIMIT $2")).
+		WithArgs("daily", 5).
+		WillReturnRows(rollupRows)
+	if len(repo.QueryRollups("daily", time.Time{}, time.Time{}, 5)) != 1 {
+		t.Fatal("expected queried analytics rollup from materialized view")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -17,6 +18,7 @@ type Summary struct {
 	Workflow    WorkflowSummary        `json:"workflow"`
 	Projections ProjectionSummary      `json:"projections"`
 	Metrics     observability.Snapshot `json:"metrics"`
+	Database    store.QuerySnapshot    `json:"database_queries"`
 }
 
 type DocumentSummary struct {
@@ -51,10 +53,18 @@ type Service struct {
 	workflows *workflow.Service
 	search    *search.Service
 	obs       *observability.Service
+	dbQueries *store.QueryMonitor
 }
 
 func NewService(documents *document.Service, eventingSvc *eventing.Service, workflowSvc *workflow.Service, searchSvc *search.Service, obs *observability.Service) *Service {
 	return &Service{documents: documents, eventing: eventingSvc, workflows: workflowSvc, search: searchSvc, obs: obs}
+}
+
+func (s *Service) AttachQueryMonitor(monitor *store.QueryMonitor) {
+	if s == nil {
+		return
+	}
+	s.dbQueries = monitor
 }
 
 func (s *Service) Summary() Summary {
@@ -102,6 +112,10 @@ func (s *Service) Summary() Summary {
 	if s.obs != nil {
 		metrics = s.obs.Snapshot()
 	}
+	querySnapshot := store.QuerySnapshot{}
+	if s.dbQueries != nil {
+		querySnapshot = s.dbQueries.Snapshot()
+	}
 	return Summary{
 		GeneratedAt: time.Now().UTC(),
 		Documents:   docSummary,
@@ -109,5 +123,6 @@ func (s *Service) Summary() Summary {
 		Workflow:    workflowSummary,
 		Projections: projectionSummary,
 		Metrics:     metrics,
+		Database:    querySnapshot,
 	}
 }

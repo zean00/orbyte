@@ -1,7 +1,12 @@
 package monitoring
 
 import (
+	"context"
+	"regexp"
 	"testing"
+	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
 
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
@@ -9,6 +14,7 @@ import (
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -39,5 +45,34 @@ func TestSummary(t *testing.T) {
 	}
 	if summary.Metrics.Counters["domain.events.recorded.total"] == 0 {
 		t.Fatal("expected metrics snapshot")
+	}
+
+	monitor := store.NewQueryMonitor(obs, store.QueryMonitorOptions{
+		SlowThreshold: time.Hour,
+		TopOperations: 5,
+		SlowQueries:   5,
+	})
+	rawDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer func() { _ = rawDB.Close() }()
+	instrumented := store.InstrumentDB(rawDB, monitor, "monitoring", "repository")
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE documents SET status = $1 WHERE document_id = $2")).
+		WithArgs("submitted", record.Header.ID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if _, err := instrumented.ExecContext(context.Background(), "UPDATE documents SET status = $1 WHERE document_id = $2", "submitted", record.Header.ID); err != nil {
+		t.Fatalf("instrumented exec: %v", err)
+	}
+	svc.AttachQueryMonitor(monitor)
+	summary = svc.Summary()
+	if len(summary.Database.TopOperations) != 1 {
+		t.Fatal("expected database query snapshot")
+	}
+	if summary.Database.TopOperations[0].Subsystem != "monitoring" {
+		t.Fatalf("unexpected database query operation: %+v", summary.Database.TopOperations[0])
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
 	}
 }

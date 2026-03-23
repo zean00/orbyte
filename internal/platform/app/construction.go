@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
+	"strings"
 	"time"
 
 	"orbyte/internal/platform/acp"
@@ -77,6 +80,7 @@ type serviceGraph struct {
 	modelActions      *application.ModelActions
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
+	queryMonitor      *store.QueryMonitor
 	businessManifests []module.Manifest
 }
 
@@ -128,38 +132,79 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.idempotency = idempotency.NewService()
 
 	if postgres != nil && postgres.DB != nil {
-		graph.flags = featureflags.NewServiceWithRepository(featureflags.NewPostgresRepository(postgres.DB))
 		graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepository(postgres.DB))
 		graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepository(postgres.DB), graph.secrets)
+		dbPolicy := databaseInstrumentationPolicy(graph.config)
+		graph.queryMonitor = store.NewQueryMonitor(graph.observability, store.QueryMonitorOptions{
+			SlowThreshold: dbPolicy.SlowThreshold,
+			TopOperations: dbPolicy.TopOperationsLimit,
+			SlowQueries:   dbPolicy.SlowQueriesLimit,
+		})
+		graph.observability.RegisterLogEventDefinition(observability.LogEventDefinition{
+			Key:            "db.query.slow",
+			Category:       "database",
+			Severity:       "warning",
+			RequiredFields: []string{"operation", "fingerprint", "duration_millis"},
+			ModuleKey:      "platform.core",
+		})
+		flagsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "featureflags", "repository")
+		secretsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "secretstore", "repository")
+		configDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "config", "repository")
+		organizationDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "organization", "repository")
+		identityDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "identity", "repository")
+		moduleDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "module", "repository")
+		modelDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "model", "repository")
+		templateDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "templateoutput", "repository")
+		referenceDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "reference", "repository")
+		documentDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "document", "repository")
+		workflowDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "workflow", "repository")
+		auditDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "audit", "repository")
+		eventingDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "eventing", "repository")
+		jobsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "jobs", "repository")
+		searchDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "search", "repository")
+		analyticsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "analytics", "repository")
+		integrationDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "integration", "repository")
+		idempotencyDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "idempotency", "repository")
+		engagementDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "engagement", "repository")
+		submitDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "application", "submit_store")
+		modelActionsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "application", "model_actions")
+
+		graph.flags = featureflags.NewServiceWithRepository(featureflags.NewPostgresRepositoryWithDB(flagsDB))
+		graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepositoryWithDB(secretsDB))
+		graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepositoryWithDB(configDB), graph.secrets)
 		graph.policy = policy.NewServiceWithConfig(graph.config)
 		graph.fieldSecurity = securityfields.NewService(graph.policy)
-		graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepository(postgres.DB))
-		graph.identity = identity.NewServiceWithRepository(graph.organization, identity.NewPostgresRepository(postgres.DB))
+		graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepositoryWithDB(organizationDB))
+		graph.identity = identity.NewServiceWithRepository(graph.organization, identity.NewPostgresRepositoryWithDB(identityDB))
 		graph.acp = acp.NewService(graph.config)
-		graph.modules = module.NewServiceWithRepository(module.NewPostgresRepository(postgres.DB))
-		graph.models = model.NewServiceWithRepository(model.NewPostgresRepository(postgres.DB))
+		graph.modules = module.NewServiceWithRepository(module.NewPostgresRepositoryWithDB(moduleDB))
+		graph.models = model.NewServiceWithRepository(model.NewPostgresRepositoryWithDB(modelDB))
 		graph.activities = activity.NewService()
 		graph.reporting = reporting.NewService(graph.models)
-		graph.templates = templateoutput.NewServiceWithRepository(templateoutput.NewPostgresRepository(postgres.DB), graph.documents, graph.reporting)
-		graph.reference = reference.NewServiceWithRepository(reference.NewPostgresRepository(postgres.DB))
-		graph.documents = document.NewServiceWithRepository(document.NewPostgresRepository(postgres.DB))
-		graph.workflows = workflow.NewServiceWithRepository(workflow.NewPostgresRepository(postgres.DB))
-		graph.audit = audit.NewServiceWithRepository(audit.NewPostgresRepository(postgres.DB))
-		graph.eventing = eventing.NewServiceWithRepository(eventing.NewPostgresRepository(postgres.DB), graph.observability, graph.logger)
-		graph.jobs = jobs.NewServiceWithRepository(jobs.NewPostgresRepository(postgres.DB))
+		graph.templates = templateoutput.NewServiceWithRepository(templateoutput.NewPostgresRepositoryWithDB(templateDB), graph.documents, graph.reporting)
+		graph.reference = reference.NewServiceWithRepository(reference.NewPostgresRepositoryWithDB(referenceDB))
+		graph.documents = document.NewServiceWithRepository(document.NewPostgresRepositoryWithDB(documentDB))
+		graph.workflows = workflow.NewServiceWithRepository(workflow.NewPostgresRepositoryWithDB(workflowDB))
+		graph.audit = audit.NewServiceWithRepository(audit.NewPostgresRepositoryWithDB(auditDB))
+		graph.eventing = eventing.NewServiceWithRepository(eventing.NewPostgresRepositoryWithDB(eventingDB), graph.observability, graph.logger)
+		graph.jobs = jobs.NewServiceWithRepository(jobs.NewPostgresRepositoryWithDB(jobsDB))
 		graph.jobs.AttachObservability(graph.observability)
-		graph.search = search.NewServiceWithRepository(search.NewPostgresRepository(postgres.DB))
-		graph.analyticsRepo = analytics.NewPostgresRepository(postgres.DB)
-		graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepository(postgres.DB), graph.observability, graph.logger)
-		graph.idempotency = idempotency.NewServiceWithRepository(idempotency.NewPostgresRepository(postgres.DB))
-		graph.engagement = engagement.NewServiceWithRepository(engagement.NewPostgresRepository(postgres.DB))
+		graph.search = search.NewServiceWithRepository(search.NewPostgresRepositoryWithDB(searchDB))
+		analyticsRepo := analytics.NewPostgresRepositoryWithDB(analyticsDB)
+		analyticsRepo.SetReadStrategyResolver(func(operation string) string {
+			return dbPolicy.ReadStrategies[operation]
+		})
+		graph.analyticsRepo = analyticsRepo
+		graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepositoryWithDB(integrationDB), graph.observability, graph.logger)
+		graph.idempotency = idempotency.NewServiceWithRepository(idempotency.NewPostgresRepositoryWithDB(idempotencyDB))
+		graph.engagement = engagement.NewServiceWithRepository(engagement.NewPostgresRepositoryWithDB(engagementDB))
 		graph.integration.AttachPolicy(graph.policy)
 		graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
 		graph.search.AttachSources(graph.documents, graph.models)
 		graph.search.AttachFieldSecurity(graph.fieldSecurity)
 		graph.reporting.AttachDocumentSources(graph.documents, graph.search)
-		graph.submitStore = application.NewPostgresSubmitStore(postgres.DB)
-		graph.modelActions = application.NewPostgresModelActions(postgres.DB, graph.models, graph.activities, graph.audit, graph.eventing)
+		graph.submitStore = application.NewPostgresSubmitStoreWithDB(submitDB)
+		graph.modelActions = application.NewPostgresModelActionsWithDB(modelActionsDB, graph.models, graph.activities, graph.audit, graph.eventing)
 	}
 
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
@@ -168,6 +213,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)
 	graph.offline = offline.NewService(graph.modules, graph.reference, graph.search)
 	graph.monitoring = monitoring.NewService(graph.documents, graph.eventing, graph.workflows, graph.search, graph.observability)
+	graph.monitoring.AttachQueryMonitor(graph.queryMonitor)
 	graph.dataops = dataops.NewService(graph.config, graph.flags, graph.modules, graph.reference, graph.identity, graph.documents, graph.integration)
 	if graph.engagement == nil {
 		graph.engagement = engagement.NewService()
@@ -197,4 +243,54 @@ func configureDatabaseHealth(health *runtimehealth.Tracker, postgres *store.Post
 			MaxLifetimeClosed:  stats.MaxLifetimeClosed,
 		}
 	})
+}
+
+type dbInstrumentationConfig struct {
+	SlowThreshold      time.Duration
+	TopOperationsLimit int
+	SlowQueriesLimit   int
+	ReadStrategies     map[string]string
+}
+
+func databaseInstrumentationPolicy(cfg *config.Service) dbInstrumentationConfig {
+	policy := dbInstrumentationConfig{
+		SlowThreshold:      250 * time.Millisecond,
+		TopOperationsLimit: 20,
+		SlowQueriesLimit:   50,
+		ReadStrategies:     map[string]string{},
+	}
+	if cfg == nil {
+		return policy
+	}
+	entry, ok := cfg.Get("platform.db")
+	if !ok {
+		return policy
+	}
+	policy.SlowThreshold = time.Duration(intValue(entry.Value["slow_query_threshold_ms"], 250)) * time.Millisecond
+	policy.TopOperationsLimit = intValue(entry.Value["top_operations_limit"], 20)
+	policy.SlowQueriesLimit = intValue(entry.Value["slow_queries_limit"], 50)
+	if raw := strings.TrimSpace(stringValue(entry.Value["read_strategies_json"])); raw != "" {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
+			policy.ReadStrategies = parsed
+		}
+	}
+	return policy
+}
+
+func intValue(value any, fallback int) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }

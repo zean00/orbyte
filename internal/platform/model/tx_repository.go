@@ -4,13 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+
+	"orbyte/internal/platform/store"
 )
 
 type TxRepository struct {
-	tx *sql.Tx
+	tx store.Tx
 }
 
 func NewTxRepository(tx *sql.Tx) *TxRepository {
+	return NewTxRepositoryWithTx(store.UninstrumentedTx(tx))
+}
+
+func NewTxRepositoryWithTx(tx store.Tx) *TxRepository {
 	return &TxRepository{tx: tx}
 }
 

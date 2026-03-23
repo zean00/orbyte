@@ -6,18 +6,22 @@ import (
 )
 
 type TransactionManager interface {
-	WithinTx(ctx context.Context, fn func(*sql.Tx) error) error
+	WithinTx(ctx context.Context, fn func(Tx) error) error
 }
 
 type PostgresTransactionManager struct {
-	db *sql.DB
+	db DB
 }
 
 func NewPostgresTransactionManager(db *sql.DB) *PostgresTransactionManager {
+	return NewPostgresTransactionManagerWithDB(UninstrumentedDB(db))
+}
+
+func NewPostgresTransactionManagerWithDB(db DB) *PostgresTransactionManager {
 	return &PostgresTransactionManager{db: db}
 }
 
-func (m *PostgresTransactionManager) WithinTx(ctx context.Context, fn func(*sql.Tx) error) error {
+func (m *PostgresTransactionManager) WithinTx(ctx context.Context, fn func(Tx) error) error {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

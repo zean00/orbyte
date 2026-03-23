@@ -7,15 +7,27 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
+
+	"orbyte/internal/platform/store"
 )
 
 type PostgresRepository struct {
-	db *sql.DB
+	db           store.DB
+	readStrategy func(string) string
 }
 
 func NewPostgresRepository(db *sql.DB) *PostgresRepository {
+	return NewPostgresRepositoryWithDB(store.UninstrumentedDB(db))
+}
+
+func NewPostgresRepositoryWithDB(db store.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
+}
+
+func (r *PostgresRepository) SetReadStrategyResolver(fn func(string) string) {
+	r.readStrategy = fn
 }
 
 func (r *PostgresRepository) SaveDimensions(dimensions DimensionBundle) error {
@@ -259,17 +271,19 @@ func (r *PostgresRepository) SaveSnapshot(snapshot Snapshot) error {
 		return err
 	}
 	const query = `INSERT INTO analytics_snapshots (snapshot_id, generated_at, window_key, payload_json) VALUES ($1, $2, $3, $4)`
-	_, err = r.db.ExecContext(context.Background(), query, snapshot.ID, snapshot.GeneratedAt, snapshot.Window, payload)
-	return err
+	if _, err = r.db.ExecContext(context.Background(), query, snapshot.ID, snapshot.GeneratedAt, snapshot.Window, payload); err != nil {
+		return err
+	}
+	return r.refreshMaterializedView("analytics.query_snapshots")
 }
 
 func (r *PostgresRepository) ListSnapshots() []Snapshot {
-	const query = `SELECT payload_json FROM analytics_snapshots ORDER BY generated_at ASC`
+	query := `SELECT payload_json FROM ` + r.snapshotReadSource() + ` ORDER BY generated_at ASC`
 	return r.listByQuery(query)
 }
 
 func (r *PostgresRepository) QuerySnapshots(query Query) []Snapshot {
-	stmt := `SELECT payload_json FROM analytics_snapshots`
+	stmt := `SELECT payload_json FROM ` + r.snapshotReadSource()
 	args := make([]any, 0, 4)
 	clauses := make([]string, 0, 3)
 	if query.Window != "" {
@@ -299,7 +313,7 @@ func (r *PostgresRepository) ListRecent(limit int) []Snapshot {
 	if limit <= 0 {
 		return r.ListSnapshots()
 	}
-	const query = `SELECT payload_json FROM analytics_snapshots ORDER BY generated_at DESC LIMIT $1`
+	query := `SELECT payload_json FROM ` + r.snapshotReadSource() + ` ORDER BY generated_at DESC LIMIT $1`
 	items := r.listByQuery(query, limit)
 	sort.Slice(items, func(i, j int) bool { return items[i].GeneratedAt.Before(items[j].GeneratedAt) })
 	return items
@@ -307,8 +321,10 @@ func (r *PostgresRepository) ListRecent(limit int) []Snapshot {
 
 func (r *PostgresRepository) DeleteOlderThan(cutoff time.Time) error {
 	const query = `DELETE FROM analytics_snapshots WHERE generated_at < $1`
-	_, err := r.db.ExecContext(context.Background(), query, cutoff)
-	return err
+	if _, err := r.db.ExecContext(context.Background(), query, cutoff); err != nil {
+		return err
+	}
+	return r.refreshMaterializedView("analytics.query_snapshots")
 }
 
 func (r *PostgresRepository) UpsertRollup(rollup Rollup) error {
@@ -326,8 +342,10 @@ func (r *PostgresRepository) UpsertRollup(rollup Rollup) error {
 			bucket_end = EXCLUDED.bucket_end,
 			snapshot_count = EXCLUDED.snapshot_count,
 			payload_json = EXCLUDED.payload_json`
-	_, err = r.db.ExecContext(context.Background(), query, rollup.ID, rollup.Granularity, rollup.BucketStart, rollup.BucketEnd, rollup.SnapshotCount, payload)
-	return err
+	if _, err = r.db.ExecContext(context.Background(), query, rollup.ID, rollup.Granularity, rollup.BucketStart, rollup.BucketEnd, rollup.SnapshotCount, payload); err != nil {
+		return err
+	}
+	return r.refreshMaterializedView("analytics.query_rollups")
 }
 
 func (r *PostgresRepository) ListRollups(granularity string, limit int) []Rollup {
@@ -335,7 +353,7 @@ func (r *PostgresRepository) ListRollups(granularity string, limit int) []Rollup
 }
 
 func (r *PostgresRepository) QueryRollups(granularity string, from, to time.Time, limit int) []Rollup {
-	query := `SELECT payload_json FROM analytics_rollups`
+	query := `SELECT payload_json FROM ` + r.rollupReadSource()
 	args := make([]any, 0, 4)
 	clauses := make([]string, 0, 3)
 	if granularity != "" {
@@ -543,7 +561,7 @@ func (r *PostgresRepository) listByQuery(query string, args ...any) []Snapshot {
 	return items
 }
 
-func listPayloads[T any](db *sql.DB, query string, args ...any) []T {
+func listPayloads[T any](db store.QueryHandle, query string, args ...any) []T {
 	rows, err := db.QueryContext(context.Background(), query, args...)
 	if err != nil {
 		return nil
@@ -564,7 +582,7 @@ func listPayloads[T any](db *sql.DB, query string, args ...any) []T {
 	return items
 }
 
-func getPayload[T any](db *sql.DB, query string, args ...any) (T, bool) {
+func getPayload[T any](db store.QueryHandle, query string, args ...any) (T, bool) {
 	var payload []byte
 	err := db.QueryRowContext(context.Background(), query, args...).Scan(&payload)
 	if err != nil {
@@ -577,6 +595,60 @@ func getPayload[T any](db *sql.DB, query string, args ...any) (T, bool) {
 		return zero, false
 	}
 	return item, true
+}
+
+func (r *PostgresRepository) snapshotReadSource() string {
+	switch r.readStrategyName("analytics.query_snapshots") {
+	case "db_view":
+		return "analytics_snapshot_reads_v"
+	case "materialized_view":
+		return "analytics_snapshot_reads_mv"
+	default:
+		return "analytics_snapshots"
+	}
+}
+
+func (r *PostgresRepository) rollupReadSource() string {
+	switch r.readStrategyName("analytics.query_rollups") {
+	case "db_view":
+		return "analytics_rollup_reads_v"
+	case "materialized_view":
+		return "analytics_rollup_reads_mv"
+	default:
+		return "analytics_rollups"
+	}
+}
+
+func (r *PostgresRepository) readStrategyName(operation string) string {
+	if r == nil || r.readStrategy == nil {
+		return "base"
+	}
+	switch strings.TrimSpace(strings.ToLower(r.readStrategy(operation))) {
+	case "db_view":
+		return "db_view"
+	case "materialized_view":
+		return "materialized_view"
+	default:
+		return "base"
+	}
+}
+
+func (r *PostgresRepository) refreshMaterializedView(operation string) error {
+	var name string
+	switch r.readStrategyName(operation) {
+	case "materialized_view":
+		switch operation {
+		case "analytics.query_snapshots":
+			name = "analytics_snapshot_reads_mv"
+		case "analytics.query_rollups":
+			name = "analytics_rollup_reads_mv"
+		}
+	}
+	if name == "" {
+		return nil
+	}
+	_, err := r.db.ExecContext(context.Background(), `REFRESH MATERIALIZED VIEW `+name)
+	return err
 }
 
 func joinClauses(clauses []string) string {

@@ -1,7 +1,6 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -53,7 +52,7 @@ func TestPostgresTransactionManagerWithinTxCommits(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectCommit()
 
-	if err := txm.WithinTx(t.Context(), func(tx *sql.Tx) error { return nil }); err != nil {
+	if err := txm.WithinTx(t.Context(), func(tx Tx) error { return nil }); err != nil {
 		t.Fatalf("WithinTx returned error: %v", err)
 	}
 }
@@ -70,7 +69,7 @@ func TestPostgresTransactionManagerWithinTxRollsBackOnError(t *testing.T) {
 	mock.ExpectRollback()
 
 	expected := errors.New("boom")
-	if err := txm.WithinTx(t.Context(), func(tx *sql.Tx) error { return expected }); !errors.Is(err, expected) {
+	if err := txm.WithinTx(t.Context(), func(tx Tx) error { return expected }); !errors.Is(err, expected) {
 		t.Fatalf("expected %v, got %v", expected, err)
 	}
 }

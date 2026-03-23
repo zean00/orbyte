@@ -131,6 +131,27 @@ func BuiltInDefinitions() []Definition {
 			{Key: "providers_json", Label: "Providers JSON", LabelI18n: i18n.LocalizedText{"en": "Providers JSON", "id": "JSON Penyedia"}, Type: "string"},
 		},
 	}, {
+		Key:             "platform.db",
+		ModuleKey:       "platform.core",
+		Category:        "platform",
+		DisplayName:     "Database Instrumentation",
+		DisplayNameI18n: i18n.LocalizedText{"en": "Database Instrumentation", "id": "Instrumentasi Database"},
+		Description:     "Database observability and named read-strategy settings.",
+		DescriptionI18n: i18n.LocalizedText{"en": "Database observability and named read-strategy settings.", "id": "Pengaturan observabilitas database dan strategi baca bernama."},
+		AllowedScopes:   []string{"deployment"},
+		DefaultValue: map[string]any{
+			"slow_query_threshold_ms": 250,
+			"top_operations_limit":    20,
+			"slow_queries_limit":      50,
+			"read_strategies_json":    "{}",
+		},
+		Fields: []FieldDefinition{
+			{Key: "slow_query_threshold_ms", Label: "Slow Query Threshold (ms)", LabelI18n: i18n.LocalizedText{"en": "Slow Query Threshold (ms)", "id": "Ambang Query Lambat (ms)"}, Type: "int"},
+			{Key: "top_operations_limit", Label: "Top Operations Limit", LabelI18n: i18n.LocalizedText{"en": "Top Operations Limit", "id": "Batas Operasi Teratas"}, Type: "int"},
+			{Key: "slow_queries_limit", Label: "Slow Queries Limit", LabelI18n: i18n.LocalizedText{"en": "Slow Queries Limit", "id": "Batas Query Lambat"}, Type: "int"},
+			{Key: "read_strategies_json", Label: "Read Strategies JSON", LabelI18n: i18n.LocalizedText{"en": "Read Strategies JSON", "id": "JSON Strategi Baca"}, Type: "string"},
+		},
+	}, {
 		Key:             "search.typesense",
 		ModuleKey:       "platform.core",
 		Category:        "search",
@@ -267,6 +288,20 @@ func BuiltInEntries(now time.Time) []Entry {
 		Scope:     "deployment",
 		ScopeID:   "",
 		Value:     map[string]any{"address": ":8080"},
+		UpdatedAt: now,
+		UpdatedBy: "system",
+	}, {
+		Key:       "platform.db",
+		ModuleKey: "platform.core",
+		Category:  "platform",
+		Scope:     "deployment",
+		ScopeID:   "",
+		Value: map[string]any{
+			"slow_query_threshold_ms": 250,
+			"top_operations_limit":    20,
+			"slow_queries_limit":      50,
+			"read_strategies_json":    "{}",
+		},
 		UpdatedAt: now,
 		UpdatedBy: "system",
 	}, {

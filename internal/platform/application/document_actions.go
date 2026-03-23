@@ -15,6 +15,7 @@ import (
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/shared"
+	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -1104,7 +1105,11 @@ type PostgresSubmitStore struct {
 }
 
 func NewPostgresSubmitStore(db *sql.DB) *PostgresSubmitStore {
-	return &PostgresSubmitStore{txm: NewPostgresTransactionManager(db)}
+	return NewPostgresSubmitStoreWithDB(store.UninstrumentedDB(db))
+}
+
+func NewPostgresSubmitStoreWithDB(db store.DB) *PostgresSubmitStore {
+	return &PostgresSubmitStore{txm: NewPostgresTransactionManagerWithDB(db)}
 }
 
 func (s *PostgresSubmitStore) TransactionManager() TransactionManager {
@@ -1137,7 +1142,7 @@ func (s *PostgresSubmitStore) persist(previousVersion int, record document.Recor
 	})
 }
 
-func saveAuditEventTx(tx *sql.Tx, event audit.Event) error {
+func saveAuditEventTx(tx store.Tx, event audit.Event) error {
 	metadata, err := json.Marshal(event.Metadata)
 	if err != nil {
 		return err
@@ -1154,7 +1159,7 @@ func saveAuditEventTx(tx *sql.Tx, event audit.Event) error {
 	return err
 }
 
-func saveDomainEventTx(tx *sql.Tx, event eventing.Event) error {
+func saveDomainEventTx(tx store.Tx, event eventing.Event) error {
 	payload, err := json.Marshal(event.Payload)
 	if err != nil {
 		return err
@@ -1169,7 +1174,7 @@ func saveDomainEventTx(tx *sql.Tx, event eventing.Event) error {
 	return err
 }
 
-func saveOutboxRecordTx(tx *sql.Tx, record eventing.OutboxRecord) error {
+func saveOutboxRecordTx(tx store.Tx, record eventing.OutboxRecord) error {
 	const query = `
 		INSERT INTO outbox_records (
 			outbox_id, event_id, event_type, status, created_at, dispatched_at
@@ -1180,7 +1185,7 @@ func saveOutboxRecordTx(tx *sql.Tx, record eventing.OutboxRecord) error {
 	return err
 }
 
-func applyWorkflowMutationTx(tx *sql.Tx, mutation workflow.Mutation) error {
+func applyWorkflowMutationTx(tx store.Tx, mutation workflow.Mutation) error {
 	for _, task := range mutation.Tasks {
 		const query = `
 			INSERT INTO workflow_tasks (

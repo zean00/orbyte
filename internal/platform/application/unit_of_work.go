@@ -55,11 +55,15 @@ type PostgresTransactionManager struct {
 }
 
 func NewPostgresTransactionManager(db *sql.DB) *PostgresTransactionManager {
-	return &PostgresTransactionManager{txm: store.NewPostgresTransactionManager(db)}
+	return NewPostgresTransactionManagerWithDB(store.UninstrumentedDB(db))
+}
+
+func NewPostgresTransactionManagerWithDB(db store.DB) *PostgresTransactionManager {
+	return &PostgresTransactionManager{txm: store.NewPostgresTransactionManagerWithDB(db)}
 }
 
 func (m *PostgresTransactionManager) WithinTx(ctx context.Context, fn func(UnitOfWork) error) error {
-	return m.txm.WithinTx(ctx, func(tx *sql.Tx) error {
+	return m.txm.WithinTx(ctx, func(tx store.Tx) error {
 		return fn(&postgresUnitOfWork{tx: tx})
 	})
 }
@@ -148,7 +152,7 @@ func (u *memoryUnitOfWork) ApplyWorkflowMutation(mutation workflow.Mutation) err
 }
 
 type postgresUnitOfWork struct {
-	tx *sql.Tx
+	tx store.Tx
 }
 
 func (u *postgresUnitOfWork) GetDocument(documentID string) (document.Record, error) {
@@ -171,7 +175,7 @@ func (u *postgresUnitOfWork) UpdateDocument(previousVersion int, record document
 }
 
 func (u *postgresUnitOfWork) GetModelRecord(modelKey, recordID string) (model.Record, error) {
-	repo := model.NewTxRepository(u.tx)
+	repo := model.NewTxRepositoryWithTx(u.tx)
 	record, ok := repo.GetRecord(modelKey, recordID)
 	if !ok {
 		return model.Record{}, shared.NotFound("record not found")
@@ -180,11 +184,11 @@ func (u *postgresUnitOfWork) GetModelRecord(modelKey, recordID string) (model.Re
 }
 
 func (u *postgresUnitOfWork) ListModelRecords(modelKey string) ([]model.Record, error) {
-	return model.NewTxRepository(u.tx).ListRecords(modelKey), nil
+	return model.NewTxRepositoryWithTx(u.tx).ListRecords(modelKey), nil
 }
 
 func (u *postgresUnitOfWork) CreateModelRecord(record model.Record) error {
-	return model.NewTxRepository(u.tx).SaveRecord(record)
+	return model.NewTxRepositoryWithTx(u.tx).SaveRecord(record)
 }
 
 func (u *postgresUnitOfWork) UpdateModelRecord(expectedVersion int, record model.Record) error {
@@ -195,15 +199,15 @@ func (u *postgresUnitOfWork) UpdateModelRecord(expectedVersion int, record model
 	if expectedVersion > 0 && current.Version != expectedVersion {
 		return shared.Conflict("record version mismatch")
 	}
-	return model.NewTxRepository(u.tx).SaveRecord(record)
+	return model.NewTxRepositoryWithTx(u.tx).SaveRecord(record)
 }
 
 func (u *postgresUnitOfWork) DeleteModelRecord(modelKey, recordID string) error {
-	return model.NewTxRepository(u.tx).DeleteRecord(modelKey, recordID)
+	return model.NewTxRepositoryWithTx(u.tx).DeleteRecord(modelKey, recordID)
 }
 
 func (u *postgresUnitOfWork) GetModelDefinition(modelKey string) (model.Definition, error) {
-	def, ok := model.NewTxRepository(u.tx).GetDefinition(modelKey)
+	def, ok := model.NewTxRepositoryWithTx(u.tx).GetDefinition(modelKey)
 	if !ok {
 		return model.Definition{}, shared.NotFound("model definition not found")
 	}
@@ -226,7 +230,7 @@ func (u *postgresUnitOfWork) ApplyWorkflowMutation(mutation workflow.Mutation) e
 	return applyWorkflowMutationTx(u.tx, mutation)
 }
 
-func getDocumentRecordTx(tx *sql.Tx, documentID string) (document.Record, bool, error) {
+func getDocumentRecordTx(tx store.Tx, documentID string) (document.Record, bool, error) {
 	const query = `
 		SELECT document_id, document_type, status, version, etag, organization_id,
 			COALESCE(location_id, ''), COALESCE(number, ''), created_by, created_at,
@@ -285,7 +289,7 @@ func getDocumentRecordTx(tx *sql.Tx, documentID string) (document.Record, bool, 
 	return record, true, nil
 }
 
-func saveDocumentRecordUpsertTx(tx *sql.Tx, record document.Record) error {
+func saveDocumentRecordUpsertTx(tx store.Tx, record document.Record) error {
 	payload, err := json.Marshal(record.Body.Payload)
 	if err != nil {
 		return shared.Validation("invalid document payload")
@@ -345,7 +349,7 @@ func saveDocumentRecordUpsertTx(tx *sql.Tx, record document.Record) error {
 	return err
 }
 
-func updateDocumentRecordTx(tx *sql.Tx, previousVersion int, record document.Record) error {
+func updateDocumentRecordTx(tx store.Tx, previousVersion int, record document.Record) error {
 	payload, err := json.Marshal(record.Body.Payload)
 	if err != nil {
 		return shared.Validation("invalid document payload")
@@ -404,7 +408,7 @@ func updateDocumentRecordTx(tx *sql.Tx, previousVersion int, record document.Rec
 	return nil
 }
 
-func listDocumentLinesTx(tx *sql.Tx, documentID string) []document.Line {
+func listDocumentLinesTx(tx store.Tx, documentID string) []document.Line {
 	const query = `
 		SELECT document_line_id, line_no, line_type, COALESCE(line_schema_ref, ''),
 		       COALESCE(payload_json, '{}'::jsonb), amount_minor, COALESCE(amount_currency, '')
@@ -432,7 +436,7 @@ func listDocumentLinesTx(tx *sql.Tx, documentID string) []document.Line {
 	return items
 }
 
-func listDocumentLinksTx(tx *sql.Tx, documentID string) []document.Link {
+func listDocumentLinksTx(tx store.Tx, documentID string) []document.Link {
 	const query = `
 		SELECT link_id, linked_document_id, link_type, COALESCE(metadata_json, '{}'::jsonb), created_at
 		FROM document_links
@@ -459,7 +463,7 @@ func listDocumentLinksTx(tx *sql.Tx, documentID string) []document.Link {
 	return items
 }
 
-func listDocumentAttachmentsTx(tx *sql.Tx, documentID string) []document.Attachment {
+func listDocumentAttachmentsTx(tx store.Tx, documentID string) []document.Attachment {
 	const query = `
 		SELECT attachment_id, attachment_type, file_name, content_type, storage_key, size_bytes, created_at
 		FROM document_attachments
