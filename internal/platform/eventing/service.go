@@ -333,7 +333,7 @@ func (s *Service) failOrDeadLetter(item OutboxDeliveryRecord, reason string) (st
 
 func (s *Service) refreshOutboxStatus(outboxID string) error {
 	deliveries := s.repo.ListDeliveriesByOutbox(outboxID)
-	status := "pending"
+	var status string
 	lastError := ""
 	dispatchedAt := time.Time{}
 	if len(deliveries) == 0 {

@@ -274,13 +274,11 @@ func (s *Service) processOnce(ctx context.Context) (processResult, error) {
 			err = renewErr
 		}
 		if err != nil {
-			status := StatusFailed
+			status := StatusQueued
 			failureCategory := "handler_failure"
 			if job.AttemptCount >= maxAttempts {
 				status = StatusDeadLetter
 				failureCategory = "dead_lettered"
-			} else {
-				status = StatusQueued
 			}
 			if markErr := s.repo.MarkFailed(job.ID, status, err.Error(), time.Now().UTC()); markErr != nil {
 				return outcome, markErr

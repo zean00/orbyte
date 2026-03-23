@@ -71,7 +71,7 @@ func TestAttachWiresServicesAndHandlers(t *testing.T) {
 	if dispatched == 0 {
 		t.Fatal("expected registered handlers to dispatch")
 	}
-	result, err := searchSvc.Query("documents.requests.search", "org_default", "loc_hq", search.QueryRequest{})
+	var result search.QueryResult
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for {
 		result, err = searchSvc.Query("documents.requests.search", "org_default", "loc_hq", search.QueryRequest{})

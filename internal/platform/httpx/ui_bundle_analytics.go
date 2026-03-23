@@ -56,7 +56,7 @@ func AnalyticsCockpitBundle() string {
         +   '<div class="page-header">'
         +     '<div>'
         +       '<h3>' + text('Analytics Cockpit', 'Kokpit Analitik') + '</h3>'
-        +       '<p class="status">' + text('Operational analytics overview for documents, workflow, and reliability.', 'Ringkasan analitik operasional untuk dokumen, workflow, dan reliabilitas.') + '</p>'
+        +       '<p class="status">' + text('Operational analytics overview for documents, workflow, and reliability.', 'Ringkasan analitik untuk dokumen, workflow, dan reliabilitas.') + '</p>'
         +     '</div>'
         +     '<div class="actions">'
         +       (ctx.print && ctx.print.resolved ? '<button type="button" class="secondary" data-print-preview="1">' + text('Preview', 'Pratinjau') + '</button><button type="button" class="secondary" data-print-window="1">' + text('Print', 'Cetak') + '</button><button type="button" class="secondary" data-print-pdf="1">' + text('Download PDF', 'Unduh PDF') + '</button>' : '')

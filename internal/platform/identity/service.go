@@ -1200,7 +1200,6 @@ func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string,
 				return Session{}, err
 			}
 			user = provisioned
-			ok = true
 		}
 	}
 	if user.AuthenticationSubject == "" {

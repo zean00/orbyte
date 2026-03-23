@@ -5010,7 +5010,6 @@ func TestDocumentRoutesAndOps(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
 	header = created["header"].(map[string]any)
 	etag = header["etag"].(string)
-	version := int(header["version"].(float64))
 
 	submitBody, _ := json.Marshal(map[string]any{"action": "submit", "expected_version": 2, "expected_etag": etag})
 	rr = h.request(http.MethodPost, "/documents/"+id+"/actions", submitBody, true)
@@ -5020,7 +5019,7 @@ func TestDocumentRoutesAndOps(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
 	header = created["header"].(map[string]any)
 	etag = header["etag"].(string)
-	version = int(header["version"].(float64))
+	version := int(header["version"].(float64))
 
 	approveBody, _ := json.Marshal(map[string]any{"action": "approve", "expected_version": version, "expected_etag": etag})
 	rr = h.request(http.MethodPost, "/documents/"+id+"/actions", approveBody, true)
