@@ -154,6 +154,10 @@
     @apply mt-3 flex flex-wrap gap-2;
   }
 
+  .surface-switcher {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
   .route-panel .status-bar {
     @apply mt-0 flex-nowrap gap-1.5 overflow-hidden;
   }
@@ -260,6 +264,10 @@
 
   .admin-grid {
     @apply grid gap-6 xl:grid-cols-[1.2fr_1fr];
+  }
+
+  .org-chart-shell {
+    @apply grid gap-4;
   }
 
   .template-admin-grid {
