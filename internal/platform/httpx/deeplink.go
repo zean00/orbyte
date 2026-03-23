@@ -118,7 +118,7 @@ func registerDeepLinkRoutes(mux *http.ServeMux, ident *identity.Service, docs *d
 			respondError(w, err)
 			return
 		}
-		requiredPermission := "document.read"
+		var requiredPermission string
 		switch action {
 		case "approve":
 			requiredPermission = "document.approve"
