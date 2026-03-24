@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/store"
 	"orbyte/internal/platform/workflow"
@@ -29,14 +29,14 @@ type SubmitStore interface {
 }
 
 type DocumentActions struct {
-	documents *document.Service
-	workflows *workflow.Service
-	identity  *identity.Service
-	policy    *policy.Service
-	activity  *activity.Service
+	documents     *document.Service
+	workflows     *workflow.Service
+	identity      *identity.Service
+	policy        *policy.Service
+	activity      *activity.Service
 	notifications *notification.Service
-	store     SubmitStore
-	runner    *KernelCommandRunner
+	store         SubmitStore
+	runner        *KernelCommandRunner
 }
 
 func NewDocumentActions(documents *document.Service, workflows *workflow.Service, ident *identity.Service, policySvc *policy.Service, store SubmitStore) *DocumentActions {
@@ -1160,8 +1160,7 @@ func (a *DocumentActions) recordWorkflowCommunicationMessage(documentID, body st
 }
 
 func workflowEmailAutoDispatchEnabled() bool {
-	value := strings.TrimSpace(strings.ToLower(os.Getenv("WORKFLOW_EMAIL_AUTO_DISPATCH")))
-	return value == "1" || value == "true" || value == "yes"
+	return runtimeconfig.Current().WorkflowEmailAutoDispatch()
 }
 
 func workflowApprovalActionLink(grant identity.DeepLinkGrant, tokenManager *identity.TokenManager) string {

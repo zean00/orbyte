@@ -3,13 +3,13 @@ package httpx
 import (
 	"context"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/shared"
 )
 
@@ -51,7 +51,7 @@ const (
 
 func withAuthentication(next http.Handler, ident *identity.Service) http.Handler {
 	tokenManager := identity.NewTokenManagerFromEnv()
-	devBypass := os.Getenv("APP_AUTH_DEV_BYPASS") == "true"
+	devBypass := runtimeconfig.Current().AuthDevBypass()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, authErr := authenticateRequest(r, w, ident, tokenManager, devBypass)
 		ctx := r.Context()

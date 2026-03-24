@@ -1,7 +1,6 @@
 package analytics
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/workflow"
 )
 
@@ -366,7 +366,7 @@ func (s *Service) Snapshot() Snapshot {
 	}
 
 	return Snapshot{
-		ID:          fmt.Sprintf("analytics:%d", time.Now().UTC().UnixNano()),
+		ID:          shared.NewID("analytics"),
 		GeneratedAt: time.Now().UTC(),
 		Window:      "current_state",
 		Documents:   docs,

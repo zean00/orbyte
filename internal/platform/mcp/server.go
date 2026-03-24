@@ -103,10 +103,14 @@ type Server struct {
 	implementation            *ImplementationService
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
+	builtInToolRegistrations  []builtInToolRegistration
+	builtInToolIndex          map[string]builtInToolRegistration
+	builtInResourceRegistry   []builtInResourceRegistration
+	builtInResourceIndex      map[string]builtInResourceRegistration
 }
 
 func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
-	return &Server{
+	server := &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
 		templates:                 templates,
@@ -130,6 +134,9 @@ func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templat
 		analyticsStreamPath:       analyticsStreamPath,
 		analyticsScopedStreamPath: analyticsScopedStreamPath,
 	}
+	server.mustInitBuiltInTools()
+	server.mustInitBuiltInResources()
+	return server
 }
 
 func (s *Server) analyticsSnapshotPayload(actor ActorContext) (analytics.Snapshot, error) {

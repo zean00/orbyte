@@ -107,7 +107,7 @@ func (s *Service) Create(modelKey, actorID string, values map[string]any) (Recor
 	now := time.Now().UTC()
 	record := Record{
 		ModelKey:  def.Key,
-		ID:        fmt.Sprintf("%s:%d", def.Key, now.UnixNano()),
+		ID:        shared.NewID(def.Key),
 		Version:   1,
 		Values:    cloneMap(values),
 		CreatedBy: fallbackActor(actorID),

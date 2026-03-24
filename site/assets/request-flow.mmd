@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant C as Client
+    participant R as Router
+    participant I as Identity/Auth
+    participant P as Policy/Permissions
+    participant X as Action/Service
+    participant D as Database
+    participant E as Audit/Eventing
+
+    C->>R: HTTP or MCP request
+    R->>I: Resolve principal
+    I-->>R: Actor context
+    R->>P: Authorize and evaluate policy
+    P-->>R: Decision
+    R->>X: Execute action
+    X->>D: Persist business state
+    X->>E: Record audit and domain events
+    E-->>X: Accepted
+    X-->>R: Result
+    R-->>C: Response

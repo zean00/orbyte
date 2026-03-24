@@ -149,6 +149,10 @@ func (s *Server) mcpCatalogResource(actor ActorContext) (map[string]any, error) 
 	}, nil
 }
 
+func (s *Server) Catalog(actor ActorContext) (map[string]any, error) {
+	return s.mcpCatalogResource(actor)
+}
+
 func (s *Server) listMCPApps(actor ActorContext) []map[string]any {
 	items := make([]map[string]any, 0)
 	if s == nil || s.modules == nil {

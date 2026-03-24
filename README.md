@@ -16,6 +16,7 @@ Repo-native workflow commands:
 make test
 make lint
 make coverage
+make contracts
 make run
 make run-postgres
 ```
@@ -30,6 +31,27 @@ If `DATABASE_URL` is set, PostgreSQL-backed repositories are used. Otherwise the
 Startup now requires `APP_JWT_SECRET` by default.
 For local development without `DATABASE_URL`, you can set `APP_AUTH_DEV_MODE=true` to have the server seed an ephemeral per-process JWT secret automatically so `/auth/login` works out of the box.
 When `DATABASE_URL` is set, startup requires `APP_JWT_SECRET` and fails fast if PostgreSQL is unavailable.
+
+## Published Contracts
+
+Versioned machine-facing contract artifacts are generated into `contracts/`:
+
+- `contracts/openapi/<version>/openapi.json`
+- `contracts/mcp/<version>/catalog.json`
+
+Generate them with:
+
+```bash
+go run ./cmd/contractsgen
+```
+
+Or use:
+
+```bash
+make contracts
+```
+
+The generated artifacts are the canonical release contracts. The development OpenAPI routes under `/dev/openapi.json` and `/dev/swagger` are local inspection surfaces, not the primary published contract format.
 
 ## Google Auth
 
@@ -190,6 +212,49 @@ curl -X POST "http://localhost:8080/ops/analytics/report-deliveries/retry?artifa
 
 ## Development Docs
 
+- [Documentation Hub](docs/README.md)
+- [Getting Started](docs/getting-started.md)
+- [Concepts](docs/concepts.md)
+- [Use Cases](docs/use-cases.md)
+- [Architecture](docs/architecture.md)
+- [Features](docs/features.md)
+- [Components](docs/components.md)
+- [Configuration](docs/configuration.md)
+- [Glossary](docs/glossary.md)
+- [Security and Governance](docs/security-and-governance.md)
+- [Product Packaging](docs/product-packaging.md)
+- [Module System](docs/module-system.md)
+- [First Module Tutorial](docs/tutorial-first-module.md)
+- [Reference Implementations](docs/reference-implementations.md)
+- [Walkthroughs](docs/walkthroughs.md)
+- [Deployment](docs/deployment.md)
+- [Integration](docs/integration.md)
+- [Operations](docs/operations.md)
+- [API and Contracts](docs/api-and-contracts.md)
+- [Sample Payloads](docs/sample-payloads.md)
 - [Development Workflow](docs/development.md)
 - [Release Policy](docs/release-policy.md)
 - [Contract Governance](docs/contracts.md)
+- [Module Generator](docs/modulegen.md)
+
+## Docs Site
+
+This repository now includes a basic `mkdocs` configuration in [mkdocs.yml](/home/sahal/workspace/orbyte/mkdocs.yml) and a docs dependency file in [requirements-docs.txt](/home/sahal/workspace/orbyte/docs/requirements-docs.txt).
+
+Typical local docs preview flow:
+
+```bash
+python3 -m venv .venv-docs
+. .venv-docs/bin/activate
+pip install -r docs/requirements-docs.txt
+mkdocs serve
+```
+
+If your system Python lacks `venv` or `pip`, this repository also works with `uv`:
+
+```bash
+uv venv .venv-docs
+. .venv-docs/bin/activate
+uv pip install -r docs/requirements-docs.txt
+mkdocs serve
+```

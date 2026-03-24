@@ -6,11 +6,11 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/shared"
 )
 
@@ -94,7 +94,7 @@ func validateTrustedOrigin(r *http.Request, trustedOrigins []string) error {
 }
 
 func issueCSRFToken(sessionID string) (string, error) {
-	secret := []byte(os.Getenv("APP_JWT_SECRET"))
+	secret := []byte(runtimeconfig.Current().JWTSecret())
 	if len(secret) == 0 {
 		return "", shared.Unauthorized("jwt secret is not configured")
 	}
@@ -108,33 +108,23 @@ func buildCSRFCookie(sessionID string) (*http.Cookie, error) {
 	if err != nil {
 		return nil, err
 	}
-	secure := true
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
-	case "", "development", "dev", "test":
-		secure = false
-	}
 	return &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: false,
-		Secure:   secure,
+		Secure:   runtimeconfig.Current().CookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	}, nil
 }
 
 func clearedCSRFCookie() *http.Cookie {
-	secure := true
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
-	case "", "development", "dev", "test":
-		secure = false
-	}
 	return &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: false,
-		Secure:   secure,
+		Secure:   runtimeconfig.Current().CookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(0, 0).UTC(),
 		MaxAge:   -1,

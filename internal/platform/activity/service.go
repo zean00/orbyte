@@ -1,7 +1,6 @@
 package activity
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -68,7 +67,7 @@ func (s *Service) AddMessage(targetType, targetID, authorID, body string, metada
 	}
 	now := time.Now().UTC()
 	item := Message{
-		ID:         fmt.Sprintf("msg:%d", now.UnixNano()),
+		ID:         shared.NewID("msg"),
 		TargetType: strings.TrimSpace(targetType),
 		TargetID:   strings.TrimSpace(targetID),
 		AuthorID:   fallbackActor(authorID),
@@ -85,7 +84,7 @@ func (s *Service) Follow(targetType, targetID, actorID string) (Follower, error)
 		return Follower{}, shared.Validation("target_type, target_id, and actor_id are required")
 	}
 	now := time.Now().UTC()
-	item := Follower{ID: fmt.Sprintf("follow:%d", now.UnixNano()), TargetType: targetType, TargetID: targetID, ActorID: actorID, CreatedAt: now}
+	item := Follower{ID: shared.NewID("follow"), TargetType: targetType, TargetID: targetID, ActorID: actorID, CreatedAt: now}
 	s.followers = append(s.followers, item)
 	return item, nil
 }
@@ -96,7 +95,7 @@ func (s *Service) CreateActivity(targetType, targetID, createdBy, assignedTo, su
 	}
 	now := time.Now().UTC()
 	item := Activity{
-		ID:         fmt.Sprintf("act:%d", now.UnixNano()),
+		ID:         shared.NewID("act"),
 		TargetType: targetType,
 		TargetID:   targetID,
 		Summary:    strings.TrimSpace(summary),

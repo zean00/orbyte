@@ -1,0 +1,4689 @@
+{
+  "app_version": "0.1.0-dev",
+  "apps": [
+    {
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.app.analytics.cockpit",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      },
+      "custom_entry_key": "analytics.cockpit",
+      "description": "Interactive analytics cockpit for MCP-capable hosts.",
+      "key": "analytics.cockpit",
+      "required_permissions": [
+        "analytics.read"
+      ],
+      "resource_key": "analytics.cockpit.app",
+      "title": "Analytics Cockpit",
+      "view_key": ""
+    }
+  ],
+  "contract_version": "2026-03-23",
+  "endpoint_scope": "",
+  "endpoint_scopes": [
+    "",
+    "analytics"
+  ],
+  "protocol_version": "2024-11-05",
+  "resources": [
+    {
+      "uri": "orbyte://analytics/snapshot/current",
+      "name": "Current Analytics Snapshot",
+      "description": "Structured current-state analytics snapshot.",
+      "scope": "analytics",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.analytics.snapshot.current",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://apps/analytics.cockpit",
+      "name": "Analytics Cockpit App",
+      "description": "Inline MCP app resource for the analytics cockpit.",
+      "scope": "analytics",
+      "mimeType": "text/html",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.analytics.cockpit.app",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://apps/analytics.studio",
+      "name": "Analytics Studio",
+      "description": "Lightweight MCP app for analytics authoring, ad hoc results, and chart previews.",
+      "scope": "analytics",
+      "mimeType": "text/html",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://apps/analytics.studio",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://apps/template.designer",
+      "name": "Template Designer",
+      "description": "Lightweight MCP app for template draft inspection and preview.",
+      "scope": "template",
+      "mimeType": "text/html",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://apps/template.designer",
+        "requiredPermissions": [
+          "template.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://apps/workflow.manager",
+      "name": "Workflow Manager",
+      "description": "Lightweight MCP app for workflow drafts, routing simulation, and hierarchy inspection.",
+      "mimeType": "text/html",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://apps/workflow.manager",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/config.catalog",
+      "name": "Config Catalog",
+      "description": "Configuration definitions, entries, and effective values.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/config.catalog",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/dataops/artifacts",
+      "name": "DataOps Artifacts",
+      "description": "Managed backup, archive, export, and migration artifacts.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/dataops/artifacts",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/dataops/catalog",
+      "name": "DataOps Catalog",
+      "description": "Data class catalog and adapter capability matrix.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/dataops/catalog",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/dataops/checkpoints",
+      "name": "DataOps Checkpoints",
+      "description": "Latest incremental checkpoints by data class and adapter.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/dataops/checkpoints",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/feature-flags.catalog",
+      "name": "Feature Flag Catalog",
+      "description": "Feature flag definitions and stored values.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/feature-flags.catalog",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/implementation-blueprints",
+      "name": "Implementation Blueprints",
+      "description": "Domain-agnostic implementation blueprint and desired-state guidance.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/implementation-blueprints",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/integration-health",
+      "name": "Integration Health",
+      "description": "Integration connector health and submission summary.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/integration-health",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/mcp-catalog",
+      "name": "MCP Catalog",
+      "description": "Protocol versions, capability discovery, tools, resources, and app metadata for external agents.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/mcp-catalog",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/module-compatibility",
+      "name": "Module Compatibility",
+      "description": "Installed module and kernel compatibility state.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/module-compatibility",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/offline-sync",
+      "name": "Offline Sync",
+      "description": "Offline sync batches, outcomes, and conflicts.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/offline-sync",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/policy-runtime",
+      "name": "Policy Runtime",
+      "description": "Policy hook runtime, compile, and evaluation status.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/policy-runtime",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/readiness",
+      "name": "Implementation Readiness",
+      "description": "Readiness and validation snapshot for control-plane applies.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/readiness",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/reference-catalog",
+      "name": "Reference Catalog",
+      "description": "Reference data types and records.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/reference-catalog",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/role-matrix",
+      "name": "Role Matrix",
+      "description": "Roles, permissions, grants, and bindings.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/role-matrix",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/runbooks",
+      "name": "Runbooks",
+      "description": "Runtime health runbooks and operator hints.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/runbooks",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "uri": "orbyte://control-plane/search-runtime",
+      "name": "Search Runtime",
+      "description": "Search index runtime and consistency status.",
+      "mimeType": "application/json",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.resource.orbyte://control-plane/search-runtime",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "analytics.chart.generate",
+      "title": "Generate Analytics Chart",
+      "description": "Generate a normalized chart spec from a query or execution result.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "type": "object"
+          },
+          "result": {
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.analytics.chart.generate",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.delete",
+      "title": "Delete Dashboard",
+      "description": "Delete a runtime analytics dashboard.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "dashboard_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dashboard_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.dashboard.delete",
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.get",
+      "title": "Get Dashboard",
+      "description": "Get one runtime analytics dashboard.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "dashboard_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dashboard_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.dashboard.get",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.list",
+      "title": "List Dashboards",
+      "description": "List runtime analytics dashboards.",
+      "scope": "analytics",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.dashboard.list",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.save",
+      "title": "Save Dashboard",
+      "description": "Create or update a runtime analytics dashboard.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "dashboard": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "dashboard"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.analytics.dashboard.save",
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.metric.delete",
+      "title": "Delete Saved Metric",
+      "description": "Delete a runtime analytics saved metric.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "metric_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.metric.delete",
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.metric.get",
+      "title": "Get Saved Metric",
+      "description": "Get one runtime analytics saved metric.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "metric_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.metric.get",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.metric.list",
+      "title": "List Saved Metrics",
+      "description": "List runtime analytics saved metrics.",
+      "scope": "analytics",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.metric.list",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.metric.save",
+      "title": "Save Saved Metric",
+      "description": "Create or update a runtime analytics saved metric.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "metric": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "metric"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.analytics.metric.save",
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.query.delete",
+      "title": "Delete Saved Query",
+      "description": "Delete a runtime analytics saved query.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "query_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.query.delete",
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.query.execute",
+      "title": "Execute Analytics Query",
+      "description": "Run an ad hoc analytics query and return table plus chart data.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.query.execute",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.query.get",
+      "title": "Get Saved Query",
+      "description": "Get one runtime analytics saved query.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "query_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.query.get",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.query.list",
+      "title": "List Saved Queries",
+      "description": "List runtime analytics saved queries.",
+      "scope": "analytics",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.query.list",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.query.save",
+      "title": "Save Saved Query",
+      "description": "Create or update a runtime analytics saved query.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.analytics.query.save",
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.report.definition.delete",
+      "title": "Delete Report Definition",
+      "description": "Delete an analytics report definition.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.report.definition.delete",
+        "requiredPermissions": [
+          "analytics.manage_reports"
+        ]
+      }
+    },
+    {
+      "name": "analytics.report.definition.get",
+      "title": "Get Report Definition",
+      "description": "Get one analytics report definition.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.report.definition.get",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.report.definition.list",
+      "title": "List Report Definitions",
+      "description": "List analytics report definitions.",
+      "scope": "analytics",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.report.definition.list",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.report.definition.save",
+      "title": "Save Report Definition",
+      "description": "Create or update an analytics report definition.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "report": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "report"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.analytics.report.definition.save",
+        "requiredPermissions": [
+          "analytics.manage_reports"
+        ]
+      }
+    },
+    {
+      "name": "analytics.report.deliver",
+      "title": "Deliver Analytics Report",
+      "description": "Deliver a report artifact or run a report and deliver it.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "report_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.report.deliver",
+        "requiredPermissions": [
+          "analytics.deliver_reports"
+        ]
+      }
+    },
+    {
+      "name": "analytics.report.run",
+      "title": "Run Analytics Report",
+      "description": "Run a stored analytics report definition.",
+      "scope": "analytics",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.report.run",
+        "requiredPermissions": [
+          "analytics.manage_reports"
+        ]
+      }
+    },
+    {
+      "name": "analytics.snapshot.get",
+      "title": "Get Analytics Snapshot",
+      "description": "Returns the latest analytics snapshot and links the cockpit app.",
+      "scope": "analytics",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.snapshot.get",
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "config.bundle.apply",
+      "title": "Apply Config Bundle",
+      "description": "Apply a validated configuration bundle. Requires explicit confirmation.",
+      "inputSchema": {
+        "properties": {
+          "bundle": {
+            "type": "object"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bundle",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.config.bundle.apply",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "config.bundle.export",
+      "title": "Export Config Bundle",
+      "description": "Export config and feature flag values into a promotion bundle.",
+      "inputSchema": {
+        "properties": {
+          "config_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "config_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "flag_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "flag_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "include_flags": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.config.bundle.export",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "config.bundle.validate",
+      "title": "Validate Config Bundle",
+      "description": "Validate a configuration bundle without applying it.",
+      "inputSchema": {
+        "properties": {
+          "bundle": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "bundle"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.config.bundle.validate",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "config.compare",
+      "title": "Compare Config Contexts",
+      "description": "Compare effective configuration across two contexts.",
+      "inputSchema": {
+        "properties": {
+          "left": {
+            "type": "object"
+          },
+          "right": {
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.config.compare",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "config.definition.list",
+      "title": "List Config Definitions",
+      "description": "List configuration definitions and allowed scopes.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.config.definition.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "config.effective.get",
+      "title": "Get Effective Config",
+      "description": "Get effective configuration for a context.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.config.effective.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "config.entry.list",
+      "title": "List Config Entries",
+      "description": "List stored configuration entries.",
+      "inputSchema": {
+        "properties": {
+          "config_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "config_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.config.entry.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.archive.plan",
+      "title": "Plan Archive",
+      "description": "Plan a transactional archive operation.",
+      "inputSchema": {
+        "properties": {
+          "created_before": {
+            "type": "string"
+          },
+          "document_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.archive.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.archive.run",
+      "title": "Run Archive",
+      "description": "Archive transactional data and remove it from live storage. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "created_before": {
+            "type": "string"
+          },
+          "document_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.dataops.archive.run",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "dataops.artifact.get",
+      "title": "Get Data Operation Artifact",
+      "description": "Get one managed data operation artifact.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.artifact.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.artifact.list",
+      "title": "List Data Operation Artifacts",
+      "description": "List backup, archive, export, and migration artifacts.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.artifact.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.backup.plan",
+      "title": "Plan Backup",
+      "description": "Plan a class-selective backup, including incremental mode.",
+      "inputSchema": {
+        "properties": {
+          "incremental": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.backup.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.backup.run",
+      "title": "Run Backup",
+      "description": "Run a managed backup artifact creation. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "incremental": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.dataops.backup.run",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "dataops.checkpoint.list",
+      "title": "List Data Operation Checkpoints",
+      "description": "List incremental checkpoints by adapter and data class.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.checkpoint.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.export.plan",
+      "title": "Plan Export",
+      "description": "Plan a structured external export by data class.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.export.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.export.run",
+      "title": "Run Export",
+      "description": "Create a structured external export artifact. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.dataops.export.run",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "dataops.migration.plan",
+      "title": "Plan Migration",
+      "description": "Build a migration apply plan from a registered migration artifact.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.migration.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.migration.register",
+      "title": "Register Migration Input",
+      "description": "Register structured migration input as a managed artifact.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "segments": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_data_classes",
+          "segments"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.dataops.migration.register",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "dataops.migration.run",
+      "title": "Run Migration",
+      "description": "Apply a validated migration artifact. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.dataops.migration.run",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "dataops.migration.validate",
+      "title": "Validate Migration",
+      "description": "Validate a migration artifact without applying it.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.migration.validate",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.operation.get",
+      "title": "Get Data Operation Run",
+      "description": "Get one data operation execution run.",
+      "inputSchema": {
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.operation.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.restore.plan",
+      "title": "Plan Restore",
+      "description": "Build a restore plan from a managed backup or archive artifact.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.restore.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "dataops.restore.run",
+      "title": "Run Restore",
+      "description": "Run a class-selective restore. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.dataops.restore.run",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "dataops.restore.validate",
+      "title": "Validate Restore",
+      "description": "Validate a restore plan without applying it.",
+      "inputSchema": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "selected_data_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.dataops.restore.validate",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.account.list",
+      "title": "List Engagement Accounts",
+      "description": "List accounts for one engagement subject.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "subject_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.account.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.achievement.list",
+      "title": "List Engagement Achievements",
+      "description": "List granted achievements for one subject.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "subject_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.achievement.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.balance.get",
+      "title": "Get Engagement Balance",
+      "description": "Get one engagement account balance.",
+      "inputSchema": {
+        "properties": {
+          "account_key": {
+            "type": "string"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "subject_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.balance.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.consumer.get",
+      "title": "Get Engagement Consumer",
+      "description": "Get one engagement consumer state.",
+      "inputSchema": {
+        "properties": {
+          "consumer_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.consumer.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.consumer.list",
+      "title": "List Engagement Consumers",
+      "description": "List engagement consumer state.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.consumer.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.journal.list",
+      "title": "List Engagement Journal",
+      "description": "List journal entries for one program or subject.",
+      "inputSchema": {
+        "properties": {
+          "account_key": {
+            "type": "string"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.journal.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.create",
+      "title": "Create Engagement Program",
+      "description": "Create one engagement program. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "subject_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.engagement.program.create",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.get",
+      "title": "Get Engagement Program",
+      "description": "Get one engagement program.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.program.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.list",
+      "title": "List Engagement Programs",
+      "description": "List engagement programs.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.program.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.update",
+      "title": "Update Engagement Program",
+      "description": "Update one engagement program. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.engagement.program.update",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.version.create",
+      "title": "Create Engagement Draft Version",
+      "description": "Create a new draft version for an engagement program. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "change_note": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "program_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.engagement.program.version.create",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.version.publish",
+      "title": "Publish Engagement Version",
+      "description": "Publish one engagement program version. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program_key",
+          "version",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.engagement.program.version.publish",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.version.save",
+      "title": "Save Engagement Draft Version",
+      "description": "Save rules onto an engagement draft version. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "change_note": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program_key",
+          "version",
+          "rules",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.engagement.program.version.save",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "engagement.program.version.validate",
+      "title": "Validate Engagement Version",
+      "description": "Validate one engagement program version.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program_key",
+          "version"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.program.version.validate",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.qualification.get",
+      "title": "Get Engagement Qualification",
+      "description": "Get qualification or tier state for one subject.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "subject_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.qualification.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.replay.get",
+      "title": "Get Engagement Replay",
+      "description": "Get one engagement replay run.",
+      "inputSchema": {
+        "properties": {
+          "replay_run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "replay_run_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.replay.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.replay.plan",
+      "title": "Plan Engagement Replay",
+      "description": "Plan a replay for one engagement program version.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.replay.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.replay.run",
+      "title": "Run Engagement Replay",
+      "description": "Queue a replay for one engagement program version. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.engagement.replay.run",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "engagement.simulation.run",
+      "title": "Simulate Engagement Rules",
+      "description": "Preview engagement rule outcomes for one event.",
+      "inputSchema": {
+        "properties": {
+          "event": {
+            "type": "object"
+          },
+          "program_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program_key",
+          "event"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.engagement.simulation.run",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "engagement.subject.get",
+      "title": "Get Engagement Subject",
+      "description": "Get balances, qualification, achievements, and recent journal for one subject.",
+      "inputSchema": {
+        "properties": {
+          "program_key": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "program_key",
+          "subject_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.engagement.subject.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "feature_flag.definition.list",
+      "title": "List Feature Flag Definitions",
+      "description": "List feature flag definitions.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.feature_flag.definition.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "feature_flag.targeting.get",
+      "title": "Get Feature Flag Targeting",
+      "description": "Inspect raw overrides and effective resolution for one feature flag.",
+      "inputSchema": {
+        "properties": {
+          "flag_key": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "flag_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.feature_flag.targeting.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "feature_flag.value.list",
+      "title": "List Feature Flag Values",
+      "description": "List stored feature flag values.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.feature_flag.value.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "feature_flag.value.upsert",
+      "title": "Upsert Feature Flag Value",
+      "description": "Create or update a feature flag override. Requires explicit confirmation when activating changes.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "value",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.feature_flag.value.upsert",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "identity.role_binding.list",
+      "title": "List Role Bindings",
+      "description": "List current role bindings.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.identity.role_binding.list",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "identity.role_binding.priority.set",
+      "title": "Set Role Binding Priority",
+      "description": "Set role binding priority. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "binding_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "priority": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "binding_id",
+          "priority",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.identity.role_binding.priority.set",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "identity.role_permission.grant",
+      "title": "Grant Role Permission",
+      "description": "Grant a permission to an existing role. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "permission_key": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_id",
+          "permission_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.identity.role_permission.grant",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "identity.role_permission.revoke",
+      "title": "Revoke Role Permission",
+      "description": "Revoke a permission from an existing role. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "permission_key": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_id",
+          "permission_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.identity.role_permission.revoke",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "identity.role_permission_matrix.get",
+      "title": "Get Role Permission Matrix",
+      "description": "Get roles, permissions, grants, and bindings in matrix form.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.identity.role_permission_matrix.get",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "implementation.checkpoint.create",
+      "title": "Create Implementation Checkpoint",
+      "description": "Create a checkpoint tied to the latest committed change-set.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.implementation.checkpoint.create",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.checkpoint.list",
+      "title": "List Implementation Checkpoints",
+      "description": "List checkpoints for a session.",
+      "inputSchema": {
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.checkpoint.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.checkpoint.restore",
+      "title": "Restore Implementation Checkpoint",
+      "description": "Apply rollback for a checkpoint when reversible. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "checkpoint_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.checkpoint.restore",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.config.apply",
+      "title": "Apply Implementation Plan",
+      "description": "Apply a validated implementation plan. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "bundle": {
+            "type": "object"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "role_grants": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.config.apply",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.config.plan",
+      "title": "Plan Implementation Config Changes",
+      "description": "Dry-run desired config, flags, and role grants into a normalized plan.",
+      "inputSchema": {
+        "properties": {
+          "bundle": {
+            "type": "object"
+          },
+          "role_grants": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.config.plan",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.plan.build",
+      "title": "Build Implementation Plan",
+      "description": "Stage a normalized implementation plan onto a session.",
+      "inputSchema": {
+        "properties": {
+          "plan": {
+            "type": "object"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.plan.build",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.plan.validate",
+      "title": "Validate Implementation Plan",
+      "description": "Validate the currently staged implementation plan for a session.",
+      "inputSchema": {
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.plan.validate",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.readiness.check",
+      "title": "Check Implementation Readiness",
+      "description": "Return readiness, validation warnings, and operator hints before apply.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.readiness.check",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.rollback.apply",
+      "title": "Apply Implementation Rollback",
+      "description": "Apply a reversible rollback plan. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "change_set_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.rollback.apply",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.rollback.inspect",
+      "title": "Inspect Recent Implementation Changes",
+      "description": "Inspect recent config, feature flag, RBAC, and integration audit trail for rollback planning.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.rollback.inspect",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.rollback.plan",
+      "title": "Plan Implementation Rollback",
+      "description": "Build a rollback plan for a change-set.",
+      "inputSchema": {
+        "properties": {
+          "change_set_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.rollback.plan",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.session.close",
+      "title": "Close Implementation Session",
+      "description": "Close one implementation session. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.session.close",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.session.create",
+      "title": "Create Implementation Session",
+      "description": "Create an implementation session for staged rollout work.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.implementation.session.create",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.session.get",
+      "title": "Get Implementation Session",
+      "description": "Get one implementation session.",
+      "inputSchema": {
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.session.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.session.list",
+      "title": "List Implementation Sessions",
+      "description": "List implementation sessions.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.implementation.session.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.stage.commit",
+      "title": "Commit Staged Implementation",
+      "description": "Apply the staged plan and record a change-set. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.stage.commit",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.stage.diff",
+      "title": "Diff Staged Implementation",
+      "description": "Compare staged session changes against current runtime state.",
+      "inputSchema": {
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.stage.diff",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.stage.discard",
+      "title": "Discard Staged Implementation",
+      "description": "Discard the staged plan for a session. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.stage.discard",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "implementation.tenant.inspect",
+      "title": "Inspect Tenant Implementation State",
+      "description": "Aggregate config, flags, modules, integrations, and readiness for implementation work.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.tenant.inspect",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.verify.diff",
+      "title": "Verify Implementation Diff",
+      "description": "Return the staged diff for verification workflows.",
+      "inputSchema": {
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.verify.diff",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.verify.readiness",
+      "title": "Verify Implementation Readiness",
+      "description": "Verify readiness and runtime validity for a session or context.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.verify.readiness",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.verify.smoke",
+      "title": "Smoke Verify Implementation",
+      "description": "Run a high-signal verification sweep for a session or context.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.verify.smoke",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "implementation.verify.state",
+      "title": "Verify Implementation State",
+      "description": "Verify current runtime state for a session or context.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.implementation.verify.state",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.adapter.list",
+      "title": "List Integration Adapters",
+      "description": "List registered integration adapters and config schema.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.adapter.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.dead_letter.list",
+      "title": "List Integration Dead Letters",
+      "description": "List integration dead letters.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.dead_letter.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.dead_letter.replay",
+      "title": "Replay Integration Dead Letter",
+      "description": "Replay one integration dead letter. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "dead_letter_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dead_letter_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.integration.dead_letter.replay",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "integration.endpoint.config.get",
+      "title": "Get Integration Endpoint Config",
+      "description": "Inspect one integration endpoint config.",
+      "inputSchema": {
+        "properties": {
+          "endpoint_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.endpoint.config.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.endpoint.config.update",
+      "title": "Update Integration Endpoint Config",
+      "description": "Update integration endpoint config. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "endpoint_key": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "endpoint_key",
+          "settings",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.integration.endpoint.config.update",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "integration.endpoint.list",
+      "title": "List Integration Endpoints",
+      "description": "List integration endpoints.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.endpoint.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.submission.get",
+      "title": "Get Integration Submission",
+      "description": "Inspect one integration submission.",
+      "inputSchema": {
+        "properties": {
+          "submission_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "submission_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.submission.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.submission.list",
+      "title": "List Integration Submissions",
+      "description": "List integration submissions.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.submission.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.system.config.get",
+      "title": "Get Integration System Config",
+      "description": "Inspect one integration system config.",
+      "inputSchema": {
+        "properties": {
+          "system_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "system_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.system.config.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "integration.system.config.update",
+      "title": "Update Integration System Config",
+      "description": "Update integration system config. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "settings": {
+            "type": "object"
+          },
+          "system_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "system_key",
+          "settings",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.integration.system.config.update",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "integration.system.list",
+      "title": "List Integration Systems",
+      "description": "List integration systems.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.integration.system.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "module.compatibility.list",
+      "title": "List Module Compatibility",
+      "description": "List module compatibility diagnostics.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.module.compatibility.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "module.disable",
+      "title": "Disable Module",
+      "description": "Disable one module. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "module_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "module_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.module.disable",
+        "requiredPermissions": [
+          "module.manage"
+        ]
+      }
+    },
+    {
+      "name": "module.enable",
+      "title": "Enable Module",
+      "description": "Enable one module. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "module_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "module_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.module.enable",
+        "requiredPermissions": [
+          "module.manage"
+        ]
+      }
+    },
+    {
+      "name": "module.list",
+      "title": "List Modules",
+      "description": "List installed modules and lifecycle state.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.module.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "offline.conflict.list",
+      "title": "List Offline Conflicts",
+      "description": "List offline sync conflicts.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.offline.conflict.list",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "name": "offline.sync.get",
+      "title": "Get Offline Sync Batch",
+      "description": "Get one offline sync batch and its outcomes.",
+      "inputSchema": {
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.offline.sync.get",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "name": "offline.sync.list",
+      "title": "List Offline Sync Batches",
+      "description": "List offline sync batches and recent outcomes.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.offline.sync.list",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "name": "ops.audit.correlation.get",
+      "title": "Get Audit Events By Correlation",
+      "description": "Get correlated audit events for one correlation id.",
+      "inputSchema": {
+        "properties": {
+          "correlation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "correlation_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.ops.audit.correlation.get",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "name": "ops.health.get",
+      "title": "Get Runtime Health",
+      "description": "Get runtime health snapshot and subsystem status.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.ops.health.get",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "name": "ops.trace.get",
+      "title": "Get Operational Trace",
+      "description": "Get a stitched trace summary for one correlation id.",
+      "inputSchema": {
+        "properties": {
+          "correlation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "correlation_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.ops.trace.get",
+        "requiredPermissions": [
+          "ops.read"
+        ]
+      }
+    },
+    {
+      "name": "policy.hook.get",
+      "title": "Get Policy Hook Runtime",
+      "description": "Get one policy hook runtime.",
+      "inputSchema": {
+        "properties": {
+          "hook_key": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hook_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.policy.hook.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "policy.hook.list",
+      "title": "List Policy Hook Runtime",
+      "description": "List policy hook runtimes.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.policy.hook.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "policy.module.upsert",
+      "title": "Update Policy Module",
+      "description": "Update Rego source for a policy hook. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "hook_key": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hook_key",
+          "source",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.policy.module.upsert",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "readiness.get",
+      "title": "Get Implementation Readiness",
+      "description": "Get readiness for applying customer configuration.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.readiness.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "reference.record.list",
+      "title": "List Reference Records",
+      "description": "List records for one reference type.",
+      "inputSchema": {
+        "properties": {
+          "type_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.reference.record.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "reference.record.upsert",
+      "title": "Upsert Reference Record",
+      "description": "Create or update a reference record. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "record": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "record",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.reference.record.upsert",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "reference.resolve",
+      "title": "Resolve Reference Records",
+      "description": "Resolve effective records for one reference type.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "type_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.reference.resolve",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "reference.type.list",
+      "title": "List Reference Types",
+      "description": "List reference data types.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.reference.type.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "search.consistency.get",
+      "title": "Get Search Consistency",
+      "description": "Get consistency report for one search index.",
+      "inputSchema": {
+        "properties": {
+          "index_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.search.consistency.get",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.rebuild",
+      "title": "Rebuild Search Index",
+      "description": "Rebuild one search index. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "index_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.search.rebuild",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.reconcile",
+      "title": "Reconcile Search Index",
+      "description": "Run a consistency scan for one search index. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "index_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.search.reconcile",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.repair",
+      "title": "Repair Search Index",
+      "description": "Repair one search index. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "index_key": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.search.repair",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.runtime.get",
+      "title": "Get Search Runtime",
+      "description": "Get runtime state for one search index.",
+      "inputSchema": {
+        "properties": {
+          "index_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.search.runtime.get",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.runtime.list",
+      "title": "List Search Runtime",
+      "description": "List search indexes and runtime status.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.search.runtime.list",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.schema.activate",
+      "title": "Activate Search Schema",
+      "description": "Activate the candidate search schema. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "index_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.search.schema.activate",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.schema.build",
+      "title": "Build Search Schema",
+      "description": "Build the candidate search schema. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "index_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.search.schema.build",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.schema.plan",
+      "title": "Plan Search Schema",
+      "description": "Plan a candidate schema version for one index.",
+      "inputSchema": {
+        "properties": {
+          "index_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key",
+          "version"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.search.schema.plan",
+        "requiredPermissions": [
+          "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "template.definition.get",
+      "title": "Get Template Definition",
+      "description": "Get one template definition and version metadata.",
+      "scope": "template",
+      "inputSchema": {
+        "properties": {
+          "template_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.template.definition.get",
+        "requiredPermissions": [
+          "template.read"
+        ]
+      }
+    },
+    {
+      "name": "template.definition.list",
+      "title": "List Template Definitions",
+      "description": "List available print template definitions.",
+      "scope": "template",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.template.definition.list",
+        "requiredPermissions": [
+          "template.read"
+        ]
+      }
+    },
+    {
+      "name": "template.draft.get",
+      "title": "Get Template Draft",
+      "description": "Load the latest draft or defaults for a template.",
+      "scope": "template",
+      "inputSchema": {
+        "properties": {
+          "template_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.template.draft.get",
+        "requiredPermissions": [
+          "template.read"
+        ]
+      }
+    },
+    {
+      "name": "template.draft.save",
+      "title": "Save Template Draft",
+      "description": "Create or update a template draft.",
+      "scope": "template",
+      "inputSchema": {
+        "properties": {
+          "template_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.template.draft.save",
+        "requiredPermissions": [
+          "template.manage"
+        ]
+      }
+    },
+    {
+      "name": "template.render.preview",
+      "title": "Preview Template Render",
+      "description": "Render a template preview in HTML or the requested output format.",
+      "scope": "template",
+      "inputSchema": {
+        "properties": {
+          "template_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.template.render.preview",
+        "requiredPermissions": [
+          "template.render"
+        ]
+      }
+    },
+    {
+      "name": "workflow.definition.get",
+      "title": "Get Workflow Definition",
+      "description": "Get one workflow definition plus versions and current draft.",
+      "inputSchema": {
+        "properties": {
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.definition.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.definition.list",
+      "title": "List Workflow Definitions",
+      "description": "List workflow definitions and published versions.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.definition.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.draft.create",
+      "title": "Create Workflow Draft",
+      "description": "Create a new workflow draft from the current published version.",
+      "inputSchema": {
+        "properties": {
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.workflow.draft.create",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "workflow.draft.get",
+      "title": "Get Workflow Draft",
+      "description": "Load the current workflow draft or a draft version.",
+      "inputSchema": {
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.draft.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.draft.publish",
+      "title": "Publish Workflow Draft",
+      "description": "Publish a workflow draft version. Requires explicit confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_publish": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_key",
+          "version",
+          "confirm_publish"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.workflow.draft.publish",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "workflow.draft.save",
+      "title": "Save Workflow Draft",
+      "description": "Create or update a workflow draft definition.",
+      "inputSchema": {
+        "properties": {
+          "workflow": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "workflow"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.workflow.draft.save",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "workflow.draft.simulate",
+      "title": "Simulate Workflow Draft",
+      "description": "Simulate a workflow transition and preview routing.",
+      "inputSchema": {
+        "properties": {
+          "input": {
+            "type": "object"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "workflow": {
+            "type": "object"
+          },
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.draft.simulate",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.draft.validate",
+      "title": "Validate Workflow Draft",
+      "description": "Validate a workflow draft or draft version.",
+      "inputSchema": {
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "workflow": {
+            "type": "object"
+          },
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.draft.validate",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "workflow.hierarchy.chain.get",
+      "title": "Get Workflow Hierarchy Chain",
+      "description": "Get the manager chain for a user.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.hierarchy.chain.get",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "workflow.hierarchy.graph.get",
+      "title": "Get Workflow Hierarchy Graph",
+      "description": "Get the reporting-line graph for workflow routing.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.hierarchy.graph.get",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "workflow.hierarchy.summary.get",
+      "title": "Get Workflow Hierarchy Summary",
+      "description": "Get hierarchy coverage and exception summary.",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "operating_unit_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.hierarchy.summary.get",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "workflow.reporting_line.list",
+      "title": "List Reporting Lines",
+      "description": "List reporting lines used for workflow routing.",
+      "inputSchema": {
+        "properties": {
+          "manager_user_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject_user_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.reporting_line.list",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "workflow.reporting_line.save",
+      "title": "Save Reporting Line",
+      "description": "Create or update a reporting line for workflow routing.",
+      "inputSchema": {
+        "properties": {
+          "reporting_line": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "reporting_line"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.workflow.reporting_line.save",
+        "requiredPermissions": [
+          "identity.manage_users"
+        ]
+      }
+    },
+    {
+      "name": "workflow.runtime.approvals.list",
+      "title": "List Workflow Approvals",
+      "description": "List read-only workflow approvals.",
+      "inputSchema": {
+        "properties": {
+          "stage_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.runtime.approvals.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.runtime.history.get",
+      "title": "Get Workflow History",
+      "description": "Get workflow history for one target.",
+      "inputSchema": {
+        "properties": {
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.runtime.history.get",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.runtime.tasks.list",
+      "title": "List Workflow Tasks",
+      "description": "List read-only workflow tasks.",
+      "inputSchema": {
+        "properties": {
+          "assignee_user_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.runtime.tasks.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "workflow.version.list",
+      "title": "List Workflow Versions",
+      "description": "List all workflow versions for a definition.",
+      "inputSchema": {
+        "properties": {
+          "workflow_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.workflow.version.list",
+        "requiredPermissions": [
+          "configuration.read"
+        ]
+      }
+    }
+  ]
+}

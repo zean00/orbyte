@@ -6,16 +6,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"orbyte/internal/modules"
 	"orbyte/internal/platform/app"
+	"orbyte/internal/platform/runtimeconfig"
 )
 
 func main() {
-	profile := os.Getenv("APP_DOMAIN_PROFILE")
+	runtime := runtimeconfig.Current()
+	profile := runtime.DomainProfile()
 	manifests, err := modules.ForProfile(profile)
 	if err != nil {
 		log.Printf("app startup error: %v", err)
@@ -38,9 +39,9 @@ func main() {
 		Addr:              application.Address(),
 		Handler:           application.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       durationFromEnv("APP_HTTP_READ_TIMEOUT_SECONDS", 15*time.Second),
-		WriteTimeout:      durationFromEnv("APP_HTTP_WRITE_TIMEOUT_SECONDS", 30*time.Second),
-		IdleTimeout:       durationFromEnv("APP_HTTP_IDLE_TIMEOUT_SECONDS", 60*time.Second),
+		ReadTimeout:       runtime.HTTPReadTimeout(),
+		WriteTimeout:      runtime.HTTPWriteTimeout(),
+		IdleTimeout:       runtime.HTTPIdleTimeout(),
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -66,17 +67,5 @@ func main() {
 }
 
 func durationFromEnv(key string, fallback time.Duration) time.Duration {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return fallback
-	}
-	parsed, err := time.ParseDuration(raw)
-	if err == nil {
-		return parsed
-	}
-	seconds, err := strconv.Atoi(raw)
-	if err != nil || seconds < 0 {
-		return fallback
-	}
-	return time.Duration(seconds) * time.Second
+	return runtimeconfig.DurationFromEnv(key, fallback)
 }

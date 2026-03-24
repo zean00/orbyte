@@ -3,11 +3,11 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"strconv"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"orbyte/internal/platform/runtimeconfig"
 )
 
 type Postgres struct {
@@ -15,7 +15,7 @@ type Postgres struct {
 }
 
 func OpenFromEnv() (*Postgres, error) {
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := runtimeconfig.Current().DatabaseURL()
 	if dsn == "" {
 		return nil, nil
 	}
@@ -42,32 +42,17 @@ func configureDBPool(db *sql.DB) {
 	if db == nil {
 		return
 	}
-	db.SetMaxOpenConns(envInt("APP_DB_MAX_OPEN_CONNS", 25))
-	db.SetMaxIdleConns(envInt("APP_DB_MAX_IDLE_CONNS", 25))
-	db.SetConnMaxLifetime(envDurationSeconds("APP_DB_CONN_MAX_LIFETIME_SECONDS", time.Hour))
-	db.SetConnMaxIdleTime(envDurationSeconds("APP_DB_CONN_MAX_IDLE_TIME_SECONDS", 15*time.Minute))
+	runtime := runtimeconfig.Current()
+	db.SetMaxOpenConns(runtime.DBMaxOpenConns())
+	db.SetMaxIdleConns(runtime.DBMaxIdleConns())
+	db.SetConnMaxLifetime(runtime.DBConnMaxLifetime())
+	db.SetConnMaxIdleTime(runtime.DBConnMaxIdleTime())
 }
 
 func envInt(key string, fallback int) int {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(raw)
-	if err != nil || parsed < 0 {
-		return fallback
-	}
-	return parsed
+	return runtimeconfig.IntFromEnv(key, fallback)
 }
 
 func envDurationSeconds(key string, fallback time.Duration) time.Duration {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(raw)
-	if err != nil || parsed < 0 {
-		return fallback
-	}
-	return time.Duration(parsed) * time.Second
+	return runtimeconfig.DurationSecondsFromEnv(key, fallback)
 }

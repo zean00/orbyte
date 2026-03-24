@@ -69,6 +69,7 @@ type serviceGraph struct {
 	analytics         *analytics.Service
 	acp               *acp.Service
 	mcpAnalytics      *mcp.AnalyticsStream
+	mcpServer         *mcp.Server
 	offline           *offline.Service
 	monitoring        *monitoring.Service
 	notifications     *notification.Service
@@ -227,6 +228,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	if graph.engagement == nil {
 		graph.engagement = engagement.NewService()
 	}
+	graph.mcpServer = mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath)
 	configureDatabaseHealth(graph.runtimeHealth, postgres)
 	return graph
 }

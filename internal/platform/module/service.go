@@ -1240,9 +1240,26 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	}
 	resourceKeys := map[string]struct{}{}
 	templateKeys := map[string]struct{}{}
+	localResourceKeys := map[string]struct{}{}
+	localResourceURIs := map[string]struct{}{}
 	for _, item := range manifest.MCP.Resources {
 		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.URI) == "" {
 			return shared.Validation("mcp resource key, title, and uri are required")
+		}
+		if _, ok := localResourceKeys[item.Key]; ok {
+			return shared.Conflict("duplicate mcp resource key in manifest")
+		}
+		if _, ok := localResourceURIs[item.URI]; ok {
+			return shared.Conflict("duplicate mcp resource uri in manifest")
+		}
+		if strings.TrimSpace(item.Provider) == "" {
+			return shared.Validation("mcp resource provider is required")
+		}
+		if strings.TrimSpace(item.Provider) == "mcp.app" && strings.TrimSpace(item.AppKey) == "" {
+			return shared.Validation("mcp app resource requires app_key")
+		}
+		if strings.TrimSpace(item.AppKey) != "" && strings.TrimSpace(item.Provider) != "mcp.app" {
+			return shared.Validation("mcp resource app_key requires provider mcp.app")
 		}
 		if owner, ok := mcpResources[item.Key]; ok && owner != manifest.Key {
 			return shared.Conflict("mcp resource key already registered")
@@ -1253,6 +1270,8 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		mcpResources[item.Key] = manifest.Key
 		mcpURIs[item.URI] = manifest.Key
 		resourceKeys[item.Key] = struct{}{}
+		localResourceKeys[item.Key] = struct{}{}
+		localResourceURIs[item.URI] = struct{}{}
 	}
 	for _, item := range manifest.Templates {
 		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.TargetKind) == "" || strings.TrimSpace(item.TargetKey) == "" {
@@ -1270,9 +1289,13 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		templateKeys[item.Key] = struct{}{}
 	}
 	appKeys := map[string]struct{}{}
+	localAppKeys := map[string]struct{}{}
 	for _, item := range manifest.MCP.Apps {
 		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.ResourceKey) == "" {
 			return shared.Validation("mcp app key, title, and resource_key are required")
+		}
+		if _, ok := localAppKeys[item.Key]; ok {
+			return shared.Conflict("duplicate mcp app key in manifest")
 		}
 		if owner, ok := mcpApps[item.Key]; ok && owner != manifest.Key {
 			return shared.Conflict("mcp app key already registered")
@@ -1300,10 +1323,15 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		mcpApps[item.Key] = manifest.Key
 		appKeys[item.Key] = struct{}{}
+		localAppKeys[item.Key] = struct{}{}
 	}
+	localToolKeys := map[string]struct{}{}
 	for _, item := range manifest.MCP.Tools {
 		if strings.TrimSpace(item.Key) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.Operation) == "" {
 			return shared.Validation("mcp tool key, title, and operation are required")
+		}
+		if _, ok := localToolKeys[item.Key]; ok {
+			return shared.Conflict("duplicate mcp tool key in manifest")
 		}
 		if owner, ok := mcpTools[item.Key]; ok && owner != manifest.Key {
 			return shared.Conflict("mcp tool key already registered")
@@ -1316,6 +1344,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 			}
 		}
 		mcpTools[item.Key] = manifest.Key
+		localToolKeys[item.Key] = struct{}{}
 	}
 	for _, item := range manifest.MCP.Resources {
 		if strings.TrimSpace(item.AppKey) != "" {

@@ -57,27 +57,42 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 }
 
 func (s *Server) mustBuiltInToolRegistrations() []builtInToolRegistration {
-	defs := make([]builtInTool, 0)
-	defs = s.appendBuiltInCoreTools(defs)
-	defs = s.appendBuiltInOpsTools(defs)
-	handlers := s.builtInCoreToolHandlers()
-	for name, handler := range s.builtInOpsToolHandlers() {
-		handlers[name] = handler
+	if s == nil {
+		return nil
 	}
-	registry, err := buildBuiltInToolRegistrations(defs, handlers)
-	if err != nil {
-		panic(err)
+	if len(s.builtInToolRegistrations) == 0 {
+		s.mustInitBuiltInTools()
 	}
-	return registry
+	return append([]builtInToolRegistration(nil), s.builtInToolRegistrations...)
 }
 
 func (s *Server) mustBuiltInToolRegistrationIndex() map[string]builtInToolRegistration {
-	registry := s.mustBuiltInToolRegistrations()
+	if s == nil {
+		return nil
+	}
+	if len(s.builtInToolIndex) == 0 {
+		s.mustInitBuiltInTools()
+	}
+	index := make(map[string]builtInToolRegistration, len(s.builtInToolIndex))
+	for key, reg := range s.builtInToolIndex {
+		index[key] = reg
+	}
+	return index
+}
+
+func (s *Server) mustInitBuiltInTools() {
+	if s == nil || len(s.builtInToolRegistrations) != 0 {
+		return
+	}
+	registry := make([]builtInToolRegistration, 0)
+	registry = s.appendBuiltInCoreToolRegistrations(registry)
+	registry = s.appendBuiltInOpsToolRegistrations(registry)
 	index := make(map[string]builtInToolRegistration, len(registry))
 	for _, reg := range registry {
 		index[reg.definition.name] = reg
 	}
-	return index
+	s.builtInToolRegistrations = registry
+	s.builtInToolIndex = index
 }
 
 func buildBuiltInToolRegistrations(defs []builtInTool, handlers map[string]builtInToolHandler) ([]builtInToolRegistration, error) {
@@ -101,4 +116,12 @@ func buildBuiltInToolRegistrations(defs []builtInTool, handlers map[string]built
 		registry = append(registry, builtInToolRegistration{definition: def, handler: handler})
 	}
 	return registry, nil
+}
+
+func mustBuiltInToolRegistration(handler builtInToolHandler, def builtInTool) builtInToolRegistration {
+	items, err := buildBuiltInToolRegistrations([]builtInTool{def}, map[string]builtInToolHandler{def.name: handler})
+	if err != nil {
+		panic(err)
+	}
+	return items[0]
 }

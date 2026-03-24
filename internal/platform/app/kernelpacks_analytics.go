@@ -1,0 +1,155 @@
+package app
+
+import (
+	"orbyte/internal/platform/httpx"
+	"orbyte/internal/platform/module"
+)
+
+func analyticsKernelPackManifest() module.Manifest {
+	return module.Manifest{
+		Key:          "analytics",
+		Name:         "Analytics",
+		NameI18n:     localize("Analytics", "Analitik"),
+		Version:      "1.0.0",
+		DomainFamily: "platform",
+		DependencyRequirements: []module.DependencyRequirement{
+			{ModuleKey: "documents", VersionRange: ">=1.1.0,<2.0.0", Kind: module.DependencyKindRequired},
+			{ModuleKey: "monitoring", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindOptional},
+		},
+		OwnedProjectionKeys: []string{"document_summary"},
+		DocumentExtensions: []module.DocumentExtension{{
+			DocumentType:       "generic_request",
+			SchemaVersion:      "v1",
+			DisplayName:        "Analytics Extension",
+			DisplayNameI18n:    localize("Analytics Extension", "Ekstensi Analitik"),
+			ReadPermissionKey:  "analytics.read",
+			WritePermissionKey: "analytics.manage_reports",
+		}},
+		Security: module.SecurityDefinition{
+			Permissions: []module.PermissionDefinition{
+				{Key: "analytics.read", Action: "read", Resource: "analytics", DisplayName: "Read Analytics", DisplayNameI18n: localize("Read Analytics", "Lihat Analitik")},
+				{Key: "analytics.author", Action: "author", Resource: "analytics_runtime", DisplayName: "Author Runtime Analytics", DisplayNameI18n: localize("Author Runtime Analytics", "Kelola Analitik Runtime"), RiskLevel: "high"},
+				{Key: "analytics.manage_reports", Action: "manage_reports", Resource: "analytics_report", DisplayName: "Manage Analytics Reports", DisplayNameI18n: localize("Manage Analytics Reports", "Kelola Laporan Analitik"), RiskLevel: "high"},
+				{Key: "analytics.deliver_reports", Action: "deliver_reports", Resource: "analytics_report", DisplayName: "Deliver Analytics Reports", DisplayNameI18n: localize("Deliver Analytics Reports", "Kirim Laporan Analitik"), RiskLevel: "high"},
+			},
+			RoleTemplates: []module.RoleTemplateDefinition{{
+				Key: "analytics_viewer", Name: "Analytics Viewer", NameI18n: localize("Analytics Viewer", "Pembaca Analitik"), AllowedScopes: []string{"deployment", "location"}, PermissionKeys: []string{"analytics.read"},
+			}},
+		},
+		Observability: module.ObservabilityDefinition{
+			Dashboards: []module.DashboardDefinition{
+				{Key: "analytics.cockpit", Title: "Analytics Cockpit", TitleI18n: localize("Analytics Cockpit", "Kokpit Analitik"), RequiredPermissions: []string{"analytics.read"}},
+			},
+			Reports: []module.ReportDefinition{
+				{Key: "analytics.documents.reporting", Title: "Document Reporting", TitleI18n: localize("Document Reporting", "Pelaporan Dokumen"), Dataset: "document_reporting", Formats: []string{"csv", "xlsx", "pdf"}, RequiredPermissions: []string{"analytics.read"}},
+			},
+			Metrics: []module.MetricDefinition{
+				{Key: "analytics.snapshots.total", Type: "counter", Description: "Captured analytics snapshots"},
+			},
+			LogEvents: []module.LogEventDefinition{{
+				Key: "analytics.report.delivery", Category: "analytics", Severity: "info", RequiredFields: []string{"artifact_id", "channel", "recipient"},
+			}},
+			DomainEvents: []module.DomainEventDefinition{
+				{Type: "analytics.snapshot.captured", Role: "producer", CorrelationRequired: true},
+			},
+		},
+		Templates: []module.TemplateDefinition{{
+			Key:                 "analytics.document_reporting.default",
+			Title:               "Document Reporting Print",
+			TitleI18n:           localize("Document Reporting Print", "Cetak Pelaporan Dokumen"),
+			Description:         "Default printable analytics reporting template.",
+			DescriptionI18n:     localize("Default printable analytics reporting template.", "Template cetak default untuk pelaporan analitik."),
+			TargetKind:          "report",
+			TargetKey:           "document_reporting",
+			RendererKind:        "visual",
+			DefaultFormat:       "html",
+			Formats:             []string{"html", "pdf"},
+			Purpose:             "report",
+			Channel:             "print",
+			AllowedScopes:       []string{"deployment", "organization", "location"},
+			RequiredPermissions: []string{"template.read", "template.render", "analytics.read"},
+			DefaultBody:         `{"schema_version":"visual-grid/v1","title":"Document Reporting","settings":{"paper_preset":"a4","orientation":"portrait","density":"comfortable"},"sections":[{"id":"header","title":"Summary","rows":[{"columns":[{"span":8,"blocks":[{"type":"text","text":"Document Reporting","font_size":"xl","emphasis":"strong"}]},{"span":4,"blocks":[{"type":"field","label":"Total Rows","path":"report.total","align":"right"}]}]}]},{"id":"body","title":"Rows","rows":[{"columns":[{"span":12,"blocks":[{"type":"table","rows_path":"report.rows","columns":[{"label":"Dimension","path":"dimension_key"},{"label":"Label","path":"label"},{"label":"Total","path":"total"}]}]}]}]},{"id":"footer","title":"Notes","rows":[{"columns":[{"span":12,"blocks":[{"type":"text","text":"Generated from the reporting workspace.","align":"right","emphasis":"muted"}]}]}]}]}`,
+			DefaultStyle:        `.template-visual{font-family:Arial,sans-serif;color:#0f172a}`,
+		}},
+		Frontend: module.FrontendDefinition{
+			Menus: []module.MenuDefinition{{
+				Key:                 "analytics.cockpit",
+				Label:               "Analytics Cockpit",
+				LabelI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
+				ActionKey:           "analytics.cockpit",
+				Order:               20,
+				RequiredPermissions: []string{"analytics.read"},
+			}},
+			Actions: []module.ActionDefinition{{
+				Key:                 "analytics.cockpit",
+				Label:               "Analytics Cockpit",
+				LabelI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
+				Kind:                "navigate",
+				RoutePath:           "/analytics/cockpit",
+				CustomEntryKey:      "analytics.cockpit",
+				RenderMode:          module.RenderModeCustom,
+				RequiredPermissions: []string{"analytics.read"},
+			}},
+			CustomEntries: []module.CustomEntryDefinition{{
+				Key:                 "analytics.cockpit",
+				Title:               "Analytics Cockpit",
+				TitleI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
+				RoutePath:           "/analytics/cockpit",
+				BundleKey:           "analytics-cockpit",
+				ComponentExport:     "render",
+				RequiredPermissions: []string{"analytics.read"},
+			}},
+		},
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{{
+				Key:                 "analytics.snapshot.get",
+				Title:               "Get Analytics Snapshot",
+				TitleI18n:           localize("Get Analytics Snapshot", "Ambil Snapshot Analitik"),
+				Description:         "Returns the latest analytics snapshot and links the cockpit app.",
+				DescriptionI18n:     localize("Returns the latest analytics snapshot and links the cockpit app.", "Mengembalikan snapshot analitik terbaru dan menautkan aplikasi kokpit."),
+				Operation:           "analytics.snapshot.get",
+				RequiredPermissions: []string{"analytics.read"},
+				AppKey:              "analytics.cockpit",
+			}},
+			Resources: []module.MCPResourceDefinition{
+				{
+					Key:                 "analytics.snapshot.current",
+					Title:               "Current Analytics Snapshot",
+					TitleI18n:           localize("Current Analytics Snapshot", "Snapshot Analitik Saat Ini"),
+					Description:         "Structured current-state analytics snapshot.",
+					DescriptionI18n:     localize("Structured current-state analytics snapshot.", "Snapshot analitik terstruktur untuk kondisi saat ini."),
+					URI:                 "orbyte://analytics/snapshot/current",
+					MIMEType:            "application/json",
+					Provider:            "analytics.snapshot.current",
+					RequiredPermissions: []string{"analytics.read"},
+				},
+				{
+					Key:                 "analytics.cockpit.app",
+					Title:               "Analytics Cockpit App",
+					TitleI18n:           localize("Analytics Cockpit App", "Aplikasi Kokpit Analitik"),
+					Description:         "Inline MCP app resource for the analytics cockpit.",
+					DescriptionI18n:     localize("Inline MCP app resource for the analytics cockpit.", "Resource aplikasi MCP inline untuk kokpit analitik."),
+					URI:                 "orbyte://apps/analytics.cockpit",
+					MIMEType:            "text/html",
+					Provider:            "mcp.app",
+					RequiredPermissions: []string{"analytics.read"},
+					AppKey:              "analytics.cockpit",
+				},
+			},
+			Apps: []module.MCPAppDefinition{{
+				Key:                 "analytics.cockpit",
+				Title:               "Analytics Cockpit",
+				TitleI18n:           localize("Analytics Cockpit", "Kokpit Analitik"),
+				Description:         "Interactive analytics cockpit for MCP-capable hosts.",
+				DescriptionI18n:     localize("Interactive analytics cockpit for MCP-capable hosts.", "Kokpit analitik interaktif untuk host yang mendukung MCP."),
+				ResourceKey:         "analytics.cockpit.app",
+				CustomEntryKey:      "analytics.cockpit",
+				RequiredPermissions: []string{"analytics.read"},
+			}},
+		},
+		Bundles: []module.BundleDefinition{{
+			Key:    "analytics-cockpit",
+			Script: httpx.AnalyticsCockpitBundle(),
+		}},
+	}
+}

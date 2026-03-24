@@ -549,7 +549,7 @@ func (s *Service) UpsertReportingLine(line ReportingLine) (ReportingLine, error)
 	line.OperatingUnitID = strings.TrimSpace(line.OperatingUnitID)
 	line.Status = strings.ToLower(strings.TrimSpace(line.Status))
 	if line.ID == "" {
-		line.ID = fmt.Sprintf("reporting_line:%d", now.UnixNano())
+		line.ID = shared.NewID("reporting_line")
 	}
 	if line.SubjectUserID == "" || line.ManagerUserID == "" {
 		return ReportingLine{}, shared.Validation("subject_user_id and manager_user_id are required")
@@ -788,7 +788,7 @@ func (s *Service) SaveDeepLinkGrant(grant DeepLinkGrant) (DeepLinkGrant, error) 
 	now := time.Now().UTC()
 	grant.ID = strings.TrimSpace(grant.ID)
 	if grant.ID == "" {
-		grant.ID = fmt.Sprintf("link:%d", now.UnixNano())
+		grant.ID = shared.NewID("link")
 	}
 	grant.Kind = strings.TrimSpace(strings.ToLower(grant.Kind))
 	if grant.Kind == "" {
@@ -961,7 +961,7 @@ func (s *Service) UpsertServicePrincipal(principal ServicePrincipal) (ServicePri
 	}
 	now := time.Now().UTC()
 	if strings.TrimSpace(principal.ID) == "" {
-		principal.ID = fmt.Sprintf("sp:%d", now.UnixNano())
+		principal.ID = shared.NewID("sp")
 	}
 	if existing, ok := s.repo.FindServicePrincipal(principal.ID); ok {
 		principal.CreatedAt = existing.CreatedAt
@@ -1070,7 +1070,7 @@ func (s *Service) createDelegationGrant(grantorUserID, delegateKind, delegateID,
 		return DelegationGrant{}, shared.Validation("expires_at must be after starts_at")
 	}
 	grant := DelegationGrant{
-		ID:                    fmt.Sprintf("dlg:%d", now.UnixNano()),
+		ID:                    shared.NewID("dlg"),
 		GrantorUserID:         grantorUserID,
 		DelegateKind:          delegateKind,
 		DelegateID:            delegateID,
@@ -1269,7 +1269,7 @@ func (s *Service) CreateUserWithPasswordPolicy(username, password, defaultLocati
 	}
 	now := time.Now().UTC()
 	user := User{
-		ID:                fmt.Sprintf("user:%d", now.UnixNano()),
+		ID:                shared.NewID("user"),
 		Username:          username,
 		Status:            "active",
 		DefaultLocationID: defaultLocationID,
@@ -1292,7 +1292,7 @@ func (s *Service) CreateUserWithPasswordPolicy(username, password, defaultLocati
 		return User{}, err
 	}
 	if err := s.repo.SaveRoleBinding(RoleBinding{
-		ID:            fmt.Sprintf("rb:%d", now.UnixNano()),
+		ID:            shared.NewID("rb"),
 		UserID:        user.ID,
 		RoleID:        roleID,
 		ScopeType:     scopeType,
@@ -1441,7 +1441,7 @@ func (s *Service) provisionGoogleUser(identity GoogleIdentity, subject string, p
 	}
 	now := time.Now().UTC()
 	user := User{
-		ID:                    fmt.Sprintf("user:%d", now.UnixNano()),
+		ID:                    shared.NewID("user"),
 		Username:              email,
 		AuthenticationSubject: subject,
 		Status:                "active",
@@ -1453,7 +1453,7 @@ func (s *Service) provisionGoogleUser(identity GoogleIdentity, subject string, p
 		return User{}, err
 	}
 	if err := s.repo.SaveRoleBinding(RoleBinding{
-		ID:            fmt.Sprintf("rb:%d", now.UnixNano()),
+		ID:            shared.NewID("rb"),
 		UserID:        user.ID,
 		RoleID:        roleID,
 		ScopeType:     scopeType,
@@ -1479,7 +1479,7 @@ func (s *Service) startSessionForUser(user User, locationID, authenticationMetho
 	}
 	now := time.Now().UTC()
 	session := Session{
-		ID:                   fmt.Sprintf("sess:%d", now.UnixNano()),
+		ID:                   shared.NewID("sess"),
 		UserID:               user.ID,
 		Status:               "active",
 		IssuedAt:             now,
@@ -1753,7 +1753,7 @@ func (s *Service) RotateSession(sessionID string, ttl time.Duration) (Session, e
 		return Session{}, err
 	}
 	rotated := Session{
-		ID:                   fmt.Sprintf("sess:%d", now.UnixNano()),
+		ID:                   shared.NewID("sess"),
 		UserID:               session.UserID,
 		Status:               "active",
 		IssuedAt:             now,

@@ -20,11 +20,13 @@ import (
 	"testing"
 	"time"
 
+	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/dataops"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
@@ -33,10 +35,13 @@ import (
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
 	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/mcp"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/monitoring"
+	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
@@ -44,6 +49,7 @@ import (
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
+	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -65,6 +71,127 @@ type testHarness struct {
 
 func newTestHarness(t *testing.T) testHarness {
 	return newTestHarnessWithConfig(t, nil)
+}
+
+func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, idempotencySvc *idempotency.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
+	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
+	analyticsStream := mcp.NewAnalyticsStream()
+	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
+	dataopsSvc := dataops.NewService(cfg, flags, modules, referenceSvc, ident, docs, integrationSvc)
+	dataopsSvc.AttachJobs(jobSvc)
+	templateSvc := templateoutput.NewService(docs, reportingSvc)
+	uiPreferences := NewUIPreferencesService()
+	acpSvc := acp.NewService(cfg)
+	notificationSvc := notification.NewService()
+	if modules != nil {
+		for _, def := range modules.Templates() {
+			_ = templateSvc.RegisterDefinition(templateoutput.FromModule(def, ""))
+		}
+	}
+	if analyticsSvc != nil {
+		analyticsSvc.SetCaptureHook(analyticsStream.Publish)
+	}
+	return BuildRouter(RouterDeps{
+		Platform: PlatformDeps{Config: cfg, Organization: org, Identity: ident, Reference: referenceSvc, Documents: docs, Workflows: flows},
+		Auth:     AuthDeps{Config: cfg, Identity: ident, Audit: auditSvc, UIPreferences: uiPreferences},
+		Models: ModelDeps{
+			Identity:      ident,
+			Models:        models,
+			Activities:    activities,
+			Policy:        policySvc,
+			FieldSecurity: fieldSecurity,
+			Actions:       modelActions,
+		},
+		Documents: DocumentDeps{
+			Identity:      ident,
+			Modules:       modules,
+			Documents:     docs,
+			Actions:       docActions,
+			Audit:         auditSvc,
+			Policy:        policySvc,
+			Search:        searchSvc,
+			FieldSecurity: fieldSecurity,
+			Observability: obsSvc,
+			Idempotency:   idempotencySvc,
+		},
+		Ops: OpsDeps{
+			Identity:      ident,
+			Audit:         auditSvc,
+			Eventing:      eventingSvc,
+			Offline:       offlineSvc,
+			Documents:     docs,
+			Search:        searchSvc,
+			Workflows:     flows,
+			Analytics:     analyticsSvc,
+			Monitoring:    monitoringSvc,
+			Notifications: notificationSvc,
+			Observability: obsSvc,
+			Integration:   integrationSvc,
+			Jobs:          jobSvc,
+			Health:        health,
+		},
+		Search: SearchDeps{Identity: ident, Search: searchSvc, Jobs: jobSvc},
+		Admin: AdminDeps{
+			Config:        cfg,
+			Flags:         flags,
+			Organization:  org,
+			Identity:      ident,
+			Modules:       modules,
+			Workflows:     flows,
+			Audit:         auditSvc,
+			Policy:        policySvc,
+			Observability: obsSvc,
+			Integration:   integrationSvc,
+			Reference:     referenceSvc,
+			Idempotency:   idempotencySvc,
+			Health:        health,
+			ACP:           acpSvc,
+		},
+		ACP:       ACPDeps{Identity: ident, Audit: auditSvc, Service: acpSvc},
+		Templates: TemplateDeps{Identity: ident, Templates: templateSvc},
+		MCP: MCPDeps{
+			Identity:         ident,
+			Audit:            auditSvc,
+			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, nil, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			Analytics:        analyticsSvc,
+			AnalyticsStream:  analyticsStream,
+			StreamPath:       analyticsMCPStreamPath,
+			ScopedStreamPath: analyticsScopedMCPStreamPath,
+		},
+		Offline: OfflineDeps{
+			Identity:        ident,
+			Modules:         modules,
+			Offline:         offlineSvc,
+			Documents:       docs,
+			DocumentActions: docActions,
+			Models:          models,
+			ModelActions:    modelActions,
+			Search:          searchSvc,
+			FieldSecurity:   fieldSecurity,
+			Idempotency:     idempotencySvc,
+		},
+		Docs:          DocsDeps{Config: cfg, Modules: modules, Models: models, Documents: docs, Search: searchSvc},
+		DeepLinks:     DeepLinkDeps{Identity: ident, Documents: docs, Workflows: flows, Actions: docActions, Audit: auditSvc},
+		Notifications: NotificationDeps{Identity: ident, Notifications: notificationSvc, Workflows: flows, Documents: docs},
+		UI: UIDeps{
+			Identity:      ident,
+			Modules:       modules,
+			Models:        models,
+			Activities:    activities,
+			Reporting:     reportingSvc,
+			Documents:     docs,
+			Workflows:     flows,
+			Search:        searchSvc,
+			Analytics:     analyticsSvc,
+			Monitoring:    monitoringSvc,
+			Policy:        policySvc,
+			FieldSecurity: fieldSecurity,
+			UIPreferences: uiPreferences,
+			ACP:           acpSvc,
+			Notifications: notificationSvc,
+		},
+		CrossCutting: CrossCuttingDeps{Config: cfg, Identity: ident, Logger: loggerSvc, Observability: obsSvc, Health: health},
+	})
 }
 
 func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness {
@@ -310,7 +437,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router:    NewRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions),
+		router:    newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions),
 		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
 		csrf:      csrfCookie,
 		ident:     ident,
@@ -3519,7 +3646,7 @@ func TestReadyzReturnsUnavailableWhenRuntimeHealthIsDegraded(t *testing.T) {
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
-	router := NewRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
+	router := newTestRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

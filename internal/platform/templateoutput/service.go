@@ -368,7 +368,7 @@ func (s *Service) SaveBinding(binding Binding) (Binding, error) {
 		break
 	}
 	if strings.TrimSpace(binding.ID) == "" {
-		binding.ID = fmt.Sprintf("tmplbind:%d", time.Now().UTC().UnixNano())
+		binding.ID = shared.NewID("tmplbind")
 	}
 	binding.UpdatedAt = time.Now().UTC()
 	if err := s.repo.SaveBinding(binding); err != nil {
@@ -392,7 +392,7 @@ func (s *Service) SaveFixture(fixture TemplateFixture) (TemplateFixture, error) 
 		return TemplateFixture{}, shared.Validation("fixture target_kind is required")
 	}
 	if strings.TrimSpace(fixture.FixtureKey) == "" {
-		fixture.FixtureKey = fmt.Sprintf("tmplfixture:%d", time.Now().UTC().UnixNano())
+		fixture.FixtureKey = shared.NewID("tmplfixture")
 	}
 	if strings.TrimSpace(fixture.Name) == "" {
 		fixture.Name = fixture.FixtureKey
@@ -675,7 +675,7 @@ func (s *Service) renderPrepared(req RenderRequest) (Definition, Version, Render
 			format = "html"
 		}
 	}
-	renderID := fmt.Sprintf("tmplrender:%d", time.Now().UTC().UnixNano())
+	renderID := shared.NewID("tmplrender")
 	output := RenderedOutput{
 		TemplateKey: resolvedDef.Key,
 		Version:     version.Version,

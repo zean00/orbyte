@@ -103,7 +103,7 @@ func (s *Service) Create(documentType, organizationID, locationID, actorID strin
 		return Record{}, shared.NotFound("document definition not found")
 	}
 	now := time.Now().UTC()
-	id := fmt.Sprintf("doc_%d", now.UnixNano())
+	id := shared.NewID("doc_")
 	body := Body{
 		DocumentID:    id,
 		SchemaVersion: def.SchemaVersion,
@@ -191,7 +191,7 @@ func (s *Service) AddLink(documentID, linkedDocumentID, linkType string, metadat
 		return Link{}, shared.Validation("link type is not allowed for document definition")
 	}
 	link := Link{
-		ID:               fmt.Sprintf("link:%s:%d", documentID, time.Now().UTC().UnixNano()),
+		ID:               shared.ChildID("link", documentID),
 		DocumentID:       documentID,
 		LinkedDocumentID: linkedDocumentID,
 		LinkType:         linkType,
@@ -220,7 +220,7 @@ func (s *Service) AddAttachment(documentID, attachmentType, fileName, contentTyp
 		return Attachment{}, shared.Validation("attachment type is not allowed for document definition")
 	}
 	attachment := Attachment{
-		ID:             fmt.Sprintf("attachment:%s:%d", documentID, time.Now().UTC().UnixNano()),
+		ID:             shared.ChildID("attachment", documentID),
 		DocumentID:     documentID,
 		AttachmentType: attachmentType,
 		FileName:       fileName,

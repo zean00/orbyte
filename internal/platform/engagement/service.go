@@ -335,7 +335,7 @@ func (s *Service) StartReplay(programKey string, version int, actorID string) (R
 		return ReplayRun{}, jobs.Job{}, shared.Validation("engagement replay validation failed")
 	}
 	run := ReplayRun{
-		ID:             fmt.Sprintf("engagement:replay:%d", time.Now().UTC().UnixNano()),
+		ID:             shared.ChildID("engagement", "replay"),
 		ProgramKey:     plan.ProgramKey,
 		Version:        plan.Version,
 		Status:         jobs.StatusQueued,
@@ -489,7 +489,7 @@ func (s *Service) applyRule(version ProgramVersion, rule Rule, subjectID, accoun
 			return err
 		}
 		return s.repo.SaveJournalEntry(JournalEntry{
-			ID:            fmt.Sprintf("engagement:journal:%d", time.Now().UTC().UnixNano()),
+			ID:            shared.ChildID("engagement", "journal"),
 			ProgramKey:    version.ProgramKey,
 			Version:       version.Version,
 			SubjectID:     subjectID,
@@ -509,7 +509,7 @@ func (s *Service) applyRule(version ProgramVersion, rule Rule, subjectID, accoun
 			return nil
 		}
 		return s.repo.SaveAchievement(AchievementGrant{
-			ID:             fmt.Sprintf("engagement:achievement:%d", time.Now().UTC().UnixNano()),
+			ID:             shared.ChildID("engagement", "achievement"),
 			ProgramKey:     version.ProgramKey,
 			SubjectID:      subjectID,
 			AchievementKey: rule.AchievementKey,

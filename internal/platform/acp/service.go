@@ -3,7 +3,6 @@ package acp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -142,7 +141,7 @@ func (s *Service) StartSession(req StartSessionRequest) (Session, error) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	sessionID := fmt.Sprintf("acp-session:%d", time.Now().UTC().UnixNano())
+	sessionID := shared.NewID("acp-session")
 	session := &Session{
 		ID:            sessionID,
 		ProviderKey:   provider.Key,
@@ -228,7 +227,7 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 		session.Status = "running"
 		session.UpdatedAt = time.Now().UTC()
 		req.ContextBlocks = mergeContextBlocks(session.ContextBlocks, req.ContextBlocks)
-		msg := Message{ID: fmt.Sprintf("msg:%d", time.Now().UTC().UnixNano()), Role: "user", Format: "markdown", Content: content, CreatedAt: time.Now().UTC()}
+		msg := Message{ID: shared.NewID("msg"), Role: "user", Format: "markdown", Content: content, CreatedAt: time.Now().UTC()}
 		session.Messages = append(session.Messages, msg)
 	}
 	s.mu.Unlock()
@@ -384,7 +383,7 @@ func (s *Service) handleRequest(sessionID string, id int64, method string, param
 			}
 		}
 		approval = Approval{
-			ID:          fmt.Sprintf("approval:%d", time.Now().UTC().UnixNano()),
+			ID:          shared.NewID("approval"),
 			Status:      "pending",
 			Title:       "ACP Request Approval",
 			Description: "Agent requested client-side action.",
@@ -436,7 +435,7 @@ func appendChunkMessage(session *Session, role, text string, meta map[string]any
 		}
 	}
 	session.Messages = append(session.Messages, Message{
-		ID:        fmt.Sprintf("msg:%d", time.Now().UTC().UnixNano()),
+		ID:        shared.NewID("msg"),
 		Role:      role,
 		Format:    "markdown",
 		Content:   text,
@@ -447,7 +446,7 @@ func appendChunkMessage(session *Session, role, text string, meta map[string]any
 
 func (s *Service) publish(sessionID, kind string, payload map[string]any) {
 	event := Event{
-		ID:        fmt.Sprintf("acp-event:%d", time.Now().UTC().UnixNano()),
+		ID:        shared.NewID("acp-event"),
 		Kind:      kind,
 		SessionID: sessionID,
 		CreatedAt: time.Now().UTC(),

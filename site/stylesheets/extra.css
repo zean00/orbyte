@@ -1,0 +1,60 @@
+:root {
+  --orbyte-ink: #12202f;
+  --orbyte-accent: #c98619;
+  --orbyte-soft: #eef4f8;
+  --orbyte-line: #d5dee7;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  letter-spacing: -0.02em;
+}
+
+.hero {
+  padding: 2rem 0 1rem;
+}
+
+.hero h1 {
+  font-size: 2.5rem;
+  line-height: 1.05;
+  margin-bottom: 0.75rem;
+}
+
+.hero p {
+  font-size: 1.1rem;
+  max-width: 52rem;
+}
+
+.grid.cards > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.grid.cards > ul > li {
+  border: 1px solid var(--orbyte-line);
+  border-radius: 1rem;
+  padding: 1rem 1rem 0.8rem;
+  background: linear-gradient(180deg, #fff, var(--orbyte-soft));
+}
+
+.grid.cards strong {
+  color: var(--orbyte-ink);
+}
+
+.orbyte-note {
+  border-left: 4px solid var(--orbyte-accent);
+  padding: 0.85rem 1rem;
+  background: #fff8ea;
+}
+
+.diagram-frame {
+  border: 1px solid var(--orbyte-line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: white;
+}

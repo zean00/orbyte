@@ -2,7 +2,6 @@ package app
 
 import (
 	"orbyte/internal/platform/httpx"
-	"orbyte/internal/platform/mcp"
 )
 
 const (
@@ -94,7 +93,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 		},
 		MCP: httpx.MCPDeps{
 			Identity:         graph.identity,
-			Server:           mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			Server:           graph.mcpServer,
 			AnalyticsStream:  graph.mcpAnalytics,
 			Analytics:        graph.analytics,
 			StreamPath:       analyticsMCPStreamPath,

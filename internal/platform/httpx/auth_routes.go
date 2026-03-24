@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/logging"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/shared"
 )
 
@@ -1561,17 +1561,12 @@ func redirectGoogleOAuthError(w http.ResponseWriter, r *http.Request, location s
 }
 
 func buildSessionCookie(token string, expiresAt time.Time) *http.Cookie {
-	secure := true
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
-	case "", "development", "dev", "test":
-		secure = false
-	}
 	return &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   secure,
+		Secure:   runtimeconfig.Current().CookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  expiresAt.UTC(),
 	}

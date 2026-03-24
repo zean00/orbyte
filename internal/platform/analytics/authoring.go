@@ -116,7 +116,7 @@ func (s *Service) SaveDashboard(item Dashboard) (Dashboard, error) {
 	}
 	now := time.Now().UTC()
 	if strings.TrimSpace(item.ID) == "" {
-		item.ID = fmt.Sprintf("analytics-dashboard:%d", now.UnixNano())
+		item.ID = shared.NewID("analytics-dashboard")
 	}
 	if strings.TrimSpace(item.Visibility) == "" {
 		item.Visibility = "private"
@@ -173,7 +173,7 @@ func (s *Service) SaveSavedQuery(item SavedQuery) (SavedQuery, error) {
 	}
 	now := time.Now().UTC()
 	if strings.TrimSpace(item.ID) == "" {
-		item.ID = fmt.Sprintf("analytics-query:%d", now.UnixNano())
+		item.ID = shared.NewID("analytics-query")
 	}
 	if strings.TrimSpace(item.ScopeType) == "" {
 		item.ScopeType = "user"
@@ -223,7 +223,7 @@ func (s *Service) SaveSavedMetric(item SavedMetric) (SavedMetric, error) {
 	}
 	now := time.Now().UTC()
 	if strings.TrimSpace(item.ID) == "" {
-		item.ID = fmt.Sprintf("analytics-metric:%d", now.UnixNano())
+		item.ID = shared.NewID("analytics-metric")
 	}
 	if strings.TrimSpace(item.Key) == "" {
 		item.Key = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(item.Name), " ", "_"))

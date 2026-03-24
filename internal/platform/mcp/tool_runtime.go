@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -41,6 +42,12 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 			})
 		}
 	}
+	sort.Slice(items, func(i, j int) bool {
+		if strings.TrimSpace(items[i].Name) == strings.TrimSpace(items[j].Name) {
+			return strings.TrimSpace(items[i].Scope) < strings.TrimSpace(items[j].Scope)
+		}
+		return strings.TrimSpace(items[i].Name) < strings.TrimSpace(items[j].Name)
+	})
 	return items
 }
 
@@ -78,6 +85,12 @@ func (s *Server) listResources(actor ActorContext) []ResourceDescriptor {
 			})
 		}
 	}
+	sort.Slice(items, func(i, j int) bool {
+		if strings.TrimSpace(items[i].URI) == strings.TrimSpace(items[j].URI) {
+			return strings.TrimSpace(items[i].Scope) < strings.TrimSpace(items[j].Scope)
+		}
+		return strings.TrimSpace(items[i].URI) < strings.TrimSpace(items[j].URI)
+	})
 	return items
 }
 

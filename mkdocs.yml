@@ -1,0 +1,69 @@
+site_name: Orbyte Platform
+site_description: Product documentation for the Orbyte enterprise application kernel and platform.
+site_url: https://example.com/orbyte
+repo_name: orbyte
+docs_dir: docs
+exclude_docs: |
+  README.md
+theme:
+  name: material
+  logo: assets/orbyte-mark.svg
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: amber
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Concepts: concepts.md
+  - Use Cases: use-cases.md
+  - Architecture: architecture.md
+  - Features: features.md
+  - Components: components.md
+  - Configuration: configuration.md
+  - Glossary: glossary.md
+  - Security and Governance: security-and-governance.md
+  - Product Packaging: product-packaging.md
+  - Module System: module-system.md
+  - First Module Tutorial: tutorial-first-module.md
+  - Reference Implementations: reference-implementations.md
+  - Walkthroughs: walkthroughs.md
+  - Deployment: deployment.md
+  - Integration: integration.md
+  - Operations: operations.md
+  - API and Contracts: api-and-contracts.md
+  - Sample Payloads: sample-payloads.md
+  - Developer References:
+      - Development Workflow: development.md
+      - Module Generator: modulegen.md
+      - Contract Governance: contracts.md
+      - Release Policy: release-policy.md
+
+markdown_extensions:
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+extra_css:
+  - stylesheets/extra.css

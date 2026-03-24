@@ -616,7 +616,7 @@ func (s *Server) implementationCheckpointCreate(actor ActorContext, arguments ma
 		return nil, true, shared.NotFound("implementation session not found")
 	}
 	item := ImplementationCheckpoint{
-		ID:        fmt.Sprintf("checkpoint:%d", time.Now().UTC().UnixNano()),
+		ID:        shared.NewID("checkpoint"),
 		Name:      firstNonEmpty(strings.TrimSpace(stringArg(arguments, "name")), "checkpoint"),
 		CreatedAt: time.Now().UTC(),
 		CreatedBy: workflowActorID(actor),
@@ -922,7 +922,7 @@ func (s *Server) applyImplementationPlan(actor ActorContext, session *Implementa
 		return ImplementationChangeSet{}, shared.Validation("implementation plan failed validation")
 	}
 	changeSet := ImplementationChangeSet{
-		ID:        fmt.Sprintf("changeset:%d", time.Now().UTC().UnixNano()),
+		ID:        shared.NewID("changeset"),
 		SessionID: session.ID,
 		Status:    "applied",
 		CreatedAt: time.Now().UTC(),
@@ -1148,7 +1148,7 @@ func (s *Server) applyRollbackPlan(actor ActorContext, session *ImplementationSe
 		}
 	}
 	session.Checkpoints = append(session.Checkpoints, ImplementationCheckpoint{
-		ID:          fmt.Sprintf("checkpoint:%d", time.Now().UTC().UnixNano()),
+		ID:          shared.NewID("checkpoint"),
 		ChangeSetID: plan.ChangeSetID,
 		Name:        "rollback",
 		CreatedAt:   time.Now().UTC(),

@@ -243,7 +243,7 @@ func (s *Service) MigrationRegister(req MigrationRegisterRequest) (Artifact, err
 		}
 		payload := map[string]any{"records": item.Records}
 		segments = append(segments, ArtifactSegment{
-			ID:          fmt.Sprintf("segment:%d", time.Now().UTC().UnixNano()),
+			ID:          shared.NewID("segment"),
 			DataClass:   item.DataClass,
 			AdapterKey:  strings.TrimSpace(item.AdapterKey),
 			Mode:        "external",
@@ -253,7 +253,7 @@ func (s *Service) MigrationRegister(req MigrationRegisterRequest) (Artifact, err
 		})
 	}
 	artifact := Artifact{
-		ID:        fmt.Sprintf("artifact:%d", now.UnixNano()),
+		ID:        shared.NewID("artifact"),
 		Type:      ArtifactTypeMigrationInput,
 		Name:      firstNonEmpty(strings.TrimSpace(req.Name), "migration_input"),
 		CreatedAt: now,
@@ -313,7 +313,7 @@ func (s *Service) enqueueOperation(opType OperationType, validation ValidationRe
 	}
 	now := time.Now().UTC()
 	run := OperationRun{
-		ID:                  fmt.Sprintf("run:%d", now.UnixNano()),
+		ID:                  shared.NewID("run"),
 		Type:                opType,
 		Status:              jobs.StatusQueued,
 		SelectedDataClasses: append([]DataClass(nil), classes...),
@@ -413,7 +413,7 @@ func (s *Service) executeBackup(req BackupRequest) (string, map[string]any, erro
 	}
 	baseArtifactID := commonBaseArtifactID(segments)
 	artifact := Artifact{
-		ID:        fmt.Sprintf("artifact:%d", now.UnixNano()),
+		ID:        shared.NewID("artifact"),
 		Type:      ArtifactTypeBackup,
 		Name:      firstNonEmpty(strings.TrimSpace(req.Name), "backup"),
 		CreatedAt: now,
@@ -436,7 +436,7 @@ func (s *Service) executeBackup(req BackupRequest) (string, map[string]any, erro
 			continue
 		}
 		_ = s.repo.SaveCheckpoint(IncrementalCheckpoint{
-			ID:           fmt.Sprintf("checkpoint:%d", time.Now().UTC().UnixNano()),
+			ID:           shared.NewID("checkpoint"),
 			DataClass:    segment.DataClass,
 			AdapterKey:   segment.AdapterKey,
 			ArtifactID:   artifact.ID,
@@ -458,7 +458,7 @@ func (s *Service) executeExport(req ExportRequest) (string, map[string]any, erro
 		return "", nil, err
 	}
 	artifact := Artifact{
-		ID:        fmt.Sprintf("artifact:%d", now.UnixNano()),
+		ID:        shared.NewID("artifact"),
 		Type:      ArtifactTypeExport,
 		Name:      firstNonEmpty(strings.TrimSpace(req.Name), "export"),
 		CreatedAt: now,
@@ -517,7 +517,7 @@ func (s *Service) executeArchive(req ArchiveRequest) (string, map[string]any, er
 		return "", nil, err
 	}
 	artifact := Artifact{
-		ID:        fmt.Sprintf("artifact:%d", now.UnixNano()),
+		ID:        shared.NewID("artifact"),
 		Type:      ArtifactTypeArchive,
 		Name:      firstNonEmpty(strings.TrimSpace(req.Name), "archive"),
 		CreatedAt: now,
@@ -595,7 +595,7 @@ func (s *Service) collectBackupSegments(classes []DataClass, incremental bool) (
 			return nil, nil, err
 		}
 		segments = append(segments, ArtifactSegment{
-			ID:               fmt.Sprintf("segment:%d", time.Now().UTC().UnixNano()),
+			ID:               shared.NewID("segment"),
 			DataClass:        capability.DataClass,
 			AdapterKey:       capability.AdapterKey,
 			Mode:             mode,
@@ -621,7 +621,7 @@ func (s *Service) collectExportSegments(classes []DataClass) ([]ArtifactSegment,
 			return nil, nil, err
 		}
 		segments = append(segments, ArtifactSegment{
-			ID:          fmt.Sprintf("segment:%d", time.Now().UTC().UnixNano()),
+			ID:          shared.NewID("segment"),
 			DataClass:   capability.DataClass,
 			AdapterKey:  capability.AdapterKey,
 			Mode:        "export",
@@ -656,7 +656,7 @@ func (s *Service) collectArchiveSegments(req ArchiveRequest) ([]ArtifactSegment,
 	payload := map[string]any{"records": records}
 	updatedAt := maxDocumentUpdatedAt(records)
 	return []ArtifactSegment{{
-		ID:           fmt.Sprintf("segment:%d", time.Now().UTC().UnixNano()),
+		ID:           shared.NewID("segment"),
 		DataClass:    DataClassTransactional,
 		AdapterKey:   "documents.records",
 		Mode:         "archive",

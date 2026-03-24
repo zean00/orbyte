@@ -19,6 +19,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+
+	"orbyte/internal/platform/runtimeconfig"
 )
 
 type DeliveryAdapter interface {
@@ -96,15 +98,16 @@ func (a EmailAdapter) Deliver(artifact ReportArtifact, recipient string) error {
 	if recipient == "" {
 		return fmt.Errorf("email recipient is required")
 	}
-	host := firstNonEmpty(a.Host, os.Getenv("SMTP_HOST"))
-	port := firstNonEmpty(a.Port, os.Getenv("SMTP_PORT"), "587")
-	from := firstNonEmpty(a.From, os.Getenv("SMTP_FROM"))
+	settings := runtimeconfig.Current().EmailSettings()
+	host := firstNonEmpty(a.Host, settings.Host)
+	port := firstNonEmpty(a.Port, settings.Port, "587")
+	from := firstNonEmpty(a.From, settings.From)
 	if host == "" || from == "" {
 		return a.writeEmailOutbox(artifact, recipient)
 	}
-	username := firstNonEmpty(a.Username, os.Getenv("SMTP_USERNAME"))
-	password := firstNonEmpty(a.Password, os.Getenv("SMTP_PASSWORD"))
-	useTLS := a.UseTLS || os.Getenv("SMTP_TLS") == "true"
+	username := firstNonEmpty(a.Username, settings.Username)
+	password := firstNonEmpty(a.Password, settings.Password)
+	useTLS := a.UseTLS || settings.UseTLS
 	addr := host + ":" + port
 	message, err := buildEmailMessage(from, recipient, artifact)
 	if err != nil {
@@ -278,13 +281,14 @@ func (a ObjectStoreAdapter) clientOrFallback() (ObjectStoreClient, error) {
 	if a.Client != nil {
 		return a.Client, nil
 	}
-	endpoint := firstNonEmpty(a.Endpoint, os.Getenv("OBJECT_STORE_ENDPOINT"))
+	storeSettings := runtimeconfig.Current().ObjectStoreSettings()
+	endpoint := firstNonEmpty(a.Endpoint, storeSettings.Endpoint)
 	if endpoint == "" {
 		return nil, nil
 	}
-	accessKey := firstNonEmpty(a.AccessKey, os.Getenv("OBJECT_STORE_ACCESS_KEY"))
-	secretKey := firstNonEmpty(a.SecretKey, os.Getenv("OBJECT_STORE_SECRET_KEY"))
-	useSSL := a.UseSSL || os.Getenv("OBJECT_STORE_SSL") == "true"
+	accessKey := firstNonEmpty(a.AccessKey, storeSettings.AccessKey)
+	secretKey := firstNonEmpty(a.SecretKey, storeSettings.SecretKey)
+	useSSL := a.UseSSL || storeSettings.UseSSL
 	client, err := minio.New(endpoint, &minio.Options{Creds: credentials.NewStaticV4(accessKey, secretKey, ""), Secure: useSSL})
 	if err != nil {
 		return nil, err

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="title desc">
+  <title id="title">Orbyte Request Flow</title>
+  <desc id="desc">Sequence-style request flow from client through router, identity, policy, action, database, and audit-eventing.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f7f9; }
+      .head { fill: #ffffff; stroke: #1f2937; stroke-width: 2; rx: 10; ry: 10; }
+      .lane { stroke: #9ca3af; stroke-width: 2; stroke-dasharray: 8 8; }
+      .arrow { stroke: #1f2937; stroke-width: 3; fill: none; marker-end: url(#m); }
+      .label { font: 600 18px sans-serif; fill: #111827; }
+      .small { font: 400 15px sans-serif; fill: #374151; }
+    </style>
+    <marker id="m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1280" height="620"/>
+
+  <rect class="head" x="60" y="30" width="130" height="50"/><text class="label" x="125" y="62" text-anchor="middle">Client</text>
+  <rect class="head" x="250" y="30" width="130" height="50"/><text class="label" x="315" y="62" text-anchor="middle">Router</text>
+  <rect class="head" x="440" y="30" width="150" height="50"/><text class="label" x="515" y="62" text-anchor="middle">Identity/Auth</text>
+  <rect class="head" x="650" y="30" width="150" height="50"/><text class="label" x="725" y="62" text-anchor="middle">Policy</text>
+  <rect class="head" x="860" y="30" width="150" height="50"/><text class="label" x="935" y="62" text-anchor="middle">Action/Service</text>
+  <rect class="head" x="1070" y="30" width="130" height="50"/><text class="label" x="1135" y="62" text-anchor="middle">Database</text>
+
+  <line class="lane" x1="125" y1="90" x2="125" y2="570"/>
+  <line class="lane" x1="315" y1="90" x2="315" y2="570"/>
+  <line class="lane" x1="515" y1="90" x2="515" y2="570"/>
+  <line class="lane" x1="725" y1="90" x2="725" y2="570"/>
+  <line class="lane" x1="935" y1="90" x2="935" y2="570"/>
+  <line class="lane" x1="1135" y1="90" x2="1135" y2="570"/>
+
+  <path class="arrow" d="M125 130 L315 130"/><text class="small" x="220" y="120" text-anchor="middle">HTTP or MCP request</text>
+  <path class="arrow" d="M315 190 L515 190"/><text class="small" x="415" y="180" text-anchor="middle">Resolve principal</text>
+  <path class="arrow" d="M515 250 L315 250"/><text class="small" x="415" y="240" text-anchor="middle">Actor context</text>
+  <path class="arrow" d="M315 310 L725 310"/><text class="small" x="520" y="300" text-anchor="middle">Permission and policy check</text>
+  <path class="arrow" d="M725 370 L935 370"/><text class="small" x="830" y="360" text-anchor="middle">Execute action</text>
+  <path class="arrow" d="M935 430 L1135 430"/><text class="small" x="1035" y="420" text-anchor="middle">Persist state</text>
+  <path class="arrow" d="M935 490 L725 490"/><text class="small" x="830" y="480" text-anchor="middle">Audit and domain events</text>
+  <path class="arrow" d="M935 550 L125 550"/><text class="small" x="530" y="540" text-anchor="middle">Response</text>
+</svg>

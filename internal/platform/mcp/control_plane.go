@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -332,7 +331,7 @@ func (s *Server) configBundleApply(actor ActorContext, arguments map[string]any)
 		}
 		appliedFlags = append(appliedFlags, value)
 	}
-	correlationID := "mcp:config.bundle.apply:" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+	correlationID := shared.ChildID("mcp", "config.bundle.apply")
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Applied bundle with %d config entries and %d feature flag values.", len(appliedConfig), len(appliedFlags))}},
 		"structuredContent": map[string]any{

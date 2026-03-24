@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -68,7 +67,7 @@ func (s *Service) Save(item Item) (Item, error) {
 	now := time.Now().UTC()
 	item.ID = strings.TrimSpace(item.ID)
 	if item.ID == "" {
-		item.ID = fmt.Sprintf("notif:%d", now.UnixNano())
+		item.ID = shared.NewID("notif")
 	}
 	if item.Status == "" {
 		item.Status = "unread"

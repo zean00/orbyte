@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 
@@ -10,7 +9,9 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/version"
 )
 
 func registerDocsRoutes(mux *http.ServeMux, cfg *config.Service, modules *module.Service, models *model.Service, docs *document.Service, searchSvc *search.Service) {
@@ -18,7 +19,7 @@ func registerDocsRoutes(mux *http.ServeMux, cfg *config.Service, modules *module
 		return
 	}
 	mux.HandleFunc("GET /dev/openapi.json", func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, http.StatusOK, buildOpenAPIDocument(cfg, modules, models, docs, searchSvc))
+		respondJSON(w, http.StatusOK, OpenAPIDocument(cfg, modules, models, docs, searchSvc))
 	})
 	mux.HandleFunc("GET /dev/swagger", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -27,15 +28,7 @@ func registerDocsRoutes(mux *http.ServeMux, cfg *config.Service, modules *module
 }
 
 func devDocsEnabled() bool {
-	if strings.EqualFold(os.Getenv("APP_AUTH_DEV_MODE"), "true") {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
-	case "development", "dev", "test":
-		return true
-	default:
-		return false
-	}
+	return runtimeconfig.Current().DocsEnabled()
 }
 
 func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *model.Service, docs *document.Service, searchSvc *search.Service) map[string]any {
@@ -53,8 +46,8 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title":       "Orbyte Platform API",
-			"version":     "dev",
-			"description": "Development-only OpenAPI document for the runtime generic platform APIs. Registered modules become available through the generic model, document, UI contract, search, and offline endpoints. Custom module-specific controller namespaces are not auto-generated.",
+			"version":     version.App,
+			"description": "OpenAPI document for the runtime generic platform APIs. Registered modules become available through the generic model, document, UI contract, search, and offline endpoints. Custom module-specific controller namespaces are not auto-generated.",
 		},
 		"servers": []map[string]any{{"url": "/"}},
 		"tags": []map[string]any{
@@ -810,6 +803,10 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 			},
 		},
 	}
+}
+
+func OpenAPIDocument(cfg *config.Service, modules *module.Service, models *model.Service, docs *document.Service, searchSvc *search.Service) map[string]any {
+	return buildOpenAPIDocument(cfg, modules, models, docs, searchSvc)
 }
 
 func configKeys(cfg *config.Service) []string {

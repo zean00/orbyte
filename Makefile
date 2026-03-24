@@ -3,7 +3,7 @@ APP_JWT_SECRET ?= dev-secret
 APP_BOOTSTRAP_ADMIN_PASSWORD ?= admin123!
 DATABASE_URL ?= postgres://orbyte:orbyte@127.0.0.1:5432/orbyte?sslmode=disable
 
-.PHONY: test lint coverage contracts ui-build migrate-up migrate-status run run-postgres smoke-postgres
+.PHONY: test lint coverage contracts ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 
 test:
 	./scripts/test.sh
@@ -19,6 +19,12 @@ contracts:
 
 ui-build:
 	npm run build:ui
+
+docs-build:
+	. .venv-docs/bin/activate && mkdocs build --strict
+
+docs-serve:
+	. .venv-docs/bin/activate && mkdocs serve
 
 migrate-up:
 	APP_JWT_SECRET=$(APP_JWT_SECRET) DATABASE_URL=$(DATABASE_URL) go run ./cmd/migrate up

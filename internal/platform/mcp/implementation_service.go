@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -9,6 +8,7 @@ import (
 
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/featureflags"
+	"orbyte/internal/platform/shared"
 )
 
 type ImplementationSession struct {
@@ -32,12 +32,12 @@ type ImplementationContext struct {
 }
 
 type ImplementationPlanEnvelope struct {
-	Bundle                 configBundle                  `json:"bundle"`
-	RoleGrants             []implementationRoleGrant     `json:"role_grants,omitempty"`
-	ModuleActions          []implementationModuleAction  `json:"module_actions,omitempty"`
-	SystemConfigUpdates    []integrationConfigUpdate     `json:"system_config_updates,omitempty"`
-	EndpointConfigUpdates  []integrationConfigUpdate     `json:"endpoint_config_updates,omitempty"`
-	ReferenceRecordUpserts []implementationReferenceUpsert `json:"reference_record_upserts,omitempty"`
+	Bundle                 configBundle                       `json:"bundle"`
+	RoleGrants             []implementationRoleGrant          `json:"role_grants,omitempty"`
+	ModuleActions          []implementationModuleAction       `json:"module_actions,omitempty"`
+	SystemConfigUpdates    []integrationConfigUpdate          `json:"system_config_updates,omitempty"`
+	EndpointConfigUpdates  []integrationConfigUpdate          `json:"endpoint_config_updates,omitempty"`
+	ReferenceRecordUpserts []implementationReferenceUpsert    `json:"reference_record_upserts,omitempty"`
 	PolicyModuleUpdates    []implementationPolicyModuleUpdate `json:"policy_module_updates,omitempty"`
 }
 
@@ -52,14 +52,14 @@ type integrationConfigUpdate struct {
 }
 
 type implementationReferenceUpsert struct {
-	TypeKey      string         `json:"type_key"`
-	Key          string         `json:"key"`
-	DisplayName  string         `json:"display_name"`
-	Scope        string         `json:"scope,omitempty"`
-	ScopeID      string         `json:"scope_id,omitempty"`
-	Status       string         `json:"status,omitempty"`
-	Value        map[string]any `json:"value,omitempty"`
-	ExternalCodes []string      `json:"external_codes,omitempty"`
+	TypeKey       string         `json:"type_key"`
+	Key           string         `json:"key"`
+	DisplayName   string         `json:"display_name"`
+	Scope         string         `json:"scope,omitempty"`
+	ScopeID       string         `json:"scope_id,omitempty"`
+	Status        string         `json:"status,omitempty"`
+	Value         map[string]any `json:"value,omitempty"`
+	ExternalCodes []string       `json:"external_codes,omitempty"`
 }
 
 type implementationPolicyModuleUpdate struct {
@@ -107,11 +107,11 @@ type ImplementationRollbackPlan struct {
 }
 
 type ImplementationVerificationReport struct {
-	Passed     bool              `json:"passed"`
-	Checks     []map[string]any  `json:"checks,omitempty"`
-	Warnings   []string          `json:"warnings,omitempty"`
-	Context    ImplementationContext `json:"context"`
-	GeneratedAt time.Time        `json:"generated_at"`
+	Passed      bool                  `json:"passed"`
+	Checks      []map[string]any      `json:"checks,omitempty"`
+	Warnings    []string              `json:"warnings,omitempty"`
+	Context     ImplementationContext `json:"context"`
+	GeneratedAt time.Time             `json:"generated_at"`
 }
 
 type ImplementationService struct {
@@ -128,7 +128,7 @@ func (s *ImplementationService) Create(actorID, name string, ctx ImplementationC
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
 	session := ImplementationSession{
-		ID:        fmt.Sprintf("impl:%d", now.UnixNano()),
+		ID:        shared.NewID("impl"),
 		Name:      strings.TrimSpace(name),
 		ActorID:   strings.TrimSpace(actorID),
 		Status:    "open",

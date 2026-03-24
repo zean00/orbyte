@@ -3,79 +3,28 @@ package mcp
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 )
 
+type builtInResourceReader func(*Server, ActorContext, *url.URL, string) ([]ResourceContent, error)
+
+type builtInResourceRegistration struct {
+	descriptor ResourceDescriptor
+	reader     builtInResourceReader
+}
+
 func (s *Server) listBuiltInResources(actor ActorContext) []ResourceDescriptor {
-	items := make([]ResourceDescriptor, 0, 9)
-	if s != nil && s.templates != nil && scopeMatches(actor.EndpointScope, "template") && allowsAll(actor.PermissionChecker, []string{"template.read"}) {
-		items = append(items, ResourceDescriptor{
-			URI:         templateDesignerResourceURI,
-			Name:        "Template Designer",
-			Description: "Lightweight MCP app for template draft inspection and preview.",
-			Scope:       "template",
-			MIMEType:    "text/html",
-			Contract:    builtInResourceContract(templateDesignerResourceURI, []string{"template.read"}),
-		})
-	}
-	if s != nil && s.analytics != nil && allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
-		if scopeMatches(actor.EndpointScope, EndpointScopeAnalytics) {
-			items = append(items, ResourceDescriptor{
-				URI:         analyticsStudioResourceURI,
-				Name:        "Analytics Studio",
-				Description: "Lightweight MCP app for analytics authoring, ad hoc results, and chart previews.",
-				Scope:       EndpointScopeAnalytics,
-				MIMEType:    "text/html",
-				Contract:    builtInResourceContract(analyticsStudioResourceURI, []string{"analytics.read"}),
-			})
+	registry := s.mustBuiltInResourceRegistrations()
+	items := make([]ResourceDescriptor, 0, len(registry))
+	for _, reg := range registry {
+		if !scopeMatches(actor.EndpointScope, reg.descriptor.Scope) {
+			continue
 		}
-	}
-	if s != nil && s.workflows != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-		items = append(items, ResourceDescriptor{
-			URI:         workflowManagerResourceURI,
-			Name:        "Workflow Manager",
-			Description: "Lightweight MCP app for workflow drafts, routing simulation, and hierarchy inspection.",
-			MIMEType:    "text/html",
-			Contract:    builtInResourceContract(workflowManagerResourceURI, []string{"configuration.read"}),
-		})
-	}
-	if s != nil && s.config != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-		items = append(items,
-			ResourceDescriptor{URI: configCatalogResourceURI, Name: "Config Catalog", Description: "Configuration definitions, entries, and effective values.", MIMEType: "application/json", Contract: builtInResourceContract(configCatalogResourceURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: flagCatalogResourceURI, Name: "Feature Flag Catalog", Description: "Feature flag definitions and stored values.", MIMEType: "application/json", Contract: builtInResourceContract(flagCatalogResourceURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: moduleCompatResourceURI, Name: "Module Compatibility", Description: "Installed module and kernel compatibility state.", MIMEType: "application/json", Contract: builtInResourceContract(moduleCompatResourceURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: readinessResourceURI, Name: "Implementation Readiness", Description: "Readiness and validation snapshot for control-plane applies.", MIMEType: "application/json", Contract: builtInResourceContract(readinessResourceURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: implementationBlueprintsURI, Name: "Implementation Blueprints", Description: "Domain-agnostic implementation blueprint and desired-state guidance.", MIMEType: "application/json", Contract: builtInResourceContract(implementationBlueprintsURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: mcpCatalogResourceURI, Name: "MCP Catalog", Description: "Protocol versions, capability discovery, tools, resources, and app metadata for external agents.", MIMEType: "application/json", Contract: builtInResourceContract(mcpCatalogResourceURI, []string{"configuration.read"})},
-		)
-	}
-	if s != nil && s.identity != nil && allowsAll(actor.PermissionChecker, []string{"identity.manage_users"}) {
-		items = append(items, ResourceDescriptor{URI: roleMatrixResourceURI, Name: "Role Matrix", Description: "Roles, permissions, grants, and bindings.", MIMEType: "application/json", Contract: builtInResourceContract(roleMatrixResourceURI, []string{"identity.manage_users"})})
-	}
-	if s != nil && s.integration != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-		items = append(items, ResourceDescriptor{URI: integrationHealthResourceURI, Name: "Integration Health", Description: "Integration connector health and submission summary.", MIMEType: "application/json", Contract: builtInResourceContract(integrationHealthResourceURI, []string{"configuration.read"})})
-	}
-	if s != nil && s.search != nil && allowsAll(actor.PermissionChecker, []string{"search.manage"}) {
-		items = append(items, ResourceDescriptor{URI: searchRuntimeResourceURI, Name: "Search Runtime", Description: "Search index runtime and consistency status.", MIMEType: "application/json", Contract: builtInResourceContract(searchRuntimeResourceURI, []string{"search.manage"})})
-	}
-	if s != nil && s.offline != nil && allowsAll(actor.PermissionChecker, []string{"ops.read"}) {
-		items = append(items, ResourceDescriptor{URI: offlineOpsResourceURI, Name: "Offline Sync", Description: "Offline sync batches, outcomes, and conflicts.", MIMEType: "application/json", Contract: builtInResourceContract(offlineOpsResourceURI, []string{"ops.read"})})
-	}
-	if s != nil && s.policy != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-		items = append(items, ResourceDescriptor{URI: policyRuntimeResourceURI, Name: "Policy Runtime", Description: "Policy hook runtime, compile, and evaluation status.", MIMEType: "application/json", Contract: builtInResourceContract(policyRuntimeResourceURI, []string{"configuration.read"})})
-	}
-	if s != nil && s.reference != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-		items = append(items, ResourceDescriptor{URI: referenceCatalogResourceURI, Name: "Reference Catalog", Description: "Reference data types and records.", MIMEType: "application/json", Contract: builtInResourceContract(referenceCatalogResourceURI, []string{"configuration.read"})})
-	}
-	if s != nil && s.health != nil && allowsAll(actor.PermissionChecker, []string{"ops.read"}) {
-		items = append(items, ResourceDescriptor{URI: runbooksResourceURI, Name: "Runbooks", Description: "Runtime health runbooks and operator hints.", MIMEType: "application/json", Contract: builtInResourceContract(runbooksResourceURI, []string{"ops.read"})})
-	}
-	if s != nil && s.dataops != nil && allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-		items = append(items,
-			ResourceDescriptor{URI: dataopsCatalogResourceURI, Name: "DataOps Catalog", Description: "Data class catalog and adapter capability matrix.", MIMEType: "application/json", Contract: builtInResourceContract(dataopsCatalogResourceURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: dataopsArtifactsResourceURI, Name: "DataOps Artifacts", Description: "Managed backup, archive, export, and migration artifacts.", MIMEType: "application/json", Contract: builtInResourceContract(dataopsArtifactsResourceURI, []string{"configuration.read"})},
-			ResourceDescriptor{URI: dataopsCheckpointsResourceURI, Name: "DataOps Checkpoints", Description: "Latest incremental checkpoints by data class and adapter.", MIMEType: "application/json", Contract: builtInResourceContract(dataopsCheckpointsResourceURI, []string{"configuration.read"})},
-		)
+		if !allowsAll(actor.PermissionChecker, reg.descriptor.Contract.RequiredPermissions) {
+			continue
+		}
+		items = append(items, reg.descriptor)
 	}
 	return items
 }
@@ -88,91 +37,194 @@ func (s *Server) readBuiltInResource(actor ActorContext, uri string) ([]Resource
 	if parsed.Scheme != "orbyte" {
 		return nil, false, nil
 	}
-	if parsed.Host == "control-plane" {
-		switch parsed.Path {
-		case "/config.catalog":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.configCatalogResource)
-		case "/feature-flags.catalog":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.flagCatalogResource)
-		case "/role-matrix":
-			return s.readJSONControlResource(actor, uri, "identity.manage_users", s.roleMatrixResource)
-		case "/module-compatibility":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.moduleCompatibilityResource)
-		case "/integration-health":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.integrationHealthResource)
-		case "/readiness":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.readinessResource)
-		case "/search-runtime":
-			return s.readJSONControlResource(actor, uri, "search.manage", s.searchRuntimeResource)
-		case "/offline-sync":
-			return s.readJSONControlResource(actor, uri, "ops.read", s.offlineSyncResource)
-		case "/policy-runtime":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.policyRuntimeResource)
-		case "/reference-catalog":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.referenceCatalogResource)
-		case "/implementation-blueprints":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.implementationBlueprintResource)
-		case "/mcp-catalog":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.mcpCatalogResource)
-		case "/runbooks":
-			return s.readJSONControlResource(actor, uri, "ops.read", s.runbooksResource)
-		case "/dataops/catalog":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.dataopsCatalogResource)
-		case "/dataops/artifacts":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.dataopsArtifactsResource)
-		case "/dataops/checkpoints":
-			return s.readJSONControlResource(actor, uri, "configuration.read", s.dataopsCheckpointsResource)
-		default:
-			return nil, false, nil
-		}
-	}
-	if parsed.Host != "apps" {
+	baseURI := builtInResourceBaseURI(parsed)
+	reg, ok := s.mustBuiltInResourceIndex()[baseURI]
+	if !ok {
 		return nil, false, nil
 	}
-	switch parsed.Path {
-	case "/template.designer":
-		if !scopeMatches(actor.EndpointScope, "template") {
-			return nil, true, fmt.Errorf("resource is not available on this endpoint")
-		}
-		if s == nil || s.templates == nil {
-			return nil, false, nil
-		}
-		if !allowsAll(actor.PermissionChecker, []string{"template.read"}) {
-			return nil, true, fmt.Errorf("resource is not allowed")
-		}
-		htmlText, err := s.renderTemplateDesignerApp(actor, parsed)
-		if err != nil {
-			return nil, true, err
-		}
-		return []ResourceContent{{URI: uri, MIMEType: "text/html", Text: htmlText}}, true, nil
-	case "/analytics.studio":
-		if !scopeMatches(actor.EndpointScope, EndpointScopeAnalytics) {
-			return nil, true, fmt.Errorf("resource is not available on this endpoint")
-		}
-		if s == nil || s.analytics == nil {
-			return nil, false, nil
-		}
-		if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
-			return nil, true, fmt.Errorf("resource is not allowed")
-		}
-		htmlText, err := s.renderAnalyticsStudioApp(actor, parsed)
-		if err != nil {
-			return nil, true, err
-		}
-		return []ResourceContent{{URI: uri, MIMEType: "text/html", Text: htmlText}}, true, nil
-	case "/workflow.manager":
-		if s == nil || s.workflows == nil {
-			return nil, false, nil
-		}
-		if !allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
-			return nil, true, fmt.Errorf("resource is not allowed")
-		}
-		htmlText, err := s.renderWorkflowManagerApp(actor, parsed)
-		if err != nil {
-			return nil, true, err
-		}
-		return []ResourceContent{{URI: uri, MIMEType: "text/html", Text: htmlText}}, true, nil
-	default:
-		return nil, false, nil
+	if !scopeMatches(actor.EndpointScope, reg.descriptor.Scope) {
+		return nil, true, fmt.Errorf("resource is not available on this endpoint")
 	}
+	if !allowsAll(actor.PermissionChecker, reg.descriptor.Contract.RequiredPermissions) {
+		return nil, true, fmt.Errorf("resource is not allowed")
+	}
+	if reg.reader == nil {
+		return nil, true, fmt.Errorf("resource reader is unavailable")
+	}
+	contents, err := reg.reader(s, actor, parsed, uri)
+	return contents, true, err
+}
+
+func (s *Server) mustBuiltInResourceRegistrations() []builtInResourceRegistration {
+	if s == nil {
+		return nil
+	}
+	if len(s.builtInResourceRegistry) == 0 {
+		s.mustInitBuiltInResources()
+	}
+	return append([]builtInResourceRegistration(nil), s.builtInResourceRegistry...)
+}
+
+func (s *Server) mustBuiltInResourceIndex() map[string]builtInResourceRegistration {
+	if s == nil {
+		return nil
+	}
+	if len(s.builtInResourceIndex) == 0 {
+		s.mustInitBuiltInResources()
+	}
+	index := make(map[string]builtInResourceRegistration, len(s.builtInResourceIndex))
+	for key, reg := range s.builtInResourceIndex {
+		index[key] = reg
+	}
+	return index
+}
+
+func (s *Server) mustInitBuiltInResources() {
+	if s == nil || len(s.builtInResourceRegistry) != 0 {
+		return
+	}
+	registry := s.buildBuiltInResourceRegistrations()
+	sort.Slice(registry, func(i, j int) bool {
+		return strings.TrimSpace(registry[i].descriptor.URI) < strings.TrimSpace(registry[j].descriptor.URI)
+	})
+	index := make(map[string]builtInResourceRegistration, len(registry))
+	for _, reg := range registry {
+		key := strings.TrimSpace(reg.descriptor.URI)
+		if key == "" {
+			panic("built-in resource registration is missing a uri")
+		}
+		if _, exists := index[key]; exists {
+			panic(fmt.Sprintf("duplicate built-in resource uri %q", key))
+		}
+		if reg.reader == nil {
+			panic(fmt.Sprintf("built-in resource %q is missing a reader", key))
+		}
+		index[key] = reg
+	}
+	s.builtInResourceRegistry = registry
+	s.builtInResourceIndex = index
+}
+
+func (s *Server) buildBuiltInResourceRegistrations() []builtInResourceRegistration {
+	registry := make([]builtInResourceRegistration, 0, 16)
+	if s != nil && s.templates != nil {
+		registry = append(registry, builtInResourceRegistration{
+			descriptor: ResourceDescriptor{
+				URI:         templateDesignerResourceURI,
+				Name:        "Template Designer",
+				Description: "Lightweight MCP app for template draft inspection and preview.",
+				Scope:       "template",
+				MIMEType:    "text/html",
+				Contract:    builtInResourceContract(templateDesignerResourceURI, []string{"template.read"}),
+			},
+			reader: func(s *Server, actor ActorContext, parsed *url.URL, requestedURI string) ([]ResourceContent, error) {
+				htmlText, err := s.renderTemplateDesignerApp(actor, parsed)
+				if err != nil {
+					return nil, err
+				}
+				return []ResourceContent{{URI: requestedURI, MIMEType: "text/html", Text: htmlText}}, nil
+			},
+		})
+	}
+	if s != nil && s.analytics != nil {
+		registry = append(registry, builtInResourceRegistration{
+			descriptor: ResourceDescriptor{
+				URI:         analyticsStudioResourceURI,
+				Name:        "Analytics Studio",
+				Description: "Lightweight MCP app for analytics authoring, ad hoc results, and chart previews.",
+				Scope:       EndpointScopeAnalytics,
+				MIMEType:    "text/html",
+				Contract:    builtInResourceContract(analyticsStudioResourceURI, []string{"analytics.read"}),
+			},
+			reader: func(s *Server, actor ActorContext, parsed *url.URL, requestedURI string) ([]ResourceContent, error) {
+				htmlText, err := s.renderAnalyticsStudioApp(actor, parsed)
+				if err != nil {
+					return nil, err
+				}
+				return []ResourceContent{{URI: requestedURI, MIMEType: "text/html", Text: htmlText}}, nil
+			},
+		})
+	}
+	if s != nil && s.workflows != nil {
+		registry = append(registry, builtInResourceRegistration{
+			descriptor: ResourceDescriptor{
+				URI:         workflowManagerResourceURI,
+				Name:        "Workflow Manager",
+				Description: "Lightweight MCP app for workflow drafts, routing simulation, and hierarchy inspection.",
+				MIMEType:    "text/html",
+				Contract:    builtInResourceContract(workflowManagerResourceURI, []string{"configuration.read"}),
+			},
+			reader: func(s *Server, actor ActorContext, parsed *url.URL, requestedURI string) ([]ResourceContent, error) {
+				htmlText, err := s.renderWorkflowManagerApp(actor, parsed)
+				if err != nil {
+					return nil, err
+				}
+				return []ResourceContent{{URI: requestedURI, MIMEType: "text/html", Text: htmlText}}, nil
+			},
+		})
+	}
+	if s != nil && s.config != nil {
+		registry = append(registry,
+			s.jsonControlResourceRegistration(configCatalogResourceURI, "Config Catalog", "Configuration definitions, entries, and effective values.", "configuration.read", (*Server).configCatalogResource),
+			s.jsonControlResourceRegistration(flagCatalogResourceURI, "Feature Flag Catalog", "Feature flag definitions and stored values.", "configuration.read", (*Server).flagCatalogResource),
+			s.jsonControlResourceRegistration(moduleCompatResourceURI, "Module Compatibility", "Installed module and kernel compatibility state.", "configuration.read", (*Server).moduleCompatibilityResource),
+			s.jsonControlResourceRegistration(readinessResourceURI, "Implementation Readiness", "Readiness and validation snapshot for control-plane applies.", "configuration.read", (*Server).readinessResource),
+			s.jsonControlResourceRegistration(implementationBlueprintsURI, "Implementation Blueprints", "Domain-agnostic implementation blueprint and desired-state guidance.", "configuration.read", (*Server).implementationBlueprintResource),
+			s.jsonControlResourceRegistration(mcpCatalogResourceURI, "MCP Catalog", "Protocol versions, capability discovery, tools, resources, and app metadata for external agents.", "configuration.read", (*Server).mcpCatalogResource),
+		)
+	}
+	if s != nil && s.identity != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(roleMatrixResourceURI, "Role Matrix", "Roles, permissions, grants, and bindings.", "identity.manage_users", (*Server).roleMatrixResource))
+	}
+	if s != nil && s.integration != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(integrationHealthResourceURI, "Integration Health", "Integration connector health and submission summary.", "configuration.read", (*Server).integrationHealthResource))
+	}
+	if s != nil && s.search != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(searchRuntimeResourceURI, "Search Runtime", "Search index runtime and consistency status.", "search.manage", (*Server).searchRuntimeResource))
+	}
+	if s != nil && s.offline != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(offlineOpsResourceURI, "Offline Sync", "Offline sync batches, outcomes, and conflicts.", "ops.read", (*Server).offlineSyncResource))
+	}
+	if s != nil && s.policy != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(policyRuntimeResourceURI, "Policy Runtime", "Policy hook runtime, compile, and evaluation status.", "configuration.read", (*Server).policyRuntimeResource))
+	}
+	if s != nil && s.reference != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(referenceCatalogResourceURI, "Reference Catalog", "Reference data types and records.", "configuration.read", (*Server).referenceCatalogResource))
+	}
+	if s != nil && s.health != nil {
+		registry = append(registry, s.jsonControlResourceRegistration(runbooksResourceURI, "Runbooks", "Runtime health runbooks and operator hints.", "ops.read", (*Server).runbooksResource))
+	}
+	if s != nil && s.dataops != nil {
+		registry = append(registry,
+			s.jsonControlResourceRegistration(dataopsCatalogResourceURI, "DataOps Catalog", "Data class catalog and adapter capability matrix.", "configuration.read", (*Server).dataopsCatalogResource),
+			s.jsonControlResourceRegistration(dataopsArtifactsResourceURI, "DataOps Artifacts", "Managed backup, archive, export, and migration artifacts.", "configuration.read", (*Server).dataopsArtifactsResource),
+			s.jsonControlResourceRegistration(dataopsCheckpointsResourceURI, "DataOps Checkpoints", "Latest incremental checkpoints by data class and adapter.", "configuration.read", (*Server).dataopsCheckpointsResource),
+		)
+	}
+	return registry
+}
+
+func (s *Server) jsonControlResourceRegistration(uri, name, description, permission string, provider func(*Server, ActorContext) (map[string]any, error)) builtInResourceRegistration {
+	return builtInResourceRegistration{
+		descriptor: ResourceDescriptor{
+			URI:         uri,
+			Name:        name,
+			Description: description,
+			MIMEType:    "application/json",
+			Contract:    builtInResourceContract(uri, []string{permission}),
+		},
+		reader: func(s *Server, actor ActorContext, _ *url.URL, requestedURI string) ([]ResourceContent, error) {
+			contents, _, err := s.readJSONControlResource(actor, requestedURI, permission, func(actor ActorContext) (map[string]any, error) {
+				return provider(s, actor)
+			})
+			return contents, err
+		},
+	}
+}
+
+func builtInResourceBaseURI(parsed *url.URL) string {
+	base := *parsed
+	base.RawQuery = ""
+	base.Fragment = ""
+	return base.String()
 }

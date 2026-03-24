@@ -115,7 +115,7 @@ func (s *Service) ExportDocumentReportingPDF(query FactQuery, dimension string) 
 
 func (s *Service) CreateReportDefinition(def ReportDefinition) (ReportDefinition, error) {
 	if def.ID == "" {
-		def.ID = fmt.Sprintf("report:%d", time.Now().UTC().UnixNano())
+		def.ID = shared.NewID("report")
 	}
 	if def.Name == "" {
 		def.Name = def.Dimension + " report"
@@ -226,7 +226,7 @@ func (s *Service) DeliverArtifact(artifactID, channel, recipient string) (Report
 		}
 	}
 	delivery := ReportDelivery{
-		ID:           fmt.Sprintf("delivery:%d", time.Now().UTC().UnixNano()),
+		ID:           shared.NewID("delivery"),
 		ArtifactID:   artifact.ID,
 		Channel:      channel,
 		Recipient:    recipient,
@@ -241,7 +241,7 @@ func (s *Service) DeliverArtifact(artifactID, channel, recipient string) (Report
 	}
 	if status == "dead_letter" {
 		if err := s.repo.SaveReportDeliveryDeadLetter(ReportDeliveryDeadLetter{
-			ID:           fmt.Sprintf("delivery-dead:%d", time.Now().UTC().UnixNano()),
+			ID:           shared.NewID("delivery-dead"),
 			ArtifactID:   artifact.ID,
 			Channel:      channel,
 			Recipient:    recipient,
@@ -300,7 +300,7 @@ func (s *Service) RunReport(def ReportDefinition) (ReportRun, []byte, error) {
 		return ReportRun{}, nil, err
 	}
 	artifact := ReportArtifact{
-		ID:          fmt.Sprintf("artifact:%d", time.Now().UTC().UnixNano()),
+		ID:          shared.NewID("artifact"),
 		ReportID:    def.ID,
 		FileName:    "analytics_reporting_documents." + def.Format,
 		ContentType: map[string]string{"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "pdf": "application/pdf"}[def.Format],
@@ -311,7 +311,7 @@ func (s *Service) RunReport(def ReportDefinition) (ReportRun, []byte, error) {
 	if artifact.ContentType == "" {
 		artifact.ContentType = "text/csv"
 	}
-	run := ReportRun{ID: fmt.Sprintf("report-run:%d", time.Now().UTC().UnixNano()), ReportID: def.ID, ArtifactID: artifact.ID, Format: def.Format, Status: "generated", GeneratedAt: time.Now().UTC(), RowCount: len(s.ReportingBreakdown(query, def.Dimension))}
+	run := ReportRun{ID: shared.NewID("report-run"), ReportID: def.ID, ArtifactID: artifact.ID, Format: def.Format, Status: "generated", GeneratedAt: time.Now().UTC(), RowCount: len(s.ReportingBreakdown(query, def.Dimension))}
 	artifact.ReportRunID = run.ID
 	if err := s.repo.SaveReportRun(run); err != nil {
 		return ReportRun{}, nil, err

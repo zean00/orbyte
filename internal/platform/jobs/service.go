@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/shared"
 )
 
 const (
@@ -122,7 +123,7 @@ func (s *Service) EnqueueUnique(name string, payload map[string]any, dedupKey st
 func (s *Service) EnqueueUniqueDetailed(name string, payload map[string]any, dedupKey string) (Job, bool, error) {
 	now := time.Now().UTC()
 	job := Job{
-		ID:        fmt.Sprintf("job:%d", now.UnixNano()),
+		ID:        shared.NewID("job"),
 		Name:      name,
 		DedupKey:  dedupKey,
 		Status:    StatusQueued,

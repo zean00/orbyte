@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
+
+	"orbyte/internal/platform/runtimeconfig"
+	"orbyte/internal/platform/shared"
 )
 
 type EmailDelivery struct {
@@ -30,15 +32,16 @@ func SendPlainTextEmail(subject, body, recipient string) (EmailDelivery, error) 
 	if _, err := mail.ParseAddress(recipient); err != nil {
 		return EmailDelivery{}, fmt.Errorf("invalid email recipient")
 	}
-	from := firstNonEmpty(strings.TrimSpace(os.Getenv("SMTP_FROM")), "workflow@orbyte.local")
+	settings := runtimeconfig.Current().EmailSettings()
+	from := settings.From
 	message, err := buildPlainTextEmail(from, recipient, firstNonEmpty(strings.TrimSpace(subject), "Workflow notification"), body)
 	if err != nil {
 		return EmailDelivery{}, err
 	}
-	host := strings.TrimSpace(os.Getenv("SMTP_HOST"))
-	port := firstNonEmpty(strings.TrimSpace(os.Getenv("SMTP_PORT")), "587")
+	host := settings.Host
+	port := settings.Port
 	if host == "" {
-		outboxDir := strings.TrimSpace(os.Getenv("WORKFLOW_EMAIL_OUTBOX_DIR"))
+		outboxDir := settings.OutboxDir
 		if outboxDir == "" {
 			tempDir, err := os.MkdirTemp("", "orbyte-workflow-emails-*")
 			if err != nil {
@@ -48,7 +51,7 @@ func SendPlainTextEmail(subject, body, recipient string) (EmailDelivery, error) 
 		} else if err := os.MkdirAll(outboxDir, 0o755); err != nil {
 			return EmailDelivery{}, err
 		}
-		fileName := fmt.Sprintf("%d_workflow_notification.eml", time.Now().UTC().UnixNano())
+		fileName := shared.NewID("") + "_workflow_notification.eml"
 		fullPath := filepath.Join(outboxDir, fileName)
 		if err := os.WriteFile(fullPath, message, 0o644); err != nil {
 			return EmailDelivery{}, err
@@ -56,9 +59,9 @@ func SendPlainTextEmail(subject, body, recipient string) (EmailDelivery, error) 
 		return EmailDelivery{Channel: "email", Mode: "outbox", Recipient: recipient, Path: fullPath}, nil
 	}
 	addr := host + ":" + port
-	username := strings.TrimSpace(os.Getenv("SMTP_USERNAME"))
-	password := strings.TrimSpace(os.Getenv("SMTP_PASSWORD"))
-	useTLS := strings.EqualFold(strings.TrimSpace(os.Getenv("SMTP_TLS")), "true")
+	username := settings.Username
+	password := settings.Password
+	useTLS := settings.UseTLS
 	var auth smtp.Auth
 	if username != "" {
 		auth = smtp.PlainAuth("", username, password, host)

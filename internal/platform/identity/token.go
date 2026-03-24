@@ -6,9 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"time"
+
+	"orbyte/internal/platform/runtimeconfig"
 )
 
 type TokenManager struct {
@@ -33,13 +34,10 @@ type TokenClaims struct {
 }
 
 func NewTokenManagerFromEnv() *TokenManager {
-	issuer := os.Getenv("APP_JWT_ISSUER")
-	if issuer == "" {
-		issuer = "orbyte"
-	}
+	runtime := runtimeconfig.Current()
 	return &TokenManager{
-		secret: []byte(os.Getenv("APP_JWT_SECRET")),
-		issuer: issuer,
+		secret: []byte(runtime.JWTSecret()),
+		issuer: runtime.JWTIssuer(),
 		now:    func() time.Time { return time.Now().UTC() },
 	}
 }

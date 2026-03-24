@@ -532,7 +532,7 @@ func TestServiceExposesDocumentFlowTemplateOfflineAndMCPContracts(t *testing.T) 
 		}},
 		MCP: MCPDefinition{
 			Tools:     []MCPToolDefinition{{Key: "analytics.query.execute", Title: "Execute Query", Operation: "analytics.query.execute"}},
-			Resources: []MCPResourceDefinition{{Key: "analytics.snapshot", Title: "Analytics Snapshot", URI: "orbyte://analytics/snapshot/current"}},
+			Resources: []MCPResourceDefinition{{Key: "analytics.snapshot", Title: "Analytics Snapshot", URI: "orbyte://apps/analytics.studio", Provider: "mcp.app", AppKey: "analytics.studio"}},
 			Apps:      []MCPAppDefinition{{Key: "analytics.studio", Title: "Analytics Studio", ResourceKey: "analytics.snapshot", CustomEntryKey: "analytics.studio.entry"}},
 		},
 		Observability: ObservabilityDefinition{
@@ -586,10 +586,10 @@ func TestServiceExposesDocumentFlowTemplateOfflineAndMCPContracts(t *testing.T) 
 	if tool, ok := svc.MCPTool("analytics.query.execute"); !ok || tool.Key != "analytics.query.execute" {
 		t.Fatalf("expected mcp tool lookup, got %+v %v", tool, ok)
 	}
-	if resource, ok := svc.MCPResourceByKey("analytics.snapshot"); !ok || resource.URI != "orbyte://analytics/snapshot/current" {
+	if resource, ok := svc.MCPResourceByKey("analytics.snapshot"); !ok || resource.URI != "orbyte://apps/analytics.studio" {
 		t.Fatalf("expected mcp resource-by-key lookup, got %+v %v", resource, ok)
 	}
-	if _, ok := svc.MCPResourceByURI("orbyte://analytics/snapshot/current"); !ok {
+	if _, ok := svc.MCPResourceByURI("orbyte://apps/analytics.studio"); !ok {
 		t.Fatal("expected mcp resource-by-uri lookup")
 	}
 	if app, ok := svc.MCPApp("analytics.studio"); !ok || app.ResourceKey != "analytics.snapshot" {
@@ -637,7 +637,7 @@ func TestRegisterValidatesMCPContracts(t *testing.T) {
 		Bundles: []BundleDefinition{{Key: "analytics-bundle", Script: "console.log('bundle');"}},
 		MCP: MCPDefinition{
 			Resources: []MCPResourceDefinition{{
-				Key: "analytics.cockpit.app", Title: "Analytics App", URI: "orbyte://apps/analytics.cockpit",
+				Key: "analytics.cockpit.app", Title: "Analytics App", URI: "orbyte://apps/analytics.cockpit", Provider: "mcp.app", AppKey: "analytics.cockpit",
 			}},
 			Apps: []MCPAppDefinition{{
 				Key: "analytics.cockpit", Title: "Analytics Cockpit", ResourceKey: "analytics.cockpit.app", CustomEntryKey: "analytics.cockpit",
@@ -674,6 +674,52 @@ func TestRegisterRejectsMCPToolWithUnknownApp(t *testing.T) {
 	}, "system")
 	if err == nil {
 		t.Fatal("expected unknown mcp app reference to fail")
+	}
+}
+
+func TestRegisterRejectsMCPResourceWithoutProvider(t *testing.T) {
+	svc := NewService()
+	err := svc.Register(Manifest{
+		Key: "analytics",
+		MCP: MCPDefinition{
+			Resources: []MCPResourceDefinition{{
+				Key: "analytics.snapshot.current", Title: "Snapshot", URI: "orbyte://analytics/snapshot/current",
+			}},
+		},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected missing mcp resource provider to fail")
+	}
+}
+
+func TestRegisterRejectsDuplicateMCPResourceURIInManifest(t *testing.T) {
+	svc := NewService()
+	err := svc.Register(Manifest{
+		Key: "analytics",
+		MCP: MCPDefinition{
+			Resources: []MCPResourceDefinition{
+				{Key: "analytics.snapshot.current", Title: "Snapshot A", URI: "orbyte://analytics/snapshot/current", Provider: "analytics.snapshot.current"},
+				{Key: "analytics.snapshot.current.copy", Title: "Snapshot B", URI: "orbyte://analytics/snapshot/current", Provider: "analytics.snapshot.current"},
+			},
+		},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected duplicate mcp resource uri in manifest to fail")
+	}
+}
+
+func TestRegisterRejectsMCPAppResourceWithoutAppProvider(t *testing.T) {
+	svc := NewService()
+	err := svc.Register(Manifest{
+		Key: "analytics",
+		MCP: MCPDefinition{
+			Resources: []MCPResourceDefinition{{
+				Key: "analytics.snapshot.current", Title: "Snapshot", URI: "orbyte://analytics/snapshot/current", Provider: "analytics.snapshot.current", AppKey: "analytics.cockpit",
+			}},
+		},
+	}, "system")
+	if err == nil {
+		t.Fatal("expected app_key with non-mcp.app provider to fail")
 	}
 }
 

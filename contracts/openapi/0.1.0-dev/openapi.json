@@ -1,0 +1,4571 @@
+{
+  "components": {
+    "schemas": {
+      "AdminBootstrapResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/UIActionDefinition"
+            },
+            "type": "array"
+          },
+          "custom_entries": {
+            "items": {
+              "$ref": "#/components/schemas/UICustomEntryDefinition"
+            },
+            "type": "array"
+          },
+          "default_path": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Location",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "menus": {
+            "items": {
+              "$ref": "#/components/schemas/UIMenuDefinition"
+            },
+            "type": "array"
+          },
+          "organization": {
+            "additionalProperties": true,
+            "description": "Organization root.",
+            "type": "object"
+          },
+          "roles": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Role",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "supported_locales": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ui_access": {
+            "type": "boolean"
+          },
+          "ui_path": {
+            "type": "string"
+          },
+          "views": {
+            "items": {
+              "$ref": "#/components/schemas/UIViewDefinition"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "AuthOptions": {
+        "properties": {
+          "google_button_label": {
+            "type": "string"
+          },
+          "google_enabled": {
+            "type": "boolean"
+          },
+          "login_subtitle": {
+            "type": "string"
+          },
+          "login_title": {
+            "type": "string"
+          },
+          "password_enabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CreateDocumentRequest": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": {
+            "enum": [
+              "clinic_encounter",
+              "clinic_registration",
+              "generic_request"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "organization_id",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "DocumentActionRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "submit",
+              "approve",
+              "reject",
+              "reopen",
+              "cancel"
+            ],
+            "type": "string"
+          },
+          "expected_etag": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "DocumentAttachment": {
+        "properties": {
+          "attachment_type": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "storage_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DocumentBody": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "schema_version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DocumentHeader": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "number": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "submitted_by": {
+            "type": "string"
+          },
+          "total_amount": {
+            "additionalProperties": true,
+            "description": "Money",
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DocumentLine": {
+        "properties": {
+          "amount": {
+            "additionalProperties": true,
+            "description": "Money",
+            "type": "object"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "line_no": {
+            "type": "integer"
+          },
+          "line_type": {
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "schema_ref": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DocumentLink": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "link_type": {
+            "type": "string"
+          },
+          "linked_document_id": {
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "DocumentListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRecord"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DocumentRecord": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentAttachment"
+            },
+            "type": "array"
+          },
+          "body": {
+            "$ref": "#/components/schemas/DocumentBody"
+          },
+          "header": {
+            "$ref": "#/components/schemas/DocumentHeader"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentLine"
+            },
+            "type": "array"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentLink"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "GenericObjectResponse": {
+        "additionalProperties": true,
+        "description": "Generic object response.",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "time": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LocalizedText": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "properties": {
+          "session": {
+            "properties": {
+              "current_location_id": {
+                "type": "string"
+              },
+              "expires_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "issued_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "last_seen_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModelDefinition": {
+        "properties": {
+          "create_permission_key": {
+            "type": "string"
+          },
+          "default_sort": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "display_name_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ModelFieldDefinition"
+            },
+            "type": "array"
+          },
+          "key": {
+            "type": "string"
+          },
+          "list_permission_key": {
+            "type": "string"
+          },
+          "owner_module_key": {
+            "type": "string"
+          },
+          "read_permission_key": {
+            "type": "string"
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/ModelRelationDefinition"
+            },
+            "type": "array"
+          },
+          "update_permission_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModelDetailResponse": {
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/ModelDefinition"
+          },
+          "model_definitions": {
+            "items": {
+              "$ref": "#/components/schemas/ModelDefinition"
+            },
+            "type": "array"
+          },
+          "record": {
+            "$ref": "#/components/schemas/ModelRecord"
+          },
+          "related": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ModelRecord"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "related_definitions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelDefinition"
+            },
+            "type": "object"
+          },
+          "timeline": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Activity timeline item",
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ModelFieldDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "default_mask": {
+            "type": "string"
+          },
+          "default_value": {},
+          "export_visible": {
+            "type": "boolean"
+          },
+          "indexed": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "label_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "read_only": {
+            "type": "boolean"
+          },
+          "read_permission_key": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "search_visible": {
+            "type": "boolean"
+          },
+          "security_class": {
+            "type": "string"
+          },
+          "sensitive": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "write_permission_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModelListResponse": {
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/ModelDefinition"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelRecord"
+            },
+            "type": "array"
+          },
+          "related_definitions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelDefinition"
+            },
+            "type": "object"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ModelMutationRequest": {
+        "properties": {
+          "relations": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "ModelMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/ModelRecord"
+          },
+          "related": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ModelRecord"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "ModelRecord": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "model_key": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ModelRelationDefinition": {
+        "properties": {
+          "foreign_key": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "target_model_key": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModuleDetail": {
+        "properties": {
+          "dependency_diagnostics": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Dependency diagnostic",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "dependency_state": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object"
+          },
+          "installed": {
+            "additionalProperties": true,
+            "description": "Installed module state",
+            "type": "object"
+          },
+          "lifecycle_state": {
+            "type": "string"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "description": "Module manifest",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "ModuleListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleDetail"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineBootstrap": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineDocumentCapability"
+            },
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineModelCapability"
+            },
+            "type": "array"
+          },
+          "projections": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineProjectionCapability"
+            },
+            "type": "array"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineReferenceCapability"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineDocumentCapability": {
+        "properties": {
+          "create_permission_key": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "type": {
+            "type": "string"
+          },
+          "update_permission_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineModelCapability": {
+        "properties": {
+          "create_permission_key": {
+            "type": "string"
+          },
+          "model_key": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "update_permission_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineProjectionCapability": {
+        "properties": {
+          "default_filters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default_include_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "index_key": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineReferenceCapability": {
+        "properties": {
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "type_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineSyncRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "document_type": {
+                  "enum": [
+                    "clinic_encounter",
+                    "clinic_registration",
+                    "generic_request"
+                  ],
+                  "type": "string"
+                },
+                "expected_etag": {
+                  "type": "string"
+                },
+                "expected_version": {
+                  "type": "integer"
+                },
+                "idempotency_key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "document",
+                    "model"
+                  ],
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "model_key": {
+                  "enum": [
+                    "party",
+                    "party_contact",
+                    "patient_profile",
+                    "payer_profile",
+                    "practitioner_profile"
+                  ],
+                  "type": "string"
+                },
+                "operation": {
+                  "enum": [
+                    "create",
+                    "update"
+                  ],
+                  "type": "string"
+                },
+                "organization_id": {
+                  "type": "string"
+                },
+                "payload": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "relations": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "values": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineSyncResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineSyncResultItem"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineSyncResultItem": {
+        "additionalProperties": true,
+        "properties": {
+          "conflict": {
+            "additionalProperties": true,
+            "description": "Conflict payload",
+            "type": "object"
+          },
+          "error": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformContextResponse": {
+        "properties": {
+          "config_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "document_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "organization": {
+            "additionalProperties": true,
+            "description": "Organization root.",
+            "type": "object"
+          },
+          "reference_types": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceTypeDefinition"
+            },
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Role",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "workflows": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ProjectionPackageResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "checksum": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "index_key": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Projection package item",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "query": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "dependency_ok": {
+            "type": "boolean"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ReferencePackageResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "checksum": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Reference package item",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "type_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReferenceTypeDefinition": {
+        "additionalProperties": true,
+        "description": "Reference type definition.",
+        "type": "object"
+      },
+      "SearchIndexDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "document_type": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "model_key": {
+            "type": "string"
+          },
+          "modes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "projection_key": {
+            "type": "string"
+          },
+          "query_filter_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "query_sort_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "SearchIndexListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SearchIndexDefinition"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SearchQueryRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "desc": {
+            "type": "boolean"
+          },
+          "filters": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SearchQueryResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "index_key": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Search result item",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UIActionDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "custom_entry_key": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "label_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "render_mode": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "route_path": {
+            "type": "string"
+          },
+          "view_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UIBootstrapResponse": {
+        "example": {
+          "available_surfaces": [
+            "backoffice",
+            "self_service"
+          ],
+          "default_path": "/self-service/requests",
+          "self_service_apis": [
+            "documents.self_service.requests.create",
+            "documents.self_service.requests.get",
+            "documents.self_service.requests.list",
+            "documents.self_service.requests.submit"
+          ],
+          "surface": "self_service"
+        },
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/UIActionDefinition"
+            },
+            "type": "array"
+          },
+          "admin_access": {
+            "type": "boolean"
+          },
+          "admin_path": {
+            "type": "string"
+          },
+          "available_surfaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default_path": {
+            "type": "string"
+          },
+          "flows": {
+            "items": {
+              "additionalProperties": true,
+              "description": "UI document flow",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "menus": {
+            "items": {
+              "$ref": "#/components/schemas/UIMenuDefinition"
+            },
+            "type": "array"
+          },
+          "self_service_apis": {
+            "items": {
+              "$ref": "#/components/schemas/UISelfServiceAPIDefinition"
+            },
+            "type": "array"
+          },
+          "supported_locales": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "views": {
+            "items": {
+              "$ref": "#/components/schemas/UIViewDefinition"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UICardDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "label_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UICustomEntryDefinition": {
+        "properties": {
+          "bundle_key": {
+            "type": "string"
+          },
+          "component_export": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "route_path": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "UIDocumentsResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "description": "UI document item",
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UIMenuDefinition": {
+        "properties": {
+          "action_key": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "label_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UIModelDataResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "description": "UI model item",
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UIRouteResolution": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/UIActionDefinition"
+          },
+          "custom_entry": {
+            "$ref": "#/components/schemas/UICustomEntryDefinition"
+          },
+          "view": {
+            "$ref": "#/components/schemas/UIViewDefinition"
+          }
+        },
+        "type": "object"
+      },
+      "UISectionDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "fields": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Section field",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "UISelfServiceAPIDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "audience_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "description_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "document_type": {
+            "type": "string"
+          },
+          "flow_key": {
+            "type": "string"
+          },
+          "handler_kind": {
+            "type": "string"
+          },
+          "idempotent": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "model_key": {
+            "type": "string"
+          },
+          "offline_capable": {
+            "type": "boolean"
+          },
+          "request_contract_key": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "response_contract_key": {
+            "type": "string"
+          },
+          "route_path": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "UISelfServiceAPIListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UISelfServiceAPIDefinition"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UITabDefinition": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/UISectionDefinition"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "UIViewColumn": {
+        "additionalProperties": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "label_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UIViewDefinition": {
+        "additionalProperties": true,
+        "properties": {
+          "allowed_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/UICardDefinition"
+            },
+            "type": "array"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/UIViewColumn"
+            },
+            "type": "array"
+          },
+          "document_type": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "model_key": {
+            "type": "string"
+          },
+          "projection_key": {
+            "type": "string"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/UITabDefinition"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "title_i18n": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateDocumentRequest": {
+        "properties": {
+          "expected_etag": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "OpenAPI document for the runtime generic platform APIs. Registered modules become available through the generic model, document, UI contract, search, and offline endpoints. Custom module-specific controller namespaces are not auto-generated.",
+    "title": "Orbyte Platform API",
+    "version": "0.1.0-dev"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/admin/api/bootstrap": {
+      "get": {
+        "description": "Returns admin workspace navigation and chrome state.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminBootstrapResponse"
+                }
+              }
+            },
+            "description": "Admin bootstrap"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get admin bootstrap",
+        "tags": [
+          "Admin"
+        ],
+        "x-orbyte-support-level": "admin"
+      }
+    },
+    "/admin/api/config/validate": {
+      "get": {
+        "description": "Runs configuration validation for the selected scope.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObjectResponse"
+                }
+              }
+            },
+            "description": "Config validation"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Validate configuration",
+        "tags": [
+          "Admin"
+        ],
+        "x-orbyte-support-level": "admin"
+      }
+    },
+    "/admin/api/modules": {
+      "get": {
+        "description": "Returns installed module details for administration.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleListResponse"
+                }
+              }
+            },
+            "description": "Module list"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "List modules",
+        "tags": [
+          "Admin"
+        ],
+        "x-orbyte-support-level": "admin"
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Creates a session and returns session metadata.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Session created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Login with password",
+        "tags": [
+          "Auth"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "description": "Revokes the current session.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Logged out"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "Auth"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/auth/options": {
+      "get": {
+        "description": "Returns login surface options for shell or external client sign-in UIs.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOptions"
+                }
+              }
+            },
+            "description": "Auth options"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get auth options",
+        "tags": [
+          "Auth"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/documents": {
+      "get": {
+        "description": "Lists documents visible to the current principal.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentListResponse"
+                }
+              }
+            },
+            "description": "Document list"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "List documents",
+        "tags": [
+          "Documents"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      },
+      "post": {
+        "description": "Creates a draft document using a registered document type.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRecord"
+                }
+              }
+            },
+            "description": "Document created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Create document",
+        "tags": [
+          "Documents"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/documents/{documentID}": {
+      "get": {
+        "description": "Returns a document record in normal, expanded, or raw view mode.",
+        "parameters": [
+          {
+            "description": "Document ID.",
+            "in": "path",
+            "name": "documentID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRecord"
+                }
+              }
+            },
+            "description": "Document detail"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get document",
+        "tags": [
+          "Documents"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      },
+      "put": {
+        "description": "Updates a draft document using optimistic concurrency.",
+        "parameters": [
+          {
+            "description": "Document ID.",
+            "in": "path",
+            "name": "documentID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRecord"
+                }
+              }
+            },
+            "description": "Document updated"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Update document draft",
+        "tags": [
+          "Documents"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/documents/{documentID}/actions": {
+      "post": {
+        "description": "Runs submit, approve, reject, reopen, or cancel through the generic document action API.",
+        "parameters": [
+          {
+            "description": "Document ID.",
+            "in": "path",
+            "name": "documentID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRecord"
+                }
+              }
+            },
+            "description": "Document action result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Run document action",
+        "tags": [
+          "Documents"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Liveness endpoint.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Healthy"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Health check",
+        "tags": [
+          "Platform"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/models/{modelKey}": {
+      "get": {
+        "description": "Lists records for the given manifest-registered model key.",
+        "parameters": [
+          {
+            "description": "Registered model key.",
+            "in": "path",
+            "name": "modelKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "party",
+                "party_contact",
+                "patient_profile",
+                "payer_profile",
+                "practitioner_profile"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            },
+            "description": "Model list"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "List model records",
+        "tags": [
+          "Models"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      },
+      "post": {
+        "description": "Creates a record through the generic model API for the given model key.",
+        "parameters": [
+          {
+            "description": "Registered model key.",
+            "in": "path",
+            "name": "modelKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "party",
+                "party_contact",
+                "patient_profile",
+                "payer_profile",
+                "practitioner_profile"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelMutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelMutationResponse"
+                }
+              }
+            },
+            "description": "Model created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Create model record",
+        "tags": [
+          "Models"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/models/{modelKey}/{recordID}": {
+      "get": {
+        "description": "Returns a record, its definition, and related definitions.",
+        "parameters": [
+          {
+            "description": "Registered model key.",
+            "in": "path",
+            "name": "modelKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "party",
+                "party_contact",
+                "patient_profile",
+                "payer_profile",
+                "practitioner_profile"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Model record ID.",
+            "in": "path",
+            "name": "recordID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDetailResponse"
+                }
+              }
+            },
+            "description": "Model detail"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get model record",
+        "tags": [
+          "Models"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      },
+      "put": {
+        "description": "Updates a record through the generic model API.",
+        "parameters": [
+          {
+            "description": "Registered model key.",
+            "in": "path",
+            "name": "modelKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "party",
+                "party_contact",
+                "patient_profile",
+                "payer_profile",
+                "practitioner_profile"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Model record ID.",
+            "in": "path",
+            "name": "recordID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelMutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelMutationResponse"
+                }
+              }
+            },
+            "description": "Model updated"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Update model record",
+        "tags": [
+          "Models"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/offline/bootstrap": {
+      "get": {
+        "description": "Returns the offline capabilities visible to the current principal.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineBootstrap"
+                }
+              }
+            },
+            "description": "Offline bootstrap"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get offline bootstrap",
+        "tags": [
+          "Offline"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/offline/packages/projections": {
+      "post": {
+        "description": "Returns an offline projection package for a registered offline projection key.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "index_key": "documents.requests.search"
+              },
+              "schema": {
+                "properties": {
+                  "index_key": {
+                    "enum": [
+                      "documents.requests.search",
+                      "masterdata.party.search"
+                    ],
+                    "type": "string"
+                  },
+                  "location_id": {
+                    "type": "string"
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "query": {
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionPackageResponse"
+                }
+              }
+            },
+            "description": "Projection package"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get offline projection package",
+        "tags": [
+          "Offline"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/offline/packages/references": {
+      "post": {
+        "description": "Returns an offline reference package for a registered offline reference key.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "type_key": "appointment_type"
+              },
+              "schema": {
+                "properties": {
+                  "location_id": {
+                    "type": "string"
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "type_key": {
+                    "enum": [
+                      "appointment_type",
+                      "party_type"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferencePackageResponse"
+                }
+              }
+            },
+            "description": "Reference package"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get offline reference package",
+        "tags": [
+          "Offline"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/offline/sync": {
+      "post": {
+        "description": "Accepts draft-safe offline create and update mutations in batch.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfflineSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineSyncResponse"
+                }
+              }
+            },
+            "description": "Sync results"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Sync offline mutations",
+        "tags": [
+          "Offline"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/platform/context": {
+      "get": {
+        "description": "Returns organization, roles, document types, workflows, and config keys for the current principal.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformContextResponse"
+                }
+              }
+            },
+            "description": "Platform context"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get platform context",
+        "tags": [
+          "Platform"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "Readiness endpoint with dependency state.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Ready"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Readiness check",
+        "tags": [
+          "Platform"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/search/indexes": {
+      "get": {
+        "description": "Lists search index definitions visible to the current principal.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchIndexListResponse"
+                }
+              }
+            },
+            "description": "Search indexes"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "List search indexes",
+        "tags": [
+          "Search"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/search/indexes/{indexKey}": {
+      "get": {
+        "description": "Returns one search index definition.",
+        "parameters": [
+          {
+            "description": "Registered search index key.",
+            "in": "path",
+            "name": "indexKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "clinic.encounter.worklist",
+                "clinic.patient.lookup",
+                "clinic.registration.worklist",
+                "documents.requests.search",
+                "documents.summary.search",
+                "masterdata.party.search"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchIndexDefinition"
+                }
+              }
+            },
+            "description": "Search index"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get search index",
+        "tags": [
+          "Search"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/search/indexes/{indexKey}/query": {
+      "post": {
+        "description": "Runs a keyword query against the index.",
+        "parameters": [
+          {
+            "description": "Registered search index key.",
+            "in": "path",
+            "name": "indexKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "clinic.encounter.worklist",
+                "clinic.patient.lookup",
+                "clinic.registration.worklist",
+                "documents.requests.search",
+                "documents.summary.search",
+                "masterdata.party.search"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchQueryResponse"
+                }
+              }
+            },
+            "description": "Query result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Keyword query",
+        "tags": [
+          "Search"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/search/indexes/{indexKey}/query/hybrid": {
+      "post": {
+        "description": "Runs a hybrid query against the index.",
+        "parameters": [
+          {
+            "description": "Registered search index key.",
+            "in": "path",
+            "name": "indexKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "clinic.encounter.worklist",
+                "clinic.patient.lookup",
+                "clinic.registration.worklist",
+                "documents.requests.search",
+                "documents.summary.search",
+                "masterdata.party.search"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchQueryResponse"
+                }
+              }
+            },
+            "description": "Query result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Hybrid query",
+        "tags": [
+          "Search"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/search/indexes/{indexKey}/query/vector": {
+      "post": {
+        "description": "Runs a vector query against the index.",
+        "parameters": [
+          {
+            "description": "Registered search index key.",
+            "in": "path",
+            "name": "indexKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "clinic.encounter.worklist",
+                "clinic.patient.lookup",
+                "clinic.registration.worklist",
+                "documents.requests.search",
+                "documents.summary.search",
+                "masterdata.party.search"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchQueryResponse"
+                }
+              }
+            },
+            "description": "Query result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Vector query",
+        "tags": [
+          "Search"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/ui/bootstrap": {
+      "get": {
+        "description": "Returns the surface-aware workspace menus, actions, views, locale, default route path, and self-service API catalog for the current principal.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIBootstrapResponse"
+                }
+              }
+            },
+            "description": "UI bootstrap"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get UI bootstrap",
+        "tags": [
+          "UI Contracts"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/ui/data/documents": {
+      "get": {
+        "description": "Returns the document summary payload used by the generic user workspace.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIDocumentsResponse"
+                }
+              }
+            },
+            "description": "UI document data"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get document summaries for UI",
+        "tags": [
+          "UI Contracts"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/ui/data/models": {
+      "get": {
+        "description": "Returns model data for the generic user workspace.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIModelDataResponse"
+                }
+              }
+            },
+            "description": "UI model data"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get model list for UI",
+        "tags": [
+          "UI Contracts"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/ui/routes/resolve": {
+      "get": {
+        "description": "Resolves a hash-route path into an action, view, or custom entry.",
+        "parameters": [
+          {
+            "description": "User route path.",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "/analytics/cockpit",
+                "/clinic/encounters",
+                "/clinic/patients",
+                "/clinic/registrations",
+                "/documents",
+                "/documents/detail",
+                "/documents/new",
+                "/masterdata/parties",
+                "/masterdata/parties/detail",
+                "/masterdata/parties/form",
+                "/monitoring"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIRouteResolution"
+                }
+              }
+            },
+            "description": "Route resolution"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Resolve UI route",
+        "tags": [
+          "UI Contracts"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/ui/self-service/apis": {
+      "get": {
+        "description": "Returns the explicit self-service APIs the current principal is allowed to invoke.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UISelfServiceAPIListResponse"
+                }
+              }
+            },
+            "description": "Self-service API list"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "List self-service APIs",
+        "tags": [
+          "UI Contracts"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    },
+    "/ui/views/{viewKey}": {
+      "get": {
+        "description": "Returns one registered user-surface view definition.",
+        "parameters": [
+          {
+            "description": "Registered user view key.",
+            "in": "path",
+            "name": "viewKey",
+            "required": true,
+            "schema": {
+              "enum": [
+                "clinic.encounters.list",
+                "clinic.patients.list",
+                "clinic.registrations.list",
+                "documents.requests.detail",
+                "documents.requests.form",
+                "documents.requests.list",
+                "masterdata.parties.detail",
+                "masterdata.parties.form",
+                "masterdata.parties.list",
+                "monitoring.overview"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIViewDefinition"
+                }
+              }
+            },
+            "description": "View definition"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Get UI view",
+        "tags": [
+          "UI Contracts"
+        ],
+        "x-orbyte-support-level": "public-headless"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Authentication and session endpoints.",
+      "name": "Auth"
+    },
+    {
+      "description": "Core platform health and context endpoints.",
+      "name": "Platform"
+    },
+    {
+      "description": "Generic manifest-driven model APIs.",
+      "name": "Models"
+    },
+    {
+      "description": "Generic manifest-driven document APIs.",
+      "name": "Documents"
+    },
+    {
+      "description": "Search and projection query APIs.",
+      "name": "Search"
+    },
+    {
+      "description": "Offline bootstrap, package, and sync APIs.",
+      "name": "Offline"
+    },
+    {
+      "description": "Supported headless UI contract endpoints for external clients.",
+      "name": "UI Contracts"
+    },
+    {
+      "description": "Admin-only and internal administration APIs.",
+      "name": "Admin"
+    }
+  ],
+  "x-orbyte-runtime": {
+    "config_keys": [
+      "eventing.nats",
+      "identity.auth",
+      "platform.acp",
+      "platform.db",
+      "platform.http",
+      "policy.clinic.registration.approval",
+      "policy.documents.action.render",
+      "policy.documents.extension.view",
+      "policy.documents.extension.write",
+      "policy.documents.numbering.assign",
+      "policy.documents.search.visibility",
+      "policy.documents.workflow.assignment",
+      "policy.documents.workflow.sla",
+      "policy.documents.workflow.transition",
+      "policy.integration.submission.preflight",
+      "policy.rego.documents.search.visibility",
+      "policy.rego.documents.workflow.transition",
+      "policy.rego.integration.submission.preflight",
+      "search.embedding",
+      "search.typesense"
+    ],
+    "document_types": [
+      "clinic_encounter",
+      "clinic_registration",
+      "generic_request"
+    ],
+    "model_keys": [
+      "party",
+      "party_contact",
+      "patient_profile",
+      "payer_profile",
+      "practitioner_profile"
+    ],
+    "registered_modules": [
+      "analytics",
+      "clinic_registration",
+      "documents",
+      "identity",
+      "integration",
+      "masterdata",
+      "monitoring",
+      "platform.core",
+      "reference_masterdata"
+    ],
+    "search_indexes": [
+      "clinic.encounter.worklist",
+      "clinic.patient.lookup",
+      "clinic.registration.worklist",
+      "documents.requests.search",
+      "documents.summary.search",
+      "masterdata.party.search"
+    ],
+    "user_route_paths": [
+      "/analytics/cockpit",
+      "/clinic/encounters",
+      "/clinic/patients",
+      "/clinic/registrations",
+      "/documents",
+      "/documents/detail",
+      "/documents/new",
+      "/masterdata/parties",
+      "/masterdata/parties/detail",
+      "/masterdata/parties/form",
+      "/monitoring"
+    ],
+    "user_view_keys": [
+      "clinic.encounters.list",
+      "clinic.patients.list",
+      "clinic.registrations.list",
+      "documents.requests.detail",
+      "documents.requests.form",
+      "documents.requests.list",
+      "masterdata.parties.detail",
+      "masterdata.parties.form",
+      "masterdata.parties.list",
+      "monitoring.overview"
+    ]
+  }
+}

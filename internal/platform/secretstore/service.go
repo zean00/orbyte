@@ -1,9 +1,10 @@
 package secretstore
 
 import (
-	"fmt"
 	"strings"
 	"time"
+
+	"orbyte/internal/platform/shared"
 )
 
 type Service struct {
@@ -29,7 +30,7 @@ func (s *Service) Upsert(name, ref, value string) (Secret, error) {
 	now := time.Now().UTC()
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		ref = fmt.Sprintf("secret:%d", now.UnixNano())
+		ref = shared.NewID("secret")
 	}
 	secret := Secret{
 		Ref:       ref,

@@ -1,0 +1,10 @@
+flowchart TD
+    U[Users and External Systems] --> H[HTTP APIs and MCP]
+    H --> K[Orbyte Kernel]
+    K --> M[Business Modules]
+    K --> A[Async Runtime]
+    K --> P[(PostgreSQL)]
+    A --> P
+    A --> T[Typesense]
+    A --> N[NATS]
+    A --> S[SMTP / Object Store]

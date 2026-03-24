@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +16,7 @@ import (
 	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/policy"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/secretstore"
 	"orbyte/internal/platform/shared"
 )
@@ -141,7 +140,7 @@ func (s *Service) RetryPolicy() RetryPolicy {
 }
 
 func defaultHTTPClient() *http.Client {
-	return &http.Client{Timeout: envDurationSeconds("APP_INTEGRATION_HTTP_TIMEOUT_SECONDS", 15*time.Second)}
+	return &http.Client{Timeout: runtimeconfig.Current().IntegrationHTTPTimeout()}
 }
 
 func (s *Service) AttachPolicy(policySvc *policy.Service) {
@@ -420,7 +419,7 @@ func (s *Service) CreateDelivery(record SubmissionRecord) (SubmissionRecord, err
 		}
 	}
 	now := time.Now().UTC()
-	record.ID = fmt.Sprintf("sub:%d", now.UnixNano())
+	record.ID = shared.NewID("sub")
 	record.ExternalSystemKey = system.Key
 	record.EndpointKey = endpoint.Key
 	record.ContractKey = contract.Key
@@ -490,7 +489,7 @@ func (s *Service) ProcessSubmission(id string) (SubmissionRecord, error) {
 	record.Terminal = false
 	record.ValidationIssues = nil
 	_ = s.repo.SaveSubmissionAttempt(encodeSubmissionAttemptRuntime(SubmissionAttempt{
-		ID:           fmt.Sprintf("attempt:%s:%d", record.ID, record.AttemptCount),
+		ID:           shared.ChildID("attempt", record.ID),
 		SubmissionID: record.ID,
 		Attempt:      record.AttemptCount,
 		Status:       "succeeded",
@@ -887,7 +886,7 @@ func (s *Service) failSubmission(record SubmissionRecord, failure submissionFail
 		_ = s.repo.SaveDeadLetter(encodeDeadLetterRuntime(dead))
 	}
 	_ = s.repo.SaveSubmissionAttempt(encodeSubmissionAttemptRuntime(SubmissionAttempt{
-		ID:              fmt.Sprintf("attempt:%s:%d", record.ID, record.AttemptCount),
+		ID:              shared.ChildID("attempt", record.ID),
 		SubmissionID:    record.ID,
 		Attempt:         record.AttemptCount,
 		Status:          record.Status,
@@ -1413,16 +1412,4 @@ func firstNonEmptyString(value any, fallback string) string {
 		return strings.TrimSpace(text)
 	}
 	return fallback
-}
-
-func envDurationSeconds(key string, fallback time.Duration) time.Duration {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(raw)
-	if err != nil || parsed < 0 {
-		return fallback
-	}
-	return time.Duration(parsed) * time.Second
 }

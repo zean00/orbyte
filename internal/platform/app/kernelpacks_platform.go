@@ -1,0 +1,45 @@
+package app
+
+import (
+	"time"
+
+	"orbyte/internal/platform/config"
+	"orbyte/internal/platform/module"
+)
+
+func referenceMasterdataKernelPackManifests() []module.Manifest {
+	seededAt := time.Now().UTC()
+	return []module.Manifest{
+		referenceMasterdataKernelPackManifest(seededAt),
+	}
+}
+
+func masterdataKernelPackManifests() []module.Manifest {
+	return []module.Manifest{masterdataKernelPackManifest()}
+}
+
+func platformCoreKernelPackManifests() []module.Manifest {
+	httpDefinition, _ := config.NewService().Definition("platform.http")
+	return []module.Manifest{platformCoreKernelPackManifest(httpDefinition)}
+}
+
+func identityKernelPackManifests() []module.Manifest {
+	authDefinition, _ := config.NewService().Definition("identity.auth")
+	return []module.Manifest{identityKernelPackManifest(authDefinition)}
+}
+
+func documentsKernelPackManifests() []module.Manifest {
+	return []module.Manifest{documentsKernelPackManifest()}
+}
+
+func analyticsKernelPackManifests() []module.Manifest {
+	return []module.Manifest{analyticsKernelPackManifest()}
+}
+
+func monitoringKernelPackManifests() []module.Manifest {
+	return []module.Manifest{monitoringKernelPackManifest()}
+}
+
+func integrationKernelPackManifests() []module.Manifest {
+	return []module.Manifest{integrationKernelPackManifest()}
+}
