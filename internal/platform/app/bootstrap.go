@@ -22,100 +22,185 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
+type KernelInstallContext struct {
+	ConfigSvc         *config.Service
+	IdentitySvc       *identity.Service
+	ModuleSvc         *module.Service
+	ModelSvc          *model.Service
+	ReportingSvc      *reporting.Service
+	TemplateSvc       *templateoutput.Service
+	ReferenceSvc      *reference.Service
+	SearchSvc         *search.Service
+	DocumentSvc       *document.Service
+	WorkflowSvc       *workflow.Service
+	PolicySvc         *policy.Service
+	BusinessManifests []module.Manifest
+	BootstrapPassword string
+	Manifests         []module.Manifest
+}
+
+type KernelInstaller interface {
+	Install(*KernelInstallContext) error
+}
+
 func seedPlatformKernel(configSvc *config.Service, identitySvc *identity.Service, moduleSvc *module.Service, modelSvc *model.Service, reportingSvc *reporting.Service, templateSvc *templateoutput.Service, referenceSvc *reference.Service, searchSvc *search.Service, documentSvc *document.Service, workflowSvc *workflow.Service, policySvc *policy.Service, businessManifests []module.Manifest, bootstrapPassword string) error {
-	manifests := append(builtInModuleManifests(), businessManifests...)
-	for _, def := range config.BuiltInDefinitions() {
-		if err := configSvc.RegisterDefinition(def); err != nil {
+	ctx := &KernelInstallContext{
+		ConfigSvc:         configSvc,
+		IdentitySvc:       identitySvc,
+		ModuleSvc:         moduleSvc,
+		ModelSvc:          modelSvc,
+		ReportingSvc:      reportingSvc,
+		TemplateSvc:       templateSvc,
+		ReferenceSvc:      referenceSvc,
+		SearchSvc:         searchSvc,
+		DocumentSvc:       documentSvc,
+		WorkflowSvc:       workflowSvc,
+		PolicySvc:         policySvc,
+		BusinessManifests: append([]module.Manifest(nil), businessManifests...),
+		BootstrapPassword: bootstrapPassword,
+		Manifests:         append(builtInModuleManifests(), businessManifests...),
+	}
+	for _, installer := range kernelInstallers() {
+		if err := installer.Install(ctx); err != nil {
 			return err
 		}
 	}
-	for _, manifest := range manifests {
-		if err := moduleSvc.Register(manifest, "system"); err != nil {
+	return nil
+}
+
+func kernelInstallers() []KernelInstaller {
+	return []KernelInstaller{
+		moduleAndConfigInstaller{},
+		configEntryInstaller{},
+		referenceInstaller{},
+		contentInstaller{},
+		identityBootstrapInstaller{},
+		securityInstaller{},
+		modelSeedInstaller{},
+		documentExtensionInstaller{},
+	}
+}
+
+type moduleAndConfigInstaller struct{}
+
+func (moduleAndConfigInstaller) Install(ctx *KernelInstallContext) error {
+	for _, def := range config.BuiltInDefinitions() {
+		if err := ctx.ConfigSvc.RegisterDefinition(def); err != nil {
+			return err
+		}
+	}
+	for _, manifest := range ctx.Manifests {
+		if err := ctx.ModuleSvc.Register(manifest, "system"); err != nil {
 			return err
 		}
 		for _, def := range manifest.ConfigDefinitions {
-			if err := configSvc.RegisterDefinition(def); err != nil {
+			if err := ctx.ConfigSvc.RegisterDefinition(def); err != nil {
 				return err
 			}
 		}
 	}
+	return nil
+}
+
+type configEntryInstaller struct{}
+
+func (configEntryInstaller) Install(ctx *KernelInstallContext) error {
 	for _, entry := range config.BuiltInEntries(time.Now().UTC()) {
-		if _, ok := configSvc.Get(entry.Key); !ok {
-			if err := configSvc.Save(entry); err != nil {
-				return err
-			}
+		if _, ok := ctx.ConfigSvc.Get(entry.Key); ok {
+			continue
+		}
+		if err := ctx.ConfigSvc.Save(entry); err != nil {
+			return err
 		}
 	}
-	for _, manifest := range manifests {
+	return nil
+}
+
+type referenceInstaller struct{}
+
+func (referenceInstaller) Install(ctx *KernelInstallContext) error {
+	for _, manifest := range ctx.Manifests {
 		for _, def := range manifest.ReferenceTypes {
-			if err := ignoreConflict(referenceSvc.RegisterType(def)); err != nil {
+			if err := ignoreConflict(ctx.ReferenceSvc.RegisterType(def)); err != nil {
 				return err
 			}
 		}
 		for _, record := range manifest.ReferenceRecords {
-			if err := ignoreConflict(referenceSvc.UpsertRecord(record)); err != nil {
+			if err := ignoreConflict(ctx.ReferenceSvc.UpsertRecord(record)); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+type contentInstaller struct{}
+
+func (contentInstaller) Install(ctx *KernelInstallContext) error {
+	for _, manifest := range ctx.Manifests {
 		for _, def := range manifest.Models {
-			if err := ignoreConflict(modelSvc.Register(def)); err != nil {
+			if err := ignoreConflict(ctx.ModelSvc.Register(def)); err != nil {
 				return err
 			}
 		}
 		for _, def := range manifest.Documents {
-			if err := ignoreConflict(documentSvc.Register(def)); err != nil {
+			if err := ignoreConflict(ctx.DocumentSvc.Register(def)); err != nil {
 				return err
 			}
 		}
 		for _, def := range manifest.Workflows {
-			if err := ignoreConflict(workflowSvc.Register(def)); err != nil {
+			if err := ignoreConflict(ctx.WorkflowSvc.Register(def)); err != nil {
 				return err
 			}
 		}
 		for _, index := range manifest.SearchIndexes {
-			if err := ignoreConflict(searchSvc.RegisterIndex(index)); err != nil {
+			if err := ignoreConflict(ctx.SearchSvc.RegisterIndex(index)); err != nil {
 				return err
 			}
 		}
 		for _, dataset := range manifest.Datasets {
-			if err := ignoreConflict(reportingSvc.Register(reporting.DatasetDefinition{
-				Key:        dataset.Key,
-				Title:      dataset.Title,
-				SourceKind: dataset.SourceKind,
-				ModelKey:   dataset.ModelKey,
-				Dimensions: datasetDimensions(dataset.Dimensions),
-				Measures:   datasetMeasures(dataset.Measures),
-			})); err != nil {
+			if err := ignoreConflict(ctx.ReportingSvc.Register(reportingDatasetDefinition(dataset))); err != nil {
 				return err
 			}
 		}
 		for _, def := range manifest.Templates {
-			if err := ignoreConflict(templateSvc.RegisterDefinition(templateoutput.FromModule(def, manifest.Key))); err != nil {
+			if err := ignoreConflict(ctx.TemplateSvc.RegisterDefinition(templateDefinitionFromModule(def, manifest.Key))); err != nil {
 				return err
 			}
 		}
 	}
-	if err := identitySvc.SeedBootstrapData(bootstrapPassword); err != nil {
+	return nil
+}
+
+type identityBootstrapInstaller struct{}
+
+func (identityBootstrapInstaller) Install(ctx *KernelInstallContext) error {
+	if err := ctx.IdentitySvc.SeedBootstrapData(ctx.BootstrapPassword); err != nil {
 		return err
 	}
-	if err := identitySvc.EnsureBootstrapAdminCredential(bootstrapPassword); err != nil {
-		return err
-	}
-	if err := seedModuleContracts(identitySvc, policySvc, manifests); err != nil {
-		return err
-	}
-	seedModelRules(modelSvc)
-	seedModelData(modelSvc)
-	for _, manifest := range manifests {
+	return ctx.IdentitySvc.EnsureBootstrapAdminCredential(ctx.BootstrapPassword)
+}
+
+type securityInstaller struct{}
+
+func (securityInstaller) Install(ctx *KernelInstallContext) error {
+	return seedModuleContracts(ctx.IdentitySvc, ctx.PolicySvc, ctx.Manifests)
+}
+
+type modelSeedInstaller struct{}
+
+func (modelSeedInstaller) Install(ctx *KernelInstallContext) error {
+	seedModelRules(ctx.ModelSvc)
+	seedModelData(ctx.ModelSvc)
+	return nil
+}
+
+type documentExtensionInstaller struct{}
+
+func (documentExtensionInstaller) Install(ctx *KernelInstallContext) error {
+	for _, manifest := range ctx.Manifests {
 		for _, extension := range manifest.DocumentExtensions {
-			if err := ignoreConflict(documentSvc.RegisterExtension(document.ExtensionDefinition{
-				DocumentType:       extension.DocumentType,
-				ModuleKey:          manifest.Key,
-				DisplayName:        extension.DisplayName,
-				SchemaVersion:      extension.SchemaVersion,
-				ReadPermissionKey:  extension.ReadPermissionKey,
-				WritePermissionKey: extension.WritePermissionKey,
-			})); err != nil {
+			if err := ignoreConflict(ctx.DocumentSvc.RegisterExtension(documentExtensionDefinition(extension, manifest.Key))); err != nil {
 				return err
 			}
 		}
@@ -190,6 +275,32 @@ func datasetMeasures(input []module.DatasetMeasure) []reporting.MeasureDefinitio
 		items = append(items, reporting.MeasureDefinition{Key: item.Key, Label: item.Label, Kind: item.Kind, Path: item.Path})
 	}
 	return items
+}
+
+func reportingDatasetDefinition(dataset module.DatasetDefinition) reporting.DatasetDefinition {
+	return reporting.DatasetDefinition{
+		Key:        dataset.Key,
+		Title:      dataset.Title,
+		SourceKind: dataset.SourceKind,
+		ModelKey:   dataset.ModelKey,
+		Dimensions: datasetDimensions(dataset.Dimensions),
+		Measures:   datasetMeasures(dataset.Measures),
+	}
+}
+
+func templateDefinitionFromModule(def module.TemplateDefinition, moduleKey string) templateoutput.Definition {
+	return templateoutput.FromModule(def, moduleKey)
+}
+
+func documentExtensionDefinition(extension module.DocumentExtension, moduleKey string) document.ExtensionDefinition {
+	return document.ExtensionDefinition{
+		DocumentType:       extension.DocumentType,
+		ModuleKey:          moduleKey,
+		DisplayName:        extension.DisplayName,
+		SchemaVersion:      extension.SchemaVersion,
+		ReadPermissionKey:  extension.ReadPermissionKey,
+		WritePermissionKey: extension.WritePermissionKey,
+	}
 }
 
 func seedModuleContracts(identitySvc *identity.Service, policySvc *policy.Service, manifests []module.Manifest) error {

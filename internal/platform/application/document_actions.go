@@ -39,6 +39,9 @@ type DocumentActions struct {
 	runner        *KernelCommandRunner
 	now           func() time.Time
 	autoDispatch  func() bool
+	persistence   *documentPersistenceService
+	artifacts     *workflowArtifactService
+	transitions   *documentTransitionService
 }
 
 func NewDocumentActions(documents *document.Service, workflows *workflow.Service, ident *identity.Service, policySvc *policy.Service, store SubmitStore) *DocumentActions {
@@ -54,6 +57,9 @@ func NewDocumentActions(documents *document.Service, workflows *workflow.Service
 	if provider, ok := store.(interface{ TransactionManager() TransactionManager }); ok {
 		actions.runner = NewKernelCommandRunner(provider.TransactionManager())
 	}
+	actions.persistence = newDocumentPersistenceService(store, actions.runner)
+	actions.artifacts = newWorkflowArtifactService(actions)
+	actions.transitions = newDocumentTransitionService(actions, actions.persistence, actions.artifacts)
 	return actions
 }
 
@@ -72,556 +78,44 @@ func (a *DocumentActions) AttachNotifications(notifications *notification.Servic
 }
 
 func (a *DocumentActions) Submit(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
-	record, err := a.documents.Get(documentID)
-	if err != nil {
-		return document.Record{}, err
-	}
-	if expectedVersion > 0 && record.Header.Version != expectedVersion {
-		return document.Record{}, shared.Conflict("document version mismatch")
-	}
-	if expectedETag != "" && record.Header.ETag != expectedETag {
-		return document.Record{}, shared.Conflict("document etag mismatch")
-	}
-	beforeRecord := cloneDocumentRecord(record)
-	def, err := a.documents.Definition(record.Header.Type)
-	if err != nil {
-		return document.Record{}, err
-	}
-	if def.WorkflowKey == "" {
-		return document.Record{}, shared.Conflict("document type has no workflow binding")
-	}
-	previousVersion := record.Header.Version
-
-	transition, err := a.workflows.Execute(def.WorkflowKey, record.Header.Status, "submit")
-	if err != nil {
-		return document.Record{}, err
-	}
-	transitionDecision, assignmentDecision, slaDecision, err := a.applyWorkflowRuntimeDecisions(record, acting.EffectiveActorID(), "submit", &transition)
-	if err != nil {
-		return document.Record{}, err
-	}
-
-	now := a.currentTime()
-	record.Header.Status = transition.ToState
-	ensureWorkflowBinding(&record, transition.WorkflowKey, transition.WorkflowVersion)
-	a.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "submit", now)
-	record.Header.Version++
-	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = acting.EffectiveActorID()
-	record.Header.UpdatedAt = now
-	record.Header.SubmittedBy = acting.EffectiveActorID()
-	record.Header.SubmittedAt = now
-
-	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-submit:%s:%d", record.Header.ID, record.Header.Version))
-	auditEvent := audit.Event{
-		ID:                fmt.Sprintf("audit:%s", correlationID),
-		Action:            "document.submit",
-		TargetType:        "document",
-		TargetID:          record.Header.ID,
-		ActorID:           acting.ActorID,
-		ActorKind:         "user",
-		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
-		DelegationGrantID: acting.DelegationGrantID,
-		FromState:         transition.FromState,
-		ToState:           transition.ToState,
-		OrganizationID:    record.Header.OrganizationID,
-		LocationID:        record.Header.LocationID,
-		OccurredAt:        now,
-		CorrelationID:     correlationID,
-		ChangeSummary:     documentChangeSummary(beforeRecord, record),
-		Metadata: map[string]any{
-			"document_type":     record.Header.Type,
-			"version":           record.Header.Version,
-			"workflow_key":      transition.WorkflowKey,
-			"workflow_version":  transition.WorkflowVersion,
-			"policy_code":       transitionDecision.Code,
-			"policy_reason":     transitionDecision.Reason,
-			"assignment_policy": decisionSummary(assignmentDecision),
-			"sla_policy":        decisionSummary(slaDecision),
-		},
-	}
-	domainEvent := eventing.Event{
-		ID:             fmt.Sprintf("event:%s", correlationID),
-		Type:           "document.submitted",
-		Version:        1,
-		AggregateType:  "document",
-		AggregateID:    record.Header.ID,
-		ActorID:        acting.ActorID,
-		CorrelationID:  correlationID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		OccurredAt:     now,
-		Payload: map[string]any{
-			"document_id":          record.Header.ID,
-			"document_type":        record.Header.Type,
-			"from_state":           transition.FromState,
-			"to_state":             transition.ToState,
-			"version":              record.Header.Version,
-			"workflow_key":         transition.WorkflowKey,
-			"workflow_version":     transition.WorkflowVersion,
-			"transition_policy":    decisionSummary(transitionDecision),
-			"assignment_policy":    decisionSummary(assignmentDecision),
-			"sla_policy":           decisionSummary(slaDecision),
-			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
-			"effective_user_id":    acting.EffectiveActorID(),
-			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
-			"delegation_grant_id":  acting.DelegationGrantID,
-		},
-	}
-	outboxRecord := eventing.OutboxRecord{
-		ID:        domainEvent.ID + ":outbox",
-		EventID:   domainEvent.ID,
-		EventType: domainEvent.Type,
-		Status:    "pending",
-		CreatedAt: now,
-	}
-	workflowMutation, err := a.buildWorkflowMutation(record, transition, acting.EffectiveActorID(), now, false, "", "")
-	if err != nil {
-		return document.Record{}, err
-	}
-	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
-	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
-		return document.Record{}, err
-	}
-	return record, nil
+	return a.transitions.Submit(documentID, acting, expectedVersion, expectedETag)
 }
 
 func (a *DocumentActions) UpdateDraft(documentID string, acting ActingContext, payload map[string]any, expectedVersion int, expectedETag string) (document.Record, error) {
-	record, err := a.documents.Get(documentID)
-	if err != nil {
-		return document.Record{}, err
-	}
-	beforeRecord := cloneDocumentRecord(record)
-	if record.Header.Status != "draft" {
-		return document.Record{}, shared.Conflict("only draft documents may be updated")
-	}
-	if expectedVersion > 0 && record.Header.Version != expectedVersion {
-		return document.Record{}, shared.Conflict("document version mismatch")
-	}
-	if expectedETag != "" && record.Header.ETag != expectedETag {
-		return document.Record{}, shared.Conflict("document etag mismatch")
-	}
-
-	previousVersion := record.Header.Version
-	now := a.currentTime()
-	record.Header.Version++
-	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = acting.EffectiveActorID()
-	record.Header.UpdatedAt = now
-	record.Body.Payload = mergeBasePayload(record.Body.Payload, payload)
-	record.Body.ContentHash = document.ContentHash(record.Body.Payload)
-
-	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-update:%s:%d", record.Header.ID, record.Header.Version))
-	auditEvent := audit.Event{
-		ID:                fmt.Sprintf("audit:%s", correlationID),
-		Action:            "document.update",
-		TargetType:        "document",
-		TargetID:          record.Header.ID,
-		ActorID:           acting.ActorID,
-		ActorKind:         "user",
-		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
-		DelegationGrantID: acting.DelegationGrantID,
-		FromState:         "draft",
-		ToState:           "draft",
-		OrganizationID:    record.Header.OrganizationID,
-		LocationID:        record.Header.LocationID,
-		OccurredAt:        now,
-		CorrelationID:     correlationID,
-		ChangeSummary:     documentChangeSummary(beforeRecord, record),
-		Metadata: map[string]any{
-			"document_type": record.Header.Type,
-			"version":       record.Header.Version,
-		},
-	}
-	domainEvent := eventing.Event{
-		ID:             fmt.Sprintf("event:%s", correlationID),
-		Type:           "document.updated",
-		Version:        1,
-		AggregateType:  "document",
-		AggregateID:    record.Header.ID,
-		ActorID:        acting.ActorID,
-		CorrelationID:  correlationID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		OccurredAt:     now,
-		Payload: map[string]any{
-			"document_id":          record.Header.ID,
-			"document_type":        record.Header.Type,
-			"status":               record.Header.Status,
-			"version":              record.Header.Version,
-			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
-			"effective_user_id":    acting.EffectiveActorID(),
-			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
-			"delegation_grant_id":  acting.DelegationGrantID,
-		},
-	}
-	outboxRecord := eventing.OutboxRecord{
-		ID:        domainEvent.ID + ":outbox",
-		EventID:   domainEvent.ID,
-		EventType: domainEvent.Type,
-		Status:    "pending",
-		CreatedAt: now,
-	}
-	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflow.Mutation{}, true); err != nil {
-		return document.Record{}, err
-	}
-	return record, nil
+	return a.transitions.UpdateDraft(documentID, acting, payload, expectedVersion, expectedETag)
 }
 
 func (a *DocumentActions) UpdateExtension(documentID, moduleKey string, acting ActingContext, extensionPayload map[string]any, expectedVersion int, expectedETag string) (document.Record, error) {
-	record, err := a.documents.Get(documentID)
-	if err != nil {
-		return document.Record{}, err
-	}
-	beforeRecord := cloneDocumentRecord(record)
-	if record.Header.Status != "draft" {
-		return document.Record{}, shared.Conflict("only draft documents may be extended")
-	}
-	if expectedVersion > 0 && record.Header.Version != expectedVersion {
-		return document.Record{}, shared.Conflict("document version mismatch")
-	}
-	if expectedETag != "" && record.Header.ETag != expectedETag {
-		return document.Record{}, shared.Conflict("document etag mismatch")
-	}
-	if !hasDocumentExtension(a.documents.ExtensionDefinitions(record.Header.Type), moduleKey) {
-		return document.Record{}, shared.Validation("document extension is not registered")
-	}
-
-	previousVersion := record.Header.Version
-	now := a.currentTime()
-	record.Header.Version++
-	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = acting.EffectiveActorID()
-	record.Header.UpdatedAt = now
-	record.Body.Payload = document.SetExtensionPayload(record.Body.Payload, moduleKey, extensionPayload)
-	record.Body.ContentHash = document.ContentHash(record.Body.Payload)
-
-	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-extension-update:%s:%s:%d", moduleKey, record.Header.ID, record.Header.Version))
-	auditEvent := audit.Event{
-		ID:                fmt.Sprintf("audit:%s", correlationID),
-		Action:            "document.extension.update",
-		TargetType:        "document",
-		TargetID:          record.Header.ID,
-		ActorID:           acting.ActorID,
-		ActorKind:         "user",
-		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
-		DelegationGrantID: acting.DelegationGrantID,
-		FromState:         record.Header.Status,
-		ToState:           record.Header.Status,
-		OrganizationID:    record.Header.OrganizationID,
-		LocationID:        record.Header.LocationID,
-		OccurredAt:        now,
-		CorrelationID:     correlationID,
-		ChangeSummary:     documentChangeSummary(beforeRecord, record),
-		Metadata: map[string]any{
-			"document_type": record.Header.Type,
-			"module_key":    moduleKey,
-			"version":       record.Header.Version,
-		},
-	}
-	domainEvent := eventing.Event{
-		ID:             fmt.Sprintf("event:%s", correlationID),
-		Type:           "document.extension.updated",
-		Version:        1,
-		AggregateType:  "document",
-		AggregateID:    record.Header.ID,
-		ActorID:        acting.ActorID,
-		CorrelationID:  correlationID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		OccurredAt:     now,
-		Payload: map[string]any{
-			"document_id":          record.Header.ID,
-			"document_type":        record.Header.Type,
-			"module_key":           moduleKey,
-			"status":               record.Header.Status,
-			"version":              record.Header.Version,
-			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
-			"effective_user_id":    acting.EffectiveActorID(),
-			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
-			"delegation_grant_id":  acting.DelegationGrantID,
-		},
-	}
-	outboxRecord := eventing.OutboxRecord{
-		ID:        domainEvent.ID + ":outbox",
-		EventID:   domainEvent.ID,
-		EventType: domainEvent.Type,
-		Status:    "pending",
-		CreatedAt: now,
-	}
-	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflow.Mutation{}, true); err != nil {
-		return document.Record{}, err
-	}
-	return record, nil
+	return a.transitions.UpdateExtension(documentID, moduleKey, acting, extensionPayload, expectedVersion, expectedETag)
 }
 
 func (a *DocumentActions) Approve(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
-	record, err := a.documents.Get(documentID)
-	if err != nil {
-		return document.Record{}, err
-	}
-	beforeRecord := cloneDocumentRecord(record)
-	if expectedVersion > 0 && record.Header.Version != expectedVersion {
-		return document.Record{}, shared.Conflict("document version mismatch")
-	}
-	if expectedETag != "" && record.Header.ETag != expectedETag {
-		return document.Record{}, shared.Conflict("document etag mismatch")
-	}
-	def, err := a.documents.Definition(record.Header.Type)
-	if err != nil {
-		return document.Record{}, err
-	}
-	transition, err := a.workflows.Execute(def.WorkflowKey, record.Header.Status, "approve")
-	if err != nil {
-		return document.Record{}, err
-	}
-	if boundVersion := boundWorkflowVersion(record); boundVersion > 0 {
-		transition, err = a.workflows.ExecuteVersion(def.WorkflowKey, boundVersion, record.Header.Status, "approve")
-		if err != nil {
-			return document.Record{}, err
-		}
-	}
-	transitionDecision, assignmentDecision, slaDecision, err := a.applyWorkflowRuntimeDecisions(record, acting.EffectiveActorID(), "approve", &transition)
-	if err != nil {
-		return document.Record{}, err
-	}
-	previousVersion := record.Header.Version
-	now := a.currentTime()
-	record.Header.Status = transition.ToState
-	ensureWorkflowBinding(&record, transition.WorkflowKey, transition.WorkflowVersion)
-	a.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "approve", now)
-	record.Header.Version++
-	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = acting.EffectiveActorID()
-	record.Header.UpdatedAt = now
-
-	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-approve:%s:%d", record.Header.ID, record.Header.Version))
-	auditEvent := audit.Event{
-		ID:                fmt.Sprintf("audit:%s", correlationID),
-		Action:            "document.approve",
-		TargetType:        "document",
-		TargetID:          record.Header.ID,
-		ActorID:           acting.ActorID,
-		ActorKind:         "user",
-		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
-		DelegationGrantID: acting.DelegationGrantID,
-		FromState:         transition.FromState,
-		ToState:           transition.ToState,
-		OrganizationID:    record.Header.OrganizationID,
-		LocationID:        record.Header.LocationID,
-		OccurredAt:        now,
-		CorrelationID:     correlationID,
-		ChangeSummary:     documentChangeSummary(beforeRecord, record),
-		Metadata: map[string]any{
-			"document_type":     record.Header.Type,
-			"version":           record.Header.Version,
-			"workflow_key":      transition.WorkflowKey,
-			"workflow_version":  transition.WorkflowVersion,
-			"policy_code":       transitionDecision.Code,
-			"policy_reason":     transitionDecision.Reason,
-			"assignment_policy": decisionSummary(assignmentDecision),
-			"sla_policy":        decisionSummary(slaDecision),
-		},
-	}
-	domainEvent := eventing.Event{
-		ID:             fmt.Sprintf("event:%s", correlationID),
-		Type:           "document.approved",
-		Version:        1,
-		AggregateType:  "document",
-		AggregateID:    record.Header.ID,
-		ActorID:        acting.ActorID,
-		CorrelationID:  correlationID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		OccurredAt:     now,
-		Payload: map[string]any{
-			"document_id":          record.Header.ID,
-			"document_type":        record.Header.Type,
-			"from_state":           transition.FromState,
-			"to_state":             transition.ToState,
-			"version":              record.Header.Version,
-			"workflow_key":         transition.WorkflowKey,
-			"workflow_version":     transition.WorkflowVersion,
-			"transition_policy":    decisionSummary(transitionDecision),
-			"assignment_policy":    decisionSummary(assignmentDecision),
-			"sla_policy":           decisionSummary(slaDecision),
-			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
-			"effective_user_id":    acting.EffectiveActorID(),
-			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
-			"delegation_grant_id":  acting.DelegationGrantID,
-		},
-	}
-	outboxRecord := eventing.OutboxRecord{
-		ID:        domainEvent.ID + ":outbox",
-		EventID:   domainEvent.ID,
-		EventType: domainEvent.Type,
-		Status:    "pending",
-		CreatedAt: now,
-	}
-	workflowMutation, err := a.buildWorkflowMutation(record, transition, acting.EffectiveActorID(), now, true, "approved", "completed")
-	if err != nil {
-		return document.Record{}, err
-	}
-	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
-	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
-		return document.Record{}, err
-	}
-	return record, nil
+	return a.transitions.Approve(documentID, acting, expectedVersion, expectedETag)
 }
 
 func (a *DocumentActions) persistDocument(previousVersion int, record document.Record, auditEvent audit.Event, domainEvent eventing.Event, outboxRecord eventing.OutboxRecord, workflowMutation workflow.Mutation, draft bool) error {
-	if a.runner != nil {
-		_, err := RunKernelCommand(context.Background(), a.runner, documentPersistCommand{
-			previousVersion:  previousVersion,
-			record:           record,
-			auditEvent:       auditEvent,
-			domainEvent:      domainEvent,
-			outboxRecord:     outboxRecord,
-			workflowMutation: workflowMutation,
-		})
-		if err == nil && !draft {
-			now := a.currentTime()
-			a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, now)
-			a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, now)
-		}
+	result, err := a.persistence.Persist(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, draft)
+	if err != nil {
 		return err
 	}
-	if draft {
-		return a.store.UpdateDraft(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
-	}
-	err := a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
-	if err == nil {
-		now := a.currentTime()
-		a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, now)
-		a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, now)
-	}
-	return err
+	a.artifacts.Publish(result)
+	return nil
 }
 
 func (a *DocumentActions) Reject(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, acting, expectedVersion, expectedETag, "reject", "document.reject")
+	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, "reject", "document.reject")
 }
 
 func (a *DocumentActions) Reopen(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, acting, expectedVersion, expectedETag, "reopen", "document.reopened")
+	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, "reopen", "document.reopened")
 }
 
 func (a *DocumentActions) Cancel(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
-	return a.transitionDocument(documentID, acting, expectedVersion, expectedETag, "cancel", "document.cancelled")
+	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, "cancel", "document.cancelled")
 }
 
 func (a *DocumentActions) transitionDocument(documentID string, acting ActingContext, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
-	record, err := a.documents.Get(documentID)
-	if err != nil {
-		return document.Record{}, err
-	}
-	beforeRecord := cloneDocumentRecord(record)
-	if expectedVersion > 0 && record.Header.Version != expectedVersion {
-		return document.Record{}, shared.Conflict("document version mismatch")
-	}
-	if expectedETag != "" && record.Header.ETag != expectedETag {
-		return document.Record{}, shared.Conflict("document etag mismatch")
-	}
-	def, err := a.documents.Definition(record.Header.Type)
-	if err != nil {
-		return document.Record{}, err
-	}
-	transition, err := a.workflows.Execute(def.WorkflowKey, record.Header.Status, action)
-	if err != nil {
-		return document.Record{}, err
-	}
-	if boundVersion := boundWorkflowVersion(record); boundVersion > 0 {
-		transition, err = a.workflows.ExecuteVersion(def.WorkflowKey, boundVersion, record.Header.Status, action)
-		if err != nil {
-			return document.Record{}, err
-		}
-	}
-	transitionDecision, assignmentDecision, slaDecision, err := a.applyWorkflowRuntimeDecisions(record, acting.EffectiveActorID(), action, &transition)
-	if err != nil {
-		return document.Record{}, err
-	}
-	previousVersion := record.Header.Version
-	now := a.currentTime()
-	workflowMutation := workflow.Mutation{}
-	if action == "reject" || action == "cancel" {
-		workflowMutation = a.workflows.PlanResolveArtifacts(documentID, transition.ToState, "cancelled", acting.EffectiveActorID(), now)
-	}
-	if transition.TaskType != "" || transition.CreateApproval {
-		createdMutation, err := a.buildWorkflowMutation(record, transition, acting.EffectiveActorID(), now, false, "", "")
-		if err != nil {
-			return document.Record{}, err
-		}
-		mergeWorkflowMutation(&workflowMutation, createdMutation)
-	}
-	record.Header.Status = transition.ToState
-	ensureWorkflowBinding(&record, transition.WorkflowKey, transition.WorkflowVersion)
-	record.Header.Version++
-	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
-	record.Header.UpdatedBy = acting.EffectiveActorID()
-	record.Header.UpdatedAt = now
-
-	correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-%s:%s:%d", action, record.Header.ID, record.Header.Version))
-	auditEvent := audit.Event{
-		ID:                fmt.Sprintf("audit:%s", correlationID),
-		Action:            "document." + action,
-		TargetType:        "document",
-		TargetID:          record.Header.ID,
-		ActorID:           acting.ActorID,
-		ActorKind:         "user",
-		OnBehalfOfUserID:  acting.OnBehalfOfUserID,
-		DelegationGrantID: acting.DelegationGrantID,
-		FromState:         transition.FromState,
-		ToState:           transition.ToState,
-		OrganizationID:    record.Header.OrganizationID,
-		LocationID:        record.Header.LocationID,
-		OccurredAt:        now,
-		CorrelationID:     correlationID,
-		ChangeSummary:     documentChangeSummary(beforeRecord, record),
-		Metadata: map[string]any{
-			"document_type":     record.Header.Type,
-			"version":           record.Header.Version,
-			"workflow_key":      transition.WorkflowKey,
-			"workflow_version":  transition.WorkflowVersion,
-			"policy_code":       transitionDecision.Code,
-			"policy_reason":     transitionDecision.Reason,
-			"assignment_policy": decisionSummary(assignmentDecision),
-			"sla_policy":        decisionSummary(slaDecision),
-		},
-	}
-	domainEvent := eventing.Event{
-		ID:             fmt.Sprintf("event:%s", correlationID),
-		Type:           eventType,
-		Version:        1,
-		AggregateType:  "document",
-		AggregateID:    record.Header.ID,
-		ActorID:        acting.ActorID,
-		CorrelationID:  correlationID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		OccurredAt:     now,
-		Payload: map[string]any{
-			"document_id":          record.Header.ID,
-			"document_type":        record.Header.Type,
-			"from_state":           transition.FromState,
-			"to_state":             transition.ToState,
-			"version":              record.Header.Version,
-			"workflow_key":         transition.WorkflowKey,
-			"workflow_version":     transition.WorkflowVersion,
-			"transition_policy":    decisionSummary(transitionDecision),
-			"assignment_policy":    decisionSummary(assignmentDecision),
-			"sla_policy":           decisionSummary(slaDecision),
-			"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
-			"effective_user_id":    acting.EffectiveActorID(),
-			"on_behalf_of_user_id": acting.OnBehalfOfUserID,
-			"delegation_grant_id":  acting.DelegationGrantID,
-		},
-	}
-	outboxRecord := eventing.OutboxRecord{ID: domainEvent.ID + ":outbox", EventID: domainEvent.ID, EventType: domainEvent.Type, Status: "pending", CreatedAt: now}
-	appendWorkflowHistory(&workflowMutation, buildWorkflowHistoryEvent(record, transition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
-	if err := a.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation, false); err != nil {
-		return document.Record{}, err
-	}
-	return record, nil
+	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, action, eventType)
 }
 
 func (a *DocumentActions) ensureTransitionAllowed(record document.Record, actorID, action string) error {

@@ -8,6 +8,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -188,6 +189,27 @@ func TestSeedPlatformKernelIsIdempotentForRestart(t *testing.T) {
 	}
 	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("second seed failed: %v", err)
+	}
+}
+
+func TestKernelInstallersOrder(t *testing.T) {
+	installers := kernelInstallers()
+	got := make([]string, 0, len(installers))
+	for _, installer := range installers {
+		got = append(got, reflect.TypeOf(installer).Name())
+	}
+	want := []string{
+		"moduleAndConfigInstaller",
+		"configEntryInstaller",
+		"referenceInstaller",
+		"contentInstaller",
+		"identityBootstrapInstaller",
+		"securityInstaller",
+		"modelSeedInstaller",
+		"documentExtensionInstaller",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected installer order\nwant: %+v\ngot:  %+v", want, got)
 	}
 }
 

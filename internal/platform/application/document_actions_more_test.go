@@ -1,11 +1,15 @@
 package application
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"orbyte/internal/platform/activity"
+	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/document"
+	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/organization"
@@ -371,4 +375,84 @@ func TestDocumentActionsWorkflowPolicyRuntimeAndAssignmentFallback(t *testing.T)
 			}
 		}
 	})
+}
+
+type failingSubmitStore struct {
+	err error
+}
+
+func (s failingSubmitStore) Submit(previousVersion int, record document.Record, auditEvent audit.Event, domainEvent eventing.Event, outboxRecord eventing.OutboxRecord, workflowMutation workflow.Mutation) error {
+	return s.err
+}
+
+func (s failingSubmitStore) UpdateDraft(previousVersion int, record document.Record, auditEvent audit.Event, domainEvent eventing.Event, outboxRecord eventing.OutboxRecord, workflowMutation workflow.Mutation) error {
+	return s.err
+}
+
+func TestSubmitDoesNotPublishWorkflowArtifactsWhenPersistenceFails(t *testing.T) {
+	t.Setenv("APP_JWT_SECRET", "test-secret")
+
+	org := organization.NewService()
+	ident := identity.NewService(org)
+	requester, err := ident.CreateUser("requester-fail", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create requester failed: %v", err)
+	}
+	manager, err := ident.CreateUser("manager-fail@example.com", "Password123!", "loc_hq", "role_admin", "deployment", "")
+	if err != nil {
+		t.Fatalf("create manager failed: %v", err)
+	}
+	if _, err := ident.UpsertReportingLine(identity.ReportingLine{
+		SubjectUserID:    requester.ID,
+		ManagerUserID:    manager.ID,
+		RelationshipType: "primary_manager",
+		Status:           "active",
+	}); err != nil {
+		t.Fatalf("save reporting line failed: %v", err)
+	}
+
+	docs := document.NewService()
+	if err := docs.Register(document.Definition{
+		Type:          "linked_request_fail",
+		DisplayName:   "Linked Request Fail",
+		SchemaVersion: "v1",
+		WorkflowKey:   "linked_request_fail_flow",
+	}); err != nil {
+		t.Fatalf("register document definition failed: %v", err)
+	}
+	flows := workflow.NewService()
+	if err := flows.Register(workflow.Definition{
+		Key:    "linked_request_fail_flow",
+		States: []string{"draft", "submitted", "approved"},
+		Actions: []workflow.ActionRule{
+			{Action: "submit", FromState: "draft", ToState: "submitted", CreateApproval: true, TaskType: "review", AssignmentStrategy: "requester_manager", LinkMode: "tokenized", LinkTTLSeconds: 3600, LinkAllowedActions: []string{"approve"}},
+			{Action: "approve", FromState: "submitted", ToState: "approved"},
+		},
+	}); err != nil {
+		t.Fatalf("register workflow failed: %v", err)
+	}
+
+	notifs := notification.NewService()
+	activitySvc := activity.NewService()
+	actions := NewDocumentActions(docs, flows, ident, nil, failingSubmitStore{err: errors.New("submit failed")})
+	actions.AttachNotifications(notifs)
+	actions.AttachActivities(activitySvc)
+
+	record, err := docs.Create("linked_request_fail", "org_default", "loc_hq", requester.ID, map[string]any{"title": "Should fail"})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	if _, err := actions.Submit(record.Header.ID, testActing(requester.ID), record.Header.Version, record.Header.ETag); err == nil || !strings.Contains(err.Error(), "submit failed") {
+		t.Fatalf("expected submit failure, got %v", err)
+	}
+	if len(notifs.List(notification.Filter{})) != 0 {
+		t.Fatalf("expected no notifications after failed persist, got %+v", notifs.List(notification.Filter{}))
+	}
+	if timeline := activitySvc.Timeline("document", record.Header.ID); len(timeline) != 0 {
+		t.Fatalf("expected no activity after failed persist, got %+v", timeline)
+	}
+	if grants := ident.DeepLinkGrants(); len(grants) != 0 {
+		t.Fatalf("expected no deep link grants after failed persist, got %+v", grants)
+	}
 }
