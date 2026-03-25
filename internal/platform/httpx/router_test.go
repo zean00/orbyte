@@ -156,7 +156,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 		MCP: MCPDeps{
 			Identity:         ident,
 			Audit:            auditSvc,
-			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, nil, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, nil),
+			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, docs, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, nil, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, nil),
 			Analytics:        analyticsSvc,
 			AnalyticsStream:  analyticsStream,
 			StreamPath:       analyticsMCPStreamPath,

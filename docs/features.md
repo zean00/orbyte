@@ -26,7 +26,6 @@ This guide summarizes the major capabilities already present in the Orbyte platf
 - service principals for system access
 - delegated execution and acting-context support
 - authentication policy configuration
-- optional Google sign-in
 
 ### Data and Transactions
 
@@ -40,13 +39,11 @@ This guide summarizes the major capabilities already present in the Orbyte platf
 
 - workflow definitions, drafts, versions, and publish flow
 - runtime workflow tasks and approvals
-- reporting-line hierarchy support
 - Rego-backed or code-backed policy hooks
 
 ### Integration
 
 - external systems and endpoints
-- adapter registry
 - contracts and mappings
 - submission tracking
 - retries, dead letters, and replay flow
@@ -77,13 +74,16 @@ This guide summarizes the major capabilities already present in the Orbyte platf
 
 These are especially important if Orbyte is used as a backend for external AI agents:
 
-- stable generic business APIs
-- MCP server and tool catalog
-- permission-aware tool exposure
-- audit trail for machine-invoked actions
-- service-principal access model
+- MCP server and tool catalog with domain-specific operations
+- permission-aware tool exposure filtered by actor permissions
+- audit trail for machine-invocated actions
+- service-principal access model for non-human authentication
 - config and policy control plane
-- structured search interfaces including keyword, vector, and hybrid query modes
+- structured search interfaces including keyword, vector, and hybrid query modes (via direct API)
+- document and model CRUD via MCP tools and HTTP APIs
+- document workflow transitions (submit, approve, reject) via HTTP APIs
+
+Note: AI agents interact with Orbyte through governed MCP tools and HTTP APIs. The platform does not include a built-in autonomous agent. All machine access is authenticated, authorized, and audited.
 
 ## Product Strengths
 

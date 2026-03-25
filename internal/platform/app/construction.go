@@ -233,7 +233,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	if graph.engagement == nil {
 		graph.engagement = engagement.NewService()
 	}
-	graph.mcpServer = mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, graph.otel)
+	graph.mcpServer = mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.documents, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, graph.otel)
 	configureDatabaseHealth(graph.runtimeHealth, postgres, graph.observability)
 	return graph
 }

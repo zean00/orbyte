@@ -2,6 +2,8 @@
 
 This guide describes how Orbyte can be packaged into reference solutions for common enterprise application categories.
 
+**Note:** The sections below describe reference patterns and design guidance. The only currently implemented business module is `clinic_registration` (see Vertical Industry Platform section). All other patterns are guides for building new modules, not pre-built bundles.
+
 ## Why Reference Implementations Matter
 
 A platform becomes easier to adopt when users can see how its generic kernel maps to recognizable product shapes.
@@ -88,9 +90,12 @@ Reference implementations help with:
 
 ## Reference Pattern: Vertical Industry Platform
 
-### Examples
+### Implemented Example
 
-- clinic
+- **clinic** - Full `clinic_registration` module with patient profiles, practitioner profiles, payer profiles, clinic registration documents, clinic encounter documents, and related workflows
+
+### Reference Patterns (Not Yet Implemented)
+
 - field service
 - logistics
 - education operations

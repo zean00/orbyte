@@ -1670,6 +1670,187 @@
       }
     },
     {
+      "name": "document.create",
+      "title": "Create Document",
+      "description": "Create a new document.",
+      "inputSchema": {
+        "properties": {
+          "document_type": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "document_type"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.document.create",
+        "requiredPermissions": [
+          "document.create"
+        ]
+      }
+    },
+    {
+      "name": "document.delete",
+      "title": "Delete Document",
+      "description": "Delete a document by ID.",
+      "inputSchema": {
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.document.delete",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
+      "name": "document.get",
+      "title": "Get Document",
+      "description": "Get one document by ID.",
+      "inputSchema": {
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.document.get",
+        "requiredPermissions": [
+          "document.read"
+        ]
+      }
+    },
+    {
+      "name": "document.list",
+      "title": "List Documents",
+      "description": "List documents.",
+      "inputSchema": {
+        "properties": {
+          "document_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.document.list",
+        "requiredPermissions": [
+          "document.list"
+        ]
+      }
+    },
+    {
+      "name": "document.type.get",
+      "title": "Get Document Type",
+      "description": "Get one document type definition.",
+      "inputSchema": {
+        "properties": {
+          "document_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_type"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.document.type.get",
+        "requiredPermissions": [
+          "document.read"
+        ]
+      }
+    },
+    {
+      "name": "document.type.list",
+      "title": "List Document Types",
+      "description": "List registered document types.",
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.document.type.list",
+        "requiredPermissions": [
+          "document.list"
+        ]
+      }
+    },
+    {
+      "name": "document.update",
+      "title": "Update Document",
+      "description": "Update an existing document.",
+      "inputSchema": {
+        "properties": {
+          "document": {
+            "type": "object"
+          },
+          "document_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "document"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.document.update",
+        "requiredPermissions": [
+          "document.update_draft"
+        ]
+      }
+    },
+    {
       "name": "engagement.account.list",
       "title": "List Engagement Accounts",
       "description": "List accounts for one engagement subject.",
@@ -3276,6 +3457,49 @@
       }
     },
     {
+      "name": "integration.submission.create",
+      "title": "Create Integration Submission",
+      "description": "Create and queue a new integration submission. Requires confirmation.",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "correlation_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "operation_type": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "system_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "system_key",
+          "operation_type",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.integration.submission.create",
+        "requiredPermissions": [
+          "configuration.manage"
+        ]
+      }
+    },
+    {
       "name": "integration.submission.get",
       "title": "Get Integration Submission",
       "description": "Inspect one integration submission.",
@@ -3843,6 +4067,50 @@
         "auditAction": "mcp.tool.search.consistency.get",
         "requiredPermissions": [
           "search.manage"
+        ]
+      }
+    },
+    {
+      "name": "search.query",
+      "title": "Query Search Index",
+      "description": "Query documents using keyword, vector, or hybrid search modes.",
+      "inputSchema": {
+        "properties": {
+          "filters": {
+            "type": "object"
+          },
+          "index_key": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          },
+          "vector_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_key"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.search.query",
+        "requiredPermissions": [
+          "configuration.read"
         ]
       }
     },

@@ -62,8 +62,11 @@ Best for:
 
 ## Suggested Bundle Shapes
 
-### ERP Starter Pack
+The following bundles are reference patterns for building industry-specific solutions. Not all are currently implemented as installable modules.
 
+### ERP Starter Pack (Reference Pattern)
+
+Target modules:
 - master data
 - procurement
 - sales
@@ -71,20 +74,26 @@ Best for:
 - approval workflows
 - accounting connector baseline
 
-### POS Starter Pack
+### POS Starter Pack (Reference Pattern)
 
+Target modules:
 - catalog
 - branch configuration
 - transaction documents
 - offline sync support
 - payment and back-office connectors
 
-### MIS Starter Pack
+### MIS Starter Pack (Reference Pattern)
 
+Target modules:
 - service requests
 - approval routing
 - dashboard and report baseline
 - communication and case management modules
+
+### Currently Implemented Bundles
+
+- **Clinic Starter Pack** - Full implementation with patient/practitioner profiles, clinic registration, and encounter workflows (`clinic_registration` module)
 
 ## Packaging Principles
 

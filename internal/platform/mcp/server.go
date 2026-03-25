@@ -14,6 +14,7 @@ import (
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
+	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/engagement"
 	"orbyte/internal/platform/eventing"
 	"orbyte/internal/platform/featureflags"
@@ -92,6 +93,7 @@ type Server struct {
 	config                    *config.Service
 	flags                     *featureflags.Service
 	integration               *integration.Service
+	documents                 *document.Service
 	reference                 *reference.Service
 	search                    *search.Service
 	policy                    *policy.Service
@@ -113,7 +115,7 @@ type Server struct {
 	otelTracer                trace.Tracer
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string, otelSvc *otel.Service) *Server {
+func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, documentsSvc *document.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string, otelSvc *otel.Service) *Server {
 	server := &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
@@ -123,6 +125,7 @@ func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templat
 		config:                    configSvc,
 		flags:                     flagsSvc,
 		integration:               integrationSvc,
+		documents:                 documentsSvc,
 		reference:                 referenceSvc,
 		search:                    searchSvc,
 		policy:                    policySvc,
@@ -1168,6 +1171,218 @@ func allowsAll(check PermissionChecker, permissions []string) bool {
 		}
 	}
 	return true
+}
+
+func (s *Server) documentTypeList(actor ActorContext, _ map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"document.list"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	items := s.documents.DocumentTypes()
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d document types.", len(items))}},
+		"structuredContent": map[string]any{"items": items},
+	}, true, nil
+}
+
+func (s *Server) documentTypeGet(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"document.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	docType := strings.TrimSpace(stringArg(arguments, "document_type"))
+	if docType == "" {
+		return nil, true, shared.Validation("document_type is required")
+	}
+	def, err := s.documents.Definition(docType)
+	if err != nil {
+		return nil, true, err
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded document type %s.", def.Type)}},
+		"structuredContent": def,
+	}, true, nil
+}
+
+func (s *Server) documentList(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"document.list"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	var docType string
+	if v := stringArg(arguments, "document_type"); v != "" {
+		docType = v
+	}
+	records := s.documents.List()
+	if docType != "" {
+		filtered := make([]document.Record, 0, len(records))
+		for _, r := range records {
+			if r.Header.Type == docType {
+				filtered = append(filtered, r)
+			}
+		}
+		records = filtered
+	}
+	sort.Slice(records, func(i, j int) bool { return records[i].Header.CreatedAt.After(records[j].Header.CreatedAt) })
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d documents.", len(records))}},
+		"structuredContent": map[string]any{"items": records},
+	}, true, nil
+}
+
+func (s *Server) documentGet(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"document.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	docID := strings.TrimSpace(stringArg(arguments, "document_id"))
+	if docID == "" {
+		return nil, true, shared.Validation("document_id is required")
+	}
+	record, err := s.documents.Get(docID)
+	if err != nil {
+		return nil, true, err
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded document %s.", record.Header.ID)}},
+		"structuredContent": record,
+	}, true, nil
+}
+
+func (s *Server) documentCreate(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"document.create"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	docType := strings.TrimSpace(stringArg(arguments, "document_type"))
+	if docType == "" {
+		return nil, true, shared.Validation("document_type is required")
+	}
+	var payload map[string]any
+	_ = decodeOptionalObjectArg(arguments, "payload", &payload)
+	if payload == nil {
+		payload = make(map[string]any)
+	}
+	orgID := firstNonEmpty(stringArg(arguments, "organization_id"), actor.OrganizationID)
+	locID := firstNonEmpty(stringArg(arguments, "location_id"), actor.LocationID)
+	actorID := firstNonEmpty(actor.EffectiveUserID, actor.ActorID)
+	record, err := s.documents.Create(docType, orgID, locID, actorID, payload)
+	if err != nil {
+		return nil, true, err
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created document %s.", record.Header.ID)}},
+		"structuredContent": record,
+	}, true, nil
+}
+
+func (s *Server) documentUpdate(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"document.update_draft"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	docID := strings.TrimSpace(stringArg(arguments, "document_id"))
+	if docID == "" {
+		return nil, true, shared.Validation("document_id is required")
+	}
+	var record document.Record
+	if err := decodeObjectArg(arguments, "document", &record); err != nil {
+		return nil, true, err
+	}
+	if err := s.documents.Save(record); err != nil {
+		return nil, true, err
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Updated document %s.", docID)}},
+		"structuredContent": record,
+	}, true, nil
+}
+
+func (s *Server) documentDelete(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"configuration.manage"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	docID := strings.TrimSpace(stringArg(arguments, "document_id"))
+	if docID == "" {
+		return nil, true, shared.Validation("document_id is required")
+	}
+	if err := s.documents.Delete(docID); err != nil {
+		return nil, true, err
+	}
+	return map[string]any{"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Deleted document %s.", docID)}}}, true, nil
+}
+
+func (s *Server) searchQuery(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"configuration.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	indexKey := strings.TrimSpace(stringArg(arguments, "index_key"))
+	if indexKey == "" {
+		return nil, true, shared.Validation("index_key is required")
+	}
+	var req search.QueryRequest
+	if v := stringArg(arguments, "mode"); v != "" {
+		req.Mode = v
+	}
+	if v := stringArg(arguments, "query"); v != "" {
+		req.Query = v
+	}
+	if v := stringArg(arguments, "vector_text"); v != "" {
+		req.VectorText = v
+	}
+	if v, ok := arguments["filters"]; ok {
+		if filters, ok := v.(map[string]any); ok {
+			req.Filters = make(map[string]string)
+			for k, val := range filters {
+				if s, ok := val.(string); ok {
+					req.Filters[k] = s
+				}
+			}
+		}
+	}
+	if v, ok := arguments["page"]; ok {
+		if n, ok := v.(float64); ok {
+			req.Page = int(n)
+		}
+	}
+	if v, ok := arguments["page_size"]; ok {
+		if n, ok := v.(float64); ok {
+			req.PageSize = int(n)
+		}
+	}
+	orgID := firstNonEmpty(actor.OrganizationID)
+	locID := firstNonEmpty(actor.LocationID)
+	result, err := s.search.Query(indexKey, orgID, locID, req)
+	if err != nil {
+		return nil, true, err
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Search returned %d hits.", result.Total)}},
+		"structuredContent": result,
+	}, true, nil
+}
+
+func (s *Server) integrationSubmissionCreate(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if !allowsAll(actor.PermissionChecker, []string{"configuration.manage"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	systemKey := strings.TrimSpace(stringArg(arguments, "system_key"))
+	if systemKey == "" {
+		return nil, true, shared.Validation("system_key is required")
+	}
+	operationType := strings.TrimSpace(stringArg(arguments, "operation_type"))
+	if operationType == "" {
+		return nil, true, shared.Validation("operation_type is required")
+	}
+	documentID := strings.TrimSpace(stringArg(arguments, "document_id"))
+	correlationID := strings.TrimSpace(stringArg(arguments, "correlation_id"))
+	var payload map[string]any
+	_ = decodeOptionalObjectArg(arguments, "payload", &payload)
+	if payload == nil {
+		payload = make(map[string]any)
+	}
+	record, err := s.integration.CreateSubmission(systemKey, operationType, documentID, correlationID, payload)
+	if err != nil {
+		return nil, true, err
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created integration submission %s.", record.ID)}},
+		"structuredContent": record,
+	}, true, nil
 }
 
 func cloneMap(input map[string]any) map[string]any {
