@@ -43,6 +43,7 @@ import (
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
+	platformotel "orbyte/internal/platform/otel"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
@@ -53,6 +54,9 @@ import (
 	"orbyte/internal/platform/workflow"
 
 	"github.com/lestrrat-go/jwx/v3/jwk"
+	globalotel "go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 type testHarness struct {
@@ -73,7 +77,7 @@ func newTestHarness(t *testing.T) testHarness {
 	return newTestHarnessWithConfig(t, nil)
 }
 
-func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, idempotencySvc *idempotency.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions) http.Handler {
+func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, referenceSvc *reference.Service, docs *document.Service, flows *workflow.Service, auditSvc *audit.Service, eventingSvc *eventing.Service, searchSvc *search.Service, loggerSvc *logging.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, obsSvc *observability.Service, policySvc *policy.Service, integrationSvc *integration.Service, idempotencySvc *idempotency.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, docActions *application.DocumentActions, modelActions *application.ModelActions, otelSvc *platformotel.Service) http.Handler {
 	fieldSecurity := newFieldSecurity(policySvc, reportingSvc)
 	analyticsStream := mcp.NewAnalyticsStream()
 	offlineSvc := offline.NewService(modules, referenceSvc, searchSvc)
@@ -81,7 +85,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 	dataopsSvc.AttachJobs(jobSvc)
 	templateSvc := templateoutput.NewService(docs, reportingSvc)
 	uiPreferences := NewUIPreferencesService()
-	acpSvc := acp.NewService(cfg)
+	acpSvc := acp.NewService(cfg, nil)
 	notificationSvc := notification.NewService()
 	if modules != nil {
 		for _, def := range modules.Templates() {
@@ -152,7 +156,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 		MCP: MCPDeps{
 			Identity:         ident,
 			Audit:            auditSvc,
-			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, nil, analyticsMCPStreamPath, analyticsScopedMCPStreamPath),
+			Server:           mcp.NewServer(modules, analyticsSvc, templateSvc, flows, ident, cfg, flags, integrationSvc, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, nil, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, nil),
 			Analytics:        analyticsSvc,
 			AnalyticsStream:  analyticsStream,
 			StreamPath:       analyticsMCPStreamPath,
@@ -190,7 +194,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 			ACP:           acpSvc,
 			Notifications: notificationSvc,
 		},
-		CrossCutting: CrossCuttingDeps{Config: cfg, Identity: ident, Logger: loggerSvc, Observability: obsSvc, Health: health},
+		CrossCutting: CrossCuttingDeps{Config: cfg, Identity: ident, Logger: loggerSvc, Observability: obsSvc, Health: health, OTel: otelSvc},
 	})
 }
 
@@ -437,7 +441,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router:    newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions),
+		router:    newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions, nil),
 		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
 		csrf:      csrfCookie,
 		ident:     ident,
@@ -456,6 +460,79 @@ func (h testHarness) registerSearchIndex(def search.IndexDefinition) error {
 		return nil
 	}
 	return h.search.RegisterIndex(def)
+}
+
+func TestBuildRouterTracesRejectedRequests(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider()
+	provider.RegisterSpanProcessor(recorder)
+	previousProvider := globalotel.GetTracerProvider()
+	globalotel.SetTracerProvider(provider)
+	defer func() {
+		globalotel.SetTracerProvider(previousProvider)
+		_ = provider.Shutdown(context.Background())
+	}()
+
+	cfg := config.NewService()
+	ident := identity.NewService(organization.NewService())
+	models := model.NewService()
+	docs := document.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	searchSvc := search.NewService()
+	loggerSvc := logging.NewServiceWithWriter(nil)
+	obsSvc := observability.NewService()
+	policySvc := policy.NewServiceWithConfig(cfg)
+	reportingSvc := reporting.NewService(models)
+	monitoringSvc := monitoring.NewService(docs, eventingSvc, flows, searchSvc, obsSvc)
+	analyticsSvc := analytics.NewService(docs, flows, eventingSvc, searchSvc, auditSvc, obsSvc)
+	integrationSvc := integration.NewService(obsSvc, loggerSvc)
+	jobSvc := jobs.NewService()
+	health := runtimehealth.NewTracker()
+	router := newTestRouter(
+		cfg,
+		featureflags.NewService(),
+		organization.NewService(),
+		ident,
+		module.NewService(),
+		models,
+		activity.NewService(),
+		reportingSvc,
+		reference.NewService(),
+		docs,
+		flows,
+		auditSvc,
+		eventingSvc,
+		searchSvc,
+		loggerSvc,
+		analyticsSvc,
+		monitoringSvc,
+		obsSvc,
+		policySvc,
+		integrationSvc,
+		idempotency.NewService(),
+		jobSvc,
+		health,
+		application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)),
+		application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc),
+		platformotel.NewService("orbyte"),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized response, got %d", rr.Code)
+	}
+
+	spans := recorder.Ended()
+	if len(spans) == 0 {
+		t.Fatal("expected rejected request to emit an HTTP server span")
+	}
+	if got := spans[0].Name(); got == "" {
+		t.Fatal("expected HTTP server span to have a non-empty name")
+	}
 }
 
 func builtInTestModuleManifests() []module.Manifest {
@@ -3646,7 +3723,7 @@ func TestReadyzReturnsUnavailableWhenRuntimeHealthIsDegraded(t *testing.T) {
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
 	health.MarkFailure("jobs", errors.New("boom"))
-	router := newTestRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc))
+	router := newTestRouter(cfg, featureflags.NewService(), org, ident, module.NewService(), models, activity.NewService(), reportingSvc, reference.NewService(), docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotency.NewService(), jobSvc, health, application.NewDocumentActions(docs, flows, ident, policySvc, application.NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc)), application.NewMemoryModelActions(models, activity.NewService(), auditSvc, eventingSvc), nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)

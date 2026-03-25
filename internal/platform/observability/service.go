@@ -14,10 +14,20 @@ type Timing struct {
 	AverageMillis float64 `json:"average_millis"`
 }
 
+type Histogram struct {
+	Name    string            `json:"name"`
+	Labels  map[string]string `json:"labels,omitempty"`
+	Count   int64             `json:"count"`
+	Sum     float64           `json:"sum"`
+	Buckets map[string]int64  `json:"buckets"`
+}
+
 type Snapshot struct {
-	Counters map[string]int64  `json:"counters"`
-	Timings  map[string]Timing `json:"timings"`
-	At       time.Time         `json:"at"`
+	Counters   map[string]int64     `json:"counters"`
+	Gauges     map[string]int64     `json:"gauges"`
+	Timings    map[string]Timing    `json:"timings"`
+	Histograms map[string]Histogram `json:"histograms"`
+	At         time.Time            `json:"at"`
 }
 
 type LogRecord struct {
@@ -65,7 +75,9 @@ type ContractStatus struct {
 type Service struct {
 	mu         sync.RWMutex
 	counters   map[string]int64
+	gauges     map[string]int64
 	timings    map[string]timingState
+	histograms map[string]histogramState
 	metrics    map[string]MetricDefinition
 	logs       map[string]LogEventDefinition
 	events     map[string]DomainEventDefinition
@@ -78,10 +90,23 @@ type timingState struct {
 	total time.Duration
 }
 
+type histogramState struct {
+	name    string
+	labels  map[string]string
+	count   int64
+	sum     float64
+	bounds  []float64
+	buckets map[float64]int64
+}
+
+var defaultHistogramBounds = []float64{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000}
+
 func NewService() *Service {
 	return &Service{
 		counters:   map[string]int64{},
+		gauges:     map[string]int64{},
 		timings:    map[string]timingState{},
+		histograms: map[string]histogramState{},
 		metrics:    map[string]MetricDefinition{},
 		logs:       map[string]LogEventDefinition{},
 		events:     map[string]DomainEventDefinition{},
@@ -109,12 +134,45 @@ func (s *Service) Observe(name string, d time.Duration) {
 	s.timings[name] = state
 }
 
+func (s *Service) SetGauge(name string, value int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.gauges[name] = value
+}
+
+func (s *Service) ObserveHistogram(name string, value float64, labels map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seriesKey := histogramSeriesKey(name, labels)
+	state, ok := s.histograms[seriesKey]
+	if !ok {
+		state = histogramState{
+			name:    name,
+			labels:  cloneStringMap(labels),
+			bounds:  defaultHistogramBounds,
+			buckets: make(map[float64]int64),
+		}
+	}
+	state.count++
+	state.sum += value
+	for _, bound := range state.bounds {
+		if value <= bound {
+			state.buckets[bound]++
+		}
+	}
+	s.histograms[seriesKey] = state
+}
+
 func (s *Service) Snapshot() Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	counters := make(map[string]int64, len(s.counters))
 	for k, v := range s.counters {
 		counters[k] = v
+	}
+	gauges := make(map[string]int64, len(s.gauges))
+	for k, v := range s.gauges {
+		gauges[k] = v
 	}
 	timings := make(map[string]Timing, len(s.timings))
 	for k, v := range s.timings {
@@ -124,7 +182,21 @@ func (s *Service) Snapshot() Snapshot {
 		}
 		timings[k] = Timing{Count: v.count, TotalMillis: v.total.Milliseconds(), AverageMillis: avg}
 	}
-	return Snapshot{Counters: counters, Timings: timings, At: time.Now().UTC()}
+	histograms := make(map[string]Histogram, len(s.histograms))
+	for k, v := range s.histograms {
+		buckets := make(map[string]int64, len(v.buckets))
+		for bound, count := range v.buckets {
+			buckets[fmt.Sprintf("%g", bound)] = count
+		}
+		histograms[k] = Histogram{
+			Name:    v.name,
+			Labels:  cloneStringMap(v.labels),
+			Count:   v.count,
+			Sum:     v.sum,
+			Buckets: buckets,
+		}
+	}
+	return Snapshot{Counters: counters, Gauges: gauges, Timings: timings, Histograms: histograms, At: time.Now().UTC()}
 }
 
 func (s *Service) RegisterMetricDefinition(def MetricDefinition) {
@@ -396,6 +468,17 @@ func cloneAnyMap(input map[string]any) map[string]any {
 	return out
 }
 
+func cloneStringMap(input map[string]string) map[string]string {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
 func cloneLogRecord(item LogRecord) LogRecord {
 	item.Fields = cloneAnyMap(item.Fields)
 	return item
@@ -408,7 +491,7 @@ func stringValue(value any) string {
 
 func (s *Service) RenderPrometheus() string {
 	snap := s.Snapshot()
-	lines := make([]string, 0, len(snap.Counters)+len(snap.Timings)*3)
+	lines := make([]string, 0, len(snap.Counters)+len(snap.Gauges)+len(snap.Timings)*3)
 	keys := make([]string, 0, len(snap.Counters))
 	for k := range snap.Counters {
 		keys = append(keys, sanitizeKey(k))
@@ -417,6 +500,15 @@ func (s *Service) RenderPrometheus() string {
 	for _, key := range keys {
 		original := unsanitizeLookup(snap.Counters, key)
 		lines = append(lines, fmt.Sprintf("%s %d", key, snap.Counters[original]))
+	}
+	gaugeKeys := make([]string, 0, len(snap.Gauges))
+	for k := range snap.Gauges {
+		gaugeKeys = append(gaugeKeys, sanitizeKey(k))
+	}
+	sort.Strings(gaugeKeys)
+	for _, key := range gaugeKeys {
+		original := unsanitizeLookup(snap.Gauges, key)
+		lines = append(lines, fmt.Sprintf("%s %d", key, snap.Gauges[original]))
 	}
 	timingKeys := make([]string, 0, len(snap.Timings))
 	for k := range snap.Timings {
@@ -429,6 +521,29 @@ func (s *Service) RenderPrometheus() string {
 		lines = append(lines, fmt.Sprintf("%s_count %d", key, value.Count))
 		lines = append(lines, fmt.Sprintf("%s_total_millis %d", key, value.TotalMillis))
 		lines = append(lines, fmt.Sprintf("%s_average_millis %.2f", key, value.AverageMillis))
+	}
+	histogramKeys := make([]string, 0, len(snap.Histograms))
+	for k := range snap.Histograms {
+		histogramKeys = append(histogramKeys, sanitizeKey(k))
+	}
+	sort.Strings(histogramKeys)
+	for _, key := range histogramKeys {
+		original := unsanitizeHistogramLookup(snap.Histograms, key)
+		h := snap.Histograms[original]
+		metricKey := sanitizeKey(h.Name)
+		lines = append(lines, fmt.Sprintf("%s_count%s %d", metricKey, renderPrometheusLabels(h.Labels, nil), h.Count))
+		lines = append(lines, fmt.Sprintf("%s_sum%s %f", metricKey, renderPrometheusLabels(h.Labels, nil), h.Sum))
+		bucketBounds := make([]string, 0, len(h.Buckets))
+		for boundStr := range h.Buckets {
+			bucketBounds = append(bucketBounds, boundStr)
+		}
+		sort.Slice(bucketBounds, func(i, j int) bool {
+			return bucketBounds[i] < bucketBounds[j]
+		})
+		for _, boundStr := range bucketBounds {
+			lines = append(lines, fmt.Sprintf("%s_bucket%s %d", metricKey, renderPrometheusLabels(h.Labels, map[string]string{"le": boundStr}), h.Buckets[boundStr]))
+		}
+		lines = append(lines, fmt.Sprintf("%s_bucket%s %d", metricKey, renderPrometheusLabels(h.Labels, map[string]string{"le": "+Inf"}), h.Count))
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -454,4 +569,56 @@ func unsanitizeTimingLookup(values map[string]Timing, sanitized string) string {
 		}
 	}
 	return sanitized
+}
+
+func unsanitizeHistogramLookup(values map[string]Histogram, sanitized string) string {
+	for k := range values {
+		if sanitizeKey(k) == sanitized {
+			return k
+		}
+	}
+	return sanitized
+}
+
+func histogramSeriesKey(name string, labels map[string]string) string {
+	if len(labels) == 0 {
+		return name
+	}
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var builder strings.Builder
+	builder.WriteString(name)
+	for _, key := range keys {
+		builder.WriteString("|")
+		builder.WriteString(key)
+		builder.WriteString("=")
+		builder.WriteString(labels[key])
+	}
+	return builder.String()
+}
+
+func renderPrometheusLabels(labels map[string]string, extra map[string]string) string {
+	if len(labels) == 0 && len(extra) == 0 {
+		return ""
+	}
+	merged := cloneStringMap(labels)
+	if merged == nil {
+		merged = map[string]string{}
+	}
+	for key, value := range extra {
+		merged[key] = value
+	}
+	keys := make([]string, 0, len(merged))
+	for key := range merged {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%q", key, merged[key]))
+	}
+	return "{" + strings.Join(parts, ",") + "}"
 }

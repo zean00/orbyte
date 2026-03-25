@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
@@ -21,6 +23,7 @@ import (
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
+	"orbyte/internal/platform/otel"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/runtimehealth"
@@ -107,9 +110,10 @@ type Server struct {
 	builtInToolIndex          map[string]builtInToolRegistration
 	builtInResourceRegistry   []builtInResourceRegistration
 	builtInResourceIndex      map[string]builtInResourceRegistration
+	otelTracer                trace.Tracer
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string) *Server {
+func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string, otelSvc *otel.Service) *Server {
 	server := &Server{
 		modules:                   modules,
 		analytics:                 analyticsSvc,
@@ -133,6 +137,9 @@ func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templat
 		implementation:            NewImplementationService(),
 		analyticsStreamPath:       analyticsStreamPath,
 		analyticsScopedStreamPath: analyticsScopedStreamPath,
+	}
+	if otelSvc != nil {
+		server.otelTracer = otelSvc.Tracer()
 	}
 	server.mustInitBuiltInTools()
 	server.mustInitBuiltInResources()

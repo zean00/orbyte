@@ -24,6 +24,7 @@ import (
 	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
+	"orbyte/internal/platform/otel"
 	"orbyte/internal/platform/organization"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
@@ -190,6 +191,7 @@ type CrossCuttingDeps struct {
 	Logger        *logging.Service
 	Observability *observability.Service
 	Health        *runtimehealth.Tracker
+	OTel          *otel.Service
 }
 
 type DocsDeps struct {

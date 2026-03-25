@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"orbyte/internal/platform/acp"
@@ -32,6 +33,7 @@ import (
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
 	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/otel"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
@@ -84,6 +86,7 @@ type serviceGraph struct {
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
 	queryMonitor      *store.QueryMonitor
+	otel              *otel.Service
 	businessManifests []module.Manifest
 }
 
@@ -108,6 +111,8 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		notifications:     notification.NewService(),
 		businessManifests: append([]module.Manifest(nil), businessManifests...),
 	}
+	graph.otel = otel.NewService("orbyte")
+	acpInstr := acp.NewInstrumentation(graph.observability, graph.otel.Tracer())
 	graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewMemoryRepository(nil), graph.secrets)
 	for _, def := range config.BuiltInDefinitions() {
 		_ = graph.config.RegisterDefinition(def)
@@ -116,7 +121,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		_ = graph.config.Save(entry)
 	}
 	graph.identity = identity.NewService(graph.organization)
-	graph.acp = acp.NewService(graph.config)
+	graph.acp = acp.NewService(graph.config, acpInstr)
 	graph.reporting = reporting.NewService(graph.models)
 	graph.templates = templateoutput.NewService(graph.documents, graph.reporting)
 	graph.policy = policy.NewServiceWithConfig(graph.config)
@@ -181,7 +186,7 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 		graph.fieldSecurity = securityfields.NewService(graph.policy)
 		graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepositoryWithDB(organizationDB))
 		graph.identity = identity.NewServiceWithRepository(graph.organization, identity.NewPostgresRepositoryWithDB(identityDB))
-		graph.acp = acp.NewService(graph.config)
+		graph.acp = acp.NewService(graph.config, acpInstr)
 		graph.modules = module.NewServiceWithRepository(module.NewPostgresRepositoryWithDB(moduleDB))
 		graph.models = model.NewServiceWithRepository(model.NewPostgresRepositoryWithDB(modelDB))
 		graph.activities = activity.NewService()
@@ -228,20 +233,42 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	if graph.engagement == nil {
 		graph.engagement = engagement.NewService()
 	}
-	graph.mcpServer = mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath)
-	configureDatabaseHealth(graph.runtimeHealth, postgres)
+	graph.mcpServer = mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, graph.otel)
+	configureDatabaseHealth(graph.runtimeHealth, postgres, graph.observability)
 	return graph
 }
 
-func configureDatabaseHealth(health *runtimehealth.Tracker, postgres *store.Postgres) {
+func configureDatabaseHealth(health *runtimehealth.Tracker, postgres *store.Postgres, obs *observability.Service) {
 	if health == nil || postgres == nil || postgres.DB == nil {
 		return
 	}
+	var (
+		waitCountMu          sync.Mutex
+		lastObservedWaits    int64
+		waitCountInitialized bool
+	)
 	health.SetChecker(func(ctx context.Context) error {
 		return postgres.DB.PingContext(ctx)
 	})
 	health.SetDBStatsProvider(func() *runtimehealth.DBStats {
 		stats := postgres.DB.Stats()
+		if obs != nil {
+			obs.SetGauge("db.pool.connections.open", int64(stats.OpenConnections))
+			obs.SetGauge("db.pool.connections.in_use", int64(stats.InUse))
+			obs.SetGauge("db.pool.connections.idle", int64(stats.Idle))
+			waitCountMu.Lock()
+			waitDelta := stats.WaitCount
+			if waitCountInitialized {
+				waitDelta = stats.WaitCount - lastObservedWaits
+				if waitDelta < 0 {
+					waitDelta = stats.WaitCount
+				}
+			}
+			lastObservedWaits = stats.WaitCount
+			waitCountInitialized = true
+			waitCountMu.Unlock()
+			obs.Add("db.pool.connections.wait_count", waitDelta)
+		}
 		return &runtimehealth.DBStats{
 			MaxOpenConnections: stats.MaxOpenConnections,
 			OpenConnections:    stats.OpenConnections,

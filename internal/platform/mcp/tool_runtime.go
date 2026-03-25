@@ -6,6 +6,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
@@ -134,7 +139,46 @@ func (s *Server) readResource(actor ActorContext, uri string) ([]ResourceContent
 	}
 }
 
-func (s *Server) callTool(_ context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
+func (s *Server) callTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
+	ctx, span := s.startToolSpan(ctx, actor, name)
+	if span != nil {
+		defer span.End()
+	}
+
+	start := time.Now()
+	result, err := s.executeTool(ctx, actor, name, arguments)
+	duration := time.Since(start)
+
+	status := "success"
+	if err != nil {
+		status = "error"
+		if span != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
+	}
+
+	s.recordToolMetrics(name, status, duration)
+
+	if span != nil {
+		span.SetAttributes(attribute.String("tool.status", status))
+	}
+
+	return result, err
+}
+
+func (s *Server) startToolSpan(ctx context.Context, actor ActorContext, name string) (context.Context, trace.Span) {
+	if s.otelTracer == nil {
+		return ctx, nil
+	}
+	return s.otelTracer.Start(ctx, "mcp.tool.call",
+		trace.WithAttributes(
+			attribute.String("tool.name", name),
+			attribute.String("actor.id", actor.ActorID),
+		),
+	)
+}
+
+func (s *Server) executeTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
 	if s == nil || s.modules == nil {
 		return nil, fmt.Errorf("mcp tools are unavailable")
 	}
@@ -183,4 +227,13 @@ func (s *Server) callTool(_ context.Context, actor ActorContext, name string, ar
 		_ = arguments
 		return nil, fmt.Errorf("unsupported tool operation")
 	}
+}
+
+func (s *Server) recordToolMetrics(name, status string, duration time.Duration) {
+	if s.observability == nil {
+		return
+	}
+	labels := map[string]string{"tool_name": name, "status": status}
+	_ = s.observability.RecordMetric("mcp.tool.calls.total", labels, 1)
+	s.observability.ObserveHistogram("mcp.tool.call.duration.ms", float64(duration.Milliseconds()), map[string]string{"tool_name": name})
 }

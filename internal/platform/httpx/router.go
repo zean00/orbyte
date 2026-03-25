@@ -10,6 +10,7 @@ import (
 
 	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/observability"
+	"orbyte/internal/platform/otel"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/runtimehealth"
@@ -50,7 +51,14 @@ func BuildRouter(deps RouterDeps) http.Handler {
 	registerLocaleRoutes(mux, deps.CrossCutting.Identity)
 	registerUIRoutesWithDeps(mux, deps.UI)
 
-	return withObservability(withAuthentication(withCSRFProtection(mux, deps.CrossCutting.Config), deps.CrossCutting.Identity), deps.CrossCutting.Logger, deps.CrossCutting.Observability)
+	var handler http.Handler = mux
+	handler = withCSRFProtection(handler, deps.CrossCutting.Config)
+	handler = withAuthentication(handler, deps.CrossCutting.Identity)
+	handler = withObservability(handler, deps.CrossCutting.Logger, deps.CrossCutting.Observability)
+	if deps.CrossCutting.OTel != nil {
+		handler = withOTelHTTP(handler, deps.CrossCutting.OTel)
+	}
+	return handler
 }
 
 func newFieldSecurity(policySvc *policy.Service, reportingSvc *reporting.Service) *securityfields.Service {
@@ -168,7 +176,11 @@ func withObservability(next http.Handler, logger *logging.Service, obs *observab
 		duration := time.Since(started)
 		obs.Observe("http.request.duration", duration)
 		obs.Observe("http.route_family."+routeFamily+".request.duration", duration)
-		_ = obs.ObserveMetric("http.request.duration", map[string]string{}, duration)
+		obs.ObserveHistogram("http.request.duration.seconds", duration.Seconds(), map[string]string{
+			"method":      r.Method,
+			"route":       routeFamily,
+			"status_code": strconv.Itoa(rw.status),
+		})
 		_ = obs.EmitLogEvent("http.request.completed", map[string]any{
 			"correlation_id": correlationID,
 			"method":         r.Method,
@@ -222,6 +234,17 @@ func routeFamilyForPath(path string) string {
 	default:
 		return "other"
 	}
+}
+
+func withOTelHTTP(next http.Handler, otelSvc *otel.Service) http.Handler {
+	if otelSvc == nil {
+		return next
+	}
+	return otel.NewHTTPHandler(next, otel.HTTPInstrumentationOptions{
+		Tracer:     otelSvc.Tracer(),
+		Propagator: otelSvc.Propagator(),
+		Operation:  "http.server",
+	})
 }
 
 type statusWriter struct {

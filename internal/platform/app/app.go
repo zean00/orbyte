@@ -29,6 +29,7 @@ import (
 	"orbyte/internal/platform/monitoring"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/organization"
+	otelplatform "orbyte/internal/platform/otel"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
@@ -40,6 +41,7 @@ import (
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -90,6 +92,16 @@ type Options struct {
 
 func New(opts Options) (*App, error) {
 	runtimeSettings := runtimeconfig.Current()
+	traceCloser, err := initializeTracing()
+	if err != nil {
+		return nil, fmt.Errorf("initialize tracing: %w", err)
+	}
+	keepTracing := true
+	defer func() {
+		if keepTracing && traceCloser != nil {
+			_ = traceCloser()
+		}
+	}()
 	databaseURLConfigured := runtimeSettings.DatabaseURL() != ""
 	postgres, err := store.OpenFromEnv()
 	if err != nil {
@@ -126,9 +138,13 @@ func New(opts Options) (*App, error) {
 	}
 	runtime := configureRuntime(graph)
 	closers := configureAdapters(graph)
+	if traceCloser != nil {
+		closers = append(closers, traceCloser)
+	}
 	router := httpx.BuildRouter(routerDeps(graph))
 
 	addr := runtimeSettings.Address()
+	keepTracing = false
 
 	return &App{
 		address:            addr,
@@ -168,6 +184,25 @@ func New(opts Options) (*App, error) {
 		ModelActions:       graph.modelActions,
 		Dispatcher:         runtime.dispatcher,
 	}, nil
+}
+
+func initializeTracing() (func() error, error) {
+	tp, err := otelplatform.InitStdoutTracerProvider(context.Background(), "orbyte", buildVersion())
+	if err != nil {
+		return nil, err
+	}
+	return func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return otelplatform.Shutdown(ctx, tp)
+	}, nil
+}
+
+func buildVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok && strings.TrimSpace(info.Main.Version) != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
 }
 
 func ensureJWTSecret(databaseURLConfigured bool) error {

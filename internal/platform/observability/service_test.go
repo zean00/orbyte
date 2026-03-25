@@ -80,3 +80,29 @@ func TestServiceValidationFailuresAreTracked(t *testing.T) {
 		t.Fatalf("expected event/log failure status, got %+v", byKey["jobs.failed"])
 	}
 }
+
+func TestRenderPrometheusPreservesHistogramLabels(t *testing.T) {
+	svc := NewService()
+
+	svc.ObserveHistogram("http.request.duration.seconds", 0.25, map[string]string{
+		"method":      "GET",
+		"route":       "health",
+		"status_code": "200",
+	})
+	svc.ObserveHistogram("http.request.duration.seconds", 0.50, map[string]string{
+		"method":      "POST",
+		"route":       "documents",
+		"status_code": "201",
+	})
+
+	rendered := svc.RenderPrometheus()
+	if !strings.Contains(rendered, `http_request_duration_seconds_count{method="GET",route="health",status_code="200"} 1`) {
+		t.Fatalf("expected GET histogram series, got %s", rendered)
+	}
+	if !strings.Contains(rendered, `http_request_duration_seconds_count{method="POST",route="documents",status_code="201"} 1`) {
+		t.Fatalf("expected POST histogram series, got %s", rendered)
+	}
+	if !strings.Contains(rendered, `http_request_duration_seconds_bucket{le="+Inf",method="GET",route="health",status_code="200"} 1`) {
+		t.Fatalf("expected +Inf bucket for labeled histogram, got %s", rendered)
+	}
+}

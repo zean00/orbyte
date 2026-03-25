@@ -147,6 +147,7 @@ func routerDeps(graph *serviceGraph) httpx.RouterDeps {
 			Logger:        graph.logger,
 			Observability: graph.observability,
 			Health:        graph.runtimeHealth,
+			OTel:          graph.otel,
 		},
 	}
 }

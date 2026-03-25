@@ -24,7 +24,7 @@ func newACPService(t *testing.T, enabled bool, providersJSON string) *Service {
 			"providers_json": providersJSON,
 		},
 	}}))
-	return NewService(cfg)
+	return NewService(cfg, nil)
 }
 
 func testClientWithResponses(t *testing.T, handler func(message map[string]any, c *acpClient) error) *acpClient {
@@ -81,7 +81,7 @@ func TestProviderConfigsDefaultsAndTrims(t *testing.T) {
 }
 
 func TestListSessionsFiltersAndSorts(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	now := time.Now().UTC()
 	svc.sessions["a"] = &Session{ID: "a", UserID: "user-1", UpdatedAt: now.Add(-time.Minute)}
 	svc.sessions["b"] = &Session{ID: "b", UserID: "user-2", UpdatedAt: now}
@@ -112,7 +112,7 @@ func TestStartSessionValidationAndDisabled(t *testing.T) {
 }
 
 func TestGetSessionReturnsClone(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{
 		ID:            "session-1",
 		Messages:      []Message{{ID: "msg-1", Content: "hello"}},
@@ -132,7 +132,7 @@ func TestGetSessionReturnsClone(t *testing.T) {
 }
 
 func TestSendPromptValidationNotFoundAndSuccess(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	if _, err := svc.SendPrompt("missing", PromptRequest{Content: "hello"}); err == nil {
 		t.Fatal("expected missing session error")
 	}
@@ -179,7 +179,7 @@ func TestSendPromptValidationNotFoundAndSuccess(t *testing.T) {
 }
 
 func TestSendPromptFailureMarksSessionError(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{ID: "session-1", RemoteSession: "remote-1"}
 	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
 		return errors.New("write failed")
@@ -196,7 +196,7 @@ func TestSendPromptFailureMarksSessionError(t *testing.T) {
 }
 
 func TestSubscribeUnsubscribeDoesNotPanicDuringPublish(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{ID: "session-1"}
 
 	ch, unsubscribe := svc.Subscribe("session-1")
@@ -222,7 +222,7 @@ func TestSubscribeUnsubscribeDoesNotPanicDuringPublish(t *testing.T) {
 }
 
 func TestCloseCancelsRuntimeAndClearsMap(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	cancelled := false
 	svc.runtimes["session-1"] = &sessionRuntime{
 		cancel: func() { cancelled = true },
@@ -237,7 +237,7 @@ func TestCloseCancelsRuntimeAndClearsMap(t *testing.T) {
 }
 
 func TestHandleNotificationAndSessionUpdate(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{ID: "session-1"}
 
 	svc.handleNotification("session-1", "session/update", json.RawMessage(`{"sessionId":"remote","update":{"sessionUpdate":"agent_message_chunk","content":{"text":"hello"}}}`))
@@ -256,7 +256,7 @@ func TestHandleNotificationAndSessionUpdate(t *testing.T) {
 }
 
 func TestApprovalResolutionRespondsToClient(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{ID: "session-1"}
 	var mu sync.Mutex
 	var responses []map[string]any
@@ -299,7 +299,7 @@ func TestApprovalResolutionRespondsToClient(t *testing.T) {
 }
 
 func TestRejectResolutionRespondsToClientError(t *testing.T) {
-	svc := NewService(config.NewService())
+	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{ID: "session-1"}
 	var mu sync.Mutex
 	var responses []map[string]any

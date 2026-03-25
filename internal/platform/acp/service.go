@@ -14,12 +14,13 @@ import (
 )
 
 type Service struct {
-	config     *config.Service
-	mu         sync.RWMutex
-	sessions   map[string]*Session
-	runtimes   map[string]*sessionRuntime
-	streams    map[string]map[chan Event]struct{}
-	eventCount int64
+	config         *config.Service
+	instrumentation *Instrumentation
+	mu             sync.RWMutex
+	sessions       map[string]*Session
+	runtimes       map[string]*sessionRuntime
+	streams        map[string]map[chan Event]struct{}
+	eventCount     int64
 }
 
 type sessionRuntime struct {
@@ -27,12 +28,13 @@ type sessionRuntime struct {
 	cancel context.CancelFunc
 }
 
-func NewService(cfg *config.Service) *Service {
+func NewService(cfg *config.Service, instr *Instrumentation) *Service {
 	return &Service{
-		config:   cfg,
-		sessions: map[string]*Session{},
-		runtimes: map[string]*sessionRuntime{},
-		streams:  map[string]map[chan Event]struct{}{},
+		config:         cfg,
+		instrumentation: instr,
+		sessions:       map[string]*Session{},
+		runtimes:       map[string]*sessionRuntime{},
+		streams:        map[string]map[chan Event]struct{}{},
 	}
 }
 
@@ -186,6 +188,9 @@ func (s *Service) StartSession(req StartSessionRequest) (Session, error) {
 	s.sessions[sessionID] = session
 	s.runtimes[sessionID] = &sessionRuntime{client: client, cancel: cancel}
 	s.mu.Unlock()
+	if s.instrumentation != nil {
+		s.instrumentation.RecordSessionStarted()
+	}
 	s.publish(sessionID, "session_started", map[string]any{"provider_key": provider.Key, "remote_session_id": remoteSessionID})
 	return *cloneSession(session), nil
 }
@@ -332,10 +337,15 @@ func (s *Service) Subscribe(sessionID string) (<-chan Event, func()) {
 func (s *Service) Close() error {
 	s.mu.Lock()
 	runtimes := make([]*sessionRuntime, 0, len(s.runtimes))
+	sessions := make([]*Session, 0, len(s.sessions))
 	for _, item := range s.runtimes {
 		runtimes = append(runtimes, item)
 	}
+	for _, item := range s.sessions {
+		sessions = append(sessions, item)
+	}
 	s.runtimes = map[string]*sessionRuntime{}
+	s.sessions = map[string]*Session{}
 	s.mu.Unlock()
 	for _, runtime := range runtimes {
 		if runtime == nil {
@@ -346,6 +356,12 @@ func (s *Service) Close() error {
 		}
 		if runtime.client != nil {
 			_ = runtime.client.close()
+		}
+	}
+	if s.instrumentation != nil {
+		for _, session := range sessions {
+			s.instrumentation.RecordSessionEnded("closed")
+			s.instrumentation.RecordSessionDuration(time.Since(session.CreatedAt))
 		}
 	}
 	return nil
