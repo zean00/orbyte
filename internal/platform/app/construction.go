@@ -91,6 +91,13 @@ type serviceGraph struct {
 }
 
 func constructServiceGraph(postgres *store.Postgres, businessManifests []module.Manifest) *serviceGraph {
+	graph := buildCoreGraph(businessManifests)
+	installPersistence(graph, postgres)
+	finalizeServiceGraph(graph, postgres)
+	return graph
+}
+
+func buildCoreGraph(businessManifests []module.Manifest) *serviceGraph {
 	graph := &serviceGraph{
 		secrets:           secretstore.NewService(),
 		flags:             featureflags.NewService(),
@@ -140,86 +147,93 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	graph.submitStore = application.NewMemorySubmitStore(graph.documents, graph.workflows, graph.audit, graph.eventing)
 	graph.modelActions = application.NewMemoryModelActions(graph.models, graph.activities, graph.audit, graph.eventing)
 	graph.idempotency = idempotency.NewService()
+	return graph
+}
 
-	if postgres != nil && postgres.DB != nil {
-		graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepository(postgres.DB))
-		graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepository(postgres.DB), graph.secrets)
-		dbPolicy := databaseInstrumentationPolicy(graph.config)
-		graph.queryMonitor = store.NewQueryMonitor(graph.observability, store.QueryMonitorOptions{
-			SlowThreshold: dbPolicy.SlowThreshold,
-			TopOperations: dbPolicy.TopOperationsLimit,
-			SlowQueries:   dbPolicy.SlowQueriesLimit,
-		})
-		graph.observability.RegisterLogEventDefinition(observability.LogEventDefinition{
-			Key:            "db.query.slow",
-			Category:       "database",
-			Severity:       "warning",
-			RequiredFields: []string{"operation", "fingerprint", "duration_millis"},
-			ModuleKey:      "platform.core",
-		})
-		flagsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "featureflags", "repository")
-		secretsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "secretstore", "repository")
-		configDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "config", "repository")
-		organizationDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "organization", "repository")
-		identityDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "identity", "repository")
-		moduleDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "module", "repository")
-		modelDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "model", "repository")
-		templateDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "templateoutput", "repository")
-		referenceDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "reference", "repository")
-		documentDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "document", "repository")
-		workflowDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "workflow", "repository")
-		auditDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "audit", "repository")
-		eventingDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "eventing", "repository")
-		jobsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "jobs", "repository")
-		searchDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "search", "repository")
-		analyticsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "analytics", "repository")
-		integrationDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "integration", "repository")
-		idempotencyDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "idempotency", "repository")
-		engagementDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "engagement", "repository")
-		submitDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "application", "submit_store")
-		modelActionsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "application", "model_actions")
-
-		graph.flags = featureflags.NewServiceWithRepository(featureflags.NewPostgresRepositoryWithDB(flagsDB))
-		graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepositoryWithDB(secretsDB))
-		graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepositoryWithDB(configDB), graph.secrets)
-		graph.policy = policy.NewServiceWithConfig(graph.config)
-		graph.fieldSecurity = securityfields.NewService(graph.policy)
-		graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepositoryWithDB(organizationDB))
-		graph.identity = identity.NewServiceWithRepository(graph.organization, identity.NewPostgresRepositoryWithDB(identityDB))
-		graph.acp = acp.NewService(graph.config, acpInstr)
-		graph.modules = module.NewServiceWithRepository(module.NewPostgresRepositoryWithDB(moduleDB))
-		graph.models = model.NewServiceWithRepository(model.NewPostgresRepositoryWithDB(modelDB))
-		graph.activities = activity.NewService()
-		graph.reporting = reporting.NewService(graph.models)
-		graph.templates = templateoutput.NewServiceWithRepository(templateoutput.NewPostgresRepositoryWithDB(templateDB), graph.documents, graph.reporting)
-		graph.reference = reference.NewServiceWithRepository(reference.NewPostgresRepositoryWithDB(referenceDB))
-		graph.documents = document.NewServiceWithRepository(document.NewPostgresRepositoryWithDB(documentDB))
-		graph.workflows = workflow.NewServiceWithRepository(workflow.NewPostgresRepositoryWithDB(workflowDB))
-		graph.audit = audit.NewServiceWithRepository(audit.NewPostgresRepositoryWithDB(auditDB))
-		graph.eventing = eventing.NewServiceWithRepository(eventing.NewPostgresRepositoryWithDB(eventingDB), graph.observability, graph.logger)
-		graph.jobs = jobs.NewServiceWithRepository(jobs.NewPostgresRepositoryWithDB(jobsDB))
-		graph.jobs.AttachObservability(graph.observability)
-		graph.search = search.NewServiceWithRepository(search.NewPostgresRepositoryWithDB(searchDB))
-		configureSearchEmbedding(graph.search, graph.config)
-		analyticsRepo := analytics.NewPostgresRepositoryWithDB(analyticsDB)
-		analyticsRepo.SetReadStrategyResolver(func(operation string) string {
-			return dbPolicy.ReadStrategies[operation]
-		})
-		graph.analyticsRepo = analyticsRepo
-		graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepositoryWithDB(integrationDB), graph.observability, graph.logger)
-		graph.idempotency = idempotency.NewServiceWithRepository(idempotency.NewPostgresRepositoryWithDB(idempotencyDB))
-		graph.engagement = engagement.NewServiceWithRepository(engagement.NewPostgresRepositoryWithDB(engagementDB))
-		graph.integration.AttachPolicy(graph.policy)
-		graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
-		graph.search.AttachSources(graph.documents, graph.models)
-		graph.search.AttachFieldSecurity(graph.fieldSecurity)
-		graph.reporting.AttachDocumentSources(graph.documents, graph.search)
-		graph.submitStore = application.NewPostgresSubmitStoreWithDB(submitDB)
-		graph.modelActions = application.NewPostgresModelActionsWithDB(modelActionsDB, graph.models, graph.activities, graph.audit, graph.eventing)
-		notificationsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "notification", "repository")
-		graph.notifications = notification.NewServiceWithRepository(notification.NewPostgresRepositoryWithDB(notificationsDB))
+func installPersistence(graph *serviceGraph, postgres *store.Postgres) {
+	if postgres == nil || postgres.DB == nil {
+		return
 	}
+	acpInstr := acp.NewInstrumentation(graph.observability, graph.otel.Tracer())
+	graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepository(postgres.DB))
+	graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepository(postgres.DB), graph.secrets)
+	dbPolicy := databaseInstrumentationPolicy(graph.config)
+	graph.queryMonitor = store.NewQueryMonitor(graph.observability, store.QueryMonitorOptions{
+		SlowThreshold: dbPolicy.SlowThreshold,
+		TopOperations: dbPolicy.TopOperationsLimit,
+		SlowQueries:   dbPolicy.SlowQueriesLimit,
+	})
+	graph.observability.RegisterLogEventDefinition(observability.LogEventDefinition{
+		Key:            "db.query.slow",
+		Category:       "database",
+		Severity:       "warning",
+		RequiredFields: []string{"operation", "fingerprint", "duration_millis"},
+		ModuleKey:      "platform.core",
+	})
+	flagsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "featureflags", "repository")
+	secretsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "secretstore", "repository")
+	configDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "config", "repository")
+	organizationDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "organization", "repository")
+	identityDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "identity", "repository")
+	moduleDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "module", "repository")
+	modelDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "model", "repository")
+	templateDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "templateoutput", "repository")
+	referenceDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "reference", "repository")
+	documentDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "document", "repository")
+	workflowDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "workflow", "repository")
+	auditDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "audit", "repository")
+	eventingDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "eventing", "repository")
+	jobsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "jobs", "repository")
+	searchDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "search", "repository")
+	analyticsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "analytics", "repository")
+	integrationDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "integration", "repository")
+	idempotencyDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "idempotency", "repository")
+	engagementDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "engagement", "repository")
+	submitDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "application", "submit_store")
+	modelActionsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "application", "model_actions")
 
+	graph.flags = featureflags.NewServiceWithRepository(featureflags.NewPostgresRepositoryWithDB(flagsDB))
+	graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepositoryWithDB(secretsDB))
+	graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepositoryWithDB(configDB), graph.secrets)
+	graph.policy = policy.NewServiceWithConfig(graph.config)
+	graph.fieldSecurity = securityfields.NewService(graph.policy)
+	graph.organization = organization.NewServiceWithRepository(organization.NewPostgresRepositoryWithDB(organizationDB))
+	graph.identity = identity.NewServiceWithRepository(graph.organization, identity.NewPostgresRepositoryWithDB(identityDB))
+	graph.acp = acp.NewService(graph.config, acpInstr)
+	graph.modules = module.NewServiceWithRepository(module.NewPostgresRepositoryWithDB(moduleDB))
+	graph.models = model.NewServiceWithRepository(model.NewPostgresRepositoryWithDB(modelDB))
+	graph.activities = activity.NewService()
+	graph.reporting = reporting.NewService(graph.models)
+	graph.templates = templateoutput.NewServiceWithRepository(templateoutput.NewPostgresRepositoryWithDB(templateDB), graph.documents, graph.reporting)
+	graph.reference = reference.NewServiceWithRepository(reference.NewPostgresRepositoryWithDB(referenceDB))
+	graph.documents = document.NewServiceWithRepository(document.NewPostgresRepositoryWithDB(documentDB))
+	graph.workflows = workflow.NewServiceWithRepository(workflow.NewPostgresRepositoryWithDB(workflowDB))
+	graph.audit = audit.NewServiceWithRepository(audit.NewPostgresRepositoryWithDB(auditDB))
+	graph.eventing = eventing.NewServiceWithRepository(eventing.NewPostgresRepositoryWithDB(eventingDB), graph.observability, graph.logger)
+	graph.jobs = jobs.NewServiceWithRepository(jobs.NewPostgresRepositoryWithDB(jobsDB))
+	graph.jobs.AttachObservability(graph.observability)
+	graph.search = search.NewServiceWithRepository(search.NewPostgresRepositoryWithDB(searchDB))
+	configureSearchEmbedding(graph.search, graph.config)
+	analyticsRepo := analytics.NewPostgresRepositoryWithDB(analyticsDB)
+	analyticsRepo.SetReadStrategyResolver(func(operation string) string {
+		return dbPolicy.ReadStrategies[operation]
+	})
+	graph.analyticsRepo = analyticsRepo
+	graph.integration = integration.NewServiceWithRepository(integration.NewPostgresRepositoryWithDB(integrationDB), graph.observability, graph.logger)
+	graph.idempotency = idempotency.NewServiceWithRepository(idempotency.NewPostgresRepositoryWithDB(idempotencyDB))
+	graph.engagement = engagement.NewServiceWithRepository(engagement.NewPostgresRepositoryWithDB(engagementDB))
+	graph.integration.AttachPolicy(graph.policy)
+	graph.reporting.AttachFieldSecurity(graph.fieldSecurity)
+	graph.search.AttachSources(graph.documents, graph.models)
+	graph.search.AttachFieldSecurity(graph.fieldSecurity)
+	graph.reporting.AttachDocumentSources(graph.documents, graph.search)
+	graph.submitStore = application.NewPostgresSubmitStoreWithDB(submitDB)
+	graph.modelActions = application.NewPostgresModelActionsWithDB(modelActionsDB, graph.models, graph.activities, graph.audit, graph.eventing)
+	notificationsDB := store.InstrumentDB(postgres.DB, graph.queryMonitor, "notification", "repository")
+	graph.notifications = notification.NewServiceWithRepository(notification.NewPostgresRepositoryWithDB(notificationsDB))
+}
+
+func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
 	graph.docActions.AttachActivities(graph.activities)
 	graph.docActions.AttachNotifications(graph.notifications)
@@ -233,9 +247,32 @@ func constructServiceGraph(postgres *store.Postgres, businessManifests []module.
 	if graph.engagement == nil {
 		graph.engagement = engagement.NewService()
 	}
-	graph.mcpServer = mcp.NewServer(graph.modules, graph.analytics, graph.templates, graph.workflows, graph.identity, graph.config, graph.flags, graph.integration, graph.documents, graph.reference, graph.search, graph.policy, graph.eventing, graph.jobs, graph.runtimeHealth, graph.audit, graph.observability, graph.offline, graph.dataops, graph.engagement, analyticsMCPStreamPath, analyticsScopedMCPStreamPath, graph.otel)
+	graph.mcpServer = mcp.NewServer(mcp.ServerDeps{
+		Modules:                   graph.modules,
+		Analytics:                 graph.analytics,
+		Templates:                 graph.templates,
+		Workflows:                 graph.workflows,
+		Identity:                  graph.identity,
+		Config:                    graph.config,
+		Flags:                     graph.flags,
+		Integration:               graph.integration,
+		Documents:                 graph.documents,
+		Reference:                 graph.reference,
+		Search:                    graph.search,
+		Policy:                    graph.policy,
+		Eventing:                  graph.eventing,
+		Jobs:                      graph.jobs,
+		Health:                    graph.runtimeHealth,
+		Audit:                     graph.audit,
+		Observability:             graph.observability,
+		Offline:                   graph.offline,
+		Dataops:                   graph.dataops,
+		Engagement:                graph.engagement,
+		AnalyticsStreamPath:       analyticsMCPStreamPath,
+		AnalyticsScopedStreamPath: analyticsScopedMCPStreamPath,
+		OTel:                      graph.otel,
+	})
 	configureDatabaseHealth(graph.runtimeHealth, postgres, graph.observability)
-	return graph
 }
 
 func configureDatabaseHealth(health *runtimehealth.Tracker, postgres *store.Postgres, obs *observability.Service) {

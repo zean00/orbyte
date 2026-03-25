@@ -37,10 +37,20 @@ type DocumentActions struct {
 	notifications *notification.Service
 	store         SubmitStore
 	runner        *KernelCommandRunner
+	now           func() time.Time
+	autoDispatch  func() bool
 }
 
 func NewDocumentActions(documents *document.Service, workflows *workflow.Service, ident *identity.Service, policySvc *policy.Service, store SubmitStore) *DocumentActions {
-	actions := &DocumentActions{documents: documents, workflows: workflows, identity: ident, policy: policySvc, store: store}
+	actions := &DocumentActions{
+		documents:    documents,
+		workflows:    workflows,
+		identity:     ident,
+		policy:       policySvc,
+		store:        store,
+		now:          func() time.Time { return time.Now().UTC() },
+		autoDispatch: func() bool { return runtimeconfig.Current().WorkflowEmailAutoDispatch() },
+	}
 	if provider, ok := store.(interface{ TransactionManager() TransactionManager }); ok {
 		actions.runner = NewKernelCommandRunner(provider.TransactionManager())
 	}
@@ -91,7 +101,7 @@ func (a *DocumentActions) Submit(documentID string, acting ActingContext, expect
 		return document.Record{}, err
 	}
 
-	now := time.Now().UTC()
+	now := a.currentTime()
 	record.Header.Status = transition.ToState
 	ensureWorkflowBinding(&record, transition.WorkflowKey, transition.WorkflowVersion)
 	a.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "submit", now)
@@ -193,7 +203,7 @@ func (a *DocumentActions) UpdateDraft(documentID string, acting ActingContext, p
 	}
 
 	previousVersion := record.Header.Version
-	now := time.Now().UTC()
+	now := a.currentTime()
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
 	record.Header.UpdatedBy = acting.EffectiveActorID()
@@ -278,7 +288,7 @@ func (a *DocumentActions) UpdateExtension(documentID, moduleKey string, acting A
 	}
 
 	previousVersion := record.Header.Version
-	now := time.Now().UTC()
+	now := a.currentTime()
 	record.Header.Version++
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
 	record.Header.UpdatedBy = acting.EffectiveActorID()
@@ -376,7 +386,7 @@ func (a *DocumentActions) Approve(documentID string, acting ActingContext, expec
 		return document.Record{}, err
 	}
 	previousVersion := record.Header.Version
-	now := time.Now().UTC()
+	now := a.currentTime()
 	record.Header.Status = transition.ToState
 	ensureWorkflowBinding(&record, transition.WorkflowKey, transition.WorkflowVersion)
 	a.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "approve", now)
@@ -470,8 +480,9 @@ func (a *DocumentActions) persistDocument(previousVersion int, record document.R
 			workflowMutation: workflowMutation,
 		})
 		if err == nil && !draft {
-			a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, time.Now().UTC())
-			a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, time.Now().UTC())
+			now := a.currentTime()
+			a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, now)
+			a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, now)
 		}
 		return err
 	}
@@ -480,8 +491,9 @@ func (a *DocumentActions) persistDocument(previousVersion int, record document.R
 	}
 	err := a.store.Submit(previousVersion, record, auditEvent, domainEvent, outboxRecord, workflowMutation)
 	if err == nil {
-		a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, time.Now().UTC())
-		a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, time.Now().UTC())
+		now := a.currentTime()
+		a.issueWorkflowDeepLinks(record, workflowMutation.Approvals, now)
+		a.issueWorkflowNotifications(record, workflowMutation.Tasks, workflowMutation.Approvals, now)
 	}
 	return err
 }
@@ -529,7 +541,7 @@ func (a *DocumentActions) transitionDocument(documentID string, acting ActingCon
 		return document.Record{}, err
 	}
 	previousVersion := record.Header.Version
-	now := time.Now().UTC()
+	now := a.currentTime()
 	workflowMutation := workflow.Mutation{}
 	if action == "reject" || action == "cancel" {
 		workflowMutation = a.workflows.PlanResolveArtifacts(documentID, transition.ToState, "cancelled", acting.EffectiveActorID(), now)
@@ -1098,7 +1110,7 @@ func workflowTaskDeepLink(taskID string) string {
 }
 
 func (a *DocumentActions) autoDispatchWorkflowApprovalEmail(record document.Record, approval workflow.Approval, grant identity.DeepLinkGrant, tokenManager *identity.TokenManager) {
-	if a == nil || !workflowEmailAutoDispatchEnabled() {
+	if a == nil || !a.workflowEmailAutoDispatchEnabled() {
 		return
 	}
 	user, ok := a.identity.FindUser(strings.TrimSpace(grant.UserID))
@@ -1159,8 +1171,18 @@ func (a *DocumentActions) recordWorkflowCommunicationMessage(documentID, body st
 	_, _ = a.activity.AddMessage("document", documentID, "system", body, metadata)
 }
 
-func workflowEmailAutoDispatchEnabled() bool {
-	return runtimeconfig.Current().WorkflowEmailAutoDispatch()
+func (a *DocumentActions) workflowEmailAutoDispatchEnabled() bool {
+	if a == nil || a.autoDispatch == nil {
+		return false
+	}
+	return a.autoDispatch()
+}
+
+func (a *DocumentActions) currentTime() time.Time {
+	if a == nil || a.now == nil {
+		return time.Now().UTC()
+	}
+	return a.now()
 }
 
 func workflowApprovalActionLink(grant identity.DeepLinkGrant, tokenManager *identity.TokenManager) string {

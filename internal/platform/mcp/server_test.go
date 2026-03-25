@@ -1846,7 +1846,7 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 		Params: mustJSON(t, map[string]any{
 			"name": "analytics.dashboard.save",
 			"arguments": map[string]any{"dashboard": map[string]any{
-				"name": "Ops Dashboard",
+				"name":    "Ops Dashboard",
 				"widgets": []map[string]any{{"title": "Submitted", "kind": "chart", "query_id": query.ID}},
 			}},
 		}),
@@ -1952,10 +1952,10 @@ func TestServerExtendedPlatformAndExecutionCoverage(t *testing.T) {
 		Params: mustJSON(t, map[string]any{
 			"name": "policy.module.upsert",
 			"arguments": map[string]any{
-				"hook_key":      "documents.search.visibility",
-				"scope":         "location",
-				"scope_id":      "loc_hq",
-				"source":        `package orbyte.policy.documents.search.visibility
+				"hook_key": "documents.search.visibility",
+				"scope":    "location",
+				"scope_id": "loc_hq",
+				"source": `package orbyte.policy.documents.search.visibility
 
 import rego.v1
 
@@ -2842,7 +2842,7 @@ func TestServerHandlesGenericViewAppsAndUnavailableServices(t *testing.T) {
 		t.Fatalf("expected generic view app html, got %+v", contents)
 	}
 
-	unavailable := NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "", nil)
+	unavailable := NewServer(ServerDeps{})
 	resp = unavailable.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -2899,7 +2899,12 @@ func TestServerRejectsUnsupportedOperationsAndUnavailableAnalytics(t *testing.T)
 		t.Fatalf("expected unsupported tool operation error, got %+v", resp.Error)
 	}
 
-	server = NewServer(newTestModules(t), nil, newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "", nil)
+	server = NewServer(ServerDeps{
+		Modules:   newTestModules(t),
+		Templates: newTestTemplates(t),
+		Workflows: workflow.NewService(),
+		Identity:  newTestIdentity(t),
+	})
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
@@ -2962,7 +2967,30 @@ func newTestServer(t *testing.T) *Server {
 	dataopsSvc.AttachJobs(jobSvc)
 	engagementSvc := engagement.NewService()
 	engagementSvc.AttachRuntime(eventingSvc, jobSvc)
-	return NewServer(modules, analyticsSvc, newTestTemplates(t), flows, ident, cfg, flags, integrationSvc, documents, referenceSvc, searchSvc, policySvc, eventingSvc, jobSvc, health, auditSvc, obsSvc, offlineSvc, dataopsSvc, engagementSvc, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot", nil)
+	return NewServer(ServerDeps{
+		Modules:                   modules,
+		Analytics:                 analyticsSvc,
+		Templates:                 newTestTemplates(t),
+		Workflows:                 flows,
+		Identity:                  ident,
+		Config:                    cfg,
+		Flags:                     flags,
+		Integration:               integrationSvc,
+		Documents:                 documents,
+		Reference:                 referenceSvc,
+		Search:                    searchSvc,
+		Policy:                    policySvc,
+		Eventing:                  eventingSvc,
+		Jobs:                      jobSvc,
+		Health:                    health,
+		Audit:                     auditSvc,
+		Observability:             obsSvc,
+		Offline:                   offlineSvc,
+		Dataops:                   dataopsSvc,
+		Engagement:                engagementSvc,
+		AnalyticsStreamPath:       "/mcp/events/analytics/snapshot",
+		AnalyticsScopedStreamPath: "/mcp/analytics/events/analytics/snapshot",
+	})
 }
 
 func newGenericViewServer(t *testing.T) *Server {
@@ -2986,7 +3014,15 @@ func newGenericViewServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register generic manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "/mcp/events/analytics/snapshot", "/mcp/analytics/events/analytics/snapshot", nil)
+	return NewServer(ServerDeps{
+		Modules:                   modules,
+		Analytics:                 analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()),
+		Templates:                 newTestTemplates(t),
+		Workflows:                 workflow.NewService(),
+		Identity:                  newTestIdentity(t),
+		AnalyticsStreamPath:       "/mcp/events/analytics/snapshot",
+		AnalyticsScopedStreamPath: "/mcp/analytics/events/analytics/snapshot",
+	})
 }
 
 func newBrokenProviderServer(t *testing.T) *Server {
@@ -3002,7 +3038,13 @@ func newBrokenProviderServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register broken manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "", nil)
+	return NewServer(ServerDeps{
+		Modules:   modules,
+		Analytics: analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()),
+		Templates: newTestTemplates(t),
+		Workflows: workflow.NewService(),
+		Identity:  newTestIdentity(t),
+	})
 }
 
 func newUnsupportedToolServer(t *testing.T) *Server {
@@ -3018,7 +3060,13 @@ func newUnsupportedToolServer(t *testing.T) *Server {
 	}, "system"); err != nil {
 		t.Fatalf("register unsupported tool manifest failed: %v", err)
 	}
-	return NewServer(modules, analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()), newTestTemplates(t), workflow.NewService(), newTestIdentity(t), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", "", nil)
+	return NewServer(ServerDeps{
+		Modules:   modules,
+		Analytics: analytics.NewService(document.NewService(), workflow.NewService(), eventing.NewService(), search.NewService(), audit.NewService(), observability.NewService()),
+		Templates: newTestTemplates(t),
+		Workflows: workflow.NewService(),
+		Identity:  newTestIdentity(t),
+	})
 }
 
 func newTestIdentity(t *testing.T) *identity.Service {

@@ -115,34 +115,60 @@ type Server struct {
 	otelTracer                trace.Tracer
 }
 
-func NewServer(modules *module.Service, analyticsSvc *analytics.Service, templates *templateoutput.Service, workflows *workflow.Service, identitySvc *identity.Service, configSvc *config.Service, flagsSvc *featureflags.Service, integrationSvc *integration.Service, documentsSvc *document.Service, referenceSvc *reference.Service, searchSvc *search.Service, policySvc *policy.Service, eventingSvc *eventing.Service, jobSvc *jobs.Service, health *runtimehealth.Tracker, auditSvc *audit.Service, obs *observability.Service, offlineSvc *offline.Service, dataopsSvc *dataops.Service, engagementSvc *engagement.Service, analyticsStreamPath, analyticsScopedStreamPath string, otelSvc *otel.Service) *Server {
+type ServerDeps struct {
+	Modules                   *module.Service
+	Analytics                 *analytics.Service
+	Templates                 *templateoutput.Service
+	Workflows                 *workflow.Service
+	Identity                  *identity.Service
+	Config                    *config.Service
+	Flags                     *featureflags.Service
+	Integration               *integration.Service
+	Documents                 *document.Service
+	Reference                 *reference.Service
+	Search                    *search.Service
+	Policy                    *policy.Service
+	Eventing                  *eventing.Service
+	Jobs                      *jobs.Service
+	Health                    *runtimehealth.Tracker
+	Audit                     *audit.Service
+	Observability             *observability.Service
+	Offline                   *offline.Service
+	Dataops                   *dataops.Service
+	Engagement                *engagement.Service
+	AnalyticsStreamPath       string
+	AnalyticsScopedStreamPath string
+	OTel                      *otel.Service
+}
+
+func NewServer(deps ServerDeps) *Server {
 	server := &Server{
-		modules:                   modules,
-		analytics:                 analyticsSvc,
-		templates:                 templates,
-		workflows:                 workflows,
-		identity:                  identitySvc,
-		config:                    configSvc,
-		flags:                     flagsSvc,
-		integration:               integrationSvc,
-		documents:                 documentsSvc,
-		reference:                 referenceSvc,
-		search:                    searchSvc,
-		policy:                    policySvc,
-		eventing:                  eventingSvc,
-		jobs:                      jobSvc,
-		health:                    health,
-		audit:                     auditSvc,
-		observability:             obs,
-		offline:                   offlineSvc,
-		dataops:                   dataopsSvc,
-		engagement:                engagementSvc,
+		modules:                   deps.Modules,
+		analytics:                 deps.Analytics,
+		templates:                 deps.Templates,
+		workflows:                 deps.Workflows,
+		identity:                  deps.Identity,
+		config:                    deps.Config,
+		flags:                     deps.Flags,
+		integration:               deps.Integration,
+		documents:                 deps.Documents,
+		reference:                 deps.Reference,
+		search:                    deps.Search,
+		policy:                    deps.Policy,
+		eventing:                  deps.Eventing,
+		jobs:                      deps.Jobs,
+		health:                    deps.Health,
+		audit:                     deps.Audit,
+		observability:             deps.Observability,
+		offline:                   deps.Offline,
+		dataops:                   deps.Dataops,
+		engagement:                deps.Engagement,
 		implementation:            NewImplementationService(),
-		analyticsStreamPath:       analyticsStreamPath,
-		analyticsScopedStreamPath: analyticsScopedStreamPath,
+		analyticsStreamPath:       deps.AnalyticsStreamPath,
+		analyticsScopedStreamPath: deps.AnalyticsScopedStreamPath,
 	}
-	if otelSvc != nil {
-		server.otelTracer = otelSvc.Tracer()
+	if deps.OTel != nil {
+		server.otelTracer = deps.OTel.Tracer()
 	}
 	server.mustInitBuiltInTools()
 	server.mustInitBuiltInResources()

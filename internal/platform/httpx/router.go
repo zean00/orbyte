@@ -23,40 +23,28 @@ const (
 	analyticsScopedMCPStreamPath = "/mcp/analytics/events/analytics/snapshot"
 )
 
-func BuildRouter(deps RouterDeps) http.Handler {
+func BuildRouter(config RouterConfig) http.Handler {
 	mux := http.NewServeMux()
-	if deps.UI.FieldSecurity == nil {
-		deps.UI.FieldSecurity = newFieldSecurity(deps.UI.Policy, deps.UI.Reporting)
+	if config.FieldSecurity.UI.FieldSecurity == nil {
+		config.FieldSecurity.UI.FieldSecurity = newFieldSecurity(config.FieldSecurity.UI.Policy, config.FieldSecurity.UI.Reporting)
 	}
-	if deps.Models.FieldSecurity == nil {
-		deps.Models.FieldSecurity = deps.UI.FieldSecurity
+	if config.FieldSecurity.Models.FieldSecurity == nil {
+		config.FieldSecurity.Models.FieldSecurity = config.FieldSecurity.UI.FieldSecurity
 	}
-	if deps.Documents.FieldSecurity == nil {
-		deps.Documents.FieldSecurity = deps.UI.FieldSecurity
+	if config.FieldSecurity.Documents.FieldSecurity == nil {
+		config.FieldSecurity.Documents.FieldSecurity = config.FieldSecurity.UI.FieldSecurity
 	}
-	registerPlatformRoutes(mux, deps.Platform, deps.CrossCutting.Health)
-	registerAuthRoutesWithDeps(mux, deps.Auth)
-	registerModelRoutesWithDeps(mux, deps.Models)
-	registerDocumentRoutesWithDeps(mux, deps.Documents)
-	registerOpsRoutesWithDeps(mux, deps.Ops)
-	registerSearchRoutesWithDeps(mux, deps.Search)
-	registerAdminRoutesWithDeps(mux, deps.Admin)
-	registerACPRoutesWithDeps(mux, deps.ACP)
-	registerTemplateRoutesWithDeps(mux, deps.Templates)
-	registerMCPRoutesWithDeps(mux, deps.MCP)
-	registerOfflineRoutesWithDeps(mux, deps.Offline)
-	registerDocsRoutesWithDeps(mux, deps.Docs)
-	registerDeepLinkRoutesWithDeps(mux, deps.DeepLinks)
-	registerNotificationRoutesWithDeps(mux, deps.Notifications)
-	registerLocaleRoutes(mux, deps.CrossCutting.Identity)
-	registerUIRoutesWithDeps(mux, deps.UI)
+	for _, registrar := range config.Registrars {
+		registrar(mux)
+	}
+	registerLocaleRoutes(mux, config.CrossCutting.Identity)
 
 	var handler http.Handler = mux
-	handler = withCSRFProtection(handler, deps.CrossCutting.Config)
-	handler = withAuthentication(handler, deps.CrossCutting.Identity)
-	handler = withObservability(handler, deps.CrossCutting.Logger, deps.CrossCutting.Observability)
-	if deps.CrossCutting.OTel != nil {
-		handler = withOTelHTTP(handler, deps.CrossCutting.OTel)
+	handler = withCSRFProtection(handler, config.CrossCutting.Config)
+	handler = withAuthentication(handler, config.CrossCutting.Identity)
+	handler = withObservability(handler, config.CrossCutting.Logger, config.CrossCutting.Observability)
+	if config.CrossCutting.OTel != nil {
+		handler = withOTelHTTP(handler, config.CrossCutting.OTel)
 	}
 	return handler
 }

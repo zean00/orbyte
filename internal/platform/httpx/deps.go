@@ -24,8 +24,8 @@ import (
 	"orbyte/internal/platform/notification"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
-	"orbyte/internal/platform/otel"
 	"orbyte/internal/platform/organization"
+	"orbyte/internal/platform/otel"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
@@ -36,23 +36,18 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-type RouterDeps struct {
-	Platform     PlatformDeps
-	Auth         AuthDeps
-	Models       ModelDeps
-	Documents    DocumentDeps
-	Ops          OpsDeps
-	Search       SearchDeps
-	Admin        AdminDeps
-	ACP          ACPDeps
-	MCP          MCPDeps
-	Offline      OfflineDeps
-	Templates    TemplateDeps
-	UI           UIDeps
-	Docs         DocsDeps
-	DeepLinks    DeepLinkDeps
-	Notifications NotificationDeps
-	CrossCutting CrossCuttingDeps
+type RouteRegistrar func(*http.ServeMux)
+
+type RouterConfig struct {
+	Registrars    []RouteRegistrar
+	CrossCutting  CrossCuttingDeps
+	FieldSecurity FieldSecurityDeps
+}
+
+type FieldSecurityDeps struct {
+	UI        UIDeps
+	Models    ModelDeps
+	Documents DocumentDeps
 }
 
 type PlatformDeps struct {
@@ -62,6 +57,7 @@ type PlatformDeps struct {
 	Reference    *reference.Service
 	Documents    *document.Service
 	Workflows    *workflow.Service
+	Health       *runtimehealth.Tracker
 }
 
 type AuthDeps struct {
@@ -217,63 +213,93 @@ type NotificationDeps struct {
 	Documents     *document.Service
 }
 
-func registerPlatformRoutes(mux *http.ServeMux, deps PlatformDeps, health *runtimehealth.Tracker) {
-	registerCorePlatformRoutes(mux, deps, health)
+func RegisterPlatformSurface(deps PlatformDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerCorePlatformRoutes(mux, deps, deps.Health)
+	}
 }
 
-func registerAuthRoutesWithDeps(mux *http.ServeMux, deps AuthDeps) {
-	registerAuthRoutes(mux, deps.Config, deps.Identity, deps.Audit, deps.UIPreferences)
+func RegisterAuthSurface(deps AuthDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerAuthRoutes(mux, deps.Config, deps.Identity, deps.Audit, deps.UIPreferences)
+	}
 }
 
-func registerModelRoutesWithDeps(mux *http.ServeMux, deps ModelDeps) {
-	registerModelRoutes(mux, deps.Identity, deps.Models, deps.Activities, deps.Policy, deps.FieldSecurity, deps.Actions)
+func RegisterModelSurface(deps ModelDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerModelRoutes(mux, deps.Identity, deps.Models, deps.Activities, deps.Policy, deps.FieldSecurity, deps.Actions)
+	}
 }
 
-func registerDocumentRoutesWithDeps(mux *http.ServeMux, deps DocumentDeps) {
-	registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
-	registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
+func RegisterDocumentSurface(deps DocumentDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
+		registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
+	}
 }
 
-func registerOpsRoutesWithDeps(mux *http.ServeMux, deps OpsDeps) {
-	registerOpsRoutes(mux, deps.Identity, deps.Audit, deps.Eventing, deps.Offline, deps.Documents, deps.Search, deps.Workflows, deps.Analytics, deps.Monitoring, deps.Observability, deps.Integration, deps.Jobs, deps.Health)
+func RegisterOpsSurface(deps OpsDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerOpsRoutes(mux, deps.Identity, deps.Audit, deps.Eventing, deps.Offline, deps.Documents, deps.Search, deps.Workflows, deps.Analytics, deps.Monitoring, deps.Observability, deps.Integration, deps.Jobs, deps.Health)
+	}
 }
 
-func registerSearchRoutesWithDeps(mux *http.ServeMux, deps SearchDeps) {
-	registerSearchRoutes(mux, deps.Identity, deps.Search, deps.Jobs)
+func RegisterSearchSurface(deps SearchDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerSearchRoutes(mux, deps.Identity, deps.Search, deps.Jobs)
+	}
 }
 
-func registerAdminRoutesWithDeps(mux *http.ServeMux, deps AdminDeps) {
-	registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP)
+func RegisterAdminSurface(deps AdminDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP)
+	}
 }
 
-func registerACPRoutesWithDeps(mux *http.ServeMux, deps ACPDeps) {
-	registerACPRoutes(mux, deps.Identity, deps.Audit, deps.Service)
+func RegisterACPSurface(deps ACPDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerACPRoutes(mux, deps.Identity, deps.Audit, deps.Service)
+	}
 }
 
-func registerMCPRoutesWithDeps(mux *http.ServeMux, deps MCPDeps) {
-	registerMCPRoutes(mux, deps.Identity, deps.Audit, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath, deps.ScopedStreamPath)
+func RegisterTemplateSurface(deps TemplateDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerTemplateRoutes(mux, deps.Identity, deps.Templates)
+	}
 }
 
-func registerOfflineRoutesWithDeps(mux *http.ServeMux, deps OfflineDeps) {
-	registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.Search, deps.FieldSecurity, deps.Idempotency)
+func RegisterMCPSurface(deps MCPDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerMCPRoutes(mux, deps.Identity, deps.Audit, deps.Server, deps.Analytics, deps.AnalyticsStream, deps.StreamPath, deps.ScopedStreamPath)
+	}
 }
 
-func registerTemplateRoutesWithDeps(mux *http.ServeMux, deps TemplateDeps) {
-	registerTemplateRoutes(mux, deps.Identity, deps.Templates)
+func RegisterOfflineSurface(deps OfflineDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerOfflineRoutes(mux, deps.Identity, deps.Modules, deps.Offline, deps.Documents, deps.DocumentActions, deps.Models, deps.ModelActions, deps.Search, deps.FieldSecurity, deps.Idempotency)
+	}
 }
 
-func registerUIRoutesWithDeps(mux *http.ServeMux, deps UIDeps) {
-	registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+func RegisterDocsSurface(deps DocsDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerDocsRoutes(mux, deps.Config, deps.Modules, deps.Models, deps.Documents, deps.Search)
+	}
 }
 
-func registerDocsRoutesWithDeps(mux *http.ServeMux, deps DocsDeps) {
-	registerDocsRoutes(mux, deps.Config, deps.Modules, deps.Models, deps.Documents, deps.Search)
+func RegisterDeepLinkSurface(deps DeepLinkDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerDeepLinkRoutes(mux, deps.Identity, deps.Documents, deps.Workflows, deps.Actions, deps.Audit)
+	}
 }
 
-func registerDeepLinkRoutesWithDeps(mux *http.ServeMux, deps DeepLinkDeps) {
-	registerDeepLinkRoutes(mux, deps.Identity, deps.Documents, deps.Workflows, deps.Actions, deps.Audit)
+func RegisterNotificationSurface(deps NotificationDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerNotificationRoutes(mux, deps.Identity, deps.Notifications, deps.Workflows, deps.Documents)
+	}
 }
 
-func registerNotificationRoutesWithDeps(mux *http.ServeMux, deps NotificationDeps) {
-	registerNotificationRoutes(mux, deps.Identity, deps.Notifications, deps.Workflows, deps.Documents)
+func RegisterUISurface(deps UIDeps) RouteRegistrar {
+	return func(mux *http.ServeMux) {
+		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+	}
 }

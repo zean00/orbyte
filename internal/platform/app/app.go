@@ -141,7 +141,7 @@ func New(opts Options) (*App, error) {
 	if traceCloser != nil {
 		closers = append(closers, traceCloser)
 	}
-	router := httpx.BuildRouter(routerDeps(graph))
+	router := httpx.BuildRouter(routerConfig(graph))
 
 	addr := runtimeSettings.Address()
 	keepTracing = false
