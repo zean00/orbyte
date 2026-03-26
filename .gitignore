@@ -3,3 +3,7 @@ dist/
 .DS_Store
 coverage.out
 node_modules/
+server
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
