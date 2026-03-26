@@ -10,6 +10,8 @@ type Repository interface {
 	RolePermissions() []RolePermission
 	Credentials() []Credential
 	Sessions() []Session
+	TOTPEnrollments() []TOTPEnrollment
+	AuthChallenges() []AuthChallenge
 	ServicePrincipals() []ServicePrincipal
 	DelegationGrants() []DelegationGrant
 	DeepLinkGrants() []DeepLinkGrant
@@ -29,6 +31,8 @@ type Repository interface {
 	FindUserByAuthenticationSubject(subject string) (User, bool)
 	FindCredentialByUserID(userID string) (Credential, bool)
 	FindSession(id string) (Session, bool)
+	FindTOTPEnrollmentByUserID(userID string) (TOTPEnrollment, bool)
+	FindAuthChallenge(id string) (AuthChallenge, bool)
 	FindServicePrincipal(id string) (ServicePrincipal, bool)
 	FindDelegationGrant(id string) (DelegationGrant, bool)
 	FindDeepLinkGrant(id string) (DeepLinkGrant, bool)
@@ -38,4 +42,6 @@ type Repository interface {
 	CleanupLoginFailures(before time.Time) error
 	SaveCredential(credential Credential) error
 	SaveSession(session Session) error
+	SaveTOTPEnrollment(enrollment TOTPEnrollment) error
+	SaveAuthChallenge(challenge AuthChallenge) error
 }

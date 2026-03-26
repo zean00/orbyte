@@ -9,6 +9,7 @@ import (
 
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/module"
@@ -58,7 +59,7 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
 		if !ok {
@@ -387,7 +388,14 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, shared.Validation("unsupported document action"))
 			return
 		}
-		p, ok := requireAuthorization(w, r, ident, permissionKey, current.Header.LocationID, "")
+		authOpts := authorizationOptions{UserPermission: permissionKey, LocationID: current.Header.LocationID}
+		if cfg != nil && (req.Action == "approve" || req.Action == "reject") {
+			if candidatePrincipal, hasPrincipal := currentPrincipal(r); hasPrincipal && candidatePrincipal.kind == userPrincipal {
+				_, _, _, actorApprovalRequired := resolveTOTPState(cfg.AuthPolicy(), ident, principalEffectiveUserID(candidatePrincipal))
+				authOpts.RequireStepUp = actorApprovalRequired
+			}
+		}
+		p, ok := requireAuthorizationWithOptions(w, r, ident, authOpts)
 		if !ok {
 			return
 		}

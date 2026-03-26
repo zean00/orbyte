@@ -38,6 +38,7 @@ type googleTokenResponse struct {
 type authOptionsResponse struct {
 	PasswordEnabled   bool   `json:"password_enabled"`
 	GoogleEnabled     bool   `json:"google_enabled"`
+	TOTPEnabled       bool   `json:"totp_enabled"`
 	LoginTitle        string `json:"login_title"`
 	LoginSubtitle     string `json:"login_subtitle"`
 	GoogleButtonLabel string `json:"google_button_label"`
@@ -341,6 +342,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		respondJSON(w, http.StatusOK, authOptionsResponse{
 			PasswordEnabled:   policy.PasswordEnabled,
 			GoogleEnabled:     policy.GoogleEnabled,
+			TOTPEnabled:       policy.TOTPEnabled,
 			LoginTitle:        policy.LoginTitle,
 			LoginSubtitle:     policy.LoginSubtitle,
 			GoogleButtonLabel: policy.GoogleButtonLabel,
@@ -360,6 +362,9 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			payload["principal_kind"] = string(p.kind)
 			payload["auth_method"] = p.authMethod
 			payload["current_location_id"] = p.currentLocationID
+			payload["login_step_up_verified"] = p.loginStepUpVerified
+			payload["approval_step_up_verified"] = p.stepUpVerified
+			payload["approval_step_up_until"] = p.approvalStepUpUntil
 			switch p.kind {
 			case userPrincipal:
 				payload["user_id"] = p.userID
@@ -402,7 +407,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 
-		session, err := ident.AuthenticatePassword(req.Username, req.Password, req.LocationID, clientMetadataFromRequest(r), policy.SessionTTL)
+		user, err := ident.AuthenticatePasswordPrimary(req.Username, req.Password)
 		if err != nil {
 			limiter.AddFailure(limiterKey)
 			recordAudit(auditSvc, audit.Event{
@@ -419,23 +424,30 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 		limiter.Reset(limiterKey)
-
-		tokenManager := identity.NewTokenManagerFromEnv()
-		token, err := tokenManager.IssueSessionToken(session)
+		loginResult, err := beginInteractiveLogin(w, ident, policy, user, "password", req.LocationID, clientMetadataFromRequest(r))
 		if err != nil {
-			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
 			respondError(w, err)
 			return
 		}
-		csrfCookie, err := buildCSRFCookie(session.ID)
+		if loginResult.RequiresChallenge {
+			payload := buildChallengePayload(loginResult.Challenge, loginResult.Enrollment, loginResult.QRURI)
+			payload["status"] = "2fa_required"
+			if loginResult.Challenge.Purpose == identity.AuthChallengePurposeTOTPEnroll {
+				payload["status"] = "2fa_enrollment_required"
+			}
+			respondJSON(w, http.StatusAccepted, payload)
+			return
+		}
+		session, err := ident.StartSession(user.Username, req.LocationID, "password", clientMetadataFromRequest(r), policy.SessionTTL)
 		if err != nil {
-			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
 			respondError(w, err)
 			return
 		}
-
-		http.SetCookie(w, buildSessionCookie(token, session.ExpiresAt))
-		http.SetCookie(w, csrfCookie)
+		session.LoginStepUpAt = time.Now().UTC()
+		if err := issueAuthenticatedSession(w, ident, session); err != nil {
+			respondError(w, err)
+			return
+		}
 		recordAudit(auditSvc, audit.Event{
 			ID:            "audit:auth:login:" + session.ID,
 			Action:        "auth.login",
@@ -488,7 +500,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, err)
 			return
 		}
-		session, err := ident.AuthenticateGoogle(verified, strings.TrimSpace(req.LocationID), clientMetadataFromRequest(r), policy.SessionTTL, googleProvisioningPolicy(policy))
+		user, metadata, err := ident.AuthenticateGooglePrimary(verified, clientMetadataFromRequest(r), googleProvisioningPolicy(policy))
 		if err != nil {
 			recordAudit(auditSvc, audit.Event{
 				ID:            "audit:auth:google:failed:" + time.Now().UTC().Format("20060102150405.000000000"),
@@ -502,21 +514,30 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, err)
 			return
 		}
-		tokenManager := identity.NewTokenManagerFromEnv()
-		token, err := tokenManager.IssueSessionToken(session)
+		loginResult, err := beginInteractiveLogin(w, ident, policy, user, "google", strings.TrimSpace(req.LocationID), metadata)
 		if err != nil {
-			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
 			respondError(w, err)
 			return
 		}
-		csrfCookie, err := buildCSRFCookie(session.ID)
+		if loginResult.RequiresChallenge {
+			payload := buildChallengePayload(loginResult.Challenge, loginResult.Enrollment, loginResult.QRURI)
+			payload["status"] = "2fa_required"
+			if loginResult.Challenge.Purpose == identity.AuthChallengePurposeTOTPEnroll {
+				payload["status"] = "2fa_enrollment_required"
+			}
+			respondJSON(w, http.StatusAccepted, payload)
+			return
+		}
+		session, err := ident.StartSession(user.Username, strings.TrimSpace(req.LocationID), "google", metadata, policy.SessionTTL)
 		if err != nil {
-			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
 			respondError(w, err)
 			return
 		}
-		http.SetCookie(w, buildSessionCookie(token, session.ExpiresAt))
-		http.SetCookie(w, csrfCookie)
+		session.LoginStepUpAt = time.Now().UTC()
+		if err := issueAuthenticatedSession(w, ident, session); err != nil {
+			respondError(w, err)
+			return
+		}
 		recordAudit(auditSvc, audit.Event{
 			ID:            "audit:auth:google:" + session.ID,
 			Action:        "auth.google",
@@ -618,7 +639,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			redirectGoogleOAuthError(w, r, fallbackPath)
 			return
 		}
-		session, err := ident.AuthenticateGoogle(verified, "", clientMetadataFromRequest(r), policy.SessionTTL, googleProvisioningPolicy(policy))
+		user, metadata, err := ident.AuthenticateGooglePrimary(verified, clientMetadataFromRequest(r), googleProvisioningPolicy(policy))
 		if err != nil {
 			recordAudit(auditSvc, audit.Event{
 				ID:            "audit:auth:google:callback_failed:" + time.Now().UTC().Format("20060102150405.000000000"),
@@ -632,21 +653,25 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			redirectGoogleOAuthError(w, r, fallbackPath)
 			return
 		}
-		tokenManager := identity.NewTokenManagerFromEnv()
-		token, err := tokenManager.IssueSessionToken(session)
+		loginResult, err := beginInteractiveLogin(w, ident, policy, user, "google", "", metadata)
 		if err != nil {
-			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
 			redirectGoogleOAuthError(w, r, fallbackPath)
 			return
 		}
-		csrfCookie, err := buildCSRFCookie(session.ID)
+		if loginResult.RequiresChallenge {
+			http.Redirect(w, r, "/ui/login?next="+url.QueryEscape(nextPath), http.StatusFound)
+			return
+		}
+		session, err := ident.StartSession(user.Username, "", "google", metadata, policy.SessionTTL)
 		if err != nil {
-			_, _ = ident.RevokeSession(session.ID, time.Now().UTC())
 			redirectGoogleOAuthError(w, r, fallbackPath)
 			return
 		}
-		http.SetCookie(w, buildSessionCookie(token, session.ExpiresAt))
-		http.SetCookie(w, csrfCookie)
+		session.LoginStepUpAt = time.Now().UTC()
+		if err := issueAuthenticatedSession(w, ident, session); err != nil {
+			redirectGoogleOAuthError(w, r, fallbackPath)
+			return
+		}
 		recordAudit(auditSvc, audit.Event{
 			ID:            "audit:auth:google:callback:" + session.ID,
 			Action:        "auth.google.callback",
@@ -762,6 +787,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		http.SetCookie(w, clearedDelegationCookie())
 		http.SetCookie(w, clearedDeepLinkCookie())
 		http.SetCookie(w, clearedDeepLinkStepUpCookie())
+		http.SetCookie(w, clearedAuthChallengeCookie())
 		recordAudit(auditSvc, audit.Event{
 			ID:            "audit:auth:logout:" + session.ID,
 			Action:        "auth.logout",
@@ -1265,6 +1291,27 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondJSON(w, http.StatusOK, user)
 			return
 		}
+		if userID, ok := userResetTwoFactorPath(r.URL.Path); ok {
+			p, ok := requireAuthorization(w, r, ident, "identity.manage_users", "", "identity.manage_users")
+			if !ok {
+				return
+			}
+			if err := ident.DisableTOTP(userID, time.Now().UTC()); err != nil {
+				respondError(w, err)
+				return
+			}
+			recordAudit(auditSvc, audit.Event{
+				ID:            "audit:identity:user_reset_2fa:" + userID,
+				Action:        "identity.user.reset_2fa",
+				TargetType:    "user",
+				TargetID:      userID,
+				ActorID:       principalActorID(p),
+				OccurredAt:    time.Now().UTC(),
+				CorrelationID: logging.CorrelationID(r.Context()),
+			})
+			respondJSON(w, http.StatusOK, map[string]any{"status": "2fa_reset"})
+			return
+		}
 		userID, ok := userResetPasswordPath(r.URL.Path)
 		if !ok {
 			http.NotFound(w, r)
@@ -1377,6 +1424,8 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 		review, _ := ident.ReviewSession(sessionID)
 		respondJSON(w, http.StatusOK, map[string]any{"session": session, "review": review})
 	})
+
+	registerTwoFactorAuthRoutes(mux, cfg, ident, auditSvc)
 }
 
 func servicePrincipalPath(path string) (string, string, bool) {
@@ -1395,6 +1444,15 @@ func userNavigationPreferencesPath(path string) (string, bool) {
 		return "", false
 	}
 	id := strings.TrimSuffix(strings.TrimPrefix(path, "/users/"), "/preferences/navigation")
+	id = strings.Trim(id, "/")
+	return id, id != ""
+}
+
+func userResetTwoFactorPath(path string) (string, bool) {
+	if !strings.HasPrefix(path, "/users/") || !strings.HasSuffix(path, "/actions/reset-2fa") {
+		return "", false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, "/users/"), "/actions/reset-2fa")
 	id = strings.Trim(id, "/")
 	return id, id != ""
 }

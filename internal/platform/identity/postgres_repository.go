@@ -275,7 +275,8 @@ func (r *PostgresRepository) FindCredentialByUserID(userID string) (Credential, 
 func (r *PostgresRepository) Sessions() []Session {
 	const query = `
 		SELECT session_id, user_id, status, issued_at, expires_at, last_seen_at,
-		       COALESCE(authentication_method, ''), COALESCE(current_location_scope, ''), revoked_at,
+		       COALESCE(authentication_method, ''), COALESCE(current_location_scope, ''),
+		       login_step_up_at, approval_step_up_at, approval_step_up_until, revoked_at,
 		       COALESCE(client_metadata_json, '{}'::jsonb)
 		FROM sessions
 		ORDER BY issued_at ASC`
@@ -288,15 +289,91 @@ func (r *PostgresRepository) Sessions() []Session {
 	items := make([]Session, 0)
 	for rows.Next() {
 		var (
-			item         Session
-			revokedAt    sql.NullTime
-			metadataJSON []byte
+			item                Session
+			loginStepUpAt       sql.NullTime
+			approvalStepUpAt    sql.NullTime
+			approvalStepUpUntil sql.NullTime
+			revokedAt           sql.NullTime
+			metadataJSON        []byte
 		)
-		if err := rows.Scan(&item.ID, &item.UserID, &item.Status, &item.IssuedAt, &item.ExpiresAt, &item.LastSeenAt, &item.AuthenticationMethod, &item.CurrentLocationID, &revokedAt, &metadataJSON); err != nil {
+		if err := rows.Scan(&item.ID, &item.UserID, &item.Status, &item.IssuedAt, &item.ExpiresAt, &item.LastSeenAt, &item.AuthenticationMethod, &item.CurrentLocationID, &loginStepUpAt, &approvalStepUpAt, &approvalStepUpUntil, &revokedAt, &metadataJSON); err != nil {
 			continue
+		}
+		if loginStepUpAt.Valid {
+			item.LoginStepUpAt = loginStepUpAt.Time
+		}
+		if approvalStepUpAt.Valid {
+			item.ApprovalStepUpAt = approvalStepUpAt.Time
+		}
+		if approvalStepUpUntil.Valid {
+			item.ApprovalStepUpUntil = approvalStepUpUntil.Time
 		}
 		if revokedAt.Valid {
 			item.RevokedAt = revokedAt.Time
+		}
+		_ = json.Unmarshal(metadataJSON, &item.ClientMetadata)
+		items = append(items, item)
+	}
+	return items
+}
+
+func (r *PostgresRepository) TOTPEnrollments() []TOTPEnrollment {
+	const query = `
+		SELECT user_id, secret, COALESCE(issuer, ''), COALESCE(account_name, ''), login_enabled, approval_enabled,
+		       verified_at, disabled_at, created_at, updated_at
+		FROM user_totp_enrollments
+		ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	items := make([]TOTPEnrollment, 0)
+	for rows.Next() {
+		var (
+			item       TOTPEnrollment
+			verifiedAt sql.NullTime
+			disabledAt sql.NullTime
+		)
+		if err := rows.Scan(&item.UserID, &item.Secret, &item.Issuer, &item.AccountName, &item.LoginEnabled, &item.ApprovalEnabled, &verifiedAt, &disabledAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			continue
+		}
+		if verifiedAt.Valid {
+			item.VerifiedAt = verifiedAt.Time
+		}
+		if disabledAt.Valid {
+			item.DisabledAt = disabledAt.Time
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func (r *PostgresRepository) AuthChallenges() []AuthChallenge {
+	const query = `
+		SELECT challenge_id, user_id, username, auth_method, COALESCE(current_location_id, ''), status, purpose,
+		       expires_at, created_at, consumed_at, COALESCE(client_metadata_json, '{}'::jsonb)
+		FROM auth_challenges
+		ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	items := make([]AuthChallenge, 0)
+	for rows.Next() {
+		var (
+			item         AuthChallenge
+			consumedAt   sql.NullTime
+			metadataJSON []byte
+		)
+		if err := rows.Scan(&item.ID, &item.UserID, &item.Username, &item.AuthMethod, &item.CurrentLocationID, &item.Status, &item.Purpose, &item.ExpiresAt, &item.CreatedAt, &consumedAt, &metadataJSON); err != nil {
+			continue
+		}
+		if consumedAt.Valid {
+			item.ConsumedAt = consumedAt.Time
 		}
 		_ = json.Unmarshal(metadataJSON, &item.ClientMetadata)
 		items = append(items, item)
@@ -619,14 +696,18 @@ func (r *PostgresRepository) SaveRolePermission(grant RolePermission) error {
 func (r *PostgresRepository) FindSession(id string) (Session, bool) {
 	const query = `
 		SELECT session_id, user_id, status, issued_at, expires_at, last_seen_at,
-		       COALESCE(authentication_method, ''), COALESCE(current_location_scope, ''), revoked_at,
+		       COALESCE(authentication_method, ''), COALESCE(current_location_scope, ''),
+		       login_step_up_at, approval_step_up_at, approval_step_up_until, revoked_at,
 		       COALESCE(client_metadata_json, '{}'::jsonb)
 		FROM sessions
 		WHERE session_id = $1`
 	var (
-		item         Session
-		revokedAt    sql.NullTime
-		metadataJSON []byte
+		item                Session
+		loginStepUpAt       sql.NullTime
+		approvalStepUpAt    sql.NullTime
+		approvalStepUpUntil sql.NullTime
+		revokedAt           sql.NullTime
+		metadataJSON        []byte
 	)
 	err := r.db.QueryRowContext(context.Background(), query, id).Scan(
 		&item.ID,
@@ -637,14 +718,95 @@ func (r *PostgresRepository) FindSession(id string) (Session, bool) {
 		&item.LastSeenAt,
 		&item.AuthenticationMethod,
 		&item.CurrentLocationID,
+		&loginStepUpAt,
+		&approvalStepUpAt,
+		&approvalStepUpUntil,
 		&revokedAt,
 		&metadataJSON,
 	)
 	if err != nil {
 		return Session{}, false
 	}
+	if loginStepUpAt.Valid {
+		item.LoginStepUpAt = loginStepUpAt.Time
+	}
+	if approvalStepUpAt.Valid {
+		item.ApprovalStepUpAt = approvalStepUpAt.Time
+	}
+	if approvalStepUpUntil.Valid {
+		item.ApprovalStepUpUntil = approvalStepUpUntil.Time
+	}
 	if revokedAt.Valid {
 		item.RevokedAt = revokedAt.Time
+	}
+	_ = json.Unmarshal(metadataJSON, &item.ClientMetadata)
+	return item, true
+}
+
+func (r *PostgresRepository) FindTOTPEnrollmentByUserID(userID string) (TOTPEnrollment, bool) {
+	const query = `
+		SELECT user_id, secret, COALESCE(issuer, ''), COALESCE(account_name, ''), login_enabled, approval_enabled,
+		       verified_at, disabled_at, created_at, updated_at
+		FROM user_totp_enrollments
+		WHERE user_id = $1`
+	var (
+		item       TOTPEnrollment
+		verifiedAt sql.NullTime
+		disabledAt sql.NullTime
+	)
+	err := r.db.QueryRowContext(context.Background(), query, userID).Scan(
+		&item.UserID,
+		&item.Secret,
+		&item.Issuer,
+		&item.AccountName,
+		&item.LoginEnabled,
+		&item.ApprovalEnabled,
+		&verifiedAt,
+		&disabledAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return TOTPEnrollment{}, false
+	}
+	if verifiedAt.Valid {
+		item.VerifiedAt = verifiedAt.Time
+	}
+	if disabledAt.Valid {
+		item.DisabledAt = disabledAt.Time
+	}
+	return item, true
+}
+
+func (r *PostgresRepository) FindAuthChallenge(id string) (AuthChallenge, bool) {
+	const query = `
+		SELECT challenge_id, user_id, username, auth_method, COALESCE(current_location_id, ''), status, purpose,
+		       expires_at, created_at, consumed_at, COALESCE(client_metadata_json, '{}'::jsonb)
+		FROM auth_challenges
+		WHERE challenge_id = $1`
+	var (
+		item         AuthChallenge
+		consumedAt   sql.NullTime
+		metadataJSON []byte
+	)
+	err := r.db.QueryRowContext(context.Background(), query, id).Scan(
+		&item.ID,
+		&item.UserID,
+		&item.Username,
+		&item.AuthMethod,
+		&item.CurrentLocationID,
+		&item.Status,
+		&item.Purpose,
+		&item.ExpiresAt,
+		&item.CreatedAt,
+		&consumedAt,
+		&metadataJSON,
+	)
+	if err != nil {
+		return AuthChallenge{}, false
+	}
+	if consumedAt.Valid {
+		item.ConsumedAt = consumedAt.Time
 	}
 	_ = json.Unmarshal(metadataJSON, &item.ClientMetadata)
 	return item, true
@@ -1037,8 +1199,9 @@ func (r *PostgresRepository) SaveSession(session Session) error {
 	const query = `
 		INSERT INTO sessions (
 			session_id, user_id, status, issued_at, expires_at, last_seen_at,
-			authentication_method, client_metadata_json, current_location_scope, revoked_at
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8::jsonb, NULLIF($9, ''), $10)
+			authentication_method, client_metadata_json, current_location_scope,
+			login_step_up_at, approval_step_up_at, approval_step_up_until, revoked_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8::jsonb, NULLIF($9, ''), $10, $11, $12, $13)
 		ON CONFLICT (session_id) DO UPDATE SET
 			status = EXCLUDED.status,
 			expires_at = EXCLUDED.expires_at,
@@ -1046,6 +1209,9 @@ func (r *PostgresRepository) SaveSession(session Session) error {
 			authentication_method = EXCLUDED.authentication_method,
 			client_metadata_json = EXCLUDED.client_metadata_json,
 			current_location_scope = EXCLUDED.current_location_scope,
+			login_step_up_at = EXCLUDED.login_step_up_at,
+			approval_step_up_at = EXCLUDED.approval_step_up_at,
+			approval_step_up_until = EXCLUDED.approval_step_up_until,
 			revoked_at = EXCLUDED.revoked_at`
 	metadataJSON, err := json.Marshal(session.ClientMetadata)
 	if err != nil {
@@ -1067,6 +1233,9 @@ func (r *PostgresRepository) SaveSession(session Session) error {
 		session.AuthenticationMethod,
 		string(metadataJSON),
 		session.CurrentLocationID,
+		nullableTime(session.LoginStepUpAt),
+		nullableTime(session.ApprovalStepUpAt),
+		nullableTime(session.ApprovalStepUpUntil),
 		revokedAt,
 	)
 	return err
@@ -1096,6 +1265,71 @@ func (r *PostgresRepository) SaveCredential(credential Credential) error {
 		credential.FailedAttemptCount,
 		lockedUntil,
 		credential.UpdatedAt,
+	)
+	return err
+}
+
+func (r *PostgresRepository) SaveTOTPEnrollment(enrollment TOTPEnrollment) error {
+	const query = `
+		INSERT INTO user_totp_enrollments (
+			user_id, secret, issuer, account_name, login_enabled, approval_enabled,
+			verified_at, disabled_at, created_at, updated_at
+		) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (user_id) DO UPDATE SET
+			secret = EXCLUDED.secret,
+			issuer = EXCLUDED.issuer,
+			account_name = EXCLUDED.account_name,
+			login_enabled = EXCLUDED.login_enabled,
+			approval_enabled = EXCLUDED.approval_enabled,
+			verified_at = EXCLUDED.verified_at,
+			disabled_at = EXCLUDED.disabled_at,
+			updated_at = EXCLUDED.updated_at`
+	_, err := r.db.ExecContext(
+		context.Background(),
+		query,
+		enrollment.UserID,
+		enrollment.Secret,
+		enrollment.Issuer,
+		enrollment.AccountName,
+		enrollment.LoginEnabled,
+		enrollment.ApprovalEnabled,
+		nullableTime(enrollment.VerifiedAt),
+		nullableTime(enrollment.DisabledAt),
+		enrollment.CreatedAt,
+		enrollment.UpdatedAt,
+	)
+	return err
+}
+
+func (r *PostgresRepository) SaveAuthChallenge(challenge AuthChallenge) error {
+	const query = `
+		INSERT INTO auth_challenges (
+			challenge_id, user_id, username, auth_method, current_location_id, status, purpose,
+			expires_at, created_at, consumed_at, client_metadata_json
+		) VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8, $9, $10, $11::jsonb)
+		ON CONFLICT (challenge_id) DO UPDATE SET
+			status = EXCLUDED.status,
+			expires_at = EXCLUDED.expires_at,
+			consumed_at = EXCLUDED.consumed_at,
+			client_metadata_json = EXCLUDED.client_metadata_json`
+	metadataJSON, err := json.Marshal(challenge.ClientMetadata)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(
+		context.Background(),
+		query,
+		challenge.ID,
+		challenge.UserID,
+		challenge.Username,
+		challenge.AuthMethod,
+		challenge.CurrentLocationID,
+		challenge.Status,
+		challenge.Purpose,
+		challenge.ExpiresAt,
+		challenge.CreatedAt,
+		nullableTime(challenge.ConsumedAt),
+		string(metadataJSON),
 	)
 	return err
 }

@@ -147,6 +147,16 @@ export function Header() {
 
         {shellKind === 'workspace' && (
           <button
+            onClick={() => navigate('/settings')}
+            className="p-1 text-muted hover:text-body transition-colors rounded hover:bg-shell"
+            title="Settings"
+          >
+            <SettingsIcon className="w-4 h-4" />
+          </button>
+        )}
+
+        {shellKind === 'workspace' && (
+          <button
             onClick={() => navigate('/notifications')}
             className="p-1 text-muted hover:text-body transition-colors rounded hover:bg-shell"
             title="Notifications"
@@ -241,6 +251,15 @@ function LogoutIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+    </svg>
+  )
+}
+
+function SettingsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317a1 1 0 011.35-.936l.821.328a1 1 0 00.748 0l.821-.328a1 1 0 011.35.936l.062.883a1 1 0 00.512.815l.746.43a1 1 0 01.365 1.366l-.43.746a1 1 0 000 .748l.43.746a1 1 0 01-.365 1.366l-.746.43a1 1 0 00-.512.815l-.062.883a1 1 0 01-1.35.936l-.821-.328a1 1 0 00-.748 0l-.821.328a1 1 0 01-1.35-.936l-.062-.883a1 1 0 00-.512-.815l-.746-.43a1 1 0 01-.365-1.366l.43-.746a1 1 0 000-.748l-.43-.746a1 1 0 01.365-1.366l.746-.43a1 1 0 00.512-.815l.062-.883z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
     </svg>
   )
 }

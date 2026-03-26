@@ -77,6 +77,7 @@ type ModelDeps struct {
 }
 
 type DocumentDeps struct {
+	Config        *config.Service
 	Identity      *identity.Service
 	Modules       *module.Service
 	Documents     *document.Service
@@ -233,7 +234,7 @@ func RegisterModelSurface(deps ModelDeps) RouteRegistrar {
 
 func RegisterDocumentSurface(deps DocumentDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerDocumentRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
+		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
 		registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
 	}
 }

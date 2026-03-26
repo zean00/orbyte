@@ -20,6 +20,12 @@ type AuthPolicy struct {
 	LoginRateLimitWindow                 time.Duration
 	TrustedOrigins                       []string
 	PasswordEnabled                      bool
+	TOTPEnabled                          bool
+	TOTPEnrollmentAllowed                bool
+	TOTPIssuer                           string
+	TOTPLoginMode                        string
+	TOTPApprovalMode                     string
+	TOTPStepUpTTL                        time.Duration
 	LoginTitle                           string
 	LoginSubtitle                        string
 	GoogleButtonLabel                    string
@@ -229,6 +235,12 @@ func BuiltInDefinitions() []Definition {
 			"login_rate_limit_window_seconds":           int(defaultLoginRateLimitWindow / time.Second),
 			"trusted_origins":                           []string{},
 			"password_enabled":                          true,
+			"totp_enabled":                              false,
+			"totp_enrollment_allowed":                   true,
+			"totp_issuer":                               "Orbyte",
+			"totp_login_mode":                           "optional",
+			"totp_approval_mode":                        "optional",
+			"totp_step_up_ttl_minutes":                  10,
 			"login_title":                               "Platform Access",
 			"login_subtitle":                            "Sign in to continue.",
 			"google_button_label":                       "Continue with Google",
@@ -257,6 +269,12 @@ func BuiltInDefinitions() []Definition {
 			{Key: "login_rate_limit_window_seconds", Label: "Login Rate Limit Window Seconds", Type: "int", Required: true},
 			{Key: "trusted_origins", Label: "Trusted Origins", Type: "string_list"},
 			{Key: "password_enabled", Label: "Password Enabled", Type: "bool"},
+			{Key: "totp_enabled", Label: "2FA Enabled", Type: "bool"},
+			{Key: "totp_enrollment_allowed", Label: "2FA Enrollment Allowed", Type: "bool"},
+			{Key: "totp_issuer", Label: "2FA Issuer", Type: "string"},
+			{Key: "totp_login_mode", Label: "2FA Login Mode", Type: "string", Enum: []string{"disabled", "optional", "required"}},
+			{Key: "totp_approval_mode", Label: "2FA Approval Mode", Type: "string", Enum: []string{"disabled", "optional", "required"}},
+			{Key: "totp_step_up_ttl_minutes", Label: "2FA Approval Step-Up TTL Minutes", Type: "int", Required: true},
 			{Key: "login_title", Label: "Login Title", Type: "string"},
 			{Key: "login_subtitle", Label: "Login Subtitle", Type: "string"},
 			{Key: "google_button_label", Label: "Google Button Label", Type: "string"},
@@ -749,6 +767,11 @@ func (s *Service) AuthPolicy() AuthPolicy {
 		LoginRateLimitAttempts:       defaultLoginRateLimitAttempts,
 		LoginRateLimitWindow:         defaultLoginRateLimitWindow,
 		PasswordEnabled:              true,
+		TOTPEnrollmentAllowed:        true,
+		TOTPIssuer:                   "Orbyte",
+		TOTPLoginMode:                "optional",
+		TOTPApprovalMode:             "optional",
+		TOTPStepUpTTL:                10 * time.Minute,
 		LoginTitle:                   "Platform Access",
 		LoginSubtitle:                "Sign in to continue.",
 		GoogleButtonLabel:            "Continue with Google",
@@ -780,6 +803,20 @@ func (s *Service) AuthPolicy() AuthPolicy {
 	}
 	policy.TrustedOrigins = stringSliceValue(value.Value["trusted_origins"])
 	policy.PasswordEnabled = boolFromValue(value.Value["password_enabled"])
+	policy.TOTPEnabled = boolFromValue(value.Value["totp_enabled"])
+	policy.TOTPEnrollmentAllowed = boolFromValue(value.Value["totp_enrollment_allowed"])
+	if issuer := strings.TrimSpace(stringFromValue(value.Value["totp_issuer"])); issuer != "" {
+		policy.TOTPIssuer = issuer
+	}
+	if mode := normalizeAuthMode(stringFromValue(value.Value["totp_login_mode"])); mode != "" {
+		policy.TOTPLoginMode = mode
+	}
+	if mode := normalizeAuthMode(stringFromValue(value.Value["totp_approval_mode"])); mode != "" {
+		policy.TOTPApprovalMode = mode
+	}
+	if raw := intValue(value.Value["totp_step_up_ttl_minutes"]); raw > 0 {
+		policy.TOTPStepUpTTL = time.Duration(raw) * time.Minute
+	}
 	if title := strings.TrimSpace(stringFromValue(value.Value["login_title"])); title != "" {
 		policy.LoginTitle = title
 	}
@@ -810,6 +847,15 @@ func (s *Service) AuthPolicy() AuthPolicy {
 		policy.GoogleTimeout = time.Duration(raw) * time.Second
 	}
 	return policy
+}
+
+func normalizeAuthMode(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "disabled", "optional", "required":
+		return strings.TrimSpace(strings.ToLower(value))
+	default:
+		return ""
+	}
 }
 
 func (s *Service) TypesensePolicy() TypesensePolicy {

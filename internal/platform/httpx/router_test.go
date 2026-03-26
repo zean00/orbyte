@@ -104,6 +104,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 		Actions:       modelActions,
 	}
 	documentDeps := DocumentDeps{
+		Config:        cfg,
 		Identity:      ident,
 		Modules:       modules,
 		Documents:     docs,

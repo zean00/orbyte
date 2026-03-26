@@ -69,8 +69,38 @@ type Session struct {
 	LastSeenAt           time.Time      `json:"last_seen_at"`
 	AuthenticationMethod string         `json:"authentication_method,omitempty"`
 	CurrentLocationID    string         `json:"current_location_id,omitempty"`
+	LoginStepUpAt        time.Time      `json:"login_step_up_at,omitempty"`
+	ApprovalStepUpAt     time.Time      `json:"approval_step_up_at,omitempty"`
+	ApprovalStepUpUntil  time.Time      `json:"approval_step_up_until,omitempty"`
 	RevokedAt            time.Time      `json:"revoked_at,omitempty"`
 	ClientMetadata       map[string]any `json:"client_metadata,omitempty"`
+}
+
+type TOTPEnrollment struct {
+	UserID          string    `json:"user_id"`
+	Secret          string    `json:"-"`
+	Issuer          string    `json:"issuer,omitempty"`
+	AccountName     string    `json:"account_name,omitempty"`
+	LoginEnabled    bool      `json:"login_enabled,omitempty"`
+	ApprovalEnabled bool      `json:"approval_enabled,omitempty"`
+	VerifiedAt      time.Time `json:"verified_at,omitempty"`
+	DisabledAt      time.Time `json:"disabled_at,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type AuthChallenge struct {
+	ID                string         `json:"id"`
+	UserID            string         `json:"user_id"`
+	Username          string         `json:"username"`
+	AuthMethod        string         `json:"auth_method"`
+	CurrentLocationID string         `json:"current_location_id,omitempty"`
+	Status            string         `json:"status"`
+	Purpose           string         `json:"purpose"`
+	ExpiresAt         time.Time      `json:"expires_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+	ConsumedAt        time.Time      `json:"consumed_at,omitempty"`
+	ClientMetadata    map[string]any `json:"client_metadata,omitempty"`
 }
 
 type DelegationGrant struct {

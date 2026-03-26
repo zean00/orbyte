@@ -51,8 +51,8 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if len(repo.Credentials()) != 1 {
 		t.Fatal("expected credentials")
 	}
-	sessionRows := sqlmock.NewRows([]string{"session_id", "user_id", "status", "issued_at", "expires_at", "last_seen_at", "authentication_method", "current_location_scope", "revoked_at", "client_metadata_json"}).
-		AddRow("s1", "u1", "active", now, now.Add(time.Hour), now, "password", "loc1", nil, []byte(`{"ip":"127.0.0.1"}`))
+	sessionRows := sqlmock.NewRows([]string{"session_id", "user_id", "status", "issued_at", "expires_at", "last_seen_at", "authentication_method", "current_location_scope", "login_step_up_at", "approval_step_up_at", "approval_step_up_until", "revoked_at", "client_metadata_json"}).
+		AddRow("s1", "u1", "active", now, now.Add(time.Hour), now, "password", "loc1", now, nil, nil, nil, []byte(`{"ip":"127.0.0.1"}`))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT session_id, user_id, status, issued_at, expires_at, last_seen_at,")).WillReturnRows(sessionRows)
 	if len(repo.Sessions()) != 1 {
 		t.Fatal("expected sessions")
@@ -96,8 +96,8 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if _, ok := repo.FindCredentialByUserID("u1"); !ok {
 		t.Fatal("expected find credential by user id")
 	}
-	findSessionRows := sqlmock.NewRows([]string{"session_id", "user_id", "status", "issued_at", "expires_at", "last_seen_at", "authentication_method", "current_location_scope", "revoked_at", "client_metadata_json"}).
-		AddRow("s1", "u1", "active", now, now.Add(time.Hour), now, "password", "loc1", nil, []byte(`{"ip":"127.0.0.1"}`))
+	findSessionRows := sqlmock.NewRows([]string{"session_id", "user_id", "status", "issued_at", "expires_at", "last_seen_at", "authentication_method", "current_location_scope", "login_step_up_at", "approval_step_up_at", "approval_step_up_until", "revoked_at", "client_metadata_json"}).
+		AddRow("s1", "u1", "active", now, now.Add(time.Hour), now, "password", "loc1", now, nil, nil, nil, []byte(`{"ip":"127.0.0.1"}`))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT session_id, user_id, status, issued_at, expires_at, last_seen_at,")).WithArgs("s1").WillReturnRows(findSessionRows)
 	if _, ok := repo.FindSession("s1"); !ok {
 		t.Fatal("expected find session")
@@ -137,7 +137,7 @@ func TestPostgresIdentityRepository(t *testing.T) {
 		t.Fatalf("expected save credential: %v", err)
 	}
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO sessions (")).
-		WithArgs("s1", "u1", "active", now, now.Add(time.Hour), now, "password", `{"ip":"127.0.0.1"}`, "loc1", nil).
+		WithArgs("s1", "u1", "active", now, now.Add(time.Hour), now, "password", `{"ip":"127.0.0.1"}`, "loc1", nil, nil, nil, nil).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	if err := repo.SaveSession(Session{
 		ID:                   "s1",

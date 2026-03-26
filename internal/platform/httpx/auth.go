@@ -18,6 +18,7 @@ const csrfCookieName = "orbyte_csrf"
 const delegationCookieName = "orbyte_delegation"
 const deepLinkCookieName = "orbyte_link"
 const deepLinkStepUpCookieName = "orbyte_link_stepup"
+const authChallengeCookieName = "orbyte_auth_challenge"
 
 type principalKind string
 
@@ -34,7 +35,9 @@ type principal struct {
 	currentLocationID string
 	serviceID         string
 	authMethod        string
+	loginStepUpVerified bool
 	stepUpVerified    bool
+	approvalStepUpUntil time.Time
 	delegationGrantID string
 	deepLinkGrantID   string
 	onBehalfOfUserID  string
@@ -85,6 +88,7 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 						sessionID:         session.ID,
 						currentLocationID: session.CurrentLocationID,
 						authMethod:        "dev_bypass",
+						loginStepUpVerified: true,
 						stepUpVerified:    true,
 					}, nil
 				}
@@ -121,7 +125,9 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 			sessionID:         session.ID,
 			currentLocationID: session.CurrentLocationID,
 			authMethod:        "cookie",
-			stepUpVerified:    stepUpVerified(r),
+			loginStepUpVerified: !session.LoginStepUpAt.IsZero(),
+			stepUpVerified:    stepUpVerified(r) || (!session.ApprovalStepUpUntil.IsZero() && time.Now().UTC().Before(session.ApprovalStepUpUntil)),
+			approvalStepUpUntil: session.ApprovalStepUpUntil,
 		}
 		return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
 	}
@@ -156,7 +162,9 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 				sessionID:         session.ID,
 				currentLocationID: session.CurrentLocationID,
 				authMethod:        "bearer",
-				stepUpVerified:    stepUpVerified(r),
+				loginStepUpVerified: !session.LoginStepUpAt.IsZero(),
+				stepUpVerified:    stepUpVerified(r) || (!session.ApprovalStepUpUntil.IsZero() && time.Now().UTC().Before(session.ApprovalStepUpUntil)),
+				approvalStepUpUntil: session.ApprovalStepUpUntil,
 			}
 			return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
 		case "service":
@@ -219,6 +227,7 @@ func authenticateDeepLinkPrincipal(r *http.Request, w http.ResponseWriter, ident
 		effectiveUserID:   grant.UserID,
 		currentLocationID: grant.LocationID,
 		authMethod:        "link",
+		loginStepUpVerified: true,
 		stepUpVerified:    !grant.RequireStepUp || deepLinkStepUpVerified(r, tokenManager, grant),
 		deepLinkGrantID:   grant.ID,
 		deepLink:          &grant,

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Shell } from '@/components/layout/Shell'
+import { Modal } from '@/components/ui/Modal'
 import { useShellStore } from '@/stores/shellStore'
 import { fetchWorkspaceBootstrap, normalizeShellPath, pickText, toShellRoutes, type ActionDefinition, type CustomEntryDefinition, type DocumentFlowDefinition, type FieldDefinition, type SectionDefinition, type ViewDefinition } from '@/services/bootstrap'
 import { useToast } from '@/components/ui/Toast'
+import SettingsPage from '@/features/SettingsPage'
 
 type RouteResolution = {
   status: 'ok' | 'not_found' | 'forbidden' | 'surface_mismatch'
@@ -20,6 +22,7 @@ type RouteResolution = {
 
 type FormState = Record<string, unknown>
 type ValidationErrors = Record<string, string>
+type HttpError = Error & { status?: number }
 
 export default function WorkspacePage() {
   const location = useLocation()
@@ -57,6 +60,12 @@ export default function WorkspacePage() {
     let mounted = true
 
     async function resolveRoute() {
+      if (pathname === '/settings') {
+        if (!mounted) return
+        setRoute(null)
+        setLoading(false)
+        return
+      }
       setLoading(true)
       try {
         const response = await fetch(
@@ -104,6 +113,7 @@ export default function WorkspacePage() {
   }
 
   const content = useMemo(() => {
+    if (pathname === '/settings') return <SettingsPage />
     if (loading) return <Panel title="Loading" status="Resolving route contract." />
     if (!route) return <Panel title="Unavailable" status="Route could not be resolved." />
     if (route.status !== 'ok') {
@@ -480,6 +490,10 @@ function DetailView({
 }) {
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState('')
+  const [stepUpCode, setStepUpCode] = useState('')
+  const [stepUpError, setStepUpError] = useState('')
   const documentID = new URLSearchParams(window.location.search).get('id')
 
   useEffect(() => {
@@ -508,6 +522,38 @@ function DetailView({
   const cancelTarget = stripEditorSuffix(currentPath) || '/documents'
   const hasDocumentCancelAction = !!view.allowed_actions?.some((actionKey) => actionKey.toLowerCase() === 'cancel')
 
+  async function handleAction(actionKey: string) {
+    try {
+      await invokeDocumentAction(String(header.id || ''), actionKey)
+      onToast(`Action ${actionKey} applied`, 'success')
+      setReloadKey((current) => current + 1)
+    } catch (error) {
+      const status = (error as HttpError).status
+      const message = error instanceof Error ? error.message : 'Action failed'
+      if (status === 403 && /step-up verification required/i.test(message) && (actionKey === 'approve' || actionKey === 'reject')) {
+        setPendingAction(actionKey)
+        setStepUpCode('')
+        setStepUpError('')
+        setStepUpOpen(true)
+        return
+      }
+      onToast(message, 'error')
+    }
+  }
+
+  async function handleVerifyStepUp() {
+    const response = await fetch('/auth/2fa/approval/verify', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': readCookie('orbyte_csrf'),
+      },
+      body: JSON.stringify({ code: stepUpCode }),
+    })
+    if (!response.ok) throw await buildError(response)
+  }
+
   return (
     <Panel title={pickText(view, 'title', locale) || 'Detail'} status={String(header.status || '')}>
       <div className="mb-4 flex flex-wrap gap-3">
@@ -522,12 +568,7 @@ function DetailView({
         {view.allowed_actions?.map((actionKey) => (
           <button
             key={actionKey}
-            onClick={() =>
-              void invokeDocumentAction(String(header.id || ''), actionKey).then(() => {
-                onToast(`Action ${actionKey} applied`, 'success')
-                setReloadKey((current) => current + 1)
-              })
-            }
+            onClick={() => void handleAction(actionKey)}
             className="rounded-lg border border-line px-4 py-2 text-sm text-body"
           >
             {humanize(actionKey)}
@@ -554,6 +595,41 @@ function DetailView({
           </section>
         ))}
       </div>
+      <Modal isOpen={stepUpOpen} onClose={() => setStepUpOpen(false)} title="Two-Factor Verification" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Enter the code from Google Authenticator to continue with this approval action.</p>
+          <input
+            value={stepUpCode}
+            onChange={(event) => setStepUpCode(event.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            className="h-10 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-body"
+            placeholder="123456"
+          />
+          {stepUpError ? <div className="text-sm text-danger">{stepUpError}</div> : null}
+          <div className="flex gap-3">
+            <button onClick={() => setStepUpOpen(false)} className="rounded-lg border border-line px-4 py-2 text-body">
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                void handleVerifyStepUp()
+                  .then(async () => {
+                    setStepUpOpen(false)
+                    setStepUpError('')
+                    if (pendingAction) {
+                      await handleAction(pendingAction)
+                    }
+                  })
+                  .catch((error) => setStepUpError(error instanceof Error ? error.message : 'Verification failed'))
+              }}
+              className="rounded-lg bg-accent px-4 py-2 text-white"
+            >
+              Verify
+            </button>
+          </div>
+        </div>
+      </Modal>
     </Panel>
   )
 }
@@ -1201,9 +1277,9 @@ async function fetchJSON<T>(url: string): Promise<T> {
 async function buildError(response: Response): Promise<Error> {
   try {
     const payload = await response.json()
-    return new Error(payload?.error?.message || `Request failed: ${response.status}`)
+    return Object.assign(new Error(payload?.error?.message || `Request failed: ${response.status}`), { status: response.status })
   } catch {
-    return new Error(`Request failed: ${response.status}`)
+    return Object.assign(new Error(`Request failed: ${response.status}`), { status: response.status })
   }
 }
 

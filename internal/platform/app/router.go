@@ -20,6 +20,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 		Actions:       graph.modelActions,
 	}
 	documentDeps := httpx.DocumentDeps{
+		Config:        graph.config,
 		Identity:      graph.identity,
 		Modules:       graph.modules,
 		Documents:     graph.documents,

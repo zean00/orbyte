@@ -10,6 +10,8 @@ type MemoryRepository struct {
 	grants            []RolePermission
 	credentials       []Credential
 	sessions          []Session
+	totpEnrollments   []TOTPEnrollment
+	authChallenges    []AuthChallenge
 	servicePrincipals []ServicePrincipal
 	delegationGrants  []DelegationGrant
 	deepLinkGrants    []DeepLinkGrant
@@ -26,6 +28,8 @@ func NewMemoryRepository(users []User, roles []Role, permissions []Permission, b
 		grants:            append([]RolePermission(nil), grants...),
 		credentials:       append([]Credential(nil), credentials...),
 		sessions:          append([]Session(nil), sessions...),
+		totpEnrollments:   []TOTPEnrollment{},
+		authChallenges:    []AuthChallenge{},
 		servicePrincipals: append([]ServicePrincipal(nil), servicePrincipals...),
 		delegationGrants:  []DelegationGrant{},
 		deepLinkGrants:    []DeepLinkGrant{},
@@ -60,6 +64,14 @@ func (r *MemoryRepository) Credentials() []Credential {
 
 func (r *MemoryRepository) Sessions() []Session {
 	return append([]Session(nil), r.sessions...)
+}
+
+func (r *MemoryRepository) TOTPEnrollments() []TOTPEnrollment {
+	return append([]TOTPEnrollment(nil), r.totpEnrollments...)
+}
+
+func (r *MemoryRepository) AuthChallenges() []AuthChallenge {
+	return append([]AuthChallenge(nil), r.authChallenges...)
 }
 
 func (r *MemoryRepository) ServicePrincipals() []ServicePrincipal {
@@ -190,6 +202,24 @@ func (r *MemoryRepository) FindCredentialByUserID(userID string) (Credential, bo
 	return Credential{}, false
 }
 
+func (r *MemoryRepository) FindTOTPEnrollmentByUserID(userID string) (TOTPEnrollment, bool) {
+	for _, enrollment := range r.totpEnrollments {
+		if enrollment.UserID == userID {
+			return enrollment, true
+		}
+	}
+	return TOTPEnrollment{}, false
+}
+
+func (r *MemoryRepository) FindAuthChallenge(id string) (AuthChallenge, bool) {
+	for _, challenge := range r.authChallenges {
+		if challenge.ID == id {
+			return challenge, true
+		}
+	}
+	return AuthChallenge{}, false
+}
+
 func (r *MemoryRepository) FindServicePrincipal(id string) (ServicePrincipal, bool) {
 	for _, principal := range r.servicePrincipals {
 		if principal.ID == id {
@@ -280,6 +310,28 @@ func (r *MemoryRepository) SaveSession(session Session) error {
 		}
 	}
 	r.sessions = append(r.sessions, session)
+	return nil
+}
+
+func (r *MemoryRepository) SaveTOTPEnrollment(enrollment TOTPEnrollment) error {
+	for i, current := range r.totpEnrollments {
+		if current.UserID == enrollment.UserID {
+			r.totpEnrollments[i] = enrollment
+			return nil
+		}
+	}
+	r.totpEnrollments = append(r.totpEnrollments, enrollment)
+	return nil
+}
+
+func (r *MemoryRepository) SaveAuthChallenge(challenge AuthChallenge) error {
+	for i, current := range r.authChallenges {
+		if current.ID == challenge.ID {
+			r.authChallenges[i] = challenge
+			return nil
+		}
+	}
+	r.authChallenges = append(r.authChallenges, challenge)
 	return nil
 }
 

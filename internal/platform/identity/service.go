@@ -693,6 +693,10 @@ func (s *Service) FindSession(id string) (Session, bool) {
 	return s.repo.FindSession(id)
 }
 
+func (s *Service) SaveSession(session Session) error {
+	return s.repo.SaveSession(session)
+}
+
 func (s *Service) FindUserByUsername(username string) (User, bool) {
 	return s.repo.FindUserByUsername(username)
 }
@@ -1306,25 +1310,25 @@ func (s *Service) CreateUserWithPasswordPolicy(username, password, defaultLocati
 	return user, nil
 }
 
-func (s *Service) AuthenticatePassword(username, password, locationID string, clientMetadata map[string]any, ttl time.Duration) (Session, error) {
+func (s *Service) AuthenticatePasswordPrimary(username, password string) (User, error) {
 	user, ok := s.repo.FindUserByUsername(username)
 	if !ok {
-		return Session{}, shared.Unauthorized("invalid credentials")
+		return User{}, shared.Unauthorized("invalid credentials")
 	}
 	if user.Status != "active" {
-		return Session{}, shared.Forbidden("user not active")
+		return User{}, shared.Forbidden("user not active")
 	}
 	credential, ok := s.repo.FindCredentialByUserID(user.ID)
 	if !ok {
-		return Session{}, shared.Unauthorized("invalid credentials")
+		return User{}, shared.Unauthorized("invalid credentials")
 	}
 	now := time.Now().UTC()
 	if !credential.LockedUntil.IsZero() && credential.LockedUntil.After(now) {
-		return Session{}, shared.Forbidden("account temporarily locked")
+		return User{}, shared.Forbidden("account temporarily locked")
 	}
 	verified, err := VerifyPassword(credential.PasswordHash, password)
 	if err != nil {
-		return Session{}, err
+		return User{}, err
 	}
 	if !verified {
 		credential.FailedAttemptCount++
@@ -1334,15 +1338,26 @@ func (s *Service) AuthenticatePassword(username, password, locationID string, cl
 		}
 		credential.UpdatedAt = now
 		if saveErr := s.repo.SaveCredential(credential); saveErr != nil {
-			return Session{}, saveErr
+			return User{}, saveErr
 		}
-		return Session{}, shared.Unauthorized("invalid credentials")
+		return User{}, shared.Unauthorized("invalid credentials")
 	}
 	credential.FailedAttemptCount = 0
 	credential.LockedUntil = time.Time{}
 	credential.UpdatedAt = now
 	if err := s.repo.SaveCredential(credential); err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+func (s *Service) AuthenticatePassword(username, password, locationID string, clientMetadata map[string]any, ttl time.Duration) (Session, error) {
+	user, err := s.AuthenticatePasswordPrimary(username, password)
+	if err != nil {
 		return Session{}, err
+	}
+	if user.Username != username {
+		username = user.Username
 	}
 	return s.StartSession(username, locationID, "password", clientMetadata, ttl)
 }
@@ -1364,10 +1379,10 @@ func (s *Service) StartSession(username, locationID, authenticationMethod string
 	return s.startSessionForUser(user, locationID, authenticationMethod, clientMetadata, ttl)
 }
 
-func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string, clientMetadata map[string]any, ttl time.Duration, provisioning GoogleProvisioningPolicy) (Session, error) {
+func (s *Service) AuthenticateGooglePrimary(identity GoogleIdentity, clientMetadata map[string]any, provisioning GoogleProvisioningPolicy) (User, map[string]any, error) {
 	subject := "google:" + strings.TrimSpace(identity.Subject)
 	if subject == "google:" {
-		return Session{}, shared.Validation("google subject is required")
+		return User{}, nil, shared.Validation("google subject is required")
 	}
 	user, ok := s.repo.FindUserByAuthenticationSubject(subject)
 	if !ok {
@@ -1375,7 +1390,7 @@ func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string,
 		if !ok {
 			provisioned, err := s.provisionGoogleUser(identity, subject, provisioning)
 			if err != nil {
-				return Session{}, err
+				return User{}, nil, err
 			}
 			user = provisioned
 		}
@@ -1384,10 +1399,10 @@ func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string,
 		user.AuthenticationSubject = subject
 		user.UpdatedAt = time.Now().UTC()
 		if err := s.repo.SaveUser(user); err != nil {
-			return Session{}, err
+			return User{}, nil, err
 		}
 	} else if user.AuthenticationSubject != subject {
-		return Session{}, shared.Forbidden("google account does not match linked platform user")
+		return User{}, nil, shared.Forbidden("google account does not match linked platform user")
 	}
 	metadata := cloneMetadata(clientMetadata)
 	if metadata == nil {
@@ -1400,6 +1415,17 @@ func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string,
 	}
 	if identity.Name != "" {
 		metadata["google_name"] = identity.Name
+	}
+	return user, metadata, nil
+}
+
+func (s *Service) AuthenticateGoogle(identity GoogleIdentity, locationID string, clientMetadata map[string]any, ttl time.Duration, provisioning GoogleProvisioningPolicy) (Session, error) {
+	user, metadata, err := s.AuthenticateGooglePrimary(identity, clientMetadata, provisioning)
+	if err != nil {
+		return Session{}, err
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
 	}
 	return s.startSessionForUser(user, locationID, "google", metadata, ttl)
 }
