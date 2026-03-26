@@ -151,7 +151,7 @@ func AnalyticsCockpitBundle() string {
         +       '<div class="analytics-cockpit__panel-body"><div class="analytics-cockpit__table-wrap"><table class="analytics-cockpit__table"><thead><tr><th>' + text('Document Type', 'Jenis Dokumen') + '</th><th>' + text('Active Flow', 'Arus Aktif') + '</th><th>' + text('Draft', 'Draf') + '</th></tr></thead><tbody>' + renderRows(typeRows, text('No document activity yet.', 'Belum ada aktivitas dokumen.')) + '</tbody></table></div></div>'
         +       '</section>'
         +     '<section class="analytics-cockpit__panel">'
-        +       '<div class="analytics-cockpit__panel-header"><div><h3>' + text('By Location', 'Per Lokasi') + '</h3><span>' + text('Operational activity split by site', 'Aktivitas operasional per lokasi') + '</span></div></div>'
+	      +       '<div class="analytics-cockpit__panel-header"><div><h3>' + text('By Location', 'Per Lokasi') + '</h3><span>' + text('Operational activity split by site', 'Aktivitas per situs') + '</span></div></div>'
         +       '<div class="analytics-cockpit__panel-body"><div class="analytics-cockpit__table-wrap"><table class="analytics-cockpit__table"><thead><tr><th>' + text('Location', 'Lokasi') + '</th><th>' + text('Active Flow', 'Arus Aktif') + '</th><th>' + text('Rejected', 'Ditolak') + '</th></tr></thead><tbody>' + renderRows(locationRows, text('No location activity yet.', 'Belum ada aktivitas lokasi.')) + '</tbody></table></div></div>'
         +       '</section>'
         +   '</section>'
