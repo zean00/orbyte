@@ -58,6 +58,7 @@ func FromModule(def module.TemplateDefinition, moduleKey string) Definition {
 		Formats:             append([]string(nil), def.Formats...),
 		Purpose:             def.Purpose,
 		Channel:             def.Channel,
+		RelatedSources:      nil,
 		AllowedScopes:       append([]string(nil), def.AllowedScopes...),
 		RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
 		DefaultBody:         def.DefaultBody,
@@ -69,6 +70,9 @@ func (s *Service) RegisterDefinition(def Definition) error {
 	if strings.TrimSpace(def.Key) == "" || strings.TrimSpace(def.Title) == "" || strings.TrimSpace(def.TargetKind) == "" || strings.TrimSpace(def.TargetKey) == "" {
 		return shared.Validation("template key, title, target_kind, and target_key are required")
 	}
+	if err := validateDefinition(def); err != nil {
+		return err
+	}
 	def.RendererKind = normalizeRenderer(def.RendererKind)
 	if def.RendererKind == "" {
 		return shared.Validation("template renderer_kind is invalid")
@@ -79,24 +83,104 @@ func (s *Service) RegisterDefinition(def Definition) error {
 	if len(def.Formats) == 0 {
 		def.Formats = []string{def.DefaultFormat}
 	}
+	if _, exists := s.repo.GetDefinition(def.Key); exists {
+		return nil
+	}
 	if _, exists := s.defs[def.Key]; exists {
-		return shared.Conflict("template key already registered")
+		return nil
 	}
 	s.defs[def.Key] = def
-	return nil
+	return s.repo.SaveDefinition(def)
+}
+
+func (s *Service) SaveDefinition(def Definition) (Definition, error) {
+	if strings.TrimSpace(def.Key) == "" || strings.TrimSpace(def.Title) == "" || strings.TrimSpace(def.TargetKind) == "" || strings.TrimSpace(def.TargetKey) == "" {
+		return Definition{}, shared.Validation("template key, title, target_kind, and target_key are required")
+	}
+	if err := validateDefinition(def); err != nil {
+		return Definition{}, err
+	}
+	def.RendererKind = normalizeRenderer(def.RendererKind)
+	if def.RendererKind == "" {
+		return Definition{}, shared.Validation("template renderer_kind is invalid")
+	}
+	if def.DefaultFormat == "" {
+		def.DefaultFormat = "html"
+	}
+	if len(def.Formats) == 0 {
+		def.Formats = []string{def.DefaultFormat}
+	}
+	if current, ok := s.Definition(def.Key); ok {
+		if strings.TrimSpace(def.DefaultBody) == "" {
+			def.DefaultBody = current.DefaultBody
+		}
+		if strings.TrimSpace(def.DefaultStyle) == "" {
+			def.DefaultStyle = current.DefaultStyle
+		}
+		if len(def.AllowedScopes) == 0 {
+			def.AllowedScopes = append([]string(nil), current.AllowedScopes...)
+		}
+		if len(def.RequiredPermissions) == 0 {
+			def.RequiredPermissions = append([]string(nil), current.RequiredPermissions...)
+		}
+	}
+	s.defs[def.Key] = def
+	if err := s.repo.SaveDefinition(def); err != nil {
+		return Definition{}, err
+	}
+	return def, nil
 }
 
 func (s *Service) Definitions() []Definition {
-	items := make([]Definition, 0, len(s.defs))
+	itemsByKey := map[string]Definition{}
 	for _, item := range s.defs {
+		itemsByKey[item.Key] = item
+	}
+	for _, item := range s.repo.Definitions() {
+		itemsByKey[item.Key] = item
+	}
+	items := make([]Definition, 0, len(itemsByKey))
+	for _, item := range itemsByKey {
 		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
 }
 
+func (s *Service) DeleteDefinition(key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return shared.Validation("template key is required")
+	}
+	if _, ok := s.Definition(key); !ok {
+		return shared.NotFound("template definition not found")
+	}
+	delete(s.defs, key)
+	if err := s.repo.DeleteDefinition(key); err != nil {
+		return err
+	}
+	if err := s.repo.DeleteVersions(key); err != nil {
+		return err
+	}
+	if err := s.repo.DeleteFixtures(key); err != nil {
+		return err
+	}
+	for _, binding := range s.Bindings() {
+		if binding.TemplateKey == key {
+			if err := s.repo.DeleteBinding(binding.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Service) Definition(key string) (Definition, bool) {
-	item, ok := s.defs[strings.TrimSpace(key)]
+	key = strings.TrimSpace(key)
+	if item, ok := s.repo.GetDefinition(key); ok {
+		return item, true
+	}
+	item, ok := s.defs[key]
 	return item, ok
 }
 
@@ -377,6 +461,19 @@ func (s *Service) SaveBinding(binding Binding) (Binding, error) {
 	return binding, nil
 }
 
+func (s *Service) DeleteBinding(bindingID string) error {
+	bindingID = strings.TrimSpace(bindingID)
+	if bindingID == "" {
+		return shared.Validation("binding id is required")
+	}
+	for _, binding := range s.Bindings() {
+		if binding.ID == bindingID {
+			return s.repo.DeleteBinding(bindingID)
+		}
+	}
+	return shared.NotFound("template binding not found")
+}
+
 func (s *Service) SaveFixture(fixture TemplateFixture) (TemplateFixture, error) {
 	defKey := strings.TrimSpace(fixture.TemplateKey)
 	if defKey != "" {
@@ -606,12 +703,14 @@ func (s *Service) renderContext(req RenderRequest, def Definition) (map[string]a
 		default:
 			return nil, shared.Validation("unsupported template target kind")
 		}
+		s.attachRelatedSources(ctx, def, fixture.Payload, req.Sample)
 		return ctx, nil
 	}
 	switch def.TargetKind {
 	case "document":
 		if req.Sample || strings.TrimSpace(req.TargetID) == "" {
 			ctx["document"] = sampleDocument(def)
+			s.attachRelatedSources(ctx, def, ctx["document"], true)
 			return ctx, nil
 		}
 		record, err := s.documents.Get(req.TargetID)
@@ -619,6 +718,7 @@ func (s *Service) renderContext(req RenderRequest, def Definition) (map[string]a
 			return nil, err
 		}
 		ctx["document"] = normalizeDocument(record)
+		s.attachRelatedSources(ctx, def, record, false)
 	case "report":
 		key := req.TargetKey
 		if key == "" {
@@ -626,6 +726,7 @@ func (s *Service) renderContext(req RenderRequest, def Definition) (map[string]a
 		}
 		if req.Sample {
 			ctx["report"] = sampleReport(def, key)
+			s.attachRelatedSources(ctx, def, ctx["report"], true)
 			return ctx, nil
 		}
 		result, err := s.reporting.ExecuteView(key, req.Query, req.ReportView)
@@ -633,6 +734,7 @@ func (s *Service) renderContext(req RenderRequest, def Definition) (map[string]a
 			return nil, err
 		}
 		ctx["report"] = result
+		s.attachRelatedSources(ctx, def, result, false)
 	default:
 		return nil, shared.Validation("unsupported template target kind")
 	}
@@ -870,6 +972,38 @@ func filterIssues(issues []ValidationIssue, severity string) []ValidationIssue {
 	return out
 }
 
+func validateDefinition(def Definition) error {
+	switch strings.TrimSpace(def.TargetKind) {
+	case "document", "report":
+	default:
+		return shared.Validation("template target_kind must be document or report")
+	}
+	for _, source := range def.RelatedSources {
+		if strings.TrimSpace(source.Key) == "" {
+			return shared.Validation("template related_sources key is required")
+		}
+		if strings.TrimSpace(source.TargetKind) == "" || strings.TrimSpace(source.TargetKey) == "" {
+			return shared.Validation("template related_sources target_kind and target_key are required")
+		}
+		switch strings.TrimSpace(source.TargetKind) {
+		case "document":
+		default:
+			return shared.Validation("template related_sources target_kind must be document")
+		}
+		switch normalizeRelationMode(source.RelationMode) {
+		case "direct", "indirect":
+		default:
+			return shared.Validation("template related_sources relation_mode must be direct or indirect")
+		}
+		switch strings.TrimSpace(source.SourceKind) {
+		case "", "document_link", "report_row_document":
+		default:
+			return shared.Validation("template related_sources source_kind is invalid")
+		}
+	}
+	return nil
+}
+
 func mergeRenderRequest(req RenderRequest, format string) RenderRequest {
 	req.Format = format
 	return req
@@ -887,11 +1021,12 @@ func renderDataSource(req RenderRequest) string {
 
 func dataContextSummary(def Definition, dataSource string, req RenderRequest) map[string]any {
 	return map[string]any{
-		"target_kind": def.TargetKind,
-		"target_key":  coalesceString(req.TargetKey, def.TargetKey),
-		"target_id":   strings.TrimSpace(req.TargetID),
-		"data_source": dataSource,
-		"fixture_key": strings.TrimSpace(req.FixtureKey),
+		"target_kind":     def.TargetKind,
+		"target_key":      coalesceString(req.TargetKey, def.TargetKey),
+		"target_id":       strings.TrimSpace(req.TargetID),
+		"data_source":     dataSource,
+		"fixture_key":     strings.TrimSpace(req.FixtureKey),
+		"related_sources": def.RelatedSources,
 	}
 }
 
@@ -1188,6 +1323,191 @@ func normalizeDocument(record document.Record) map[string]any {
 		"body":   body,
 		"lines":  lines,
 	}
+}
+
+func (s *Service) attachRelatedSources(ctx map[string]any, def Definition, primary any, sample bool) {
+	if len(def.RelatedSources) == 0 {
+		return
+	}
+	related := map[string]any{}
+	relatedSingle := map[string]any{}
+	for _, source := range def.RelatedSources {
+		key := strings.TrimSpace(source.Key)
+		if key == "" {
+			continue
+		}
+		switch {
+		case sample:
+			items := []any{sampleRelatedDocument(source)}
+			related[key] = items
+			relatedSingle[key] = items[0]
+		case def.TargetKind == "document":
+			record, ok := primary.(document.Record)
+			if !ok {
+				continue
+			}
+			items := s.relatedDocumentsForRecord(record.Header.ID, source)
+			related[key] = items
+			if len(items) > 0 {
+				relatedSingle[key] = items[0]
+			}
+		case def.TargetKind == "report":
+			items := s.relatedDocumentsForReport(primary, source)
+			related[key] = items
+			if len(items) > 0 {
+				relatedSingle[key] = items[0]
+			}
+		}
+	}
+	if len(related) > 0 {
+		ctx["related_documents"] = related
+		ctx["related_document"] = relatedSingle
+		ctx["related"] = related
+	}
+}
+
+func sampleRelatedDocument(source RelatedSource) map[string]any {
+	sample := sampleDocument(Definition{TargetKey: source.TargetKey})
+	if header, ok := sample["header"].(map[string]any); ok {
+		header["number"] = "REL-" + strings.ToUpper(strings.ReplaceAll(source.TargetKey, ".", "-"))
+	}
+	if body, ok := sample["body"].(map[string]any); ok {
+		if payload, ok := body["payload"].(map[string]any); ok {
+			payload["title"] = strings.TrimSpace(source.Label)
+			if payload["title"] == "" {
+				payload["title"] = startCase(strings.ReplaceAll(source.TargetKey, ".", " "))
+			}
+		}
+	}
+	return sample
+}
+
+func (s *Service) relatedDocumentsForRecord(rootID string, source RelatedSource) []any {
+	if s.documents == nil || strings.TrimSpace(rootID) == "" {
+		return []any{}
+	}
+	candidates := traverseDocumentGraph(s.documents.List(), []string{rootID}, relationDepth(source))
+	items := make([]any, 0, len(candidates))
+	for _, item := range candidates {
+		if item.Header.Type != source.TargetKey {
+			continue
+		}
+		items = append(items, normalizeDocument(item))
+	}
+	return items
+}
+
+func (s *Service) relatedDocumentsForReport(primary any, source RelatedSource) []any {
+	rows := normalizeSlice(lookupPath(primary, "rows"))
+	seedIDs := make([]string, 0)
+	path := strings.TrimSpace(source.DocumentIDPath)
+	if path == "" {
+		path = "document_id"
+	}
+	for _, row := range rows {
+		values := lookupPath(row, path)
+		switch typed := values.(type) {
+		case string:
+			if strings.TrimSpace(typed) != "" {
+				seedIDs = append(seedIDs, strings.TrimSpace(typed))
+			}
+		case []any:
+			for _, item := range typed {
+				if value, ok := item.(string); ok && strings.TrimSpace(value) != "" {
+					seedIDs = append(seedIDs, strings.TrimSpace(value))
+				}
+			}
+		}
+	}
+	if len(seedIDs) == 0 {
+		return []any{}
+	}
+	candidates := traverseDocumentGraph(s.documents.List(), seedIDs, relationDepth(source))
+	items := make([]any, 0, len(candidates))
+	for _, item := range candidates {
+		if item.Header.Type != source.TargetKey {
+			continue
+		}
+		items = append(items, normalizeDocument(item))
+	}
+	return items
+}
+
+func normalizeRelationMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "indirect":
+		return "indirect"
+	default:
+		return "direct"
+	}
+}
+
+func relationDepth(source RelatedSource) int {
+	if normalizeRelationMode(source.RelationMode) == "indirect" {
+		if source.MaxDepth > 1 {
+			return source.MaxDepth
+		}
+		return 2
+	}
+	return 1
+}
+
+func traverseDocumentGraph(records []document.Record, seedIDs []string, depth int) []document.Record {
+	if depth <= 0 {
+		return []document.Record{}
+	}
+	byID := make(map[string]document.Record, len(records))
+	neighbors := make(map[string][]string, len(records))
+	for _, record := range records {
+		byID[record.Header.ID] = record
+	}
+	for _, record := range records {
+		for _, link := range record.Links {
+			neighbors[record.Header.ID] = append(neighbors[record.Header.ID], link.LinkedDocumentID)
+			neighbors[link.LinkedDocumentID] = append(neighbors[link.LinkedDocumentID], record.Header.ID)
+		}
+	}
+	queue := append([]string(nil), seedIDs...)
+	distance := map[string]int{}
+	for _, id := range seedIDs {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		distance[id] = 0
+	}
+	collected := make([]document.Record, 0)
+	seen := map[string]bool{}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		currentDistance, ok := distance[current]
+		if !ok || currentDistance >= depth {
+			continue
+		}
+		for _, next := range neighbors[current] {
+			if _, visited := distance[next]; visited {
+				continue
+			}
+			distance[next] = currentDistance + 1
+			queue = append(queue, next)
+			if record, exists := byID[next]; exists && !seen[next] {
+				seen[next] = true
+				collected = append(collected, record)
+			}
+		}
+	}
+	return collected
+}
+
+func startCase(value string) string {
+	parts := strings.Fields(strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(value))
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+	}
+	return strings.Join(parts, " ")
 }
 
 func normalizeVisualTemplate(visual VisualTemplate) VisualTemplate {

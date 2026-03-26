@@ -14,6 +14,46 @@ import (
 	"orbyte/internal/platform/reporting"
 )
 
+func TestServicePersistsTemplateDefinitionsAcrossServiceInstances(t *testing.T) {
+	repo := NewMemoryRepository()
+	reportingSvc := reporting.NewService(model.NewService())
+	svc := NewServiceWithRepository(repo, document.NewService(), reportingSvc)
+	def := Definition{
+		Key:          "documents.invoice.print",
+		Title:        "Invoice Print",
+		TargetKind:   "document",
+		TargetKey:    "invoice",
+		RendererKind: "visual",
+		DefaultBody:  `{"schema_version":"visual-grid/v1","title":"Invoice Print","sections":[]}`,
+	}
+	if err := svc.RegisterDefinition(def); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+	updated, err := svc.SaveDefinition(Definition{
+		Key:          def.Key,
+		Title:        `Invoice "Official" Print`,
+		TargetKind:   def.TargetKind,
+		TargetKey:    def.TargetKey,
+		RendererKind: def.RendererKind,
+		DefaultBody:  def.DefaultBody,
+	})
+	if err != nil {
+		t.Fatalf("save definition failed: %v", err)
+	}
+
+	reloaded := NewServiceWithRepository(repo, document.NewService(), reportingSvc)
+	got, ok := reloaded.Definition(def.Key)
+	if !ok {
+		t.Fatalf("expected definition %q to reload from repository", def.Key)
+	}
+	if got.Title != updated.Title {
+		t.Fatalf("expected persisted title %q, got %q", updated.Title, got.Title)
+	}
+	if len(reloaded.Definitions()) != 1 {
+		t.Fatalf("expected one persisted definition, got %+v", reloaded.Definitions())
+	}
+}
+
 func TestServiceRendersDocumentTemplateAndPublishesDraft(t *testing.T) {
 	docs := document.NewService()
 	record, err := docs.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{"title": "Need approval"})

@@ -13,7 +13,46 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
+type workflowCreateRequest struct {
+	Key string `json:"key"`
+}
+
 func registerAdminWorkflowRoutes(mux *http.ServeMux, ident *identity.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service) {
+	mux.HandleFunc("POST /admin/api/workflows", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage")
+		if !ok {
+			return
+		}
+		var req workflowCreateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid workflow payload"))
+			return
+		}
+		key := strings.TrimSpace(req.Key)
+		if key == "" {
+			respondError(w, shared.Validation("workflow key is required"))
+			return
+		}
+		def := workflow.Definition{
+			Key:    key,
+			States: []string{"draft", "submitted", "approved", "cancelled"},
+			Actions: []workflow.ActionRule{
+				{Action: "submit", FromState: "draft", ToState: "submitted"},
+				{Action: "approve", FromState: "submitted", ToState: "approved"},
+				{Action: "reopen", FromState: "approved", ToState: "draft"},
+				{Action: "cancel", FromState: "draft", ToState: "cancelled"},
+				{Action: "cancel", FromState: "submitted", ToState: "cancelled"},
+			},
+			UpdatedBy: principalActorID(p),
+		}
+		draft, err := workflowSvc.RegisterDraft(def)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusCreated, draft)
+	})
+
 	mux.HandleFunc("GET /admin/api/workflows/", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
@@ -36,6 +75,22 @@ func registerAdminWorkflowRoutes(mux *http.ServeMux, ident *identity.Service, wo
 		default:
 			respondError(w, shared.NotFound("workflow route not found"))
 		}
+	})
+
+	mux.HandleFunc("DELETE /admin/api/workflows/", func(w http.ResponseWriter, r *http.Request) {
+		key, version, action, ok := adminWorkflowPath(r.URL.Path)
+		if !ok || version != 0 || action != "" {
+			respondError(w, shared.NotFound("workflow route not found"))
+			return
+		}
+		if _, ok := requireAuthorization(w, r, ident, "configuration.manage", "", "configuration.manage"); !ok {
+			return
+		}
+		if err := workflowSvc.Delete(key); err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"deleted": true})
 	})
 
 	mux.HandleFunc("POST /admin/api/workflows/", func(w http.ResponseWriter, r *http.Request) {

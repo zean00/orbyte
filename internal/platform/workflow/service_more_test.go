@@ -201,6 +201,40 @@ func TestWorkflowListDefinitionsAndHelper(t *testing.T) {
 	}
 }
 
+func TestRegisterDraftLeavesWorkflowUnpublishedUntilExplicitPublish(t *testing.T) {
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(repo)
+	def, err := svc.RegisterDraft(Definition{
+		Key:    "invoice_approval_flow",
+		States: []string{"draft", "approved"},
+		Actions: []ActionRule{
+			{Action: "approve", FromState: "draft", ToState: "approved", PermissionKey: "document.approve"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("register draft failed: %v", err)
+	}
+	if def.Status != "draft" || def.Version != 1 {
+		t.Fatalf("expected initial draft version, got %+v", def)
+	}
+	if _, err := svc.Get(def.Key); err == nil {
+		t.Fatal("expected draft-only workflow to be unavailable to runtime")
+	}
+	defs := svc.ListDefinitions()
+	found := false
+	for _, item := range defs {
+		if item.Key == def.Key {
+			found = true
+			if item.Status != "draft" || item.Version != 1 {
+				t.Fatalf("expected draft-only workflow in admin list, got %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected draft-only workflow %q to appear in definitions list", def.Key)
+	}
+}
+
 func TestValidateDefinitionReturnsExpandedIssues(t *testing.T) {
 	err := validateDefinition(Definition{
 		Key:    " ",

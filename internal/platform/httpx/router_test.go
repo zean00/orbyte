@@ -173,7 +173,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 				ACP:           acpSvc,
 			}),
 			RegisterACPSurface(ACPDeps{Identity: ident, Audit: auditSvc, Service: acpSvc}),
-			RegisterTemplateSurface(TemplateDeps{Identity: ident, Templates: templateSvc}),
+			RegisterTemplateSurface(TemplateDeps{Identity: ident, Templates: templateSvc, Documents: docs, Reporting: reportingSvc}),
 			RegisterMCPSurface(MCPDeps{
 				Identity: ident,
 				Audit:    auditSvc,

@@ -3,6 +3,19 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Shell } from '@/components/layout/Shell'
 import { useShellStore } from '@/stores/shellStore'
 import { normalizeShellPath } from '@/services/bootstrap'
+import { mutateJson } from './adminClient'
+import { TemplateDesignerPage } from './TemplateDesignerPage'
+import { WorkflowDesignerPage } from './WorkflowDesignerPage'
+
+type TargetOption = {
+  key: string
+  title?: string
+}
+
+type TemplateTargetCatalog = {
+  documents?: TargetOption[]
+  reports?: TargetOption[]
+}
 
 export default function AdminWorkspacePage() {
   const location = useLocation()
@@ -124,6 +137,9 @@ function AdminContent({
   }
 
   if (path === '/definitions' || path === '/templates') {
+    if (path === '/templates') {
+      return <TemplateListPage rows={asItems(payload)} />
+    }
     return (
       <DataGrid
         columns={[
@@ -136,6 +152,18 @@ function AdminContent({
         rows={asItems(payload)}
       />
     )
+  }
+
+  if (path === '/templates/designer') {
+    return <TemplateDesignerPage />
+  }
+
+  if (path === '/workflows') {
+    return <WorkflowListPage rows={asItems(payload)} />
+  }
+
+  if (path === '/workflows/designer') {
+    return <WorkflowDesignerPage />
   }
 
   if (path === '/security') {
@@ -193,6 +221,12 @@ function endpointForPath(path: string): string {
       return '/admin/api/observability/contracts'
     case '/templates':
       return '/admin/api/templates/definitions'
+    case '/templates/designer':
+      return '/admin/api/templates/definitions'
+    case '/workflows':
+      return '/admin/api/workflows'
+    case '/workflows/designer':
+      return '/admin/api/workflows'
     default:
       return ''
   }
@@ -214,6 +248,12 @@ function titleForPath(path: string): string {
       return 'Observability'
     case '/templates':
       return 'Templates'
+    case '/templates/designer':
+      return 'Template Designer'
+    case '/workflows':
+      return 'Workflows'
+    case '/workflows/designer':
+      return 'Workflow Designer'
     case '/org':
       return 'Organization'
     default:
@@ -251,12 +291,221 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   )
 }
 
+function TemplateListPage({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const navigate = useNavigate()
+  const [targetCatalog, setTargetCatalog] = useState<TemplateTargetCatalog>({})
+  const [draft, setDraft] = useState({ key: '', title: '', targetKind: 'document', targetKey: '', purpose: '' })
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    async function loadCatalog() {
+      try {
+        const payload = await fetch('/admin/api/template-targets', { credentials: 'include' })
+        const data = (await payload.json()) as TemplateTargetCatalog
+        if (!mounted) return
+        setTargetCatalog(data || {})
+        setDraft((current) => ({
+          ...current,
+          targetKey: current.targetKey || (current.targetKind === 'report' ? data?.reports?.[0]?.key || '' : data?.documents?.[0]?.key || ''),
+        }))
+      } catch {
+        if (!mounted) return
+      }
+    }
+    void loadCatalog()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const targetOptions = draft.targetKind === 'report' ? targetCatalog.reports || [] : targetCatalog.documents || []
+
+  async function createTemplate() {
+    setBusy(true)
+    setMessage('')
+    try {
+      await mutateJson('/admin/api/templates/definitions', {
+        method: 'POST',
+        body: JSON.stringify({
+          key: draft.key,
+          title: draft.title,
+          target_kind: draft.targetKind,
+          target_key: draft.targetKey,
+          renderer_kind: 'visual',
+          default_format: 'html',
+          purpose: draft.purpose,
+        }),
+      })
+      navigate(`/templates/designer?key=${encodeURIComponent(draft.key)}`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to create template.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteTemplate(row: Record<string, unknown>) {
+    const key = String(resolvePath(row, 'key') || '')
+    if (!key) return
+    setBusy(true)
+    setMessage('')
+    try {
+      await mutateJson(`/admin/api/templates/definitions/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      })
+      navigate(0)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to delete template.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-line bg-accent-soft/60 p-4 text-sm text-body">
+        Select a template to open the visual designer, preview drafts, and use advanced body or style editing.
+      </div>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <div className="mb-3 text-sm font-semibold text-body">Create New Template</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <input className="admin-input" placeholder="Key" value={draft.key} onChange={(event) => setDraft((current) => ({ ...current, key: event.target.value }))} />
+          <input className="admin-input" placeholder="Title" value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
+          <select
+            className="admin-input"
+            value={draft.targetKind}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                targetKind: event.target.value,
+                targetKey: event.target.value === 'report' ? targetCatalog.reports?.[0]?.key || '' : targetCatalog.documents?.[0]?.key || '',
+              }))
+            }
+          >
+            <option value="document">Document</option>
+            <option value="report">Report</option>
+          </select>
+          <select
+            className="admin-input"
+            value={draft.targetKey}
+            onChange={(event) => setDraft((current) => ({ ...current, targetKey: event.target.value }))}
+          >
+            <option value="">Select target</option>
+            {targetOptions.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.title || item.key}
+              </option>
+            ))}
+          </select>
+          <input className="admin-input" placeholder="Purpose" value={draft.purpose} onChange={(event) => setDraft((current) => ({ ...current, purpose: event.target.value }))} />
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button type="button" className="admin-button" disabled={busy || !draft.key || !draft.title || !draft.targetKey} onClick={() => void createTemplate()}>
+            Create New Template
+          </button>
+          {message ? <div className="text-sm text-body">{message}</div> : null}
+        </div>
+      </section>
+      <DataGrid
+        columns={[
+          { key: 'key', label: 'Template' },
+          { key: 'title', label: 'Title' },
+          { key: 'target_kind', label: 'Target' },
+          { key: 'default_format', label: 'Format' },
+          { key: 'purpose', label: 'Purpose' },
+        ]}
+        rows={rows}
+        actionLabel="Open Designer"
+        onAction={(row) => navigate(`/templates/designer?key=${encodeURIComponent(String(resolvePath(row, 'key') || ''))}`)}
+        secondaryActionLabel="Delete"
+        onSecondaryAction={(row) => void deleteTemplate(row)}
+      />
+    </div>
+  )
+}
+
+function WorkflowListPage({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const navigate = useNavigate()
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function createWorkflow() {
+    setBusy(true)
+    setMessage('')
+    try {
+      await mutateJson('/admin/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({ key }),
+      })
+      navigate(`/workflows/designer?key=${encodeURIComponent(key)}`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to create workflow.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteWorkflow(row: Record<string, unknown>) {
+    const key = String(resolvePath(row, 'key') || '')
+    if (!key) return
+    setBusy(true)
+    setMessage('')
+    try {
+      await mutateJson(`/admin/api/workflows/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      })
+      navigate(0)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to delete workflow.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-line bg-accent-soft/60 p-4 text-sm text-body">
+        Select a workflow to open the visual designer, manage versions, validate transitions, and simulate routing.
+      </div>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <div className="mb-3 text-sm font-semibold text-body">Create New Workflow</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+          <input className="admin-input" placeholder="Workflow Key" value={key} onChange={(event) => setKey(event.target.value)} />
+          <button type="button" className="admin-button" disabled={busy || !key} onClick={() => void createWorkflow()}>
+            Create New Workflow
+          </button>
+        </div>
+        {message ? <div className="mt-3 text-sm text-body">{message}</div> : null}
+      </section>
+      <DataGrid
+        columns={[{ key: 'key', label: 'Workflow' }]}
+        rows={rows}
+        actionLabel="Open Designer"
+        onAction={(row) => navigate(`/workflows/designer?key=${encodeURIComponent(String(resolvePath(row, 'key') || ''))}`)}
+        secondaryActionLabel="Delete"
+        onSecondaryAction={(row) => void deleteWorkflow(row)}
+      />
+    </div>
+  )
+}
+
 function DataGrid({
   columns,
   rows,
+  actionLabel,
+  onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: {
   columns: Array<{ key: string; label: string }>
   rows: Array<Record<string, unknown>>
+  actionLabel?: string
+  onAction?: (row: Record<string, unknown>) => void
+  secondaryActionLabel?: string
+  onSecondaryAction?: (row: Record<string, unknown>) => void
 }) {
   if (!rows.length) {
     return <div className="rounded-xl border border-dashed border-line p-6 text-sm text-muted">No data available.</div>
@@ -274,6 +523,7 @@ function DataGrid({
                 {column.label}
               </th>
             ))}
+            {actionLabel || secondaryActionLabel ? <th className="px-4 py-3" /> : null}
           </tr>
         </thead>
         <tbody className="divide-y divide-line bg-surface">
@@ -284,6 +534,22 @@ function DataGrid({
                   {displayValue(resolvePath(row, column.key))}
                 </td>
               ))}
+              {actionLabel || secondaryActionLabel ? (
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-2">
+                    {actionLabel ? (
+                      <button type="button" className="admin-button admin-button-secondary" onClick={() => onAction?.(row)}>
+                        {actionLabel}
+                      </button>
+                    ) : null}
+                    {secondaryActionLabel ? (
+                      <button type="button" className="admin-button admin-button-secondary" onClick={() => onSecondaryAction?.(row)}>
+                        {secondaryActionLabel}
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>

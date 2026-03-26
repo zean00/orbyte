@@ -41,6 +41,24 @@ func (s *Service) Register(def Definition) error {
 	return s.repo.SaveDefinition(def)
 }
 
+func (s *Service) RegisterDraft(def Definition) (Definition, error) {
+	if err := validateDefinition(def); err != nil {
+		return Definition{}, err
+	}
+	return s.repo.SaveDefinitionDraft(def)
+}
+
+func (s *Service) Delete(key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return shared.Validation("workflow key is required")
+	}
+	if _, ok := s.repo.GetDefinition(key); !ok {
+		return shared.NotFound("workflow definition not found")
+	}
+	return s.repo.DeleteDefinition(key)
+}
+
 func (s *Service) Get(key string) (Definition, error) {
 	def, ok := s.repo.GetDefinition(key)
 	if !ok {

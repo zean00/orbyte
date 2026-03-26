@@ -64,6 +64,51 @@ func (r *PostgresRepository) SaveDefinition(def Definition) error {
 	return tx.Commit()
 }
 
+func (r *PostgresRepository) SaveDefinitionDraft(def Definition) (Definition, error) {
+	if _, ok := r.GetDefinition(def.Key); ok {
+		return Definition{}, shared.Conflict("workflow definition already exists")
+	}
+	if existing, ok := r.GetDefinitionVersion(def.Key, 1); ok && existing.Key != "" {
+		return Definition{}, shared.Conflict("workflow definition already exists")
+	}
+	now := time.Now().UTC()
+	def.Version = 1
+	def.Status = "draft"
+	if def.CreatedAt.IsZero() {
+		def.CreatedAt = now
+	}
+	def.UpdatedAt = now
+	states, actions, err := marshalDefinition(def)
+	if err != nil {
+		return Definition{}, err
+	}
+	_, err = r.db.ExecContext(context.Background(), `
+		INSERT INTO workflow_definition_versions (
+			workflow_key, version_no, status, states_json, actions_json, created_at, updated_at, updated_by
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''))`,
+		def.Key, def.Version, def.Status, states, actions, def.CreatedAt, def.UpdatedAt, def.UpdatedBy,
+	)
+	if err != nil {
+		return Definition{}, shared.Conflict("workflow definition already exists")
+	}
+	return def, nil
+}
+
+func (r *PostgresRepository) DeleteDefinition(key string) error {
+	tx, err := r.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(context.Background(), `DELETE FROM workflow_definitions WHERE workflow_key = $1`, key); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(context.Background(), `DELETE FROM workflow_definition_versions WHERE workflow_key = $1`, key); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (r *PostgresRepository) GetDefinition(key string) (Definition, bool) {
 	row := r.db.QueryRowContext(context.Background(), `
 		SELECT workflow_key, version_no, states_json, actions_json, updated_at
@@ -94,7 +139,7 @@ func (r *PostgresRepository) ListDefinitions() []Definition {
 		SELECT workflow_key, version_no, states_json, actions_json, updated_at
 		FROM workflow_definitions`)
 	if err != nil {
-		return nil
+		return r.listDraftOnlyDefinitions()
 	}
 	defer rows.Close()
 	items := make([]Definition, 0)
@@ -103,6 +148,16 @@ func (r *PostgresRepository) ListDefinitions() []Definition {
 		if err == nil {
 			items = append(items, def)
 		}
+	}
+	known := map[string]struct{}{}
+	for _, item := range items {
+		known[item.Key] = struct{}{}
+	}
+	for _, item := range r.listDraftOnlyDefinitions() {
+		if _, ok := known[item.Key]; ok {
+			continue
+		}
+		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	return items
@@ -229,6 +284,33 @@ func (r *PostgresRepository) PublishDefinition(key string, version int, actorID 
 	}
 	published, _ := r.GetDefinitionVersion(key, version)
 	return published, nil
+}
+
+func (r *PostgresRepository) listDraftOnlyDefinitions() []Definition {
+	rows, err := r.db.QueryContext(context.Background(), `
+		SELECT workflow_key, version_no, status, states_json, actions_json, created_at, updated_at,
+		       COALESCE(updated_by,''), published_at, COALESCE(published_by,'')
+		FROM workflow_definition_versions
+		WHERE workflow_key NOT IN (SELECT workflow_key FROM workflow_definitions)
+		ORDER BY workflow_key ASC, version_no DESC`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	seen := map[string]struct{}{}
+	items := make([]Definition, 0)
+	for rows.Next() {
+		def, scanErr := scanVersionedDefinition(rows)
+		if scanErr != nil {
+			continue
+		}
+		if _, ok := seen[def.Key]; ok {
+			continue
+		}
+		seen[def.Key] = struct{}{}
+		items = append(items, def)
+	}
+	return items
 }
 
 func (r *PostgresRepository) SaveTask(task Task) error {

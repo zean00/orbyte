@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@xyflow/react": "^12.8.5",
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",
     "openapi-fetch": "^0.10.0",

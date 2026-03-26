@@ -2,6 +2,8 @@ package workflow
 
 type Repository interface {
 	SaveDefinition(def Definition) error
+	SaveDefinitionDraft(def Definition) (Definition, error)
+	DeleteDefinition(key string) error
 	GetDefinition(key string) (Definition, bool)
 	GetDefinitionVersion(key string, version int) (Definition, bool)
 	ListDefinitions() []Definition

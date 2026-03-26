@@ -22,10 +22,22 @@ type Definition struct {
 	Formats             []string           `json:"formats,omitempty"`
 	Purpose             string             `json:"purpose,omitempty"`
 	Channel             string             `json:"channel,omitempty"`
+	RelatedSources      []RelatedSource    `json:"related_sources,omitempty"`
 	AllowedScopes       []string           `json:"allowed_scopes,omitempty"`
 	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 	DefaultBody         string             `json:"default_body,omitempty"`
 	DefaultStyle        string             `json:"default_style,omitempty"`
+}
+
+type RelatedSource struct {
+	Key            string `json:"key"`
+	Label          string `json:"label,omitempty"`
+	SourceKind     string `json:"source_kind,omitempty"`
+	TargetKind     string `json:"target_kind"`
+	TargetKey      string `json:"target_key"`
+	RelationMode   string `json:"relation_mode,omitempty"`
+	MaxDepth       int    `json:"max_depth,omitempty"`
+	DocumentIDPath string `json:"document_id_path,omitempty"`
 }
 
 type Version struct {

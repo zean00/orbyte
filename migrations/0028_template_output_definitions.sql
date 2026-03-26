@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS template_output_definitions (
+    template_key TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    title_i18n JSONB NOT NULL DEFAULT '{}'::jsonb,
+    description TEXT,
+    description_i18n JSONB NOT NULL DEFAULT '{}'::jsonb,
+    owner_module_key TEXT,
+    target_kind TEXT NOT NULL,
+    target_key TEXT NOT NULL,
+    renderer_kind TEXT NOT NULL,
+    default_format TEXT,
+    formats_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    purpose TEXT,
+    channel TEXT,
+    related_sources_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    allowed_scopes_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    required_permissions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    default_body TEXT,
+    default_style TEXT
+);

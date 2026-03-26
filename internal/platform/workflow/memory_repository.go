@@ -43,6 +43,26 @@ func (r *MemoryRepository) SaveDefinition(def Definition) error {
 	return nil
 }
 
+func (r *MemoryRepository) SaveDefinitionDraft(def Definition) (Definition, error) {
+	if _, exists := r.definitions[def.Key]; exists {
+		return Definition{}, shared.Conflict("workflow definition already exists")
+	}
+	now := time.Now().UTC()
+	def.Version = 1
+	def.Status = "draft"
+	if def.CreatedAt.IsZero() {
+		def.CreatedAt = now
+	}
+	def.UpdatedAt = now
+	r.definitions[def.Key] = append(r.definitions[def.Key], cloneDefinition(def))
+	return cloneDefinition(def), nil
+}
+
+func (r *MemoryRepository) DeleteDefinition(key string) error {
+	delete(r.definitions, key)
+	return nil
+}
+
 func (r *MemoryRepository) GetDefinition(key string) (Definition, bool) {
 	items := r.definitions[key]
 	for i := len(items) - 1; i >= 0; i-- {
@@ -67,6 +87,11 @@ func (r *MemoryRepository) ListDefinitions() []Definition {
 	for key := range r.definitions {
 		if def, ok := r.GetDefinition(key); ok {
 			items = append(items, def)
+			continue
+		}
+		versions := r.definitions[key]
+		if len(versions) > 0 {
+			items = append(items, cloneDefinition(versions[len(versions)-1]))
 		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })

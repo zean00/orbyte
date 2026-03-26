@@ -84,6 +84,15 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					RequiredPermissions: []string{"template.read"},
 				},
 				{
+					Key:                 "admin.workflows",
+					Label:               "Workflows",
+					LabelI18n:           localize("Workflows", "Workflow"),
+					ActionKey:           "admin.workflows",
+					Order:               47,
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
 					Key:                 "admin.security",
 					Label:               "Security",
 					LabelI18n:           localize("Security", "Keamanan"),
@@ -147,6 +156,15 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					RoutePath:           "/admin/templates",
 					Surface:             module.UISurfaceAdmin,
 					RequiredPermissions: []string{"template.read"},
+				},
+				{
+					Key:                 "admin.workflows",
+					Label:               "Workflows",
+					LabelI18n:           localize("Workflows", "Workflow"),
+					Kind:                "navigate",
+					RoutePath:           "/admin/workflows",
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
 				},
 				{
 					Key:                 "admin.security",

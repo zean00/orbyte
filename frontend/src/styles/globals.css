@@ -171,3 +171,205 @@ table thead th {
 .dark table thead th {
   color: var(--color-body);
 }
+
+.admin-input {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 0.85rem;
+  background-color: var(--color-surface);
+  color: var(--color-body);
+  padding: 0.72rem 0.9rem;
+  font: inherit;
+}
+
+.admin-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+  outline: none;
+}
+
+.admin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 0.85rem;
+  background-color: var(--color-accent);
+  color: #fff;
+  padding: 0.72rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease;
+}
+
+.admin-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.admin-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-button-secondary {
+  background-color: var(--color-surface);
+  color: var(--color-body);
+  border-color: var(--color-line);
+}
+
+.dark .admin-button-secondary {
+  background-color: color-mix(in srgb, var(--color-surface) 82%, transparent);
+}
+
+.workflow-canvas-shell {
+  height: 640px;
+  overflow: hidden;
+  border: 1px dashed var(--color-line);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-accent-soft) 55%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-shell) 82%, white 18%), var(--color-surface));
+}
+
+.workflow-canvas-shell .react-flow {
+  background: transparent;
+}
+
+.workflow-canvas-shell .react-flow__node.workflow-node {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--color-body);
+  font-family: var(--font-family-body);
+}
+
+.workflow-canvas-shell .react-flow__node.workflow-node-selected,
+.workflow-canvas-shell .react-flow__node.selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent), var(--shadow-panel);
+}
+
+.workflow-state-card {
+  min-width: 220px;
+  border: 1px solid var(--color-line);
+  border-radius: 1.25rem;
+  background: var(--color-surface);
+  color: var(--color-body);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.workflow-state-card::before {
+  content: "";
+  display: block;
+  height: 0.35rem;
+  background: linear-gradient(90deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 40%, transparent));
+}
+
+.workflow-state-card-selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent), var(--shadow-panel);
+}
+
+.workflow-state-card__eyebrow {
+  padding: 0.9rem 1rem 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.workflow-state-card__title {
+  padding: 0.2rem 1rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.workflow-state-card__meta {
+  padding: 0.3rem 1rem 1rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.workflow-state-card__badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.workflow-state-card__badge-start {
+  background: color-mix(in srgb, #10b981 18%, transparent);
+  color: #047857;
+}
+
+.workflow-state-card__badge-terminal {
+  background: color-mix(in srgb, #ea580c 16%, transparent);
+  color: #c2410c;
+}
+
+.workflow-canvas-shell .react-flow__node .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--color-surface);
+  background: var(--color-accent);
+}
+
+.workflow-canvas-shell .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--color-accent) 68%, var(--color-body));
+  stroke-width: 2;
+}
+
+.workflow-canvas-shell .react-flow__edge.workflow-edge-selected .react-flow__edge-path,
+.workflow-canvas-shell .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-accent);
+  stroke-width: 3;
+}
+
+.workflow-canvas-shell .react-flow__edge.workflow-edge-loopback .react-flow__edge-path {
+  stroke: #f97316;
+}
+
+.workflow-canvas-shell .react-flow__edge-textbg {
+  fill: var(--color-surface);
+}
+
+.workflow-canvas-shell .react-flow__edge-text {
+  fill: var(--color-body);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-canvas-shell .react-flow__controls,
+.workflow-canvas-shell .react-flow__minimap {
+  border: 1px solid var(--color-line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  box-shadow: var(--shadow-panel);
+}
+
+.workflow-canvas-shell .react-flow__controls-button {
+  border-bottom: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-body);
+}
+
+.workflow-canvas-shell .react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+
+.dark .workflow-canvas-shell {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-accent-soft) 35%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-shell) 92%, transparent), color-mix(in srgb, var(--color-surface) 90%, transparent));
+}

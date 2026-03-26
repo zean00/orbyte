@@ -62,6 +62,12 @@ func (s *Service) DocumentTypes() []string {
 	return keys
 }
 
+func (s *Service) Definitions() []Definition {
+	defs := s.repo.ListDefinitions()
+	sort.Slice(defs, func(i, j int) bool { return defs[i].Type < defs[j].Type })
+	return defs
+}
+
 func (s *Service) List() []Record {
 	return s.repo.ListRecords()
 }

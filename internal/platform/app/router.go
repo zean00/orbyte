@@ -112,6 +112,8 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 			httpx.RegisterTemplateSurface(httpx.TemplateDeps{
 				Identity:  graph.identity,
 				Templates: graph.templates,
+				Documents: graph.documents,
+				Reporting: graph.reporting,
 			}),
 			httpx.RegisterMCPSurface(httpx.MCPDeps{
 				Identity:         graph.identity,

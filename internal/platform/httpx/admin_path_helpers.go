@@ -141,12 +141,15 @@ func adminOperatingUnitPath(path string) (string, bool) {
 
 func adminWorkflowPath(path string) (string, int, string, bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) < 5 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "workflows" {
+	if len(parts) < 4 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "workflows" {
 		return "", 0, "", false
 	}
 	key := strings.TrimSpace(parts[3])
 	if key == "" {
 		return "", 0, "", false
+	}
+	if len(parts) == 4 {
+		return key, 0, "", true
 	}
 	if len(parts) == 5 && parts[4] == "drafts" {
 		return key, 0, "drafts", true

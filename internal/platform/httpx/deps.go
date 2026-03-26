@@ -133,6 +133,8 @@ type AdminDeps struct {
 type TemplateDeps struct {
 	Identity  *identity.Service
 	Templates *templateoutput.Service
+	Documents *document.Service
+	Reporting *reporting.Service
 }
 
 type UIDeps struct {
@@ -265,7 +267,7 @@ func RegisterACPSurface(deps ACPDeps) RouteRegistrar {
 
 func RegisterTemplateSurface(deps TemplateDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerTemplateRoutes(mux, deps.Identity, deps.Templates)
+		registerTemplateRoutes(mux, deps.Identity, deps.Templates, deps.Documents, deps.Reporting)
 	}
 }
 

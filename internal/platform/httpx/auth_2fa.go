@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -191,6 +192,11 @@ func registerTwoFactorAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident 
 	mux.HandleFunc("GET /auth/2fa/challenge", func(w http.ResponseWriter, r *http.Request) {
 		challenge, enrollment, qrURI, err := currentChallengeDetails(r, ident)
 		if err != nil {
+			var platformErr shared.Error
+			if errors.As(err, &platformErr) && platformErr.Kind == shared.KindNotFound {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 			respondError(w, err)
 			return
 		}
@@ -304,11 +310,11 @@ func buildTOTPEnrollmentPayload(enrollment identity.TOTPEnrollment, qrURI string
 func buildChallengePayload(challenge identity.AuthChallenge, enrollment *identity.TOTPEnrollment, qrURI string) map[string]any {
 	payload := map[string]any{
 		"challenge": map[string]any{
-			"id":         challenge.ID,
-			"status":     challenge.Status,
-			"purpose":    challenge.Purpose,
-			"expires_at": challenge.ExpiresAt,
-			"username":   challenge.Username,
+			"id":          challenge.ID,
+			"status":      challenge.Status,
+			"purpose":     challenge.Purpose,
+			"expires_at":  challenge.ExpiresAt,
+			"username":    challenge.Username,
 			"auth_method": challenge.AuthMethod,
 		},
 	}
