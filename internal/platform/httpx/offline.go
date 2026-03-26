@@ -236,6 +236,11 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			result.ErrorCode = "validation_error"
 			return result
 		}
+		if err := validateDocumentPayloadForType(modules, item.DocumentType, item.Payload); err != nil {
+			result.Error = err.Error()
+			result.ErrorCode = "validation_error"
+			return result
+		}
 		record, err := docs.Create(item.DocumentType, item.OrganizationID, locationID, principalEffectiveUserID(p), item.Payload)
 		if err != nil {
 			result = offlineFailureFromError(err, result)
@@ -264,6 +269,11 @@ func applyOfflineDocumentSync(ident *identity.Service, p principal, modules *mod
 			return result
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, current, item.Payload, "", "api"); err != nil {
+			result.Error = err.Error()
+			result.ErrorCode = "validation_error"
+			return result
+		}
+		if err := validateDocumentPayloadForType(modules, current.Header.Type, item.Payload); err != nil {
 			result.Error = err.Error()
 			result.ErrorCode = "validation_error"
 			return result

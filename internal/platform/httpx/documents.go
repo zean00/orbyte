@@ -127,6 +127,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			respondError(w, err)
 			return
 		}
+		if err := validateDocumentPayloadForType(modules, req.Type, req.Payload); err != nil {
+			respondError(w, err)
+			return
+		}
 		record, err := docs.Create(req.Type, req.OrganizationID, locationID, principalEffectiveUserID(p), req.Payload)
 		if err != nil {
 			incActionMetric(obs, "create", "error")
@@ -289,6 +293,10 @@ func registerDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modules
 			return
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, current, req.Payload, "", "api"); err != nil {
+			respondError(w, err)
+			return
+		}
+		if err := validateDocumentPayloadForType(modules, current.Header.Type, req.Payload); err != nil {
 			respondError(w, err)
 			return
 		}

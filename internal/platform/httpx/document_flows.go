@@ -124,6 +124,10 @@ func registerDocumentFlowRoutes(mux *http.ServeMux, ident *identity.Service, mod
 				respondError(w, err)
 				return
 			}
+			if err := validateDocumentPayloadFields(collectModuleFields(item.Definition.Fields, item.Definition.Sections, item.Definition.Tabs), item.Payload); err != nil {
+				respondError(w, err)
+				return
+			}
 		}
 
 		outcome, err := idempotencySvc.Execute("document_flow.commit:"+flow.Key, req.IdempotencyKey, principalActorID(p), req, func() (idempotency.Outcome, error) {

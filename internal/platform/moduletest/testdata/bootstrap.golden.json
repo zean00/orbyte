@@ -67,6 +67,21 @@
       "view_key": "documents.requests.detail"
     },
     {
+      "key": "documents.requests.form",
+      "kind": "navigate",
+      "label": "Request Draft",
+      "label_i18n": {
+        "en": "Request Draft",
+        "id": "Draf Permintaan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/documents/form",
+      "view_key": "documents.requests.form"
+    },
+    {
       "key": "documents.requests.list",
       "kind": "navigate",
       "label": "Requests",
@@ -222,12 +237,15 @@
                         "en": "Title",
                         "id": "Judul"
                       },
+                      "max_length": 280,
+                      "min_length": 5,
                       "path": "body.payload.title",
                       "placeholder": "Enter request title",
                       "placeholder_i18n": {
                         "en": "Enter request title",
                         "id": "Masukkan judul permintaan"
                       },
+                      "required": true,
                       "type": "string",
                       "widget": "text"
                     },
@@ -243,6 +261,7 @@
                         "followup"
                       ],
                       "path": "body.payload.request_kind",
+                      "required": true,
                       "type": "string",
                       "widget": "select"
                     }
@@ -297,7 +316,10 @@
                         "en": "Title",
                         "id": "Judul"
                       },
+                      "max_length": 120,
+                      "min_length": 3,
                       "path": "body.payload.title",
+                      "required": true,
                       "type": "string",
                       "widget": "text"
                     },
@@ -308,7 +330,10 @@
                         "en": "Notes",
                         "id": "Catatan"
                       },
+                      "max_length": 500,
+                      "min_length": 5,
                       "path": "body.payload.notes",
+                      "required": true,
                       "type": "string",
                       "widget": "textarea"
                     }
@@ -341,7 +366,10 @@
                         "en": "Title",
                         "id": "Judul"
                       },
+                      "max_length": 120,
+                      "min_length": 3,
                       "path": "body.payload.title",
+                      "required": true,
                       "type": "string",
                       "widget": "text"
                     },
@@ -352,7 +380,10 @@
                         "en": "Owner",
                         "id": "Penanggung Jawab"
                       },
+                      "max_length": 120,
+                      "min_length": 3,
                       "path": "body.payload.owner",
+                      "required": true,
                       "type": "string",
                       "widget": "text"
                     }
@@ -395,7 +426,10 @@
                         "en": "Title",
                         "id": "Judul"
                       },
+                      "max_length": 120,
+                      "min_length": 3,
                       "path": "body.payload.title",
+                      "required": true,
                       "type": "string",
                       "widget": "text"
                     },
@@ -406,7 +440,10 @@
                         "en": "Next Action",
                         "id": "Tindak Lanjut"
                       },
+                      "max_length": 500,
+                      "min_length": 5,
                       "path": "body.payload.next_action",
+                      "required": true,
                       "type": "string",
                       "widget": "textarea"
                     }
@@ -795,6 +832,76 @@
       "title_i18n": {
         "en": "Request Detail",
         "id": "Detail Permintaan"
+      }
+    },
+    {
+      "document_type": "generic_request",
+      "fields": [
+        {
+          "help_text": "Short summary used in lists.",
+          "help_text_i18n": {
+            "en": "Short summary used in lists.",
+            "id": "Ringkasan singkat yang dipakai di daftar."
+          },
+          "key": "title",
+          "label": "Title",
+          "label_i18n": {
+            "en": "Title",
+            "id": "Judul"
+          },
+          "max_length": 280,
+          "min_length": 5,
+          "path": "body.payload.title",
+          "placeholder": "Enter request title",
+          "placeholder_i18n": {
+            "en": "Enter request title",
+            "id": "Masukkan judul permintaan"
+          },
+          "required": true,
+          "type": "string",
+          "widget": "text"
+        }
+      ],
+      "key": "documents.requests.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Judul"
+              },
+              "max_length": 280,
+              "min_length": 5,
+              "path": "body.payload.title",
+              "placeholder": "Describe the request",
+              "placeholder_i18n": {
+                "en": "Describe the request",
+                "id": "Jelaskan permintaan"
+              },
+              "required": true,
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "draft_fields",
+          "title": "Draft Fields",
+          "title_i18n": {
+            "en": "Draft Fields",
+            "id": "Field Draf"
+          }
+        }
+      ],
+      "title": "Request Draft Form",
+      "title_i18n": {
+        "en": "Request Draft Form",
+        "id": "Form Draf Permintaan"
       }
     },
     {

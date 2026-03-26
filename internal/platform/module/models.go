@@ -600,6 +600,12 @@ type FieldDefinition struct {
 	HelpText           string             `json:"help_text,omitempty"`
 	HelpTextI18n       i18n.LocalizedText `json:"help_text_i18n,omitempty"`
 	Options            []string           `json:"options,omitempty"`
+	Required           bool               `json:"required,omitempty"`
+	MinLength          int                `json:"min_length,omitempty"`
+	MaxLength          int                `json:"max_length,omitempty"`
+	Pattern            string             `json:"pattern,omitempty"`
+	MinValue           *float64           `json:"min_value,omitempty"`
+	MaxValue           *float64           `json:"max_value,omitempty"`
 	ReadOnly           bool               `json:"read_only,omitempty"`
 	ExtensionModuleKey string             `json:"extension_module_key,omitempty"`
 }

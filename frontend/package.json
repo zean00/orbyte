@@ -1,0 +1,35 @@
+{
+  "name": "@orbyte/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean:embed": "rm -rf ../internal/platform/httpx/assets/assets && rm -f ../internal/platform/httpx/assets/index.html ../internal/platform/httpx/assets/admin.html ../internal/platform/httpx/assets/registerSW.js ../internal/platform/httpx/assets/manifest.webmanifest ../internal/platform/httpx/assets/sw.js ../internal/platform/httpx/assets/workbox-*.js",
+    "dev": "vite",
+    "build": "npm run clean:embed && tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.15.0",
+    "openapi-fetch": "^0.10.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "tailwind-merge": "^2.6.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^25.5.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.14",
+    "vite-plugin-pwa": "^0.21.1",
+    "workbox-window": "^7.3.0"
+  }
+}

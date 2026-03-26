@@ -216,6 +216,16 @@ func documentsKernelPackManifest() module.Manifest {
 					RequiredPermissions: []string{"document.read"},
 				},
 				{
+					Key:                 "documents.requests.form",
+					Label:               "Request Draft",
+					LabelI18n:           localize("Request Draft", "Draf Permintaan"),
+					Kind:                "navigate",
+					RoutePath:           "/documents/form",
+					ViewKey:             "documents.requests.form",
+					RenderMode:          module.RenderModeGeneric,
+					RequiredPermissions: []string{"document.update_draft"},
+				},
+				{
 					Key:                 "documents.self_service.requests.create",
 					Label:               "New Request",
 					LabelI18n:           localize("New Request", "Permintaan Baru"),
@@ -434,7 +444,7 @@ func documentsKernelPackManifest() module.Manifest {
 					RequiredPermissions: []string{"document.update_draft"},
 					Sections: []module.SectionDefinition{{
 						Key: "request_fields", Title: "Request", TitleI18n: localize("Request", "Permintaan"), Fields: []module.FieldDefinition{
-							{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe your request", PlaceholderI18n: localize("Describe your request", "Jelaskan permintaan Anda")},
+							{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe your request", PlaceholderI18n: localize("Describe your request", "Jelaskan permintaan Anda"), Required: true, MinLength: 5, MaxLength: 280},
 						},
 					}},
 				},
@@ -468,11 +478,11 @@ func documentsKernelPackManifest() module.Manifest {
 					DocumentType:        "generic_request",
 					RequiredPermissions: []string{"document.update_draft"},
 					Fields: []module.FieldDefinition{
-						{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", PlaceholderI18n: localize("Enter request title", "Masukkan judul permintaan"), HelpText: "Short summary used in lists.", HelpTextI18n: localize("Short summary used in lists.", "Ringkasan singkat yang dipakai di daftar.")},
+						{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", PlaceholderI18n: localize("Enter request title", "Masukkan judul permintaan"), HelpText: "Short summary used in lists.", HelpTextI18n: localize("Short summary used in lists.", "Ringkasan singkat yang dipakai di daftar."), Required: true, MinLength: 5, MaxLength: 280},
 					},
 					Sections: []module.SectionDefinition{{
 						Key: "draft_fields", Title: "Draft Fields", TitleI18n: localize("Draft Fields", "Field Draf"), Fields: []module.FieldDefinition{
-							{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe the request", PlaceholderI18n: localize("Describe the request", "Jelaskan permintaan")},
+							{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe the request", PlaceholderI18n: localize("Describe the request", "Jelaskan permintaan"), Required: true, MinLength: 5, MaxLength: 280},
 						},
 					}},
 				},
@@ -497,8 +507,8 @@ func documentsKernelPackManifest() module.Manifest {
 							PrimaryOutput: true,
 							Sections: []module.SectionDefinition{{
 								Key: "request_core", Title: "Request Details", TitleI18n: localize("Request Details", "Detail Permintaan"), Fields: []module.FieldDefinition{
-									{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", PlaceholderI18n: localize("Enter request title", "Masukkan judul permintaan")},
-									{Key: "request_kind", Label: "Request Kind", LabelI18n: localize("Request Kind", "Jenis Permintaan"), Path: "body.payload.request_kind", Type: "string", Widget: "select", Options: []string{"review", "followup"}},
+									{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Placeholder: "Enter request title", PlaceholderI18n: localize("Enter request title", "Masukkan judul permintaan"), Required: true, MinLength: 5, MaxLength: 280},
+									{Key: "request_kind", Label: "Request Kind", LabelI18n: localize("Request Kind", "Jenis Permintaan"), Path: "body.payload.request_kind", Type: "string", Widget: "select", Options: []string{"review", "followup"}, Required: true},
 								},
 							}},
 						}},
@@ -520,8 +530,8 @@ func documentsKernelPackManifest() module.Manifest {
 								LinkType:     "related_to",
 								Sections: []module.SectionDefinition{{
 									Key: "review_note", Title: "Review Note", TitleI18n: localize("Review Note", "Catatan Tinjauan"), Fields: []module.FieldDefinition{
-										{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text"},
-										{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "body.payload.notes", Type: "string", Widget: "textarea"},
+										{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Required: true, MinLength: 3, MaxLength: 120},
+										{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "body.payload.notes", Type: "string", Widget: "textarea", Required: true, MinLength: 5, MaxLength: 500},
 									},
 								}},
 							},
@@ -533,8 +543,8 @@ func documentsKernelPackManifest() module.Manifest {
 								LinkType:     "related_to",
 								Sections: []module.SectionDefinition{{
 									Key: "review_checklist", Title: "Checklist", TitleI18n: localize("Checklist", "Daftar Periksa"), Fields: []module.FieldDefinition{
-										{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text"},
-										{Key: "owner", Label: "Owner", LabelI18n: localize("Owner", "Penanggung Jawab"), Path: "body.payload.owner", Type: "string", Widget: "text"},
+										{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Required: true, MinLength: 3, MaxLength: 120},
+										{Key: "owner", Label: "Owner", LabelI18n: localize("Owner", "Penanggung Jawab"), Path: "body.payload.owner", Type: "string", Widget: "text", Required: true, MinLength: 3, MaxLength: 120},
 									},
 								}},
 							},
@@ -552,8 +562,8 @@ func documentsKernelPackManifest() module.Manifest {
 							LinkType:     "related_to",
 							Sections: []module.SectionDefinition{{
 								Key: "followup_plan", Title: "Plan", TitleI18n: localize("Plan", "Rencana"), Fields: []module.FieldDefinition{
-									{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text"},
-									{Key: "next_action", Label: "Next Action", LabelI18n: localize("Next Action", "Tindak Lanjut"), Path: "body.payload.next_action", Type: "string", Widget: "textarea"},
+									{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "text", Required: true, MinLength: 3, MaxLength: 120},
+									{Key: "next_action", Label: "Next Action", LabelI18n: localize("Next Action", "Tindak Lanjut"), Path: "body.payload.next_action", Type: "string", Widget: "textarea", Required: true, MinLength: 5, MaxLength: 500},
 								},
 							}},
 						}},
@@ -579,7 +589,7 @@ func documentsKernelPackManifest() module.Manifest {
 						PrimaryOutput: true,
 						Sections: []module.SectionDefinition{{
 							Key: "request_core", Title: "Request", TitleI18n: localize("Request", "Permintaan"), Fields: []module.FieldDefinition{
-								{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe your request", PlaceholderI18n: localize("Describe your request", "Jelaskan permintaan Anda")},
+								{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: "textarea", Placeholder: "Describe your request", PlaceholderI18n: localize("Describe your request", "Jelaskan permintaan Anda"), Required: true, MinLength: 5, MaxLength: 280},
 							},
 						}},
 					}},

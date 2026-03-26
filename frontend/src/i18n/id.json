@@ -1,0 +1,41 @@
+{
+  "common": {
+    "appName": "Orbyte",
+    "loading": "Memuat...",
+    "error": "Terjadi kesalahan",
+    "retry": "Coba lagi",
+    "cancel": "Batal",
+    "save": "Simpan",
+    "delete": "Hapus",
+    "edit": "Ubah",
+    "create": "Buat",
+    "search": "Cari",
+    "noResults": "Tidak ada hasil",
+    "confirmDelete": "Apakah Anda yakin ingin menghapus ini?",
+    "yes": "Ya",
+    "no": "Tidak"
+  },
+  "auth": {
+    "login": "Masuk",
+    "logout": "Keluar",
+    "email": "Email",
+    "password": "Kata sandi",
+    "signInWithGoogle": "Masuk dengan Google",
+    "forgotPassword": "Lupa kata sandi?",
+    "rememberMe": "Ingat saya"
+  },
+  "nav": {
+    "home": "Beranda",
+    "documents": "Dokumen",
+    "worklist": "Daftar kerja",
+    "workflows": "Alur kerja",
+    "settings": "Pengaturan",
+    "admin": "Admin"
+  },
+  "shell": {
+    "searchPlaceholder": "Cari...",
+    "notifications": "Notifikasi",
+    "darkMode": "Mode gelap",
+    "lightMode": "Mode terang"
+  }
+}
