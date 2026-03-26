@@ -7,6 +7,14 @@ import { useAuth } from '@/hooks/useAuth'
 
 type ChallengePayload = {
   status?: string
+  username?: string
+  password_policy?: {
+    min_length?: number
+    require_uppercase?: boolean
+    require_number?: boolean
+    require_special?: boolean
+    max_age_days?: number
+  }
   challenge?: {
     id: string
     status: string
@@ -41,6 +49,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)
+  const [expiredPasswordFlow, setExpiredPasswordFlow] = useState<ChallengePayload | null>(null)
+  const [newPassword, setNewPassword] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -83,7 +93,13 @@ export default function LoginPage() {
       })
       const payload = await response.json().catch(() => ({}))
       if (response.status === 202) {
+        setExpiredPasswordFlow(null)
         setChallenge(payload as ChallengePayload)
+        return
+      }
+      if (response.status === 403 && (payload as ChallengePayload).status === 'password_change_required') {
+        setChallenge(null)
+        setExpiredPasswordFlow(payload as ChallengePayload)
         return
       }
       if (!response.ok) {
@@ -116,6 +132,53 @@ export default function LoginPage() {
       await hydrateAuthenticatedUser()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleExpiredPasswordChange = async () => {
+    setIsLoading(true)
+    setError('')
+    const targetUsername = expiredPasswordFlow?.username || username
+    try {
+      const response = await fetch('/auth/password/change', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: targetUsername,
+          current_password: password,
+          new_password: newPassword,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error((payload as { error?: { message?: string } })?.error?.message || 'Password change failed')
+      }
+      const retryResponse = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: targetUsername, password: newPassword }),
+        credentials: 'include',
+      })
+      const retryPayload = await retryResponse.json().catch(() => ({}))
+      if (retryResponse.status === 202) {
+        setExpiredPasswordFlow(null)
+        setChallenge(retryPayload as ChallengePayload)
+        setPassword(newPassword)
+        setNewPassword('')
+        return
+      }
+      if (!retryResponse.ok) {
+        throw new Error((retryPayload as { error?: { message?: string } })?.error?.message || 'Login failed after password change')
+      }
+      setExpiredPasswordFlow(null)
+      setPassword(newPassword)
+      setNewPassword('')
+      await hydrateAuthenticatedUser()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Password change failed')
     } finally {
       setIsLoading(false)
     }
@@ -175,6 +238,33 @@ export default function LoginPage() {
 
               <Button type="button" className="w-full" isLoading={isLoading} onClick={() => void handleChallengeVerify()}>
                 Verify Code
+              </Button>
+            </div>
+          ) : expiredPasswordFlow ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-line p-4 text-sm text-body">
+                <div className="font-semibold">Password change required</div>
+                <div className="mt-2 text-muted">Your password has expired. Set a new password to continue signing in.</div>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-muted">
+                  <li>Minimum length: {expiredPasswordFlow.password_policy?.min_length || 8}</li>
+                  {expiredPasswordFlow.password_policy?.require_uppercase ? <li>Must include an uppercase letter</li> : null}
+                  {expiredPasswordFlow.password_policy?.require_number ? <li>Must include a number</li> : null}
+                  {expiredPasswordFlow.password_policy?.require_special ? <li>Must include a special character</li> : null}
+                </ul>
+              </div>
+
+              <Input
+                label="New Password"
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="Enter a new password"
+                autoComplete="new-password"
+                required
+              />
+
+              <Button type="button" className="w-full" isLoading={isLoading} onClick={() => void handleExpiredPasswordChange()}>
+                Change Password
               </Button>
             </div>
           ) : (

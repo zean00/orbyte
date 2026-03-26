@@ -17,6 +17,13 @@ type Service struct {
 	repo         Repository
 }
 
+type PasswordPolicy struct {
+	MinLength        int
+	RequireUppercase bool
+	RequireNumber    bool
+	RequireSpecial   bool
+}
+
 type bootstrapData struct {
 	roles             []Role
 	permissions       []Permission
@@ -1252,6 +1259,10 @@ func (s *Service) CreateUser(username, password, defaultLocationID, roleID, scop
 }
 
 func (s *Service) CreateUserWithPasswordPolicy(username, password, defaultLocationID, roleID, scopeType, scopeID string, passwordMinLength int) (User, error) {
+	return s.CreateUserWithPolicy(username, password, defaultLocationID, roleID, scopeType, scopeID, PasswordPolicy{MinLength: passwordMinLength})
+}
+
+func (s *Service) CreateUserWithPolicy(username, password, defaultLocationID, roleID, scopeType, scopeID string, passwordPolicy PasswordPolicy) (User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" {
 		return User{}, shared.Validation("username is required")
@@ -1259,7 +1270,7 @@ func (s *Service) CreateUserWithPasswordPolicy(username, password, defaultLocati
 	if _, ok := s.repo.FindUserByUsername(username); ok {
 		return User{}, shared.Conflict("username already exists")
 	}
-	if err := validateNewPassword(password, passwordMinLength); err != nil {
+	if err := validateNewPassword(password, passwordPolicy); err != nil {
 		return User{}, err
 	}
 	if roleID == "" {
@@ -1526,7 +1537,11 @@ func (s *Service) ChangePassword(userID, currentPassword, newPassword string) er
 }
 
 func (s *Service) ChangePasswordWithPolicy(userID, currentPassword, newPassword string, passwordMinLength int) error {
-	if err := validateNewPassword(newPassword, passwordMinLength); err != nil {
+	return s.ChangePasswordUsingPolicy(userID, currentPassword, newPassword, PasswordPolicy{MinLength: passwordMinLength})
+}
+
+func (s *Service) ChangePasswordUsingPolicy(userID, currentPassword, newPassword string, passwordPolicy PasswordPolicy) error {
+	if err := validateNewPassword(newPassword, passwordPolicy); err != nil {
 		return err
 	}
 	user, ok := s.repo.FindUser(userID)
@@ -1565,7 +1580,11 @@ func (s *Service) ResetPassword(userID, newPassword string) error {
 }
 
 func (s *Service) ResetPasswordWithPolicy(userID, newPassword string, passwordMinLength int) error {
-	if err := validateNewPassword(newPassword, passwordMinLength); err != nil {
+	return s.ResetPasswordUsingPolicy(userID, newPassword, PasswordPolicy{MinLength: passwordMinLength})
+}
+
+func (s *Service) ResetPasswordUsingPolicy(userID, newPassword string, passwordPolicy PasswordPolicy) error {
+	if err := validateNewPassword(newPassword, passwordPolicy); err != nil {
 		return err
 	}
 	user, ok := s.repo.FindUser(userID)
@@ -1833,6 +1852,27 @@ func (s *Service) TouchSession(sessionID string, seenAt time.Time) (Session, err
 		return Session{}, err
 	}
 	return session, nil
+}
+
+func (s *Service) PasswordExpired(userID string, maxAge time.Duration, now time.Time) (bool, error) {
+	if maxAge <= 0 {
+		return false, nil
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false, shared.Validation("user id is required")
+	}
+	credential, ok := s.repo.FindCredentialByUserID(userID)
+	if !ok {
+		return false, nil
+	}
+	if credential.PasswordChangedAt.IsZero() {
+		return true, nil
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return !now.Before(credential.PasswordChangedAt.Add(maxAge)), nil
 }
 
 func (s *Service) RevokeSession(sessionID string, revokedAt time.Time) (Session, error) {
@@ -2191,15 +2231,24 @@ func allowDefaultBootstrapPassword() bool {
 	}
 }
 
-func validateNewPassword(password string, minLength int) error {
+func validateNewPassword(password string, policy PasswordPolicy) error {
 	if strings.TrimSpace(password) == "" {
 		return shared.Validation("new_password is required")
 	}
-	if minLength <= 0 {
-		minLength = minPasswordLength
+	if policy.MinLength <= 0 {
+		policy.MinLength = minPasswordLength
 	}
-	if len(password) < minLength {
-		return shared.Validation(fmt.Sprintf("new_password must be at least %d characters", minLength))
+	if len(password) < policy.MinLength {
+		return shared.Validation(fmt.Sprintf("new_password must be at least %d characters", policy.MinLength))
+	}
+	if policy.RequireUppercase && !strings.ContainsAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+		return shared.Validation("new_password must include at least one uppercase letter")
+	}
+	if policy.RequireNumber && !strings.ContainsAny(password, "0123456789") {
+		return shared.Validation("new_password must include at least one number")
+	}
+	if policy.RequireSpecial && !strings.ContainsAny(password, `!"#$%&'()*+,-./:;<=>?@[\]^_{|}~`) {
+		return shared.Validation("new_password must include at least one special character")
 	}
 	return nil
 }

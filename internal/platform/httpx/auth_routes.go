@@ -51,6 +51,7 @@ const (
 )
 
 type changePasswordRequest struct {
+	Username        string `json:"username,omitempty"`
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
 }
@@ -424,6 +425,25 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 		limiter.Reset(limiterKey)
+		passwordExpired, err := ident.PasswordExpired(user.ID, policy.PasswordMaxAge, time.Now().UTC())
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		if passwordExpired {
+			respondJSON(w, http.StatusForbidden, map[string]any{
+				"status":   "password_change_required",
+				"username": user.Username,
+				"password_policy": map[string]any{
+					"min_length":        policy.PasswordMinLength,
+					"require_uppercase": policy.PasswordRequireUppercase,
+					"require_number":    policy.PasswordRequireNumber,
+					"require_special":   policy.PasswordRequireSpecial,
+					"max_age_days":      int(policy.PasswordMaxAge / (24 * time.Hour)),
+				},
+			})
+			return
+		}
 		loginResult, err := beginInteractiveLogin(w, ident, policy, user, "password", req.LocationID, clientMetadataFromRequest(r))
 		if err != nil {
 			respondError(w, err)
@@ -692,7 +712,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			return
 		}
 		p, ok := currentPrincipal(r)
-		if !ok || p.kind != userPrincipal || p.userID == "" {
+		if ok && p.kind != userPrincipal {
 			respondError(w, shared.Unauthorized("authentication required"))
 			return
 		}
@@ -701,16 +721,79 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, shared.Validation("invalid password change payload"))
 			return
 		}
-		if err := ident.ChangePasswordWithPolicy(p.userID, req.CurrentPassword, req.NewPassword, policy.PasswordMinLength); err != nil {
+		passwordPolicy := identity.PasswordPolicy{
+			MinLength:        policy.PasswordMinLength,
+			RequireUppercase: policy.PasswordRequireUppercase,
+			RequireNumber:    policy.PasswordRequireNumber,
+			RequireSpecial:   policy.PasswordRequireSpecial,
+		}
+		targetUserID := p.userID
+		actorID := p.userID
+		limiter := newLoginRateLimiter(ident, policy.LoginRateLimitAttempts, policy.LoginRateLimitWindow)
+		limiterKey := ""
+		if targetUserID == "" {
+			username := strings.TrimSpace(req.Username)
+			if username == "" {
+				respondError(w, shared.Unauthorized("authentication required"))
+				return
+			}
+			limiterKey = loginLimitKey(r, username)
+			if !limiter.Allow(limiterKey) {
+				recordAudit(auditSvc, audit.Event{
+					ID:            "audit:auth:password_change:rate_limited:" + time.Now().UTC().Format("20060102150405.000000000"),
+					Action:        "auth.password.change.rate_limited",
+					TargetType:    "session",
+					ActorID:       username,
+					OccurredAt:    time.Now().UTC(),
+					Metadata:      map[string]any{"username": username},
+					CorrelationID: logging.CorrelationID(r.Context()),
+				})
+				respondError(w, shared.Forbidden("login rate limit exceeded"))
+				return
+			}
+			user, ok := ident.FindUserByUsername(username)
+			if !ok {
+				limiter.AddFailure(limiterKey)
+				recordAudit(auditSvc, audit.Event{
+					ID:            "audit:auth:password_change:failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+					Action:        "auth.password.change.failed",
+					TargetType:    "session",
+					ActorID:       username,
+					OccurredAt:    time.Now().UTC(),
+					Metadata:      map[string]any{"username": username, "reason": "invalid credentials"},
+					CorrelationID: logging.CorrelationID(r.Context()),
+				})
+				respondError(w, shared.Unauthorized("invalid credentials"))
+				return
+			}
+			targetUserID = user.ID
+			actorID = user.ID
+		}
+		if err := ident.ChangePasswordUsingPolicy(targetUserID, req.CurrentPassword, req.NewPassword, passwordPolicy); err != nil {
+			if limiterKey != "" {
+				limiter.AddFailure(limiterKey)
+				recordAudit(auditSvc, audit.Event{
+					ID:            "audit:auth:password_change:failed:" + time.Now().UTC().Format("20060102150405.000000000"),
+					Action:        "auth.password.change.failed",
+					TargetType:    "session",
+					ActorID:       strings.TrimSpace(req.Username),
+					OccurredAt:    time.Now().UTC(),
+					Metadata:      map[string]any{"username": strings.TrimSpace(req.Username), "reason": err.Error()},
+					CorrelationID: logging.CorrelationID(r.Context()),
+				})
+			}
 			respondError(w, err)
 			return
 		}
+		if limiterKey != "" {
+			limiter.Reset(limiterKey)
+		}
 		recordAudit(auditSvc, audit.Event{
-			ID:            "audit:auth:password_change:" + p.userID,
+			ID:            "audit:auth:password_change:" + targetUserID,
 			Action:        "auth.password.change",
 			TargetType:    "user",
-			TargetID:      p.userID,
-			ActorID:       p.userID,
+			TargetID:      targetUserID,
+			ActorID:       actorID,
 			OccurredAt:    time.Now().UTC(),
 			CorrelationID: logging.CorrelationID(r.Context()),
 		})
@@ -1124,7 +1207,12 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, shared.Validation("invalid user create payload"))
 			return
 		}
-		user, err := ident.CreateUserWithPasswordPolicy(req.Username, req.Password, strings.TrimSpace(req.DefaultLocationID), strings.TrimSpace(req.RoleID), strings.TrimSpace(req.ScopeType), strings.TrimSpace(req.ScopeID), policy.PasswordMinLength)
+		user, err := ident.CreateUserWithPolicy(req.Username, req.Password, strings.TrimSpace(req.DefaultLocationID), strings.TrimSpace(req.RoleID), strings.TrimSpace(req.ScopeType), strings.TrimSpace(req.ScopeID), identity.PasswordPolicy{
+			MinLength:        policy.PasswordMinLength,
+			RequireUppercase: policy.PasswordRequireUppercase,
+			RequireNumber:    policy.PasswordRequireNumber,
+			RequireSpecial:   policy.PasswordRequireSpecial,
+		})
 		if err != nil {
 			respondError(w, err)
 			return
@@ -1327,7 +1415,12 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, shared.Validation("invalid password reset payload"))
 			return
 		}
-		if err := ident.ResetPasswordWithPolicy(userID, req.NewPassword, policy.PasswordMinLength); err != nil {
+		if err := ident.ResetPasswordUsingPolicy(userID, req.NewPassword, identity.PasswordPolicy{
+			MinLength:        policy.PasswordMinLength,
+			RequireUppercase: policy.PasswordRequireUppercase,
+			RequireNumber:    policy.PasswordRequireNumber,
+			RequireSpecial:   policy.PasswordRequireSpecial,
+		}); err != nil {
 			respondError(w, err)
 			return
 		}

@@ -41,7 +41,7 @@ func BuildRouter(config RouterConfig) http.Handler {
 
 	var handler http.Handler = mux
 	handler = withCSRFProtection(handler, config.CrossCutting.Config)
-	handler = withAuthentication(handler, config.CrossCutting.Identity)
+	handler = withAuthentication(handler, config.CrossCutting.Config, config.CrossCutting.Identity)
 	handler = withObservability(handler, config.CrossCutting.Logger, config.CrossCutting.Observability)
 	if config.CrossCutting.OTel != nil {
 		handler = withOTelHTTP(handler, config.CrossCutting.OTel)

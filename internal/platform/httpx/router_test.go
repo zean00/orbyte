@@ -64,6 +64,7 @@ type testHarness struct {
 	cookie    *http.Cookie
 	csrf      *http.Cookie
 	ident     *identity.Service
+	identRepo identity.Repository
 	audit     *audit.Service
 	cfg       *config.Service
 	modules   *module.Service
@@ -238,7 +239,9 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		cfg = config.NewServiceWithRepository(config.NewMemoryRepository(entries))
 	}
 	org := organization.NewService()
-	ident := identity.NewService(org)
+	bootstrap := identity.NewService(org)
+	identRepo := identity.NewMemoryRepository(bootstrap.Users(), bootstrap.Roles(), bootstrap.Permissions(), bootstrap.Bindings(), bootstrap.RolePermissions(), bootstrap.Credentials(), bootstrap.Sessions(), bootstrap.ServicePrincipals())
+	ident := identity.NewServiceWithRepository(org, identRepo)
 	modules := module.NewService()
 	models := model.NewService()
 	activities := activity.NewService()
@@ -474,6 +477,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
 		csrf:      csrfCookie,
 		ident:     ident,
+		identRepo: identRepo,
 		audit:     auditSvc,
 		cfg:       cfg,
 		modules:   modules,
@@ -2581,6 +2585,114 @@ func TestPasswordChangeRoute(t *testing.T) {
 	}
 }
 
+func TestPasswordExpiredLoginRequiresPasswordChange(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{
+		{
+			Key:      "platform.http",
+			Category: "platform",
+			Scope:    "deployment",
+			Value:    map[string]any{"address": ":8080"},
+		},
+		{
+			Key:      "identity.auth",
+			Category: "identity",
+			Scope:    "deployment",
+			Value: map[string]any{
+				"password_min_length":             8,
+				"password_require_uppercase":      true,
+				"password_require_number":         true,
+				"password_require_special":        true,
+				"password_max_age_days":           1,
+				"session_ttl_minutes":             480,
+				"session_idle_timeout_minutes":    0,
+				"session_refresh_window_minutes":  60,
+				"login_rate_limit_attempts":       5,
+				"login_rate_limit_window_seconds": 300,
+			},
+		},
+	})
+	credential, ok := h.ident.FindCredentialByUserID("user_admin")
+	if !ok {
+		t.Fatal("expected admin credential")
+	}
+	credential.PasswordChangedAt = time.Now().UTC().Add(-48 * time.Hour)
+	if err := h.identRepo.SaveCredential(credential); err != nil {
+		t.Fatalf("expected credential update to succeed: %v", err)
+	}
+
+	loginBody, _ := json.Marshal(map[string]any{"username": "admin", "password": "admin123!"})
+	rr := h.request(http.MethodPost, "/auth/login", loginBody, false)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected expired-password login to be forbidden, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &payload)
+	if payload["status"] != "password_change_required" {
+		t.Fatalf("expected password change required status, got %+v", payload)
+	}
+
+	changeBody, _ := json.Marshal(map[string]any{
+		"username":         "admin",
+		"current_password": "admin123!",
+		"new_password":     "BetterAdmin1!",
+	})
+	changeRR := h.request(http.MethodPost, "/auth/password/change", changeBody, false)
+	if changeRR.Code != http.StatusOK {
+		t.Fatalf("expected unauthenticated expired-password change to succeed, got %d body=%s", changeRR.Code, changeRR.Body.String())
+	}
+
+	retryBody, _ := json.Marshal(map[string]any{"username": "admin", "password": "BetterAdmin1!"})
+	retryRR := h.request(http.MethodPost, "/auth/login", retryBody, false)
+	if retryRR.Code != http.StatusOK {
+		t.Fatalf("expected login with changed password to succeed, got %d body=%s", retryRR.Code, retryRR.Body.String())
+	}
+}
+
+func TestPasswordChangeRouteAnonymousUsesLoginRateLimit(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{
+		{
+			Key:      "platform.http",
+			Category: "platform",
+			Scope:    "deployment",
+			Value:    map[string]any{"address": ":8080"},
+		},
+		{
+			Key:      "identity.auth",
+			Category: "identity",
+			Scope:    "deployment",
+			Value: map[string]any{
+				"password_min_length":             8,
+				"session_ttl_minutes":             480,
+				"session_idle_timeout_minutes":    0,
+				"session_refresh_window_minutes":  60,
+				"login_rate_limit_attempts":       2,
+				"login_rate_limit_window_seconds": 300,
+			},
+		},
+	})
+
+	badChangeBody, _ := json.Marshal(map[string]any{
+		"username":         "admin",
+		"current_password": "wrong-password",
+		"new_password":     "BetterAdmin1!",
+	})
+
+	first := h.request(http.MethodPost, "/auth/password/change", badChangeBody, false)
+	if first.Code != http.StatusUnauthorized {
+		t.Fatalf("expected first anonymous password change attempt to fail with unauthorized, got %d body=%s", first.Code, first.Body.String())
+	}
+
+	second := h.request(http.MethodPost, "/auth/password/change", badChangeBody, false)
+	if second.Code != http.StatusUnauthorized {
+		t.Fatalf("expected second anonymous password change attempt to fail with unauthorized, got %d body=%s", second.Code, second.Body.String())
+	}
+
+	third := h.request(http.MethodPost, "/auth/password/change", badChangeBody, false)
+	if third.Code != http.StatusForbidden {
+		t.Fatalf("expected anonymous password change to be rate limited, got %d body=%s", third.Code, third.Body.String())
+	}
+}
+
 func TestAdminProvisionUserAndResetPassword(t *testing.T) {
 	h := newTestHarness(t)
 
@@ -3309,6 +3421,51 @@ func TestSessionRefreshPolicy(t *testing.T) {
 	}
 	if newSession.ExpiresAt.Before(originalExpiry) {
 		t.Fatalf("expected rotated session expiry to be preserved or extended, before=%s after=%s", originalExpiry, newSession.ExpiresAt)
+	}
+}
+
+func TestSessionIdleTimeout(t *testing.T) {
+	h := newTestHarnessWithConfig(t, []config.Entry{
+		{
+			Key:      "platform.http",
+			Category: "platform",
+			Scope:    "deployment",
+			Value:    map[string]any{"address": ":8080"},
+		},
+		{
+			Key:      "identity.auth",
+			Category: "identity",
+			Scope:    "deployment",
+			Value: map[string]any{
+				"password_min_length":             8,
+				"session_ttl_minutes":             480,
+				"session_idle_timeout_minutes":    1,
+				"session_refresh_window_minutes":  60,
+				"login_rate_limit_attempts":       5,
+				"login_rate_limit_window_seconds": 300,
+			},
+		},
+	})
+
+	loginBody, _ := json.Marshal(map[string]any{"username": "admin", "password": "admin123!", "location_id": "loc_hq"})
+	rr := h.request(http.MethodPost, "/auth/login", loginBody, false)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected login to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var loginResp map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &loginResp)
+	sessionID := loginResp["session"].(map[string]any)["id"].(string)
+	idleAt := time.Now().UTC().Add(-2 * time.Minute)
+	if _, err := h.ident.TouchSession(sessionID, idleAt); err != nil {
+		t.Fatalf("expected session touch to succeed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/platform/context", nil)
+	req.AddCookie(findCookieByName(rr.Result().Cookies(), sessionCookieName))
+	idleRR := httptest.NewRecorder()
+	h.router.ServeHTTP(idleRR, req)
+	if idleRR.Code != http.StatusUnauthorized {
+		t.Fatalf("expected idle-expired session to be unauthorized, got %d body=%s", idleRR.Code, idleRR.Body.String())
 	}
 }
 

@@ -14,7 +14,12 @@ import (
 
 type AuthPolicy struct {
 	PasswordMinLength                    int
+	PasswordRequireUppercase             bool
+	PasswordRequireNumber                bool
+	PasswordRequireSpecial               bool
+	PasswordMaxAge                       time.Duration
 	SessionTTL                           time.Duration
+	SessionIdleTimeout                   time.Duration
 	SessionRefreshWindow                 time.Duration
 	LoginRateLimitAttempts               int
 	LoginRateLimitWindow                 time.Duration
@@ -229,7 +234,12 @@ func BuiltInDefinitions() []Definition {
 		AllowedScopes:   []string{"deployment", "organization", "location"},
 		DefaultValue: map[string]any{
 			"password_min_length":                       defaultPasswordMinLength,
+			"password_require_uppercase":                false,
+			"password_require_number":                   false,
+			"password_require_special":                  false,
+			"password_max_age_days":                     0,
 			"session_ttl_minutes":                       int(defaultSessionTTL / time.Minute),
+			"session_idle_timeout_minutes":              0,
 			"session_refresh_window_minutes":            int(defaultSessionRefreshWindow / time.Minute),
 			"login_rate_limit_attempts":                 defaultLoginRateLimitAttempts,
 			"login_rate_limit_window_seconds":           int(defaultLoginRateLimitWindow / time.Second),
@@ -263,7 +273,12 @@ func BuiltInDefinitions() []Definition {
 		},
 		Fields: []FieldDefinition{
 			{Key: "password_min_length", Label: "Password Min Length", Type: "int", Required: true},
+			{Key: "password_require_uppercase", Label: "Password Requires Uppercase", Type: "bool"},
+			{Key: "password_require_number", Label: "Password Requires Number", Type: "bool"},
+			{Key: "password_require_special", Label: "Password Requires Special Character", Type: "bool"},
+			{Key: "password_max_age_days", Label: "Password Max Age Days", Type: "int", Required: true},
 			{Key: "session_ttl_minutes", Label: "Session TTL Minutes", Type: "int", Required: true},
+			{Key: "session_idle_timeout_minutes", Label: "Session Idle Timeout Minutes", Type: "int", Required: true},
 			{Key: "session_refresh_window_minutes", Label: "Session Refresh Window Minutes", Type: "int", Required: true},
 			{Key: "login_rate_limit_attempts", Label: "Login Rate Limit Attempts", Type: "int", Required: true},
 			{Key: "login_rate_limit_window_seconds", Label: "Login Rate Limit Window Seconds", Type: "int", Required: true},
@@ -371,7 +386,12 @@ func BuiltInEntries(now time.Time) []Entry {
 		ScopeID:   "",
 		Value: map[string]any{
 			"password_min_length":                       defaultPasswordMinLength,
+			"password_require_uppercase":                false,
+			"password_require_number":                   false,
+			"password_require_special":                  false,
+			"password_max_age_days":                     0,
 			"session_ttl_minutes":                       int(defaultSessionTTL / time.Minute),
+			"session_idle_timeout_minutes":              0,
 			"session_refresh_window_minutes":            int(defaultSessionRefreshWindow / time.Minute),
 			"login_rate_limit_attempts":                 defaultLoginRateLimitAttempts,
 			"login_rate_limit_window_seconds":           int(defaultLoginRateLimitWindow / time.Second),
@@ -762,7 +782,12 @@ func (s *Service) CompareContexts(left, right CompareContext) []ComparisonItem {
 func (s *Service) AuthPolicy() AuthPolicy {
 	policy := AuthPolicy{
 		PasswordMinLength:            defaultPasswordMinLength,
+		PasswordRequireUppercase:     false,
+		PasswordRequireNumber:        false,
+		PasswordRequireSpecial:       false,
+		PasswordMaxAge:               0,
 		SessionTTL:                   defaultSessionTTL,
+		SessionIdleTimeout:           0,
 		SessionRefreshWindow:         defaultSessionRefreshWindow,
 		LoginRateLimitAttempts:       defaultLoginRateLimitAttempts,
 		LoginRateLimitWindow:         defaultLoginRateLimitWindow,
@@ -789,8 +814,17 @@ func (s *Service) AuthPolicy() AuthPolicy {
 	if raw := intValue(value.Value["password_min_length"]); raw > 0 {
 		policy.PasswordMinLength = raw
 	}
+	policy.PasswordRequireUppercase = boolFromValue(value.Value["password_require_uppercase"])
+	policy.PasswordRequireNumber = boolFromValue(value.Value["password_require_number"])
+	policy.PasswordRequireSpecial = boolFromValue(value.Value["password_require_special"])
+	if raw := intValue(value.Value["password_max_age_days"]); raw > 0 {
+		policy.PasswordMaxAge = time.Duration(raw) * 24 * time.Hour
+	}
 	if raw := intValue(value.Value["session_ttl_minutes"]); raw > 0 {
 		policy.SessionTTL = time.Duration(raw) * time.Minute
+	}
+	if raw := intValue(value.Value["session_idle_timeout_minutes"]); raw > 0 {
+		policy.SessionIdleTimeout = time.Duration(raw) * time.Minute
 	}
 	if raw := intValue(value.Value["session_refresh_window_minutes"]); raw > 0 {
 		policy.SessionRefreshWindow = time.Duration(raw) * time.Minute
@@ -963,6 +997,16 @@ func appendRequiredFieldIssues(report *ValidationReport, def Definition, value m
 }
 
 func appendSpecialValidationIssues(report *ValidationReport, def Definition, value map[string]any) {
+	if def.Key == "identity.auth" {
+		if intValue(value["password_max_age_days"]) < 0 {
+			report.Valid = false
+			report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "password_max_age_days", Severity: "error", Message: "password max age days must be zero or greater"})
+		}
+		if intValue(value["session_idle_timeout_minutes"]) < 0 {
+			report.Valid = false
+			report.Issues = append(report.Issues, ValidationIssue{Key: def.Key, Field: "session_idle_timeout_minutes", Severity: "error", Message: "session idle timeout minutes must be zero or greater"})
+		}
+	}
 	if def.Key != "identity.auth" || !boolFromValue(value["google_enabled"]) {
 		return
 	}

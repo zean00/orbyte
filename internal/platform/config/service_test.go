@@ -34,6 +34,9 @@ func TestAuthPolicyDefaultsAndOverrides(t *testing.T) {
 	if policy.PasswordMinLength != 8 || policy.SessionTTL <= 0 || policy.LoginRateLimitAttempts != 5 {
 		t.Fatalf("unexpected default auth policy: %+v", policy)
 	}
+	if policy.PasswordRequireUppercase || policy.PasswordRequireNumber || policy.PasswordRequireSpecial || policy.PasswordMaxAge != 0 || policy.SessionIdleTimeout != 0 {
+		t.Fatalf("unexpected default password/session policy extensions: %+v", policy)
+	}
 	if !policy.PasswordEnabled || policy.LoginTitle != "Platform Access" || policy.LoginSubtitle != "Sign in to continue." || policy.GoogleButtonLabel != "Continue with Google" || policy.GoogleAutoProvisionEnabled || policy.GoogleAutoProvisionScopeType != "deployment" || policy.GoogleEnabled || policy.GoogleClientID != "" || policy.GoogleJWKSURL == "" {
 		t.Fatalf("unexpected default google auth policy: %+v", policy)
 	}
@@ -44,7 +47,12 @@ func TestAuthPolicyDefaultsAndOverrides(t *testing.T) {
 		Scope:    "deployment",
 		Value: map[string]any{
 			"password_min_length":                       12,
+			"password_require_uppercase":                true,
+			"password_require_number":                   true,
+			"password_require_special":                  true,
+			"password_max_age_days":                     30,
 			"session_ttl_minutes":                       30,
+			"session_idle_timeout_minutes":              15,
 			"session_refresh_window_minutes":            10,
 			"login_rate_limit_attempts":                 2,
 			"login_rate_limit_window_seconds":           45,
@@ -72,7 +80,7 @@ func TestAuthPolicyDefaultsAndOverrides(t *testing.T) {
 		},
 	}}))
 	policy = override.AuthPolicy()
-	if policy.PasswordMinLength != 12 || policy.SessionTTL != 30*time.Minute || policy.SessionRefreshWindow != 10*time.Minute || policy.LoginRateLimitAttempts != 2 || policy.LoginRateLimitWindow != 45*time.Second || len(policy.TrustedOrigins) != 1 || policy.TrustedOrigins[0] != "https://app.example.com" || policy.PasswordEnabled || policy.LoginTitle != "Welcome to Orbyte" || policy.LoginSubtitle != "Use your company account." || policy.GoogleButtonLabel != "Sign in with Google Workspace" || !policy.GoogleEnabled || !policy.GoogleAutoProvisionEnabled || len(policy.GoogleAutoProvisionAllowedDomains) != 2 || policy.GoogleAutoProvisionAllowedDomains[0] != "example.com" || policy.GoogleAutoProvisionRoleID != "role_admin" || policy.GoogleAutoProvisionScopeType != "deployment" || policy.GoogleAutoProvisionDefaultLocationID != "loc_hq" || policy.GoogleClientID != "client-123" || policy.GoogleClientSecret != "secret-123" || policy.GoogleRedirectURL != "https://app.example.com/auth/google/callback" || policy.GoogleAuthURL != "https://accounts.google.com/o/oauth2/v2/auth" || policy.GoogleTokenURL != "https://oauth2.googleapis.com/token" || policy.GoogleHostedDomain != "example.com" || policy.GoogleTimeout != 9*time.Second {
+	if policy.PasswordMinLength != 12 || !policy.PasswordRequireUppercase || !policy.PasswordRequireNumber || !policy.PasswordRequireSpecial || policy.PasswordMaxAge != 30*24*time.Hour || policy.SessionTTL != 30*time.Minute || policy.SessionIdleTimeout != 15*time.Minute || policy.SessionRefreshWindow != 10*time.Minute || policy.LoginRateLimitAttempts != 2 || policy.LoginRateLimitWindow != 45*time.Second || len(policy.TrustedOrigins) != 1 || policy.TrustedOrigins[0] != "https://app.example.com" || policy.PasswordEnabled || policy.LoginTitle != "Welcome to Orbyte" || policy.LoginSubtitle != "Use your company account." || policy.GoogleButtonLabel != "Sign in with Google Workspace" || !policy.GoogleEnabled || !policy.GoogleAutoProvisionEnabled || len(policy.GoogleAutoProvisionAllowedDomains) != 2 || policy.GoogleAutoProvisionAllowedDomains[0] != "example.com" || policy.GoogleAutoProvisionRoleID != "role_admin" || policy.GoogleAutoProvisionScopeType != "deployment" || policy.GoogleAutoProvisionDefaultLocationID != "loc_hq" || policy.GoogleClientID != "client-123" || policy.GoogleClientSecret != "secret-123" || policy.GoogleRedirectURL != "https://app.example.com/auth/google/callback" || policy.GoogleAuthURL != "https://accounts.google.com/o/oauth2/v2/auth" || policy.GoogleTokenURL != "https://oauth2.googleapis.com/token" || policy.GoogleHostedDomain != "example.com" || policy.GoogleTimeout != 9*time.Second {
 		t.Fatalf("unexpected overridden auth policy: %+v", policy)
 	}
 }

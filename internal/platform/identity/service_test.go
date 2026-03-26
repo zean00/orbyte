@@ -333,6 +333,32 @@ func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	}
 }
 
+func TestCreateUserAndChangePasswordEnforceComplexityPolicy(t *testing.T) {
+	svc := NewService(organization.NewService())
+	policy := PasswordPolicy{MinLength: 10, RequireUppercase: true, RequireNumber: true, RequireSpecial: true}
+	if _, err := svc.CreateUserWithPolicy("policy-user", "simplepass", "loc_hq", "role_admin", "deployment", "", policy); err == nil {
+		t.Fatal("expected complexity validation to reject weak password")
+	}
+	user, err := svc.CreateUserWithPolicy("policy-user", "Complex10!", "loc_hq", "role_admin", "deployment", "", policy)
+	if err != nil {
+		t.Fatalf("expected policy-compliant password to succeed: %v", err)
+	}
+	if err := svc.ChangePasswordUsingPolicy(user.ID, "Complex10!", "nouppercase1!", policy); err == nil {
+		t.Fatal("expected complexity policy to reject missing uppercase on password change")
+	}
+}
+
+func TestPasswordExpired(t *testing.T) {
+	svc := NewService(organization.NewService())
+	expired, err := svc.PasswordExpired("user_admin", 24*time.Hour, time.Now().UTC().Add(48*time.Hour))
+	if err != nil {
+		t.Fatalf("password expired check failed: %v", err)
+	}
+	if !expired {
+		t.Fatal("expected bootstrap admin password to be expired with small max age")
+	}
+}
+
 func TestAuthenticateGoogleLinksExistingUserByEmail(t *testing.T) {
 	svc := NewService(organization.NewService())
 	user, err := svc.CreateUser("user@example.com", "example-pass-123", "loc_hq", "role_admin", "deployment", "")

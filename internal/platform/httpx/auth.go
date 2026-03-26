@@ -7,6 +7,7 @@ import (
 	"time"
 
 	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/logging"
 	"orbyte/internal/platform/runtimeconfig"
@@ -28,21 +29,21 @@ const (
 )
 
 type principal struct {
-	kind              principalKind
-	userID            string
-	effectiveUserID   string
-	sessionID         string
-	currentLocationID string
-	serviceID         string
-	authMethod        string
+	kind                principalKind
+	userID              string
+	effectiveUserID     string
+	sessionID           string
+	currentLocationID   string
+	serviceID           string
+	authMethod          string
 	loginStepUpVerified bool
-	stepUpVerified    bool
+	stepUpVerified      bool
 	approvalStepUpUntil time.Time
-	delegationGrantID string
-	deepLinkGrantID   string
-	onBehalfOfUserID  string
-	delegation        *identity.DelegationGrant
-	deepLink          *identity.DeepLinkGrant
+	delegationGrantID   string
+	deepLinkGrantID     string
+	onBehalfOfUserID    string
+	delegation          *identity.DelegationGrant
+	deepLink            *identity.DeepLinkGrant
 }
 
 type authContextKey string
@@ -52,11 +53,11 @@ const (
 	authErrorContextKey authContextKey = "auth_error"
 )
 
-func withAuthentication(next http.Handler, ident *identity.Service) http.Handler {
+func withAuthentication(next http.Handler, cfg *config.Service, ident *identity.Service) http.Handler {
 	tokenManager := identity.NewTokenManagerFromEnv()
 	devBypass := runtimeconfig.Current().AuthDevBypass()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, authErr := authenticateRequest(r, w, ident, tokenManager, devBypass)
+		p, authErr := authenticateRequest(r, w, cfg, ident, tokenManager, devBypass)
 		ctx := r.Context()
 		if p != nil {
 			if p.kind == userPrincipal && p.sessionID != "" {
@@ -76,20 +77,20 @@ func withAuthentication(next http.Handler, ident *identity.Service) http.Handler
 	})
 }
 
-func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity.Service, tokenManager *identity.TokenManager, devBypass bool) (*principal, error) {
+func authenticateRequest(r *http.Request, w http.ResponseWriter, cfg *config.Service, ident *identity.Service, tokenManager *identity.TokenManager, devBypass bool) (*principal, error) {
 	if devBypass {
 		if userID := strings.TrimSpace(r.Header.Get("X-Dev-User-ID")); userID != "" {
 			for _, session := range ident.Sessions() {
 				if session.UserID == userID && session.Status == "active" {
 					return &principal{
-						kind:              userPrincipal,
-						userID:            userID,
-						effectiveUserID:   userID,
-						sessionID:         session.ID,
-						currentLocationID: session.CurrentLocationID,
-						authMethod:        "dev_bypass",
+						kind:                userPrincipal,
+						userID:              userID,
+						effectiveUserID:     userID,
+						sessionID:           session.ID,
+						currentLocationID:   session.CurrentLocationID,
+						authMethod:          "dev_bypass",
 						loginStepUpVerified: true,
-						stepUpVerified:    true,
+						stepUpVerified:      true,
 					}, nil
 				}
 			}
@@ -115,18 +116,18 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 		if !ok || session.UserID != claims.Subject {
 			return nil, shared.Unauthorized("session not found")
 		}
-		if err := validateAuthenticatedSession(session); err != nil {
+		if err := validateAuthenticatedSession(session, cfg.AuthPolicy().SessionIdleTimeout); err != nil {
 			return nil, err
 		}
 		p := &principal{
-			kind:              userPrincipal,
-			userID:            session.UserID,
-			effectiveUserID:   session.UserID,
-			sessionID:         session.ID,
-			currentLocationID: session.CurrentLocationID,
-			authMethod:        "cookie",
+			kind:                userPrincipal,
+			userID:              session.UserID,
+			effectiveUserID:     session.UserID,
+			sessionID:           session.ID,
+			currentLocationID:   session.CurrentLocationID,
+			authMethod:          "cookie",
 			loginStepUpVerified: !session.LoginStepUpAt.IsZero(),
-			stepUpVerified:    stepUpVerified(r) || (!session.ApprovalStepUpUntil.IsZero() && time.Now().UTC().Before(session.ApprovalStepUpUntil)),
+			stepUpVerified:      stepUpVerified(r) || (!session.ApprovalStepUpUntil.IsZero() && time.Now().UTC().Before(session.ApprovalStepUpUntil)),
 			approvalStepUpUntil: session.ApprovalStepUpUntil,
 		}
 		return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
@@ -152,18 +153,18 @@ func authenticateRequest(r *http.Request, w http.ResponseWriter, ident *identity
 			if !ok || session.UserID != claims.Subject {
 				return nil, shared.Unauthorized("session not found")
 			}
-			if err := validateAuthenticatedSession(session); err != nil {
+			if err := validateAuthenticatedSession(session, cfg.AuthPolicy().SessionIdleTimeout); err != nil {
 				return nil, err
 			}
 			p := &principal{
-				kind:              userPrincipal,
-				userID:            session.UserID,
-				effectiveUserID:   session.UserID,
-				sessionID:         session.ID,
-				currentLocationID: session.CurrentLocationID,
-				authMethod:        "bearer",
+				kind:                userPrincipal,
+				userID:              session.UserID,
+				effectiveUserID:     session.UserID,
+				sessionID:           session.ID,
+				currentLocationID:   session.CurrentLocationID,
+				authMethod:          "bearer",
 				loginStepUpVerified: !session.LoginStepUpAt.IsZero(),
-				stepUpVerified:    stepUpVerified(r) || (!session.ApprovalStepUpUntil.IsZero() && time.Now().UTC().Before(session.ApprovalStepUpUntil)),
+				stepUpVerified:      stepUpVerified(r) || (!session.ApprovalStepUpUntil.IsZero() && time.Now().UTC().Before(session.ApprovalStepUpUntil)),
 				approvalStepUpUntil: session.ApprovalStepUpUntil,
 			}
 			return resolveDelegationPrincipal(r, w, ident, tokenManager, session, p)
@@ -222,19 +223,19 @@ func authenticateDeepLinkPrincipal(r *http.Request, w http.ResponseWriter, ident
 		return nil, true, nil
 	}
 	return &principal{
-		kind:              userPrincipal,
-		userID:            grant.UserID,
-		effectiveUserID:   grant.UserID,
-		currentLocationID: grant.LocationID,
-		authMethod:        "link",
+		kind:                userPrincipal,
+		userID:              grant.UserID,
+		effectiveUserID:     grant.UserID,
+		currentLocationID:   grant.LocationID,
+		authMethod:          "link",
 		loginStepUpVerified: true,
-		stepUpVerified:    !grant.RequireStepUp || deepLinkStepUpVerified(r, tokenManager, grant),
-		deepLinkGrantID:   grant.ID,
-		deepLink:          &grant,
+		stepUpVerified:      !grant.RequireStepUp || deepLinkStepUpVerified(r, tokenManager, grant),
+		deepLinkGrantID:     grant.ID,
+		deepLink:            &grant,
 	}, true, nil
 }
 
-func validateAuthenticatedSession(session identity.Session) error {
+func validateAuthenticatedSession(session identity.Session, idleTimeout time.Duration) error {
 	if session.Status != "active" {
 		return shared.Unauthorized("session not active")
 	}
@@ -242,6 +243,9 @@ func validateAuthenticatedSession(session identity.Session) error {
 		return shared.Unauthorized("session revoked")
 	}
 	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Before(time.Now().UTC()) {
+		return shared.Unauthorized("session expired")
+	}
+	if idleTimeout > 0 && !session.LastSeenAt.IsZero() && time.Since(session.LastSeenAt) > idleTimeout {
 		return shared.Unauthorized("session expired")
 	}
 	return nil
