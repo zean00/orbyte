@@ -6,6 +6,7 @@ import (
 	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
+	"orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/model"
@@ -18,10 +19,10 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
+func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, commercialSvc *application.CommercialCoreService, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
 	registerUIShellRoutes(mux)
 	registerUISurfaceRoutes(mux, ident, modules, docs, policySvc, uiPrefs, acpSvc)
-	registerUIDataRoutes(mux, ident, modules, models, activities, reportingSvc, docs, workflowSvc, searchSvc, analyticsSvc, monitoringSvc, policySvc, fieldSecurity)
+	registerUIDataRoutes(mux, ident, modules, models, activities, reportingSvc, docs, workflowSvc, searchSvc, analyticsSvc, monitoringSvc, commercialSvc, policySvc, fieldSecurity)
 }
 
 func relatedModelItems(models *model.Service, def model.Definition, recordID, relationKey string) []model.Record {

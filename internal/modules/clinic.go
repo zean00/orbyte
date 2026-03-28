@@ -13,6 +13,21 @@ func localizeClinic(en, id string) platformi18n.LocalizedText {
 	return platformi18n.LocalizedText{"en": en, "id": id}
 }
 
+func clinicAdminConsoleLink(key, labelEn, labelID, routePath, descriptionEn, descriptionID, permission string) platformmodule.AdminConsoleLinkDefinition {
+	link := platformmodule.AdminConsoleLinkDefinition{
+		Key:             key,
+		Label:           labelEn,
+		LabelI18n:       localizeClinic(labelEn, labelID),
+		Description:     descriptionEn,
+		DescriptionI18n: localizeClinic(descriptionEn, descriptionID),
+		RoutePath:       routePath,
+	}
+	if permission != "" {
+		link.RequiredPermissions = []string{permission}
+	}
+	return link
+}
+
 func clinicRegistrationManifest() platformmodule.Manifest {
 	return platformmodule.Manifest{
 		Key:          "clinic_registration",
@@ -27,6 +42,35 @@ func clinicRegistrationManifest() platformmodule.Manifest {
 			{ModuleKey: "masterdata", VersionRange: ">=1.0.0,<2.0.0", Kind: platformmodule.DependencyKindRequired},
 			{ModuleKey: "reference_masterdata", VersionRange: ">=1.0.0,<2.0.0", Kind: platformmodule.DependencyKindRequired},
 			{ModuleKey: "integration", VersionRange: ">=1.0.0,<2.0.0", Kind: platformmodule.DependencyKindOptional},
+		},
+		AdminConsole: platformmodule.AdminConsoleDefinition{
+			Title:           "Clinic Registration Console",
+			TitleI18n:       localizeClinic("Clinic Registration Console", "Konsol Registrasi Klinik"),
+			Description:     "Clinic registration operations, patient records, and workflow shortcuts.",
+			DescriptionI18n: localizeClinic("Clinic registration operations, patient records, and workflow shortcuts.", "Operasi registrasi klinik, rekam pasien, dan pintasan workflow."),
+			Sections: []platformmodule.AdminConsoleSectionDefinition{
+				{
+					Key:       "clinic_operations",
+					Title:     "Clinic Operations",
+					TitleI18n: localizeClinic("Clinic Operations", "Operasi Klinik"),
+					Kind:      platformmodule.AdminConsoleSectionResourceLinks,
+					Links: []platformmodule.AdminConsoleLinkDefinition{
+						clinicAdminConsoleLink("registrations", "Registrations", "Registrasi", "/ui/clinic/registrations", "Open clinic registrations.", "Buka registrasi klinik.", "document.list"),
+						clinicAdminConsoleLink("encounters", "Encounters", "Encounter", "/ui/clinic/encounters", "Open clinic encounters.", "Buka encounter klinik.", "document.list"),
+						clinicAdminConsoleLink("patients", "Patients", "Pasien", "/ui/clinic/patients", "Open patient records.", "Buka data pasien.", "clinic.patient.list"),
+					},
+				},
+				{
+					Key:       "clinic_workflows",
+					Title:     "Clinic Workflows",
+					TitleI18n: localizeClinic("Clinic Workflows", "Workflow Klinik"),
+					Kind:      platformmodule.AdminConsoleSectionWorkflowLinks,
+					Links: []platformmodule.AdminConsoleLinkDefinition{
+						clinicAdminConsoleLink("registration_flow", "Registration Workflow", "Workflow Registrasi", "/admin/workflows/designer?key=clinic_registration_flow", "Open the clinic registration workflow.", "Buka workflow registrasi klinik.", "configuration.read"),
+						clinicAdminConsoleLink("encounter_flow", "Encounter Workflow", "Workflow Encounter", "/admin/workflows/designer?key=clinic_encounter_flow", "Open the clinic encounter workflow.", "Buka workflow encounter klinik.", "configuration.read"),
+					},
+				},
+			},
 		},
 		OwnedEntityTypes:   []string{"patient_profile", "practitioner_profile", "payer_profile"},
 		OwnedDocumentTypes: []string{"clinic_registration", "clinic_encounter"},

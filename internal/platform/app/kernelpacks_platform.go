@@ -43,3 +43,7 @@ func monitoringKernelPackManifests() []module.Manifest {
 func integrationKernelPackManifests() []module.Manifest {
 	return []module.Manifest{integrationKernelPackManifest()}
 }
+
+func commercialCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{commercialCoreKernelPackManifest()}
+}

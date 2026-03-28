@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Shell } from '@/components/layout/Shell'
 import { Modal } from '@/components/ui/Modal'
@@ -23,6 +23,19 @@ type RouteResolution = {
 type FormState = Record<string, unknown>
 type ValidationErrors = Record<string, string>
 type HttpError = Error & { status?: number }
+type CommercialFormCatalog = {
+  partiesByID: Record<string, Record<string, unknown>>
+  invoicesByID: Record<string, Record<string, unknown>>
+  paymentsByID: Record<string, Record<string, unknown>>
+  itemsByCode: Record<string, Record<string, unknown>>
+  itemCategoriesByCode: Record<string, Record<string, unknown>>
+  uomsByCode: Record<string, Record<string, unknown>>
+  taxCodesByCode: Record<string, Record<string, unknown>>
+  taxProfilesByCode: Record<string, Record<string, unknown>>
+  priceListsByCode: Record<string, Record<string, unknown>>
+  priceListItemsByKey: Record<string, Record<string, unknown>>
+  paymentMethodsByCode: Record<string, Record<string, unknown>>
+}
 
 export default function WorkspacePage() {
   const location = useLocation()
@@ -328,7 +341,14 @@ function ListView({
       const query = new URLSearchParams()
       if (view.document_type) query.set('type', view.document_type)
       if (view.model_key) query.set('model', view.model_key)
-      for (const key of ['status', 'name', 'sort', 'page', 'page_size']) {
+      if (!view.model_key && documentListNeedsPayload(view)) {
+        query.set('include_payload', '1')
+      }
+      const queryKeys = new Set(['name', 'sort', 'page', 'page_size'])
+      for (const filter of view.filters || []) {
+        queryKeys.add(filter.key)
+      }
+      for (const key of queryKeys) {
         const value = searchParams.get(key)
         if (value) query.set(key, value)
       }
@@ -359,6 +379,10 @@ function ListView({
       return { value: raw, label: pickText(column, 'label', locale) || humanize(raw) }
     })
     .filter((option, index, items) => items.findIndex((candidate) => candidate.value === option.value) === index)
+  const totalItems = payload?.total ?? payload?.items?.length ?? 0
+  const listStatus = totalItems > 0
+    ? `Showing ${totalItems} item${totalItems === 1 ? '' : 's'}.`
+    : (pickText(view, 'empty_state', locale) || 'Standard list rendered from UI contracts.')
 
   function applyListQuery(updates: Record<string, string>) {
     const next = new URLSearchParams(searchParams)
@@ -372,10 +396,10 @@ function ListView({
   }
 
   return (
-    <Panel title={pickText(view, 'title', locale) || 'List'} status={pickText(view, 'empty_state', locale) || 'Standard list rendered from UI contracts.'}>
+    <Panel title={pickText(view, 'title', locale) || 'List'} status={listStatus}>
       <div className="mb-4 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="text-sm text-muted">Items {payload?.total ?? payload?.items?.length ?? 0}</div>
+          <div className="text-sm text-muted">Items {totalItems}</div>
           {createTarget ? (
             <button onClick={() => onNavigate(createTarget)} className="rounded-lg bg-accent px-4 py-2 text-sm text-white">
               New
@@ -489,6 +513,7 @@ function DetailView({
   onToast: (message: string, variant?: 'default' | 'success' | 'warning' | 'error') => void
 }) {
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null)
+  const [commercialSummary, setCommercialSummary] = useState<Record<string, unknown> | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState('')
@@ -504,6 +529,18 @@ function DetailView({
       const result = await fetchJSON<Record<string, unknown>>(base)
       if (!mounted) return
       setPayload(result)
+      if (view.model_key === 'party') {
+        try {
+          const summary = await fetchJSON<Record<string, unknown>>(`/ui/data/commercial/parties/${encodeURIComponent(documentID)}/summary`)
+          if (!mounted) return
+          setCommercialSummary(summary)
+        } catch {
+          if (!mounted) return
+          setCommercialSummary(null)
+        }
+      } else {
+        setCommercialSummary(null)
+      }
     }
     void load()
     return () => {
@@ -520,9 +557,77 @@ function DetailView({
   const sections = resolveSections(view)
   const editTarget = view.model_key ? routeForModel(view.model_key, 'form', routeActions, currentPath) : routeForEdit(currentPath, view.document_type || String(header.type || ''), routeActions)
   const cancelTarget = stripEditorSuffix(currentPath) || '/documents'
-  const hasDocumentCancelAction = !!view.allowed_actions?.some((actionKey) => actionKey.toLowerCase() === 'cancel')
+  const visibleActions = (view.allowed_actions || []).filter((actionKey) =>
+    actionVisibleForStatus(actionKey, String(header.status || ''), String(header.type || view.document_type || '')),
+  )
+  const hasDocumentCancelAction = !!visibleActions.some((actionKey) => actionKey.toLowerCase() === 'cancel')
+  const canEdit = !!editTarget && !isCommercialDocumentLocked(String(header.type || ''), String(header.status || ''))
 
   async function handleAction(actionKey: string) {
+    if (String(header.type || '') === 'sales_order' && actionKey === 'generate_invoice') {
+      try {
+        const created = await invokeCommercialAction(`/commercial/orders/${encodeURIComponent(String(header.id || ''))}/generate-invoice`)
+        onToast('Invoice generated.', 'success')
+        const target = routeForDocument('invoice', 'detail', routeActions, '/commercial/invoices')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Invoice generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'invoice' && actionKey === 'register_payment') {
+      try {
+        const created = await invokeCommercialAction(`/commercial/invoices/${encodeURIComponent(String(header.id || ''))}/register-payment`)
+        onToast('Payment draft generated.', 'success')
+        const target = routeForDocument('payment_receipt', 'detail', routeActions, '/commercial/payments')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Payment registration failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'invoice' && actionKey === 'issue_credit_note') {
+      try {
+        const created = await invokeCommercialAction(`/commercial/invoices/${encodeURIComponent(String(header.id || ''))}/issue-credit-note`)
+        onToast('Credit note draft generated.', 'success')
+        const target = routeForDocument('credit_note', 'detail', routeActions, '/commercial/credit-notes')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Credit note generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'credit_note' && actionKey === 'register_refund') {
+      try {
+        const created = await invokeCommercialAction(`/commercial/credit-notes/${encodeURIComponent(String(header.id || ''))}/register-refund`)
+        onToast('Refund draft generated.', 'success')
+        const target = routeForDocument('payment_refund', 'detail', routeActions, '/commercial/refunds')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Refund generation failed', 'error')
+      }
+      return
+    }
     try {
       await invokeDocumentAction(String(header.id || ''), actionKey)
       onToast(`Action ${actionKey} applied`, 'success')
@@ -565,7 +670,7 @@ function DetailView({
             Cancel
           </button>
         ) : null}
-        {view.allowed_actions?.map((actionKey) => (
+        {visibleActions.map((actionKey) => (
           <button
             key={actionKey}
             onClick={() => void handleAction(actionKey)}
@@ -574,7 +679,7 @@ function DetailView({
             {humanize(actionKey)}
           </button>
         ))}
-        {editTarget ? (
+        {canEdit ? (
           <button onClick={() => onNavigate(`${editTarget}?id=${encodeURIComponent(documentID)}`)} className="rounded-lg bg-accent px-4 py-2 text-sm text-white">
             Edit
           </button>
@@ -588,12 +693,15 @@ function DetailView({
               {(section.fields || []).map((field) => (
                 <article key={field.key} className="rounded-lg bg-surface p-3 dark:bg-ink/60">
                   <div className="text-xs uppercase tracking-wide text-muted">{pickText(field, 'label', locale) || field.key}</div>
-                  <div className="mt-1 text-sm text-body">{displayValue(resolvePath(record, field.path))}</div>
+                  <div className="mt-1 text-sm text-body">{renderDetailFieldValue(field, resolvePath(record, field.path))}</div>
                 </article>
               ))}
             </div>
           </section>
         ))}
+        {view.model_key === 'party' && commercialSummary ? (
+          <PartyCommercialSummaryPanel summary={commercialSummary} routeActions={routeActions} onNavigate={onNavigate} />
+        ) : null}
       </div>
       <Modal isOpen={stepUpOpen} onClose={() => setStepUpOpen(false)} title="Two-Factor Verification" size="sm">
         <div className="space-y-4">
@@ -650,8 +758,18 @@ function DashboardView({
   useEffect(() => {
     let mounted = true
     async function load() {
+      const search = new URLSearchParams(window.location.search)
+      if (view.projection_key === 'commercial.party_statement' && !search.get('party_id')) {
+        if (!mounted) return
+        setPayload(null)
+        return
+      }
       const target = view.dataset_key
         ? `/ui/data/reporting/datasets/${encodeURIComponent(view.dataset_key)}`
+        : view.projection_key === 'commercial.receivables.summary'
+          ? '/ui/data/commercial/receivables/summary'
+        : view.projection_key === 'commercial.party_statement'
+          ? `/ui/data/commercial/parties/${encodeURIComponent(search.get('party_id') || '')}/summary${buildStatementQuery(search)}`
         : view.projection_key === 'monitoring.summary'
           ? '/ui/data/monitoring/summary'
           : '/ui/data/analytics/snapshot'
@@ -665,6 +783,12 @@ function DashboardView({
     }
   }, [view.dataset_key, view.projection_key])
 
+  const statementSearch = new URLSearchParams(window.location.search)
+  const partyID = statementSearch.get('party_id') || ''
+  const receivablesItems = view.projection_key === 'commercial.receivables.summary'
+    ? asRecordList(resolvePath(payload, 'items'))
+    : []
+
   return (
     <Panel title={pickText(view, 'title', locale) || 'Dashboard'}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -672,8 +796,8 @@ function DashboardView({
           <button
             key={card.key}
             onClick={() => {
-              const action = routeActions.find((item) => item.key === card.action_key)
-              if (action) onNavigate(action.route_path)
+              const target = dashboardCardTarget(view, card.key, routeActions)
+              if (target) onNavigate(target)
             }}
             className="rounded-xl border border-line bg-surface p-5 text-left dark:bg-ink/60"
           >
@@ -682,7 +806,162 @@ function DashboardView({
           </button>
         ))}
       </div>
+      {receivablesItems.length ? (
+        <section className="mt-6 rounded-xl border border-line p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Receivables Aging</h2>
+          <DataTable
+            columns={[
+              { key: 'number', label: 'Invoice' },
+              { key: 'party_name', label: 'Customer' },
+              { key: 'due_date', label: 'Due Date' },
+              { key: 'paid_amount', label: 'Paid' },
+              { key: 'credited', label: 'Credited' },
+              { key: 'refunded', label: 'Refunded' },
+              { key: 'balance_due', label: 'Open Balance' },
+              { key: 'aging_bucket', label: 'Aging' },
+            ]}
+            rows={receivablesItems}
+            emptyText="No receivables."
+            renderAction={(row) => {
+              const detailPath = routeForDocument('invoice', 'detail', routeActions, '/commercial/invoices')
+              const documentID = String(row.id || '')
+              if (!detailPath || !documentID) return null
+              return (
+                <button onClick={() => onNavigate(`${detailPath}?id=${encodeURIComponent(documentID)}`)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-body">
+                  Open
+                </button>
+              )
+            }}
+          />
+        </section>
+      ) : null}
+      {view.projection_key === 'commercial.party_statement' ? (
+        partyID ? (
+          <section className="mt-6">
+            <PartyCommercialSummaryPanel summary={payload || {}} routeActions={routeActions} onNavigate={onNavigate} />
+          </section>
+        ) : (
+          <section className="mt-6 rounded-xl border border-line p-4 text-sm text-muted">
+            Select a customer from party detail to open a statement.
+          </section>
+        )
+      ) : null}
     </Panel>
+  )
+}
+
+function dashboardCardTarget(view: ViewDefinition, cardKey: string, routeActions: ActionDefinition[]): string {
+  const action = routeActions.find((item) => item.key === view.cards?.find((card) => card.key === cardKey)?.action_key)
+  const basePath = action?.route_path
+  if (!basePath) return ''
+  if (view.projection_key !== 'commercial.receivables.summary') {
+    return basePath
+  }
+  switch (cardKey) {
+    case 'open_invoice_count':
+    case 'open_balance_total':
+      return `${basePath}?receivable_state=open`
+    case 'overdue_invoice_count':
+    case 'overdue_balance_total':
+      return `${basePath}?receivable_state=overdue`
+    case 'due_today_total':
+      return `${basePath}?receivable_state=due_today`
+    case 'current_balance_total':
+      return `${basePath}?receivable_state=current`
+    case 'paid_amount_total':
+      return `${basePath}?status=received`
+    case 'refunded_amount_total': {
+      const separator = basePath.includes('?') ? '&' : '?'
+      return `${basePath}${separator}status=refunded`
+    }
+    default:
+      return basePath
+  }
+}
+
+function buildStatementQuery(search: URLSearchParams): string {
+  const query = new URLSearchParams()
+  const from = search.get('from')
+  const to = search.get('to')
+  if (from) query.set('from', from)
+  if (to) query.set('to', to)
+  const encoded = query.toString()
+  return encoded ? `?${encoded}` : ''
+}
+
+function PartyCommercialSummaryPanel({
+  summary,
+  routeActions,
+  onNavigate,
+}: {
+  summary: Record<string, unknown>
+  routeActions: ActionDefinition[]
+  onNavigate: (target: string) => void
+}) {
+  const openInvoices = asRecordList(resolvePath(summary, 'open_invoices'))
+  const activities = asRecordList(resolvePath(summary, 'activities')).slice(0, 10)
+  const invoiceDetailPath = routeForDocument('invoice', 'detail', routeActions, '/commercial/invoices')
+  const statementPath = routeActions.find((action) => action.key === 'commercial.party_statement.dashboard')?.route_path || ''
+  const partyID = String(resolvePath(summary, 'party_id') || '')
+
+  return (
+    <section className="space-y-4 rounded-xl border border-line p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Commercial Summary</h2>
+        {statementPath && partyID ? (
+          <button onClick={() => onNavigate(`${statementPath}?party_id=${encodeURIComponent(partyID)}`)} className="rounded-lg border border-line px-3 py-2 text-sm text-body">
+            Open Statement
+          </button>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <MetricCard label="Open Invoices" value={displayValue(resolvePath(summary, 'open_invoice_count'))} />
+        <MetricCard label="Open Balance" value={displayValue(resolvePath(summary, 'open_balance_total'))} />
+        <MetricCard label="Collected" value={displayValue(resolvePath(summary, 'paid_amount_total'))} />
+        <MetricCard label="Refunded" value={displayValue(resolvePath(summary, 'refunded_amount_total'))} />
+      </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Open Invoices</h3>
+          <DataTable
+            columns={[
+              { key: 'number', label: 'Invoice' },
+              { key: 'due_date', label: 'Due Date' },
+              { key: 'paid_amount', label: 'Paid' },
+              { key: 'credited', label: 'Credited' },
+              { key: 'refunded', label: 'Refunded' },
+              { key: 'balance_due', label: 'Open Balance' },
+            ]}
+            rows={openInvoices}
+            emptyText="No open invoices."
+            renderAction={(row) => {
+              const documentID = String(row.id || '')
+              if (!invoiceDetailPath || !documentID) return null
+              return (
+                <button onClick={() => onNavigate(`${invoiceDetailPath}?id=${encodeURIComponent(documentID)}`)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-body">
+                  Open
+                </button>
+              )
+            }}
+          />
+        </section>
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Recent Activity</h3>
+          <DataTable
+            columns={[
+              { key: 'date', label: 'Date' },
+              { key: 'type', label: 'Type' },
+              { key: 'number', label: 'Number' },
+              { key: 'counter', label: 'Counterparty Doc' },
+              { key: 'amount', label: 'Amount' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={activities}
+            emptyText="No commercial activity yet."
+          />
+        </section>
+      </div>
+    </section>
   )
 }
 
@@ -705,7 +984,9 @@ function FormView({
   const [values, setValues] = useState<FormState>({})
   const [version, setVersion] = useState(0)
   const [etag, setETag] = useState('')
+  const [recordStatus, setRecordStatus] = useState('')
   const [errors, setErrors] = useState<ValidationErrors>({})
+  const [catalog, setCatalog] = useState<CommercialFormCatalog>({ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
 
   useEffect(() => {
     let mounted = true
@@ -717,6 +998,7 @@ function FormView({
         const record = payload.record as Record<string, unknown>
         setValues(((record.values as Record<string, unknown>) || {}) as FormState)
         setVersion(Number(record.version || 0))
+        setRecordStatus('')
         setErrors({})
       } else {
         const payload = await fetchJSON<Record<string, unknown>>(`/ui/data/documents/${encodeURIComponent(targetID)}`)
@@ -727,6 +1009,7 @@ function FormView({
         setValues(((body.payload as Record<string, unknown>) || {}) as FormState)
         setVersion(Number(header.version || 0))
         setETag(String(header.etag || ''))
+        setRecordStatus(String(header.status || ''))
         setErrors({})
       }
     }
@@ -736,6 +1019,112 @@ function FormView({
     }
   }, [targetID, view.model_key])
 
+  useEffect(() => {
+    let mounted = true
+    async function loadCatalog() {
+      const documentType = String(view.document_type || '')
+      const modelKey = String(view.model_key || '')
+      const needsCatalog =
+        ['sales_order', 'invoice', 'credit_note', 'payment_receipt', 'payment_refund'].includes(documentType) ||
+        ['party', 'commercial_item', 'commercial_price_list_item'].includes(modelKey)
+      if (!needsCatalog) {
+        if (!mounted) return
+        setCatalog({ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
+        return
+      }
+      try {
+        const [partiesPayload, invoicesPayload, paymentsPayload, itemsPayload, categoriesPayload, uomsPayload, taxPayload, taxProfilesPayload, priceListsPayload, priceListItemsPayload, paymentPayload] = await Promise.all([
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/party'),
+          fetchJSON<{ items: Array<Record<string, unknown>>; total?: number }>('/ui/data/documents?type=invoice&page_size=200&include_payload=1'),
+          fetchJSON<{ items: Array<Record<string, unknown>>; total?: number }>('/ui/data/documents?type=payment_receipt&page_size=200&include_payload=1'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_item'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_item_category'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_uom'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_tax_code'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_tax_profile'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_price_list'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_price_list_item'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/payment_method'),
+        ])
+        const openInvoiceIDs = (invoicesPayload.items || [])
+          .filter((item) => {
+            const status = String(resolvePath(item, 'header.status') || '')
+            return status === 'issued' || status === 'partially_paid'
+          })
+          .map((item) => String(resolvePath(item, 'header.id') || ''))
+          .filter(Boolean)
+        const invoiceDetails = await Promise.all(
+          openInvoiceIDs.map(async (id) => {
+            try {
+              return await fetchJSON<Record<string, unknown>>(`/ui/data/documents/${encodeURIComponent(id)}`)
+            } catch {
+              return null
+            }
+          }),
+        )
+        const invoicesByID = Object.fromEntries(
+          invoiceDetails
+            .map((detail) => (detail?.record || detail) as Record<string, unknown> | null)
+            .filter((detail): detail is Record<string, unknown> => !!detail)
+            .map((detail) => [String(resolvePath(detail, 'header.id') || ''), detail]),
+        )
+        const paymentIDs = (paymentsPayload.items || [])
+          .filter((item) => String(resolvePath(item, 'header.status') || '') === 'received')
+          .map((item) => String(resolvePath(item, 'header.id') || ''))
+          .filter(Boolean)
+        const paymentDetails = await Promise.all(
+          paymentIDs.map(async (id) => {
+            try {
+              return await fetchJSON<Record<string, unknown>>(`/ui/data/documents/${encodeURIComponent(id)}`)
+            } catch {
+              return null
+            }
+          }),
+        )
+        const paymentsByID = Object.fromEntries(
+          paymentDetails
+            .map((detail) => (detail?.record || detail) as Record<string, unknown> | null)
+            .filter((detail): detail is Record<string, unknown> => !!detail)
+            .map((detail) => [String(resolvePath(detail, 'header.id') || ''), detail]),
+        )
+        if (!mounted) return
+        setCatalog({
+          partiesByID: Object.fromEntries((partiesPayload.items || []).map((item) => [String(item.id || ''), item])),
+          invoicesByID,
+          paymentsByID,
+          itemsByCode: Object.fromEntries((itemsPayload.items || []).map((item) => [String(resolvePath(item, 'values.sku') || ''), item])),
+          itemCategoriesByCode: Object.fromEntries((categoriesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          uomsByCode: Object.fromEntries((uomsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          taxCodesByCode: Object.fromEntries((taxPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          taxProfilesByCode: Object.fromEntries((taxProfilesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          priceListsByCode: Object.fromEntries((priceListsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          priceListItemsByKey: Object.fromEntries((priceListItemsPayload.items || []).map((item) => [`${String(resolvePath(item, 'values.price_list_code') || '')}|${String(resolvePath(item, 'values.item_code') || '')}`, item])),
+          paymentMethodsByCode: Object.fromEntries((paymentPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+        })
+        setValues((current) => normalizeCommercialFormState(current, String(view.document_type || ''), {
+          partiesByID: Object.fromEntries((partiesPayload.items || []).map((item) => [String(item.id || ''), item])),
+          invoicesByID,
+          paymentsByID,
+          itemsByCode: Object.fromEntries((itemsPayload.items || []).map((item) => [String(resolvePath(item, 'values.sku') || ''), item])),
+          itemCategoriesByCode: Object.fromEntries((categoriesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          uomsByCode: Object.fromEntries((uomsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          taxCodesByCode: Object.fromEntries((taxPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          taxProfilesByCode: Object.fromEntries((taxProfilesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          priceListsByCode: Object.fromEntries((priceListsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          priceListItemsByKey: Object.fromEntries((priceListItemsPayload.items || []).map((item) => [`${String(resolvePath(item, 'values.price_list_code') || '')}|${String(resolvePath(item, 'values.item_code') || '')}`, item])),
+          paymentMethodsByCode: Object.fromEntries((paymentPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+        }))
+      } catch {
+        if (!mounted) return
+        setCatalog({ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
+      }
+    }
+    void loadCatalog()
+    return () => {
+      mounted = false
+    }
+  }, [view.document_type, view.model_key])
+
   const sections = resolveSections(view)
   const validationFields = sections.flatMap((section) => section.fields || [])
   const cancelTarget = targetID
@@ -743,6 +1132,22 @@ function FormView({
         ? routeForModel(view.model_key, 'detail', useShellStore.getState().actions, currentPath)
         : routeForDocument(view.document_type || '', 'detail', useShellStore.getState().actions, currentPath))
     : stripEditorSuffix(currentPath) || '/'
+  const formLocked = !view.model_key && targetID && isCommercialDocumentLocked(String(view.document_type || ''), recordStatus)
+
+  if (formLocked) {
+    return (
+      <Panel title={pickText(view, 'title', locale) || 'Editor'} status={`Editing is unavailable while this record is ${recordStatus || 'locked'}.`}>
+        <div className="mt-2 flex gap-3">
+          <button
+            onClick={() => onNavigate(cancelTarget ? `${cancelTarget}?id=${encodeURIComponent(targetID)}` : stripEditorSuffix(currentPath) || '/')}
+            className="rounded-lg border border-line px-4 py-2 text-body"
+          >
+            Back to detail
+          </button>
+        </div>
+      </Panel>
+    )
+  }
 
   async function handleSave() {
     const nextErrors = validateFieldCollection(validationFields, values, !!view.model_key, locale)
@@ -823,6 +1228,7 @@ function FormView({
                   values={values}
                   onChange={setValues}
                   model={!!view.model_key}
+                  catalog={catalog}
                   error={errors[field.key]}
                   onBlur={() =>
                     setErrors((current) => {
@@ -858,6 +1264,13 @@ function FormView({
       </div>
     </Panel>
   )
+}
+
+function documentListNeedsPayload(view: ViewDefinition): boolean {
+  return (view.columns || []).some((column) => {
+    const path = String(column.path || '')
+    return path.startsWith('body.') || path.startsWith('lines') || path.startsWith('links') || path.startsWith('attachments') || path === 'header.number'
+  })
 }
 
 function FlowRouteView({ route, locale }: { route: RouteResolution; locale: string }) {
@@ -990,6 +1403,7 @@ function FlowRouteView({ route, locale }: { route: RouteResolution; locale: stri
                       }))
                     }
                     model={false}
+                    catalog={{ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} }}
                     error={errors[validationFieldKey(doc.key, field.key)]}
                     onBlur={() =>
                       setErrors((current) => {
@@ -1181,6 +1595,7 @@ function FieldEditor({
   values,
   onChange,
   model,
+  catalog,
   error,
   onBlur,
 }: {
@@ -1189,17 +1604,66 @@ function FieldEditor({
   values: FormState
   onChange: React.Dispatch<React.SetStateAction<FormState>>
   model: boolean
+  catalog: CommercialFormCatalog
   error?: string
   onBlur?: () => void
 }) {
   const normalizedPath = normalizeFieldPath(field, model)
   const value = resolvePath(values, normalizedPath)
   const label = pickText(field, 'label', locale) || field.key
+  const placeholder = pickText(field, 'placeholder', locale)
   const inputClassName = `h-10 rounded-lg border bg-surface px-3 py-2 text-sm text-body ${error ? 'border-danger' : 'border-line'}`
   const textareaClassName = `min-h-28 rounded-lg border bg-surface px-3 py-2 text-sm text-body ${error ? 'border-danger' : 'border-line'}`
+  const catalogOptions = commercialSelectOptions(normalizedPath, catalog)
 
   function update(next: unknown) {
-    onChange((current) => assignPathValue(current, normalizedPath, next))
+    onChange((current) => applyFieldUpdate(current, normalizedPath, next, catalog))
+  }
+
+  if (field.widget === 'commercial_lines' || field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations' || field.widget === 'commercial_journal_lines') {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-body">{label}</span>
+        <CommercialArrayFieldEditor
+          fieldKey={field.key}
+          widget={field.widget}
+          value={value}
+          values={values}
+          catalog={catalog}
+          onChange={(rows, patch) =>
+            onChange((current) => {
+              let next = applyCommercialArrayUpdate(current, normalizedPath, field.widget || '', rows, catalog)
+              if ((field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations') && patch) {
+                if (patch.amount_received != null && (patch.replace_amount_received || toNumber(resolvePath(current, 'amount_received')) <= 0)) {
+                  next = assignPathValue(next, 'amount_received', patch.amount_received)
+                }
+                if (patch.amount_refunded != null && (patch.replace_amount_refunded || toNumber(resolvePath(current, 'amount_refunded')) <= 0)) {
+                  next = assignPathValue(next, 'amount_refunded', patch.amount_refunded)
+                }
+                if (patch.payment_reference && !String(resolvePath(current, 'payment_reference') || '')) {
+                  next = assignPathValue(next, 'payment_reference', patch.payment_reference)
+                }
+                if (patch.refund_reference && !String(resolvePath(current, 'refund_reference') || '')) {
+                  next = assignPathValue(next, 'refund_reference', patch.refund_reference)
+                }
+                if (patch.party_id && !String(resolvePath(current, 'party_id') || '')) {
+                  next = applyFieldUpdate(next, 'party_id', patch.party_id, catalog)
+                }
+                if (patch.party_name && !String(resolvePath(current, 'party_name') || '')) {
+                  next = assignPathValue(next, 'party_name', patch.party_name)
+                }
+                if (patch.currency_code && !String(resolvePath(current, 'currency_code') || '')) {
+                  next = assignPathValue(next, 'currency_code', patch.currency_code)
+                }
+              }
+              return next
+            })
+          }
+        />
+        {error ? <span className="text-xs text-danger">{error}</span> : null}
+        {field.help_text ? <span className="text-xs text-muted">{pickText(field, 'help_text', locale) || field.help_text}</span> : null}
+      </div>
+    )
   }
 
   return (
@@ -1212,12 +1676,13 @@ function FieldEditor({
           value={String(value ?? '')}
           onChange={(e) => update(e.target.value)}
           onBlur={onBlur}
+          placeholder={placeholder}
           required={field.required}
           minLength={field.min_length}
           maxLength={field.max_length}
           className={textareaClassName}
         />
-      ) : field.widget === 'select' || field.options?.length ? (
+      ) : field.widget === 'select' || field.options?.length || catalogOptions.length ? (
         <select
           id={`field-${field.key}`}
           name={field.key}
@@ -1228,9 +1693,9 @@ function FieldEditor({
           className={inputClassName}
         >
           <option value="">Select an option</option>
-          {(field.options || []).map((option) => (
-            <option key={option} value={option}>
-              {humanize(option)}
+          {(catalogOptions.length ? catalogOptions : (field.options || []).map((option) => ({ value: option, label: humanize(option) }))).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -1259,7 +1724,7 @@ function FieldEditor({
           min={field.min_value}
           max={field.max_value}
           className={inputClassName}
-          placeholder={pickText(field, 'placeholder', locale)}
+          placeholder={placeholder}
         />
       )}
       {error ? <span className="text-xs text-danger">{error}</span> : null}
@@ -1268,10 +1733,266 @@ function FieldEditor({
   )
 }
 
+function CommercialArrayFieldEditor({
+  fieldKey,
+  widget,
+  value,
+  values,
+  catalog,
+  onChange,
+}: {
+  fieldKey: string
+  widget: string
+  value: unknown
+  values: FormState
+  catalog: CommercialFormCatalog
+  onChange: (rows: Array<Record<string, unknown>>, patch?: Record<string, unknown>) => void
+}) {
+  const rows = asRecordList(value)
+  const columns = commercialArrayColumns(widget, catalog, values)
+  const openInvoices = widget === 'commercial_allocations' ? commercialOpenInvoices(catalog, values) : []
+  const openInvoiceBalance = openInvoices.reduce((sum, invoice) => sum + toNumber(resolvePath(invoice, 'body.payload.balance_due_amount')), 0)
+  const refundablePayments = widget === 'commercial_refund_allocations' ? commercialRefundablePayments(catalog, values) : []
+  const refundablePaymentBalance = refundablePayments.reduce((sum, payment) => {
+    const amount = toNumber(resolvePath(payment, 'body.payload.amount_received'))
+    const refunded = toNumber(resolvePath(payment, 'body.payload.refunded_amount'))
+    return sum + roundMoney(Math.max(amount - refunded, 0))
+  }, 0)
+
+  function updateRow(index: number, key: string, nextValue: unknown) {
+    let patch: Record<string, unknown> | undefined
+    const nextRows = rows.map((row, rowIndex) => {
+      if (rowIndex !== index) return row
+      const updated = { ...row, [key]: nextValue }
+      if (widget === 'commercial_allocations' && key === 'invoice_id') {
+        const invoice = catalog.invoicesByID[String(nextValue || '')]
+        const invoiceNumber = String(resolvePath(invoice, 'header.number') || '')
+        const openAmount = toNumber(resolvePath(invoice, 'body.payload.balance_due_amount'))
+        const partyID = String(resolvePath(invoice, 'body.payload.party_id') || '')
+        const partyName = String(resolvePath(invoice, 'body.payload.party_name') || '')
+        const currencyCode = String(resolvePath(invoice, 'body.payload.currency_code') || '')
+        if (invoiceNumber) updated.invoice_number = invoiceNumber
+        if (!toNumber(updated.amount) && openAmount > 0) updated.amount = openAmount
+        patch = {
+          amount_received: openAmount > 0 ? openAmount : undefined,
+          payment_reference: invoiceNumber || undefined,
+          party_id: partyID || undefined,
+          party_name: partyName || undefined,
+          currency_code: currencyCode || undefined,
+        }
+      }
+      if (widget === 'commercial_refund_allocations' && key === 'payment_id') {
+        const payment = catalog.paymentsByID[String(nextValue || '')]
+        const paymentNumber = String(resolvePath(payment, 'header.number') || '')
+        const methodCode = String(resolvePath(payment, 'body.payload.payment_method_code') || '')
+        const clearingAccount = String(resolvePath(payment, 'body.payload.clearing_account_code') || '')
+        const paidAmount = toNumber(resolvePath(payment, 'body.payload.amount_received'))
+        const refundedAmount = toNumber(resolvePath(payment, 'body.payload.refunded_amount'))
+        const remainingAmount = roundMoney(Math.max(paidAmount - refundedAmount, 0))
+        if (paymentNumber) updated.payment_number = paymentNumber
+        if (!toNumber(updated.amount) && remainingAmount > 0) updated.amount = remainingAmount
+        patch = {
+          amount_refunded: remainingAmount > 0 ? remainingAmount : undefined,
+          refund_reference: paymentNumber || undefined,
+          payment_method_code: methodCode || undefined,
+          clearing_account_code: clearingAccount || undefined,
+        }
+      }
+      return updated
+    })
+    onChange(normalizeCommercialRows(nextRows, widget, catalog), patch)
+  }
+
+  function addRow() {
+    onChange(normalizeCommercialRows([...rows, commercialArrayDefaultRow(widget)], widget, catalog))
+  }
+
+  function removeRow(index: number) {
+    onChange(normalizeCommercialRows(rows.filter((_, rowIndex) => rowIndex !== index), widget, catalog))
+  }
+
+  function autoAllocate(useFullOpenBalance: boolean) {
+    if (widget !== 'commercial_allocations') return
+    const targetAmount = useFullOpenBalance ? openInvoiceBalance : toNumber(resolvePath(values, 'amount_received'))
+    const { rows: nextRows, allocatedAmount } = buildAllocationRows(openInvoices, targetAmount)
+    onChange(normalizeCommercialRows(nextRows, widget, catalog), {
+      amount_received: allocatedAmount,
+      replace_amount_received: useFullOpenBalance || targetAmount <= 0,
+    })
+  }
+
+  function autoAllocateRefund(useFullRefundableBalance: boolean) {
+    if (widget !== 'commercial_refund_allocations') return
+    const targetAmount = useFullRefundableBalance ? refundablePaymentBalance : toNumber(resolvePath(values, 'amount_refunded'))
+    const { rows: nextRows, allocatedAmount } = buildRefundAllocationRows(refundablePayments, targetAmount)
+    onChange(normalizeCommercialRows(nextRows, widget, catalog), {
+      amount_refunded: allocatedAmount,
+      replace_amount_refunded: useFullRefundableBalance || targetAmount <= 0,
+    })
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-line p-3">
+      {widget === 'commercial_allocations' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-accent-soft/30 px-3 py-2 text-sm text-body">
+          <span>
+            Open invoices for payer: <strong>{openInvoices.length}</strong>
+          </span>
+          <span>
+            Open balance: <strong>{roundMoney(openInvoiceBalance)}</strong>
+          </span>
+          <button type="button" onClick={() => autoAllocate(false)} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!openInvoices.length}>
+            Auto Allocate Receipt
+          </button>
+          <button type="button" onClick={() => autoAllocate(true)} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!openInvoices.length}>
+            Use Full Open Balance
+          </button>
+          <button type="button" onClick={() => onChange([])} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!rows.length}>
+            Clear Allocations
+          </button>
+        </div>
+      ) : null}
+      {widget === 'commercial_refund_allocations' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-accent-soft/30 px-3 py-2 text-sm text-body">
+          <span>
+            Refundable receipts: <strong>{refundablePayments.length}</strong>
+          </span>
+          <span>
+            Refundable balance: <strong>{roundMoney(refundablePaymentBalance)}</strong>
+          </span>
+          <button type="button" onClick={() => autoAllocateRefund(false)} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!refundablePayments.length}>
+            Auto Allocate Refund
+          </button>
+          <button type="button" onClick={() => autoAllocateRefund(true)} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!refundablePayments.length}>
+            Use Full Refundable Balance
+          </button>
+          <button type="button" onClick={() => onChange([])} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!rows.length}>
+            Clear Refund Allocations
+          </button>
+        </div>
+      ) : null}
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-line text-sm">
+          <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
+            <tr>
+              {columns.map((column) => (
+                <th key={column.key} className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">
+                  {column.label}
+                </th>
+              ))}
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line bg-surface">
+            {rows.length ? rows.map((row, index) => (
+              <tr key={`${widget}-${index}`}>
+                {columns.map((column) => (
+                  <td key={column.key} className="px-3 py-2 align-top">
+                    {column.readOnly ? (
+                      <div className="h-10 rounded-lg border border-line bg-accent-soft/40 px-3 py-2 text-sm text-body">
+                        {displayValue(row[column.key])}
+                      </div>
+                    ) : column.options?.length ? (
+                      <select
+                        id={`field-${fieldKey}-${index}-${column.key}`}
+                        name={`${fieldKey}[${index}].${column.key}`}
+                        className="h-10 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-body"
+                        value={String(row[column.key] ?? '')}
+                        onChange={(event) => updateRow(index, column.key, event.target.value)}
+                      >
+                        <option value="">Select an option</option>
+                        {column.options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={column.type === 'number' ? 'number' : 'text'}
+                        id={`field-${fieldKey}-${index}-${column.key}`}
+                        name={`${fieldKey}[${index}].${column.key}`}
+                        className="h-10 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-body"
+                        value={String(row[column.key] ?? '')}
+                        onChange={(event) => updateRow(index, column.key, column.type === 'number' ? (event.target.value === '' ? '' : Number(event.target.value)) : event.target.value)}
+                      />
+                    )}
+                  </td>
+                ))}
+                <td className="px-3 py-2 text-right">
+                  <button type="button" onClick={() => removeRow(index)} className="rounded-lg border border-line px-3 py-2 text-body">
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={columns.length + 1} className="px-3 py-6 text-center text-sm text-muted">
+                  No rows yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <button type="button" onClick={addRow} className="rounded-lg border border-line px-4 py-2 text-body">
+        Add Row
+      </button>
+    </div>
+  )
+}
+
+function renderDetailFieldValue(field: FieldDefinition, value: unknown): ReactNode {
+  if (field.widget === 'commercial_lines' || field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations' || field.widget === 'commercial_journal_lines') {
+    const rows = asRecordList(value)
+    const columns = commercialArrayColumns(field.widget)
+    if (!rows.length) return <span className="text-muted">No rows.</span>
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-line text-sm">
+          <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
+            <tr>
+              {columns.map((column) => (
+                <th key={column.key} className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line bg-surface">
+            {rows.map((row, index) => (
+              <tr key={`${field.key}-${index}`}>
+                {columns.map((column) => (
+                  <td key={column.key} className="px-3 py-2 align-top text-body">
+                    {displayValue(row[column.key])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  return displayValue(value)
+}
+
 async function fetchJSON<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include' })
   if (!response.ok) throw await buildError(response)
   return response.json()
+}
+
+async function invokeCommercialAction(url: string): Promise<Record<string, unknown>> {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'X-CSRF-Token': readCookie('orbyte_csrf'),
+    },
+  })
+  if (!response.ok) throw await buildError(response)
+  return response.json() as Promise<Record<string, unknown>>
 }
 
 async function buildError(response: Response): Promise<Error> {
@@ -1288,6 +2009,634 @@ function displayValue(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
+}
+
+function asRecordList(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => (item && typeof item === 'object' ? { ...(item as Record<string, unknown>) } : {}))
+}
+
+function commercialArrayColumns(widget: string, catalog?: CommercialFormCatalog, values?: FormState): Array<{ key: string; label: string; type: 'text' | 'number'; readOnly?: boolean; options?: Array<{ value: string; label: string }> }> {
+  switch (widget) {
+    case 'commercial_lines':
+      return [
+        { key: 'item_code', label: 'Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
+        { key: 'quantity', label: 'Qty', type: 'number' },
+        { key: 'unit_price', label: 'Unit Price', type: 'number' },
+        { key: 'discount_amount', label: 'Discount', type: 'number' },
+        { key: 'tax_code', label: 'Tax Code', type: 'text', options: commercialSelectOptions('tax_code', catalog) },
+        { key: 'tax_rate', label: 'Tax Rate %', type: 'number' },
+        { key: 'line_subtotal', label: 'Subtotal', type: 'number', readOnly: true },
+        { key: 'tax_amount', label: 'Tax', type: 'number', readOnly: true },
+        { key: 'line_total', label: 'Total', type: 'number', readOnly: true },
+      ]
+    case 'commercial_allocations':
+      return [
+        { key: 'invoice_number', label: 'Invoice', type: 'text', readOnly: true },
+        { key: 'invoice_id', label: 'Invoice ID', type: 'text', options: commercialSelectOptions('invoice_id', catalog, values) },
+        { key: 'amount', label: 'Amount', type: 'number' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'commercial_refund_allocations':
+      return [
+        { key: 'payment_number', label: 'Receipt', type: 'text', readOnly: true },
+        { key: 'payment_id', label: 'Receipt ID', type: 'text', options: commercialSelectOptions('source_payment_id', catalog, values) },
+        { key: 'amount', label: 'Amount', type: 'number' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'commercial_journal_lines':
+      return [
+        { key: 'account_code', label: 'Account', type: 'text' },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'debit', label: 'Debit', type: 'number' },
+        { key: 'credit', label: 'Credit', type: 'number' },
+      ]
+    default:
+      return []
+  }
+}
+
+function commercialArrayDefaultRow(widget: string): Record<string, unknown> {
+  switch (widget) {
+    case 'commercial_lines':
+      return { item_code: '', description: '', uom_code: '', quantity: 1, unit_price: 0, discount_amount: 0, tax_code: '', tax_rate: 0, line_subtotal: 0, tax_amount: 0, line_total: 0 }
+    case 'commercial_allocations':
+      return { invoice_number: '', invoice_id: '', amount: 0, note: '' }
+    case 'commercial_refund_allocations':
+      return { payment_number: '', payment_id: '', amount: 0, note: '' }
+    case 'commercial_journal_lines':
+      return { account_code: '', description: '', debit: 0, credit: 0 }
+    default:
+      return {}
+  }
+}
+
+function commercialSelectOptions(path: string, catalog?: CommercialFormCatalog, values?: FormState): Array<{ value: string; label: string }> {
+  if (!catalog) return []
+  switch (path) {
+    case 'party_id':
+      return Object.entries(catalog.partiesByID)
+        .filter(([value]) => value)
+        .map(([value, item]) => ({
+          value,
+          label: String(resolvePath(item, 'values.display_name') || resolvePath(item, 'values.name') || value),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'tax_profile_code':
+      return Object.values(catalog.taxProfilesByCode)
+        .map((item) => ({
+          value: String(resolvePath(item, 'values.code') || ''),
+          label: `${String(resolvePath(item, 'values.code') || '')} - ${String(resolvePath(item, 'values.name') || resolvePath(item, 'values.title') || '')}`.trim(),
+        }))
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'category_code':
+      return Object.values(catalog.itemCategoriesByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'uom_code':
+      return Object.values(catalog.uomsByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          const symbol = String(resolvePath(item, 'values.symbol') || '')
+          return { value: code, label: [code, name, symbol].filter(Boolean).join(' - ') }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'default_price_list_code':
+    case 'price_list_code':
+      return Object.values(catalog.priceListsByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'default_tax_code':
+    case 'tax_code':
+      return Object.values(catalog.taxCodesByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'payment_method_code':
+      return Object.values(catalog.paymentMethodsByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'source_payment_id':
+      return commercialRefundablePayments(catalog, values)
+        .map((item) => {
+          const id = String(resolvePath(item, 'header.id') || '')
+          const number = String(resolvePath(item, 'header.number') || id)
+          const method = String(resolvePath(item, 'body.payload.payment_method_code') || '')
+          const amount = toNumber(resolvePath(item, 'body.payload.amount_received'))
+          const refunded = toNumber(resolvePath(item, 'body.payload.refunded_amount'))
+          const remaining = roundMoney(Math.max(amount - refunded, 0))
+          return {
+            value: id,
+            label: `${number}${method ? ` - ${humanize(method)}` : ''}${remaining > 0 ? ` (${remaining})` : ''}`,
+          }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'invoice_id':
+      return commercialOpenInvoices(catalog, values)
+        .map((item) => {
+          const id = String(resolvePath(item, 'header.id') || '')
+          const number = String(resolvePath(item, 'header.number') || id)
+          const partyName = String(resolvePath(item, 'body.payload.party_name') || '')
+          const balance = toNumber(resolvePath(item, 'body.payload.balance_due_amount'))
+          return {
+            value: id,
+            label: `${number}${partyName ? ` - ${partyName}` : ''}${balance > 0 ? ` (${balance})` : ''}`,
+          }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'item_code':
+      return Object.values(catalog.itemsByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.sku') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    default:
+      return []
+  }
+}
+
+function commercialOpenInvoices(catalog?: CommercialFormCatalog, values?: FormState): Array<Record<string, unknown>> {
+  if (!catalog) return []
+  const partyID = String(resolvePath(values || {}, 'party_id') || '')
+  return Object.values(catalog.invoicesByID)
+    .filter((item) => {
+      const balance = toNumber(resolvePath(item, 'body.payload.balance_due_amount'))
+      if (balance <= 0) return false
+      if (!partyID) return true
+      return String(resolvePath(item, 'body.payload.party_id') || '') === partyID
+    })
+    .sort((left, right) => {
+      const leftDue = String(resolvePath(left, 'body.payload.due_date') || '')
+      const rightDue = String(resolvePath(right, 'body.payload.due_date') || '')
+      if (leftDue !== rightDue) return leftDue.localeCompare(rightDue)
+      return String(resolvePath(left, 'header.number') || '').localeCompare(String(resolvePath(right, 'header.number') || ''))
+    })
+}
+
+function commercialRefundablePayments(catalog?: CommercialFormCatalog, values?: FormState): Array<Record<string, unknown>> {
+  if (!catalog) return []
+  const invoiceID = String(resolvePath(values || {}, 'source_invoice_id') || '')
+  if (!invoiceID) return []
+  return Object.values(catalog.paymentsByID)
+    .filter((item) => {
+      const status = String(resolvePath(item, 'header.status') || '')
+      if (status !== 'received') return false
+      const amount = toNumber(resolvePath(item, 'body.payload.amount_received'))
+      const refunded = toNumber(resolvePath(item, 'body.payload.refunded_amount'))
+      if (roundMoney(Math.max(amount - refunded, 0)) <= 0) return false
+      const links = (resolvePath(item, 'links') as Array<Record<string, unknown>> | undefined) || []
+      return links.some((link) => String(link.link_type || '') === 'payment_for' && String(link.linked_document_id || '') === invoiceID)
+    })
+    .sort((left, right) => {
+      const leftDate = String(resolvePath(left, 'body.payload.receipt_date') || '')
+      const rightDate = String(resolvePath(right, 'body.payload.receipt_date') || '')
+      if (leftDate !== rightDate) return leftDate.localeCompare(rightDate)
+      return String(resolvePath(left, 'header.number') || '').localeCompare(String(resolvePath(right, 'header.number') || ''))
+    })
+}
+
+function buildAllocationRows(invoices: Array<Record<string, unknown>>, requestedAmount: number): { rows: Array<Record<string, unknown>>; allocatedAmount: number } {
+  let remaining = roundMoney(requestedAmount)
+  const allocateAll = remaining <= 0
+  const rows: Array<Record<string, unknown>> = []
+  let allocatedAmount = 0
+  for (const invoice of invoices) {
+    const balance = roundMoney(toNumber(resolvePath(invoice, 'body.payload.balance_due_amount')))
+    if (balance <= 0) continue
+    const allocationAmount = allocateAll ? balance : roundMoney(Math.min(balance, remaining))
+    if (allocationAmount <= 0) continue
+    rows.push({
+      invoice_id: String(resolvePath(invoice, 'header.id') || ''),
+      invoice_number: String(resolvePath(invoice, 'header.number') || ''),
+      amount: allocationAmount,
+      note: '',
+    })
+    allocatedAmount = roundMoney(allocatedAmount + allocationAmount)
+    if (!allocateAll) {
+      remaining = roundMoney(Math.max(remaining-allocationAmount, 0))
+      if (remaining <= 0) break
+    }
+  }
+  return { rows, allocatedAmount }
+}
+
+function buildRefundAllocationRows(payments: Array<Record<string, unknown>>, requestedAmount: number): { rows: Array<Record<string, unknown>>; allocatedAmount: number } {
+  let remaining = roundMoney(requestedAmount)
+  const allocateAll = remaining <= 0
+  const rows: Array<Record<string, unknown>> = []
+  let allocatedAmount = 0
+  for (const payment of payments) {
+    const amount = toNumber(resolvePath(payment, 'body.payload.amount_received'))
+    const refunded = toNumber(resolvePath(payment, 'body.payload.refunded_amount'))
+    const balance = roundMoney(Math.max(amount - refunded, 0))
+    if (balance <= 0) continue
+    const allocationAmount = allocateAll ? balance : roundMoney(Math.min(balance, remaining))
+    if (allocationAmount <= 0) continue
+    rows.push({
+      payment_id: String(resolvePath(payment, 'header.id') || ''),
+      payment_number: String(resolvePath(payment, 'header.number') || ''),
+      amount: allocationAmount,
+      note: '',
+    })
+    allocatedAmount = roundMoney(allocatedAmount + allocationAmount)
+    if (!allocateAll) {
+      remaining = roundMoney(Math.max(remaining - allocationAmount, 0))
+      if (remaining <= 0) break
+    }
+  }
+  return { rows, allocatedAmount }
+}
+
+function applyCommercialArrayUpdate(current: FormState, path: string, widget: string, rows: Array<Record<string, unknown>>, catalog?: CommercialFormCatalog): FormState {
+  let next = assignPathValue(current, path, rows)
+  switch (widget) {
+    case 'commercial_lines': {
+      const defaultTaxCode = String(resolvePath(current, 'default_tax_code') || '')
+      const rowsWithDefaults = rows.map((row) => ({
+        ...row,
+        tax_code: row.tax_code || defaultTaxCode,
+      }))
+      const normalizedRows = normalizeCommercialRows(rowsWithDefaults, widget, catalog, current)
+      const subtotalAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.line_subtotal), 0)
+      const taxAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.tax_amount), 0)
+      const totalAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.line_total), 0)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'subtotal_amount', roundMoney(subtotalAmount))
+      next = assignPathValue(next, 'tax_amount', roundMoney(taxAmount))
+      next = assignPathValue(next, 'total_amount', roundMoney(totalAmount))
+      return next
+    }
+    case 'commercial_allocations': {
+      const normalizedRows = rows.map((row) => ({ ...row, amount: toNumber(row.amount) }))
+      const currentAmountReceived = toNumber(resolvePath(current, 'amount_received'))
+      const appliedAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.amount), 0)
+      const amountReceived = currentAmountReceived > 0 ? currentAmountReceived : roundMoney(appliedAmount)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'amount_received', amountReceived)
+      next = assignPathValue(next, 'unapplied_amount', roundMoney(Math.max(amountReceived-appliedAmount, 0)))
+      return next
+    }
+    case 'commercial_refund_allocations': {
+      const normalizedRows = rows.map((row) => ({ ...row, amount: toNumber(row.amount) })) as Array<Record<string, unknown>>
+      const refundedAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.amount), 0)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'amount_refunded', roundMoney(refundedAmount))
+      if (normalizedRows.length === 1) {
+        const firstRow = normalizedRows[0] || {}
+        next = assignPathValue(next, 'source_payment_id', String(firstRow.payment_id || ''))
+        next = assignPathValue(next, 'source_payment_number', String(firstRow.payment_number || ''))
+      } else {
+        next = assignPathValue(next, 'source_payment_id', '')
+        next = assignPathValue(next, 'source_payment_number', '')
+      }
+      return next
+    }
+    case 'commercial_journal_lines': {
+      const normalizedRows = rows.map((row) => ({ ...row, debit: toNumber(row.debit), credit: toNumber(row.credit) }))
+      const debitTotal = normalizedRows.reduce((sum, row) => sum + toNumber(row.debit), 0)
+      const creditTotal = normalizedRows.reduce((sum, row) => sum + toNumber(row.credit), 0)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'total_amount', roundMoney(Math.max(debitTotal, creditTotal)))
+      return next
+    }
+    default:
+      return next
+  }
+}
+
+function applyFieldUpdate(current: FormState, path: string, value: unknown, catalog?: CommercialFormCatalog): FormState {
+  const next = assignPathValue(current, path, value)
+  if (path === 'default_tax_code') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'commercial_lines', lines, catalog)
+    }
+  }
+  if (path === 'party_id') {
+    const partyID = String(value || '')
+    const party = catalog?.partiesByID?.[partyID]
+    let withParty = next
+    const partyName = String(resolvePath(party, 'values.display_name') || resolvePath(party, 'values.name') || '')
+    const currencyCode = String(resolvePath(party, 'values.currency_code') || '')
+    const taxProfileCode = String(resolvePath(party, 'values.tax_profile_code') || '')
+    const priceListCode = String(resolvePath(party, 'values.default_price_list_code') || '')
+    const paymentTermDays = resolvePath(party, 'values.payment_term_days')
+    const profile = catalog?.taxProfilesByCode?.[taxProfileCode]
+    const profileDefaultTaxCode = String(resolvePath(profile, 'values.default_tax_code') || '')
+    const profilePaymentTermDays = toNumber(resolvePath(profile, 'values.payment_term_days'))
+    if (partyName) {
+      withParty = assignPathValue(withParty, 'party_name', partyName)
+    }
+    if (currencyCode && !String(resolvePath(withParty, 'currency_code') || '')) {
+      withParty = assignPathValue(withParty, 'currency_code', currencyCode)
+    }
+    if (taxProfileCode && !String(resolvePath(withParty, 'tax_profile_code') || '')) {
+      withParty = assignPathValue(withParty, 'tax_profile_code', taxProfileCode)
+    }
+    if (priceListCode && !String(resolvePath(withParty, 'price_list_code') || '')) {
+      withParty = assignPathValue(withParty, 'price_list_code', priceListCode)
+    }
+    if (profileDefaultTaxCode && !String(resolvePath(withParty, 'default_tax_code') || '')) {
+      withParty = assignPathValue(withParty, 'default_tax_code', profileDefaultTaxCode)
+    }
+    const resolvedPaymentTermDays = toNumber(paymentTermDays) || profilePaymentTermDays
+    if (resolvedPaymentTermDays > 0 && !toNumber(resolvePath(withParty, 'payment_term_days'))) {
+      withParty = assignPathValue(withParty, 'payment_term_days', resolvedPaymentTermDays)
+      const baseDate = String(resolvePath(withParty, 'invoice_date') || resolvePath(withParty, 'order_date') || '')
+      if (baseDate) {
+        const dueDate = addDaysToDate(baseDate, resolvedPaymentTermDays)
+        if (dueDate) {
+          withParty = assignPathValue(withParty, 'due_date', dueDate)
+        }
+      }
+    }
+    const lines = asRecordList(resolvePath(withParty, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(withParty, 'lines', 'commercial_lines', lines, catalog)
+    }
+    return withParty
+  }
+  if (path === 'price_list_code') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'commercial_lines', lines, catalog)
+    }
+    return next
+  }
+  if (path === 'tax_profile_code') {
+    const profileCode = String(value || '')
+    const profile = catalog?.taxProfilesByCode?.[profileCode]
+    let withProfile = next
+    const defaultTaxCode = resolvePath(profile, 'values.default_tax_code')
+    const paymentTermDays = resolvePath(profile, 'values.payment_term_days')
+    if (typeof defaultTaxCode === 'string' && defaultTaxCode) {
+      withProfile = assignPathValue(withProfile, 'default_tax_code', defaultTaxCode)
+    }
+    if (paymentTermDays != null && paymentTermDays !== '') {
+      withProfile = assignPathValue(withProfile, 'payment_term_days', toNumber(paymentTermDays))
+      const baseDate = String(resolvePath(withProfile, 'invoice_date') || resolvePath(withProfile, 'order_date') || '')
+      if (baseDate) {
+        withProfile = assignPathValue(withProfile, 'due_date', addDaysToDate(baseDate, toNumber(paymentTermDays)))
+      }
+    }
+    const lines = asRecordList(resolvePath(withProfile, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(withProfile, 'lines', 'commercial_lines', lines, catalog)
+    }
+    return withProfile
+  }
+  if ((path === 'invoice_date' || path === 'order_date') && toNumber(resolvePath(next, 'payment_term_days')) > 0) {
+    const dueDate = addDaysToDate(String(value || ''), toNumber(resolvePath(next, 'payment_term_days')))
+    if (dueDate) {
+      return assignPathValue(next, 'due_date', dueDate)
+    }
+  }
+  if (path === 'payment_term_days') {
+    const baseDate = String(resolvePath(next, 'invoice_date') || resolvePath(next, 'order_date') || '')
+    const dueDate = addDaysToDate(baseDate, toNumber(value))
+    if (dueDate) {
+      return assignPathValue(next, 'due_date', dueDate)
+    }
+  }
+  if (path === 'payment_method_code') {
+    const methodCode = String(value || '')
+    const clearingAccount = resolvePath(catalog?.paymentMethodsByCode?.[methodCode], 'values.clearing_account_code')
+    if (typeof clearingAccount === 'string' && clearingAccount) {
+      return assignPathValue(next, 'clearing_account_code', clearingAccount)
+    }
+  }
+  if (path === 'source_payment_id') {
+    const paymentID = String(value || '')
+    const payment = catalog?.paymentsByID?.[paymentID]
+    let updated = next
+    const paymentNumber = String(resolvePath(payment, 'header.number') || '')
+    const methodCode = String(resolvePath(payment, 'body.payload.payment_method_code') || '')
+    const clearingAccount = String(resolvePath(payment, 'body.payload.clearing_account_code') || '')
+    const paidAmount = toNumber(resolvePath(payment, 'body.payload.amount_received'))
+    const refundedAmount = toNumber(resolvePath(payment, 'body.payload.refunded_amount'))
+    const remainingAmount = roundMoney(Math.max(paidAmount - refundedAmount, 0))
+    if (paymentNumber) updated = assignPathValue(updated, 'source_payment_number', paymentNumber)
+    if (methodCode) updated = assignPathValue(updated, 'payment_method_code', methodCode)
+    if (clearingAccount) updated = assignPathValue(updated, 'clearing_account_code', clearingAccount)
+    if (paymentNumber && !String(resolvePath(updated, 'refund_reference') || '')) {
+      updated = assignPathValue(updated, 'refund_reference', paymentNumber)
+    }
+    const currentRefund = toNumber(resolvePath(updated, 'amount_refunded'))
+    if ((currentRefund <= 0 || currentRefund > remainingAmount) && remainingAmount > 0) {
+      updated = assignPathValue(updated, 'amount_refunded', remainingAmount)
+    }
+    return updated
+  }
+  if (path === 'amount_refunded') {
+    const refundAllocations = asRecordList(resolvePath(next, 'refund_allocations'))
+    if (refundAllocations.length) {
+      return applyCommercialArrayUpdate(next, 'refund_allocations', 'commercial_refund_allocations', refundAllocations, catalog)
+    }
+  }
+  if (path === 'amount_received') {
+    const allocations = asRecordList(resolvePath(next, 'allocations'))
+    if (allocations.length) {
+      return applyCommercialArrayUpdate(next, 'allocations', 'commercial_allocations', allocations, catalog)
+    }
+    return assignPathValue(next, 'unapplied_amount', roundMoney(Math.max(toNumber(value), 0)))
+  }
+  return next
+}
+
+function normalizeCommercialFormState(current: FormState, documentType: string, catalog: CommercialFormCatalog): FormState {
+  let next = current
+  const partyID = String(resolvePath(next, 'party_id') || '')
+  const party = catalog.partiesByID[partyID]
+  if (party) {
+    const partyName = String(resolvePath(party, 'values.display_name') || resolvePath(party, 'values.name') || '')
+    const currencyCode = String(resolvePath(party, 'values.currency_code') || '')
+    const taxProfileCode = String(resolvePath(party, 'values.tax_profile_code') || '')
+    const priceListCode = String(resolvePath(party, 'values.default_price_list_code') || '')
+    const paymentTermDays = toNumber(resolvePath(party, 'values.payment_term_days'))
+    if (!resolvePath(next, 'party_name') && partyName) {
+      next = assignPathValue(next, 'party_name', partyName)
+    }
+    if (!resolvePath(next, 'currency_code') && currencyCode) {
+      next = assignPathValue(next, 'currency_code', currencyCode)
+    }
+    if (!resolvePath(next, 'tax_profile_code') && taxProfileCode) {
+      next = assignPathValue(next, 'tax_profile_code', taxProfileCode)
+    }
+    if (!resolvePath(next, 'price_list_code') && priceListCode) {
+      next = assignPathValue(next, 'price_list_code', priceListCode)
+    }
+    if (!resolvePath(next, 'payment_term_days') && paymentTermDays > 0) {
+      next = assignPathValue(next, 'payment_term_days', paymentTermDays)
+    }
+  }
+  const profileCode = String(resolvePath(next, 'tax_profile_code') || '')
+  const profile = catalog.taxProfilesByCode[profileCode]
+  if (profile) {
+    const defaultTaxCode = String(resolvePath(profile, 'values.default_tax_code') || '')
+    if (!resolvePath(next, 'default_tax_code') && defaultTaxCode) {
+      next = assignPathValue(next, 'default_tax_code', defaultTaxCode)
+    }
+    const paymentTermDays = toNumber(resolvePath(profile, 'values.payment_term_days'))
+    if (!resolvePath(next, 'payment_term_days') && paymentTermDays > 0) {
+      next = assignPathValue(next, 'payment_term_days', paymentTermDays)
+    }
+  }
+  if (documentType === 'sales_order' || documentType === 'invoice') {
+    const baseDate = String(resolvePath(next, 'invoice_date') || resolvePath(next, 'order_date') || '')
+    const paymentTermDays = toNumber(resolvePath(next, 'payment_term_days'))
+    if (baseDate && paymentTermDays > 0 && !resolvePath(next, 'due_date')) {
+      next = assignPathValue(next, 'due_date', addDaysToDate(baseDate, paymentTermDays))
+    }
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'commercial_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'payment_receipt') {
+    next = applyFieldUpdate(next, 'payment_method_code', resolvePath(next, 'payment_method_code'), catalog)
+    const allocations = asRecordList(resolvePath(next, 'allocations'))
+    if (allocations.length) {
+      return applyCommercialArrayUpdate(next, 'allocations', 'commercial_allocations', allocations, catalog)
+    }
+    return next
+  }
+  if (documentType === 'payment_refund') {
+    const refundAllocations = asRecordList(resolvePath(next, 'refund_allocations'))
+    if (refundAllocations.length) {
+      next = applyCommercialArrayUpdate(next, 'refund_allocations', 'commercial_refund_allocations', refundAllocations, catalog)
+    }
+    next = applyFieldUpdate(next, 'source_payment_id', resolvePath(next, 'source_payment_id'), catalog)
+    next = applyFieldUpdate(next, 'payment_method_code', resolvePath(next, 'payment_method_code'), catalog)
+    return next
+  }
+  return next
+}
+
+function normalizeCommercialRows(rows: Array<Record<string, unknown>>, widget: string, catalog?: CommercialFormCatalog, values?: FormState): Array<Record<string, unknown>> {
+  if (widget === 'commercial_refund_allocations') {
+    return rows.map((row) => {
+      const paymentID = String(row.payment_id || '')
+      const payment = catalog?.paymentsByID?.[paymentID]
+      const paymentNumber = String(row.payment_number || resolvePath(payment, 'header.number') || '')
+      const amountReceived = toNumber(resolvePath(payment, 'body.payload.amount_received'))
+      const refundedAmount = toNumber(resolvePath(payment, 'body.payload.refunded_amount'))
+      const remainingAmount = roundMoney(Math.max(amountReceived - refundedAmount, 0))
+      let amount = toNumber(row.amount)
+      if (remainingAmount > 0 && (amount <= 0 || amount > remainingAmount)) {
+        amount = remainingAmount
+      }
+      return {
+        ...row,
+        payment_number: paymentNumber,
+        amount,
+      }
+    })
+  }
+  if (widget !== 'commercial_lines') return rows
+  return rows.map((row) => {
+    const itemCode = String(row.item_code || '')
+    const item = catalog?.itemsByCode?.[itemCode]
+    const itemDescription = resolvePath(item, 'values.description') || resolvePath(item, 'values.name')
+    const itemUOMCode = resolvePath(item, 'values.uom_code')
+    const priceListCode = String(resolvePath(values || {}, 'price_list_code') || '')
+    const priceListItem = catalog?.priceListItemsByKey?.[`${priceListCode}|${itemCode}`]
+    const itemUnitPrice = resolvePath(priceListItem, 'values.unit_price') ?? resolvePath(item, 'values.base_price') ?? resolvePath(item, 'values.unit_price')
+    const itemTaxCode = resolvePath(item, 'values.tax_code')
+    const itemRevenueAccount = resolvePath(item, 'values.revenue_account_code')
+    const priceListTaxCode = resolvePath(priceListItem, 'values.tax_code')
+    const priceListRevenueAccount = resolvePath(priceListItem, 'values.revenue_account_code')
+    const profile = catalog?.taxProfilesByCode?.[String(resolvePath(values || {}, 'tax_profile_code') || row.tax_profile_code || '')]
+    const profileTaxCode = resolvePath(profile, 'values.default_tax_code')
+    const profileTaxMode = resolvePath(profile, 'values.price_tax_mode')
+    const defaultTaxCode = resolvePath(values || {}, 'default_tax_code')
+    const taxCode = String(row.tax_code || defaultTaxCode || profileTaxCode || priceListTaxCode || itemTaxCode || '')
+    const tax = catalog?.taxCodesByCode?.[taxCode]
+    const taxRate = toNumber(row.tax_rate || resolvePath(tax, 'values.rate_percent'))
+    const taxMode = String(resolvePath(tax, 'values.mode') || profileTaxMode || row.tax_mode || 'exclusive')
+    const quantity = toNumber(row.quantity) || 1
+    const unitPrice = toNumber(row.unit_price || itemUnitPrice)
+    const discountAmount = toNumber(row.discount_amount)
+    const grossAmount = Math.max(quantity * unitPrice - discountAmount, 0)
+    const breakdown = calculateTaxBreakdown(grossAmount, taxRate, taxMode)
+    return {
+      ...row,
+      description: String(row.description || itemDescription || ''),
+      uom_code: String(row.uom_code || itemUOMCode || ''),
+      unit_price: unitPrice,
+      tax_code: taxCode,
+      tax_rate: taxRate,
+      tax_mode: taxMode,
+      revenue_account_code: row.revenue_account_code || priceListRevenueAccount || itemRevenueAccount || '',
+      tax_account_code: row.tax_account_code || resolvePath(tax, 'values.tax_account_code') || '',
+      quantity,
+      discount_amount: discountAmount,
+      line_subtotal: breakdown.subtotal,
+      tax_amount: breakdown.tax,
+      line_total: breakdown.total,
+    }
+  })
+}
+
+function calculateTaxBreakdown(grossAmount: number, taxRate: number, taxMode: string): { subtotal: number; tax: number; total: number } {
+  const mode = String(taxMode || 'exclusive').toLowerCase()
+  if (mode === 'inclusive') {
+    if (taxRate <= 0) return { subtotal: roundMoney(grossAmount), tax: 0, total: roundMoney(grossAmount) }
+    const subtotal = roundMoney(grossAmount / (1 + taxRate / 100))
+    return { subtotal, tax: roundMoney(grossAmount - subtotal), total: roundMoney(grossAmount) }
+  }
+  if (mode === 'exempt') {
+    return { subtotal: roundMoney(grossAmount), tax: 0, total: roundMoney(grossAmount) }
+  }
+  const subtotal = roundMoney(grossAmount)
+  const tax = roundMoney(subtotal * taxRate / 100)
+  return { subtotal, tax, total: roundMoney(subtotal + tax) }
+}
+
+function toNumber(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value || 0)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function addDaysToDate(baseDate: string, days: number): string {
+  if (!baseDate || !Number.isFinite(days) || days <= 0) return ''
+  const date = new Date(`${baseDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  date.setDate(date.getDate() + days)
+  return date.toISOString().slice(0, 10)
 }
 
 function resolvePath(payload: unknown, path: string): unknown {
@@ -1406,6 +2755,46 @@ async function invokeDocumentAction(documentID: string, action: string): Promise
 
 function humanize(value: string): string {
   return value.replace(/[_./-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function actionVisibleForStatus(actionKey: string, status: string, documentType: string): boolean {
+  const normalizedAction = actionKey.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  const normalizedType = documentType.toLowerCase()
+  if (!normalizedStatus) return true
+  switch (normalizedAction) {
+    case 'submit':
+      return normalizedStatus === 'draft'
+    case 'approve':
+    case 'reject':
+      return normalizedStatus === 'submitted'
+    case 'cancel':
+      if (normalizedStatus === 'draft' || normalizedStatus === 'submitted') return true
+      if (normalizedType === 'invoice' && normalizedStatus === 'issued') return true
+      if (normalizedType === 'payment_receipt' && normalizedStatus === 'received') return true
+      if (normalizedType === 'payment_refund' && normalizedStatus === 'refunded') return true
+      return false
+    case 'reopen':
+      return normalizedStatus !== 'draft' && normalizedStatus !== 'submitted'
+    case 'generate_invoice':
+      return normalizedStatus === 'confirmed'
+    case 'register_payment':
+      return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid'
+    case 'issue_credit_note':
+      return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid' || normalizedStatus === 'paid'
+    case 'register_refund':
+      return normalizedStatus === 'issued'
+    default:
+      return true
+  }
+}
+
+function isCommercialDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['sales_order', 'invoice', 'credit_note', 'payment_receipt', 'payment_refund', 'ledger_posting'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
 }
 
 function readCookie(name: string): string {

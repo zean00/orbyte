@@ -60,18 +60,20 @@ import (
 )
 
 type testHarness struct {
-	router    http.Handler
-	cookie    *http.Cookie
-	csrf      *http.Cookie
-	ident     *identity.Service
-	identRepo identity.Repository
-	audit     *audit.Service
-	cfg       *config.Service
-	modules   *module.Service
-	policy    *policy.Service
-	search    *search.Service
-	workflows *workflow.Service
-	analytics *analytics.Service
+	router     http.Handler
+	cookie     *http.Cookie
+	csrf       *http.Cookie
+	ident      *identity.Service
+	identRepo  identity.Repository
+	audit      *audit.Service
+	cfg        *config.Service
+	modules    *module.Service
+	policy     *policy.Service
+	search     *search.Service
+	docs       *document.Service
+	docActions *application.DocumentActions
+	workflows  *workflow.Service
+	analytics  *analytics.Service
 }
 
 func newTestHarness(t *testing.T) testHarness {
@@ -473,18 +475,20 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router:    newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions, nil),
-		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
-		csrf:      csrfCookie,
-		ident:     ident,
-		identRepo: identRepo,
-		audit:     auditSvc,
-		cfg:       cfg,
-		modules:   modules,
-		policy:    policySvc,
-		search:    searchSvc,
-		workflows: flows,
-		analytics: analyticsSvc,
+		router:     newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions, nil),
+		cookie:     &http.Cookie{Name: sessionCookieName, Value: token},
+		csrf:       csrfCookie,
+		ident:      ident,
+		identRepo:  identRepo,
+		audit:      auditSvc,
+		cfg:        cfg,
+		modules:    modules,
+		policy:     policySvc,
+		search:     searchSvc,
+		docs:       docs,
+		docActions: actions,
+		workflows:  flows,
+		analytics:  analyticsSvc,
 	}
 }
 
@@ -572,6 +576,7 @@ func builtInTestModuleManifests() []module.Manifest {
 	cfg := config.NewService()
 	httpDef, _ := cfg.Definition("platform.http")
 	authDef, _ := cfg.Definition("identity.auth")
+	commercialPostingDef, _ := cfg.Definition("commercial.posting")
 	searchTypesenseDef, _ := cfg.Definition("search.typesense")
 	searchEmbeddingDef, _ := cfg.Definition("search.embedding")
 	return []module.Manifest{
@@ -621,6 +626,51 @@ func builtInTestModuleManifests() []module.Manifest {
 			},
 		},
 		{Key: "identity", Name: "Identity", Version: "1.0.0", DomainFamily: "platform", DependencyRequirements: []module.DependencyRequirement{{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired}}, ConfigDefinitions: []config.Definition{authDef}},
+		{
+			Key:               "commercial_core",
+			Name:              "Commercial Core",
+			Version:           "1.0.0",
+			DomainFamily:      "business",
+			ConfigDefinitions: []config.Definition{commercialPostingDef},
+			Documents: []document.Definition{{
+				Type:           "invoice",
+				DisplayName:    "Invoice",
+				SchemaVersion:  "v1",
+				WorkflowKey:    "invoice_flow",
+				NumberingKey:   "invoice_number",
+				OwnerModuleKey: "commercial_core",
+			}},
+			Workflows: []workflow.Definition{{
+				Key:    "invoice_flow",
+				States: []string{"draft", "submitted", "issued", "cancelled"},
+				Actions: []workflow.ActionRule{
+					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit"},
+					{Action: "approve", FromState: "submitted", ToState: "issued", PermissionKey: "document.approve"},
+					{Action: "cancel", FromState: "issued", ToState: "cancelled", PermissionKey: "document.cancel"},
+				},
+			}},
+			AdminConsole: module.AdminConsoleDefinition{
+				Title:       "Commercial Console",
+				Description: "Commercial setup and shortcuts.",
+				Sections: []module.AdminConsoleSectionDefinition{
+					{
+						Key:                 "posting_defaults",
+						Title:               "Posting Defaults",
+						Kind:                module.AdminConsoleSectionSettingsForm,
+						ConfigKey:           "commercial.posting",
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:   "catalog_setup",
+						Title: "Catalog Setup",
+						Kind:  module.AdminConsoleSectionResourceLinks,
+						Links: []module.AdminConsoleLinkDefinition{
+							{Key: "catalog", Label: "Catalog", RoutePath: "/ui/commercial/catalog", RequiredPermissions: []string{"item.list"}},
+						},
+					},
+				},
+			},
+		},
 		{
 			Key:          "documents",
 			Name:         "Documents",
@@ -4591,6 +4641,43 @@ func TestAdminRoutesHandleFailureCases(t *testing.T) {
 	}
 }
 
+func TestAdminModuleConsolePayload(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/modules/commercial_core/console", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected module console to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode module console: %v", err)
+	}
+	modulePayload, _ := payload["module"].(map[string]any)
+	manifest, _ := modulePayload["manifest"].(map[string]any)
+	if manifest["key"] != "commercial_core" {
+		t.Fatalf("expected commercial_core manifest, got %+v", manifest["key"])
+	}
+	consolePayload, _ := payload["console"].(map[string]any)
+	sections, _ := consolePayload["sections"].([]any)
+	if len(sections) == 0 {
+		t.Fatalf("expected module console sections, got %+v", consolePayload)
+	}
+	first, _ := sections[0].(map[string]any)
+	if first["kind"] != "settings_form" {
+		t.Fatalf("expected settings form first section, got %+v", first["kind"])
+	}
+	if first["config_key"] != "commercial.posting" {
+		t.Fatalf("expected commercial.posting config binding, got %+v", first["config_key"])
+	}
+	if _, ok := first["definition"].(map[string]any); !ok {
+		t.Fatalf("expected config definition in first section, got %+v", first["definition"])
+	}
+	if _, ok := first["entry"].(map[string]any); !ok {
+		t.Fatalf("expected resolved config entry in first section, got %+v", first["entry"])
+	}
+}
+
 func TestAdminModuleLocalExtensionAPIs(t *testing.T) {
 	h := newTestHarness(t)
 	if err := h.modules.Register(module.Manifest{
@@ -5505,6 +5592,27 @@ func TestUIDocumentListProjectionAndNotFoundBranches(t *testing.T) {
 		if header["type"] != "generic_request" {
 			t.Fatalf("expected only generic_request items, got %+v", payload.Items)
 		}
+		if _, ok := item["body"]; ok {
+			t.Fatalf("expected projection-only list payload by default, got %+v", item)
+		}
+	}
+
+	expanded := h.request(http.MethodGet, "/ui/data/documents?type=generic_request&include_payload=1", nil, true)
+	if expanded.Code != http.StatusOK {
+		t.Fatalf("expected expanded ui document list to succeed, got %d body=%s", expanded.Code, expanded.Body.String())
+	}
+	if err := json.Unmarshal(expanded.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode expanded documents failed: %v", err)
+	}
+	for _, item := range payload.Items {
+		body, ok := item["body"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected expanded list payload body, got %+v", item)
+		}
+		recordPayload, ok := body["payload"].(map[string]any)
+		if !ok || recordPayload["title"] == nil {
+			t.Fatalf("expected expanded list payload title, got %+v", item)
+		}
 	}
 
 	projections := h.request(http.MethodGet, "/ui/data/projections/documents", nil, true)
@@ -5976,6 +6084,28 @@ func TestDocumentRoutesAndOps(t *testing.T) {
 	rr = h.request(http.MethodGet, "/ops/projections/documents", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for projections, got %d", rr.Code)
+	}
+}
+
+func TestCommercialDocumentsRejectUpdateOutsideDraft(t *testing.T) {
+	cases := []struct {
+		documentType string
+		status       string
+		locked       bool
+	}{
+		{documentType: "sales_order", status: "draft", locked: false},
+		{documentType: "sales_order", status: "rejected", locked: false},
+		{documentType: "sales_order", status: "confirmed", locked: true},
+		{documentType: "invoice", status: "issued", locked: true},
+		{documentType: "invoice", status: "paid", locked: true},
+		{documentType: "payment_receipt", status: "received", locked: true},
+		{documentType: "ledger_posting", status: "posted", locked: true},
+		{documentType: "generic_request", status: "approved", locked: false},
+	}
+	for _, tc := range cases {
+		if got := commercialDocumentUpdateLocked(tc.documentType, tc.status); got != tc.locked {
+			t.Fatalf("commercialDocumentUpdateLocked(%q, %q) = %v, want %v", tc.documentType, tc.status, got, tc.locked)
+		}
 	}
 }
 

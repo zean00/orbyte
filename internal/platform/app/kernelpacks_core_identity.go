@@ -14,6 +14,45 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 		DomainFamily:        "platform",
 		OwnedPermissionKeys: []string{"platform.context.read", "module.read", "module.manage", "configuration.read", "configuration.manage", "search.manage", "template.read", "template.manage", "template.publish", "template.bind", "template.render"},
 		ConfigDefinitions:   []config.Definition{httpDefinition},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Platform Core Console",
+			TitleI18n:       localize("Platform Core Console", "Konsol Inti Platform"),
+			Description:     "Core platform settings and shortcuts for module, configuration, template, and observability operations.",
+			DescriptionI18n: localize("Core platform settings and shortcuts for module, configuration, template, and observability operations.", "Pengaturan inti platform dan pintasan untuk operasi modul, konfigurasi, template, dan observabilitas."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:                 "http_settings",
+					Title:               "HTTP Settings",
+					TitleI18n:           localize("HTTP Settings", "Pengaturan HTTP"),
+					Description:         "Deployment-level listener and origin settings.",
+					DescriptionI18n:     localize("Deployment-level listener and origin settings.", "Pengaturan listener dan origin tingkat deployment."),
+					Kind:                module.AdminConsoleSectionSettingsForm,
+					ConfigKey:           "platform.http",
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:       "admin_operations",
+					Title:     "Admin Operations",
+					TitleI18n: localize("Admin Operations", "Operasi Admin"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("modules", "Modules", "Modul", "/admin/modules", "Open the module inventory.", "Buka inventaris modul.", "module.read"),
+						adminConsoleLink("config", "Configuration", "Konfigurasi", "/admin/config", "Open global configuration entries.", "Buka entri konfigurasi global.", "configuration.read"),
+						adminConsoleLink("definitions", "Definitions", "Definisi", "/admin/definitions", "Open platform definitions.", "Buka definisi platform.", "configuration.read"),
+						adminConsoleLink("observability", "Observability", "Observabilitas", "/admin/observability", "Open platform observability.", "Buka observabilitas platform.", "module.read"),
+					},
+				},
+				{
+					Key:       "template_operations",
+					Title:     "Template Operations",
+					TitleI18n: localize("Template Operations", "Operasi Template"),
+					Kind:      module.AdminConsoleSectionTemplateLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("templates", "Templates", "Template", "/admin/templates", "Open the template list and designer.", "Buka daftar dan perancang template.", "template.read"),
+					},
+				},
+			},
+		},
 		Security: module.SecurityDefinition{
 			Permissions: []module.PermissionDefinition{
 				{Key: "platform.context.read", Action: "read", Resource: "context", DisplayName: "Read Platform Context", DisplayNameI18n: localize("Read Platform Context", "Lihat Konteks Platform")},
@@ -62,6 +101,15 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					LabelI18n:           localize("Configuration", "Konfigurasi"),
 					ActionKey:           "admin.configuration",
 					Order:               30,
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:                 "admin.finance",
+					Label:               "Finance",
+					LabelI18n:           localize("Finance", "Keuangan"),
+					ActionKey:           "admin.finance",
+					Order:               35,
 					Surface:             module.UISurfaceAdmin,
 					RequiredPermissions: []string{"configuration.read"},
 				},
@@ -140,6 +188,15 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					RequiredPermissions: []string{"configuration.read"},
 				},
 				{
+					Key:                 "admin.finance",
+					Label:               "Finance",
+					LabelI18n:           localize("Finance", "Keuangan"),
+					Kind:                "navigate",
+					RoutePath:           "/admin/finance",
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
 					Key:                 "admin.definitions",
 					Label:               "Definitions",
 					LabelI18n:           localize("Definitions", "Definisi"),
@@ -210,6 +267,35 @@ func identityKernelPackManifest(authDefinition config.Definition) module.Manifes
 		}},
 		OwnedPermissionKeys: []string{"identity.manage_sessions", "identity.manage_users"},
 		ConfigDefinitions:   []config.Definition{authDefinition},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Identity Console",
+			TitleI18n:       localize("Identity Console", "Konsol Identitas"),
+			Description:     "Authentication policy, security operations, and identity administration shortcuts.",
+			DescriptionI18n: localize("Authentication policy, security operations, and identity administration shortcuts.", "Kebijakan autentikasi, operasi keamanan, dan pintasan administrasi identitas."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:                 "auth_policy",
+					Title:               "Authentication Policy",
+					TitleI18n:           localize("Authentication Policy", "Kebijakan Autentikasi"),
+					Description:         "Password, session, sign-in, and 2FA policy settings.",
+					DescriptionI18n:     localize("Password, session, sign-in, and 2FA policy settings.", "Pengaturan kebijakan kata sandi, sesi, masuk, dan 2FA."),
+					Kind:                module.AdminConsoleSectionSettingsForm,
+					ConfigKey:           "identity.auth",
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:       "identity_admin",
+					Title:     "Identity Administration",
+					TitleI18n: localize("Identity Administration", "Administrasi Identitas"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("auth", "Authentication", "Autentikasi", "/admin/auth", "Open authentication settings.", "Buka pengaturan autentikasi.", "configuration.read"),
+						adminConsoleLink("security", "Security", "Keamanan", "/admin/security", "Open policy and security management.", "Buka manajemen kebijakan dan keamanan.", "configuration.read"),
+						adminConsoleLink("modules", "Modules", "Modul", "/admin/modules", "Return to the module inventory.", "Kembali ke inventaris modul.", "module.read"),
+					},
+				},
+			},
+		},
 		Security: module.SecurityDefinition{
 			Permissions: []module.PermissionDefinition{
 				{Key: "identity.manage_sessions", Action: "manage", Resource: "session", DisplayName: "Manage Sessions", DisplayNameI18n: localize("Manage Sessions", "Kelola Sesi"), RiskLevel: "high"},

@@ -82,6 +82,7 @@ type DocumentDeps struct {
 	Modules       *module.Service
 	Documents     *document.Service
 	Actions       *application.DocumentActions
+	Commercial    *application.CommercialCoreService
 	Audit         *audit.Service
 	Policy        *policy.Service
 	Search        *search.Service
@@ -148,6 +149,7 @@ type UIDeps struct {
 	Search        *search.Service
 	Analytics     *analytics.Service
 	Monitoring    *monitoring.Service
+	Commercial    *application.CommercialCoreService
 	Policy        *policy.Service
 	FieldSecurity *securityfields.Service
 	UIPreferences *UIPreferencesService
@@ -236,7 +238,7 @@ func RegisterModelSurface(deps ModelDeps) RouteRegistrar {
 
 func RegisterDocumentSurface(deps DocumentDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
+		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Commercial, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
 		registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
 	}
 }
@@ -303,6 +305,6 @@ func RegisterNotificationSurface(deps NotificationDeps) RouteRegistrar {
 
 func RegisterUISurface(deps UIDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
 	}
 }

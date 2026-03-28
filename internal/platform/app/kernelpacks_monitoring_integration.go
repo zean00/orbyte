@@ -12,6 +12,25 @@ func monitoringKernelPackManifest() module.Manifest {
 		DependencyRequirements: []module.DependencyRequirement{{
 			ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired,
 		}},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Monitoring Console",
+			TitleI18n:       localize("Monitoring Console", "Konsol Pemantauan"),
+			Description:     "Monitoring dashboards and observability shortcuts.",
+			DescriptionI18n: localize("Monitoring dashboards and observability shortcuts.", "Dashboard pemantauan dan pintasan observabilitas."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "monitoring_operations",
+					Title:     "Monitoring Operations",
+					TitleI18n: localize("Monitoring Operations", "Operasi Pemantauan"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("monitoring_dashboard", "Monitoring Dashboard", "Dashboard Pemantauan", "/ui/monitoring", "Open the monitoring dashboard.", "Buka dashboard pemantauan.", "monitoring.read"),
+						adminConsoleLink("observability", "Observability", "Observabilitas", "/admin/observability", "Open the observability admin page.", "Buka halaman admin observabilitas.", "module.read"),
+						adminConsoleLink("security", "Security", "Keamanan", "/admin/security", "Open security policies related to monitoring access.", "Buka kebijakan keamanan terkait akses pemantauan.", "configuration.read"),
+					},
+				},
+			},
+		},
 		Security: module.SecurityDefinition{
 			Permissions: []module.PermissionDefinition{
 				{Key: "metrics.read", Action: "read", Resource: "metrics", DisplayName: "Read Metrics", DisplayNameI18n: localize("Read Metrics", "Lihat Metrik")},
@@ -61,6 +80,24 @@ func integrationKernelPackManifest() module.Manifest {
 		DependencyRequirements: []module.DependencyRequirement{
 			{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
 			{ModuleKey: "documents", VersionRange: ">=1.1.0,<2.0.0", Kind: module.DependencyKindOptional},
+		},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Integration Console",
+			TitleI18n:       localize("Integration Console", "Konsol Integrasi"),
+			Description:     "Integration policy hooks and observability entry points.",
+			DescriptionI18n: localize("Integration policy hooks and observability entry points.", "Hook kebijakan integrasi dan pintu masuk observabilitas."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "integration_operations",
+					Title:     "Integration Operations",
+					TitleI18n: localize("Integration Operations", "Operasi Integrasi"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("observability", "Observability", "Observabilitas", "/admin/observability", "Inspect integration metrics and logs.", "Periksa metrik dan log integrasi.", "module.read"),
+						adminConsoleLink("security", "Security", "Keamanan", "/admin/security", "Open policy hooks and security rules.", "Buka hook kebijakan dan aturan keamanan.", "configuration.read"),
+					},
+				},
+			},
 		},
 		Security: module.SecurityDefinition{
 			PolicyHooks: []module.PolicyHookDefinition{

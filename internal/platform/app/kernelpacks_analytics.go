@@ -17,6 +17,33 @@ func analyticsKernelPackManifest() module.Manifest {
 			{ModuleKey: "monitoring", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindOptional},
 		},
 		OwnedProjectionKeys: []string{"document_summary"},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Analytics Console",
+			TitleI18n:       localize("Analytics Console", "Konsol Analitik"),
+			Description:     "Analytics cockpit, reporting templates, and operational shortcuts.",
+			DescriptionI18n: localize("Analytics cockpit, reporting templates, and operational shortcuts.", "Kokpit analitik, template pelaporan, dan pintasan operasional."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "analytics_operations",
+					Title:     "Analytics Operations",
+					TitleI18n: localize("Analytics Operations", "Operasi Analitik"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("cockpit", "Analytics Cockpit", "Kokpit Analitik", "/ui/analytics/cockpit", "Open the analytics cockpit.", "Buka kokpit analitik.", "analytics.read"),
+						adminConsoleLink("observability", "Observability", "Observabilitas", "/admin/observability", "Open platform observability.", "Buka observabilitas platform.", "module.read"),
+					},
+				},
+				{
+					Key:       "analytics_templates",
+					Title:     "Analytics Templates",
+					TitleI18n: localize("Analytics Templates", "Template Analitik"),
+					Kind:      module.AdminConsoleSectionTemplateLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("document_reporting", "Document Reporting Print", "Cetak Pelaporan Dokumen", "/admin/templates/designer?key=analytics.document_reporting.default", "Open the document reporting print template.", "Buka template cetak pelaporan dokumen.", "template.read"),
+					},
+				},
+			},
+		},
 		DocumentExtensions: []module.DocumentExtension{{
 			DocumentType:       "generic_request",
 			SchemaVersion:      "v1",

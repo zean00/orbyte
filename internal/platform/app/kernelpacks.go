@@ -28,6 +28,7 @@ func builtInModulePacks() []modulePack {
 		staticModulePack{manifests: platformCoreKernelPackManifests},
 		staticModulePack{manifests: identityKernelPackManifests},
 		staticModulePack{manifests: documentsKernelPackManifests},
+		staticModulePack{manifests: commercialCoreKernelPackManifests},
 		staticModulePack{manifests: analyticsKernelPackManifests},
 		staticModulePack{manifests: monitoringKernelPackManifests},
 		staticModulePack{manifests: integrationKernelPackManifests},

@@ -17,6 +17,25 @@ func masterdataKernelPackManifest() module.Manifest {
 			{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
 			{ModuleKey: "reference_masterdata", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
 		},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Master Data Console",
+			TitleI18n:       localize("Master Data Console", "Konsol Data Master"),
+			Description:     "Master data operations and related commercial/customer entry points.",
+			DescriptionI18n: localize("Master data operations and related commercial/customer entry points.", "Operasi data master dan pintu masuk pelanggan/komersial terkait."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "masterdata_operations",
+					Title:     "Master Data Operations",
+					TitleI18n: localize("Master Data Operations", "Operasi Data Master"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("parties", "Parties", "Pihak", "/ui/masterdata/parties", "Open party master records.", "Buka data master pihak.", "party.list"),
+						adminConsoleLink("catalog", "Catalog", "Katalog", "/ui/commercial/catalog", "Open the sellable catalog linked to parties.", "Buka katalog jual terkait pihak.", "item.list"),
+						adminConsoleLink("receivables", "Receivables", "Piutang", "/ui/commercial/receivables", "Open receivables tied to parties.", "Buka piutang yang terkait pihak.", "document.list"),
+					},
+				},
+			},
+		},
 		Models: []model.Definition{{
 			Key:                 "party",
 			DisplayName:         "Party",
@@ -32,6 +51,10 @@ func masterdataKernelPackManifest() module.Manifest {
 				{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
 				{Key: "display_name", Label: "Display Name", LabelI18n: localize("Display Name", "Nama Tampil"), Type: "string", ReadOnly: true, ComputeRuleKey: "party.display_name.compute"},
 				{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Type: "string"},
+				{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Type: "string"},
+				{Key: "tax_profile_code", Label: "Tax Profile", LabelI18n: localize("Tax Profile", "Profil Pajak"), Type: "string"},
+				{Key: "default_price_list_code", Label: "Default Price List", LabelI18n: localize("Default Price List", "Daftar Harga Default"), Type: "string"},
+				{Key: "payment_term_days", Label: "Payment Term Days", LabelI18n: localize("Payment Term Days", "Hari Termin Pembayaran"), Type: "number"},
 				{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultRuleKey: "party.status.default", ConstraintRuleKeys: []string{"party.status.allowed"}},
 			},
 			Relations: []model.RelationDefinition{
@@ -115,6 +138,8 @@ func masterdataKernelPackManifest() module.Manifest {
 					Columns: []module.ColumnDefinition{
 						{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name"},
 						{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Path: "values.email"},
+						{Key: "tax_profile_code", Label: "Tax Profile", LabelI18n: localize("Tax Profile", "Profil Pajak"), Path: "values.tax_profile_code"},
+						{Key: "default_price_list_code", Label: "Price List", LabelI18n: localize("Price List", "Daftar Harga"), Path: "values.default_price_list_code"},
 						{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status"},
 					},
 					Filters:         []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "enum", Options: []string{"active", "inactive", "blocked"}}},
@@ -130,6 +155,10 @@ func masterdataKernelPackManifest() module.Manifest {
 								{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string"},
 								{Key: "display_name", Label: "Display Name", LabelI18n: localize("Display Name", "Nama Tampil"), Path: "values.display_name", Type: "string"},
 								{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Path: "values.email", Type: "string"},
+								{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Path: "values.currency_code", Type: "string"},
+								{Key: "tax_profile_code", Label: "Tax Profile", LabelI18n: localize("Tax Profile", "Profil Pajak"), Path: "values.tax_profile_code", Type: "string"},
+								{Key: "default_price_list_code", Label: "Default Price List", LabelI18n: localize("Default Price List", "Daftar Harga Default"), Path: "values.default_price_list_code", Type: "string"},
+								{Key: "payment_term_days", Label: "Payment Term Days", LabelI18n: localize("Payment Term Days", "Hari Termin Pembayaran"), Path: "values.payment_term_days", Type: "number"},
 								{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string"},
 							},
 						}},
@@ -145,6 +174,10 @@ func masterdataKernelPackManifest() module.Manifest {
 						Key: "edit", Title: "Edit Party", TitleI18n: localize("Edit Party", "Ubah Pihak"), Fields: []module.FieldDefinition{
 							{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string", Widget: "text", Placeholder: "Party name", PlaceholderI18n: localize("Party name", "Nama pihak")},
 							{Key: "email", Label: "Email", LabelI18n: localize("Email", "Email"), Path: "values.email", Type: "string", Widget: "text", Placeholder: "Email address", PlaceholderI18n: localize("Email address", "Alamat email")},
+							{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Path: "values.currency_code", Type: "string", Widget: "text", Placeholder: "Default currency", PlaceholderI18n: localize("Default currency", "Mata uang default")},
+							{Key: "tax_profile_code", Label: "Tax Profile Code", LabelI18n: localize("Tax Profile Code", "Kode Profil Pajak"), Path: "values.tax_profile_code", Type: "string", Widget: "select", Placeholder: "Commercial tax profile", PlaceholderI18n: localize("Commercial tax profile", "Profil pajak komersial")},
+							{Key: "default_price_list_code", Label: "Default Price List", LabelI18n: localize("Default Price List", "Daftar Harga Default"), Path: "values.default_price_list_code", Type: "string", Widget: "select", Placeholder: "Commercial price list", PlaceholderI18n: localize("Commercial price list", "Daftar harga komersial")},
+							{Key: "payment_term_days", Label: "Payment Term Days", LabelI18n: localize("Payment Term Days", "Hari Termin Pembayaran"), Path: "values.payment_term_days", Type: "number"},
 							{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive", "blocked"}},
 						},
 					}},

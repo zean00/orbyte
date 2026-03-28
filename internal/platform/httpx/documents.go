@@ -3,6 +3,7 @@ package httpx
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -59,7 +60,104 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+	if commercialSvc != nil {
+		mux.HandleFunc("POST /commercial/orders/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/generate-invoice") {
+				http.NotFound(w, r)
+				return
+			}
+			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/orders/"), "/generate-invoice")
+			order, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.create", order.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			record, err := commercialSvc.GenerateInvoiceFromOrder(documentID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			refreshDocumentSearch(searchSvc, record)
+			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+		})
+
+		mux.HandleFunc("POST /commercial/invoices/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/register-payment"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/invoices/"), "/register-payment")
+				invoice, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", invoice.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := commercialSvc.CreatePaymentReceiptFromInvoice(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/issue-credit-note"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/invoices/"), "/issue-credit-note")
+				invoice, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", invoice.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := commercialSvc.CreateCreditNoteFromInvoice(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+
+		mux.HandleFunc("POST /commercial/credit-notes/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/register-refund") {
+				http.NotFound(w, r)
+				return
+			}
+			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/credit-notes/"), "/register-refund")
+			creditNote, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.create", creditNote.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			record, err := commercialSvc.CreateRefundFromCreditNote(documentID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			refreshDocumentSearch(searchSvc, record)
+			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+		})
+	}
+
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
 		if !ok {
@@ -102,6 +200,9 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		if req.OrganizationID == "" {
 			respondError(w, shared.Validation("organization_id is required"))
 			return
+		}
+		if commercialSvc != nil {
+			req.Payload = commercialSvc.NormalizePayload(req.Type, req.Payload)
 		}
 		p, ok := requireAuthorization(w, r, ident, "document.create", req.LocationID, "")
 		if !ok {
@@ -288,10 +389,17 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 			return
 		}
+		if commercialDocumentUpdateLocked(current.Header.Type, current.Header.Status) {
+			respondError(w, shared.Conflict("commercial documents can only be edited while draft or rejected"))
+			return
+		}
 		var req updateDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, shared.Validation("invalid document update payload"))
 			return
+		}
+		if commercialSvc != nil {
+			req.Payload = commercialSvc.NormalizePayload(current.Header.Type, req.Payload)
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, current, req.Payload, "", "api"); err != nil {
 			respondError(w, err)
@@ -403,6 +511,20 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 			return
 		}
+		if commercialSvc != nil {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = commercialSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = commercialSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
 
 		var record document.Record
 		switch req.Action {
@@ -421,6 +543,28 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			incActionMetric(obs, req.Action, "error")
 			respondError(w, err)
 			return
+		}
+		if commercialSvc != nil && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = commercialSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = commercialSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "commercial post-commit synchronization failed"
+				log.Printf("documents: commercial post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
 		}
 		incActionMetric(obs, req.Action, "success")
 		rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
@@ -463,6 +607,16 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		}
 		http.NotFound(w, r)
 	})
+}
+
+func commercialDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "sales_order", "invoice", "credit_note", "payment_receipt", "payment_refund", "ledger_posting":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
 }
 
 func refreshDocumentSearch(searchSvc *search.Service, record document.Record) {

@@ -37,6 +37,847 @@
       "route_path": "/analytics/cockpit"
     },
     {
+      "key": "commercial.accounts.detail",
+      "kind": "navigate",
+      "label": "Account Detail",
+      "label_i18n": {
+        "en": "Account Detail",
+        "id": "Detail Akun"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "account.read"
+      ],
+      "route_path": "/commercial/accounts/detail",
+      "view_key": "commercial.accounts.detail"
+    },
+    {
+      "key": "commercial.accounts.form",
+      "kind": "navigate",
+      "label": "Account Form",
+      "label_i18n": {
+        "en": "Account Form",
+        "id": "Form Akun"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "account.update"
+      ],
+      "route_path": "/commercial/accounts/form",
+      "view_key": "commercial.accounts.form"
+    },
+    {
+      "key": "commercial.accounts.list",
+      "kind": "navigate",
+      "label": "Accounts",
+      "label_i18n": {
+        "en": "Accounts",
+        "id": "Akun"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "account.list"
+      ],
+      "route_path": "/commercial/accounts",
+      "view_key": "commercial.accounts.list"
+    },
+    {
+      "key": "commercial.catalog.detail",
+      "kind": "navigate",
+      "label": "Catalog Detail",
+      "label_i18n": {
+        "en": "Catalog Detail",
+        "id": "Detail Katalog"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item.read"
+      ],
+      "route_path": "/commercial/catalog/detail",
+      "view_key": "commercial.items.detail"
+    },
+    {
+      "key": "commercial.catalog.form",
+      "kind": "navigate",
+      "label": "Catalog Form",
+      "label_i18n": {
+        "en": "Catalog Form",
+        "id": "Form Katalog"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item.update"
+      ],
+      "route_path": "/commercial/catalog/form",
+      "view_key": "commercial.items.form"
+    },
+    {
+      "key": "commercial.catalog.list",
+      "kind": "navigate",
+      "label": "Catalog",
+      "label_i18n": {
+        "en": "Catalog",
+        "id": "Katalog"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item.list"
+      ],
+      "route_path": "/commercial/catalog",
+      "view_key": "commercial.items.list"
+    },
+    {
+      "key": "commercial.credit_notes.detail",
+      "kind": "navigate",
+      "label": "Credit Note",
+      "label_i18n": {
+        "en": "Credit Note",
+        "id": "Credit Note"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/commercial/credit-notes/detail",
+      "view_key": "commercial.credit_notes.detail"
+    },
+    {
+      "key": "commercial.credit_notes.form",
+      "kind": "navigate",
+      "label": "Credit Note Form",
+      "label_i18n": {
+        "en": "Credit Note Form",
+        "id": "Credit Note Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/commercial/credit-notes/form",
+      "view_key": "commercial.credit_notes.form"
+    },
+    {
+      "key": "commercial.credit_notes.list",
+      "kind": "navigate",
+      "label": "Credit Notes",
+      "label_i18n": {
+        "en": "Credit Notes",
+        "id": "Credit Notes"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/credit-notes",
+      "view_key": "commercial.credit_notes.list"
+    },
+    {
+      "key": "commercial.credit_notes.new",
+      "kind": "navigate",
+      "label": "New Credit Note",
+      "label_i18n": {
+        "en": "New Credit Note",
+        "id": "New Credit Note"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/commercial/credit-notes/new",
+      "view_key": "commercial.credit_notes.form"
+    },
+    {
+      "key": "commercial.invoices.detail",
+      "kind": "navigate",
+      "label": "Invoice",
+      "label_i18n": {
+        "en": "Invoice",
+        "id": "Invoice"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/commercial/invoices/detail",
+      "view_key": "commercial.invoices.detail"
+    },
+    {
+      "key": "commercial.invoices.form",
+      "kind": "navigate",
+      "label": "Invoice Form",
+      "label_i18n": {
+        "en": "Invoice Form",
+        "id": "Invoice Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/commercial/invoices/form",
+      "view_key": "commercial.invoices.form"
+    },
+    {
+      "key": "commercial.invoices.list",
+      "kind": "navigate",
+      "label": "Invoices",
+      "label_i18n": {
+        "en": "Invoices",
+        "id": "Invoices"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/invoices",
+      "view_key": "commercial.invoices.list"
+    },
+    {
+      "key": "commercial.invoices.new",
+      "kind": "navigate",
+      "label": "New Invoice",
+      "label_i18n": {
+        "en": "New Invoice",
+        "id": "New Invoice"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/commercial/invoices/new",
+      "view_key": "commercial.invoices.form"
+    },
+    {
+      "key": "commercial.item_categories.detail",
+      "kind": "navigate",
+      "label": "Item Category Detail",
+      "label_i18n": {
+        "en": "Item Category Detail",
+        "id": "Detail Kategori Item"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item_category.read"
+      ],
+      "route_path": "/commercial/item-categories/detail",
+      "view_key": "commercial.item_categories.detail"
+    },
+    {
+      "key": "commercial.item_categories.form",
+      "kind": "navigate",
+      "label": "Item Category Form",
+      "label_i18n": {
+        "en": "Item Category Form",
+        "id": "Form Kategori Item"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item_category.update"
+      ],
+      "route_path": "/commercial/item-categories/form",
+      "view_key": "commercial.item_categories.form"
+    },
+    {
+      "key": "commercial.item_categories.list",
+      "kind": "navigate",
+      "label": "Item Categories",
+      "label_i18n": {
+        "en": "Item Categories",
+        "id": "Kategori Item"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item_category.list"
+      ],
+      "route_path": "/commercial/item-categories",
+      "view_key": "commercial.item_categories.list"
+    },
+    {
+      "key": "commercial.items.detail",
+      "kind": "navigate",
+      "label": "Item Detail",
+      "label_i18n": {
+        "en": "Item Detail",
+        "id": "Detail Item"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item.read"
+      ],
+      "route_path": "/commercial/items/detail",
+      "view_key": "commercial.items.detail"
+    },
+    {
+      "key": "commercial.items.form",
+      "kind": "navigate",
+      "label": "Item Form",
+      "label_i18n": {
+        "en": "Item Form",
+        "id": "Form Item"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item.update"
+      ],
+      "route_path": "/commercial/items/form",
+      "view_key": "commercial.items.form"
+    },
+    {
+      "key": "commercial.items.list",
+      "kind": "navigate",
+      "label": "Items",
+      "label_i18n": {
+        "en": "Items",
+        "id": "Item"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "item.list"
+      ],
+      "route_path": "/commercial/items",
+      "view_key": "commercial.items.list"
+    },
+    {
+      "key": "commercial.ledger.detail",
+      "kind": "navigate",
+      "label": "Ledger Posting",
+      "label_i18n": {
+        "en": "Ledger Posting",
+        "id": "Ledger Posting"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/commercial/ledger/detail",
+      "view_key": "commercial.ledger.detail"
+    },
+    {
+      "key": "commercial.ledger.form",
+      "kind": "navigate",
+      "label": "Ledger Posting Form",
+      "label_i18n": {
+        "en": "Ledger Posting Form",
+        "id": "Ledger Posting Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/commercial/ledger/form",
+      "view_key": "commercial.ledger.form"
+    },
+    {
+      "key": "commercial.ledger.list",
+      "kind": "navigate",
+      "label": "Ledger Postings",
+      "label_i18n": {
+        "en": "Ledger Postings",
+        "id": "Ledger Postings"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/ledger",
+      "view_key": "commercial.ledger.list"
+    },
+    {
+      "key": "commercial.ledger.new",
+      "kind": "navigate",
+      "label": "New Posting",
+      "label_i18n": {
+        "en": "New Posting",
+        "id": "New Posting"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/commercial/ledger/new",
+      "view_key": "commercial.ledger.form"
+    },
+    {
+      "key": "commercial.orders.detail",
+      "kind": "navigate",
+      "label": "Order",
+      "label_i18n": {
+        "en": "Order",
+        "id": "Order"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/commercial/orders/detail",
+      "view_key": "commercial.orders.detail"
+    },
+    {
+      "key": "commercial.orders.form",
+      "kind": "navigate",
+      "label": "Order Form",
+      "label_i18n": {
+        "en": "Order Form",
+        "id": "Order Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/commercial/orders/form",
+      "view_key": "commercial.orders.form"
+    },
+    {
+      "key": "commercial.orders.list",
+      "kind": "navigate",
+      "label": "Orders",
+      "label_i18n": {
+        "en": "Orders",
+        "id": "Orders"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/orders",
+      "view_key": "commercial.orders.list"
+    },
+    {
+      "key": "commercial.orders.new",
+      "kind": "navigate",
+      "label": "New Order",
+      "label_i18n": {
+        "en": "New Order",
+        "id": "New Order"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/commercial/orders/new",
+      "view_key": "commercial.orders.form"
+    },
+    {
+      "key": "commercial.party_statement.dashboard",
+      "kind": "navigate",
+      "label": "Customer Statement",
+      "label_i18n": {
+        "en": "Customer Statement",
+        "id": "Laporan Pelanggan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.read",
+        "document.list"
+      ],
+      "route_path": "/commercial/party-statement",
+      "view_key": "commercial.party_statement.dashboard"
+    },
+    {
+      "key": "commercial.payment_methods.detail",
+      "kind": "navigate",
+      "label": "Payment Method Detail",
+      "label_i18n": {
+        "en": "Payment Method Detail",
+        "id": "Detail Metode Pembayaran"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payment_method.read"
+      ],
+      "route_path": "/commercial/payment-methods/detail",
+      "view_key": "commercial.payment_methods.detail"
+    },
+    {
+      "key": "commercial.payment_methods.form",
+      "kind": "navigate",
+      "label": "Payment Method Form",
+      "label_i18n": {
+        "en": "Payment Method Form",
+        "id": "Form Metode Pembayaran"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payment_method.update"
+      ],
+      "route_path": "/commercial/payment-methods/form",
+      "view_key": "commercial.payment_methods.form"
+    },
+    {
+      "key": "commercial.payment_methods.list",
+      "kind": "navigate",
+      "label": "Payment Methods",
+      "label_i18n": {
+        "en": "Payment Methods",
+        "id": "Metode Pembayaran"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payment_method.list"
+      ],
+      "route_path": "/commercial/payment-methods",
+      "view_key": "commercial.payment_methods.list"
+    },
+    {
+      "key": "commercial.payments.detail",
+      "kind": "navigate",
+      "label": "Payment Receipt",
+      "label_i18n": {
+        "en": "Payment Receipt",
+        "id": "Payment Receipt"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/commercial/payments/detail",
+      "view_key": "commercial.payments.detail"
+    },
+    {
+      "key": "commercial.payments.form",
+      "kind": "navigate",
+      "label": "Payment Receipt Form",
+      "label_i18n": {
+        "en": "Payment Receipt Form",
+        "id": "Payment Receipt Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/commercial/payments/form",
+      "view_key": "commercial.payments.form"
+    },
+    {
+      "key": "commercial.payments.list",
+      "kind": "navigate",
+      "label": "Payments",
+      "label_i18n": {
+        "en": "Payments",
+        "id": "Payments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/payments",
+      "view_key": "commercial.payments.list"
+    },
+    {
+      "key": "commercial.payments.new",
+      "kind": "navigate",
+      "label": "New Payment",
+      "label_i18n": {
+        "en": "New Payment",
+        "id": "New Payment"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/commercial/payments/new",
+      "view_key": "commercial.payments.form"
+    },
+    {
+      "key": "commercial.price_list_items.detail",
+      "kind": "navigate",
+      "label": "Price List Item Detail",
+      "label_i18n": {
+        "en": "Price List Item Detail",
+        "id": "Detail Item Daftar Harga"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "price_list_item.read"
+      ],
+      "route_path": "/commercial/price-list-items/detail",
+      "view_key": "commercial.price_list_items.detail"
+    },
+    {
+      "key": "commercial.price_list_items.form",
+      "kind": "navigate",
+      "label": "Price List Item Form",
+      "label_i18n": {
+        "en": "Price List Item Form",
+        "id": "Form Item Daftar Harga"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "price_list_item.update"
+      ],
+      "route_path": "/commercial/price-list-items/form",
+      "view_key": "commercial.price_list_items.form"
+    },
+    {
+      "key": "commercial.price_list_items.list",
+      "kind": "navigate",
+      "label": "Price List Items",
+      "label_i18n": {
+        "en": "Price List Items",
+        "id": "Item Daftar Harga"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "price_list_item.list"
+      ],
+      "route_path": "/commercial/price-list-items",
+      "view_key": "commercial.price_list_items.list"
+    },
+    {
+      "key": "commercial.price_lists.detail",
+      "kind": "navigate",
+      "label": "Price List Detail",
+      "label_i18n": {
+        "en": "Price List Detail",
+        "id": "Detail Daftar Harga"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "price_list.read"
+      ],
+      "route_path": "/commercial/price-lists/detail",
+      "view_key": "commercial.price_lists.detail"
+    },
+    {
+      "key": "commercial.price_lists.form",
+      "kind": "navigate",
+      "label": "Price List Form",
+      "label_i18n": {
+        "en": "Price List Form",
+        "id": "Form Daftar Harga"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "price_list.update"
+      ],
+      "route_path": "/commercial/price-lists/form",
+      "view_key": "commercial.price_lists.form"
+    },
+    {
+      "key": "commercial.price_lists.list",
+      "kind": "navigate",
+      "label": "Price Lists",
+      "label_i18n": {
+        "en": "Price Lists",
+        "id": "Daftar Harga"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "price_list.list"
+      ],
+      "route_path": "/commercial/price-lists",
+      "view_key": "commercial.price_lists.list"
+    },
+    {
+      "key": "commercial.receivables.dashboard",
+      "kind": "navigate",
+      "label": "Receivables",
+      "label_i18n": {
+        "en": "Receivables",
+        "id": "Piutang"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/receivables",
+      "view_key": "commercial.receivables.dashboard"
+    },
+    {
+      "key": "commercial.refunds.detail",
+      "kind": "navigate",
+      "label": "Payment Refund",
+      "label_i18n": {
+        "en": "Payment Refund",
+        "id": "Payment Refund"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/commercial/refunds/detail",
+      "view_key": "commercial.refunds.detail"
+    },
+    {
+      "key": "commercial.refunds.form",
+      "kind": "navigate",
+      "label": "Payment Refund Form",
+      "label_i18n": {
+        "en": "Payment Refund Form",
+        "id": "Payment Refund Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/commercial/refunds/form",
+      "view_key": "commercial.refunds.form"
+    },
+    {
+      "key": "commercial.refunds.list",
+      "kind": "navigate",
+      "label": "Refunds",
+      "label_i18n": {
+        "en": "Refunds",
+        "id": "Refunds"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/commercial/refunds",
+      "view_key": "commercial.refunds.list"
+    },
+    {
+      "key": "commercial.refunds.new",
+      "kind": "navigate",
+      "label": "New Refund",
+      "label_i18n": {
+        "en": "New Refund",
+        "id": "New Refund"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/commercial/refunds/new",
+      "view_key": "commercial.refunds.form"
+    },
+    {
+      "key": "commercial.tax_codes.detail",
+      "kind": "navigate",
+      "label": "Tax Code Detail",
+      "label_i18n": {
+        "en": "Tax Code Detail",
+        "id": "Detail Kode Pajak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "tax_code.read"
+      ],
+      "route_path": "/commercial/tax-codes/detail",
+      "view_key": "commercial.tax_codes.detail"
+    },
+    {
+      "key": "commercial.tax_codes.form",
+      "kind": "navigate",
+      "label": "Tax Code Form",
+      "label_i18n": {
+        "en": "Tax Code Form",
+        "id": "Form Kode Pajak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "tax_code.update"
+      ],
+      "route_path": "/commercial/tax-codes/form",
+      "view_key": "commercial.tax_codes.form"
+    },
+    {
+      "key": "commercial.tax_codes.list",
+      "kind": "navigate",
+      "label": "Tax Codes",
+      "label_i18n": {
+        "en": "Tax Codes",
+        "id": "Kode Pajak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "tax_code.list"
+      ],
+      "route_path": "/commercial/tax-codes",
+      "view_key": "commercial.tax_codes.list"
+    },
+    {
+      "key": "commercial.tax_profiles.detail",
+      "kind": "navigate",
+      "label": "Tax Profile Detail",
+      "label_i18n": {
+        "en": "Tax Profile Detail",
+        "id": "Detail Profil Pajak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "tax_profile.read"
+      ],
+      "route_path": "/commercial/tax-profiles/detail",
+      "view_key": "commercial.tax_profiles.detail"
+    },
+    {
+      "key": "commercial.tax_profiles.form",
+      "kind": "navigate",
+      "label": "Tax Profile Form",
+      "label_i18n": {
+        "en": "Tax Profile Form",
+        "id": "Form Profil Pajak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "tax_profile.update"
+      ],
+      "route_path": "/commercial/tax-profiles/form",
+      "view_key": "commercial.tax_profiles.form"
+    },
+    {
+      "key": "commercial.tax_profiles.list",
+      "kind": "navigate",
+      "label": "Tax Profiles",
+      "label_i18n": {
+        "en": "Tax Profiles",
+        "id": "Profil Pajak"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "tax_profile.list"
+      ],
+      "route_path": "/commercial/tax-profiles",
+      "view_key": "commercial.tax_profiles.list"
+    },
+    {
+      "key": "commercial.uoms.detail",
+      "kind": "navigate",
+      "label": "Unit Detail",
+      "label_i18n": {
+        "en": "Unit Detail",
+        "id": "Detail Satuan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "uom.read"
+      ],
+      "route_path": "/commercial/uoms/detail",
+      "view_key": "commercial.uoms.detail"
+    },
+    {
+      "key": "commercial.uoms.form",
+      "kind": "navigate",
+      "label": "Unit Form",
+      "label_i18n": {
+        "en": "Unit Form",
+        "id": "Form Satuan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "uom.update"
+      ],
+      "route_path": "/commercial/uoms/form",
+      "view_key": "commercial.uoms.form"
+    },
+    {
+      "key": "commercial.uoms.list",
+      "kind": "navigate",
+      "label": "Units",
+      "label_i18n": {
+        "en": "Units",
+        "id": "Satuan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "uom.list"
+      ],
+      "route_path": "/commercial/uoms",
+      "view_key": "commercial.uoms.list"
+    },
+    {
       "flow_key": "documents.requests.intake",
       "key": "documents.requests.create",
       "kind": "navigate",
@@ -512,6 +1353,19 @@
       ]
     },
     {
+      "action_key": "commercial.catalog.list",
+      "key": "commercial.catalog",
+      "label": "Catalog",
+      "label_i18n": {
+        "en": "Catalog",
+        "id": "Katalog"
+      },
+      "order": 19,
+      "required_permissions": [
+        "item.list"
+      ]
+    },
+    {
       "action_key": "analytics.cockpit",
       "key": "analytics.cockpit",
       "label": "Analytics Cockpit",
@@ -525,6 +1379,136 @@
       ]
     },
     {
+      "action_key": "commercial.items.list",
+      "key": "commercial.items",
+      "label": "Items",
+      "label_i18n": {
+        "en": "Items",
+        "id": "Item"
+      },
+      "order": 20,
+      "required_permissions": [
+        "item.list"
+      ]
+    },
+    {
+      "action_key": "commercial.item_categories.list",
+      "key": "commercial.item_categories",
+      "label": "Item Categories",
+      "label_i18n": {
+        "en": "Item Categories",
+        "id": "Kategori Item"
+      },
+      "order": 21,
+      "required_permissions": [
+        "item_category.list"
+      ]
+    },
+    {
+      "action_key": "commercial.uoms.list",
+      "key": "commercial.uoms",
+      "label": "Units",
+      "label_i18n": {
+        "en": "Units",
+        "id": "Satuan"
+      },
+      "order": 22,
+      "required_permissions": [
+        "uom.list"
+      ]
+    },
+    {
+      "action_key": "commercial.tax_codes.list",
+      "key": "commercial.tax_codes",
+      "label": "Tax Codes",
+      "label_i18n": {
+        "en": "Tax Codes",
+        "id": "Kode Pajak"
+      },
+      "order": 23,
+      "required_permissions": [
+        "tax_code.list"
+      ]
+    },
+    {
+      "action_key": "commercial.tax_profiles.list",
+      "key": "commercial.tax_profiles",
+      "label": "Tax Profiles",
+      "label_i18n": {
+        "en": "Tax Profiles",
+        "id": "Profil Pajak"
+      },
+      "order": 24,
+      "required_permissions": [
+        "tax_profile.list"
+      ]
+    },
+    {
+      "action_key": "commercial.price_lists.list",
+      "key": "commercial.price_lists",
+      "label": "Price Lists",
+      "label_i18n": {
+        "en": "Price Lists",
+        "id": "Daftar Harga"
+      },
+      "order": 25,
+      "required_permissions": [
+        "price_list.list"
+      ]
+    },
+    {
+      "action_key": "commercial.price_list_items.list",
+      "key": "commercial.price_list_items",
+      "label": "Price List Items",
+      "label_i18n": {
+        "en": "Price List Items",
+        "id": "Item Daftar Harga"
+      },
+      "order": 26,
+      "required_permissions": [
+        "price_list_item.list"
+      ]
+    },
+    {
+      "action_key": "commercial.accounts.list",
+      "key": "commercial.accounts",
+      "label": "Accounts",
+      "label_i18n": {
+        "en": "Accounts",
+        "id": "Akun"
+      },
+      "order": 27,
+      "required_permissions": [
+        "account.list"
+      ]
+    },
+    {
+      "action_key": "commercial.payment_methods.list",
+      "key": "commercial.payment_methods",
+      "label": "Payment Methods",
+      "label_i18n": {
+        "en": "Payment Methods",
+        "id": "Metode Pembayaran"
+      },
+      "order": 28,
+      "required_permissions": [
+        "payment_method.list"
+      ]
+    },
+    {
+      "action_key": "commercial.orders.list",
+      "key": "commercial.orders",
+      "label": "Orders",
+      "label_i18n": {
+        "en": "Orders",
+        "id": "Pesanan"
+      },
+      "order": 30,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
       "action_key": "monitoring.overview",
       "key": "monitoring.overview",
       "label": "Monitoring",
@@ -535,6 +1519,84 @@
       "order": 30,
       "required_permissions": [
         "monitoring.read"
+      ]
+    },
+    {
+      "action_key": "commercial.invoices.list",
+      "key": "commercial.invoices",
+      "label": "Invoices",
+      "label_i18n": {
+        "en": "Invoices",
+        "id": "Faktur"
+      },
+      "order": 31,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "commercial.credit_notes.list",
+      "key": "commercial.credit_notes",
+      "label": "Credit Notes",
+      "label_i18n": {
+        "en": "Credit Notes",
+        "id": "Nota Kredit"
+      },
+      "order": 32,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "commercial.receivables.dashboard",
+      "key": "commercial.receivables",
+      "label": "Receivables",
+      "label_i18n": {
+        "en": "Receivables",
+        "id": "Piutang"
+      },
+      "order": 33,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "commercial.payments.list",
+      "key": "commercial.payments",
+      "label": "Payments",
+      "label_i18n": {
+        "en": "Payments",
+        "id": "Pembayaran"
+      },
+      "order": 34,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "commercial.refunds.list",
+      "key": "commercial.refunds",
+      "label": "Refunds",
+      "label_i18n": {
+        "en": "Refunds",
+        "id": "Pengembalian Dana"
+      },
+      "order": 35,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "commercial.ledger.list",
+      "key": "commercial.ledger",
+      "label": "Ledger",
+      "label_i18n": {
+        "en": "Ledger",
+        "id": "Buku Besar"
+      },
+      "order": 36,
+      "required_permissions": [
+        "document.list"
       ]
     }
   ],
@@ -649,6 +1711,5282 @@
   ],
   "surface": "backoffice",
   "views": [
+    {
+      "key": "commercial.accounts.detail",
+      "kind": "detail",
+      "model_key": "commercial_account",
+      "required_permissions": [
+        "account.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "category",
+              "label": "Category",
+              "label_i18n": {
+                "en": "Category",
+                "id": "Kategori"
+              },
+              "path": "values.category",
+              "type": "string"
+            },
+            {
+              "key": "normal_balance",
+              "label": "Normal Balance",
+              "label_i18n": {
+                "en": "Normal Balance",
+                "id": "Saldo Normal"
+              },
+              "path": "values.normal_balance",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Account Detail",
+      "title_i18n": {
+        "en": "Account Detail",
+        "id": "Account Detail"
+      }
+    },
+    {
+      "key": "commercial.accounts.form",
+      "kind": "form",
+      "model_key": "commercial_account",
+      "required_permissions": [
+        "account.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "category",
+              "label": "Category",
+              "label_i18n": {
+                "en": "Category",
+                "id": "Kategori"
+              },
+              "options": [
+                "asset",
+                "liability",
+                "equity",
+                "revenue",
+                "expense"
+              ],
+              "path": "values.category",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "normal_balance",
+              "label": "Normal Balance",
+              "label_i18n": {
+                "en": "Normal Balance",
+                "id": "Saldo Normal"
+              },
+              "options": [
+                "debit",
+                "credit"
+              ],
+              "path": "values.normal_balance",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Account Form",
+          "title_i18n": {
+            "en": "Account Form",
+            "id": "Account Form"
+          }
+        }
+      ],
+      "title": "Account Form",
+      "title_i18n": {
+        "en": "Account Form",
+        "id": "Account Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "category",
+          "label": "Category",
+          "label_i18n": {
+            "en": "Category",
+            "id": "Kategori"
+          },
+          "path": "values.category"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.accounts.list",
+      "kind": "list",
+      "model_key": "commercial_account",
+      "required_permissions": [
+        "account.list"
+      ],
+      "title": "Accounts",
+      "title_i18n": {
+        "en": "Accounts",
+        "id": "Accounts"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel",
+        "register_refund"
+      ],
+      "document_type": "credit_note",
+      "key": "commercial.credit_notes.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Credit Note Number",
+              "label_i18n": {
+                "en": "Credit Note Number",
+                "id": "Nomor Nota Kredit"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "type": "string"
+            },
+            {
+              "key": "credit_date",
+              "label": "Credit Date",
+              "label_i18n": {
+                "en": "Credit Date",
+                "id": "Tanggal Kredit"
+              },
+              "path": "body.payload.credit_date",
+              "type": "string"
+            },
+            {
+              "key": "source_invoice_id",
+              "label": "Source Invoice ID",
+              "label_i18n": {
+                "en": "Source Invoice ID",
+                "id": "ID Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_id",
+              "type": "string"
+            },
+            {
+              "key": "source_invoice_number",
+              "label": "Source Invoice",
+              "label_i18n": {
+                "en": "Source Invoice",
+                "id": "Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_number",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "receivable_account_code",
+              "label": "Receivable Account",
+              "label_i18n": {
+                "en": "Receivable Account",
+                "id": "Akun Piutang"
+              },
+              "path": "body.payload.receivable_account_code",
+              "type": "string"
+            },
+            {
+              "key": "subtotal_amount",
+              "label": "Subtotal",
+              "label_i18n": {
+                "en": "Subtotal",
+                "id": "Subtotal"
+              },
+              "path": "body.payload.subtotal_amount",
+              "type": "number"
+            },
+            {
+              "key": "tax_amount",
+              "label": "Tax Amount",
+              "label_i18n": {
+                "en": "Tax Amount",
+                "id": "Jumlah Pajak"
+              },
+              "path": "body.payload.tax_amount",
+              "type": "number"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "refunded_amount",
+              "label": "Refunded",
+              "label_i18n": {
+                "en": "Refunded",
+                "id": "Direfund"
+              },
+              "path": "body.payload.refunded_amount",
+              "type": "number"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "label_i18n": {
+                "en": "Reason",
+                "id": "Alasan"
+              },
+              "path": "body.payload.reason",
+              "type": "string"
+            },
+            {
+              "key": "lines",
+              "label": "Line Items",
+              "label_i18n": {
+                "en": "Line Items",
+                "id": "Baris"
+              },
+              "path": "body.payload.lines",
+              "type": "object",
+              "widget": "commercial_lines"
+            }
+          ],
+          "key": "summary",
+          "title": "Credit Note Summary",
+          "title_i18n": {
+            "en": "Credit Note Summary",
+            "id": "Ringkasan Nota Kredit"
+          }
+        }
+      ],
+      "title": "Credit Note Detail",
+      "title_i18n": {
+        "en": "Credit Note Detail",
+        "id": "Credit Note Detail"
+      }
+    },
+    {
+      "document_type": "credit_note",
+      "key": "commercial.credit_notes.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Customer ID",
+              "label_i18n": {
+                "en": "Customer ID",
+                "id": "ID Pelanggan"
+              },
+              "path": "body.payload.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Nama Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "credit_date",
+              "label": "Credit Date",
+              "label_i18n": {
+                "en": "Credit Date",
+                "id": "Tanggal Kredit"
+              },
+              "path": "body.payload.credit_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_invoice_id",
+              "label": "Source Invoice ID",
+              "label_i18n": {
+                "en": "Source Invoice ID",
+                "id": "ID Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_invoice_number",
+              "label": "Source Invoice Number",
+              "label_i18n": {
+                "en": "Source Invoice Number",
+                "id": "Nomor Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_number",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receivable_account_code",
+              "label": "Receivable Account",
+              "label_i18n": {
+                "en": "Receivable Account",
+                "id": "Akun Piutang"
+              },
+              "path": "body.payload.receivable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "subtotal_amount",
+              "label": "Subtotal",
+              "label_i18n": {
+                "en": "Subtotal",
+                "id": "Subtotal"
+              },
+              "path": "body.payload.subtotal_amount",
+              "type": "number"
+            },
+            {
+              "key": "tax_amount",
+              "label": "Tax Amount",
+              "label_i18n": {
+                "en": "Tax Amount",
+                "id": "Jumlah Pajak"
+              },
+              "path": "body.payload.tax_amount",
+              "type": "number"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "refunded_amount",
+              "label": "Refunded",
+              "label_i18n": {
+                "en": "Refunded",
+                "id": "Direfund"
+              },
+              "path": "body.payload.refunded_amount",
+              "type": "number"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "label_i18n": {
+                "en": "Reason",
+                "id": "Alasan"
+              },
+              "path": "body.payload.reason",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "help_text": "Credit note lines reverse the original invoice amount.",
+              "key": "lines",
+              "label": "Line Items",
+              "label_i18n": {
+                "en": "Line Items",
+                "id": "Baris"
+              },
+              "path": "body.payload.lines",
+              "type": "object",
+              "widget": "commercial_lines"
+            }
+          ],
+          "key": "credit",
+          "title": "Credit Terms",
+          "title_i18n": {
+            "en": "Credit Terms",
+            "id": "Ketentuan Kredit"
+          }
+        }
+      ],
+      "title": "Credit Note Draft",
+      "title_i18n": {
+        "en": "Credit Note Draft",
+        "id": "Credit Note Draft"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Credit Note",
+          "label_i18n": {
+            "en": "Credit Note",
+            "id": "Nota Kredit"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "body.payload.party_name"
+        },
+        {
+          "key": "credit_date",
+          "label": "Credit Date",
+          "label_i18n": {
+            "en": "Credit Date",
+            "id": "Tanggal Kredit"
+          },
+          "path": "body.payload.credit_date"
+        },
+        {
+          "key": "source_invoice_number",
+          "label": "Source Invoice",
+          "label_i18n": {
+            "en": "Source Invoice",
+            "id": "Faktur Sumber"
+          },
+          "path": "body.payload.source_invoice_number"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "credit_note",
+      "empty_state": "No Credit Notes exist yet.",
+      "empty_state_i18n": {
+        "en": "No Credit Notes exist yet.",
+        "id": "Belum ada Credit Notes."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "issued",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.credit_notes.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Credit Notes",
+      "title_i18n": {
+        "en": "Credit Notes",
+        "id": "Credit Notes"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel",
+        "register_payment",
+        "issue_credit_note"
+      ],
+      "document_type": "invoice",
+      "key": "commercial.invoices.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Invoice Number",
+              "label_i18n": {
+                "en": "Invoice Number",
+                "id": "Nomor Faktur"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "type": "string"
+            },
+            {
+              "key": "invoice_date",
+              "label": "Invoice Date",
+              "label_i18n": {
+                "en": "Invoice Date",
+                "id": "Tanggal Faktur"
+              },
+              "path": "body.payload.invoice_date",
+              "type": "string"
+            },
+            {
+              "key": "due_date",
+              "label": "Due Date",
+              "label_i18n": {
+                "en": "Due Date",
+                "id": "Jatuh Tempo"
+              },
+              "path": "body.payload.due_date",
+              "type": "string"
+            },
+            {
+              "key": "source_order_id",
+              "label": "Source Order",
+              "label_i18n": {
+                "en": "Source Order",
+                "id": "Pesanan Sumber"
+              },
+              "path": "body.payload.source_order_id",
+              "type": "string"
+            },
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "body.payload.price_list_code",
+              "type": "string"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile",
+              "label_i18n": {
+                "en": "Tax Profile",
+                "id": "Profil Pajak"
+              },
+              "path": "body.payload.tax_profile_code",
+              "type": "string"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Terms",
+              "label_i18n": {
+                "en": "Payment Terms",
+                "id": "Termin Pembayaran"
+              },
+              "path": "body.payload.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "body.payload.default_tax_code",
+              "type": "string"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "paid_amount",
+              "label": "Paid",
+              "label_i18n": {
+                "en": "Paid",
+                "id": "Terbayar"
+              },
+              "path": "body.payload.paid_amount",
+              "type": "number"
+            },
+            {
+              "key": "refunded_amount",
+              "label": "Refunded",
+              "label_i18n": {
+                "en": "Refunded",
+                "id": "Direfund"
+              },
+              "path": "body.payload.refunded_amount",
+              "type": "number"
+            },
+            {
+              "key": "balance_due_amount",
+              "label": "Balance Due",
+              "label_i18n": {
+                "en": "Balance Due",
+                "id": "Sisa Tagihan"
+              },
+              "path": "body.payload.balance_due_amount",
+              "type": "number"
+            },
+            {
+              "key": "lines",
+              "label": "Line Items",
+              "label_i18n": {
+                "en": "Line Items",
+                "id": "Baris"
+              },
+              "path": "body.payload.lines",
+              "type": "object",
+              "widget": "commercial_lines"
+            }
+          ],
+          "key": "summary",
+          "title": "Invoice Summary",
+          "title_i18n": {
+            "en": "Invoice Summary",
+            "id": "Ringkasan Faktur"
+          }
+        }
+      ],
+      "title": "Invoice Detail",
+      "title_i18n": {
+        "en": "Invoice Detail",
+        "id": "Invoice Detail"
+      }
+    },
+    {
+      "document_type": "invoice",
+      "key": "commercial.invoices.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Customer ID",
+              "label_i18n": {
+                "en": "Customer ID",
+                "id": "ID Pelanggan"
+              },
+              "path": "body.payload.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Nama Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "invoice_date",
+              "label": "Invoice Date",
+              "label_i18n": {
+                "en": "Invoice Date",
+                "id": "Tanggal Faktur"
+              },
+              "path": "body.payload.invoice_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "due_date",
+              "label": "Due Date",
+              "label_i18n": {
+                "en": "Due Date",
+                "id": "Jatuh Tempo"
+              },
+              "path": "body.payload.due_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_order_id",
+              "label": "Source Order ID",
+              "label_i18n": {
+                "en": "Source Order ID",
+                "id": "ID Pesanan Sumber"
+              },
+              "path": "body.payload.source_order_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "body.payload.price_list_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile Code",
+              "label_i18n": {
+                "en": "Tax Profile Code",
+                "id": "Kode Profil Pajak"
+              },
+              "path": "body.payload.tax_profile_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "body.payload.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "body.payload.default_tax_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "receivable_account_code",
+              "label": "Receivable Account",
+              "label_i18n": {
+                "en": "Receivable Account",
+                "id": "Akun Piutang"
+              },
+              "path": "body.payload.receivable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "subtotal_amount",
+              "label": "Subtotal",
+              "label_i18n": {
+                "en": "Subtotal",
+                "id": "Subtotal"
+              },
+              "path": "body.payload.subtotal_amount",
+              "type": "number"
+            },
+            {
+              "key": "tax_amount",
+              "label": "Tax Amount",
+              "label_i18n": {
+                "en": "Tax Amount",
+                "id": "Jumlah Pajak"
+              },
+              "path": "body.payload.tax_amount",
+              "type": "number"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "paid_amount",
+              "label": "Paid",
+              "label_i18n": {
+                "en": "Paid",
+                "id": "Terbayar"
+              },
+              "path": "body.payload.paid_amount",
+              "type": "number"
+            },
+            {
+              "key": "refunded_amount",
+              "label": "Refunded",
+              "label_i18n": {
+                "en": "Refunded",
+                "id": "Direfund"
+              },
+              "path": "body.payload.refunded_amount",
+              "type": "number"
+            },
+            {
+              "key": "balance_due_amount",
+              "label": "Balance Due",
+              "label_i18n": {
+                "en": "Balance Due",
+                "id": "Sisa Tagihan"
+              },
+              "path": "body.payload.balance_due_amount",
+              "type": "number"
+            },
+            {
+              "help_text": "Add invoice line items directly. Totals are derived from the rows below.",
+              "key": "lines",
+              "label": "Line Items",
+              "label_i18n": {
+                "en": "Line Items",
+                "id": "Baris"
+              },
+              "path": "body.payload.lines",
+              "type": "object",
+              "widget": "commercial_lines"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "billing",
+          "title": "Billing Terms",
+          "title_i18n": {
+            "en": "Billing Terms",
+            "id": "Ketentuan Penagihan"
+          }
+        }
+      ],
+      "title": "Invoice Draft",
+      "title_i18n": {
+        "en": "Invoice Draft",
+        "id": "Invoice Draft"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Invoice",
+          "label_i18n": {
+            "en": "Invoice",
+            "id": "Faktur"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "body.payload.party_name"
+        },
+        {
+          "key": "invoice_date",
+          "label": "Invoice Date",
+          "label_i18n": {
+            "en": "Invoice Date",
+            "id": "Tanggal Faktur"
+          },
+          "path": "body.payload.invoice_date"
+        },
+        {
+          "key": "due_date",
+          "label": "Due Date",
+          "label_i18n": {
+            "en": "Due Date",
+            "id": "Jatuh Tempo"
+          },
+          "path": "body.payload.due_date"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "invoice",
+      "empty_state": "No Invoices exist yet.",
+      "empty_state_i18n": {
+        "en": "No Invoices exist yet.",
+        "id": "Belum ada Invoices."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "issued",
+            "partially_paid",
+            "paid",
+            "refunded",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "receivable_state",
+          "label": "Receivable State",
+          "label_i18n": {
+            "en": "Receivable State",
+            "id": "Status Piutang"
+          },
+          "options": [
+            "open",
+            "due_today",
+            "overdue",
+            "current",
+            "paid"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.invoices.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Invoices",
+      "title_i18n": {
+        "en": "Invoices",
+        "id": "Invoices"
+      }
+    },
+    {
+      "key": "commercial.item_categories.detail",
+      "kind": "detail",
+      "model_key": "commercial_item_category",
+      "required_permissions": [
+        "item_category.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Deskripsi"
+              },
+              "path": "values.description",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Item Category Detail",
+      "title_i18n": {
+        "en": "Item Category Detail",
+        "id": "Item Category Detail"
+      }
+    },
+    {
+      "key": "commercial.item_categories.form",
+      "kind": "form",
+      "model_key": "commercial_item_category",
+      "required_permissions": [
+        "item_category.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Deskripsi"
+              },
+              "path": "values.description",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Item Category Form",
+          "title_i18n": {
+            "en": "Item Category Form",
+            "id": "Item Category Form"
+          }
+        }
+      ],
+      "title": "Item Category Form",
+      "title_i18n": {
+        "en": "Item Category Form",
+        "id": "Item Category Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.item_categories.list",
+      "kind": "list",
+      "model_key": "commercial_item_category",
+      "required_permissions": [
+        "item_category.list"
+      ],
+      "title": "Item Categories",
+      "title_i18n": {
+        "en": "Item Categories",
+        "id": "Item Categories"
+      }
+    },
+    {
+      "key": "commercial.items.detail",
+      "kind": "detail",
+      "model_key": "commercial_item",
+      "required_permissions": [
+        "item.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "sku",
+              "label": "SKU",
+              "label_i18n": {
+                "en": "SKU",
+                "id": "SKU"
+              },
+              "path": "values.sku",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Deskripsi"
+              },
+              "path": "values.description",
+              "type": "string"
+            },
+            {
+              "key": "item_type",
+              "label": "Item Type",
+              "label_i18n": {
+                "en": "Item Type",
+                "id": "Tipe Item"
+              },
+              "path": "values.item_type",
+              "type": "string"
+            },
+            {
+              "key": "category_code",
+              "label": "Category",
+              "label_i18n": {
+                "en": "Category",
+                "id": "Kategori"
+              },
+              "path": "values.category_code",
+              "type": "string"
+            },
+            {
+              "key": "is_sellable",
+              "label": "Sellable",
+              "label_i18n": {
+                "en": "Sellable",
+                "id": "Dapat Dijual"
+              },
+              "path": "values.is_sellable",
+              "type": "bool"
+            },
+            {
+              "key": "uom_code",
+              "label": "UOM",
+              "label_i18n": {
+                "en": "UOM",
+                "id": "Satuan"
+              },
+              "path": "values.uom_code",
+              "type": "string"
+            },
+            {
+              "key": "base_price",
+              "label": "Base Price",
+              "label_i18n": {
+                "en": "Base Price",
+                "id": "Harga Dasar"
+              },
+              "path": "values.base_price",
+              "type": "number"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "tax_code",
+              "label": "Tax Code",
+              "label_i18n": {
+                "en": "Tax Code",
+                "id": "Kode Pajak"
+              },
+              "path": "values.tax_code",
+              "type": "string"
+            },
+            {
+              "key": "revenue_account_code",
+              "label": "Revenue Account",
+              "label_i18n": {
+                "en": "Revenue Account",
+                "id": "Akun Pendapatan"
+              },
+              "path": "values.revenue_account_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Item Detail",
+      "title_i18n": {
+        "en": "Item Detail",
+        "id": "Item Detail"
+      }
+    },
+    {
+      "key": "commercial.items.form",
+      "kind": "form",
+      "model_key": "commercial_item",
+      "required_permissions": [
+        "item.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "sku",
+              "label": "SKU",
+              "label_i18n": {
+                "en": "SKU",
+                "id": "SKU"
+              },
+              "path": "values.sku",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Deskripsi"
+              },
+              "path": "values.description",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "item_type",
+              "label": "Item Type",
+              "label_i18n": {
+                "en": "Item Type",
+                "id": "Tipe Item"
+              },
+              "options": [
+                "product",
+                "service",
+                "fee"
+              ],
+              "path": "values.item_type",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "category_code",
+              "label": "Category",
+              "label_i18n": {
+                "en": "Category",
+                "id": "Kategori"
+              },
+              "path": "values.category_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "tags",
+              "label": "Tags",
+              "label_i18n": {
+                "en": "Tags",
+                "id": "Tag"
+              },
+              "path": "values.tags",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "is_sellable",
+              "label": "Sellable",
+              "label_i18n": {
+                "en": "Sellable",
+                "id": "Dapat Dijual"
+              },
+              "path": "values.is_sellable",
+              "type": "bool"
+            },
+            {
+              "key": "uom_code",
+              "label": "UOM",
+              "label_i18n": {
+                "en": "UOM",
+                "id": "Satuan"
+              },
+              "path": "values.uom_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "base_price",
+              "label": "Base Price",
+              "label_i18n": {
+                "en": "Base Price",
+                "id": "Harga Dasar"
+              },
+              "path": "values.base_price",
+              "type": "number"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_code",
+              "label": "Tax Code",
+              "label_i18n": {
+                "en": "Tax Code",
+                "id": "Kode Pajak"
+              },
+              "path": "values.tax_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "revenue_account_code",
+              "label": "Revenue Account",
+              "label_i18n": {
+                "en": "Revenue Account",
+                "id": "Akun Pendapatan"
+              },
+              "path": "values.revenue_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "service_unit",
+              "label": "Service Unit",
+              "label_i18n": {
+                "en": "Service Unit",
+                "id": "Unit Layanan"
+              },
+              "path": "values.service_unit",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "standard_duration_minutes",
+              "label": "Standard Duration Minutes",
+              "label_i18n": {
+                "en": "Standard Duration Minutes",
+                "id": "Durasi Standar Menit"
+              },
+              "path": "values.standard_duration_minutes",
+              "type": "number"
+            },
+            {
+              "key": "product_unit",
+              "label": "Product Unit",
+              "label_i18n": {
+                "en": "Product Unit",
+                "id": "Unit Produk"
+              },
+              "path": "values.product_unit",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "fulfillment_mode",
+              "label": "Fulfillment Mode",
+              "label_i18n": {
+                "en": "Fulfillment Mode",
+                "id": "Mode Pemenuhan"
+              },
+              "options": [
+                "manual",
+                "delivery",
+                "digital",
+                "pickup"
+              ],
+              "path": "values.fulfillment_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Item Form",
+          "title_i18n": {
+            "en": "Item Form",
+            "id": "Item Form"
+          }
+        }
+      ],
+      "title": "Item Form",
+      "title_i18n": {
+        "en": "Item Form",
+        "id": "Item Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "sku",
+          "label": "SKU",
+          "label_i18n": {
+            "en": "SKU",
+            "id": "SKU"
+          },
+          "path": "values.sku"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "item_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.item_type"
+        },
+        {
+          "key": "category_code",
+          "label": "Category",
+          "label_i18n": {
+            "en": "Category",
+            "id": "Kategori"
+          },
+          "path": "values.category_code"
+        },
+        {
+          "key": "base_price",
+          "label": "Base Price",
+          "label_i18n": {
+            "en": "Base Price",
+            "id": "Harga Dasar"
+          },
+          "path": "values.base_price"
+        },
+        {
+          "key": "uom_code",
+          "label": "UOM",
+          "label_i18n": {
+            "en": "UOM",
+            "id": "Satuan"
+          },
+          "path": "values.uom_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "item_type",
+          "label": "Item Type",
+          "label_i18n": {
+            "en": "Item Type",
+            "id": "Tipe Item"
+          },
+          "options": [
+            "product",
+            "service",
+            "fee"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "category_code",
+          "label": "Category",
+          "label_i18n": {
+            "en": "Category",
+            "id": "Kategori"
+          },
+          "type": "string"
+        },
+        {
+          "key": "is_sellable",
+          "label": "Sellable",
+          "label_i18n": {
+            "en": "Sellable",
+            "id": "Dapat Dijual"
+          },
+          "options": [
+            "true",
+            "false"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.items.list",
+      "kind": "list",
+      "model_key": "commercial_item",
+      "required_permissions": [
+        "item.list"
+      ],
+      "title": "Items",
+      "title_i18n": {
+        "en": "Items",
+        "id": "Items"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "ledger_posting",
+      "key": "commercial.ledger.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Posting Number",
+              "label_i18n": {
+                "en": "Posting Number",
+                "id": "Nomor Posting"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "source_document_type",
+              "label": "Source Type",
+              "label_i18n": {
+                "en": "Source Type",
+                "id": "Tipe Sumber"
+              },
+              "path": "body.payload.source_document_type",
+              "type": "string"
+            },
+            {
+              "key": "source_document_id",
+              "label": "Source ID",
+              "label_i18n": {
+                "en": "Source ID",
+                "id": "ID Sumber"
+              },
+              "path": "body.payload.source_document_id",
+              "type": "string"
+            },
+            {
+              "key": "posting_date",
+              "label": "Posting Date",
+              "label_i18n": {
+                "en": "Posting Date",
+                "id": "Tanggal Posting"
+              },
+              "path": "body.payload.posting_date",
+              "type": "string"
+            },
+            {
+              "key": "posting_rule_key",
+              "label": "Posting Rule",
+              "label_i18n": {
+                "en": "Posting Rule",
+                "id": "Aturan Posting"
+              },
+              "path": "body.payload.posting_rule_key",
+              "type": "string"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "journal_lines",
+              "label": "Journal Lines",
+              "label_i18n": {
+                "en": "Journal Lines",
+                "id": "Baris Jurnal"
+              },
+              "path": "body.payload.journal_lines",
+              "type": "object",
+              "widget": "commercial_journal_lines"
+            }
+          ],
+          "key": "summary",
+          "title": "Posting Summary",
+          "title_i18n": {
+            "en": "Posting Summary",
+            "id": "Ringkasan Posting"
+          }
+        }
+      ],
+      "title": "Posting Detail",
+      "title_i18n": {
+        "en": "Posting Detail",
+        "id": "Posting Detail"
+      }
+    },
+    {
+      "document_type": "ledger_posting",
+      "key": "commercial.ledger.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "source_document_type",
+              "label": "Source Document Type",
+              "label_i18n": {
+                "en": "Source Document Type",
+                "id": "Tipe Dokumen Sumber"
+              },
+              "path": "body.payload.source_document_type",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_document_id",
+              "label": "Source Document ID",
+              "label_i18n": {
+                "en": "Source Document ID",
+                "id": "ID Dokumen Sumber"
+              },
+              "path": "body.payload.source_document_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "posting_date",
+              "label": "Posting Date",
+              "label_i18n": {
+                "en": "Posting Date",
+                "id": "Tanggal Posting"
+              },
+              "path": "body.payload.posting_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "posting_rule_key",
+              "label": "Posting Rule",
+              "label_i18n": {
+                "en": "Posting Rule",
+                "id": "Aturan Posting"
+              },
+              "path": "body.payload.posting_rule_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "help_text": "Enter debit and credit lines directly.",
+              "key": "journal_lines",
+              "label": "Journal Lines",
+              "label_i18n": {
+                "en": "Journal Lines",
+                "id": "Baris Jurnal"
+              },
+              "path": "body.payload.journal_lines",
+              "type": "object",
+              "widget": "commercial_journal_lines"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "posting",
+          "title": "Posting Details",
+          "title_i18n": {
+            "en": "Posting Details",
+            "id": "Detail Posting"
+          }
+        }
+      ],
+      "title": "Posting Draft",
+      "title_i18n": {
+        "en": "Posting Draft",
+        "id": "Posting Draft"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Posting",
+          "label_i18n": {
+            "en": "Posting",
+            "id": "Posting"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "source_document_type",
+          "label": "Source Type",
+          "label_i18n": {
+            "en": "Source Type",
+            "id": "Tipe Sumber"
+          },
+          "path": "body.payload.source_document_type"
+        },
+        {
+          "key": "source_document_id",
+          "label": "Source ID",
+          "label_i18n": {
+            "en": "Source ID",
+            "id": "ID Sumber"
+          },
+          "path": "body.payload.source_document_id"
+        },
+        {
+          "key": "posting_rule_key",
+          "label": "Posting Rule",
+          "label_i18n": {
+            "en": "Posting Rule",
+            "id": "Aturan Posting"
+          },
+          "path": "body.payload.posting_rule_key"
+        },
+        {
+          "key": "posting_date",
+          "label": "Posting Date",
+          "label_i18n": {
+            "en": "Posting Date",
+            "id": "Tanggal Posting"
+          },
+          "path": "body.payload.posting_date"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "ledger_posting",
+      "empty_state": "No Ledger Postings exist yet.",
+      "empty_state_i18n": {
+        "en": "No Ledger Postings exist yet.",
+        "id": "Belum ada Ledger Postings."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "posted",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.ledger.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Ledger Postings",
+      "title_i18n": {
+        "en": "Ledger Postings",
+        "id": "Ledger Postings"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel",
+        "generate_invoice"
+      ],
+      "document_type": "sales_order",
+      "key": "commercial.orders.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Order Number",
+              "label_i18n": {
+                "en": "Order Number",
+                "id": "Nomor Pesanan"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "type": "string"
+            },
+            {
+              "key": "order_date",
+              "label": "Order Date",
+              "label_i18n": {
+                "en": "Order Date",
+                "id": "Tanggal Pesanan"
+              },
+              "path": "body.payload.order_date",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "body.payload.price_list_code",
+              "type": "string"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile",
+              "label_i18n": {
+                "en": "Tax Profile",
+                "id": "Profil Pajak"
+              },
+              "path": "body.payload.tax_profile_code",
+              "type": "string"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Terms",
+              "label_i18n": {
+                "en": "Payment Terms",
+                "id": "Termin Pembayaran"
+              },
+              "path": "body.payload.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "body.payload.default_tax_code",
+              "type": "string"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "reference",
+              "label": "Reference",
+              "label_i18n": {
+                "en": "Reference",
+                "id": "Referensi"
+              },
+              "path": "body.payload.reference",
+              "type": "string"
+            },
+            {
+              "key": "lines",
+              "label": "Line Items",
+              "label_i18n": {
+                "en": "Line Items",
+                "id": "Baris"
+              },
+              "path": "body.payload.lines",
+              "type": "object",
+              "widget": "commercial_lines"
+            }
+          ],
+          "key": "summary",
+          "title": "Order Summary",
+          "title_i18n": {
+            "en": "Order Summary",
+            "id": "Ringkasan Pesanan"
+          }
+        }
+      ],
+      "title": "Order Detail",
+      "title_i18n": {
+        "en": "Order Detail",
+        "id": "Order Detail"
+      }
+    },
+    {
+      "document_type": "sales_order",
+      "key": "commercial.orders.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Customer ID",
+              "label_i18n": {
+                "en": "Customer ID",
+                "id": "ID Pelanggan"
+              },
+              "path": "body.payload.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Nama Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "order_date",
+              "label": "Order Date",
+              "label_i18n": {
+                "en": "Order Date",
+                "id": "Tanggal Pesanan"
+              },
+              "path": "body.payload.order_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "requested_delivery_date",
+              "label": "Requested Delivery",
+              "label_i18n": {
+                "en": "Requested Delivery",
+                "id": "Tanggal Kirim Diminta"
+              },
+              "path": "body.payload.requested_delivery_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "body.payload.price_list_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile Code",
+              "label_i18n": {
+                "en": "Tax Profile Code",
+                "id": "Kode Profil Pajak"
+              },
+              "path": "body.payload.tax_profile_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "body.payload.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "body.payload.default_tax_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "reference",
+              "label": "Reference",
+              "label_i18n": {
+                "en": "Reference",
+                "id": "Referensi"
+              },
+              "path": "body.payload.reference",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "subtotal_amount",
+              "label": "Subtotal",
+              "label_i18n": {
+                "en": "Subtotal",
+                "id": "Subtotal"
+              },
+              "path": "body.payload.subtotal_amount",
+              "type": "number"
+            },
+            {
+              "key": "tax_amount",
+              "label": "Tax Amount",
+              "label_i18n": {
+                "en": "Tax Amount",
+                "id": "Jumlah Pajak"
+              },
+              "path": "body.payload.tax_amount",
+              "type": "number"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "help_text": "Add line items directly. Totals are derived from the rows below.",
+              "key": "lines",
+              "label": "Line Items",
+              "label_i18n": {
+                "en": "Line Items",
+                "id": "Baris"
+              },
+              "path": "body.payload.lines",
+              "type": "object",
+              "widget": "commercial_lines"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "commercial",
+          "title": "Commercial Terms",
+          "title_i18n": {
+            "en": "Commercial Terms",
+            "id": "Ketentuan Komersial"
+          }
+        }
+      ],
+      "title": "Order Draft",
+      "title_i18n": {
+        "en": "Order Draft",
+        "id": "Order Draft"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Order",
+          "label_i18n": {
+            "en": "Order",
+            "id": "Pesanan"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "body.payload.party_name"
+        },
+        {
+          "key": "order_date",
+          "label": "Order Date",
+          "label_i18n": {
+            "en": "Order Date",
+            "id": "Tanggal Pesanan"
+          },
+          "path": "body.payload.order_date"
+        },
+        {
+          "key": "currency_code",
+          "label": "Currency",
+          "label_i18n": {
+            "en": "Currency",
+            "id": "Mata Uang"
+          },
+          "path": "body.payload.currency_code"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "sales_order",
+      "empty_state": "No Orders exist yet.",
+      "empty_state_i18n": {
+        "en": "No Orders exist yet.",
+        "id": "Belum ada Orders."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "confirmed",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.orders.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Orders",
+      "title_i18n": {
+        "en": "Orders",
+        "id": "Orders"
+      }
+    },
+    {
+      "cards": [
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "open_invoice_count",
+          "label": "Open Invoices",
+          "label_i18n": {
+            "en": "Open Invoices",
+            "id": "Faktur Terbuka"
+          },
+          "path": "open_invoice_count"
+        },
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "open_balance_total",
+          "label": "Open Balance",
+          "label_i18n": {
+            "en": "Open Balance",
+            "id": "Saldo Terbuka"
+          },
+          "path": "open_balance_total"
+        },
+        {
+          "action_key": "commercial.payments.list",
+          "key": "paid_amount_total",
+          "label": "Collected",
+          "label_i18n": {
+            "en": "Collected",
+            "id": "Tertagih"
+          },
+          "path": "paid_amount_total"
+        },
+        {
+          "action_key": "commercial.credit_notes.list",
+          "key": "credited_amount_total",
+          "label": "Credited",
+          "label_i18n": {
+            "en": "Credited",
+            "id": "Dikreditkan"
+          },
+          "path": "credited_amount_total"
+        },
+        {
+          "action_key": "commercial.refunds.list",
+          "key": "refunded_amount_total",
+          "label": "Refunded",
+          "label_i18n": {
+            "en": "Refunded",
+            "id": "Direfund"
+          },
+          "path": "refunded_amount_total"
+        }
+      ],
+      "key": "commercial.party_statement.dashboard",
+      "kind": "dashboard",
+      "projection_key": "commercial.party_statement",
+      "required_permissions": [
+        "party.read",
+        "document.list"
+      ],
+      "title": "Customer Statement",
+      "title_i18n": {
+        "en": "Customer Statement",
+        "id": "Laporan Pelanggan"
+      }
+    },
+    {
+      "key": "commercial.payment_methods.detail",
+      "kind": "detail",
+      "model_key": "payment_method",
+      "required_permissions": [
+        "payment_method.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "kind",
+              "label": "Kind",
+              "label_i18n": {
+                "en": "Kind",
+                "id": "Jenis"
+              },
+              "path": "values.kind",
+              "type": "string"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "values.clearing_account_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payment Method Detail",
+      "title_i18n": {
+        "en": "Payment Method Detail",
+        "id": "Payment Method Detail"
+      }
+    },
+    {
+      "key": "commercial.payment_methods.form",
+      "kind": "form",
+      "model_key": "payment_method",
+      "required_permissions": [
+        "payment_method.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "kind",
+              "label": "Kind",
+              "label_i18n": {
+                "en": "Kind",
+                "id": "Jenis"
+              },
+              "options": [
+                "cash",
+                "bank_transfer",
+                "card",
+                "e_wallet",
+                "cheque",
+                "other"
+              ],
+              "path": "values.kind",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "values.clearing_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Payment Method Form",
+          "title_i18n": {
+            "en": "Payment Method Form",
+            "id": "Payment Method Form"
+          }
+        }
+      ],
+      "title": "Payment Method Form",
+      "title_i18n": {
+        "en": "Payment Method Form",
+        "id": "Payment Method Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "path": "values.kind"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.payment_methods.list",
+      "kind": "list",
+      "model_key": "payment_method",
+      "required_permissions": [
+        "payment_method.list"
+      ],
+      "title": "Payment Methods",
+      "title_i18n": {
+        "en": "Payment Methods",
+        "id": "Payment Methods"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payment_receipt",
+      "key": "commercial.payments.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Receipt Number",
+              "label_i18n": {
+                "en": "Receipt Number",
+                "id": "Nomor Tanda Terima"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Payer",
+              "label_i18n": {
+                "en": "Payer",
+                "id": "Pembayar"
+              },
+              "path": "body.payload.party_name",
+              "type": "string"
+            },
+            {
+              "key": "receipt_date",
+              "label": "Receipt Date",
+              "label_i18n": {
+                "en": "Receipt Date",
+                "id": "Tanggal Penerimaan"
+              },
+              "path": "body.payload.receipt_date",
+              "type": "string"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "label_i18n": {
+                "en": "Payment Method",
+                "id": "Metode Pembayaran"
+              },
+              "path": "body.payload.payment_method_code",
+              "type": "string"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "body.payload.clearing_account_code",
+              "type": "string"
+            },
+            {
+              "key": "amount_received",
+              "label": "Amount Received",
+              "label_i18n": {
+                "en": "Amount Received",
+                "id": "Jumlah Diterima"
+              },
+              "path": "body.payload.amount_received",
+              "type": "number"
+            },
+            {
+              "key": "refunded_amount",
+              "label": "Refunded",
+              "label_i18n": {
+                "en": "Refunded",
+                "id": "Direfund"
+              },
+              "path": "body.payload.refunded_amount",
+              "type": "number"
+            },
+            {
+              "key": "unapplied_amount",
+              "label": "Unapplied Amount",
+              "label_i18n": {
+                "en": "Unapplied Amount",
+                "id": "Jumlah Belum Dialokasikan"
+              },
+              "path": "body.payload.unapplied_amount",
+              "type": "number"
+            },
+            {
+              "key": "allocations",
+              "label": "Allocations",
+              "label_i18n": {
+                "en": "Allocations",
+                "id": "Alokasi"
+              },
+              "path": "body.payload.allocations",
+              "type": "object",
+              "widget": "commercial_allocations"
+            }
+          ],
+          "key": "summary",
+          "title": "Payment Summary",
+          "title_i18n": {
+            "en": "Payment Summary",
+            "id": "Ringkasan Pembayaran"
+          }
+        }
+      ],
+      "title": "Payment Detail",
+      "title_i18n": {
+        "en": "Payment Detail",
+        "id": "Payment Detail"
+      }
+    },
+    {
+      "document_type": "payment_receipt",
+      "key": "commercial.payments.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Payer ID",
+              "label_i18n": {
+                "en": "Payer ID",
+                "id": "ID Pembayar"
+              },
+              "path": "body.payload.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Payer Name",
+              "label_i18n": {
+                "en": "Payer Name",
+                "id": "Nama Pembayar"
+              },
+              "path": "body.payload.party_name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receipt_date",
+              "label": "Receipt Date",
+              "label_i18n": {
+                "en": "Receipt Date",
+                "id": "Tanggal Penerimaan"
+              },
+              "path": "body.payload.receipt_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "label_i18n": {
+                "en": "Payment Method",
+                "id": "Metode Pembayaran"
+              },
+              "path": "body.payload.payment_method_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "body.payload.clearing_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payment_reference",
+              "label": "Reference",
+              "label_i18n": {
+                "en": "Reference",
+                "id": "Referensi"
+              },
+              "path": "body.payload.payment_reference",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "amount_received",
+              "label": "Amount Received",
+              "label_i18n": {
+                "en": "Amount Received",
+                "id": "Jumlah Diterima"
+              },
+              "path": "body.payload.amount_received",
+              "required": true,
+              "type": "number"
+            },
+            {
+              "key": "unapplied_amount",
+              "label": "Unapplied Amount",
+              "label_i18n": {
+                "en": "Unapplied Amount",
+                "id": "Jumlah Belum Dialokasikan"
+              },
+              "path": "body.payload.unapplied_amount",
+              "type": "number"
+            },
+            {
+              "help_text": "Allocate the receipt across one or more invoices.",
+              "key": "allocations",
+              "label": "Allocations",
+              "label_i18n": {
+                "en": "Allocations",
+                "id": "Alokasi"
+              },
+              "path": "body.payload.allocations",
+              "type": "object",
+              "widget": "commercial_allocations"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "payment",
+          "title": "Payment Details",
+          "title_i18n": {
+            "en": "Payment Details",
+            "id": "Detail Pembayaran"
+          }
+        }
+      ],
+      "title": "Payment Draft",
+      "title_i18n": {
+        "en": "Payment Draft",
+        "id": "Payment Draft"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Receipt",
+          "label_i18n": {
+            "en": "Receipt",
+            "id": "Tanda Terima"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "party_name",
+          "label": "Payer",
+          "label_i18n": {
+            "en": "Payer",
+            "id": "Pembayar"
+          },
+          "path": "body.payload.party_name"
+        },
+        {
+          "key": "receipt_date",
+          "label": "Receipt Date",
+          "label_i18n": {
+            "en": "Receipt Date",
+            "id": "Tanggal Penerimaan"
+          },
+          "path": "body.payload.receipt_date"
+        },
+        {
+          "key": "payment_method_code",
+          "label": "Method",
+          "label_i18n": {
+            "en": "Method",
+            "id": "Metode"
+          },
+          "path": "body.payload.payment_method_code"
+        },
+        {
+          "key": "amount_received",
+          "label": "Amount",
+          "label_i18n": {
+            "en": "Amount",
+            "id": "Jumlah"
+          },
+          "path": "body.payload.amount_received"
+        },
+        {
+          "key": "refunded_amount",
+          "label": "Refunded",
+          "label_i18n": {
+            "en": "Refunded",
+            "id": "Direfund"
+          },
+          "path": "body.payload.refunded_amount"
+        },
+        {
+          "key": "unapplied_amount",
+          "label": "Unapplied",
+          "label_i18n": {
+            "en": "Unapplied",
+            "id": "Belum Dialokasikan"
+          },
+          "path": "body.payload.unapplied_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payment_receipt",
+      "empty_state": "No Payments exist yet.",
+      "empty_state_i18n": {
+        "en": "No Payments exist yet.",
+        "id": "Belum ada Payments."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "received",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.payments.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Payments",
+      "title_i18n": {
+        "en": "Payments",
+        "id": "Payments"
+      }
+    },
+    {
+      "key": "commercial.price_list_items.detail",
+      "kind": "detail",
+      "model_key": "commercial_price_list_item",
+      "required_permissions": [
+        "price_list_item.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "values.price_list_code",
+              "type": "string"
+            },
+            {
+              "key": "item_code",
+              "label": "Item",
+              "label_i18n": {
+                "en": "Item",
+                "id": "Item"
+              },
+              "path": "values.item_code",
+              "type": "string"
+            },
+            {
+              "key": "unit_price",
+              "label": "Unit Price",
+              "label_i18n": {
+                "en": "Unit Price",
+                "id": "Harga Satuan"
+              },
+              "path": "values.unit_price",
+              "type": "number"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "tax_code",
+              "label": "Tax Code",
+              "label_i18n": {
+                "en": "Tax Code",
+                "id": "Kode Pajak"
+              },
+              "path": "values.tax_code",
+              "type": "string"
+            },
+            {
+              "key": "revenue_account_code",
+              "label": "Revenue Account",
+              "label_i18n": {
+                "en": "Revenue Account",
+                "id": "Akun Pendapatan"
+              },
+              "path": "values.revenue_account_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Price List Item Detail",
+      "title_i18n": {
+        "en": "Price List Item Detail",
+        "id": "Price List Item Detail"
+      }
+    },
+    {
+      "key": "commercial.price_list_items.form",
+      "kind": "form",
+      "model_key": "commercial_price_list_item",
+      "required_permissions": [
+        "price_list_item.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "values.price_list_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "item_code",
+              "label": "Item",
+              "label_i18n": {
+                "en": "Item",
+                "id": "Item"
+              },
+              "path": "values.item_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "unit_price",
+              "label": "Unit Price",
+              "label_i18n": {
+                "en": "Unit Price",
+                "id": "Harga Satuan"
+              },
+              "path": "values.unit_price",
+              "required": true,
+              "type": "number"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_code",
+              "label": "Tax Code",
+              "label_i18n": {
+                "en": "Tax Code",
+                "id": "Kode Pajak"
+              },
+              "path": "values.tax_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "revenue_account_code",
+              "label": "Revenue Account",
+              "label_i18n": {
+                "en": "Revenue Account",
+                "id": "Akun Pendapatan"
+              },
+              "path": "values.revenue_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Price List Item Form",
+          "title_i18n": {
+            "en": "Price List Item Form",
+            "id": "Price List Item Form"
+          }
+        }
+      ],
+      "title": "Price List Item Form",
+      "title_i18n": {
+        "en": "Price List Item Form",
+        "id": "Price List Item Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "price_list_code",
+          "label": "Price List",
+          "label_i18n": {
+            "en": "Price List",
+            "id": "Daftar Harga"
+          },
+          "path": "values.price_list_code"
+        },
+        {
+          "key": "item_code",
+          "label": "Item",
+          "label_i18n": {
+            "en": "Item",
+            "id": "Item"
+          },
+          "path": "values.item_code"
+        },
+        {
+          "key": "unit_price",
+          "label": "Unit Price",
+          "label_i18n": {
+            "en": "Unit Price",
+            "id": "Harga Satuan"
+          },
+          "path": "values.unit_price"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.price_list_items.list",
+      "kind": "list",
+      "model_key": "commercial_price_list_item",
+      "required_permissions": [
+        "price_list_item.list"
+      ],
+      "title": "Price List Items",
+      "title_i18n": {
+        "en": "Price List Items",
+        "id": "Price List Items"
+      }
+    },
+    {
+      "key": "commercial.price_lists.detail",
+      "kind": "detail",
+      "model_key": "commercial_price_list",
+      "required_permissions": [
+        "price_list.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "effective_from",
+              "label": "Effective From",
+              "label_i18n": {
+                "en": "Effective From",
+                "id": "Berlaku Mulai"
+              },
+              "path": "values.effective_from",
+              "type": "string"
+            },
+            {
+              "key": "effective_to",
+              "label": "Effective To",
+              "label_i18n": {
+                "en": "Effective To",
+                "id": "Berlaku Sampai"
+              },
+              "path": "values.effective_to",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Price List Detail",
+      "title_i18n": {
+        "en": "Price List Detail",
+        "id": "Price List Detail"
+      }
+    },
+    {
+      "key": "commercial.price_lists.form",
+      "kind": "form",
+      "model_key": "commercial_price_list",
+      "required_permissions": [
+        "price_list.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "effective_from",
+              "label": "Effective From",
+              "label_i18n": {
+                "en": "Effective From",
+                "id": "Berlaku Mulai"
+              },
+              "path": "values.effective_from",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "effective_to",
+              "label": "Effective To",
+              "label_i18n": {
+                "en": "Effective To",
+                "id": "Berlaku Sampai"
+              },
+              "path": "values.effective_to",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Price List Form",
+          "title_i18n": {
+            "en": "Price List Form",
+            "id": "Price List Form"
+          }
+        }
+      ],
+      "title": "Price List Form",
+      "title_i18n": {
+        "en": "Price List Form",
+        "id": "Price List Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "currency_code",
+          "label": "Currency",
+          "label_i18n": {
+            "en": "Currency",
+            "id": "Mata Uang"
+          },
+          "path": "values.currency_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.price_lists.list",
+      "kind": "list",
+      "model_key": "commercial_price_list",
+      "required_permissions": [
+        "price_list.list"
+      ],
+      "title": "Price Lists",
+      "title_i18n": {
+        "en": "Price Lists",
+        "id": "Price Lists"
+      }
+    },
+    {
+      "cards": [
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "open_invoice_count",
+          "label": "Open Invoices",
+          "label_i18n": {
+            "en": "Open Invoices",
+            "id": "Faktur Terbuka"
+          },
+          "path": "open_invoice_count"
+        },
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "open_balance_total",
+          "label": "Open Balance",
+          "label_i18n": {
+            "en": "Open Balance",
+            "id": "Saldo Terbuka"
+          },
+          "path": "open_balance_total"
+        },
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "overdue_invoice_count",
+          "label": "Overdue Invoices",
+          "label_i18n": {
+            "en": "Overdue Invoices",
+            "id": "Faktur Jatuh Tempo"
+          },
+          "path": "overdue_invoice_count"
+        },
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "overdue_balance_total",
+          "label": "Overdue Balance",
+          "label_i18n": {
+            "en": "Overdue Balance",
+            "id": "Saldo Jatuh Tempo"
+          },
+          "path": "overdue_balance_total"
+        },
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "due_today_total",
+          "label": "Due Today",
+          "label_i18n": {
+            "en": "Due Today",
+            "id": "Jatuh Tempo Hari Ini"
+          },
+          "path": "due_today_total"
+        },
+        {
+          "action_key": "commercial.invoices.list",
+          "key": "current_balance_total",
+          "label": "Current Balance",
+          "label_i18n": {
+            "en": "Current Balance",
+            "id": "Saldo Lancar"
+          },
+          "path": "current_balance_total"
+        },
+        {
+          "action_key": "commercial.payments.list",
+          "key": "paid_amount_total",
+          "label": "Collected",
+          "label_i18n": {
+            "en": "Collected",
+            "id": "Tertagih"
+          },
+          "path": "paid_amount_total"
+        },
+        {
+          "action_key": "commercial.refunds.list",
+          "key": "refunded_amount_total",
+          "label": "Refunded",
+          "label_i18n": {
+            "en": "Refunded",
+            "id": "Direfund"
+          },
+          "path": "refunded_amount_total"
+        }
+      ],
+      "key": "commercial.receivables.dashboard",
+      "kind": "dashboard",
+      "projection_key": "commercial.receivables.summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Receivables",
+      "title_i18n": {
+        "en": "Receivables",
+        "id": "Piutang"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payment_refund",
+      "key": "commercial.refunds.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Refund Number",
+              "label_i18n": {
+                "en": "Refund Number",
+                "id": "Nomor Refund"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "type": "string"
+            },
+            {
+              "key": "refund_date",
+              "label": "Refund Date",
+              "label_i18n": {
+                "en": "Refund Date",
+                "id": "Tanggal Refund"
+              },
+              "path": "body.payload.refund_date",
+              "type": "string"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "label_i18n": {
+                "en": "Payment Method",
+                "id": "Metode Pembayaran"
+              },
+              "path": "body.payload.payment_method_code",
+              "type": "string"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "body.payload.clearing_account_code",
+              "type": "string"
+            },
+            {
+              "key": "refund_reference",
+              "label": "Reference",
+              "label_i18n": {
+                "en": "Reference",
+                "id": "Referensi"
+              },
+              "path": "body.payload.refund_reference",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "amount_refunded",
+              "label": "Amount Refunded",
+              "label_i18n": {
+                "en": "Amount Refunded",
+                "id": "Jumlah Refund"
+              },
+              "path": "body.payload.amount_refunded",
+              "type": "number"
+            },
+            {
+              "key": "source_credit_note_number",
+              "label": "Source Credit Note",
+              "label_i18n": {
+                "en": "Source Credit Note",
+                "id": "Nota Kredit Sumber"
+              },
+              "path": "body.payload.source_credit_note_number",
+              "type": "string"
+            },
+            {
+              "key": "source_invoice_number",
+              "label": "Source Invoice",
+              "label_i18n": {
+                "en": "Source Invoice",
+                "id": "Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_number",
+              "type": "string"
+            },
+            {
+              "key": "source_payment_number",
+              "label": "Source Payment",
+              "label_i18n": {
+                "en": "Source Payment",
+                "id": "Pembayaran Sumber"
+              },
+              "path": "body.payload.source_payment_number",
+              "type": "string"
+            },
+            {
+              "key": "refund_allocations",
+              "label": "Refund Allocations",
+              "label_i18n": {
+                "en": "Refund Allocations",
+                "id": "Alokasi Refund"
+              },
+              "path": "body.payload.refund_allocations",
+              "type": "object",
+              "widget": "commercial_refund_allocations"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "label_i18n": {
+                "en": "Reason",
+                "id": "Alasan"
+              },
+              "path": "body.payload.reason",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Refund Summary",
+          "title_i18n": {
+            "en": "Refund Summary",
+            "id": "Ringkasan Refund"
+          }
+        }
+      ],
+      "title": "Refund Detail",
+      "title_i18n": {
+        "en": "Refund Detail",
+        "id": "Refund Detail"
+      }
+    },
+    {
+      "document_type": "payment_refund",
+      "key": "commercial.refunds.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Customer ID",
+              "label_i18n": {
+                "en": "Customer ID",
+                "id": "ID Pelanggan"
+              },
+              "path": "body.payload.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Nama Pelanggan"
+              },
+              "path": "body.payload.party_name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "refund_date",
+              "label": "Refund Date",
+              "label_i18n": {
+                "en": "Refund Date",
+                "id": "Tanggal Refund"
+              },
+              "path": "body.payload.refund_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "label_i18n": {
+                "en": "Payment Method",
+                "id": "Metode Pembayaran"
+              },
+              "path": "body.payload.payment_method_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "body.payload.clearing_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "refund_reference",
+              "label": "Reference",
+              "label_i18n": {
+                "en": "Reference",
+                "id": "Referensi"
+              },
+              "path": "body.payload.refund_reference",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "amount_refunded",
+              "label": "Amount Refunded",
+              "label_i18n": {
+                "en": "Amount Refunded",
+                "id": "Jumlah Refund"
+              },
+              "path": "body.payload.amount_refunded",
+              "required": true,
+              "type": "number"
+            },
+            {
+              "key": "source_credit_note_id",
+              "label": "Source Credit Note ID",
+              "label_i18n": {
+                "en": "Source Credit Note ID",
+                "id": "ID Nota Kredit Sumber"
+              },
+              "path": "body.payload.source_credit_note_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_credit_note_number",
+              "label": "Source Credit Note",
+              "label_i18n": {
+                "en": "Source Credit Note",
+                "id": "Nota Kredit Sumber"
+              },
+              "path": "body.payload.source_credit_note_number",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_invoice_id",
+              "label": "Source Invoice ID",
+              "label_i18n": {
+                "en": "Source Invoice ID",
+                "id": "ID Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_invoice_number",
+              "label": "Source Invoice",
+              "label_i18n": {
+                "en": "Source Invoice",
+                "id": "Faktur Sumber"
+              },
+              "path": "body.payload.source_invoice_number",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "help_text": "Split the refund across one or more original receipts.",
+              "key": "refund_allocations",
+              "label": "Refund Allocations",
+              "label_i18n": {
+                "en": "Refund Allocations",
+                "id": "Alokasi Refund"
+              },
+              "path": "body.payload.refund_allocations",
+              "type": "object",
+              "widget": "commercial_refund_allocations"
+            },
+            {
+              "key": "receivable_account_code",
+              "label": "Receivable Account",
+              "label_i18n": {
+                "en": "Receivable Account",
+                "id": "Akun Piutang"
+              },
+              "path": "body.payload.receivable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "label_i18n": {
+                "en": "Reason",
+                "id": "Alasan"
+              },
+              "path": "body.payload.reason",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "refund",
+          "title": "Refund Details",
+          "title_i18n": {
+            "en": "Refund Details",
+            "id": "Detail Refund"
+          }
+        }
+      ],
+      "title": "Refund Draft",
+      "title_i18n": {
+        "en": "Refund Draft",
+        "id": "Refund Draft"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Refund",
+          "label_i18n": {
+            "en": "Refund",
+            "id": "Refund"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "body.payload.party_name"
+        },
+        {
+          "key": "refund_date",
+          "label": "Refund Date",
+          "label_i18n": {
+            "en": "Refund Date",
+            "id": "Tanggal Refund"
+          },
+          "path": "body.payload.refund_date"
+        },
+        {
+          "key": "source_invoice_number",
+          "label": "Source Invoice",
+          "label_i18n": {
+            "en": "Source Invoice",
+            "id": "Faktur Sumber"
+          },
+          "path": "body.payload.source_invoice_number"
+        },
+        {
+          "key": "payment_method_code",
+          "label": "Method",
+          "label_i18n": {
+            "en": "Method",
+            "id": "Metode"
+          },
+          "path": "body.payload.payment_method_code"
+        },
+        {
+          "key": "amount_refunded",
+          "label": "Amount",
+          "label_i18n": {
+            "en": "Amount",
+            "id": "Jumlah"
+          },
+          "path": "body.payload.amount_refunded"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payment_refund",
+      "empty_state": "No Refunds exist yet.",
+      "empty_state_i18n": {
+        "en": "No Refunds exist yet.",
+        "id": "Belum ada Refunds."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "refunded",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.refunds.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Refunds",
+      "title_i18n": {
+        "en": "Refunds",
+        "id": "Refunds"
+      }
+    },
+    {
+      "key": "commercial.tax_codes.detail",
+      "kind": "detail",
+      "model_key": "commercial_tax_code",
+      "required_permissions": [
+        "tax_code.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "mode",
+              "label": "Mode",
+              "label_i18n": {
+                "en": "Mode",
+                "id": "Mode"
+              },
+              "path": "values.mode",
+              "type": "string"
+            },
+            {
+              "key": "rate_percent",
+              "label": "Rate Percent",
+              "label_i18n": {
+                "en": "Rate Percent",
+                "id": "Persen Tarif"
+              },
+              "path": "values.rate_percent",
+              "type": "number"
+            },
+            {
+              "key": "tax_account_code",
+              "label": "Tax Account",
+              "label_i18n": {
+                "en": "Tax Account",
+                "id": "Akun Pajak"
+              },
+              "path": "values.tax_account_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Tax Code Detail",
+      "title_i18n": {
+        "en": "Tax Code Detail",
+        "id": "Tax Code Detail"
+      }
+    },
+    {
+      "key": "commercial.tax_codes.form",
+      "kind": "form",
+      "model_key": "commercial_tax_code",
+      "required_permissions": [
+        "tax_code.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "mode",
+              "label": "Mode",
+              "label_i18n": {
+                "en": "Mode",
+                "id": "Mode"
+              },
+              "options": [
+                "exclusive",
+                "inclusive",
+                "exempt"
+              ],
+              "path": "values.mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "rate_percent",
+              "label": "Rate Percent",
+              "label_i18n": {
+                "en": "Rate Percent",
+                "id": "Persen Tarif"
+              },
+              "path": "values.rate_percent",
+              "type": "number"
+            },
+            {
+              "key": "tax_account_code",
+              "label": "Tax Account",
+              "label_i18n": {
+                "en": "Tax Account",
+                "id": "Akun Pajak"
+              },
+              "path": "values.tax_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Tax Code Form",
+          "title_i18n": {
+            "en": "Tax Code Form",
+            "id": "Tax Code Form"
+          }
+        }
+      ],
+      "title": "Tax Code Form",
+      "title_i18n": {
+        "en": "Tax Code Form",
+        "id": "Tax Code Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "mode",
+          "label": "Mode",
+          "label_i18n": {
+            "en": "Mode",
+            "id": "Mode"
+          },
+          "path": "values.mode"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.tax_codes.list",
+      "kind": "list",
+      "model_key": "commercial_tax_code",
+      "required_permissions": [
+        "tax_code.list"
+      ],
+      "title": "Tax Codes",
+      "title_i18n": {
+        "en": "Tax Codes",
+        "id": "Tax Codes"
+      }
+    },
+    {
+      "key": "commercial.tax_profiles.detail",
+      "kind": "detail",
+      "model_key": "commercial_tax_profile",
+      "required_permissions": [
+        "tax_profile.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "values.default_tax_code",
+              "type": "string"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "values.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "price_tax_mode",
+              "label": "Price Tax Mode",
+              "label_i18n": {
+                "en": "Price Tax Mode",
+                "id": "Mode Harga Pajak"
+              },
+              "path": "values.price_tax_mode",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Tax Profile Detail",
+      "title_i18n": {
+        "en": "Tax Profile Detail",
+        "id": "Tax Profile Detail"
+      }
+    },
+    {
+      "key": "commercial.tax_profiles.form",
+      "kind": "form",
+      "model_key": "commercial_tax_profile",
+      "required_permissions": [
+        "tax_profile.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "values.default_tax_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "values.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "price_tax_mode",
+              "label": "Price Tax Mode",
+              "label_i18n": {
+                "en": "Price Tax Mode",
+                "id": "Mode Harga Pajak"
+              },
+              "options": [
+                "exclusive",
+                "inclusive",
+                "exempt"
+              ],
+              "path": "values.price_tax_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Tax Profile Form",
+          "title_i18n": {
+            "en": "Tax Profile Form",
+            "id": "Tax Profile Form"
+          }
+        }
+      ],
+      "title": "Tax Profile Form",
+      "title_i18n": {
+        "en": "Tax Profile Form",
+        "id": "Tax Profile Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "default_tax_code",
+          "label": "Default Tax Code",
+          "label_i18n": {
+            "en": "Default Tax Code",
+            "id": "Kode Pajak Default"
+          },
+          "path": "values.default_tax_code"
+        },
+        {
+          "key": "payment_term_days",
+          "label": "Payment Terms",
+          "label_i18n": {
+            "en": "Payment Terms",
+            "id": "Termin Pembayaran"
+          },
+          "path": "values.payment_term_days"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.tax_profiles.list",
+      "kind": "list",
+      "model_key": "commercial_tax_profile",
+      "required_permissions": [
+        "tax_profile.list"
+      ],
+      "title": "Tax Profiles",
+      "title_i18n": {
+        "en": "Tax Profiles",
+        "id": "Tax Profiles"
+      }
+    },
+    {
+      "key": "commercial.uoms.detail",
+      "kind": "detail",
+      "model_key": "commercial_uom",
+      "required_permissions": [
+        "uom.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "symbol",
+              "label": "Symbol",
+              "label_i18n": {
+                "en": "Symbol",
+                "id": "Simbol"
+              },
+              "path": "values.symbol",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Unit Detail",
+      "title_i18n": {
+        "en": "Unit Detail",
+        "id": "Unit Detail"
+      }
+    },
+    {
+      "key": "commercial.uoms.form",
+      "kind": "form",
+      "model_key": "commercial_uom",
+      "required_permissions": [
+        "uom.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "symbol",
+              "label": "Symbol",
+              "label_i18n": {
+                "en": "Symbol",
+                "id": "Simbol"
+              },
+              "path": "values.symbol",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Unit Form",
+          "title_i18n": {
+            "en": "Unit Form",
+            "id": "Unit Form"
+          }
+        }
+      ],
+      "title": "Unit Form",
+      "title_i18n": {
+        "en": "Unit Form",
+        "id": "Unit Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "symbol",
+          "label": "Symbol",
+          "label_i18n": {
+            "en": "Symbol",
+            "id": "Simbol"
+          },
+          "path": "values.symbol"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "commercial.uoms.list",
+      "kind": "list",
+      "model_key": "commercial_uom",
+      "required_permissions": [
+        "uom.list"
+      ],
+      "title": "Units",
+      "title_i18n": {
+        "en": "Units",
+        "id": "Units"
+      }
+    },
     {
       "action_placements": [
         {
@@ -1045,6 +7383,46 @@
                   "type": "string"
                 },
                 {
+                  "key": "currency_code",
+                  "label": "Currency",
+                  "label_i18n": {
+                    "en": "Currency",
+                    "id": "Mata Uang"
+                  },
+                  "path": "values.currency_code",
+                  "type": "string"
+                },
+                {
+                  "key": "tax_profile_code",
+                  "label": "Tax Profile",
+                  "label_i18n": {
+                    "en": "Tax Profile",
+                    "id": "Profil Pajak"
+                  },
+                  "path": "values.tax_profile_code",
+                  "type": "string"
+                },
+                {
+                  "key": "default_price_list_code",
+                  "label": "Default Price List",
+                  "label_i18n": {
+                    "en": "Default Price List",
+                    "id": "Daftar Harga Default"
+                  },
+                  "path": "values.default_price_list_code",
+                  "type": "string"
+                },
+                {
+                  "key": "payment_term_days",
+                  "label": "Payment Term Days",
+                  "label_i18n": {
+                    "en": "Payment Term Days",
+                    "id": "Hari Termin Pembayaran"
+                  },
+                  "path": "values.payment_term_days",
+                  "type": "number"
+                },
+                {
                   "key": "status",
                   "label": "Status",
                   "label_i18n": {
@@ -1135,6 +7513,64 @@
               "widget": "text"
             },
             {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "placeholder": "Default currency",
+              "placeholder_i18n": {
+                "en": "Default currency",
+                "id": "Mata uang default"
+              },
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile Code",
+              "label_i18n": {
+                "en": "Tax Profile Code",
+                "id": "Kode Profil Pajak"
+              },
+              "path": "values.tax_profile_code",
+              "placeholder": "Commercial tax profile",
+              "placeholder_i18n": {
+                "en": "Commercial tax profile",
+                "id": "Profil pajak komersial"
+              },
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_price_list_code",
+              "label": "Default Price List",
+              "label_i18n": {
+                "en": "Default Price List",
+                "id": "Daftar Harga Default"
+              },
+              "path": "values.default_price_list_code",
+              "placeholder": "Commercial price list",
+              "placeholder_i18n": {
+                "en": "Commercial price list",
+                "id": "Daftar harga komersial"
+              },
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "values.payment_term_days",
+              "type": "number"
+            },
+            {
               "key": "status",
               "label": "Status",
               "label_i18n": {
@@ -1184,6 +7620,24 @@
             "id": "Email"
           },
           "path": "values.email"
+        },
+        {
+          "key": "tax_profile_code",
+          "label": "Tax Profile",
+          "label_i18n": {
+            "en": "Tax Profile",
+            "id": "Profil Pajak"
+          },
+          "path": "values.tax_profile_code"
+        },
+        {
+          "key": "default_price_list_code",
+          "label": "Price List",
+          "label_i18n": {
+            "en": "Price List",
+            "id": "Daftar Harga"
+          },
+          "path": "values.default_price_list_code"
         },
         {
           "key": "status",

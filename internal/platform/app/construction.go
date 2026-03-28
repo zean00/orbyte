@@ -83,6 +83,7 @@ type serviceGraph struct {
 	runtimeHealth     *runtimehealth.Tracker
 	docActions        *application.DocumentActions
 	modelActions      *application.ModelActions
+	commercialCore    *application.CommercialCoreService
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
 	queryMonitor      *store.QueryMonitor
@@ -237,6 +238,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
 	graph.docActions.AttachActivities(graph.activities)
 	graph.docActions.AttachNotifications(graph.notifications)
+	graph.commercialCore = application.NewCommercialCoreService(graph.documents, graph.config, graph.models, graph.search)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)

@@ -44,6 +44,7 @@ type Manifest struct {
 	Security               SecurityDefinition         `json:"security,omitempty"`
 	Observability          ObservabilityDefinition    `json:"observability,omitempty"`
 	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
+	AdminConsole           AdminConsoleDefinition     `json:"admin_console,omitempty"`
 	SelfService            SelfServiceDefinition      `json:"self_service,omitempty"`
 	Offline                OfflineDefinition          `json:"offline,omitempty"`
 	MCP                    MCPDefinition              `json:"mcp,omitempty"`
@@ -296,6 +297,45 @@ type FrontendDefinition struct {
 	Views         []ViewDefinition         `json:"views,omitempty"`
 	CustomEntries []CustomEntryDefinition  `json:"custom_entries,omitempty"`
 	DocumentFlows []DocumentFlowDefinition `json:"document_flows,omitempty"`
+}
+
+type AdminConsoleDefinition struct {
+	Title           string                          `json:"title,omitempty"`
+	TitleI18n       i18n.LocalizedText              `json:"title_i18n,omitempty"`
+	Description     string                          `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText              `json:"description_i18n,omitempty"`
+	Sections        []AdminConsoleSectionDefinition `json:"sections,omitempty"`
+}
+
+type AdminConsoleSectionKind string
+
+const (
+	AdminConsoleSectionSettingsForm  AdminConsoleSectionKind = "settings_form"
+	AdminConsoleSectionResourceLinks AdminConsoleSectionKind = "resource_links"
+	AdminConsoleSectionWorkflowLinks AdminConsoleSectionKind = "workflow_links"
+	AdminConsoleSectionTemplateLinks AdminConsoleSectionKind = "template_links"
+)
+
+type AdminConsoleSectionDefinition struct {
+	Key                 string                       `json:"key"`
+	Title               string                       `json:"title"`
+	TitleI18n           i18n.LocalizedText           `json:"title_i18n,omitempty"`
+	Description         string                       `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText           `json:"description_i18n,omitempty"`
+	Kind                AdminConsoleSectionKind      `json:"kind"`
+	ConfigKey           string                       `json:"config_key,omitempty"`
+	Links               []AdminConsoleLinkDefinition `json:"links,omitempty"`
+	RequiredPermissions []string                     `json:"required_permissions,omitempty"`
+}
+
+type AdminConsoleLinkDefinition struct {
+	Key                 string             `json:"key"`
+	Label               string             `json:"label"`
+	LabelI18n           i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	RoutePath           string             `json:"route_path"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type UISurface string

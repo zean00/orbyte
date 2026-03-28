@@ -17,6 +17,18 @@ type TemplateTargetCatalog = {
   reports?: TargetOption[]
 }
 
+type ModuleConsoleSection = {
+  key: string
+  title?: string
+  description?: string
+  kind: string
+  config_key?: string
+  definition?: Record<string, unknown>
+  entry?: Record<string, unknown>
+  editable?: boolean
+  links?: Array<Record<string, unknown>>
+}
+
 export default function AdminWorkspacePage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -93,12 +105,20 @@ function AdminContent({
     return <ModuleManagementPage rows={asItems(payload)} />
   }
 
+  if (path.startsWith('/modules/')) {
+    return <ModuleConsolePage payload={payload} />
+  }
+
   if (path === '/auth') {
     return <AuthSettingsPage payload={payload} />
   }
 
   if (path === '/config') {
     return <ConfigManagementPage definitions={asItems(payload)} />
+  }
+
+  if (path === '/finance') {
+    return <FinanceSettingsPage />
   }
 
   if (path === '/definitions' || path === '/templates') {
@@ -159,13 +179,20 @@ function AdminContent({
 }
 
 function endpointForPath(path: string): string {
-  switch (normalizeShellPath(path, 'admin')) {
+  const normalizedPath = normalizeShellPath(path, 'admin')
+  if (normalizedPath.startsWith('/modules/')) {
+    const moduleKey = normalizedPath.slice('/modules/'.length)
+    return moduleKey ? `/admin/api/modules/${encodeURIComponent(moduleKey)}/console` : ''
+  }
+  switch (normalizedPath) {
     case '/modules':
       return '/admin/api/modules'
     case '/config':
       return '/admin/api/config/definitions'
     case '/auth':
       return '/admin/api/auth/settings'
+    case '/finance':
+      return '/admin/api/config/definitions'
     case '/definitions':
       return '/admin/api/templates/definitions'
     case '/security':
@@ -186,13 +213,20 @@ function endpointForPath(path: string): string {
 }
 
 function titleForPath(path: string): string {
-  switch (normalizeShellPath(path, 'admin')) {
+  const normalizedPath = normalizeShellPath(path, 'admin')
+  if (normalizedPath.startsWith('/modules/')) {
+    const moduleKey = normalizedPath.slice('/modules/'.length)
+    return moduleKey ? `${startCase(moduleKey)} Console` : 'Module Console'
+  }
+  switch (normalizedPath) {
     case '/modules':
       return 'Modules'
     case '/config':
       return 'Configuration'
     case '/auth':
       return 'Authentication'
+    case '/finance':
+      return 'Finance'
     case '/definitions':
       return 'Definitions'
     case '/security':
@@ -245,6 +279,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function ModuleManagementPage({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const navigate = useNavigate()
   const [items, setItems] = useState(rows)
   const [busyKey, setBusyKey] = useState('')
   const [message, setMessage] = useState('')
@@ -299,10 +334,13 @@ function ModuleManagementPage({ rows }: { rows: Array<Record<string, unknown>> }
           { key: 'lifecycle_state', label: 'Lifecycle' },
         ]}
         rows={items}
-        actionLabel="Toggle"
-        onAction={(row) => void toggleModule(row)}
-        actionLabelForRow={(row) => (Boolean(resolvePath(row, 'installed.enabled')) ? 'Disable' : 'Enable')}
-        actionDisabledForRow={(row) => busyKey === String(resolvePath(row, 'manifest.key') || '')}
+        actionLabel="Open Console"
+        onAction={(row) => navigate(`/modules/${encodeURIComponent(String(resolvePath(row, 'manifest.key') || ''))}`)}
+        actionDisabledForRow={(row) => !Array.isArray(resolvePath(row, 'manifest.admin_console.sections') as unknown[] | undefined) || !((resolvePath(row, 'manifest.admin_console.sections') as unknown[] | undefined)?.length)}
+        secondaryActionLabel="Toggle"
+        secondaryActionLabelForRow={(row) => (Boolean(resolvePath(row, 'installed.enabled')) ? 'Disable' : 'Enable')}
+        onSecondaryAction={(row) => void toggleModule(row)}
+        secondaryActionDisabledForRow={(row) => busyKey === String(resolvePath(row, 'manifest.key') || '')}
       />
     </div>
   )
@@ -480,6 +518,212 @@ function ConfigManagementPage({ definitions }: { definitions: Array<Record<strin
         </section>
       ) : null}
     </div>
+  )
+}
+
+function FinanceSettingsPage() {
+  const [definition, setDefinition] = useState<Record<string, unknown> | null>(null)
+  const [effective, setEffective] = useState<Record<string, unknown> | null>(null)
+  const [draft, setDraft] = useState<Record<string, unknown>>({})
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      const [definitionsPayload, effectivePayload] = await Promise.all([
+        fetchJson<{ items: Array<Record<string, unknown>> }>('/admin/api/config/definitions'),
+        fetchJson<{ items: Array<Record<string, unknown>> }>('/admin/api/config/effective'),
+      ])
+      if (!mounted) return
+      const financeDefinition = (definitionsPayload.items || []).find((item) => String(item.key || '') === 'commercial.posting') || null
+      const financeEffective = (effectivePayload.items || []).find((item) => String(item.key || '') === 'commercial.posting') || null
+      setDefinition(financeDefinition)
+      setEffective(financeEffective)
+      setDraft(((financeEffective?.value as Record<string, unknown>) || (financeDefinition?.default_value as Record<string, unknown>) || {}) as Record<string, unknown>)
+    }
+    void load()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const fields = Array.isArray(definition?.fields) ? (definition?.fields as Array<Record<string, unknown>>) : []
+
+  async function save() {
+    if (!definition) return
+    setBusy(true)
+    setMessage('')
+    try {
+      const response = await mutateJson<Record<string, unknown>>('/admin/api/config/entries/commercial.posting/value', {
+        method: 'PUT',
+        body: JSON.stringify({
+          scope: normalizeEditorScope(effective?.source_scope),
+          scope_id: normalizeEditorScopeID(effective?.source_scope, effective?.source_scope_id),
+          value: normalizeEditorPayload(fields, draft),
+        }),
+      })
+      setEffective(response)
+      setDraft((response.value as Record<string, unknown>) || draft)
+      setMessage('Finance posting defaults updated.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to update finance settings.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <SummaryCard label="Config Key" value="commercial.posting" />
+        <SummaryCard label="Scope" value={String(effective?.source_scope || effective?.scope || 'deployment')} />
+        <SummaryCard label="Purpose" value="Posting Defaults" />
+      </div>
+      <div className="rounded-xl border border-line bg-accent-soft/60 p-4 text-sm text-body">
+        Set the default receivable, revenue, tax, and clearing accounts used by commercial invoice and payment postings when the document or catalog does not override them.
+      </div>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <EditableFieldSection label="Posting Defaults" fields={fields} values={draft} onChange={setDraft} />
+        <div className="mt-4 flex items-center gap-3">
+          <button type="button" className="admin-button" disabled={busy} onClick={() => void save()}>
+            Save Finance Settings
+          </button>
+          {message ? <div className="text-sm text-body">{message}</div> : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ModuleConsolePage({ payload }: { payload: Record<string, unknown> | null }) {
+  const consolePayload = ((payload?.console as Record<string, unknown> | null) || {}) as Record<string, unknown>
+  const moduleDetail = ((payload?.module as Record<string, unknown> | null) || {}) as Record<string, unknown>
+  const sections = Array.isArray(consolePayload.sections) ? (consolePayload.sections as ModuleConsoleSection[]) : []
+  const title = String(consolePayload.title || resolvePath(moduleDetail, 'manifest.name') || 'Module Console')
+  const description = String(consolePayload.description || '')
+
+  if (!sections.length) {
+    return <ValueCard label={title} value={payload ?? {}} />
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-line bg-accent-soft/60 p-4 text-sm text-body">
+        <div className="font-semibold text-body">{title}</div>
+        {description ? <div className="mt-1 text-sm text-body">{description}</div> : null}
+      </div>
+      {sections.map((section) => {
+        if (section.kind === 'settings_form') {
+          return <ModuleConsoleSettingsSection key={section.key} section={section} />
+        }
+        return <ModuleConsoleLinkSection key={section.key} section={section} />
+      })}
+    </div>
+  )
+}
+
+function ModuleConsoleSettingsSection({ section }: { section: ModuleConsoleSection }) {
+  const definition = (section.definition || {}) as Record<string, unknown>
+  const entry = (section.entry || {}) as Record<string, unknown>
+  const fields = Array.isArray(definition.fields) ? (definition.fields as Array<Record<string, unknown>>) : []
+  const resolved = entry.value && typeof entry.value === 'object' ? (entry.value as Record<string, unknown>) : {}
+  const defaults = (definition.default_value && typeof definition.default_value === 'object' ? (definition.default_value as Record<string, unknown>) : {}) || {}
+  const [draft, setDraft] = useState<Record<string, unknown>>({ ...defaults, ...resolved })
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setDraft({ ...defaults, ...resolved })
+  }, [section.config_key, definition.default_value, entry.value])
+
+  async function save() {
+    if (!section.config_key || !section.editable) return
+    setBusy(true)
+    setMessage('')
+    try {
+      const response = await mutateJson<Record<string, unknown>>(`/admin/api/config/entries/${encodeURIComponent(section.config_key)}/value`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          scope: normalizeEditorScope(entry.source_scope),
+          scope_id: normalizeEditorScopeID(entry.source_scope, entry.source_scope_id),
+          value: normalizeEditorPayload(fields, draft),
+        }),
+      })
+      setDraft((response.value as Record<string, unknown>) || draft)
+      setMessage('Configuration updated.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to update configuration.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+      <div className="mb-3">
+        <div className="text-sm font-semibold text-body">{String(section.title || section.config_key || 'Settings')}</div>
+        {section.description ? <div className="mt-1 text-sm text-muted">{section.description}</div> : null}
+      </div>
+      <EditableFieldSection
+        label={String(section.title || section.config_key || 'Settings')}
+        fields={fields}
+        values={draft}
+        onChange={setDraft}
+        disabled={!section.editable}
+      />
+      <div className="mt-4 flex items-center gap-3">
+        {section.editable ? (
+          <button type="button" className="admin-button" disabled={busy} onClick={() => void save()}>
+            Save Settings
+          </button>
+        ) : (
+          <div className="text-sm text-muted">Read-only for your current permissions.</div>
+        )}
+        {message ? <div className="text-sm text-body">{message}</div> : null}
+      </div>
+    </section>
+  )
+}
+
+function ModuleConsoleLinkSection({ section }: { section: ModuleConsoleSection }) {
+  const links = Array.isArray(section.links) ? section.links : []
+
+  return (
+    <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+      <div className="mb-4">
+        <div className="text-sm font-semibold text-body">{String(section.title || 'Links')}</div>
+        {section.description ? <div className="mt-1 text-sm text-muted">{section.description}</div> : null}
+      </div>
+      {links.length ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {links.map((link) => {
+            const routePath = String(link.route_path || '')
+            return (
+              <article key={String(link.key || routePath)} className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+                <div className="text-sm font-semibold text-body">{String(link.label || routePath)}</div>
+                {link.description ? <div className="mt-1 text-sm text-muted">{String(link.description)}</div> : null}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    className="admin-button admin-button-secondary"
+                    onClick={() => {
+                      if (routePath) {
+                        window.location.assign(routePath)
+                      }
+                    }}
+                  >
+                    Open
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-line p-4 text-sm text-muted">No links available for your current permissions.</div>
+      )}
+    </section>
   )
 }
 
@@ -799,7 +1043,9 @@ function DataGrid({
   actionLabelForRow,
   actionDisabledForRow,
   secondaryActionLabel,
+  secondaryActionLabelForRow,
   onSecondaryAction,
+  secondaryActionDisabledForRow,
 }: {
   columns: Array<{ key: string; label: string }>
   rows: Array<Record<string, unknown>>
@@ -808,7 +1054,9 @@ function DataGrid({
   actionLabelForRow?: (row: Record<string, unknown>) => string
   actionDisabledForRow?: (row: Record<string, unknown>) => boolean
   secondaryActionLabel?: string
+  secondaryActionLabelForRow?: (row: Record<string, unknown>) => string
   onSecondaryAction?: (row: Record<string, unknown>) => void
+  secondaryActionDisabledForRow?: (row: Record<string, unknown>) => boolean
 }) {
   if (!rows.length) {
     return <div className="rounded-xl border border-dashed border-line p-6 text-sm text-muted">No data available.</div>
@@ -846,8 +1094,8 @@ function DataGrid({
                       </button>
                     ) : null}
                     {secondaryActionLabel ? (
-                      <button type="button" className="admin-button admin-button-secondary" onClick={() => onSecondaryAction?.(row)}>
-                        {secondaryActionLabel}
+                      <button type="button" className="admin-button admin-button-secondary" disabled={secondaryActionDisabledForRow?.(row)} onClick={() => onSecondaryAction?.(row)}>
+                        {secondaryActionLabelForRow ? secondaryActionLabelForRow(row) : secondaryActionLabel}
                       </button>
                     ) : null}
                   </div>
@@ -866,11 +1114,13 @@ function EditableFieldSection({
   fields,
   values,
   onChange,
+  disabled,
 }: {
   label: string
   fields: Array<Record<string, unknown>>
   values: Record<string, unknown>
   onChange: (next: Record<string, unknown>) => void
+  disabled?: boolean
 }) {
   const visibleFields = fields.filter((field) => typeof field.key === 'string')
   return (
@@ -887,7 +1137,7 @@ function EditableFieldSection({
           if (type === 'bool') {
             return (
               <label key={key} className="flex items-center gap-3 rounded-xl border border-line p-3 text-sm text-body" htmlFor={fieldId}>
-                <input id={fieldId} name={fieldId} type="checkbox" checked={Boolean(value)} onChange={(event) => onChange({ ...values, [key]: event.target.checked })} />
+                <input id={fieldId} name={fieldId} type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(event) => onChange({ ...values, [key]: event.target.checked })} />
                 <span>{labelText}</span>
               </label>
             )
@@ -896,7 +1146,7 @@ function EditableFieldSection({
             return (
               <label key={key} className="space-y-2 text-sm text-body" htmlFor={fieldId}>
                 <span className="block text-xs font-semibold uppercase tracking-wide text-muted">{labelText}</span>
-                <select id={fieldId} name={fieldId} className="admin-input" value={String(value ?? '')} onChange={(event) => onChange({ ...values, [key]: event.target.value })}>
+                <select id={fieldId} name={fieldId} className="admin-input" disabled={disabled} value={String(value ?? '')} onChange={(event) => onChange({ ...values, [key]: event.target.value })}>
                   <option value="">Select {labelText}</option>
                   {enumValues.map((item) => (
                     <option key={item} value={item}>
@@ -915,6 +1165,7 @@ function EditableFieldSection({
                   id={fieldId}
                   name={fieldId}
                   className="admin-input min-h-24"
+                  disabled={disabled}
                   value={Array.isArray(value) ? value.map(String).join('\n') : ''}
                   onChange={(event) => onChange({ ...values, [key]: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) })}
                 />
@@ -928,6 +1179,7 @@ function EditableFieldSection({
                 id={fieldId}
                 name={fieldId}
                 className="admin-input"
+                disabled={disabled}
                 type={type === 'int' ? 'number' : 'text'}
                 value={type === 'int' ? String(value ?? 0) : String(value ?? '')}
                 onChange={(event) => onChange({ ...values, [key]: type === 'int' ? event.target.value : event.target.value })}
