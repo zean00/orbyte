@@ -261,7 +261,7 @@ func productionDocumentDefinition(documentType, displayName, workflowKey, number
 		WorkflowKey:            workflowKey,
 		NumberingKey:           numberingKey,
 		OwnerModuleKey:         "production_core",
-		AllowedLinkTypes:       []string{"production_for", "movement_for", "related_to"},
+		AllowedLinkTypes:       []string{"production_for", "movement_for", "related_to", "posting_for"},
 		AllowedAttachmentTypes: []string{"note", "image", "document"},
 	}
 }

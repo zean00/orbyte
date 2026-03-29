@@ -76,7 +76,7 @@ func fulfillmentCoreKernelPackManifest() module.Manifest {
 				WorkflowKey:            "sales_fulfillment_flow",
 				NumberingKey:           "sales_fulfillment_number",
 				OwnerModuleKey:         "fulfillment_core",
-				AllowedLinkTypes:       []string{"fulfillment_for", "movement_for", "delivery_for", "related_to", "return_for", "exchange_for"},
+				AllowedLinkTypes:       []string{"fulfillment_for", "movement_for", "delivery_for", "related_to", "return_for", "exchange_for", "posting_for"},
 				AllowedAttachmentTypes: []string{"note", "image", "document"},
 			},
 		},

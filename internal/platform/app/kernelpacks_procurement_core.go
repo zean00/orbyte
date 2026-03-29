@@ -242,7 +242,7 @@ func procurementDocumentDefinition(documentType, displayName, workflowKey, numbe
 		WorkflowKey:            workflowKey,
 		NumberingKey:           numberingKey,
 		OwnerModuleKey:         "procurement_core",
-		AllowedLinkTypes:       []string{"source_request", "purchase_order_for", "receipt_for", "bill_for", "payment_for", "credit_for", "return_for", "posting_for"},
+		AllowedLinkTypes:       []string{"source_request", "purchase_order_for", "receipt_for", "bill_for", "payment_for", "credit_for", "return_for", "movement_for", "posting_for"},
 		AllowedAttachmentTypes: []string{"note", "image", "document"},
 	}
 }

@@ -3,6 +3,7 @@ package application
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -3187,7 +3188,7 @@ func numberValue(value any) float64 {
 }
 
 func roundMoney(value float64) float64 {
-	return float64(int(value*100+0.5)) / 100
+	return math.Round(value*100) / 100
 }
 
 func addDaysToDate(base string, days int) (string, bool) {
