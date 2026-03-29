@@ -37,6 +37,7 @@ func builtInModulePacks() []modulePack {
 		staticModulePack{manifests: supplierReturnsCoreKernelPackManifests},
 		staticModulePack{manifests: planningCoreKernelPackManifests},
 		staticModulePack{manifests: productionCoreKernelPackManifests},
+		staticModulePack{manifests: posCoreKernelPackManifests},
 		staticModulePack{manifests: traceabilityCoreKernelPackManifests},
 		staticModulePack{manifests: recallCoreKernelPackManifests},
 		staticModulePack{manifests: analyticsKernelPackManifests},

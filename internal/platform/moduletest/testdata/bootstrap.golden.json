@@ -1673,6 +1673,231 @@
       "view_key": "planning.runs.dashboard"
     },
     {
+      "key": "pos.registers.detail",
+      "kind": "navigate",
+      "label": "POS Register Detail",
+      "label_i18n": {
+        "en": "POS Register Detail",
+        "id": "Detail Register POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_register.read"
+      ],
+      "route_path": "/pos/registers/detail",
+      "view_key": "pos.registers.detail"
+    },
+    {
+      "key": "pos.registers.form",
+      "kind": "navigate",
+      "label": "POS Register Form",
+      "label_i18n": {
+        "en": "POS Register Form",
+        "id": "Form Register POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_register.update"
+      ],
+      "route_path": "/pos/registers/form",
+      "view_key": "pos.registers.form"
+    },
+    {
+      "key": "pos.registers.list",
+      "kind": "navigate",
+      "label": "POS Registers",
+      "label_i18n": {
+        "en": "POS Registers",
+        "id": "Register POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_register.list"
+      ],
+      "route_path": "/pos/registers",
+      "view_key": "pos.registers.list"
+    },
+    {
+      "key": "pos.sales.detail",
+      "kind": "navigate",
+      "label": "POS Sale Detail",
+      "label_i18n": {
+        "en": "POS Sale Detail",
+        "id": "Detail Penjualan POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_sale.read"
+      ],
+      "route_path": "/pos/sales/detail",
+      "view_key": "pos.sales.detail"
+    },
+    {
+      "key": "pos.sales.form",
+      "kind": "navigate",
+      "label": "POS Sale Form",
+      "label_i18n": {
+        "en": "POS Sale Form",
+        "id": "Form Penjualan POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_sale.update"
+      ],
+      "route_path": "/pos/sales/form",
+      "view_key": "pos.sales.form"
+    },
+    {
+      "key": "pos.sales.list",
+      "kind": "navigate",
+      "label": "POS Sales",
+      "label_i18n": {
+        "en": "POS Sales",
+        "id": "Penjualan POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_sale.list"
+      ],
+      "route_path": "/pos/sales",
+      "view_key": "pos.sales.list"
+    },
+    {
+      "key": "pos.shifts.detail",
+      "kind": "navigate",
+      "label": "POS Shift Detail",
+      "label_i18n": {
+        "en": "POS Shift Detail",
+        "id": "Detail Shift POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_shift.read"
+      ],
+      "route_path": "/pos/shifts/detail",
+      "view_key": "pos.shifts.detail"
+    },
+    {
+      "key": "pos.shifts.form",
+      "kind": "navigate",
+      "label": "POS Shift Form",
+      "label_i18n": {
+        "en": "POS Shift Form",
+        "id": "Form Shift POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_shift.update"
+      ],
+      "route_path": "/pos/shifts/form",
+      "view_key": "pos.shifts.form"
+    },
+    {
+      "key": "pos.shifts.list",
+      "kind": "navigate",
+      "label": "POS Shifts",
+      "label_i18n": {
+        "en": "POS Shifts",
+        "id": "Shift POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_shift.list"
+      ],
+      "route_path": "/pos/shifts",
+      "view_key": "pos.shifts.list"
+    },
+    {
+      "key": "pos.stores.detail",
+      "kind": "navigate",
+      "label": "POS Store Detail",
+      "label_i18n": {
+        "en": "POS Store Detail",
+        "id": "Detail Toko POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_store.read"
+      ],
+      "route_path": "/pos/stores/detail",
+      "view_key": "pos.stores.detail"
+    },
+    {
+      "key": "pos.stores.form",
+      "kind": "navigate",
+      "label": "POS Store Form",
+      "label_i18n": {
+        "en": "POS Store Form",
+        "id": "Form Toko POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_store.update"
+      ],
+      "route_path": "/pos/stores/form",
+      "view_key": "pos.stores.form"
+    },
+    {
+      "key": "pos.stores.list",
+      "kind": "navigate",
+      "label": "POS Stores",
+      "label_i18n": {
+        "en": "POS Stores",
+        "id": "Toko POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_store.list"
+      ],
+      "route_path": "/pos/stores",
+      "view_key": "pos.stores.list"
+    },
+    {
+      "key": "pos.tender_types.detail",
+      "kind": "navigate",
+      "label": "POS Tender Type Detail",
+      "label_i18n": {
+        "en": "POS Tender Type Detail",
+        "id": "Detail Jenis Tender POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_tender_type.read"
+      ],
+      "route_path": "/pos/tender-types/detail",
+      "view_key": "pos.tender_types.detail"
+    },
+    {
+      "key": "pos.tender_types.form",
+      "kind": "navigate",
+      "label": "POS Tender Type Form",
+      "label_i18n": {
+        "en": "POS Tender Type Form",
+        "id": "Form Jenis Tender POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_tender_type.update"
+      ],
+      "route_path": "/pos/tender-types/form",
+      "view_key": "pos.tender_types.form"
+    },
+    {
+      "key": "pos.tender_types.list",
+      "kind": "navigate",
+      "label": "POS Tender Types",
+      "label_i18n": {
+        "en": "POS Tender Types",
+        "id": "Jenis Tender POS"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pos_tender_type.list"
+      ],
+      "route_path": "/pos/tender-types",
+      "view_key": "pos.tender_types.list"
+    },
+    {
       "key": "procurement.bills.detail",
       "kind": "navigate",
       "label": "Vendor Bill",
@@ -2759,7 +2984,8 @@
   "available_surfaces": [
     "backoffice",
     "worklist",
-    "self_service"
+    "self_service",
+    "pos"
   ],
   "capabilities": {
     "column_preferences": true,
@@ -2776,6 +3002,7 @@
   "default_path": "/sdk/items",
   "fallback_paths": {
     "backoffice": "/sdk/items",
+    "pos": "/pos/terminal",
     "self_service": "/self-service/requests",
     "worklist": "/worklist"
   },
@@ -3778,6 +4005,71 @@
       "order": 66,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "pos.stores.list",
+      "key": "pos.stores",
+      "label": "POS Stores",
+      "label_i18n": {
+        "en": "POS Stores",
+        "id": "Toko POS"
+      },
+      "order": 81,
+      "required_permissions": [
+        "pos_store.list"
+      ]
+    },
+    {
+      "action_key": "pos.registers.list",
+      "key": "pos.registers",
+      "label": "POS Registers",
+      "label_i18n": {
+        "en": "POS Registers",
+        "id": "Register POS"
+      },
+      "order": 82,
+      "required_permissions": [
+        "pos_register.list"
+      ]
+    },
+    {
+      "action_key": "pos.tender_types.list",
+      "key": "pos.tender_types",
+      "label": "POS Tender Types",
+      "label_i18n": {
+        "en": "POS Tender Types",
+        "id": "Jenis Tender POS"
+      },
+      "order": 83,
+      "required_permissions": [
+        "pos_tender_type.list"
+      ]
+    },
+    {
+      "action_key": "pos.shifts.list",
+      "key": "pos.shifts",
+      "label": "POS Shifts",
+      "label_i18n": {
+        "en": "POS Shifts",
+        "id": "Shift POS"
+      },
+      "order": 84,
+      "required_permissions": [
+        "pos_shift.list"
+      ]
+    },
+    {
+      "action_key": "pos.sales.list",
+      "key": "pos.sales",
+      "label": "POS Sales",
+      "label_i18n": {
+        "en": "POS Sales",
+        "id": "Penjualan POS"
+      },
+      "order": 85,
+      "required_permissions": [
+        "pos_sale.list"
       ]
     }
   ],
@@ -14009,6 +14301,1695 @@
       "title_i18n": {
         "en": "Planning Runs",
         "id": "Planning Run"
+      }
+    },
+    {
+      "key": "pos.registers.detail",
+      "kind": "detail",
+      "model_key": "pos_register",
+      "required_permissions": [
+        "pos_register.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string"
+            },
+            {
+              "key": "checkout_mode",
+              "label": "Checkout Mode",
+              "label_i18n": {
+                "en": "Checkout Mode",
+                "id": "Mode Checkout"
+              },
+              "path": "values.checkout_mode",
+              "type": "string"
+            },
+            {
+              "key": "cash_account_code",
+              "label": "Cash Account",
+              "label_i18n": {
+                "en": "Cash Account",
+                "id": "Akun Kas"
+              },
+              "path": "values.cash_account_code",
+              "type": "string"
+            },
+            {
+              "key": "card_account_code",
+              "label": "Card Account",
+              "label_i18n": {
+                "en": "Card Account",
+                "id": "Akun Kartu"
+              },
+              "path": "values.card_account_code",
+              "type": "string"
+            },
+            {
+              "key": "hardware_profile",
+              "label": "Hardware Profile",
+              "label_i18n": {
+                "en": "Hardware Profile",
+                "id": "Profil Perangkat"
+              },
+              "path": "values.hardware_profile",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "POS Register Detail",
+      "title_i18n": {
+        "en": "POS Register Detail",
+        "id": "POS Register Detail"
+      }
+    },
+    {
+      "key": "pos.registers.form",
+      "kind": "form",
+      "model_key": "pos_register",
+      "required_permissions": [
+        "pos_register.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "checkout_mode",
+              "label": "Checkout Mode",
+              "label_i18n": {
+                "en": "Checkout Mode",
+                "id": "Mode Checkout"
+              },
+              "options": [
+                "invoice_first",
+                "sales_order_first"
+              ],
+              "path": "values.checkout_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "cash_account_code",
+              "label": "Cash Account",
+              "label_i18n": {
+                "en": "Cash Account",
+                "id": "Akun Kas"
+              },
+              "path": "values.cash_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "card_account_code",
+              "label": "Card Account",
+              "label_i18n": {
+                "en": "Card Account",
+                "id": "Akun Kartu"
+              },
+              "path": "values.card_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "hardware_profile",
+              "label": "Hardware Profile",
+              "label_i18n": {
+                "en": "Hardware Profile",
+                "id": "Profil Perangkat"
+              },
+              "path": "values.hardware_profile",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receipt_template_key",
+              "label": "Receipt Template",
+              "label_i18n": {
+                "en": "Receipt Template",
+                "id": "Template Struk"
+              },
+              "path": "values.receipt_template_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "POS Register Form",
+          "title_i18n": {
+            "en": "POS Register Form",
+            "id": "POS Register Form"
+          }
+        }
+      ],
+      "title": "POS Register Form",
+      "title_i18n": {
+        "en": "POS Register Form",
+        "id": "POS Register Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "store_code",
+          "label": "Store",
+          "label_i18n": {
+            "en": "Store",
+            "id": "Toko"
+          },
+          "path": "values.store_code"
+        },
+        {
+          "key": "checkout_mode",
+          "label": "Checkout",
+          "label_i18n": {
+            "en": "Checkout",
+            "id": "Checkout"
+          },
+          "path": "values.checkout_mode"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "pos.registers.list",
+      "kind": "list",
+      "model_key": "pos_register",
+      "required_permissions": [
+        "pos_register.list"
+      ],
+      "title": "POS Registers",
+      "title_i18n": {
+        "en": "POS Registers",
+        "id": "POS Registers"
+      }
+    },
+    {
+      "key": "pos.sales.detail",
+      "kind": "detail",
+      "model_key": "pos_sale",
+      "required_permissions": [
+        "pos_sale.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "sale_number",
+              "label": "Sale Number",
+              "label_i18n": {
+                "en": "Sale Number",
+                "id": "Nomor Penjualan"
+              },
+              "path": "values.sale_number",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string"
+            },
+            {
+              "key": "register_code",
+              "label": "Register",
+              "label_i18n": {
+                "en": "Register",
+                "id": "Register"
+              },
+              "path": "values.register_code",
+              "type": "string"
+            },
+            {
+              "key": "shift_id",
+              "label": "Shift",
+              "label_i18n": {
+                "en": "Shift",
+                "id": "Shift"
+              },
+              "path": "values.shift_id",
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Pelanggan"
+              },
+              "path": "values.party_name",
+              "type": "string"
+            },
+            {
+              "key": "checkout_mode",
+              "label": "Checkout Mode",
+              "label_i18n": {
+                "en": "Checkout Mode",
+                "id": "Mode Checkout"
+              },
+              "path": "values.checkout_mode",
+              "type": "string"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "values.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "tendered_amount",
+              "label": "Tendered",
+              "label_i18n": {
+                "en": "Tendered",
+                "id": "Dibayar"
+              },
+              "path": "values.tendered_amount",
+              "type": "number"
+            },
+            {
+              "key": "change_due_amount",
+              "label": "Change Due",
+              "label_i18n": {
+                "en": "Change Due",
+                "id": "Kembalian"
+              },
+              "path": "values.change_due_amount",
+              "type": "number"
+            },
+            {
+              "key": "invoice_number",
+              "label": "Invoice",
+              "label_i18n": {
+                "en": "Invoice",
+                "id": "Invoice"
+              },
+              "path": "values.invoice_number",
+              "type": "string"
+            },
+            {
+              "key": "fulfillment_number",
+              "label": "Fulfillment",
+              "label_i18n": {
+                "en": "Fulfillment",
+                "id": "Fulfillment"
+              },
+              "path": "values.fulfillment_number",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "POS Sale Detail",
+      "title_i18n": {
+        "en": "POS Sale Detail",
+        "id": "POS Sale Detail"
+      }
+    },
+    {
+      "key": "pos.sales.form",
+      "kind": "form",
+      "model_key": "pos_sale",
+      "required_permissions": [
+        "pos_sale.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "sale_number",
+              "label": "Sale Number",
+              "label_i18n": {
+                "en": "Sale Number",
+                "id": "Nomor Penjualan"
+              },
+              "path": "values.sale_number",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "register_code",
+              "label": "Register",
+              "label_i18n": {
+                "en": "Register",
+                "id": "Register"
+              },
+              "path": "values.register_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "shift_id",
+              "label": "Shift",
+              "label_i18n": {
+                "en": "Shift",
+                "id": "Shift"
+              },
+              "path": "values.shift_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Pelanggan"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "checkout_mode",
+              "label": "Checkout Mode",
+              "label_i18n": {
+                "en": "Checkout Mode",
+                "id": "Mode Checkout"
+              },
+              "options": [
+                "invoice_first",
+                "sales_order_first"
+              ],
+              "path": "values.checkout_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "held",
+                "completed",
+                "voided"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "POS Sale Form",
+          "title_i18n": {
+            "en": "POS Sale Form",
+            "id": "POS Sale Form"
+          }
+        }
+      ],
+      "title": "POS Sale Form",
+      "title_i18n": {
+        "en": "POS Sale Form",
+        "id": "POS Sale Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "sale_number",
+          "label": "Sale",
+          "label_i18n": {
+            "en": "Sale",
+            "id": "Penjualan"
+          },
+          "path": "values.sale_number"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "values.party_name"
+        },
+        {
+          "key": "invoice_number",
+          "label": "Invoice",
+          "label_i18n": {
+            "en": "Invoice",
+            "id": "Invoice"
+          },
+          "path": "values.invoice_number"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "values.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "held",
+            "completed",
+            "voided"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "pos.sales.list",
+      "kind": "list",
+      "model_key": "pos_sale",
+      "required_permissions": [
+        "pos_sale.list"
+      ],
+      "title": "POS Sales",
+      "title_i18n": {
+        "en": "POS Sales",
+        "id": "POS Sales"
+      }
+    },
+    {
+      "key": "pos.shifts.detail",
+      "kind": "detail",
+      "model_key": "pos_shift",
+      "required_permissions": [
+        "pos_shift.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "shift_number",
+              "label": "Shift Number",
+              "label_i18n": {
+                "en": "Shift Number",
+                "id": "Nomor Shift"
+              },
+              "path": "values.shift_number",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string"
+            },
+            {
+              "key": "register_code",
+              "label": "Register",
+              "label_i18n": {
+                "en": "Register",
+                "id": "Register"
+              },
+              "path": "values.register_code",
+              "type": "string"
+            },
+            {
+              "key": "cashier_user_id",
+              "label": "Cashier",
+              "label_i18n": {
+                "en": "Cashier",
+                "id": "Kasir"
+              },
+              "path": "values.cashier_user_id",
+              "type": "string"
+            },
+            {
+              "key": "opened_at",
+              "label": "Opened At",
+              "label_i18n": {
+                "en": "Opened At",
+                "id": "Dibuka Pada"
+              },
+              "path": "values.opened_at",
+              "type": "string"
+            },
+            {
+              "key": "closed_at",
+              "label": "Closed At",
+              "label_i18n": {
+                "en": "Closed At",
+                "id": "Ditutup Pada"
+              },
+              "path": "values.closed_at",
+              "type": "string"
+            },
+            {
+              "key": "opening_cash_amount",
+              "label": "Opening Cash",
+              "label_i18n": {
+                "en": "Opening Cash",
+                "id": "Kas Awal"
+              },
+              "path": "values.opening_cash_amount",
+              "type": "number"
+            },
+            {
+              "key": "expected_cash_amount",
+              "label": "Expected Cash",
+              "label_i18n": {
+                "en": "Expected Cash",
+                "id": "Kas Diharapkan"
+              },
+              "path": "values.expected_cash_amount",
+              "type": "number"
+            },
+            {
+              "key": "actual_cash_amount",
+              "label": "Actual Cash",
+              "label_i18n": {
+                "en": "Actual Cash",
+                "id": "Kas Aktual"
+              },
+              "path": "values.actual_cash_amount",
+              "type": "number"
+            },
+            {
+              "key": "over_short_amount",
+              "label": "Over / Short",
+              "label_i18n": {
+                "en": "Over / Short",
+                "id": "Lebih / Kurang"
+              },
+              "path": "values.over_short_amount",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "POS Shift Detail",
+      "title_i18n": {
+        "en": "POS Shift Detail",
+        "id": "POS Shift Detail"
+      }
+    },
+    {
+      "key": "pos.shifts.form",
+      "kind": "form",
+      "model_key": "pos_shift",
+      "required_permissions": [
+        "pos_shift.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "shift_number",
+              "label": "Shift Number",
+              "label_i18n": {
+                "en": "Shift Number",
+                "id": "Nomor Shift"
+              },
+              "path": "values.shift_number",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "register_code",
+              "label": "Register",
+              "label_i18n": {
+                "en": "Register",
+                "id": "Register"
+              },
+              "path": "values.register_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "cashier_user_id",
+              "label": "Cashier",
+              "label_i18n": {
+                "en": "Cashier",
+                "id": "Kasir"
+              },
+              "path": "values.cashier_user_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "opening_cash_amount",
+              "label": "Opening Cash",
+              "label_i18n": {
+                "en": "Opening Cash",
+                "id": "Kas Awal"
+              },
+              "path": "values.opening_cash_amount",
+              "type": "number"
+            },
+            {
+              "key": "expected_cash_amount",
+              "label": "Expected Cash",
+              "label_i18n": {
+                "en": "Expected Cash",
+                "id": "Kas Diharapkan"
+              },
+              "path": "values.expected_cash_amount",
+              "type": "number"
+            },
+            {
+              "key": "actual_cash_amount",
+              "label": "Actual Cash",
+              "label_i18n": {
+                "en": "Actual Cash",
+                "id": "Kas Aktual"
+              },
+              "path": "values.actual_cash_amount",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "draft",
+                "opened",
+                "closed",
+                "cancelled"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "POS Shift Form",
+          "title_i18n": {
+            "en": "POS Shift Form",
+            "id": "POS Shift Form"
+          }
+        }
+      ],
+      "title": "POS Shift Form",
+      "title_i18n": {
+        "en": "POS Shift Form",
+        "id": "POS Shift Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "shift_number",
+          "label": "Shift",
+          "label_i18n": {
+            "en": "Shift",
+            "id": "Shift"
+          },
+          "path": "values.shift_number"
+        },
+        {
+          "key": "register_code",
+          "label": "Register",
+          "label_i18n": {
+            "en": "Register",
+            "id": "Register"
+          },
+          "path": "values.register_code"
+        },
+        {
+          "key": "cashier_user_id",
+          "label": "Cashier",
+          "label_i18n": {
+            "en": "Cashier",
+            "id": "Kasir"
+          },
+          "path": "values.cashier_user_id"
+        },
+        {
+          "key": "opened_at",
+          "label": "Opened",
+          "label_i18n": {
+            "en": "Opened",
+            "id": "Dibuka"
+          },
+          "path": "values.opened_at"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "opened",
+            "closed",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "pos.shifts.list",
+      "kind": "list",
+      "model_key": "pos_shift",
+      "required_permissions": [
+        "pos_shift.list"
+      ],
+      "title": "POS Shifts",
+      "title_i18n": {
+        "en": "POS Shifts",
+        "id": "POS Shifts"
+      }
+    },
+    {
+      "key": "pos.stores.detail",
+      "kind": "detail",
+      "model_key": "pos_store",
+      "required_permissions": [
+        "pos_store.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "warehouse_code",
+              "label": "Warehouse",
+              "label_i18n": {
+                "en": "Warehouse",
+                "id": "Gudang"
+              },
+              "path": "values.warehouse_code",
+              "type": "string"
+            },
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "values.price_list_code",
+              "type": "string"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile",
+              "label_i18n": {
+                "en": "Tax Profile",
+                "id": "Profil Pajak"
+              },
+              "path": "values.tax_profile_code",
+              "type": "string"
+            },
+            {
+              "key": "checkout_mode",
+              "label": "Checkout Mode",
+              "label_i18n": {
+                "en": "Checkout Mode",
+                "id": "Mode Checkout"
+              },
+              "path": "values.checkout_mode",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "POS Store Detail",
+      "title_i18n": {
+        "en": "POS Store Detail",
+        "id": "POS Store Detail"
+      }
+    },
+    {
+      "key": "pos.stores.form",
+      "kind": "form",
+      "model_key": "pos_store",
+      "required_permissions": [
+        "pos_store.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "warehouse_code",
+              "label": "Warehouse",
+              "label_i18n": {
+                "en": "Warehouse",
+                "id": "Gudang"
+              },
+              "path": "values.warehouse_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "price_list_code",
+              "label": "Price List",
+              "label_i18n": {
+                "en": "Price List",
+                "id": "Daftar Harga"
+              },
+              "path": "values.price_list_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile",
+              "label_i18n": {
+                "en": "Tax Profile",
+                "id": "Profil Pajak"
+              },
+              "path": "values.tax_profile_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_tax_code",
+              "label": "Default Tax Code",
+              "label_i18n": {
+                "en": "Default Tax Code",
+                "id": "Kode Pajak Default"
+              },
+              "path": "values.default_tax_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "checkout_mode",
+              "label": "Checkout Mode",
+              "label_i18n": {
+                "en": "Checkout Mode",
+                "id": "Mode Checkout"
+              },
+              "options": [
+                "invoice_first",
+                "sales_order_first"
+              ],
+              "path": "values.checkout_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "POS Store Form",
+          "title_i18n": {
+            "en": "POS Store Form",
+            "id": "POS Store Form"
+          }
+        }
+      ],
+      "title": "POS Store Form",
+      "title_i18n": {
+        "en": "POS Store Form",
+        "id": "POS Store Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "warehouse_code",
+          "label": "Warehouse",
+          "label_i18n": {
+            "en": "Warehouse",
+            "id": "Gudang"
+          },
+          "path": "values.warehouse_code"
+        },
+        {
+          "key": "checkout_mode",
+          "label": "Checkout",
+          "label_i18n": {
+            "en": "Checkout",
+            "id": "Checkout"
+          },
+          "path": "values.checkout_mode"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "pos.stores.list",
+      "kind": "list",
+      "model_key": "pos_store",
+      "required_permissions": [
+        "pos_store.list"
+      ],
+      "title": "POS Stores",
+      "title_i18n": {
+        "en": "POS Stores",
+        "id": "POS Stores"
+      }
+    },
+    {
+      "key": "pos.tender_types.detail",
+      "kind": "detail",
+      "model_key": "pos_tender_type",
+      "required_permissions": [
+        "pos_tender_type.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "kind",
+              "label": "Kind",
+              "label_i18n": {
+                "en": "Kind",
+                "id": "Jenis"
+              },
+              "path": "values.kind",
+              "type": "string"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "label_i18n": {
+                "en": "Payment Method",
+                "id": "Metode Pembayaran"
+              },
+              "path": "values.payment_method_code",
+              "type": "string"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "values.clearing_account_code",
+              "type": "string"
+            },
+            {
+              "key": "requires_reference",
+              "label": "Requires Reference",
+              "label_i18n": {
+                "en": "Requires Reference",
+                "id": "Butuh Referensi"
+              },
+              "path": "values.requires_reference",
+              "type": "bool"
+            },
+            {
+              "key": "is_cash_like",
+              "label": "Cash Like",
+              "label_i18n": {
+                "en": "Cash Like",
+                "id": "Seperti Tunai"
+              },
+              "path": "values.is_cash_like",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "POS Tender Type Detail",
+      "title_i18n": {
+        "en": "POS Tender Type Detail",
+        "id": "POS Tender Type Detail"
+      }
+    },
+    {
+      "key": "pos.tender_types.form",
+      "kind": "form",
+      "model_key": "pos_tender_type",
+      "required_permissions": [
+        "pos_tender_type.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "kind",
+              "label": "Kind",
+              "label_i18n": {
+                "en": "Kind",
+                "id": "Jenis"
+              },
+              "options": [
+                "cash",
+                "card",
+                "bank_transfer",
+                "voucher",
+                "gift_card",
+                "store_credit",
+                "other"
+              ],
+              "path": "values.kind",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "label_i18n": {
+                "en": "Payment Method",
+                "id": "Metode Pembayaran"
+              },
+              "path": "values.payment_method_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "clearing_account_code",
+              "label": "Clearing Account",
+              "label_i18n": {
+                "en": "Clearing Account",
+                "id": "Akun Clearing"
+              },
+              "path": "values.clearing_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "requires_reference",
+              "label": "Requires Reference",
+              "label_i18n": {
+                "en": "Requires Reference",
+                "id": "Butuh Referensi"
+              },
+              "path": "values.requires_reference",
+              "type": "bool"
+            },
+            {
+              "key": "is_cash_like",
+              "label": "Cash Like",
+              "label_i18n": {
+                "en": "Cash Like",
+                "id": "Seperti Tunai"
+              },
+              "path": "values.is_cash_like",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "POS Tender Type Form",
+          "title_i18n": {
+            "en": "POS Tender Type Form",
+            "id": "POS Tender Type Form"
+          }
+        }
+      ],
+      "title": "POS Tender Type Form",
+      "title_i18n": {
+        "en": "POS Tender Type Form",
+        "id": "POS Tender Type Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "path": "values.kind"
+        },
+        {
+          "key": "payment_method_code",
+          "label": "Payment Method",
+          "label_i18n": {
+            "en": "Payment Method",
+            "id": "Metode Pembayaran"
+          },
+          "path": "values.payment_method_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "pos.tender_types.list",
+      "kind": "list",
+      "model_key": "pos_tender_type",
+      "required_permissions": [
+        "pos_tender_type.list"
+      ],
+      "title": "POS Tender Types",
+      "title_i18n": {
+        "en": "POS Tender Types",
+        "id": "POS Tender Types"
       }
     },
     {

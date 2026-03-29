@@ -1420,23 +1420,59 @@ func (s *CommercialCoreService) refundPostingLines(payload map[string]any) []map
 		postingConfig["payment_receipt_receivable_account_code"],
 		"1100-AR",
 	)
-	clearingAccount := firstNonEmptyString(
-		s.resolvePaymentClearingAccount(payload),
-		postingConfig["payment_refund_clearing_account_code"],
-		postingConfig["payment_receipt_clearing_account_code"],
-		"1000-CASH",
-	)
-	return []map[string]any{{
+	rows := []map[string]any{{
 		"account_code": receivableAccount,
 		"description":  "Accounts Receivable",
 		"debit":        totalAmount,
 		"credit":       0.0,
-	}, {
-		"account_code": clearingAccount,
-		"description":  "Cash / Clearing",
-		"debit":        0.0,
-		"credit":       totalAmount,
 	}}
+	allocationCredits := map[string]float64{}
+	for _, allocation := range refundAllocationsFromPayload(payload) {
+		if allocation.amount <= 0 || strings.TrimSpace(allocation.paymentID) == "" {
+			continue
+		}
+		payment, err := s.documents.Get(allocation.paymentID)
+		if err != nil || payment.Header.Type != "payment_receipt" {
+			continue
+		}
+		accountCode := firstNonEmptyString(
+			s.resolvePaymentClearingAccount(payment.Body.Payload),
+			textValue(payment.Body.Payload["clearing_account_code"]),
+		)
+		if accountCode == "" {
+			continue
+		}
+		allocationCredits[accountCode] = roundMoney(allocationCredits[accountCode] + allocation.amount)
+	}
+	if len(allocationCredits) == 0 {
+		clearingAccount := firstNonEmptyString(
+			s.resolvePaymentClearingAccount(payload),
+			postingConfig["payment_refund_clearing_account_code"],
+			postingConfig["payment_receipt_clearing_account_code"],
+			"1000-CASH",
+		)
+		rows = append(rows, map[string]any{
+			"account_code": clearingAccount,
+			"description":  "Cash / Clearing",
+			"debit":        0.0,
+			"credit":       totalAmount,
+		})
+		return rows
+	}
+	accounts := make([]string, 0, len(allocationCredits))
+	for accountCode := range allocationCredits {
+		accounts = append(accounts, accountCode)
+	}
+	sort.Strings(accounts)
+	for _, accountCode := range accounts {
+		rows = append(rows, map[string]any{
+			"account_code": accountCode,
+			"description":  "Cash / Clearing",
+			"debit":        0.0,
+			"credit":       roundMoney(allocationCredits[accountCode]),
+		})
+	}
+	return rows
 }
 
 func (s *CommercialCoreService) postingConfig() map[string]string {

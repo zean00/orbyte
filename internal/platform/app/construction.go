@@ -92,6 +92,7 @@ type serviceGraph struct {
 	supplierReturns   *application.SupplierReturnsCoreService
 	planningCore      *application.PlanningCoreService
 	productionCore    *application.ProductionCoreService
+	posCore           *application.POSCoreService
 	traceabilityCore  *application.TraceabilityCoreService
 	recallCore        *application.RecallCoreService
 	analyticsRepo     analytics.Repository
@@ -257,6 +258,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.supplierReturns = application.NewSupplierReturnsCoreService(graph.documents, graph.search, graph.inventoryCore, graph.procurementCore)
 	graph.planningCore = application.NewPlanningCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.fulfillmentCore, graph.procurementCore)
 	graph.productionCore = application.NewProductionCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore)
+	graph.posCore = application.NewPOSCoreService(graph.documents, graph.models, graph.search, graph.docActions, graph.commercialCore, graph.inventoryCore, graph.fulfillmentCore, graph.returnsCore)
 	graph.traceabilityCore = application.NewTraceabilityCoreService(graph.documents, graph.models, graph.inventoryCore)
 	graph.recallCore = application.NewRecallCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.traceabilityCore)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)

@@ -8,6 +8,7 @@ import { fetchWorkspaceBootstrap, toShellRoutes } from '@/services/bootstrap'
 import { useShellStore } from '@/stores/shellStore'
 
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
+const POSSurfacePage = lazy(() => import('@/features/pos/POSSurfacePage'))
 const WorkspacePage = lazy(() => import('@/features/workspace/WorkspacePage'))
 
 function PageLoader() {
@@ -111,6 +112,16 @@ export default function App() {
       <BootstrapLoader>
         <Routes>
           <Route path="/login" element={<LoginGate />} />
+          <Route
+            path="/pos/terminal"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <POSSurfacePage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="*"
             element={
