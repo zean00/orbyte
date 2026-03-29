@@ -111,6 +111,106 @@ func TestCreateVendorBillFromReceiptUsesReceiptQuantityAndTotals(t *testing.T) {
 	}
 }
 
+func TestVendorBillPostingLinesCapitalizesInventoryItems(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProcurementGenerationDocumentTypes(t, docs)
+	mustRegisterProcurementGenerationModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                          "COFFEE-BEAN",
+		"name":                         "Coffee Bean",
+		"inventory_enabled":            true,
+		"inventory_asset_account_code": "1200-INV-COFFEE",
+	}); err != nil {
+		t.Fatalf("create inventory item: %v", err)
+	}
+
+	service := NewProcurementCoreService(docs, nil, models, nil)
+	lines := service.vendorBillPostingLines(map[string]any{
+		"source_goods_receipt_id": "doc_gr_1",
+		"subtotal_amount": 1500.0,
+		"tax_amount":      165.0,
+		"total_amount":    1665.0,
+		"lines": []map[string]any{{
+			"item_code":                    "COFFEE-BEAN",
+			"line_subtotal":                1500.0,
+			"inventory_asset_account_code": "1200-INV-COFFEE",
+		}},
+	})
+
+	var inventoryDebit, expenseDebit, taxDebit, payableCredit float64
+	for _, line := range lines {
+		switch textValue(line["account_code"]) {
+		case "1200-INV-COFFEE":
+			inventoryDebit = numberValue(line["debit"])
+		case "5000-EXP":
+			expenseDebit = numberValue(line["debit"])
+		case "2100-TAX":
+			taxDebit = numberValue(line["debit"])
+		case "2000-AP":
+			payableCredit = numberValue(line["credit"])
+		}
+	}
+	if inventoryDebit != 1500.0 {
+		t.Fatalf("expected inventory debit 1500, got %v", inventoryDebit)
+	}
+	if expenseDebit != 0 {
+		t.Fatalf("expected no expense debit for inventory purchase, got %v", expenseDebit)
+	}
+	if taxDebit != 165.0 {
+		t.Fatalf("expected tax debit 165, got %v", taxDebit)
+	}
+	if payableCredit != 1665.0 {
+		t.Fatalf("expected payable credit 1665, got %v", payableCredit)
+	}
+}
+
+func TestVendorBillPostingLinesFromPurchaseOrderDoNotCapitalizeInventoryBeforeReceipt(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProcurementGenerationDocumentTypes(t, docs)
+	mustRegisterProcurementGenerationModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                          "COFFEE-BEAN-PO",
+		"name":                         "Coffee Bean PO",
+		"inventory_enabled":            true,
+		"inventory_asset_account_code": "1200-INV-COFFEE-PO",
+	}); err != nil {
+		t.Fatalf("create inventory item: %v", err)
+	}
+
+	service := NewProcurementCoreService(docs, nil, models, nil)
+	lines := service.vendorBillPostingLines(map[string]any{
+		"source_purchase_order_id": "doc_po_1",
+		"subtotal_amount":          1500.0,
+		"tax_amount":               165.0,
+		"total_amount":             1665.0,
+		"lines": []map[string]any{{
+			"item_code":                    "COFFEE-BEAN-PO",
+			"line_subtotal":                1500.0,
+			"inventory_asset_account_code": "1200-INV-COFFEE-PO",
+		}},
+	})
+
+	var inventoryDebit, expenseDebit float64
+	for _, line := range lines {
+		switch textValue(line["account_code"]) {
+		case "1200-INV-COFFEE-PO":
+			inventoryDebit = numberValue(line["debit"])
+		case "5000-EXP":
+			expenseDebit = numberValue(line["debit"])
+		}
+	}
+	if inventoryDebit != 0 {
+		t.Fatalf("expected no inventory capitalization before receipt, got %v", inventoryDebit)
+	}
+	if expenseDebit != 1500.0 {
+		t.Fatalf("expected expense debit 1500 before receipt, got %v", expenseDebit)
+	}
+}
+
 func mustRegisterProcurementGenerationDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{
@@ -137,6 +237,8 @@ func mustRegisterProcurementGenerationModels(t *testing.T, models *model.Service
 				{Key: "uom_code", Type: "string"},
 				{Key: "base_price", Type: "number"},
 				{Key: "tax_code", Type: "string"},
+				{Key: "inventory_enabled", Type: "bool"},
+				{Key: "inventory_asset_account_code", Type: "string"},
 			},
 		},
 	} {

@@ -50,6 +50,10 @@ type inventoryPolicy struct {
 	DefaultIssue       string
 	Name               string
 	UOMCode            string
+	ItemType           string
+	InventoryAccount   string
+	COGSAccount        string
+	WIPAccount         string
 }
 
 type inventoryBalance struct {
@@ -58,6 +62,16 @@ type inventoryBalance struct {
 	BatchCode      string
 	ExpirationDate string
 	Quantity       float64
+}
+
+type inventoryValuationSnapshot struct {
+	ID              string
+	Version         int
+	ItemCode        string
+	WarehouseCode   string
+	QuantityOnHand  float64
+	AverageUnitCost float64
+	InventoryValue  float64
 }
 
 const defaultInventoryNearExpiryDays = 30
@@ -449,16 +463,25 @@ func (s *InventoryCoreService) HandleApprovedFulfillment(record document.Record,
 	if s.hasMovementLink(record, "sales_fulfillment") {
 		return nil
 	}
-	for _, line := range recordList(record.Body.Payload["lines"]) {
-		if err := s.createMovement(record, actorID, "sales_fulfillment", line, "out"); err != nil {
+	payload := clonedPayload(record.Body.Payload)
+	lines := recordList(payload["lines"])
+	costedLines := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		costed := s.prepareMovementLineForCost(record, "sales_fulfillment", line, "out")
+		if err := s.createMovement(record, actorID, "sales_fulfillment", costed, "out"); err != nil {
 			return err
 		}
+		costedLines = append(costedLines, costed)
 	}
-	payload := clonedPayload(record.Body.Payload)
+	payload["lines"] = costedLines
 	payload["fulfillment_status"] = "issued"
-	payload["fulfilled_quantity_total"] = roundMoney(sumInventoryLineQuantity(recordList(payload["lines"]), "quantity"))
+	payload["fulfilled_quantity_total"] = roundMoney(sumInventoryLineQuantity(costedLines, "quantity"))
 	payload["reserved_quantity_total"] = 0.0
-	return s.updateDocumentPayload(record, actorID, payload)
+	payload["cost_amount_total"] = roundMoney(sumInventoryLineQuantity(costedLines, "extended_cost"))
+	if err := s.updateDocumentPayload(record, actorID, payload); err != nil {
+		return err
+	}
+	return s.createFulfillmentCostPosting(record, actorID, costedLines)
 }
 
 func (s *InventoryCoreService) validateGoodsReceiptForInventory(record document.Record) error {
@@ -581,21 +604,27 @@ func (s *InventoryCoreService) handleApprovedGoodsReceipt(receipt document.Recor
 			continue
 		}
 		lines = append(lines, map[string]any{
-			"item_code":       textValue(line["item_code"]),
-			"description":     textValue(line["description"]),
-			"warehouse_code":  textValue(line["warehouse_code"]),
-			"batch_code":      textValue(line["batch_code"]),
-			"expiration_date": textValue(line["expiration_date"]),
-			"quantity":        qty,
-			"uom_code":        firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
-			"note":            firstNonEmptyString(textValue(line["note"]), "Auto-received from procurement"),
+			"item_code":                    textValue(line["item_code"]),
+			"description":                  textValue(line["description"]),
+			"warehouse_code":               textValue(line["warehouse_code"]),
+			"batch_code":                   textValue(line["batch_code"]),
+			"expiration_date":              textValue(line["expiration_date"]),
+			"quantity":                     qty,
+			"uom_code":                     firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
+			"unit_cost":                    firstPositiveNumber(line["unit_cost"], line["unit_price"]),
+			"currency_code":                firstNonEmptyString(textValue(line["currency_code"]), textValue(receipt.Body.Payload["currency_code"]), "IDR"),
+			"inventory_asset_account_code": firstNonEmptyString(textValue(line["inventory_asset_account_code"]), policy.InventoryAccount),
+			"cogs_account_code":            firstNonEmptyString(textValue(line["cogs_account_code"]), policy.COGSAccount),
+			"wip_account_code":             firstNonEmptyString(textValue(line["wip_account_code"]), policy.WIPAccount),
+			"note":                         firstNonEmptyString(textValue(line["note"]), "Auto-received from procurement"),
 		})
 	}
 	if len(lines) == 0 || s.hasMovementLink(receipt, "goods_receipt_inventory") {
 		return nil
 	}
 	for _, line := range lines {
-		if err := s.createMovement(receipt, actorID, "goods_receipt_inventory", line, "in"); err != nil {
+		costed := s.prepareMovementLineForCost(receipt, "goods_receipt_inventory", line, "in")
+		if err := s.createMovement(receipt, actorID, "goods_receipt_inventory", costed, "in"); err != nil {
 			return err
 		}
 	}
@@ -607,7 +636,8 @@ func (s *InventoryCoreService) handleApprovedStockReceipt(record document.Record
 		return nil
 	}
 	for _, line := range recordList(record.Body.Payload["lines"]) {
-		if err := s.createMovement(record, actorID, "stock_receipt", line, "in"); err != nil {
+		costed := s.prepareMovementLineForCost(record, "stock_receipt", line, "in")
+		if err := s.createMovement(record, actorID, "stock_receipt", costed, "in"); err != nil {
 			return err
 		}
 	}
@@ -632,10 +662,18 @@ func (s *InventoryCoreService) handleApprovedStockIssue(record document.Record, 
 	if err == nil {
 		record = updated
 	}
+	costedLines := make([]map[string]any, 0, len(movementLines))
 	for _, line := range movementLines {
-		if err := s.createMovement(record, actorID, "stock_issue", line, "out"); err != nil {
+		costed := s.prepareMovementLineForCost(record, "stock_issue", line, "out")
+		if err := s.createMovement(record, actorID, "stock_issue", costed, "out"); err != nil {
 			return err
 		}
+		costedLines = append(costedLines, costed)
+	}
+	payload["lines"] = costedLines
+	payload["cost_amount_total"] = roundMoney(sumInventoryLineQuantity(costedLines, "extended_cost"))
+	if err := s.updateDocumentPayload(record, actorID, payload); err != nil {
+		return err
 	}
 	return nil
 }
@@ -651,7 +689,8 @@ func (s *InventoryCoreService) handleApprovedStockAdjustment(record document.Rec
 			line = cloneMap(line)
 			line["quantity"] = roundMoney(-numberValue(line["quantity"]))
 		}
-		if err := s.createMovement(record, actorID, "stock_adjustment", line, direction); err != nil {
+		costed := s.prepareMovementLineForCost(record, "stock_adjustment", line, direction)
+		if err := s.createMovement(record, actorID, "stock_adjustment", costed, direction); err != nil {
 			return err
 		}
 	}
@@ -665,11 +704,16 @@ func (s *InventoryCoreService) handleApprovedStockTransfer(record document.Recor
 	for _, line := range recordList(record.Body.Payload["lines"]) {
 		outLine := cloneMap(line)
 		outLine["warehouse_code"] = textValue(line["source_warehouse_code"])
+		outLine = s.prepareMovementLineForCost(record, "stock_transfer", outLine, "out")
 		if err := s.createMovement(record, actorID, "stock_transfer", outLine, "out"); err != nil {
 			return err
 		}
 		inLine := cloneMap(line)
 		inLine["warehouse_code"] = textValue(line["target_warehouse_code"])
+		inLine["unit_cost"] = numberValue(outLine["unit_cost"])
+		inLine["inventory_asset_account_code"] = textValue(outLine["inventory_asset_account_code"])
+		inLine["wip_account_code"] = textValue(outLine["wip_account_code"])
+		inLine = s.prepareMovementLineForCost(record, "stock_transfer", inLine, "in")
 		if err := s.createMovement(record, actorID, "stock_transfer", inLine, "in"); err != nil {
 			return err
 		}
@@ -684,6 +728,7 @@ func (s *InventoryCoreService) reverseMovements(source document.Record, actorID,
 		payload["movement_reason"] = reversalReason
 		payload["movement_date"] = time.Now().UTC().Format("2006-01-02")
 		payload["quantity_delta"] = roundMoney(-numberValue(payload["quantity_delta"]))
+		payload["total_cost"] = roundMoney(-numberValue(payload["total_cost"]))
 		payload["notes"] = fmt.Sprintf("Reversal of %s", firstNonEmptyString(original.Header.Number, original.Header.ID))
 		reversal, err := s.documents.Create("stock_movement", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
 		if err != nil {
@@ -702,6 +747,10 @@ func (s *InventoryCoreService) reverseMovements(source document.Record, actorID,
 			"movement_reason": reversalReason,
 			"reversal_of":     original.Header.ID,
 		}); err != nil {
+			return err
+		}
+		s.ensureBatchRecord(source.Header.OrganizationID, source.Header.LocationID, payload)
+		if err := s.recordCostImpact(reversal, actorID); err != nil {
 			return err
 		}
 	}
@@ -838,20 +887,26 @@ func (s *InventoryCoreService) createMovement(source document.Record, actorID, r
 		qty = -qty
 	}
 	payload := map[string]any{
-		"source_document_type": source.Header.Type,
-		"source_document_id":   source.Header.ID,
-		"movement_date":        time.Now().UTC().Format("2006-01-02"),
-		"movement_reason":      reason,
-		"movement_direction":   direction,
-		"item_code":            textValue(line["item_code"]),
-		"description":          textValue(line["description"]),
-		"warehouse_code":       textValue(line["warehouse_code"]),
-		"batch_code":           textValue(line["batch_code"]),
-		"expiration_date":      textValue(line["expiration_date"]),
-		"uom_code":             textValue(line["uom_code"]),
-		"quantity_delta":       qty,
-		"available_quantity":   roundMoney(numberValue(line["available_quantity"])),
-		"note":                 textValue(line["note"]),
+		"source_document_type":         source.Header.Type,
+		"source_document_id":           source.Header.ID,
+		"movement_date":                time.Now().UTC().Format("2006-01-02"),
+		"movement_reason":              reason,
+		"movement_direction":           direction,
+		"item_code":                    textValue(line["item_code"]),
+		"description":                  textValue(line["description"]),
+		"warehouse_code":               textValue(line["warehouse_code"]),
+		"batch_code":                   textValue(line["batch_code"]),
+		"expiration_date":              textValue(line["expiration_date"]),
+		"uom_code":                     textValue(line["uom_code"]),
+		"quantity_delta":               qty,
+		"available_quantity":           roundMoney(numberValue(line["available_quantity"])),
+		"note":                         textValue(line["note"]),
+		"unit_cost":                    roundMoney(numberValue(line["unit_cost"])),
+		"total_cost":                   roundMoney(numberValue(line["total_cost"])),
+		"currency_code":                firstNonEmptyString(textValue(line["currency_code"]), "IDR"),
+		"inventory_asset_account_code": textValue(line["inventory_asset_account_code"]),
+		"cogs_account_code":            textValue(line["cogs_account_code"]),
+		"wip_account_code":             textValue(line["wip_account_code"]),
 	}
 	movement, err := s.documents.Create("stock_movement", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
 	if err != nil {
@@ -871,7 +926,7 @@ func (s *InventoryCoreService) createMovement(source document.Record, actorID, r
 		return err
 	}
 	s.ensureBatchRecord(source.Header.OrganizationID, source.Header.LocationID, payload)
-	return nil
+	return s.recordCostImpact(movement, actorID)
 }
 
 func (s *InventoryCoreService) ensureBatchRecord(organizationID, locationID string, payload map[string]any) {
@@ -1012,7 +1067,13 @@ func (s *InventoryCoreService) effectiveBatchStatus(rawStatus, expirationDate st
 }
 
 func (s *InventoryCoreService) lookupItemPolicy(itemCode string) inventoryPolicy {
-	policy := inventoryPolicy{TrackingMode: "none", DefaultIssue: "manual"}
+	policy := inventoryPolicy{
+		TrackingMode:     "none",
+		DefaultIssue:     "manual",
+		InventoryAccount: "1200-INV",
+		COGSAccount:      "5000-COGS",
+		WIPAccount:       "1300-WIP",
+	}
 	if s.models == nil || strings.TrimSpace(itemCode) == "" {
 		return policy
 	}
@@ -1034,7 +1095,21 @@ func (s *InventoryCoreService) lookupItemPolicy(itemCode string) inventoryPolicy
 	policy.DefaultIssue = firstNonEmptyString(textValue(values["default_issue_strategy"]), "manual")
 	policy.Name = firstNonEmptyString(textValue(values["name"]), itemCode)
 	policy.UOMCode = textValue(values["uom_code"])
+	policy.ItemType = textValue(values["item_type"])
+	policy.InventoryAccount = firstNonEmptyString(textValue(values["inventory_asset_account_code"]), policy.InventoryAccount)
+	policy.COGSAccount = firstNonEmptyString(textValue(values["cogs_account_code"]), policy.COGSAccount)
+	policy.WIPAccount = firstNonEmptyString(textValue(values["wip_account_code"]), policy.WIPAccount)
 	return policy
+}
+
+func (s *InventoryCoreService) CurrentAverageUnitCost(organizationID, locationID, itemCode, warehouseCode string) float64 {
+	snapshot, _ := s.currentValuationSnapshot(organizationID, locationID, itemCode, warehouseCode)
+	return roundMoney(snapshot.AverageUnitCost)
+}
+
+func (s *InventoryCoreService) CostAccounts(itemCode string) (string, string, string) {
+	policy := s.lookupItemPolicy(itemCode)
+	return policy.InventoryAccount, policy.COGSAccount, policy.WIPAccount
 }
 
 func (s *InventoryCoreService) currentBalances(organizationID, locationID string) []inventoryBalance {
@@ -1428,6 +1503,248 @@ func matchesInventoryScope(record document.Record, organizationID, locationID st
 		return false
 	}
 	return true
+}
+
+func isMissingModelDefinitionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "model definition not found") || strings.Contains(message, "model not found")
+}
+
+func (s *InventoryCoreService) prepareMovementLineForCost(source document.Record, reason string, line map[string]any, direction string) map[string]any {
+	next := cloneMap(line)
+	itemCode := textValue(next["item_code"])
+	warehouseCode := textValue(next["warehouse_code"])
+	quantity := roundMoney(numberValue(next["quantity"]))
+	if quantity <= 0 {
+		return next
+	}
+	inventoryAccount, cogsAccount, wipAccount := s.CostAccounts(itemCode)
+	next["inventory_asset_account_code"] = firstNonEmptyString(textValue(next["inventory_asset_account_code"]), inventoryAccount)
+	next["cogs_account_code"] = firstNonEmptyString(textValue(next["cogs_account_code"]), cogsAccount)
+	next["wip_account_code"] = firstNonEmptyString(textValue(next["wip_account_code"]), wipAccount)
+	next["currency_code"] = firstNonEmptyString(textValue(next["currency_code"]), "IDR")
+	unitCost := roundMoney(numberValue(next["unit_cost"]))
+	if unitCost <= 0 {
+		switch direction {
+		case "out":
+			unitCost = s.CurrentAverageUnitCost(source.Header.OrganizationID, source.Header.LocationID, itemCode, warehouseCode)
+		default:
+			unitCost = firstPositiveNumber(
+				next["received_unit_cost"],
+				next["receipt_unit_cost"],
+				next["unit_price"],
+				next["base_unit_cost"],
+				next["average_unit_cost"],
+			)
+		}
+	}
+	next["unit_cost"] = roundMoney(unitCost)
+	totalCost := roundMoney(numberValue(next["total_cost"]))
+	if totalCost == 0 && unitCost != 0 {
+		totalCost = roundMoney(quantity * unitCost)
+	}
+	next["extended_cost"] = roundMoney(maxFloat(totalCost, 0))
+	if direction == "out" {
+		next["total_cost"] = roundMoney(-maxFloat(totalCost, 0))
+	} else {
+		next["total_cost"] = roundMoney(maxFloat(totalCost, 0))
+	}
+	return next
+}
+
+func (s *InventoryCoreService) recordCostImpact(movement document.Record, actorID string) error {
+	if s.models == nil {
+		return nil
+	}
+	payload := movement.Body.Payload
+	itemCode := textValue(payload["item_code"])
+	warehouseCode := textValue(payload["warehouse_code"])
+	qtyDelta := roundMoney(numberValue(payload["quantity_delta"]))
+	totalCost := roundMoney(numberValue(payload["total_cost"]))
+	unitCost := roundMoney(numberValue(payload["unit_cost"]))
+	if itemCode == "" || warehouseCode == "" {
+		return nil
+	}
+	if err := s.recordCostLayer(movement, actorID, itemCode, warehouseCode, qtyDelta, unitCost, totalCost); err != nil {
+		return err
+	}
+	return s.applyValuationDelta(actorID, movement.Header.OrganizationID, movement.Header.LocationID, itemCode, warehouseCode, qtyDelta, totalCost)
+}
+
+func (s *InventoryCoreService) recordCostLayer(movement document.Record, actorID, itemCode, warehouseCode string, qtyDelta, unitCost, totalCost float64) error {
+	if s.models == nil {
+		return nil
+	}
+	_, err := s.models.Create("inventory_cost_layer", actorID, map[string]any{
+		"organization_id":      movement.Header.OrganizationID,
+		"location_id":          movement.Header.LocationID,
+		"item_code":            itemCode,
+		"warehouse_code":       warehouseCode,
+		"batch_code":           textValue(movement.Body.Payload["batch_code"]),
+		"source_document_type": textValue(movement.Body.Payload["source_document_type"]),
+		"source_document_id":   textValue(movement.Body.Payload["source_document_id"]),
+		"movement_document_id": movement.Header.ID,
+		"event_type":           textValue(movement.Body.Payload["movement_reason"]),
+		"quantity_delta":       qtyDelta,
+		"unit_cost":            unitCost,
+		"total_cost":           totalCost,
+		"currency_code":        firstNonEmptyString(textValue(movement.Body.Payload["currency_code"]), "IDR"),
+		"valuation_method":     "weighted_average",
+		"effective_at":         time.Now().UTC().Format(time.RFC3339),
+		"status":               "posted",
+	})
+	if err != nil && !isMissingModelDefinitionError(err) {
+		return err
+	}
+	return nil
+}
+
+func (s *InventoryCoreService) currentValuationSnapshot(organizationID, locationID, itemCode, warehouseCode string) (inventoryValuationSnapshot, bool) {
+	if s.models == nil || itemCode == "" || warehouseCode == "" {
+		return inventoryValuationSnapshot{}, false
+	}
+	filters := map[string]string{"item_code": itemCode, "warehouse_code": warehouseCode}
+	if strings.TrimSpace(organizationID) != "" {
+		filters["organization_id"] = organizationID
+	}
+	if strings.TrimSpace(locationID) != "" {
+		filters["location_id"] = locationID
+	}
+	items, _, err := s.models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  filters,
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil || len(items) == 0 {
+		return inventoryValuationSnapshot{}, false
+	}
+	return inventoryValuationSnapshot{
+		ID:              items[0].ID,
+		Version:         items[0].Version,
+		ItemCode:        textValue(items[0].Values["item_code"]),
+		WarehouseCode:   textValue(items[0].Values["warehouse_code"]),
+		QuantityOnHand:  roundMoney(numberValue(items[0].Values["quantity_on_hand"])),
+		AverageUnitCost: roundMoney(numberValue(items[0].Values["average_unit_cost"])),
+		InventoryValue:  roundMoney(numberValue(items[0].Values["inventory_value"])),
+	}, true
+}
+
+func (s *InventoryCoreService) applyValuationDelta(actorID, organizationID, locationID, itemCode, warehouseCode string, qtyDelta, totalCost float64) error {
+	snapshot, ok := s.currentValuationSnapshot(organizationID, locationID, itemCode, warehouseCode)
+	quantityOnHand := roundMoney(snapshot.QuantityOnHand + qtyDelta)
+	inventoryValue := roundMoney(snapshot.InventoryValue + totalCost)
+	if roundMoney(quantityOnHand) == 0 {
+		quantityOnHand = 0
+		inventoryValue = 0
+	}
+	averageUnitCost := 0.0
+	if quantityOnHand != 0 {
+		averageUnitCost = roundMoney(inventoryValue / quantityOnHand)
+	}
+	values := map[string]any{
+		"organization_id":    organizationID,
+		"location_id":        locationID,
+		"item_code":          itemCode,
+		"warehouse_code":     warehouseCode,
+		"quantity_on_hand":   quantityOnHand,
+		"average_unit_cost":  averageUnitCost,
+		"inventory_value":    inventoryValue,
+		"valuation_method":   "weighted_average",
+		"last_calculated_at": time.Now().UTC().Format(time.RFC3339),
+	}
+	if !ok {
+		_, err := s.models.Create("inventory_valuation_snapshot", actorID, values)
+		if err != nil && !isMissingModelDefinitionError(err) {
+			return err
+		}
+		return nil
+	}
+	_, err := s.models.Update("inventory_valuation_snapshot", snapshot.ID, actorID, values, snapshot.Version)
+	if err != nil && !isMissingModelDefinitionError(err) {
+		return err
+	}
+	return nil
+}
+
+func (s *InventoryCoreService) createFulfillmentCostPosting(record document.Record, actorID string, lines []map[string]any) error {
+	if s.hasPostingLink(record, "fulfillment_issue_cogs") {
+		return nil
+	}
+	creditByAccount := map[string]float64{}
+	debitByAccount := map[string]float64{}
+	totalCost := 0.0
+	for _, line := range lines {
+		extendedCost := roundMoney(numberValue(line["extended_cost"]))
+		if extendedCost <= 0 {
+			continue
+		}
+		totalCost = roundMoney(totalCost + extendedCost)
+		debitByAccount[firstNonEmptyString(textValue(line["cogs_account_code"]), "5000-COGS")] = roundMoney(debitByAccount[firstNonEmptyString(textValue(line["cogs_account_code"]), "5000-COGS")] + extendedCost)
+		creditByAccount[firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV")] = roundMoney(creditByAccount[firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV")] + extendedCost)
+	}
+	if totalCost <= 0 {
+		return nil
+	}
+	journalLines := make([]map[string]any, 0, len(debitByAccount)+len(creditByAccount))
+	for account, amount := range debitByAccount {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "COGS", "debit": amount, "credit": 0.0})
+	}
+	for account, amount := range creditByAccount {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory", "debit": 0.0, "credit": amount})
+	}
+	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, map[string]any{
+		"source_document_type": record.Header.Type,
+		"source_document_id":   record.Header.ID,
+		"posting_date":         time.Now().UTC().Format("2006-01-02"),
+		"currency_code":        "IDR",
+		"posting_rule_key":     "fulfillment_issue_cogs_default",
+		"total_amount":         totalCost,
+		"journal_lines":        journalLines,
+		"notes":                fmt.Sprintf("Auto-posted COGS from fulfillment %s", firstNonEmptyString(record.Header.Number, record.Header.ID)),
+	})
+	if err != nil {
+		return err
+	}
+	if err := s.finalizeSystemPosting(posting, actorID, "posted"); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(posting.Header.ID, record.Header.ID, "posting_for", map[string]any{"posting_reason": "fulfillment_issue_cogs"}); err != nil {
+		return err
+	}
+	_, err = s.documents.AddLink(record.Header.ID, posting.Header.ID, "posting_for", map[string]any{"posting_reason": "fulfillment_issue_cogs"})
+	return err
+}
+
+func (s *InventoryCoreService) hasPostingLink(record document.Record, reason string) bool {
+	for _, link := range record.Links {
+		if link.LinkType != "posting_for" {
+			continue
+		}
+		if textValue(link.Metadata["posting_reason"]) == reason {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *InventoryCoreService) finalizeSystemPosting(record document.Record, actorID, status string) error {
+	record.Header.Status = status
+	record.Header.Version++
+	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
+	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedAt = time.Now().UTC()
+	record.Header.TotalAmount = shared.Money{
+		Currency:    firstNonEmptyString(textValue(record.Body.Payload["currency_code"]), record.Header.TotalAmount.Currency, "IDR"),
+		AmountMinor: moneyMinor(numberValue(record.Body.Payload["total_amount"])),
+	}
+	if err := s.documents.Save(record); err != nil {
+		return err
+	}
+	s.refreshDocuments(record)
+	return nil
 }
 
 func boolValue(value any) bool {

@@ -304,14 +304,24 @@ func (s *ProductionCoreService) HandleApprovedDocument(record document.Record, a
 }
 
 func (s *ProductionCoreService) HandleCanceledDocument(record document.Record, actorID string) error {
+	current, err := s.documents.Get(record.Header.ID)
+	if err == nil {
+		record = current
+	}
 	switch record.Header.Type {
 	case "production_issue":
 		if err := s.inventory.reverseMovements(record, actorID, "production_issue", "production_issue_reversal"); err != nil {
 			return err
 		}
+		if err := s.createReversalPosting(record, actorID, "production_issue_wip", "production_issue_wip_reversal", "production_issue_wip_reversal_default"); err != nil {
+			return err
+		}
 		return s.refreshLinkedProductionOrder(record, actorID)
 	case "production_output":
 		if err := s.inventory.reverseMovements(record, actorID, "production_output", "production_output_reversal"); err != nil {
+			return err
+		}
+		if err := s.createReversalPosting(record, actorID, "production_output_wip_clear", "production_output_wip_clear_reversal", "production_output_wip_clear_reversal_default"); err != nil {
 			return err
 		}
 		return s.refreshLinkedProductionOrder(record, actorID)
@@ -411,20 +421,25 @@ func (s *ProductionCoreService) handleApprovedProductionIssue(record document.Re
 		return err
 	}
 	payload := clonedPayload(record.Body.Payload)
-	payload["lines"] = movementLines
-	payload["total_quantity"] = roundMoney(sumInventoryLineQuantity(movementLines, "quantity"))
-	payload["issued_quantity_total"] = roundMoney(sumInventoryLineQuantity(movementLines, "quantity"))
+	costedLines := make([]map[string]any, 0, len(movementLines))
+	issueCostTotal := 0.0
+	for _, line := range movementLines {
+		costed := s.inventory.prepareMovementLineForCost(record, "production_issue", line, "out")
+		if err := s.inventory.createMovement(record, actorID, "production_issue", costed, "out"); err != nil {
+			return err
+		}
+		costedLines = append(costedLines, costed)
+		issueCostTotal = roundMoney(issueCostTotal + numberValue(costed["extended_cost"]))
+	}
+	payload["lines"] = costedLines
+	payload["total_quantity"] = roundMoney(sumInventoryLineQuantity(costedLines, "quantity"))
+	payload["issued_quantity_total"] = roundMoney(sumInventoryLineQuantity(costedLines, "quantity"))
+	payload["issued_material_cost_total"] = issueCostTotal
 	if err := s.updateDocumentPayload(record, actorID, payload); err != nil {
 		return err
 	}
-	updated, err := s.documents.Get(record.Header.ID)
-	if err == nil {
-		record = updated
-	}
-	for _, line := range movementLines {
-		if err := s.inventory.createMovement(record, actorID, "production_issue", line, "out"); err != nil {
-			return err
-		}
+	if err := s.createProductionIssueCostPosting(record, actorID, costedLines); err != nil {
+		return err
 	}
 	return s.refreshLinkedProductionOrder(record, actorID)
 }
@@ -444,13 +459,28 @@ func (s *ProductionCoreService) handleApprovedProductionOutput(record document.R
 		"uom_code":        textValue(payload["uom_code"]),
 		"note":            firstNonEmptyString(textValue(payload["notes"]), textValue(payload["production_lot_code"])),
 	}
+	totalProductionCost := s.productionOutputTotalCost(payload)
+	outputQty := roundMoney(numberValue(payload["output_quantity"]))
+	if outputQty > 0 && totalProductionCost > 0 {
+		line["unit_cost"] = roundMoney(totalProductionCost / outputQty)
+		line["total_cost"] = totalProductionCost
+	}
 	if strings.EqualFold(itemPolicy.TrackingMode, "batch") {
 		line["batch_code"] = textValue(payload["production_lot_code"])
 	}
 	if err := s.inventory.validateInventoryLine(line, true); err != nil {
 		return err
 	}
+	line = s.inventory.prepareMovementLineForCost(record, "production_output", line, "in")
 	if err := s.inventory.createMovement(record, actorID, "production_output", line, "in"); err != nil {
+		return err
+	}
+	payload["output_unit_cost"] = roundMoney(numberValue(line["unit_cost"]))
+	payload["total_production_cost"] = totalProductionCost
+	if err := s.updateDocumentPayload(record, actorID, payload); err != nil {
+		return err
+	}
+	if err := s.createProductionOutputCostPosting(record, actorID, payload, line); err != nil {
 		return err
 	}
 	return s.refreshLinkedProductionOrder(record, actorID)
@@ -753,6 +783,7 @@ func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Rec
 	issueQty := 0.0
 	outputQty := 0.0
 	wasteQty := 0.0
+	issuedMaterialCostTotal := 0.0
 	for _, item := range s.documents.List() {
 		if item.Header.Status == "cancelled" || item.Header.Status == "rejected" {
 			continue
@@ -770,6 +801,7 @@ func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Rec
 		switch item.Header.Type {
 		case "production_issue":
 			issueQty = roundMoney(issueQty + sumInventoryLineQuantity(recordList(item.Body.Payload["lines"]), "quantity"))
+			issuedMaterialCostTotal = roundMoney(issuedMaterialCostTotal + numberValue(item.Body.Payload["issued_material_cost_total"]))
 		case "production_output":
 			outputQty = roundMoney(outputQty + numberValue(item.Body.Payload["output_quantity"]))
 			wasteQty = roundMoney(wasteQty + numberValue(item.Body.Payload["waste_quantity"]))
@@ -784,6 +816,7 @@ func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Rec
 	payload["lines"] = lines
 	payload["actual_output_quantity"] = outputQty
 	payload["waste_quantity"] = wasteQty
+	payload["issued_material_cost_total"] = issuedMaterialCostTotal
 	switch {
 	case outputQty > 0:
 		stages = completeRemainingStages(stages)
@@ -848,6 +881,158 @@ func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Rec
 		order = updated
 	}
 	return s.refreshDocuments(record, order)
+}
+
+func (s *ProductionCoreService) productionOutputTotalCost(payload map[string]any) float64 {
+	if total := roundMoney(numberValue(payload["total_production_cost"])); total > 0 {
+		return total
+	}
+	sourceOrderID := textValue(payload["source_production_order_id"])
+	if sourceOrderID == "" {
+		return 0
+	}
+	order, err := s.documents.Get(sourceOrderID)
+	if err != nil {
+		return 0
+	}
+	return roundMoney(numberValue(order.Body.Payload["issued_material_cost_total"]))
+}
+
+func (s *ProductionCoreService) createProductionIssueCostPosting(record document.Record, actorID string, lines []map[string]any) error {
+	if s.hasPostingLink(record, "production_issue_wip") {
+		return nil
+	}
+	debitByAccount := map[string]float64{}
+	creditByAccount := map[string]float64{}
+	totalCost := 0.0
+	for _, line := range lines {
+		extendedCost := roundMoney(numberValue(line["extended_cost"]))
+		if extendedCost <= 0 {
+			continue
+		}
+		totalCost = roundMoney(totalCost + extendedCost)
+		debitByAccount[firstNonEmptyString(textValue(line["wip_account_code"]), "1300-WIP")] = roundMoney(debitByAccount[firstNonEmptyString(textValue(line["wip_account_code"]), "1300-WIP")] + extendedCost)
+		creditByAccount[firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV")] = roundMoney(creditByAccount[firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV")] + extendedCost)
+	}
+	if totalCost <= 0 {
+		return nil
+	}
+	return s.createProductionPosting(record, actorID, "production_issue_wip_default", "production_issue_wip", totalCost, debitByAccount, creditByAccount, "Auto-posted WIP from production issue")
+}
+
+func (s *ProductionCoreService) createProductionOutputCostPosting(record document.Record, actorID string, payload map[string]any, line map[string]any) error {
+	if s.hasPostingLink(record, "production_output_wip_clear") {
+		return nil
+	}
+	totalCost := roundMoney(numberValue(payload["total_production_cost"]))
+	if totalCost <= 0 {
+		return nil
+	}
+	debitByAccount := map[string]float64{
+		firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV"): totalCost,
+	}
+	creditByAccount := map[string]float64{
+		firstNonEmptyString(textValue(line["wip_account_code"]), "1300-WIP"): totalCost,
+	}
+	return s.createProductionPosting(record, actorID, "production_output_wip_clear_default", "production_output_wip_clear", totalCost, debitByAccount, creditByAccount, "Auto-posted finished goods from production output")
+}
+
+func (s *ProductionCoreService) createProductionPosting(record document.Record, actorID, postingRuleKey, postingReason string, totalCost float64, debitByAccount, creditByAccount map[string]float64, notePrefix string) error {
+	journalLines := make([]map[string]any, 0, len(debitByAccount)+len(creditByAccount))
+	for account, amount := range debitByAccount {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory / WIP", "debit": amount, "credit": 0.0})
+	}
+	for account, amount := range creditByAccount {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory / WIP", "debit": 0.0, "credit": amount})
+	}
+	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, map[string]any{
+		"source_document_type": record.Header.Type,
+		"source_document_id":   record.Header.ID,
+		"posting_date":         time.Now().UTC().Format("2006-01-02"),
+		"currency_code":        "IDR",
+		"posting_rule_key":     postingRuleKey,
+		"total_amount":         totalCost,
+		"journal_lines":        journalLines,
+		"notes":                fmt.Sprintf("%s %s", notePrefix, firstNonEmptyString(record.Header.Number, record.Header.ID)),
+	})
+	if err != nil {
+		return err
+	}
+	if err := s.finalizeSystemPosting(posting, actorID, "posted"); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(posting.Header.ID, record.Header.ID, "posting_for", map[string]any{"posting_reason": postingReason}); err != nil {
+		return err
+	}
+	_, err = s.documents.AddLink(record.Header.ID, posting.Header.ID, "posting_for", map[string]any{"posting_reason": postingReason})
+	return err
+}
+
+func (s *ProductionCoreService) hasPostingLink(record document.Record, reason string) bool {
+	for _, link := range record.Links {
+		if link.LinkType != "posting_for" {
+			continue
+		}
+		if textValue(link.Metadata["posting_reason"]) == reason {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ProductionCoreService) createReversalPosting(source document.Record, actorID, originalReason, reversalReason, postingRuleKey string) error {
+	originalPosting, ok := s.findPostingForReason(source, originalReason)
+	if !ok {
+		return nil
+	}
+	if s.hasPostingLink(source, reversalReason) {
+		return nil
+	}
+	lines := reverseJournalLines(recordList(originalPosting.Body.Payload["journal_lines"]))
+	payload := clonedPayload(originalPosting.Body.Payload)
+	payload["source_document_type"] = source.Header.Type
+	payload["source_document_id"] = source.Header.ID
+	payload["posting_date"] = time.Now().UTC().Format("2006-01-02")
+	payload["posting_rule_key"] = postingRuleKey
+	payload["journal_lines"] = lines
+	payload["notes"] = fmt.Sprintf("Reversal of %s", firstNonEmptyString(originalPosting.Header.Number, originalPosting.Header.ID))
+	payload["total_amount"] = roundMoney(numberValue(originalPosting.Body.Payload["total_amount"]))
+	reversal, err := s.documents.Create("ledger_posting", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
+	if err != nil {
+		return err
+	}
+	if err := s.finalizeSystemPosting(reversal, actorID, "posted"); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(reversal.Header.ID, source.Header.ID, "posting_for", map[string]any{
+		"posting_reason": reversalReason,
+		"reversal_of":    originalPosting.Header.ID,
+	}); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(source.Header.ID, reversal.Header.ID, "posting_for", map[string]any{
+		"posting_reason": reversalReason,
+		"reversal_of":    originalPosting.Header.ID,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ProductionCoreService) findPostingForReason(record document.Record, reason string) (document.Record, bool) {
+	for _, link := range record.Links {
+		if link.LinkType != "posting_for" {
+			continue
+		}
+		if textValue(link.Metadata["posting_reason"]) != reason {
+			continue
+		}
+		posting, err := s.documents.Get(link.LinkedDocumentID)
+		if err == nil && posting.Header.Type == "ledger_posting" {
+			return posting, true
+		}
+	}
+	return document.Record{}, false
 }
 
 func (s *ProductionCoreService) applyProductionReservations(record document.Record, actorID string) error {
@@ -1031,6 +1216,19 @@ func (s *ProductionCoreService) updateDocumentPayload(record document.Record, ac
 	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
 	record.Header.UpdatedBy = actorID
 	record.Header.UpdatedAt = time.Now().UTC()
+	return s.documents.Save(record)
+}
+
+func (s *ProductionCoreService) finalizeSystemPosting(record document.Record, actorID, status string) error {
+	record.Header.Status = status
+	record.Header.Version++
+	record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
+	record.Header.UpdatedBy = actorID
+	record.Header.UpdatedAt = time.Now().UTC()
+	record.Header.TotalAmount = shared.Money{
+		Currency:    firstNonEmptyString(textValue(record.Body.Payload["currency_code"]), record.Header.TotalAmount.Currency, "IDR"),
+		AmountMinor: moneyMinor(numberValue(record.Body.Payload["total_amount"])),
+	}
 	return s.documents.Save(record)
 }
 

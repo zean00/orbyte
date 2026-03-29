@@ -1095,19 +1095,37 @@ func (s *ProcurementCoreService) bumpOrderBilledQuantities(orderID string, billL
 }
 
 func (s *ProcurementCoreService) vendorBillPostingLines(payload map[string]any) []map[string]any {
-	subtotal := roundMoney(numberValue(payload["subtotal_amount"]))
 	taxAmount := roundMoney(numberValue(payload["tax_amount"]))
 	totalAmount := roundMoney(numberValue(payload["total_amount"]))
 	postingConfig := s.postingConfig()
 	payableAccount := firstNonEmptyString(textValue(payload["payable_account_code"]), postingConfig["vendor_bill_payable_account_code"], "2000-AP")
 	expenseAccount := firstNonEmptyString(s.resolveExpenseAccount(payload), postingConfig["vendor_bill_expense_account_code"], "5000-EXP")
+	inventoryAccountDefault := firstNonEmptyString(postingConfig["vendor_bill_inventory_account_code"], "1200-INV")
 	taxAccount := firstNonEmptyString(s.resolveTaxAccount(payload), postingConfig["vendor_bill_tax_account_code"], "2100-TAX")
-	lines := []map[string]any{{
-		"account_code": expenseAccount,
-		"description":  "Expense",
-		"debit":        subtotal,
-		"credit":       0.0,
-	}}
+	debitByAccount := map[string]float64{}
+	for _, line := range recordList(payload["lines"]) {
+		lineSubtotal := roundMoney(numberValue(line["line_subtotal"]))
+		if lineSubtotal <= 0 {
+			continue
+		}
+		accountCode := expenseAccount
+		if s.shouldCapitalizeVendorBillLine(payload, line) {
+			accountCode = firstNonEmptyString(textValue(line["inventory_asset_account_code"]), inventoryAccountDefault)
+		}
+		debitByAccount[accountCode] = roundMoney(debitByAccount[accountCode] + lineSubtotal)
+	}
+	if len(debitByAccount) == 0 {
+		debitByAccount[expenseAccount] = roundMoney(numberValue(payload["subtotal_amount"]))
+	}
+	lines := make([]map[string]any, 0, len(debitByAccount)+2)
+	for accountCode, amount := range debitByAccount {
+		lines = append(lines, map[string]any{
+			"account_code": accountCode,
+			"description":  "Expense / Inventory",
+			"debit":        amount,
+			"credit":       0.0,
+		})
+	}
 	if taxAmount > 0 {
 		lines = append(lines, map[string]any{
 			"account_code": taxAccount,
@@ -1123,6 +1141,13 @@ func (s *ProcurementCoreService) vendorBillPostingLines(payload map[string]any) 
 		"credit":       totalAmount,
 	})
 	return lines
+}
+
+func (s *ProcurementCoreService) shouldCapitalizeVendorBillLine(payload map[string]any, line map[string]any) bool {
+	if !s.isInventoryPurchaseLine(line) {
+		return false
+	}
+	return strings.TrimSpace(textValue(payload["source_goods_receipt_id"])) != ""
 }
 
 func (s *ProcurementCoreService) paymentOutPostingLines(payload map[string]any) []map[string]any {
@@ -1152,6 +1177,7 @@ func (s *ProcurementCoreService) postingConfig() map[string]string {
 	defaults := map[string]string{
 		"vendor_bill_payable_account_code":    "2000-AP",
 		"vendor_bill_expense_account_code":    "5000-EXP",
+		"vendor_bill_inventory_account_code":  "1200-INV",
 		"vendor_bill_tax_account_code":        "2100-TAX",
 		"payment_out_clearing_account_code":   "1000-CASH",
 		"payment_out_payable_account_code":    "2000-AP",
@@ -1173,6 +1199,22 @@ func (s *ProcurementCoreService) postingConfig() map[string]string {
 		}
 	}
 	return defaults
+}
+
+func (s *ProcurementCoreService) isInventoryPurchaseLine(line map[string]any) bool {
+	itemCode := textValue(line["item_code"])
+	if itemCode == "" || s.models == nil {
+		return false
+	}
+	items, _, err := s.models.List("commercial_item", model.Query{
+		Filters:  map[string]string{"sku": itemCode},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil || len(items) == 0 {
+		return false
+	}
+	return boolValue(items[0].Values["inventory_enabled"])
 }
 
 func (s *ProcurementCoreService) normalizeProcurementLines(payload map[string]any) map[string]any {
@@ -1227,6 +1269,9 @@ func (s *ProcurementCoreService) normalizeProcurementLines(payload map[string]an
 		}
 		if textValue(normalized["expense_account_code"]) == "" {
 			normalized["expense_account_code"] = firstNonEmptyString(textValue(next["expense_account_code"]), s.lookupVendorValue(textValue(next["vendor_id"]), "expense_account_code"))
+		}
+		if textValue(normalized["inventory_asset_account_code"]) == "" {
+			normalized["inventory_asset_account_code"] = s.lookupAccountCode("commercial_item", "sku", itemCode, "inventory_asset_account_code")
 		}
 		taxMode := strings.ToLower(s.lookupAccountCode("commercial_tax_code", "code", textValue(normalized["tax_code"]), "mode"))
 		if taxMode == "" {

@@ -186,19 +186,19 @@ func TestProductionIssueAndOutputRefreshLinkedOrderReservations(t *testing.T) {
 	mustRegisterProductionTestModels(t, models)
 
 	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
-		"sku":                    "SOUP",
-		"name":                   "Soup",
-		"uom_code":               "EA",
-		"inventory_enabled":      true,
+		"sku":                     "SOUP",
+		"name":                    "Soup",
+		"uom_code":                "EA",
+		"inventory_enabled":       true,
 		"inventory_tracking_mode": "quantity",
 	}); err != nil {
 		t.Fatalf("create finished item: %v", err)
 	}
 	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
-		"sku":                    "BROTH",
-		"name":                   "Broth",
-		"uom_code":               "EA",
-		"inventory_enabled":      true,
+		"sku":                     "BROTH",
+		"name":                    "Broth",
+		"uom_code":                "EA",
+		"inventory_enabled":       true,
 		"inventory_tracking_mode": "quantity",
 	}); err != nil {
 		t.Fatalf("create broth item: %v", err)
@@ -694,14 +694,336 @@ func TestProductionIssueAllowsApprovedSubstitute(t *testing.T) {
 	}
 }
 
+func TestProductionIssueAndOutputCreateCostPostingsAndFinishedCost(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProductionTestDocumentTypes(t, docs)
+	mustRegisterProductionTestModels(t, models)
+
+	for _, item := range []map[string]any{
+		{
+			"sku":                          "BURGER-COST",
+			"name":                         "Burger Costed",
+			"uom_code":                     "EA",
+			"inventory_enabled":            true,
+			"inventory_asset_account_code": "1200-FG",
+			"wip_account_code":             "1300-WIP",
+		},
+		{
+			"sku":                          "BUN-COST",
+			"name":                         "Bun Costed",
+			"uom_code":                     "EA",
+			"inventory_enabled":            true,
+			"inventory_asset_account_code": "1200-RM",
+			"wip_account_code":             "1300-WIP",
+		},
+		{
+			"sku":                          "PATTY-COST",
+			"name":                         "Patty Costed",
+			"uom_code":                     "EA",
+			"inventory_enabled":            true,
+			"inventory_asset_account_code": "1200-RM",
+			"wip_account_code":             "1300-WIP",
+		},
+	} {
+		if _, err := models.Create("commercial_item", "user_admin", item); err != nil {
+			t.Fatalf("create item %s: %v", item["sku"], err)
+		}
+	}
+	now := time.Now().UTC().Format("2006-01-02")
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{
+		"item_code":          "BUN-COST",
+		"warehouse_code":     "MAIN",
+		"quantity_delta":     10.0,
+		"movement_reason":    "seed",
+		"movement_date":      now,
+		"movement_direction": "in",
+		"unit_cost":          5.0,
+		"total_cost":         50.0,
+	})
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{
+		"item_code":          "PATTY-COST",
+		"warehouse_code":     "MAIN",
+		"quantity_delta":     10.0,
+		"movement_reason":    "seed",
+		"movement_date":      now,
+		"movement_direction": "in",
+		"unit_cost":          15.0,
+		"total_cost":         150.0,
+	})
+	for _, snapshot := range []map[string]any{
+		{"organization_id": "org_default", "location_id": "loc_main", "item_code": "BUN-COST", "warehouse_code": "MAIN", "quantity_on_hand": 10.0, "average_unit_cost": 5.0, "inventory_value": 50.0},
+		{"organization_id": "org_default", "location_id": "loc_main", "item_code": "PATTY-COST", "warehouse_code": "MAIN", "quantity_on_hand": 10.0, "average_unit_cost": 15.0, "inventory_value": 150.0},
+	} {
+		if _, err := models.Create("inventory_valuation_snapshot", "user_admin", snapshot); err != nil {
+			t.Fatalf("create valuation snapshot: %v", err)
+		}
+	}
+
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	service := NewProductionCoreService(docs, models, nil, inventorySvc)
+	order, err := docs.Create("production_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"finished_item_code":       "BURGER-COST",
+		"warehouse_code":           "MAIN",
+		"planned_quantity":         2.0,
+		"expected_output_quantity": 2.0,
+		"lines": []map[string]any{
+			{"component_item_code": "BUN-COST", "actual_item_code": "BUN-COST", "warehouse_code": "MAIN", "uom_code": "EA", "quantity_per_unit": 1.0, "quantity": 2.0},
+			{"component_item_code": "PATTY-COST", "actual_item_code": "PATTY-COST", "warehouse_code": "MAIN", "uom_code": "EA", "quantity_per_unit": 1.0, "quantity": 2.0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create production order: %v", err)
+	}
+	order.Body.Payload = service.NormalizePayload("production_order", order.Body.Payload)
+	order.Header.Status = "approved"
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save production order: %v", err)
+	}
+	if err := service.HandleApprovedDocument(order, "user_admin"); err != nil {
+		t.Fatalf("approve production order: %v", err)
+	}
+
+	issue, err := service.CreateProductionIssueFromOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create production issue: %v", err)
+	}
+	issue.Header.Status = "issued"
+	if err := docs.Save(issue); err != nil {
+		t.Fatalf("save production issue: %v", err)
+	}
+	if err := service.HandleApprovedDocument(issue, "user_admin"); err != nil {
+		t.Fatalf("handle production issue: %v", err)
+	}
+
+	issued, err := docs.Get(issue.Header.ID)
+	if err != nil {
+		t.Fatalf("reload production issue: %v", err)
+	}
+	if got := numberValue(issued.Body.Payload["issued_material_cost_total"]); got != 40.0 {
+		t.Fatalf("expected issued material cost 40, got %v", got)
+	}
+	issueLines := recordList(issued.Body.Payload["lines"])
+	if got := numberValue(issueLines[0]["total_cost"]); got != -10.0 {
+		t.Fatalf("expected first issue line total cost -10, got %v", got)
+	}
+	if got := numberValue(issueLines[1]["total_cost"]); got != -30.0 {
+		t.Fatalf("expected second issue line total cost -30, got %v", got)
+	}
+
+	output, err := service.CreateProductionOutputFromOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create production output: %v", err)
+	}
+	output.Body.Payload["output_quantity"] = 2.0
+	output.Body.Payload["production_lot_code"] = "LOT-COST-1"
+	output.Body.Payload["stages"] = []map[string]any{}
+	output.Body.Payload = service.NormalizePayload("production_output", output.Body.Payload)
+	output.Header.Status = "posted"
+	if err := docs.Save(output); err != nil {
+		t.Fatalf("save production output: %v", err)
+	}
+	if err := service.HandleApprovedDocument(output, "user_admin"); err != nil {
+		t.Fatalf("handle production output: %v", err)
+	}
+
+	postedOutput, err := docs.Get(output.Header.ID)
+	if err != nil {
+		t.Fatalf("reload production output: %v", err)
+	}
+	if got := numberValue(postedOutput.Body.Payload["total_production_cost"]); got != 40.0 {
+		t.Fatalf("expected total production cost 40, got %v", got)
+	}
+	if got := numberValue(postedOutput.Body.Payload["output_unit_cost"]); got != 20.0 {
+		t.Fatalf("expected output unit cost 20, got %v", got)
+	}
+
+	snapshotItems, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"organization_id": "org_default", "location_id": "loc_main", "item_code": "BURGER-COST", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list finished valuation snapshot: %v", err)
+	}
+	if len(snapshotItems) != 1 {
+		t.Fatalf("expected finished good valuation snapshot")
+	}
+	if got := numberValue(snapshotItems[0].Values["average_unit_cost"]); got != 20.0 {
+		t.Fatalf("expected finished average cost 20, got %v", got)
+	}
+	if got := numberValue(snapshotItems[0].Values["inventory_value"]); got != 40.0 {
+		t.Fatalf("expected finished inventory value 40, got %v", got)
+	}
+	rawSnapshotItems, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"organization_id": "org_default", "location_id": "loc_main", "item_code": "BUN-COST", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list raw-material valuation snapshot: %v", err)
+	}
+	if len(rawSnapshotItems) != 1 {
+		t.Fatalf("expected raw-material valuation snapshot")
+	}
+	if got := numberValue(rawSnapshotItems[0].Values["quantity_on_hand"]); got != 8.0 {
+		t.Fatalf("expected bun quantity on hand 8, got %v", got)
+	}
+	if got := numberValue(rawSnapshotItems[0].Values["inventory_value"]); got != 40.0 {
+		t.Fatalf("expected bun inventory value 40, got %v", got)
+	}
+
+	foundIssuePosting := false
+	foundOutputInventoryPosting := false
+	foundOutputWIPClear := false
+	for _, item := range docs.List() {
+		if item.Header.Type != "ledger_posting" {
+			continue
+		}
+		lines := recordList(item.Body.Payload["journal_lines"])
+		for _, line := range lines {
+			account := textValue(line["account_code"])
+			debit := numberValue(line["debit"])
+			credit := numberValue(line["credit"])
+			if account == "1300-WIP" && debit == 40.0 {
+				foundIssuePosting = true
+			}
+			if account == "1200-FG" && debit == 40.0 {
+				foundOutputInventoryPosting = true
+			}
+			if account == "1300-WIP" && credit == 40.0 {
+				foundOutputWIPClear = true
+			}
+		}
+	}
+	if !foundIssuePosting {
+		t.Fatalf("expected production issue WIP posting")
+	}
+	if !foundOutputInventoryPosting || !foundOutputWIPClear {
+		t.Fatalf("expected production output finished-goods posting")
+	}
+}
+
+func TestCancelProductionDocumentsReverseCostPostings(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProductionTestDocumentTypes(t, docs)
+	mustRegisterProductionTestModels(t, models)
+
+	for _, item := range []map[string]any{
+		{"sku": "BUN-CANCEL", "name": "Bun Cancel", "inventory_enabled": true, "inventory_tracking_mode": "quantity", "uom_code": "EA", "inventory_asset_account_code": "1200-RM-CANCEL", "wip_account_code": "1300-WIP-CANCEL"},
+		{"sku": "PATTY-CANCEL", "name": "Patty Cancel", "inventory_enabled": true, "inventory_tracking_mode": "quantity", "uom_code": "EA", "inventory_asset_account_code": "1200-RM-CANCEL", "wip_account_code": "1300-WIP-CANCEL"},
+		{"sku": "FG-CANCEL", "name": "FG Cancel", "inventory_enabled": true, "inventory_tracking_mode": "quantity", "uom_code": "EA", "inventory_asset_account_code": "1200-FG-CANCEL", "cogs_account_code": "5000-COGS-FG-CANCEL", "wip_account_code": "1300-WIP-CANCEL"},
+	} {
+		if _, err := models.Create("commercial_item", "user_admin", item); err != nil {
+			t.Fatalf("create item %s: %v", item["sku"], err)
+		}
+	}
+
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{"item_code": "BUN-CANCEL", "warehouse_code": "MAIN", "quantity_delta": 10.0, "movement_reason": "seed", "movement_date": "2026-03-29", "movement_direction": "in", "unit_cost": 5.0, "total_cost": 50.0})
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{"item_code": "PATTY-CANCEL", "warehouse_code": "MAIN", "quantity_delta": 10.0, "movement_reason": "seed", "movement_date": "2026-03-29", "movement_direction": "in", "unit_cost": 15.0, "total_cost": 150.0})
+	for _, snapshot := range []map[string]any{
+		{"organization_id": "org_default", "location_id": "loc_main", "item_code": "BUN-CANCEL", "warehouse_code": "MAIN", "quantity_on_hand": 10.0, "average_unit_cost": 5.0, "inventory_value": 50.0},
+		{"organization_id": "org_default", "location_id": "loc_main", "item_code": "PATTY-CANCEL", "warehouse_code": "MAIN", "quantity_on_hand": 10.0, "average_unit_cost": 15.0, "inventory_value": 150.0},
+	} {
+		if _, err := models.Create("inventory_valuation_snapshot", "user_admin", snapshot); err != nil {
+			t.Fatalf("create valuation snapshot: %v", err)
+		}
+	}
+
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	service := NewProductionCoreService(docs, models, nil, inventorySvc)
+
+	order, err := docs.Create("production_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"finished_item_code":       "FG-CANCEL",
+		"warehouse_code":           "MAIN",
+		"planned_quantity":         2.0,
+		"expected_output_quantity": 2.0,
+		"lines": []map[string]any{
+			{"component_item_code": "BUN-CANCEL", "actual_item_code": "BUN-CANCEL", "warehouse_code": "MAIN", "uom_code": "EA", "quantity_per_unit": 1.0, "quantity": 2.0},
+			{"component_item_code": "PATTY-CANCEL", "actual_item_code": "PATTY-CANCEL", "warehouse_code": "MAIN", "uom_code": "EA", "quantity_per_unit": 1.0, "quantity": 2.0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create production order: %v", err)
+	}
+	order.Body.Payload = service.NormalizePayload("production_order", order.Body.Payload)
+	order.Header.Status = "approved"
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save production order: %v", err)
+	}
+	if err := service.HandleApprovedDocument(order, "user_admin"); err != nil {
+		t.Fatalf("approve production order: %v", err)
+	}
+
+	issue, err := service.CreateProductionIssueFromOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create production issue: %v", err)
+	}
+	issue.Header.Status = "issued"
+	if err := docs.Save(issue); err != nil {
+		t.Fatalf("save production issue: %v", err)
+	}
+	if err := service.HandleApprovedDocument(issue, "user_admin"); err != nil {
+		t.Fatalf("handle production issue: %v", err)
+	}
+	if err := service.HandleCanceledDocument(issue, "user_admin"); err != nil {
+		t.Fatalf("cancel production issue: %v", err)
+	}
+
+	output, err := service.CreateProductionOutputFromOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create production output: %v", err)
+	}
+	output.Body.Payload["output_quantity"] = 2.0
+	output.Body.Payload["production_lot_code"] = "LOT-CANCEL-1"
+	output.Body.Payload["stages"] = []map[string]any{}
+	output.Body.Payload = service.NormalizePayload("production_output", output.Body.Payload)
+	output.Header.Status = "posted"
+	if err := docs.Save(output); err != nil {
+		t.Fatalf("save production output: %v", err)
+	}
+	if err := service.HandleApprovedDocument(output, "user_admin"); err != nil {
+		t.Fatalf("handle production output: %v", err)
+	}
+	if err := service.HandleCanceledDocument(output, "user_admin"); err != nil {
+		t.Fatalf("cancel production output: %v", err)
+	}
+
+	var issueReversal, outputReversal bool
+	for _, item := range docs.List() {
+		if item.Header.Type != "ledger_posting" {
+			continue
+		}
+		for _, link := range item.Links {
+			if link.LinkType != "posting_for" {
+				continue
+			}
+			switch textValue(link.Metadata["posting_reason"]) {
+			case "production_issue_wip_reversal":
+				issueReversal = true
+			case "production_output_wip_clear_reversal":
+				outputReversal = true
+			}
+		}
+	}
+	if !issueReversal {
+		t.Fatalf("expected production issue reversal posting")
+	}
+	if !outputReversal {
+		t.Fatalf("expected production output reversal posting")
+	}
+}
+
 func mustRegisterProductionTestDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{
 		{Type: "sales_order", DisplayName: "Sales Order", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for"}},
-		{Type: "production_order", DisplayName: "Production Order", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for", "movement_for"}},
-		{Type: "production_issue", DisplayName: "Production Issue", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for", "movement_for"}},
-		{Type: "production_output", DisplayName: "Production Output", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for", "movement_for"}},
+		{Type: "production_order", DisplayName: "Production Order", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for", "movement_for", "posting_for"}},
+		{Type: "production_issue", DisplayName: "Production Issue", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for", "movement_for", "posting_for"}},
+		{Type: "production_output", DisplayName: "Production Output", SchemaVersion: "v1", AllowedLinkTypes: []string{"production_for", "movement_for", "posting_for"}},
 		{Type: "stock_movement", DisplayName: "Stock Movement", SchemaVersion: "v1", AllowedLinkTypes: []string{"movement_for"}},
+		{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"posting_for"}},
 	} {
 		if err := docs.Register(def); err != nil {
 			t.Fatalf("register document definition %s: %v", def.Type, err)
@@ -726,6 +1048,9 @@ func mustRegisterProductionTestModels(t *testing.T, models *model.Service) {
 				{Key: "allow_negative_stock", Type: "bool"},
 				{Key: "default_issue_strategy", Type: "string"},
 				{Key: "default_replenishment_warehouse_code", Type: "string"},
+				{Key: "inventory_asset_account_code", Type: "string"},
+				{Key: "cogs_account_code", Type: "string"},
+				{Key: "wip_account_code", Type: "string"},
 			},
 		},
 		{
@@ -767,6 +1092,43 @@ func mustRegisterProductionTestModels(t *testing.T, models *model.Service) {
 				{Key: "hold_reason", Type: "string"},
 				{Key: "hold_notes", Type: "string"},
 				{Key: "recall_reference", Type: "string"},
+			},
+		},
+		{
+			Key:         "inventory_cost_layer",
+			DisplayName: "Inventory Cost Layer",
+			DefaultSort: "effective_at",
+			Fields: []model.FieldDefinition{
+				{Key: "item_code", Type: "string"},
+				{Key: "warehouse_code", Type: "string"},
+				{Key: "batch_code", Type: "string"},
+				{Key: "source_document_type", Type: "string"},
+				{Key: "source_document_id", Type: "string"},
+				{Key: "movement_document_id", Type: "string"},
+				{Key: "event_type", Type: "string"},
+				{Key: "quantity_delta", Type: "number"},
+				{Key: "unit_cost", Type: "number"},
+				{Key: "total_cost", Type: "number"},
+				{Key: "currency_code", Type: "string"},
+				{Key: "valuation_method", Type: "string"},
+				{Key: "effective_at", Type: "string"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "inventory_valuation_snapshot",
+			DisplayName: "Inventory Valuation Snapshot",
+			DefaultSort: "item_code",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string"},
+				{Key: "location_id", Type: "string"},
+				{Key: "item_code", Type: "string"},
+				{Key: "warehouse_code", Type: "string"},
+				{Key: "quantity_on_hand", Type: "number"},
+				{Key: "average_unit_cost", Type: "number"},
+				{Key: "inventory_value", Type: "number"},
+				{Key: "valuation_method", Type: "string"},
+				{Key: "last_calculated_at", Type: "string"},
 			},
 		},
 	} {

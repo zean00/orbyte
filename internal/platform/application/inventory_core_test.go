@@ -249,11 +249,332 @@ func TestDecorateBatchRecordReflectsEffectiveStatusAndAvailability(t *testing.T)
 	}
 }
 
+func TestStockReceiptsUpdateWeightedAverageValuation(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterInventoryTestDocumentTypes(t, docs)
+	mustRegisterInventoryTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                          "COFFEE",
+		"name":                         "Coffee Beans",
+		"inventory_enabled":            true,
+		"inventory_tracking_mode":      "quantity",
+		"uom_code":                     "EA",
+		"inventory_asset_account_code": "1200-INV-COFFEE",
+		"cogs_account_code":            "5000-COGS-COFFEE",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+
+	service := NewInventoryCoreService(docs, config.NewService(), models, nil)
+	for _, receipt := range []map[string]any{
+		{"quantity": 10.0, "unit_cost": 100.0},
+		{"quantity": 10.0, "unit_cost": 120.0},
+	} {
+		record, err := docs.Create("stock_receipt", "org_default", "loc_main", "user_admin", map[string]any{
+			"lines": []map[string]any{{
+				"item_code":      "COFFEE",
+				"warehouse_code": "MAIN",
+				"quantity":       receipt["quantity"],
+				"unit_cost":      receipt["unit_cost"],
+				"uom_code":       "EA",
+			}},
+		})
+		if err != nil {
+			t.Fatalf("create receipt: %v", err)
+		}
+		record.Header.Status = "received"
+		if err := docs.Save(record); err != nil {
+			t.Fatalf("save receipt: %v", err)
+		}
+		if err := service.HandleApprovedDocument(record, "user_admin"); err != nil {
+			t.Fatalf("handle receipt: %v", err)
+		}
+	}
+
+	items, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"item_code": "COFFEE", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list valuation snapshots: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 valuation snapshot, got %d", len(items))
+	}
+	if got := numberValue(items[0].Values["quantity_on_hand"]); got != 20 {
+		t.Fatalf("expected quantity on hand 20, got %v", got)
+	}
+	if got := numberValue(items[0].Values["average_unit_cost"]); got != 110 {
+		t.Fatalf("expected average unit cost 110, got %v", got)
+	}
+	if got := numberValue(items[0].Values["inventory_value"]); got != 2200 {
+		t.Fatalf("expected inventory value 2200, got %v", got)
+	}
+}
+
+func TestFulfillmentIssueCreatesCOGSPostingFromAverageCost(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterInventoryTestDocumentTypes(t, docs)
+	mustRegisterInventoryTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                          "TSHIRT",
+		"name":                         "T-Shirt",
+		"inventory_enabled":            true,
+		"inventory_tracking_mode":      "quantity",
+		"uom_code":                     "EA",
+		"inventory_asset_account_code": "1200-INV-APP",
+		"cogs_account_code":            "5000-COGS-APP",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("inventory_valuation_snapshot", "user_admin", map[string]any{
+		"organization_id":   "org_default",
+		"location_id":       "loc_main",
+		"item_code":         "TSHIRT",
+		"warehouse_code":    "MAIN",
+		"quantity_on_hand":  20.0,
+		"average_unit_cost": 110.0,
+		"inventory_value":   2200.0,
+	}); err != nil {
+		t.Fatalf("create valuation snapshot: %v", err)
+	}
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{
+		"item_code":          "TSHIRT",
+		"warehouse_code":     "MAIN",
+		"quantity_delta":     20.0,
+		"movement_reason":    "seed",
+		"movement_date":      time.Now().UTC().Format("2006-01-02"),
+		"movement_direction": "in",
+		"unit_cost":          110.0,
+		"total_cost":         2200.0,
+	})
+
+	service := NewInventoryCoreService(docs, config.NewService(), models, nil)
+	record, err := docs.Create("sales_fulfillment", "org_default", "loc_main", "user_admin", map[string]any{
+		"lines": []map[string]any{{
+			"item_code":      "TSHIRT",
+			"warehouse_code": "MAIN",
+			"quantity":       5.0,
+			"uom_code":       "EA",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create fulfillment: %v", err)
+	}
+	record.Header.Status = "issued"
+	if err := docs.Save(record); err != nil {
+		t.Fatalf("save fulfillment: %v", err)
+	}
+	if err := service.HandleApprovedFulfillment(record, "user_admin"); err != nil {
+		t.Fatalf("handle approved fulfillment: %v", err)
+	}
+
+	updated, err := docs.Get(record.Header.ID)
+	if err != nil {
+		t.Fatalf("reload fulfillment: %v", err)
+	}
+	line := recordList(updated.Body.Payload["lines"])[0]
+	if got := numberValue(line["unit_cost"]); got != 110 {
+		t.Fatalf("expected line unit cost 110, got %v", got)
+	}
+	if got := numberValue(line["total_cost"]); got != -550 {
+		t.Fatalf("expected line total cost -550, got %v", got)
+	}
+	if got := numberValue(updated.Body.Payload["cost_amount_total"]); got != 550 {
+		t.Fatalf("expected fulfillment cost total 550, got %v", got)
+	}
+	items, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"organization_id": "org_default", "location_id": "loc_main", "item_code": "TSHIRT", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list valuation snapshots after fulfillment: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 valuation snapshot after fulfillment, got %d", len(items))
+	}
+	if got := numberValue(items[0].Values["quantity_on_hand"]); got != 15 {
+		t.Fatalf("expected quantity on hand 15 after fulfillment, got %v", got)
+	}
+	if got := numberValue(items[0].Values["average_unit_cost"]); got != 110 {
+		t.Fatalf("expected average unit cost 110 after fulfillment, got %v", got)
+	}
+	if got := numberValue(items[0].Values["inventory_value"]); got != 1650 {
+		t.Fatalf("expected inventory value 1650 after fulfillment, got %v", got)
+	}
+	postingCount := 0
+	for _, item := range docs.List() {
+		if item.Header.Type != "ledger_posting" {
+			continue
+		}
+		postingCount++
+		journalLines := recordList(item.Body.Payload["journal_lines"])
+		if len(journalLines) != 2 {
+			t.Fatalf("expected 2 journal lines, got %d", len(journalLines))
+		}
+	}
+	if postingCount != 1 {
+		t.Fatalf("expected 1 ledger posting, got %d", postingCount)
+	}
+}
+
+func TestGoodsReceiptUsesReceiptUnitPriceForValuation(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterInventoryTestDocumentTypes(t, docs)
+	mustRegisterInventoryTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                          "CUFF-GR",
+		"name":                         "Cuff Goods Receipt",
+		"inventory_enabled":            true,
+		"inventory_tracking_mode":      "quantity",
+		"uom_code":                     "EA",
+		"inventory_asset_account_code": "1200-INV-CUFF",
+		"cogs_account_code":            "5000-COGS-CUFF",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+
+	service := NewInventoryCoreService(docs, config.NewService(), models, nil)
+	record, err := docs.Create("goods_receipt", "org_default", "loc_main", "user_admin", map[string]any{
+		"currency_code": "IDR",
+		"lines": []map[string]any{{
+			"item_code":        "CUFF-GR",
+			"warehouse_code":   "MAIN",
+			"receipt_qty":      15.0,
+			"unit_price":       250000.0,
+			"uom_code":         "EA",
+			"description":      "Cuff receipt",
+			"tax_rate":         11.0,
+			"tax_mode":         "exclusive",
+			"tax_account_code": "1300-VATIN-CUFF",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create goods receipt: %v", err)
+	}
+	record.Header.Status = "received"
+	if err := docs.Save(record); err != nil {
+		t.Fatalf("save goods receipt: %v", err)
+	}
+	if err := service.HandleApprovedDocument(record, "user_admin"); err != nil {
+		t.Fatalf("handle approved goods receipt: %v", err)
+	}
+
+	items, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"item_code": "CUFF-GR", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list valuation snapshots: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 valuation snapshot, got %d", len(items))
+	}
+	if got := numberValue(items[0].Values["quantity_on_hand"]); got != 15 {
+		t.Fatalf("expected quantity on hand 15, got %v", got)
+	}
+	if got := numberValue(items[0].Values["average_unit_cost"]); got != 250000 {
+		t.Fatalf("expected average unit cost 250000, got %v", got)
+	}
+	if got := numberValue(items[0].Values["inventory_value"]); got != 3750000 {
+		t.Fatalf("expected inventory value 3750000, got %v", got)
+	}
+}
+
+func TestValuationSnapshotsAreScopedByOrganizationAndLocation(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterInventoryTestDocumentTypes(t, docs)
+	mustRegisterInventoryTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                          "SCOPED-ITEM",
+		"name":                         "Scoped Item",
+		"inventory_enabled":            true,
+		"inventory_tracking_mode":      "quantity",
+		"uom_code":                     "EA",
+		"inventory_asset_account_code": "1200-INV-SCOPED",
+		"cogs_account_code":            "5000-COGS-SCOPED",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+
+	service := NewInventoryCoreService(docs, config.NewService(), models, nil)
+	for _, scope := range []struct {
+		org       string
+		loc       string
+		warehouse string
+		quantity  float64
+		unitCost  float64
+	}{
+		{org: "org_default", loc: "loc_main", warehouse: "MAIN", quantity: 10, unitCost: 100},
+		{org: "org_other", loc: "loc_branch", warehouse: "MAIN", quantity: 10, unitCost: 200},
+	} {
+		record, err := docs.Create("stock_receipt", scope.org, scope.loc, "user_admin", map[string]any{
+			"lines": []map[string]any{{
+				"item_code":      "SCOPED-ITEM",
+				"warehouse_code": scope.warehouse,
+				"quantity":       scope.quantity,
+				"unit_cost":      scope.unitCost,
+				"uom_code":       "EA",
+			}},
+		})
+		if err != nil {
+			t.Fatalf("create receipt: %v", err)
+		}
+		record.Header.Status = "received"
+		if err := docs.Save(record); err != nil {
+			t.Fatalf("save receipt: %v", err)
+		}
+		if err := service.HandleApprovedDocument(record, "user_admin"); err != nil {
+			t.Fatalf("handle receipt: %v", err)
+		}
+	}
+
+	first, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"organization_id": "org_default", "location_id": "loc_main", "item_code": "SCOPED-ITEM", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list first scoped snapshot: %v", err)
+	}
+	second, _, err := models.List("inventory_valuation_snapshot", model.Query{
+		Filters:  map[string]string{"organization_id": "org_other", "location_id": "loc_branch", "item_code": "SCOPED-ITEM", "warehouse_code": "MAIN"},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list second scoped snapshot: %v", err)
+	}
+	if len(first) != 1 || len(second) != 1 {
+		t.Fatalf("expected 1 snapshot per scope, got %d and %d", len(first), len(second))
+	}
+	if got := numberValue(first[0].Values["average_unit_cost"]); got != 100 {
+		t.Fatalf("expected first scope avg cost 100, got %v", got)
+	}
+	if got := numberValue(second[0].Values["average_unit_cost"]); got != 200 {
+		t.Fatalf("expected second scope avg cost 200, got %v", got)
+	}
+}
+
 func mustRegisterInventoryTestDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{
-		{Type: "sales_fulfillment", DisplayName: "Sales Fulfillment", SchemaVersion: "v1", AllowedLinkTypes: []string{"movement_for"}},
+		{Type: "sales_fulfillment", DisplayName: "Sales Fulfillment", SchemaVersion: "v1", AllowedLinkTypes: []string{"movement_for", "posting_for"}},
+		{Type: "goods_receipt", DisplayName: "Goods Receipt", SchemaVersion: "v1", AllowedLinkTypes: []string{"movement_for"}},
+		{Type: "stock_receipt", DisplayName: "Stock Receipt", SchemaVersion: "v1", AllowedLinkTypes: []string{"movement_for"}},
 		{Type: "stock_movement", DisplayName: "Stock Movement", SchemaVersion: "v1", AllowedLinkTypes: []string{"movement_for"}},
+		{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"posting_for"}},
 	} {
 		if err := docs.Register(def); err != nil {
 			t.Fatalf("register document definition %s: %v", def.Type, err)
@@ -277,6 +598,9 @@ func mustRegisterInventoryTestModels(t *testing.T, models *model.Service) {
 				{Key: "allow_negative_stock", Type: "bool"},
 				{Key: "default_issue_strategy", Type: "string"},
 				{Key: "uom_code", Type: "string"},
+				{Key: "inventory_asset_account_code", Type: "string"},
+				{Key: "cogs_account_code", Type: "string"},
+				{Key: "wip_account_code", Type: "string"},
 			},
 		},
 		{
@@ -292,6 +616,37 @@ func mustRegisterInventoryTestModels(t *testing.T, models *model.Service) {
 				{Key: "hold_reason", Type: "string"},
 				{Key: "hold_notes", Type: "string"},
 				{Key: "recall_reference", Type: "string"},
+			},
+		},
+		{
+			Key:         "inventory_cost_layer",
+			DisplayName: "Inventory Cost Layer",
+			DefaultSort: "effective_at",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string"},
+				{Key: "location_id", Type: "string"},
+				{Key: "item_code", Type: "string"},
+				{Key: "warehouse_code", Type: "string"},
+				{Key: "quantity_delta", Type: "number"},
+				{Key: "unit_cost", Type: "number"},
+				{Key: "total_cost", Type: "number"},
+				{Key: "effective_at", Type: "string"},
+			},
+		},
+		{
+			Key:         "inventory_valuation_snapshot",
+			DisplayName: "Inventory Valuation Snapshot",
+			DefaultSort: "item_code",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string"},
+				{Key: "location_id", Type: "string"},
+				{Key: "item_code", Type: "string"},
+				{Key: "warehouse_code", Type: "string"},
+				{Key: "quantity_on_hand", Type: "number"},
+				{Key: "average_unit_cost", Type: "number"},
+				{Key: "inventory_value", Type: "number"},
+				{Key: "valuation_method", Type: "string"},
+				{Key: "last_calculated_at", Type: "string"},
 			},
 		},
 	} {
