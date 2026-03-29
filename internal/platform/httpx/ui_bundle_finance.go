@@ -11,11 +11,19 @@ func FinanceReportsBundle() string {
         : path.includes("profit-and-loss") ? "profit-and-loss"
         : path.includes("balance-sheet") ? "balance-sheet"
         : path.includes("tax-summary") ? "tax-summary"
+        : path.includes("ar-aging") ? "ar-aging"
+        : path.includes("ap-aging") ? "ap-aging"
+        : path.includes("ar-reconciliation") ? "ar-reconciliation"
+        : path.includes("ap-reconciliation") ? "ap-reconciliation"
         : "journal-ledger";
       const title = reportKey === "trial-balance" ? text("Trial Balance", "Neraca Saldo")
         : reportKey === "profit-and-loss" ? text("Profit and Loss", "Laba Rugi")
         : reportKey === "balance-sheet" ? text("Balance Sheet", "Neraca")
         : reportKey === "tax-summary" ? text("Tax Summary", "Ringkasan Pajak")
+        : reportKey === "ar-aging" ? text("AR Aging", "Umur Piutang")
+        : reportKey === "ap-aging" ? text("AP Aging", "Umur Utang")
+        : reportKey === "ar-reconciliation" ? text("AR Reconciliation", "Rekonsiliasi Piutang")
+        : reportKey === "ap-reconciliation" ? text("AP Reconciliation", "Rekonsiliasi Utang")
         : text("Journal Ledger", "Buku Jurnal");
       const mount = ctx.mount;
       const params = new URLSearchParams(window.location.search);
@@ -23,7 +31,12 @@ func FinanceReportsBundle() string {
         from_date: params.get("from_date") || "",
         to_date: params.get("to_date") || "",
         as_of_date: params.get("as_of_date") || "",
+        party_id: params.get("party_id") || "",
+        vendor_id: params.get("vendor_id") || "",
+        account_code: params.get("account_code") || "",
+        aging_bucket: params.get("aging_bucket") || "",
       };
+      const usesAsOf = reportKey === "balance-sheet" || reportKey === "ar-aging" || reportKey === "ap-aging" || reportKey === "ar-reconciliation" || reportKey === "ap-reconciliation";
       function escapeHTML(value) {
         return String(value == null ? "" : value).replace(/[&<>"]/g, function(char) {
           return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char];
@@ -66,15 +79,34 @@ func FinanceReportsBundle() string {
       }
       async function loadReport() {
         const query = new URLSearchParams();
-        if (reportKey === "balance-sheet") {
+        if (usesAsOf) {
           if (filters.as_of_date) query.set("as_of_date", filters.as_of_date);
         } else {
           if (filters.from_date) query.set("from_date", filters.from_date);
           if (filters.to_date) query.set("to_date", filters.to_date);
         }
+        if (filters.party_id && (reportKey === "ar-aging" || reportKey === "ar-reconciliation")) query.set("party_id", filters.party_id);
+        if (filters.vendor_id && (reportKey === "ap-aging" || reportKey === "ap-reconciliation")) query.set("vendor_id", filters.vendor_id);
+        if (filters.account_code && (reportKey === "ar-reconciliation" || reportKey === "ap-reconciliation")) query.set("account_code", filters.account_code);
+        if (filters.aging_bucket && (reportKey === "ar-aging" || reportKey === "ap-aging")) query.set("aging_bucket", filters.aging_bucket);
         return ctx.api("/ui/data/finance/" + reportKey + (query.toString() ? "?" + query.toString() : ""));
       }
       function renderRows(payload) {
+        if (reportKey === "ar-aging" || reportKey === "ap-aging") {
+          return "<div class='finance-report__table-wrap'><table class='finance-report__table'><thead><tr><th>" + text("Counterparty", "Mitra") + "</th><th>" + text("Document", "Dokumen") + "</th><th>" + text("Date", "Tanggal") + "</th><th>" + text("Due", "Jatuh Tempo") + "</th><th>" + text("Account", "Akun") + "</th><th>" + text("Bucket", "Kelompok") + "</th><th>" + text("Open", "Terbuka") + "</th></tr></thead><tbody>" + (payload.items || []).map(function(row) {
+            return "<tr><td>" + escapeHTML(row.counterparty_name) + "</td><td>" + escapeHTML(row.document_number) + "</td><td>" + escapeHTML(row.document_date) + "</td><td>" + escapeHTML(row.due_date) + "</td><td>" + escapeHTML(row.account_code) + "</td><td>" + escapeHTML(row.aging_bucket) + "</td><td>" + money(row.open_amount) + "</td></tr>";
+          }).join("") + "</tbody></table></div>";
+        }
+        if (reportKey === "ar-reconciliation" || reportKey === "ap-reconciliation") {
+          const accountRows = (payload.accounts || []).map(function(row) {
+            return "<tr><td>" + escapeHTML(row.account_code) + "</td><td>" + escapeHTML(row.account_name) + "</td><td>" + money(row.subledger_amount) + "</td><td>" + money(row.gl_amount) + "</td><td>" + money(row.difference) + "</td></tr>";
+          }).join("");
+          const mismatchRows = (payload.mismatches || []).map(function(row) {
+            return "<tr><td>" + escapeHTML(row.account_code || row.document_number || "") + "</td><td>" + escapeHTML(row.reason || "") + "</td><td>" + money(row.subledger_amount) + "</td><td>" + money(row.gl_amount) + "</td><td>" + money(row.difference) + "</td></tr>";
+          }).join("");
+          return "<section class='finance-report__panel'><h3>" + escapeHTML(text("Account Comparison", "Perbandingan Akun")) + "</h3><div class='finance-report__table-wrap'><table class='finance-report__table'><thead><tr><th>" + text("Account", "Akun") + "</th><th>" + text("Name", "Nama") + "</th><th>" + text("Subledger", "Subledger") + "</th><th>" + text("GL", "GL") + "</th><th>" + text("Difference", "Selisih") + "</th></tr></thead><tbody>" + accountRows + "</tbody></table></div></section>"
+            + "<section class='finance-report__panel'><h3>" + escapeHTML(text("Mismatches", "Selisih")) + "</h3><div class='finance-report__table-wrap'><table class='finance-report__table'><thead><tr><th>" + text("Reference", "Referensi") + "</th><th>" + text("Reason", "Alasan") + "</th><th>" + text("Subledger", "Subledger") + "</th><th>" + text("GL", "GL") + "</th><th>" + text("Difference", "Selisih") + "</th></tr></thead><tbody>" + mismatchRows + "</tbody></table></div></section>";
+        }
         if (reportKey === "profit-and-loss" || reportKey === "balance-sheet") {
           const sections = payload.sections || [];
           return sections.map(function(section) {
@@ -106,6 +138,9 @@ func FinanceReportsBundle() string {
         if (reportKey === "balance-sheet") {
           return "<section class='finance-report__cards'><article class='finance-report__card'><span>" + text("Retained Earnings", "Laba Ditahan") + "</span><strong>" + money(payload.retained_earnings) + "</strong></article></section>";
         }
+        if (reportKey === "ar-reconciliation" || reportKey === "ap-reconciliation") {
+          return "<section class='finance-report__cards'><article class='finance-report__card'><span>" + text("Subledger", "Subledger") + "</span><strong>" + money(payload.subledger_total) + "</strong></article><article class='finance-report__card'><span>" + text("GL", "GL") + "</span><strong>" + money(payload.gl_total) + "</strong></article><article class='finance-report__card'><span>" + text("Difference", "Selisih") + "</span><strong>" + money(payload.difference) + "</strong></article></section>";
+        }
         const totals = payload.totals || {};
         const keys = Object.keys(totals);
         if (!keys.length) return "";
@@ -120,6 +155,10 @@ func FinanceReportsBundle() string {
         { key: "profit-and-loss", label: text("Profit and Loss", "Laba Rugi"), path: "/ui/finance/profit-and-loss" },
         { key: "balance-sheet", label: text("Balance Sheet", "Neraca"), path: "/ui/finance/balance-sheet" },
         { key: "tax-summary", label: text("Tax Summary", "Ringkasan Pajak"), path: "/ui/finance/tax-summary" },
+        { key: "ar-aging", label: text("AR Aging", "Umur Piutang"), path: "/ui/finance/ar-aging" },
+        { key: "ap-aging", label: text("AP Aging", "Umur Utang"), path: "/ui/finance/ap-aging" },
+        { key: "ar-reconciliation", label: text("AR Reconciliation", "Rekonsiliasi Piutang"), path: "/ui/finance/ar-reconciliation" },
+        { key: "ap-reconciliation", label: text("AP Reconciliation", "Rekonsiliasi Utang"), path: "/ui/finance/ap-reconciliation" },
         { key: "journal-ledger", label: text("Journal Ledger", "Buku Jurnal"), path: "/ui/finance/journal-ledger" }
       ];
       mount.innerHTML = ""
@@ -128,9 +167,13 @@ func FinanceReportsBundle() string {
               return "<a href='" + item.path + "' class='" + (item.key === reportKey ? "is-active" : "") + "'>" + escapeHTML(item.label) + "</a>";
             }).join("") + "</nav></section>"
         +   "<section class='finance-report__panel'><div class='finance-report__filters'>"
-        +     (reportKey === "balance-sheet"
+        +     (usesAsOf
                 ? "<label class='finance-report__field'><span>" + text("As Of", "Per Tanggal") + "</span><input data-filter='as_of_date' type='date' value='" + escapeHTML(filters.as_of_date) + "' /></label>"
                 : "<label class='finance-report__field'><span>" + text("From", "Dari") + "</span><input data-filter='from_date' type='date' value='" + escapeHTML(filters.from_date) + "' /></label><label class='finance-report__field'><span>" + text("To", "Sampai") + "</span><input data-filter='to_date' type='date' value='" + escapeHTML(filters.to_date) + "' /></label>")
+        +     ((reportKey === "ar-aging" || reportKey === "ar-reconciliation") ? "<label class='finance-report__field'><span>" + text("Party", "Pihak") + "</span><input data-filter='party_id' value='" + escapeHTML(filters.party_id) + "' /></label>" : "")
+        +     ((reportKey === "ap-aging" || reportKey === "ap-reconciliation") ? "<label class='finance-report__field'><span>" + text("Vendor", "Vendor") + "</span><input data-filter='vendor_id' value='" + escapeHTML(filters.vendor_id) + "' /></label>" : "")
+        +     ((reportKey === "ar-reconciliation" || reportKey === "ap-reconciliation") ? "<label class='finance-report__field'><span>" + text("Account", "Akun") + "</span><input data-filter='account_code' value='" + escapeHTML(filters.account_code) + "' /></label>" : "")
+        +     ((reportKey === "ar-aging" || reportKey === "ap-aging") ? "<label class='finance-report__field'><span>" + text("Bucket", "Kelompok") + "</span><input data-filter='aging_bucket' value='" + escapeHTML(filters.aging_bucket) + "' /></label>" : "")
         +     "<button class='finance-report__button finance-report__button--primary' data-apply>" + escapeHTML(text("Apply", "Terapkan")) + "</button>"
         +   "</div></section>"
         +   summaryCards(payload)
@@ -143,7 +186,7 @@ func FinanceReportsBundle() string {
             filters[node.getAttribute("data-filter")] = node.value || "";
           });
           const next = new URL(window.location.href);
-          if (reportKey === "balance-sheet") {
+          if (usesAsOf) {
             if (filters.as_of_date) next.searchParams.set("as_of_date", filters.as_of_date); else next.searchParams.delete("as_of_date");
             next.searchParams.delete("from_date");
             next.searchParams.delete("to_date");
@@ -152,6 +195,10 @@ func FinanceReportsBundle() string {
             if (filters.to_date) next.searchParams.set("to_date", filters.to_date); else next.searchParams.delete("to_date");
             next.searchParams.delete("as_of_date");
           }
+          if (filters.party_id) next.searchParams.set("party_id", filters.party_id); else next.searchParams.delete("party_id");
+          if (filters.vendor_id) next.searchParams.set("vendor_id", filters.vendor_id); else next.searchParams.delete("vendor_id");
+          if (filters.account_code) next.searchParams.set("account_code", filters.account_code); else next.searchParams.delete("account_code");
+          if (filters.aging_bucket) next.searchParams.set("aging_bucket", filters.aging_bucket); else next.searchParams.delete("aging_bucket");
           window.location.assign(next.toString());
         });
       }

@@ -96,6 +96,7 @@ type serviceGraph struct {
 	traceabilityCore  *application.TraceabilityCoreService
 	recallCore        *application.RecallCoreService
 	financeReporting  *application.FinanceReportingCoreService
+	financeReconcile  *application.FinanceReconciliationCoreService
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
 	queryMonitor      *store.QueryMonitor
@@ -263,6 +264,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.traceabilityCore = application.NewTraceabilityCoreService(graph.documents, graph.models, graph.inventoryCore)
 	graph.recallCore = application.NewRecallCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.traceabilityCore)
 	graph.financeReporting = application.NewFinanceReportingCoreService(graph.documents, graph.models, graph.config)
+	graph.financeReconcile = application.NewFinanceReconciliationCoreService(graph.documents, graph.models, graph.financeReporting)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.procurementCore.SetFinanceReporting(graph.financeReporting)
 	graph.inventoryCore.SetFinanceReporting(graph.financeReporting)

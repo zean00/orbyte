@@ -10,7 +10,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -101,6 +101,80 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			strings.TrimSpace(query.Get("to_date")),
 		))
 	})
+	if reconciliationSvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/ar-aging", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "document.read"}) {
+				respondError(w, shared.Forbidden("ar aging is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, reconciliationSvc.ARAging(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("party_id")),
+				strings.TrimSpace(query.Get("aging_bucket")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/ap-aging", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "document.read"}) {
+				respondError(w, shared.Forbidden("ap aging is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, reconciliationSvc.APAging(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("vendor_id")),
+				strings.TrimSpace(query.Get("aging_bucket")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/ar-reconciliation", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "document.read"}) {
+				respondError(w, shared.Forbidden("ar reconciliation is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, reconciliationSvc.ARReconciliation(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("party_id")),
+				strings.TrimSpace(query.Get("account_code")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/ap-reconciliation", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "document.read"}) {
+				respondError(w, shared.Forbidden("ap reconciliation is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, reconciliationSvc.APReconciliation(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("vendor_id")),
+				strings.TrimSpace(query.Get("account_code")),
+			))
+		})
+	}
 	mux.HandleFunc("POST /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {

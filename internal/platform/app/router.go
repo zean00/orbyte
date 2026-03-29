@@ -65,6 +65,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 		Traceability:    graph.traceabilityCore,
 		Recall:          graph.recallCore,
 		Finance:         graph.financeReporting,
+		Reconciliation:  graph.financeReconcile,
 		Policy:          graph.policy,
 		FieldSecurity:   graph.fieldSecurity,
 		UIPreferences:   uiPreferences,
