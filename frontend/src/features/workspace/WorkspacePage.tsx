@@ -25,11 +25,21 @@ type ValidationErrors = Record<string, string>
 type HttpError = Error & { status?: number }
 type CommercialFormCatalog = {
   partiesByID: Record<string, Record<string, unknown>>
+  vendorsByID: Record<string, Record<string, unknown>>
   invoicesByID: Record<string, Record<string, unknown>>
+  billsByID: Record<string, Record<string, unknown>>
   paymentsByID: Record<string, Record<string, unknown>>
+  productsByCode: Record<string, Record<string, unknown>>
   itemsByCode: Record<string, Record<string, unknown>>
+  variantDimensionsByCode: Record<string, Record<string, unknown>>
+  variantValuesByKey: Record<string, Record<string, unknown>>
   itemCategoriesByCode: Record<string, Record<string, unknown>>
   uomsByCode: Record<string, Record<string, unknown>>
+  warehousesByCode: Record<string, Record<string, unknown>>
+  workCentersByCode: Record<string, Record<string, unknown>>
+  inventoryBatchesByID: Record<string, Record<string, unknown>>
+  bomsByID: Record<string, Record<string, unknown>>
+  bomVersionsByID: Record<string, Record<string, unknown>>
   taxCodesByCode: Record<string, Record<string, unknown>>
   taxProfilesByCode: Record<string, Record<string, unknown>>
   priceListsByCode: Record<string, Record<string, unknown>>
@@ -234,7 +244,7 @@ function GenericRouteView({
     return <DetailView view={view} locale={locale} routeActions={actions} currentPath={currentPath} onNavigate={onNavigate} onToast={onToast} />
   }
   if (view.kind === 'dashboard') {
-    return <DashboardView view={view} locale={locale} onNavigate={onNavigate} routeActions={actions} />
+    return <DashboardView view={view} locale={locale} onNavigate={onNavigate} routeActions={actions} onToast={onToast} />
   }
   if (view.kind === 'form') {
     return <FormView view={view} locale={locale} currentPath={currentPath} searchParams={searchParams} onNavigate={onNavigate} onToast={onToast} />
@@ -514,6 +524,7 @@ function DetailView({
 }) {
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null)
   const [commercialSummary, setCommercialSummary] = useState<Record<string, unknown> | null>(null)
+  const [procurementSummary, setProcurementSummary] = useState<Record<string, unknown> | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState('')
@@ -541,6 +552,18 @@ function DetailView({
       } else {
         setCommercialSummary(null)
       }
+      if (view.model_key === 'vendor_profile') {
+        try {
+          const summary = await fetchJSON<Record<string, unknown>>(`/ui/data/procurement/vendors/${encodeURIComponent(documentID)}/summary`)
+          if (!mounted) return
+          setProcurementSummary(summary)
+        } catch {
+          if (!mounted) return
+          setProcurementSummary(null)
+        }
+      } else {
+        setProcurementSummary(null)
+      }
     }
     void load()
     return () => {
@@ -561,9 +584,81 @@ function DetailView({
     actionVisibleForStatus(actionKey, String(header.status || ''), String(header.type || view.document_type || '')),
   )
   const hasDocumentCancelAction = !!visibleActions.some((actionKey) => actionKey.toLowerCase() === 'cancel')
-  const canEdit = !!editTarget && !isCommercialDocumentLocked(String(header.type || ''), String(header.status || ''))
+  const canEdit =
+    !!editTarget &&
+    !isCommercialDocumentLocked(String(header.type || ''), String(header.status || '')) &&
+    !isProcurementDocumentLocked(String(header.type || ''), String(header.status || '')) &&
+    !isFulfillmentDocumentLocked(String(header.type || ''), String(header.status || '')) &&
+    !isReturnsDocumentLocked(String(header.type || ''), String(header.status || '')) &&
+    !isSupplierReturnsDocumentLocked(String(header.type || ''), String(header.status || '')) &&
+    !isProductionDocumentLocked(String(header.type || ''), String(header.status || ''))
 
   async function handleAction(actionKey: string) {
+    if (String(header.type || '') === 'sales_fulfillment' && actionKey === 'register_return') {
+      try {
+        const created = await invokeCommercialAction(`/returns/fulfillments/${encodeURIComponent(String(header.id || ''))}/register-return`)
+        onToast('Return draft generated.', 'success')
+        const target = routeForDocument('sales_return', 'detail', routeActions, '/returns/returns')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Return generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_fulfillment' && actionKey === 'register_delivery') {
+      try {
+        const created = await invokeCommercialAction(`/delivery/fulfillments/${encodeURIComponent(String(header.id || ''))}/register-delivery`)
+        onToast('Delivery draft generated.', 'success')
+        const target = routeForDocument('delivery_order', 'detail', routeActions, '/delivery/orders')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Delivery generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_order' && actionKey === 'generate_fulfillment') {
+      try {
+        const created = await invokeCommercialAction(`/commercial/orders/${encodeURIComponent(String(header.id || ''))}/generate-fulfillment`)
+        onToast('Fulfillment draft generated.', 'success')
+        const target = routeForDocument('sales_fulfillment', 'detail', routeActions, '/fulfillment/fulfillments')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Fulfillment generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_order' && actionKey === 'generate_production_order') {
+      try {
+        const created = await invokeCommercialAction(`/commercial/orders/${encodeURIComponent(String(header.id || ''))}/generate-production-order`)
+        const items = Array.isArray((created as Record<string, unknown>).items) ? ((created as Record<string, unknown>).items as Array<Record<string, unknown>>) : []
+        onToast(items.length > 1 ? `${items.length} production orders generated.` : 'Production order draft generated.', 'success')
+        const firstID = items.length ? resolvePath(items[0], 'header.id') : null
+        const target = routeForDocument('production_order', 'detail', routeActions, '/production/orders')
+        if (target && firstID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(firstID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Production order generation failed', 'error')
+      }
+      return
+    }
     if (String(header.type || '') === 'sales_order' && actionKey === 'generate_invoice') {
       try {
         const created = await invokeCommercialAction(`/commercial/orders/${encodeURIComponent(String(header.id || ''))}/generate-invoice`)
@@ -625,6 +720,246 @@ function DetailView({
         setReloadKey((current) => current + 1)
       } catch (error) {
         onToast(error instanceof Error ? error.message : 'Refund generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_return' && actionKey === 'register_return_receipt') {
+      try {
+        const created = await invokeCommercialAction(`/returns/returns/${encodeURIComponent(String(header.id || ''))}/register-receipt`)
+        onToast('Return receipt draft generated.', 'success')
+        const target = routeForDocument('return_receipt', 'detail', routeActions, '/returns/receipts')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Return receipt generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_return' && actionKey === 'issue_credit_note') {
+      try {
+        const created = await invokeCommercialAction(`/returns/returns/${encodeURIComponent(String(header.id || ''))}/issue-credit-note`)
+        onToast('Credit note draft generated.', 'success')
+        const target = routeForDocument('credit_note', 'detail', routeActions, '/commercial/credit-notes')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Credit note generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_return' && actionKey === 'register_refund') {
+      try {
+        const created = await invokeCommercialAction(`/returns/returns/${encodeURIComponent(String(header.id || ''))}/register-refund`)
+        onToast('Refund draft generated.', 'success')
+        const target = routeForDocument('payment_refund', 'detail', routeActions, '/commercial/refunds')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Refund generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'sales_return' && actionKey === 'create_replacement_order') {
+      try {
+        const created = await invokeCommercialAction(`/returns/returns/${encodeURIComponent(String(header.id || ''))}/create-replacement-order`)
+        onToast('Replacement order draft generated.', 'success')
+        const target = routeForDocument('sales_order', 'detail', routeActions, '/commercial/orders')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Replacement order generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'purchase_request' && actionKey === 'generate_purchase_order') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/requests/${encodeURIComponent(String(header.id || ''))}/generate-purchase-order`)
+        onToast('Purchase order draft generated.', 'success')
+        const target = routeForDocument('purchase_order', 'detail', routeActions, '/procurement/orders')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Purchase order generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'purchase_order' && actionKey === 'register_receipt') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/orders/${encodeURIComponent(String(header.id || ''))}/register-receipt`)
+        onToast('Goods receipt draft generated.', 'success')
+        const target = routeForDocument('goods_receipt', 'detail', routeActions, '/procurement/receipts')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Receipt registration failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'production_order' && actionKey === 'register_production_issue') {
+      try {
+        const created = await invokeCommercialAction(`/production/orders/${encodeURIComponent(String(header.id || ''))}/register-issue`)
+        onToast('Production issue draft generated.', 'success')
+        const target = routeForDocument('production_issue', 'detail', routeActions, '/production/issues')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Production issue generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'production_order' && actionKey === 'register_production_output') {
+      try {
+        const created = await invokeCommercialAction(`/production/orders/${encodeURIComponent(String(header.id || ''))}/register-output`)
+        onToast('Production output draft generated.', 'success')
+        const target = routeForDocument('production_output', 'detail', routeActions, '/production/outputs')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Production output generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'purchase_order' && actionKey === 'register_vendor_bill') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/orders/${encodeURIComponent(String(header.id || ''))}/register-vendor-bill`)
+        onToast('Vendor bill draft generated.', 'success')
+        const target = routeForDocument('vendor_bill', 'detail', routeActions, '/procurement/bills')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Vendor bill generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'goods_receipt' && actionKey === 'register_vendor_bill') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/receipts/${encodeURIComponent(String(header.id || ''))}/register-vendor-bill`)
+        onToast('Vendor bill draft generated.', 'success')
+        const target = routeForDocument('vendor_bill', 'detail', routeActions, '/procurement/bills')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Vendor bill generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'goods_receipt' && actionKey === 'register_supplier_return') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/receipts/${encodeURIComponent(String(header.id || ''))}/register-supplier-return`)
+        onToast('Supplier return draft generated.', 'success')
+        const target = routeForDocument('supplier_return', 'detail', routeActions, '/supplier-returns/returns')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Supplier return generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'vendor_bill' && actionKey === 'register_payment_out') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/bills/${encodeURIComponent(String(header.id || ''))}/register-payment`)
+        onToast('Payment-out draft generated.', 'success')
+        const target = routeForDocument('payment_out', 'detail', routeActions, '/procurement/payments')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Payment registration failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'vendor_bill' && actionKey === 'issue_vendor_credit_note') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/bills/${encodeURIComponent(String(header.id || ''))}/issue-credit-note`)
+        onToast('Vendor credit draft generated.', 'success')
+        const target = routeForDocument('vendor_credit_note', 'detail', routeActions, '/procurement/credits')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Vendor credit generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'vendor_bill' && actionKey === 'register_supplier_return') {
+      try {
+        const created = await invokeCommercialAction(`/procurement/bills/${encodeURIComponent(String(header.id || ''))}/register-supplier-return`)
+        onToast('Supplier return draft generated.', 'success')
+        const target = routeForDocument('supplier_return', 'detail', routeActions, '/supplier-returns/returns')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Supplier return generation failed', 'error')
+      }
+      return
+    }
+    if (String(header.type || '') === 'supplier_return' && actionKey === 'issue_vendor_credit_note') {
+      try {
+        const created = await invokeCommercialAction(`/supplier-returns/returns/${encodeURIComponent(String(header.id || ''))}/issue-vendor-credit`)
+        onToast('Vendor credit draft generated.', 'success')
+        const target = routeForDocument('vendor_credit_note', 'detail', routeActions, '/procurement/credits')
+        const createdID = resolvePath(created, 'header.id')
+        if (target && createdID) {
+          onNavigate(`${target}?id=${encodeURIComponent(String(createdID))}`)
+          return
+        }
+        setReloadKey((current) => current + 1)
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : 'Vendor credit generation failed', 'error')
       }
       return
     }
@@ -702,6 +1037,18 @@ function DetailView({
         {view.model_key === 'party' && commercialSummary ? (
           <PartyCommercialSummaryPanel summary={commercialSummary} routeActions={routeActions} onNavigate={onNavigate} />
         ) : null}
+        {view.model_key === 'vendor_profile' && procurementSummary ? (
+          <VendorProcurementSummaryPanel summary={procurementSummary} routeActions={routeActions} onNavigate={onNavigate} />
+        ) : null}
+        {view.model_key === 'commercial_product' ? (
+          <ProductVariantsPanel product={record || {}} routeActions={routeActions} onNavigate={onNavigate} onToast={onToast} />
+        ) : null}
+        {view.model_key === 'inventory_batch' && record ? (
+          <>
+            <InventoryBatchControlPanel batch={record} onToast={onToast} onChanged={() => setReloadKey((current) => current + 1)} />
+            <InventoryBatchTracePanel batch={record} onToast={onToast} />
+          </>
+        ) : null}
       </div>
       <Modal isOpen={stepUpOpen} onClose={() => setStepUpOpen(false)} title="Two-Factor Verification" size="sm">
         <div className="space-y-4">
@@ -747,18 +1094,23 @@ function DashboardView({
   locale,
   onNavigate,
   routeActions,
+  onToast,
 }: {
   view: ViewDefinition
   locale: string
   onNavigate: (target: string) => void
   routeActions: ActionDefinition[]
+  onToast: (message: string, variant?: 'default' | 'success' | 'warning' | 'error') => void
 }) {
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null)
+  const [selectedReplenishmentKeys, setSelectedReplenishmentKeys] = useState<string[]>([])
+  const [selectedProposalIDs, setSelectedProposalIDs] = useState<string[]>([])
+  const searchKey = window.location.search
 
   useEffect(() => {
     let mounted = true
     async function load() {
-      const search = new URLSearchParams(window.location.search)
+      const search = new URLSearchParams(searchKey)
       if (view.projection_key === 'commercial.party_statement' && !search.get('party_id')) {
         if (!mounted) return
         setPayload(null)
@@ -768,8 +1120,20 @@ function DashboardView({
         ? `/ui/data/reporting/datasets/${encodeURIComponent(view.dataset_key)}`
         : view.projection_key === 'commercial.receivables.summary'
           ? '/ui/data/commercial/receivables/summary'
+        : view.projection_key === 'procurement.payables.summary'
+          ? '/ui/data/procurement/payables/summary'
+        : view.projection_key === 'inventory.summary'
+          ? '/ui/data/inventory/summary'
+        : view.projection_key === 'planning.replenishment.summary'
+          ? `/ui/data/planning/replenishment/summary${searchKey || ''}`
+        : view.projection_key === 'planning.runs.summary'
+          ? '/ui/data/planning/runs'
+        : view.projection_key === 'planning.proposals.summary'
+          ? `/ui/data/planning/runs/${encodeURIComponent(search.get('run_id') || '')}/proposals`
         : view.projection_key === 'commercial.party_statement'
           ? `/ui/data/commercial/parties/${encodeURIComponent(search.get('party_id') || '')}/summary${buildStatementQuery(search)}`
+        : view.projection_key === 'procurement.vendor_statement'
+          ? `/ui/data/procurement/vendors/${encodeURIComponent(search.get('vendor_id') || '')}/summary${buildStatementQuery(search)}`
         : view.projection_key === 'monitoring.summary'
           ? '/ui/data/monitoring/summary'
           : '/ui/data/analytics/snapshot'
@@ -781,13 +1145,39 @@ function DashboardView({
     return () => {
       mounted = false
     }
-  }, [view.dataset_key, view.projection_key])
+  }, [searchKey, view.dataset_key, view.projection_key])
 
   const statementSearch = new URLSearchParams(window.location.search)
   const partyID = statementSearch.get('party_id') || ''
+  const vendorID = statementSearch.get('vendor_id') || ''
   const receivablesItems = view.projection_key === 'commercial.receivables.summary'
     ? asRecordList(resolvePath(payload, 'items'))
     : []
+  const payablesItems = view.projection_key === 'procurement.payables.summary'
+    ? asRecordList(resolvePath(payload, 'items'))
+    : []
+  const inventoryBatches = view.projection_key === 'inventory.summary'
+    ? asRecordList(resolvePath(payload, 'batches'))
+    : []
+  const planningRuns = view.projection_key === 'planning.runs.summary'
+    ? asRecordList(resolvePath(payload, 'items'))
+    : []
+  const replenishmentItems = view.projection_key === 'planning.replenishment.summary'
+    ? asRecordList(resolvePath(payload, 'items'))
+    : []
+  const planningProposals = view.projection_key === 'planning.proposals.summary'
+    ? asRecordList(resolvePath(payload, 'items'))
+    : []
+  useEffect(() => {
+    if (view.projection_key !== 'planning.replenishment.summary') return
+    const currentKeys = new Set(replenishmentItems.map((row) => `${String(row.item_code || '')}|${String(row.warehouse_code || '')}`))
+    setSelectedReplenishmentKeys((existing) => existing.filter((key) => currentKeys.has(key)))
+  }, [replenishmentItems, view.projection_key])
+  useEffect(() => {
+    if (view.projection_key !== 'planning.proposals.summary') return
+    const currentIDs = new Set(planningProposals.map((row) => String(row.id || '')))
+    setSelectedProposalIDs((existing) => existing.filter((id) => currentIDs.has(id)))
+  }, [planningProposals, view.projection_key])
 
   return (
     <Panel title={pickText(view, 'title', locale) || 'Dashboard'}>
@@ -835,6 +1225,454 @@ function DashboardView({
           />
         </section>
       ) : null}
+      {payablesItems.length ? (
+        <section className="mt-6 rounded-xl border border-line p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Payables Aging</h2>
+          <DataTable
+            columns={[
+              { key: 'number', label: 'Bill' },
+              { key: 'vendor_name', label: 'Vendor' },
+              { key: 'due_date', label: 'Due Date' },
+              { key: 'paid_amount', label: 'Paid' },
+              { key: 'credited', label: 'Credited' },
+              { key: 'balance_due', label: 'Open Balance' },
+              { key: 'aging_bucket', label: 'Aging' },
+            ]}
+            rows={payablesItems}
+            emptyText="No payables."
+            renderAction={(row) => {
+              const detailPath = routeForDocument('vendor_bill', 'detail', routeActions, '/procurement/bills')
+              const recordID = String(row.id || '')
+              if (!detailPath || !recordID) return null
+              return (
+                <button onClick={() => onNavigate(`${detailPath}?id=${encodeURIComponent(recordID)}`)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-body">
+                  Open
+                </button>
+              )
+            }}
+          />
+        </section>
+      ) : null}
+      {inventoryBatches.length ? (
+        <section className="mt-6 rounded-xl border border-line p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Batch Stock</h2>
+          <DataTable
+            columns={[
+              { key: 'item_code', label: 'Item' },
+              { key: 'warehouse_code', label: 'Warehouse' },
+              { key: 'batch_code', label: 'Batch' },
+              { key: 'expiration_date', label: 'Expiration' },
+              { key: 'status', label: 'Status' },
+              { key: 'on_hand_quantity', label: 'On Hand' },
+              { key: 'available_quantity', label: 'Available' },
+            ]}
+            rows={inventoryBatches}
+            emptyText="No tracked batches."
+          />
+        </section>
+      ) : null}
+      {view.projection_key === 'planning.replenishment.summary' ? (
+        <section className="mt-6 rounded-xl border border-line p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Replenishment Candidates</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={async () => {
+                  const search = new URLSearchParams(window.location.search)
+                  try {
+                    const response = await fetch('/ui/data/planning/runs', {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': readCookie('orbyte_csrf'),
+                      },
+                      body: JSON.stringify({
+                        warehouse_code: search.get('warehouse_code') || '',
+                        item_code: search.get('item_code') || '',
+                        category_code: search.get('category_code') || '',
+                        coverage_status: search.get('coverage_status') || '',
+                        shortage_only: search.get('shortage_only') === '1' || search.get('shortage_only') === 'true',
+                        has_inbound: search.get('has_inbound') === '1' || search.get('has_inbound') === 'true',
+                        has_preferred_vendor: search.get('has_preferred_vendor') === '1' || search.get('has_preferred_vendor') === 'true',
+                      }),
+                    })
+                    if (!response.ok) throw await buildError(response)
+                    const result = (await response.json()) as Record<string, unknown>
+                    const runID = String(result.run_id || '')
+                    if (!runID) throw new Error('Planning run was created without an id.')
+                    onToast('Planning run created.', 'success')
+                    onNavigate(`/planning/proposals?run_id=${encodeURIComponent(runID)}`)
+                  } catch (error) {
+                    onToast(error instanceof Error ? error.message : 'Failed to create planning run.', 'error')
+                  }
+                }}
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-body"
+              >
+                Create Planning Run
+              </button>
+              <button
+                disabled={!selectedReplenishmentKeys.length}
+                onClick={async () => {
+                  const purchaseRequestDetailPath = routeForDocument('purchase_request', 'detail', routeActions, '/procurement/requests')
+                  const selectedRows = replenishmentItems.filter((row) => selectedReplenishmentKeys.includes(`${String(row.item_code || '')}|${String(row.warehouse_code || '')}`))
+                  if (!selectedRows.length) return
+                  try {
+                    const response = await fetch('/ui/data/planning/replenishment/generate-purchase-request', {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': readCookie('orbyte_csrf'),
+                      },
+                      body: JSON.stringify({
+                        items: selectedRows.map((row) => ({
+                          item_code: String(row.item_code || ''),
+                          warehouse_code: String(row.warehouse_code || ''),
+                          quantity: Number(row.normalized_request_quantity || row.suggested_request_quantity || 0),
+                        })),
+                      }),
+                    })
+                    if (!response.ok) throw await buildError(response)
+                    const result = (await response.json()) as Record<string, unknown>
+                    const records = asRecordList(result.records)
+                    setSelectedReplenishmentKeys([])
+                    if (records.length === 1 && purchaseRequestDetailPath) {
+                      const firstRecord = records[0]
+                      const recordID = String(firstRecord?.record_id || '')
+                      if (recordID) {
+                        onToast('Purchase request created.', 'success')
+                        onNavigate(`${purchaseRequestDetailPath}?id=${encodeURIComponent(recordID)}`)
+                        return
+                      }
+                    }
+                    onToast(`${records.length || Number(result.record_count || 0)} purchase requests created.`, 'success')
+                  } catch (error) {
+                    onToast(error instanceof Error ? error.message : 'Failed to generate purchase requests.', 'error')
+                  }
+                }}
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-body disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Generate Purchase Requests
+              </button>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-line">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">
+                    <input
+                      type="checkbox"
+                      checked={replenishmentItems.length > 0 && replenishmentItems.every((row) => selectedReplenishmentKeys.includes(`${String(row.item_code || '')}|${String(row.warehouse_code || '')}`) || Number(row.normalized_request_quantity || row.suggested_request_quantity || 0) <= 0)}
+                      onChange={(event) => {
+                        if (event.target.checked) {
+                          setSelectedReplenishmentKeys(replenishmentItems.filter((row) => Number(row.normalized_request_quantity || row.suggested_request_quantity || 0) > 0).map((row) => `${String(row.item_code || '')}|${String(row.warehouse_code || '')}`))
+                          return
+                        }
+                        setSelectedReplenishmentKeys([])
+                      }}
+                    />
+                  </th>
+                  {[
+                    'Item',
+                    'Warehouse',
+                    'Preferred Vendor',
+                    'On Hand',
+                    'Reserved',
+                    'Inbound',
+                    'Requested',
+                    'Ordered',
+                    'Received',
+                    'Net',
+                    'Forecast',
+                    'Shortage Date',
+                    'Order By',
+                    'Reorder',
+                    'Target',
+                    'Demand',
+                    'Uncovered',
+                    'Suggested',
+                    'Normalized',
+                    'Coverage',
+                    'MOQ',
+                    'Pack',
+                    'Lead Time',
+                  ].map((label) => (
+                    <th key={label} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">{label}</th>
+                  ))}
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line bg-surface">
+                {replenishmentItems.length ? replenishmentItems.map((row, index) => {
+                  const rowKey = `${String(row.item_code || '')}|${String(row.warehouse_code || '')}`
+                  const suggestedQuantity = Number(row.normalized_request_quantity || row.suggested_request_quantity || 0)
+                  const purchaseRequestDetailPath = routeForDocument('purchase_request', 'detail', routeActions, '/procurement/requests')
+                  const requestRefs = asRecordList(row.purchase_request_refs)
+                  const orderRefs = asRecordList(row.purchase_order_refs)
+                  return (
+                    <tr key={index}>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <input
+                          type="checkbox"
+                          disabled={suggestedQuantity <= 0}
+                          checked={selectedReplenishmentKeys.includes(rowKey)}
+                          onChange={(event) => {
+                            setSelectedReplenishmentKeys((existing) => event.target.checked
+                              ? [...existing, rowKey]
+                              : existing.filter((value) => value !== rowKey))
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'item_code'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'warehouse_code'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'preferred_vendor_name'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'on_hand_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'reserved_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'inbound_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <div>{displayValue(resolvePath(row, 'requested_quantity'))}</div>
+                        {requestRefs.length ? <div className="mt-1 text-xs text-muted">{requestRefs.map((ref) => String(ref.number || ref.id || '')).join(', ')}</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <div>{displayValue(resolvePath(row, 'ordered_quantity'))}</div>
+                        {orderRefs.length ? <div className="mt-1 text-xs text-muted">{orderRefs.map((ref) => String(ref.number || ref.id || '')).join(', ')}</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'received_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'net_available_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'forecast_demand_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <div>{displayValue(resolvePath(row, 'projected_shortage_date'))}</div>
+                        {Boolean(row.time_critical) ? <div className="mt-1 text-xs text-red-600">Time critical</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'recommended_order_by_date'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'reorder_point_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'target_stock_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'sales_demand_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'uncovered_shortage_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'suggested_request_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <div>{displayValue(resolvePath(row, 'normalized_request_quantity'))}</div>
+                        {String(row.planning_quantity_rule || '') !== 'none' ? <div className="mt-1 text-xs text-muted">{displayValue(resolvePath(row, 'planning_quantity_rule'))}</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'coverage_status'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'minimum_order_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'pack_size'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'lead_time_days'))}</td>
+                      <td className="px-4 py-3 text-right">
+                        {suggestedQuantity > 0 && purchaseRequestDetailPath ? (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await fetch('/ui/data/planning/replenishment/generate-purchase-request', {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-Token': readCookie('orbyte_csrf'),
+                                  },
+                                  body: JSON.stringify({
+                                    items: [{
+                                      item_code: String(row.item_code || ''),
+                                      warehouse_code: String(row.warehouse_code || ''),
+                                      quantity: suggestedQuantity,
+                                    }],
+                                  }),
+                                })
+                                if (!response.ok) throw await buildError(response)
+                                const result = (await response.json()) as Record<string, unknown>
+                                const recordID = String(result.record_id || '')
+                                if (!recordID) throw new Error('Purchase request was created without an id.')
+                                onToast('Purchase request created.', 'success')
+                                onNavigate(`${purchaseRequestDetailPath}?id=${encodeURIComponent(recordID)}`)
+                              } catch (error) {
+                                onToast(error instanceof Error ? error.message : 'Failed to generate purchase request.', 'error')
+                              }
+                            }}
+                            className="rounded-lg border border-line px-3 py-1.5 text-sm text-body"
+                          >
+                            Generate PR
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  )
+                }) : (
+                  <tr>
+                    <td colSpan={25} className="px-4 py-10 text-center text-sm text-muted">
+                      No replenishment candidates.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+      {view.projection_key === 'planning.runs.summary' ? (
+        <section className="mt-6 rounded-xl border border-line p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Saved Planning Runs</h2>
+            <button
+              onClick={() => onNavigate('/planning/replenishment')}
+              className="rounded-lg border border-line px-3 py-1.5 text-sm text-body"
+            >
+              Open Replenishment
+            </button>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'run_date', label: 'Run Date' },
+              { key: 'warehouse_code', label: 'Warehouse' },
+              { key: 'proposal_count', label: 'Proposals' },
+              { key: 'projected_shortage_item_count', label: 'Shortages' },
+              { key: 'total_forecast_demand_quantity', label: 'Forecast Demand' },
+              { key: 'due_soon_count', label: 'Due Soon' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={planningRuns}
+            emptyText="No planning runs."
+            renderAction={(row) => {
+              const runID = String(row.id || '')
+              if (!runID) return null
+              return (
+                <button onClick={() => onNavigate(`/planning/proposals?run_id=${encodeURIComponent(runID)}`)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-body">
+                  Open
+                </button>
+              )
+            }}
+          />
+        </section>
+      ) : null}
+      {view.projection_key === 'planning.proposals.summary' ? (
+        <section className="mt-6 rounded-xl border border-line p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Planning Proposals</h2>
+              <div className="mt-1 text-xs text-muted">
+                Run {displayValue(resolvePath(payload, 'run.run_date'))} · Warehouse {displayValue(resolvePath(payload, 'run.warehouse_code')) || 'All'}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => onNavigate('/planning/runs')}
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-body"
+              >
+                Back to Runs
+              </button>
+              <button
+                disabled={!selectedProposalIDs.length}
+                onClick={async () => {
+                  const purchaseRequestDetailPath = routeForDocument('purchase_request', 'detail', routeActions, '/procurement/requests')
+                  try {
+                    const response = await fetch('/ui/data/planning/proposals/convert-purchase-request', {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': readCookie('orbyte_csrf'),
+                      },
+                      body: JSON.stringify({ proposal_ids: selectedProposalIDs }),
+                    })
+                    if (!response.ok) throw await buildError(response)
+                    const result = (await response.json()) as Record<string, unknown>
+                    const records = asRecordList(result.records)
+                    setSelectedProposalIDs([])
+                    if (records.length === 1 && purchaseRequestDetailPath) {
+                      const recordID = String(records[0]?.record_id || '')
+                      if (recordID) {
+                        onToast('Purchase request created.', 'success')
+                        onNavigate(`${purchaseRequestDetailPath}?id=${encodeURIComponent(recordID)}`)
+                        return
+                      }
+                    }
+                    onToast(`${records.length || Number(result.record_count || 0)} purchase requests created.`, 'success')
+                    const refreshed = await fetchJSON<Record<string, unknown>>(`/ui/data/planning/runs/${encodeURIComponent(new URLSearchParams(window.location.search).get('run_id') || '')}/proposals`)
+                    setPayload(refreshed)
+                  } catch (error) {
+                    onToast(error instanceof Error ? error.message : 'Failed to convert planning proposals.', 'error')
+                  }
+                }}
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-body disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Convert to Purchase Requests
+              </button>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-line">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">
+                    <input
+                      type="checkbox"
+                      checked={planningProposals.length > 0 && planningProposals.every((row) => selectedProposalIDs.includes(String(row.id || '')) || String(row.conversion_status || '') === 'converted' || Number(row.normalized_request_quantity || 0) <= 0)}
+                      onChange={(event) => {
+                        if (event.target.checked) {
+                          setSelectedProposalIDs(planningProposals.filter((row) => String(row.conversion_status || '') !== 'converted' && Number(row.normalized_request_quantity || 0) > 0).map((row) => String(row.id || '')))
+                          return
+                        }
+                        setSelectedProposalIDs([])
+                      }}
+                    />
+                  </th>
+                  {['Item', 'Warehouse', 'Vendor', 'Forecast', 'Demand', 'Inbound ETA', 'Shortage Date', 'Order By', 'Suggested', 'Normalized', 'Coverage', 'Conversion'].map((label) => (
+                    <th key={label} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line bg-surface">
+                {planningProposals.length ? planningProposals.map((row, index) => {
+                  const proposalID = String(row.id || '')
+                  const normalizedQuantity = Number(row.normalized_request_quantity || 0)
+                  const conversionStatus = String(row.conversion_status || '')
+                  return (
+                    <tr key={proposalID || index}>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <input
+                          type="checkbox"
+                          disabled={conversionStatus === 'converted' || normalizedQuantity <= 0}
+                          checked={selectedProposalIDs.includes(proposalID)}
+                          onChange={(event) => {
+                            setSelectedProposalIDs((existing) => event.target.checked
+                              ? [...existing, proposalID]
+                              : existing.filter((value) => value !== proposalID))
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'item_code'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'warehouse_code'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'preferred_vendor_name'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'forecast_demand_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'sales_demand_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'next_inbound_date'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <div>{displayValue(resolvePath(row, 'projected_shortage_date'))}</div>
+                        {Boolean(row.time_critical) ? <div className="mt-1 text-xs text-red-600">Time critical</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'recommended_order_by_date'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'suggested_request_quantity'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">
+                        <div>{displayValue(resolvePath(row, 'normalized_request_quantity'))}</div>
+                        {String(row.planning_quantity_rule || '') !== 'none' ? <div className="mt-1 text-xs text-muted">{displayValue(resolvePath(row, 'planning_quantity_rule'))}</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'coverage_status'))}</td>
+                      <td className="px-4 py-3 text-sm text-body">{displayValue(resolvePath(row, 'conversion_status'))}</td>
+                    </tr>
+                  )
+                }) : (
+                  <tr>
+                    <td colSpan={13} className="px-4 py-10 text-center text-sm text-muted">
+                      No saved planning proposals.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       {view.projection_key === 'commercial.party_statement' ? (
         partyID ? (
           <section className="mt-6">
@@ -843,6 +1681,17 @@ function DashboardView({
         ) : (
           <section className="mt-6 rounded-xl border border-line p-4 text-sm text-muted">
             Select a customer from party detail to open a statement.
+          </section>
+        )
+      ) : null}
+      {view.projection_key === 'procurement.vendor_statement' ? (
+        vendorID ? (
+          <section className="mt-6">
+            <VendorProcurementSummaryPanel summary={payload || {}} routeActions={routeActions} onNavigate={onNavigate} />
+          </section>
+        ) : (
+          <section className="mt-6 rounded-xl border border-line p-4 text-sm text-muted">
+            Select a vendor from vendor detail to open a statement.
           </section>
         )
       ) : null}
@@ -855,7 +1704,53 @@ function dashboardCardTarget(view: ViewDefinition, cardKey: string, routeActions
   const basePath = action?.route_path
   if (!basePath) return ''
   if (view.projection_key !== 'commercial.receivables.summary') {
-    return basePath
+    if (view.projection_key === 'inventory.summary') {
+      switch (cardKey) {
+        case 'expired_batch_count':
+          return `${basePath}?status=expired`
+        case 'near_expiry_batch_count':
+          return `${basePath}?status=near_expiry`
+        case 'quarantined_batch_count':
+          return `${basePath}?status=quarantined`
+        case 'blocked_batch_count':
+          return `${basePath}?status=blocked`
+        case 'recalled_batch_count':
+          return `${basePath}?status=recalled`
+        default:
+          return basePath
+      }
+    }
+    if (view.projection_key === 'planning.replenishment.summary') {
+      switch (cardKey) {
+        case 'shortage_item_count':
+        case 'total_shortage_quantity':
+        case 'total_suggested_request_quantity':
+          return `${basePath}?shortage_only=1`
+        default:
+          return basePath
+      }
+    }
+    if (view.projection_key !== 'procurement.payables.summary') {
+      return basePath
+    }
+    switch (cardKey) {
+      case 'open_bill_count':
+      case 'open_balance_total':
+        return `${basePath}?payable_state=open`
+      case 'overdue_bill_count':
+      case 'overdue_balance_total':
+        return `${basePath}?payable_state=overdue`
+      case 'due_today_total':
+        return `${basePath}?payable_state=due_today`
+      case 'current_balance_total':
+        return `${basePath}?payable_state=current`
+      case 'paid_amount_total':
+        return `${basePath}?status=paid`
+      case 'credited_amount_total':
+        return `${basePath}?status=issued`
+      default:
+        return basePath
+    }
   }
   switch (cardKey) {
     case 'open_invoice_count':
@@ -965,6 +1860,454 @@ function PartyCommercialSummaryPanel({
   )
 }
 
+function VendorProcurementSummaryPanel({
+  summary,
+  routeActions,
+  onNavigate,
+}: {
+  summary: Record<string, unknown>
+  routeActions: ActionDefinition[]
+  onNavigate: (target: string) => void
+}) {
+  const openBills = asRecordList(resolvePath(summary, 'open_bills'))
+  const activities = asRecordList(resolvePath(summary, 'activities')).slice(0, 10)
+  const billDetailPath = routeForDocument('vendor_bill', 'detail', routeActions, '/procurement/bills')
+  const statementPath = routeActions.find((action) => action.key === 'procurement.vendor_statement.dashboard')?.route_path || ''
+  const vendorID = String(resolvePath(summary, 'vendor_id') || '')
+
+  return (
+    <section className="space-y-4 rounded-xl border border-line p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Procurement Summary</h2>
+        {statementPath && vendorID ? (
+          <button onClick={() => onNavigate(`${statementPath}?vendor_id=${encodeURIComponent(vendorID)}`)} className="rounded-lg border border-line px-3 py-2 text-sm text-body">
+            Open Statement
+          </button>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <MetricCard label="Open Bills" value={displayValue(resolvePath(summary, 'open_bill_count'))} />
+        <MetricCard label="Open Balance" value={displayValue(resolvePath(summary, 'open_balance_total'))} />
+        <MetricCard label="Paid" value={displayValue(resolvePath(summary, 'paid_amount_total'))} />
+        <MetricCard label="Credited" value={displayValue(resolvePath(summary, 'credited_amount_total'))} />
+      </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Open Bills</h3>
+          <DataTable
+            columns={[
+              { key: 'number', label: 'Bill' },
+              { key: 'due_date', label: 'Due Date' },
+              { key: 'paid_amount', label: 'Paid' },
+              { key: 'credited', label: 'Credited' },
+              { key: 'balance_due', label: 'Open Balance' },
+            ]}
+            rows={openBills}
+            emptyText="No open bills."
+            renderAction={(row) => {
+              const recordID = String(row.id || '')
+              if (!billDetailPath || !recordID) return null
+              return (
+                <button onClick={() => onNavigate(`${billDetailPath}?id=${encodeURIComponent(recordID)}`)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-body">
+                  Open
+                </button>
+              )
+            }}
+          />
+        </section>
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Recent Activity</h3>
+          <DataTable
+            columns={[
+              { key: 'date', label: 'Date' },
+              { key: 'type', label: 'Type' },
+              { key: 'number', label: 'Number' },
+              { key: 'counter', label: 'Counterparty Doc' },
+              { key: 'amount', label: 'Amount' },
+              { key: 'status', label: 'Status' },
+            ]}
+            rows={activities}
+            emptyText="No procurement activity yet."
+          />
+        </section>
+      </div>
+    </section>
+  )
+}
+
+function InventoryBatchControlPanel({
+  batch,
+  onToast,
+  onChanged,
+}: {
+  batch: Record<string, unknown>
+  onToast: (message: string, variant?: 'default' | 'success' | 'warning' | 'error') => void
+  onChanged: () => void
+}) {
+  const batchID = String(resolvePath(batch, 'id') || '')
+  const status = String(resolvePath(batch, 'values.status') || '')
+  const [submitting, setSubmitting] = useState('')
+
+  const actions = (() => {
+    switch (status) {
+      case 'quarantined':
+        return ['release', 'block', 'recall']
+      case 'blocked':
+        return ['unblock', 'quarantine', 'recall']
+      case 'recalled':
+        return ['release']
+      default:
+        return ['quarantine', 'block', 'recall']
+    }
+  })()
+
+  async function handleAction(action: string) {
+    if (!batchID) return
+    setSubmitting(action)
+    try {
+      const response = await fetch(`/ui/data/inventory/batches/${encodeURIComponent(batchID)}/actions`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': readCookie('orbyte_csrf'),
+        },
+        body: JSON.stringify({
+          action,
+          reason: action,
+        }),
+      })
+      if (!response.ok) throw await buildError(response)
+      onToast(`Batch ${humanize(action)} applied.`, 'success')
+      onChanged()
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : 'Batch action failed', 'error')
+    } finally {
+      setSubmitting('')
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-line p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Batch Controls</h2>
+        {actions.map((action) => (
+          <button
+            key={action}
+            type="button"
+            disabled={submitting !== '' && submitting !== action}
+            onClick={() => void handleAction(action)}
+            className="rounded-lg border border-line px-3 py-2 text-sm text-body disabled:opacity-50"
+          >
+            {submitting === action ? 'Working...' : humanize(action)}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function InventoryBatchTracePanel({
+  batch,
+  onToast,
+}: {
+  batch: Record<string, unknown>
+  onToast: (message: string, variant?: 'default' | 'success' | 'warning' | 'error') => void
+}) {
+  const batchID = String(resolvePath(batch, 'id') || '')
+  const [trace, setTrace] = useState<Record<string, unknown> | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    async function loadTrace() {
+      if (!batchID) return
+      setLoading(true)
+      try {
+        const payload = await fetchJSON<Record<string, unknown>>(`/ui/data/inventory/batches/${encodeURIComponent(batchID)}/trace`)
+        if (!mounted) return
+        setTrace(payload)
+      } catch (error) {
+        if (!mounted) return
+        setTrace(null)
+        onToast(error instanceof Error ? error.message : 'Batch trace failed', 'error')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    void loadTrace()
+    return () => {
+      mounted = false
+    }
+  }, [batchID, onToast])
+
+  const nodes = asRecordList(resolvePath(trace, 'nodes'))
+  const producedInto = asRecordList(resolvePath(trace, 'produced_into'))
+  const consumedFrom = asRecordList(resolvePath(trace, 'consumed_from'))
+  const summary = (resolvePath(trace, 'summary') || {}) as Record<string, unknown>
+
+  return (
+    <section className="space-y-4 rounded-xl border border-line p-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Batch Trace</h2>
+      {loading ? <div className="text-sm text-muted">Loading batch trace.</div> : null}
+      {!loading && trace ? (
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <MetricCard label="On Hand" value={displayValue(resolvePath(summary, 'on_hand_quantity'))} />
+            <MetricCard label="Available" value={displayValue(resolvePath(summary, 'available_quantity'))} />
+            <MetricCard label="Movements" value={displayValue(resolvePath(summary, 'movement_count'))} />
+            <MetricCard label="Linked Docs" value={displayValue(resolvePath(summary, 'document_node_count'))} />
+          </div>
+          <section>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Document Chain</h3>
+            <DataTable
+              columns={[
+                { key: 'date', label: 'Date' },
+                { key: 'type', label: 'Type' },
+                { key: 'number', label: 'Number' },
+                { key: 'movement_reason', label: 'Reason' },
+                { key: 'quantity_delta', label: 'Delta' },
+                { key: 'status', label: 'Status' },
+              ]}
+              rows={nodes}
+              emptyText="No trace nodes."
+            />
+          </section>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <section>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Produced Into</h3>
+              <DataTable
+                columns={[
+                  { key: 'production_order_number', label: 'Production Order' },
+                  { key: 'production_output_number', label: 'Output' },
+                  { key: 'item_code', label: 'Item' },
+                  { key: 'batch_code', label: 'Batch' },
+                  { key: 'output_quantity', label: 'Quantity' },
+                ]}
+                rows={producedInto}
+                emptyText="This batch has not produced downstream lots."
+              />
+            </section>
+            <section>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Consumed From</h3>
+              <DataTable
+                columns={[
+                  { key: 'production_order_number', label: 'Production Order' },
+                  { key: 'production_issue_number', label: 'Issue' },
+                  { key: 'item_code', label: 'Item' },
+                  { key: 'batch_code', label: 'Batch' },
+                  { key: 'quantity', label: 'Quantity' },
+                ]}
+                rows={consumedFrom}
+                emptyText="No upstream production consumption links."
+              />
+            </section>
+          </div>
+        </>
+      ) : null}
+    </section>
+  )
+}
+
+function ProductVariantsPanel({
+  product,
+  routeActions,
+  onNavigate,
+  onToast,
+}: {
+  product: Record<string, unknown>
+  routeActions: ActionDefinition[]
+  onNavigate: (target: string) => void
+  onToast: (message: string, variant?: 'default' | 'success' | 'warning' | 'error') => void
+}) {
+  const productID = String(resolvePath(product, 'id') || '')
+  const productCode = String(resolvePath(product, 'values.code') || '')
+  const dimensionCodes = parseDimensionCodes(resolvePath(product, 'values.variant_dimension_codes'))
+  const [dimensionDefs, setDimensionDefs] = useState<Array<Record<string, unknown>>>([])
+  const [variantValues, setVariantValues] = useState<Array<Record<string, unknown>>>([])
+  const [variants, setVariants] = useState<Array<Record<string, unknown>>>([])
+  const [selected, setSelected] = useState<Record<string, string[]>>({})
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      if (!productCode) return
+      setLoading(true)
+      try {
+        const [dimensionsPayload, valuesPayload, itemsPayload] = await Promise.all([
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_variant_dimension?page_size=200'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_variant_value?page_size=500'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>(`/models/commercial_item?product_code=${encodeURIComponent(productCode)}&page_size=500`),
+        ])
+        if (!mounted) return
+        setDimensionDefs((dimensionsPayload.items || []).filter((item) => dimensionCodes.includes(String(resolvePath(item, 'values.code') || ''))))
+        setVariantValues(valuesPayload.items || [])
+        setVariants(itemsPayload.items || [])
+      } catch {
+        if (!mounted) return
+        setDimensionDefs([])
+        setVariantValues([])
+        setVariants([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      mounted = false
+    }
+  }, [productCode, dimensionCodes.join('|')])
+
+  const valuesByDimension = useMemo(() => {
+    const grouped: Record<string, Array<Record<string, unknown>>> = {}
+    for (const item of variantValues) {
+      const dimensionCode = String(resolvePath(item, 'values.dimension_code') || '')
+      if (!dimensionCode || !dimensionCodes.includes(dimensionCode)) continue
+      if (!grouped[dimensionCode]) grouped[dimensionCode] = []
+      grouped[dimensionCode].push(item)
+    }
+    for (const key of Object.keys(grouped)) {
+      const dimensionValues = grouped[key]
+      if (!dimensionValues) continue
+      dimensionValues.sort((left, right) => {
+        const leftOrder = toNumber(resolvePath(left, 'values.sort_order'))
+        const rightOrder = toNumber(resolvePath(right, 'values.sort_order'))
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder
+        return String(resolvePath(left, 'values.name') || resolvePath(left, 'values.code') || '').localeCompare(String(resolvePath(right, 'values.name') || resolvePath(right, 'values.code') || ''))
+      })
+    }
+    return grouped
+  }, [dimensionCodes, variantValues])
+
+  const canGenerate = dimensionCodes.length > 0 && dimensionCodes.every((code) => (selected[code] || []).length > 0)
+
+  async function handleGenerate() {
+    if (!productID || !canGenerate) return
+    setSubmitting(true)
+    try {
+      const response = await fetch(`/commercial/products/${encodeURIComponent(productID)}/generate-variants`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': readCookie('orbyte_csrf'),
+        },
+        body: JSON.stringify({
+          dimensions: dimensionCodes.map((dimensionCode) => ({
+            dimension_code: dimensionCode,
+            value_codes: selected[dimensionCode] || [],
+          })),
+        }),
+      })
+      if (!response.ok) throw await buildError(response)
+      const refreshed = await fetchJSON<{ items: Array<Record<string, unknown>> }>(`/models/commercial_item?product_code=${encodeURIComponent(productCode)}&page_size=500`)
+      setVariants(refreshed.items || [])
+      onToast('Variants generated.', 'success')
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : 'Variant generation failed', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const itemDetailPath = routeForModel('commercial_item', 'detail', routeActions, '/commercial/items')
+
+  return (
+    <section className="rounded-xl border border-line p-4">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Variants</h2>
+      {!dimensionCodes.length ? (
+        <div className="text-sm text-muted">No variant dimensions are configured for this product.</div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {dimensionCodes.map((dimensionCode) => {
+              const dimension = dimensionDefs.find((item) => String(resolvePath(item, 'values.code') || '') === dimensionCode)
+              const options = valuesByDimension[dimensionCode] || []
+              return (
+                <div key={dimensionCode} className="rounded-lg border border-line p-3">
+                  <div className="mb-2 text-sm font-medium text-body">
+                    {String(resolvePath(dimension, 'values.name') || dimensionCode)}
+                  </div>
+                  <div className="space-y-2">
+                    {options.length ? options.map((item) => {
+                      const valueCode = String(resolvePath(item, 'values.code') || '')
+                      const checked = (selected[dimensionCode] || []).includes(valueCode)
+                      return (
+                        <label key={`${dimensionCode}-${valueCode}`} className="flex items-center gap-2 text-sm text-body">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setSelected((current) => ({
+                                ...current,
+                                [dimensionCode]: event.target.checked
+                                  ? [...(current[dimensionCode] || []), valueCode]
+                                  : (current[dimensionCode] || []).filter((value) => value !== valueCode),
+                              }))
+                            }
+                          />
+                          <span>{String(resolvePath(item, 'values.name') || valueCode)}</span>
+                        </label>
+                      )
+                    }) : <div className="text-sm text-muted">No active values for this dimension.</div>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => void handleGenerate()} disabled={!canGenerate || submitting} className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-50">
+              Generate Variants
+            </button>
+            <span className="text-sm text-muted">Choose one or more values for each configured dimension.</span>
+          </div>
+        </div>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-full divide-y divide-line text-sm">
+          <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
+            <tr>
+              <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">SKU</th>
+              <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">Name</th>
+              <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">Variant</th>
+              <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">Base Price</th>
+              <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">Status</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line bg-surface">
+            {loading ? (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-muted">Loading variants.</td></tr>
+            ) : variants.length ? variants.map((item) => {
+              const id = String(item.id || '')
+              return (
+                <tr key={id}>
+                  <td className="px-3 py-2 text-body">{displayValue(resolvePath(item, 'values.sku'))}</td>
+                  <td className="px-3 py-2 text-body">{displayValue(resolvePath(item, 'values.name'))}</td>
+                  <td className="px-3 py-2 text-body">{displayValue(resolvePath(item, 'values.variant_label'))}</td>
+                  <td className="px-3 py-2 text-body">{displayValue(resolvePath(item, 'values.base_price'))}</td>
+                  <td className="px-3 py-2 text-body">{displayValue(resolvePath(item, 'values.status'))}</td>
+                  <td className="px-3 py-2 text-right">
+                    {itemDetailPath ? (
+                      <button type="button" onClick={() => onNavigate(`${itemDetailPath}?id=${encodeURIComponent(id)}`)} className="rounded-lg border border-line px-3 py-2 text-body">
+                        Open
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              )
+            }) : (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-muted">No variants exist yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 function FormView({
   view,
   locale,
@@ -986,7 +2329,7 @@ function FormView({
   const [etag, setETag] = useState('')
   const [recordStatus, setRecordStatus] = useState('')
   const [errors, setErrors] = useState<ValidationErrors>({})
-  const [catalog, setCatalog] = useState<CommercialFormCatalog>({ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
+  const [catalog, setCatalog] = useState<CommercialFormCatalog>({ partiesByID: {}, vendorsByID: {}, invoicesByID: {}, billsByID: {}, paymentsByID: {}, productsByCode: {}, itemsByCode: {}, variantDimensionsByCode: {}, variantValuesByKey: {}, itemCategoriesByCode: {}, uomsByCode: {}, warehousesByCode: {}, workCentersByCode: {}, inventoryBatchesByID: {}, bomsByID: {}, bomVersionsByID: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
 
   useEffect(() => {
     let mounted = true
@@ -1025,21 +2368,31 @@ function FormView({
       const documentType = String(view.document_type || '')
       const modelKey = String(view.model_key || '')
       const needsCatalog =
-        ['sales_order', 'invoice', 'credit_note', 'payment_receipt', 'payment_refund'].includes(documentType) ||
-        ['party', 'commercial_item', 'commercial_price_list_item'].includes(modelKey)
+        ['sales_order', 'invoice', 'credit_note', 'payment_receipt', 'payment_refund', 'purchase_request', 'purchase_order', 'goods_receipt', 'vendor_bill', 'payment_out', 'vendor_credit_note', 'sales_fulfillment', 'delivery_order', 'sales_return', 'return_receipt', 'supplier_return', 'stock_receipt', 'stock_issue', 'stock_adjustment', 'stock_transfer', 'production_order', 'production_issue', 'production_output', 'recall_case', 'recall_action'].includes(documentType) ||
+        ['party', 'vendor_profile', 'commercial_product', 'commercial_item', 'commercial_variant_dimension', 'commercial_variant_value', 'commercial_price_list_item', 'inventory_batch', 'warehouse', 'production_bom', 'production_bom_version', 'production_work_center'].includes(modelKey)
       if (!needsCatalog) {
         if (!mounted) return
-        setCatalog({ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
+        setCatalog({ partiesByID: {}, vendorsByID: {}, invoicesByID: {}, billsByID: {}, paymentsByID: {}, productsByCode: {}, itemsByCode: {}, variantDimensionsByCode: {}, variantValuesByKey: {}, itemCategoriesByCode: {}, uomsByCode: {}, warehousesByCode: {}, workCentersByCode: {}, inventoryBatchesByID: {}, bomsByID: {}, bomVersionsByID: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
         return
       }
       try {
-        const [partiesPayload, invoicesPayload, paymentsPayload, itemsPayload, categoriesPayload, uomsPayload, taxPayload, taxProfilesPayload, priceListsPayload, priceListItemsPayload, paymentPayload] = await Promise.all([
+        const [partiesPayload, vendorsPayload, invoicesPayload, billsPayload, paymentsPayload, productsPayload, itemsPayload, variantDimensionsPayload, variantValuesPayload, categoriesPayload, uomsPayload, warehousesPayload, workCentersPayload, inventoryBatchesPayload, bomsPayload, bomVersionsPayload, taxPayload, taxProfilesPayload, priceListsPayload, priceListItemsPayload, paymentPayload] = await Promise.all([
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/party'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/vendor_profile'),
           fetchJSON<{ items: Array<Record<string, unknown>>; total?: number }>('/ui/data/documents?type=invoice&page_size=200&include_payload=1'),
+          fetchJSON<{ items: Array<Record<string, unknown>>; total?: number }>('/ui/data/documents?type=vendor_bill&page_size=200&include_payload=1'),
           fetchJSON<{ items: Array<Record<string, unknown>>; total?: number }>('/ui/data/documents?type=payment_receipt&page_size=200&include_payload=1'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_product'),
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_item'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_variant_dimension'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_variant_value'),
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_item_category'),
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_uom'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/warehouse'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/production_work_center'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/inventory_batch?page_size=500'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/production_bom'),
+          fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/production_bom_version'),
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_tax_code'),
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_tax_profile'),
           fetchJSON<{ items: Array<Record<string, unknown>> }>('/models/commercial_price_list'),
@@ -1068,6 +2421,28 @@ function FormView({
             .filter((detail): detail is Record<string, unknown> => !!detail)
             .map((detail) => [String(resolvePath(detail, 'header.id') || ''), detail]),
         )
+        const openBillIDs = (billsPayload.items || [])
+          .filter((item) => {
+            const status = String(resolvePath(item, 'header.status') || '')
+            return status === 'issued' || status === 'partially_paid'
+          })
+          .map((item) => String(resolvePath(item, 'header.id') || ''))
+          .filter(Boolean)
+        const billDetails = await Promise.all(
+          openBillIDs.map(async (id) => {
+            try {
+              return await fetchJSON<Record<string, unknown>>(`/ui/data/documents/${encodeURIComponent(id)}`)
+            } catch {
+              return null
+            }
+          }),
+        )
+        const billsByID = Object.fromEntries(
+          billDetails
+            .map((detail) => (detail?.record || detail) as Record<string, unknown> | null)
+            .filter((detail): detail is Record<string, unknown> => !!detail)
+            .map((detail) => [String(resolvePath(detail, 'header.id') || ''), detail]),
+        )
         const paymentIDs = (paymentsPayload.items || [])
           .filter((item) => String(resolvePath(item, 'header.status') || '') === 'received')
           .map((item) => String(resolvePath(item, 'header.id') || ''))
@@ -1090,11 +2465,21 @@ function FormView({
         if (!mounted) return
         setCatalog({
           partiesByID: Object.fromEntries((partiesPayload.items || []).map((item) => [String(item.id || ''), item])),
+          vendorsByID: Object.fromEntries((vendorsPayload.items || []).map((item) => [String(item.id || ''), item])),
           invoicesByID,
+          billsByID,
           paymentsByID,
+          productsByCode: Object.fromEntries((productsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           itemsByCode: Object.fromEntries((itemsPayload.items || []).map((item) => [String(resolvePath(item, 'values.sku') || ''), item])),
+          variantDimensionsByCode: Object.fromEntries((variantDimensionsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          variantValuesByKey: Object.fromEntries((variantValuesPayload.items || []).map((item) => [`${String(resolvePath(item, 'values.dimension_code') || '')}|${String(resolvePath(item, 'values.code') || '')}`, item])),
           itemCategoriesByCode: Object.fromEntries((categoriesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           uomsByCode: Object.fromEntries((uomsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          warehousesByCode: Object.fromEntries((warehousesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          workCentersByCode: Object.fromEntries((workCentersPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          inventoryBatchesByID: Object.fromEntries((inventoryBatchesPayload.items || []).map((item) => [String(resolvePath(item, 'id') || ''), item])),
+          bomsByID: Object.fromEntries((bomsPayload.items || []).map((item) => [String(item.id || ''), item])),
+          bomVersionsByID: Object.fromEntries((bomVersionsPayload.items || []).map((item) => [String(item.id || ''), item])),
           taxCodesByCode: Object.fromEntries((taxPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           taxProfilesByCode: Object.fromEntries((taxProfilesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           priceListsByCode: Object.fromEntries((priceListsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
@@ -1103,11 +2488,21 @@ function FormView({
         })
         setValues((current) => normalizeCommercialFormState(current, String(view.document_type || ''), {
           partiesByID: Object.fromEntries((partiesPayload.items || []).map((item) => [String(item.id || ''), item])),
+          vendorsByID: Object.fromEntries((vendorsPayload.items || []).map((item) => [String(item.id || ''), item])),
           invoicesByID,
+          billsByID,
           paymentsByID,
+          productsByCode: Object.fromEntries((productsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           itemsByCode: Object.fromEntries((itemsPayload.items || []).map((item) => [String(resolvePath(item, 'values.sku') || ''), item])),
+          variantDimensionsByCode: Object.fromEntries((variantDimensionsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          variantValuesByKey: Object.fromEntries((variantValuesPayload.items || []).map((item) => [`${String(resolvePath(item, 'values.dimension_code') || '')}|${String(resolvePath(item, 'values.code') || '')}`, item])),
           itemCategoriesByCode: Object.fromEntries((categoriesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           uomsByCode: Object.fromEntries((uomsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          warehousesByCode: Object.fromEntries((warehousesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          workCentersByCode: Object.fromEntries((workCentersPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
+          inventoryBatchesByID: Object.fromEntries((inventoryBatchesPayload.items || []).map((item) => [String(resolvePath(item, 'id') || ''), item])),
+          bomsByID: Object.fromEntries((bomsPayload.items || []).map((item) => [String(item.id || ''), item])),
+          bomVersionsByID: Object.fromEntries((bomVersionsPayload.items || []).map((item) => [String(item.id || ''), item])),
           taxCodesByCode: Object.fromEntries((taxPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           taxProfilesByCode: Object.fromEntries((taxProfilesPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
           priceListsByCode: Object.fromEntries((priceListsPayload.items || []).map((item) => [String(resolvePath(item, 'values.code') || ''), item])),
@@ -1116,7 +2511,7 @@ function FormView({
         }))
       } catch {
         if (!mounted) return
-        setCatalog({ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
+        setCatalog({ partiesByID: {}, vendorsByID: {}, invoicesByID: {}, billsByID: {}, paymentsByID: {}, productsByCode: {}, itemsByCode: {}, variantDimensionsByCode: {}, variantValuesByKey: {}, itemCategoriesByCode: {}, uomsByCode: {}, warehousesByCode: {}, workCentersByCode: {}, inventoryBatchesByID: {}, bomsByID: {}, bomVersionsByID: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} })
       }
     }
     void loadCatalog()
@@ -1132,7 +2527,7 @@ function FormView({
         ? routeForModel(view.model_key, 'detail', useShellStore.getState().actions, currentPath)
         : routeForDocument(view.document_type || '', 'detail', useShellStore.getState().actions, currentPath))
     : stripEditorSuffix(currentPath) || '/'
-  const formLocked = !view.model_key && targetID && isCommercialDocumentLocked(String(view.document_type || ''), recordStatus)
+  const formLocked = !view.model_key && targetID && (isCommercialDocumentLocked(String(view.document_type || ''), recordStatus) || isProcurementDocumentLocked(String(view.document_type || ''), recordStatus) || isFulfillmentDocumentLocked(String(view.document_type || ''), recordStatus) || isReturnsDocumentLocked(String(view.document_type || ''), recordStatus) || isSupplierReturnsDocumentLocked(String(view.document_type || ''), recordStatus) || isProductionDocumentLocked(String(view.document_type || ''), recordStatus) || isRecallDocumentLocked(String(view.document_type || ''), recordStatus))
 
   if (formLocked) {
     return (
@@ -1154,6 +2549,10 @@ function FormView({
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) {
       onToast('Please fix the highlighted fields.', 'warning')
+      return
+    }
+    if (hasUnresolvedVariantSelections(values)) {
+      onToast('Select a concrete variant SKU for every product-based line before saving.', 'warning')
       return
     }
 
@@ -1403,7 +2802,7 @@ function FlowRouteView({ route, locale }: { route: RouteResolution; locale: stri
                       }))
                     }
                     model={false}
-                    catalog={{ partiesByID: {}, invoicesByID: {}, paymentsByID: {}, itemsByCode: {}, itemCategoriesByCode: {}, uomsByCode: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} }}
+                    catalog={{ partiesByID: {}, vendorsByID: {}, invoicesByID: {}, billsByID: {}, paymentsByID: {}, productsByCode: {}, itemsByCode: {}, variantDimensionsByCode: {}, variantValuesByKey: {}, itemCategoriesByCode: {}, uomsByCode: {}, warehousesByCode: {}, workCentersByCode: {}, inventoryBatchesByID: {}, bomsByID: {}, bomVersionsByID: {}, taxCodesByCode: {}, taxProfilesByCode: {}, priceListsByCode: {}, priceListItemsByKey: {}, paymentMethodsByCode: {} }}
                     error={errors[validationFieldKey(doc.key, field.key)]}
                     onBlur={() =>
                       setErrors((current) => {
@@ -1620,7 +3019,25 @@ function FieldEditor({
     onChange((current) => applyFieldUpdate(current, normalizedPath, next, catalog))
   }
 
-  if (field.widget === 'commercial_lines' || field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations' || field.widget === 'commercial_journal_lines') {
+  if (
+    field.widget === 'commercial_lines' ||
+    field.widget === 'commercial_allocations' ||
+    field.widget === 'commercial_refund_allocations' ||
+    field.widget === 'commercial_journal_lines' ||
+    field.widget === 'procurement_lines' ||
+    field.widget === 'procurement_receipt_lines' ||
+    field.widget === 'procurement_allocations' ||
+    field.widget === 'fulfillment_lines' ||
+    field.widget === 'delivery_lines' ||
+    field.widget === 'return_lines' ||
+    field.widget === 'supplier_return_lines' ||
+    field.widget === 'inventory_lines' ||
+    field.widget === 'inventory_transfer_lines' ||
+    field.widget === 'production_component_lines' ||
+    field.widget === 'production_issue_lines' ||
+    field.widget === 'production_stage_lines' ||
+    field.widget === 'trace_batches'
+  ) {
     return (
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-body">{label}</span>
@@ -1633,9 +3050,12 @@ function FieldEditor({
           onChange={(rows, patch) =>
             onChange((current) => {
               let next = applyCommercialArrayUpdate(current, normalizedPath, field.widget || '', rows, catalog)
-              if ((field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations') && patch) {
+              if ((field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations' || field.widget === 'procurement_allocations') && patch) {
                 if (patch.amount_received != null && (patch.replace_amount_received || toNumber(resolvePath(current, 'amount_received')) <= 0)) {
                   next = assignPathValue(next, 'amount_received', patch.amount_received)
+                }
+                if (patch.amount_paid != null && (patch.replace_amount_paid || toNumber(resolvePath(current, 'amount_paid')) <= 0)) {
+                  next = assignPathValue(next, 'amount_paid', patch.amount_paid)
                 }
                 if (patch.amount_refunded != null && (patch.replace_amount_refunded || toNumber(resolvePath(current, 'amount_refunded')) <= 0)) {
                   next = assignPathValue(next, 'amount_refunded', patch.amount_refunded)
@@ -1649,8 +3069,14 @@ function FieldEditor({
                 if (patch.party_id && !String(resolvePath(current, 'party_id') || '')) {
                   next = applyFieldUpdate(next, 'party_id', patch.party_id, catalog)
                 }
+                if (patch.vendor_id && !String(resolvePath(current, 'vendor_id') || '')) {
+                  next = applyFieldUpdate(next, 'vendor_id', patch.vendor_id, catalog)
+                }
                 if (patch.party_name && !String(resolvePath(current, 'party_name') || '')) {
                   next = assignPathValue(next, 'party_name', patch.party_name)
+                }
+                if (patch.vendor_name && !String(resolvePath(current, 'vendor_name') || '')) {
+                  next = assignPathValue(next, 'vendor_name', patch.vendor_name)
                 }
                 if (patch.currency_code && !String(resolvePath(current, 'currency_code') || '')) {
                   next = assignPathValue(next, 'currency_code', patch.currency_code)
@@ -1752,6 +3178,8 @@ function CommercialArrayFieldEditor({
   const columns = commercialArrayColumns(widget, catalog, values)
   const openInvoices = widget === 'commercial_allocations' ? commercialOpenInvoices(catalog, values) : []
   const openInvoiceBalance = openInvoices.reduce((sum, invoice) => sum + toNumber(resolvePath(invoice, 'body.payload.balance_due_amount')), 0)
+  const openBills = widget === 'procurement_allocations' ? procurementOpenBills(catalog, values) : []
+  const openBillBalance = openBills.reduce((sum, bill) => sum + toNumber(resolvePath(bill, 'body.payload.balance_due_amount')), 0)
   const refundablePayments = widget === 'commercial_refund_allocations' ? commercialRefundablePayments(catalog, values) : []
   const refundablePaymentBalance = refundablePayments.reduce((sum, payment) => {
     const amount = toNumber(resolvePath(payment, 'body.payload.amount_received'))
@@ -1764,6 +3192,18 @@ function CommercialArrayFieldEditor({
     const nextRows = rows.map((row, rowIndex) => {
       if (rowIndex !== index) return row
       const updated = { ...row, [key]: nextValue }
+      if (key === 'product_code') {
+        updated.variant_signature = ''
+        updated.item_code = ''
+      }
+      if (key === 'variant_signature') {
+        updated.item_code = resolveVariantItemCodeFromRow(updated, catalog)
+      }
+      if (key === 'item_code') {
+        const item = catalog.itemsByCode[String(nextValue || '')]
+        updated.product_code = String(resolvePath(item, 'values.product_code') || updated.product_code || '')
+        updated.variant_signature = String(resolvePath(item, 'values.variant_signature') || updated.variant_signature || '')
+      }
       if (widget === 'commercial_allocations' && key === 'invoice_id') {
         const invoice = catalog.invoicesByID[String(nextValue || '')]
         const invoiceNumber = String(resolvePath(invoice, 'header.number') || '')
@@ -1778,6 +3218,22 @@ function CommercialArrayFieldEditor({
           payment_reference: invoiceNumber || undefined,
           party_id: partyID || undefined,
           party_name: partyName || undefined,
+          currency_code: currencyCode || undefined,
+        }
+      }
+      if (widget === 'procurement_allocations' && key === 'bill_id') {
+        const bill = catalog.billsByID[String(nextValue || '')]
+        const billNumber = String(resolvePath(bill, 'header.number') || '')
+        const openAmount = toNumber(resolvePath(bill, 'body.payload.balance_due_amount'))
+        const vendorID = String(resolvePath(bill, 'body.payload.vendor_id') || '')
+        const vendorName = String(resolvePath(bill, 'body.payload.vendor_name') || '')
+        const currencyCode = String(resolvePath(bill, 'body.payload.currency_code') || '')
+        if (billNumber) updated.bill_number = billNumber
+        if (!toNumber(updated.amount) && openAmount > 0) updated.amount = openAmount
+        patch = {
+          amount_paid: openAmount > 0 ? openAmount : undefined,
+          vendor_id: vendorID || undefined,
+          vendor_name: vendorName || undefined,
           currency_code: currencyCode || undefined,
         }
       }
@@ -1797,6 +3253,23 @@ function CommercialArrayFieldEditor({
           payment_method_code: methodCode || undefined,
           clearing_account_code: clearingAccount || undefined,
         }
+      }
+      if (widget === 'trace_batches' && key === 'batch_id') {
+        const batch = catalog.inventoryBatchesByID[String(nextValue || '')]
+        updated.item_code = String(resolvePath(batch, 'values.item_code') || '')
+        updated.warehouse_code = String(resolvePath(batch, 'values.warehouse_code') || '')
+        updated.batch_code = String(resolvePath(batch, 'values.batch_code') || '')
+        updated.expiration_date = String(resolvePath(batch, 'values.expiration_date') || '')
+        updated.status = String(resolvePath(batch, 'values.status') || '')
+        updated.on_hand_quantity = toNumber(resolvePath(batch, 'values.on_hand_quantity'))
+        updated.reserved_quantity = toNumber(resolvePath(batch, 'values.reserved_quantity'))
+        updated.available_quantity = toNumber(resolvePath(batch, 'values.available_quantity'))
+      }
+      if (widget === 'production_component_lines' && key === 'component_item_code' && !String(updated.actual_item_code || '')) {
+        updated.actual_item_code = String(nextValue || '')
+      }
+      if (widget === 'production_issue_lines' && key === 'actual_item_code') {
+        updated.item_code = String(nextValue || '')
       }
       return updated
     })
@@ -1828,6 +3301,16 @@ function CommercialArrayFieldEditor({
     onChange(normalizeCommercialRows(nextRows, widget, catalog), {
       amount_refunded: allocatedAmount,
       replace_amount_refunded: useFullRefundableBalance || targetAmount <= 0,
+    })
+  }
+
+  function autoAllocateProcurement(useFullOpenBalance: boolean) {
+    if (widget !== 'procurement_allocations') return
+    const targetAmount = useFullOpenBalance ? openBillBalance : toNumber(resolvePath(values, 'amount_paid'))
+    const { rows: nextRows, allocatedAmount } = buildProcurementAllocationRows(openBills, targetAmount)
+    onChange(normalizeCommercialRows(nextRows, widget, catalog), {
+      amount_paid: allocatedAmount,
+      replace_amount_paid: useFullOpenBalance || targetAmount <= 0,
     })
   }
 
@@ -1871,6 +3354,25 @@ function CommercialArrayFieldEditor({
           </button>
         </div>
       ) : null}
+      {widget === 'procurement_allocations' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-accent-soft/30 px-3 py-2 text-sm text-body">
+          <span>
+            Open bills for vendor: <strong>{openBills.length}</strong>
+          </span>
+          <span>
+            Open balance: <strong>{roundMoney(openBillBalance)}</strong>
+          </span>
+          <button type="button" onClick={() => autoAllocateProcurement(false)} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!openBills.length}>
+            Auto Allocate Payment
+          </button>
+          <button type="button" onClick={() => autoAllocateProcurement(true)} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!openBills.length}>
+            Use Full Open Balance
+          </button>
+          <button type="button" onClick={() => onChange([])} className="rounded-lg border border-line px-3 py-2 text-body" disabled={!rows.length}>
+            Clear Allocations
+          </button>
+        </div>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-line text-sm">
           <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
@@ -1892,7 +3394,10 @@ function CommercialArrayFieldEditor({
                       <div className="h-10 rounded-lg border border-line bg-accent-soft/40 px-3 py-2 text-sm text-body">
                         {displayValue(row[column.key])}
                       </div>
-                    ) : column.options?.length ? (
+                    ) : resolveCommercialColumnOptions(column.key, widget, row, catalog, values, column.options).length ? (
+                      (() => {
+                        const options = resolveCommercialColumnOptions(column.key, widget, row, catalog, values, column.options)
+                        return (
                       <select
                         id={`field-${fieldKey}-${index}-${column.key}`}
                         name={`${fieldKey}[${index}].${column.key}`}
@@ -1901,12 +3406,14 @@ function CommercialArrayFieldEditor({
                         onChange={(event) => updateRow(index, column.key, event.target.value)}
                       >
                         <option value="">Select an option</option>
-                        {column.options.map((option) => (
+                        {options.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
                         ))}
                       </select>
+                        )
+                      })()
                     ) : (
                       <input
                         type={column.type === 'number' ? 'number' : 'text'}
@@ -1943,7 +3450,25 @@ function CommercialArrayFieldEditor({
 }
 
 function renderDetailFieldValue(field: FieldDefinition, value: unknown): ReactNode {
-  if (field.widget === 'commercial_lines' || field.widget === 'commercial_allocations' || field.widget === 'commercial_refund_allocations' || field.widget === 'commercial_journal_lines') {
+  if (
+    field.widget === 'commercial_lines' ||
+    field.widget === 'commercial_allocations' ||
+    field.widget === 'commercial_refund_allocations' ||
+    field.widget === 'commercial_journal_lines' ||
+    field.widget === 'procurement_lines' ||
+    field.widget === 'procurement_receipt_lines' ||
+    field.widget === 'procurement_allocations' ||
+    field.widget === 'fulfillment_lines' ||
+    field.widget === 'delivery_lines' ||
+    field.widget === 'return_lines' ||
+    field.widget === 'supplier_return_lines' ||
+    field.widget === 'inventory_lines' ||
+    field.widget === 'inventory_transfer_lines' ||
+    field.widget === 'production_component_lines' ||
+    field.widget === 'production_issue_lines' ||
+    field.widget === 'production_stage_lines' ||
+    field.widget === 'trace_batches'
+  ) {
     const rows = asRecordList(value)
     const columns = commercialArrayColumns(field.widget)
     if (!rows.length) return <span className="text-muted">No rows.</span>
@@ -1973,6 +3498,9 @@ function renderDetailFieldValue(field: FieldDefinition, value: unknown): ReactNo
         </table>
       </div>
     )
+  }
+  if (field.widget === 'json') {
+    return <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-body">{JSON.stringify(value ?? {}, null, 2)}</pre>
   }
   return displayValue(value)
 }
@@ -2020,6 +3548,8 @@ function commercialArrayColumns(widget: string, catalog?: CommercialFormCatalog,
   switch (widget) {
     case 'commercial_lines':
       return [
+        { key: 'product_code', label: 'Product', type: 'text', options: commercialSelectOptions('product_code', catalog) },
+        { key: 'variant_signature', label: 'Variant', type: 'text' },
         { key: 'item_code', label: 'Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
         { key: 'description', label: 'Description', type: 'text' },
         { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
@@ -2053,6 +3583,196 @@ function commercialArrayColumns(widget: string, catalog?: CommercialFormCatalog,
         { key: 'debit', label: 'Debit', type: 'number' },
         { key: 'credit', label: 'Credit', type: 'number' },
       ]
+    case 'procurement_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', options: commercialSelectOptions('product_code', catalog) },
+        { key: 'variant_signature', label: 'Variant', type: 'text' },
+        { key: 'item_code', label: 'Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
+        { key: 'quantity', label: 'Qty', type: 'number' },
+        { key: 'received_qty', label: 'Received', type: 'number' },
+        { key: 'billed_qty', label: 'Billed', type: 'number' },
+        { key: 'unit_price', label: 'Unit Price', type: 'number' },
+        { key: 'tax_code', label: 'Tax Code', type: 'text', options: commercialSelectOptions('tax_code', catalog) },
+        { key: 'line_total', label: 'Total', type: 'number', readOnly: true },
+      ]
+    case 'procurement_receipt_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', readOnly: true },
+        { key: 'variant_signature', label: 'Variant', type: 'text', readOnly: true },
+        { key: 'item_code', label: 'Item', type: 'text', readOnly: true },
+        { key: 'description', label: 'Description', type: 'text', readOnly: true },
+        { key: 'uom_code', label: 'UOM', type: 'text', readOnly: true },
+        { key: 'ordered_qty', label: 'Ordered', type: 'number', readOnly: true },
+        { key: 'received_qty', label: 'Receive Now', type: 'number' },
+        { key: 'cumulative_received_qty', label: 'Cumulative', type: 'number', readOnly: true },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'procurement_allocations':
+      return [
+        { key: 'bill_number', label: 'Bill', type: 'text', readOnly: true },
+        { key: 'bill_id', label: 'Bill ID', type: 'text', options: commercialSelectOptions('bill_id', catalog, values) },
+        { key: 'amount', label: 'Amount', type: 'number' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'fulfillment_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', readOnly: true },
+        { key: 'variant_signature', label: 'Variant', type: 'text', readOnly: true },
+        { key: 'item_code', label: 'Item', type: 'text', readOnly: true },
+        { key: 'description', label: 'Description', type: 'text', readOnly: true },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text', readOnly: true },
+        { key: 'uom_code', label: 'UOM', type: 'text', readOnly: true },
+        { key: 'ordered_quantity', label: 'Ordered', type: 'number', readOnly: true },
+        { key: 'quantity', label: 'Reserve', type: 'number' },
+        { key: 'available_quantity', label: 'Available', type: 'number', readOnly: true },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'delivery_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', readOnly: true },
+        { key: 'variant_signature', label: 'Variant', type: 'text', readOnly: true },
+        { key: 'item_code', label: 'Item', type: 'text', readOnly: true },
+        { key: 'description', label: 'Description', type: 'text', readOnly: true },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text', readOnly: true },
+        { key: 'expiration_date', label: 'Expiration', type: 'text', readOnly: true },
+        { key: 'uom_code', label: 'UOM', type: 'text', readOnly: true },
+        { key: 'fulfilled_quantity', label: 'Fulfilled', type: 'number', readOnly: true },
+        { key: 'quantity', label: 'Deliver Qty', type: 'number' },
+        { key: 'tracking_number', label: 'Tracking', type: 'text' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'return_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', readOnly: true },
+        { key: 'variant_signature', label: 'Variant', type: 'text', readOnly: true },
+        { key: 'item_code', label: 'Item', type: 'text', readOnly: true },
+        { key: 'description', label: 'Description', type: 'text', readOnly: true },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', readOnly: true },
+        { key: 'fulfilled_quantity', label: 'Fulfilled', type: 'number', readOnly: true },
+        { key: 'quantity', label: 'Return Qty', type: 'number' },
+        {
+          key: 'disposition',
+          label: 'Disposition',
+          type: 'text',
+          options: [
+            { value: 'restock', label: 'Restock' },
+            { value: 'quarantine', label: 'Quarantine' },
+            { value: 'block', label: 'Block' },
+          ],
+        },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'supplier_return_lines':
+      return [
+        { key: 'item_code', label: 'Item', type: 'text', readOnly: true },
+        { key: 'description', label: 'Description', type: 'text', readOnly: true },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', readOnly: true },
+        { key: 'received_quantity', label: 'Received', type: 'number', readOnly: true },
+        { key: 'quantity', label: 'Return Qty', type: 'number' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'inventory_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', options: commercialSelectOptions('product_code', catalog) },
+        { key: 'variant_signature', label: 'Variant', type: 'text' },
+        { key: 'item_code', label: 'Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
+        { key: 'quantity', label: 'Quantity', type: 'number' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'inventory_transfer_lines':
+      return [
+        { key: 'product_code', label: 'Product', type: 'text', options: commercialSelectOptions('product_code', catalog) },
+        { key: 'variant_signature', label: 'Variant', type: 'text' },
+        { key: 'item_code', label: 'Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'source_warehouse_code', label: 'Source Warehouse', type: 'text', options: commercialSelectOptions('source_warehouse_code', catalog) },
+        { key: 'target_warehouse_code', label: 'Target Warehouse', type: 'text', options: commercialSelectOptions('target_warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
+        { key: 'quantity', label: 'Quantity', type: 'number' },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'production_component_lines':
+      return [
+        { key: 'component_item_code', label: 'Component Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'actual_item_code', label: 'Actual Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
+        { key: 'quantity_per_unit', label: 'Qty / Unit', type: 'number' },
+        { key: 'quantity', label: 'Planned Qty', type: 'number' },
+        { key: 'issued_quantity', label: 'Issued Qty', type: 'number', readOnly: true },
+        { key: 'reserved_quantity', label: 'Reserved Qty', type: 'number', readOnly: true },
+        { key: 'shortage_quantity', label: 'Shortage Qty', type: 'number', readOnly: true },
+        { key: 'available_quantity', label: 'Available', type: 'number', readOnly: true },
+        { key: 'allowed_substitute_item_codes', label: 'Allowed Subs', type: 'text' },
+        { key: 'reservation_status', label: 'Reservation', type: 'text', readOnly: true },
+        { key: 'substitution_status', label: 'Substitution', type: 'text', readOnly: true },
+      ]
+    case 'production_issue_lines':
+      return [
+        { key: 'planned_item_code', label: 'Planned Item', type: 'text', readOnly: true },
+        { key: 'actual_item_code', label: 'Actual Item', type: 'text', options: commercialSelectOptions('item_code', catalog) },
+        { key: 'description', label: 'Description', type: 'text' },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', options: commercialSelectOptions('warehouse_code', catalog) },
+        { key: 'batch_code', label: 'Batch', type: 'text' },
+        { key: 'expiration_date', label: 'Expiration', type: 'text' },
+        { key: 'uom_code', label: 'UOM', type: 'text', options: commercialSelectOptions('uom_code', catalog) },
+        { key: 'quantity', label: 'Issue Qty', type: 'number' },
+        { key: 'reserved_quantity', label: 'Reserved Qty', type: 'number', readOnly: true },
+        { key: 'available_quantity', label: 'Available', type: 'number', readOnly: true },
+        { key: 'allowed_substitute_item_codes', label: 'Allowed Subs', type: 'text', readOnly: true },
+        { key: 'substitution_status', label: 'Substitution', type: 'text', readOnly: true },
+      ]
+    case 'production_stage_lines':
+      return [
+        { key: 'stage_code', label: 'Stage Code', type: 'text' },
+        { key: 'stage_name', label: 'Stage', type: 'text' },
+        { key: 'sequence', label: 'Seq', type: 'number' },
+        { key: 'work_center_code', label: 'Work Center', type: 'text', options: commercialSelectOptions('work_center_code', catalog) },
+        { key: 'status', label: 'Status', type: 'text', options: [
+          { value: 'pending', label: 'Pending' },
+          { value: 'ready', label: 'Ready' },
+          { value: 'in_progress', label: 'In Progress' },
+          { value: 'completed', label: 'Completed' },
+          { value: 'skipped', label: 'Skipped' },
+        ] },
+        { key: 'required', label: 'Required', type: 'text', options: [
+          { value: 'true', label: 'Yes' },
+          { value: 'false', label: 'No' },
+        ] },
+        { key: 'note', label: 'Note', type: 'text' },
+      ]
+    case 'trace_batches':
+      return [
+        { key: 'batch_id', label: 'Batch', type: 'text', options: commercialSelectOptions('batch_id', catalog) },
+        { key: 'item_code', label: 'Item', type: 'text', readOnly: true },
+        { key: 'warehouse_code', label: 'Warehouse', type: 'text', readOnly: true },
+        { key: 'batch_code', label: 'Batch Code', type: 'text', readOnly: true },
+        { key: 'expiration_date', label: 'Expiration', type: 'text', readOnly: true },
+        { key: 'status', label: 'Status', type: 'text', readOnly: true },
+        { key: 'available_quantity', label: 'Available', type: 'number', readOnly: true },
+      ]
     default:
       return []
   }
@@ -2061,13 +3781,39 @@ function commercialArrayColumns(widget: string, catalog?: CommercialFormCatalog,
 function commercialArrayDefaultRow(widget: string): Record<string, unknown> {
   switch (widget) {
     case 'commercial_lines':
-      return { item_code: '', description: '', uom_code: '', quantity: 1, unit_price: 0, discount_amount: 0, tax_code: '', tax_rate: 0, line_subtotal: 0, tax_amount: 0, line_total: 0 }
+      return { product_code: '', variant_signature: '', item_code: '', description: '', uom_code: '', quantity: 1, unit_price: 0, discount_amount: 0, tax_code: '', tax_rate: 0, line_subtotal: 0, tax_amount: 0, line_total: 0 }
     case 'commercial_allocations':
       return { invoice_number: '', invoice_id: '', amount: 0, note: '' }
     case 'commercial_refund_allocations':
       return { payment_number: '', payment_id: '', amount: 0, note: '' }
     case 'commercial_journal_lines':
       return { account_code: '', description: '', debit: 0, credit: 0 }
+    case 'procurement_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', uom_code: '', quantity: 1, received_qty: 0, billed_qty: 0, unit_price: 0, tax_code: '', tax_rate: 0, line_subtotal: 0, tax_amount: 0, line_total: 0 }
+    case 'procurement_receipt_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', uom_code: '', ordered_qty: 0, received_qty: 0, cumulative_received_qty: 0, warehouse_code: '', batch_code: '', expiration_date: '', note: '' }
+    case 'procurement_allocations':
+      return { bill_number: '', bill_id: '', amount: 0, note: '' }
+    case 'fulfillment_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', ordered_quantity: 0, quantity: 0, available_quantity: 0, note: '' }
+    case 'delivery_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', fulfilled_quantity: 0, quantity: 0, tracking_number: '', note: '' }
+    case 'return_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', fulfilled_quantity: 0, quantity: 0, disposition: 'restock', note: '' }
+    case 'supplier_return_lines':
+      return { item_code: '', description: '', warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', received_quantity: 0, quantity: 0, note: '' }
+    case 'inventory_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', quantity: 0, note: '' }
+    case 'inventory_transfer_lines':
+      return { product_code: '', variant_signature: '', item_code: '', description: '', source_warehouse_code: '', target_warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', quantity: 0, note: '' }
+    case 'production_component_lines':
+      return { component_item_code: '', actual_item_code: '', description: '', warehouse_code: '', uom_code: '', quantity_per_unit: 0, quantity: 0, issued_quantity: 0, reserved_quantity: 0, shortage_quantity: 0, available_quantity: 0, allowed_substitute_item_codes: '', reservation_status: 'unreserved', substitution_status: 'planned' }
+    case 'production_issue_lines':
+      return { planned_item_code: '', actual_item_code: '', description: '', warehouse_code: '', batch_code: '', expiration_date: '', uom_code: '', quantity: 0, reserved_quantity: 0, available_quantity: 0, allowed_substitute_item_codes: '', substitution_status: 'planned' }
+    case 'production_stage_lines':
+      return { stage_code: '', stage_name: '', sequence: 1, work_center_code: '', status: 'pending', required: 'true', note: '' }
+    case 'trace_batches':
+      return { batch_id: '', item_code: '', warehouse_code: '', batch_code: '', expiration_date: '', status: '', on_hand_quantity: 0, reserved_quantity: 0, available_quantity: 0 }
     default:
       return {}
   }
@@ -2076,6 +3822,24 @@ function commercialArrayDefaultRow(widget: string): Record<string, unknown> {
 function commercialSelectOptions(path: string, catalog?: CommercialFormCatalog, values?: FormState): Array<{ value: string; label: string }> {
   if (!catalog) return []
   switch (path) {
+    case 'product_code':
+      return Object.values(catalog.productsByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'dimension_code':
+      return Object.values(catalog.variantDimensionsByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
     case 'party_id':
       return Object.entries(catalog.partiesByID)
         .filter(([value]) => value)
@@ -2108,6 +3872,57 @@ function commercialSelectOptions(path: string, catalog?: CommercialFormCatalog, 
           const name = String(resolvePath(item, 'values.name') || '')
           const symbol = String(resolvePath(item, 'values.symbol') || '')
           return { value: code, label: [code, name, symbol].filter(Boolean).join(' - ') }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'bom_id':
+      return Object.values(catalog.bomsByID)
+        .map((item) => {
+          const id = String(item.id || '')
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: id, label: [code, name].filter(Boolean).join(' - ') || id }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'bom_version_id':
+      return Object.values(catalog.bomVersionsByID)
+        .map((item) => {
+          const id = String(item.id || '')
+          const bomCode = String(resolvePath(item, 'values.bom_code') || '')
+          const versionCode = String(resolvePath(item, 'values.version_code') || '')
+          return { value: id, label: [bomCode, versionCode].filter(Boolean).join(' - ') || id }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'warehouse_code':
+    case 'source_warehouse_code':
+    case 'target_warehouse_code':
+      return Object.values(catalog.warehousesByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'work_center_code':
+      return Object.values(catalog.workCentersByCode)
+        .map((item) => {
+          const code = String(resolvePath(item, 'values.code') || '')
+          const name = String(resolvePath(item, 'values.name') || '')
+          return { value: code, label: name ? `${code} - ${name}` : code }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'batch_id':
+      return Object.values(catalog.inventoryBatchesByID)
+        .map((item) => {
+          const id = String(resolvePath(item, 'id') || '')
+          const itemCode = String(resolvePath(item, 'values.item_code') || '')
+          const warehouseCode = String(resolvePath(item, 'values.warehouse_code') || '')
+          const batchCode = String(resolvePath(item, 'values.batch_code') || '')
+          return { value: id, label: [itemCode, warehouseCode, batchCode].filter(Boolean).join(' - ') || id }
         })
         .filter((option) => option.value)
         .sort((left, right) => left.label.localeCompare(right.label))
@@ -2156,6 +3971,28 @@ function commercialSelectOptions(path: string, catalog?: CommercialFormCatalog, 
         })
         .filter((option) => option.value)
         .sort((left, right) => left.label.localeCompare(right.label))
+    case 'vendor_id':
+      return Object.entries(catalog.vendorsByID)
+        .filter(([value]) => value)
+        .map(([value, item]) => ({
+          value,
+          label: String(resolvePath(item, 'values.vendor_name') || value),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label))
+    case 'bill_id':
+      return procurementOpenBills(catalog, values)
+        .map((item) => {
+          const id = String(resolvePath(item, 'header.id') || '')
+          const number = String(resolvePath(item, 'header.number') || id)
+          const vendorName = String(resolvePath(item, 'body.payload.vendor_name') || '')
+          const balance = toNumber(resolvePath(item, 'body.payload.balance_due_amount'))
+          return {
+            value: id,
+            label: `${number}${vendorName ? ` - ${vendorName}` : ''}${balance > 0 ? ` (${balance})` : ''}`,
+          }
+        })
+        .filter((option) => option.value)
+        .sort((left, right) => left.label.localeCompare(right.label))
     case 'invoice_id':
       return commercialOpenInvoices(catalog, values)
         .map((item) => {
@@ -2171,17 +4008,76 @@ function commercialSelectOptions(path: string, catalog?: CommercialFormCatalog, 
         .filter((option) => option.value)
         .sort((left, right) => left.label.localeCompare(right.label))
     case 'item_code':
+    case 'finished_item_code':
       return Object.values(catalog.itemsByCode)
         .map((item) => {
           const code = String(resolvePath(item, 'values.sku') || '')
           const name = String(resolvePath(item, 'values.name') || '')
-          return { value: code, label: name ? `${code} - ${name}` : code }
+          const variantLabel = String(resolvePath(item, 'values.variant_label') || '')
+          return { value: code, label: [code, name, variantLabel].filter(Boolean).join(' - ') }
         })
         .filter((option) => option.value)
         .sort((left, right) => left.label.localeCompare(right.label))
     default:
       return []
   }
+}
+
+function resolveCommercialColumnOptions(
+  key: string,
+  _widget: string,
+  row: Record<string, unknown>,
+  catalog?: CommercialFormCatalog,
+  values?: FormState,
+  fallback?: Array<{ value: string; label: string }>,
+): Array<{ value: string; label: string }> {
+  if (!catalog) return fallback || []
+  if (key === 'variant_signature') {
+    return variantSignatureOptions(String(row.product_code || ''), catalog)
+  }
+  return fallback || commercialSelectOptions(key, catalog, values)
+}
+
+function variantSignatureOptions(productCode: string, catalog?: CommercialFormCatalog): Array<{ value: string; label: string }> {
+  if (!catalog || !productCode) return []
+  return Object.values(catalog.itemsByCode)
+    .filter((item) => String(resolvePath(item, 'values.product_code') || '') === productCode)
+    .map((item) => ({
+      value: String(resolvePath(item, 'values.variant_signature') || ''),
+      label: String(resolvePath(item, 'values.variant_label') || resolvePath(item, 'values.variant_signature') || resolvePath(item, 'values.sku') || ''),
+    }))
+    .filter((option) => option.value)
+    .sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function resolveVariantItemCodeFromRow(row: Record<string, unknown>, catalog?: CommercialFormCatalog): string {
+  if (!catalog) return String(row.item_code || '')
+  const productCode = String(row.product_code || '')
+  const variantSignature = String(row.variant_signature || '')
+  if (!productCode || !variantSignature) return String(row.item_code || '')
+  const match = Object.values(catalog.itemsByCode).find((item) =>
+    String(resolvePath(item, 'values.product_code') || '') === productCode &&
+    String(resolvePath(item, 'values.variant_signature') || '') === variantSignature,
+  )
+  return String(resolvePath(match, 'values.sku') || row.item_code || '')
+}
+
+function parseDimensionCodes(value: unknown): string[] {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function hasUnresolvedVariantSelections(values: FormState): boolean {
+  const collections = ['lines', 'allocations', 'refund_allocations']
+  for (const key of collections) {
+    const rows = asRecordList(resolvePath(values, key))
+    if (rows.some((row) => String(row.product_code || '') !== '' && String(row.item_code || '') === '')) {
+      return true
+    }
+  }
+  return false
 }
 
 function commercialOpenInvoices(catalog?: CommercialFormCatalog, values?: FormState): Array<Record<string, unknown>> {
@@ -2220,6 +4116,24 @@ function commercialRefundablePayments(catalog?: CommercialFormCatalog, values?: 
       const leftDate = String(resolvePath(left, 'body.payload.receipt_date') || '')
       const rightDate = String(resolvePath(right, 'body.payload.receipt_date') || '')
       if (leftDate !== rightDate) return leftDate.localeCompare(rightDate)
+      return String(resolvePath(left, 'header.number') || '').localeCompare(String(resolvePath(right, 'header.number') || ''))
+    })
+}
+
+function procurementOpenBills(catalog?: CommercialFormCatalog, values?: FormState): Array<Record<string, unknown>> {
+  if (!catalog) return []
+  const vendorID = String(resolvePath(values || {}, 'vendor_id') || '')
+  return Object.values(catalog.billsByID)
+    .filter((item) => {
+      const balance = toNumber(resolvePath(item, 'body.payload.balance_due_amount'))
+      if (balance <= 0) return false
+      if (!vendorID) return true
+      return String(resolvePath(item, 'body.payload.vendor_id') || '') === vendorID
+    })
+    .sort((left, right) => {
+      const leftDue = String(resolvePath(left, 'body.payload.due_date') || '')
+      const rightDue = String(resolvePath(right, 'body.payload.due_date') || '')
+      if (leftDue !== rightDue) return leftDue.localeCompare(rightDue)
       return String(resolvePath(left, 'header.number') || '').localeCompare(String(resolvePath(right, 'header.number') || ''))
     })
 }
@@ -2264,6 +4178,31 @@ function buildRefundAllocationRows(payments: Array<Record<string, unknown>>, req
     rows.push({
       payment_id: String(resolvePath(payment, 'header.id') || ''),
       payment_number: String(resolvePath(payment, 'header.number') || ''),
+      amount: allocationAmount,
+      note: '',
+    })
+    allocatedAmount = roundMoney(allocatedAmount + allocationAmount)
+    if (!allocateAll) {
+      remaining = roundMoney(Math.max(remaining - allocationAmount, 0))
+      if (remaining <= 0) break
+    }
+  }
+  return { rows, allocatedAmount }
+}
+
+function buildProcurementAllocationRows(bills: Array<Record<string, unknown>>, requestedAmount: number): { rows: Array<Record<string, unknown>>; allocatedAmount: number } {
+  let remaining = roundMoney(requestedAmount)
+  const allocateAll = remaining <= 0
+  const rows: Array<Record<string, unknown>> = []
+  let allocatedAmount = 0
+  for (const bill of bills) {
+    const balance = roundMoney(toNumber(resolvePath(bill, 'body.payload.balance_due_amount')))
+    if (balance <= 0) continue
+    const allocationAmount = allocateAll ? balance : roundMoney(Math.min(balance, remaining))
+    if (allocationAmount <= 0) continue
+    rows.push({
+      bill_id: String(resolvePath(bill, 'header.id') || ''),
+      bill_number: String(resolvePath(bill, 'header.number') || ''),
       amount: allocationAmount,
       note: '',
     })
@@ -2328,6 +4267,105 @@ function applyCommercialArrayUpdate(current: FormState, path: string, widget: st
       next = assignPathValue(next, 'total_amount', roundMoney(Math.max(debitTotal, creditTotal)))
       return next
     }
+    case 'procurement_lines': {
+      const rowsWithDefaults = rows.map((row) => ({
+        ...row,
+        tax_code: row.tax_code || String(resolvePath(current, 'default_tax_code') || ''),
+      }))
+      const normalizedRows = normalizeCommercialRows(rowsWithDefaults, widget, catalog, current)
+      const subtotalAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.line_subtotal), 0)
+      const taxAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.tax_amount), 0)
+      const totalAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.line_total), 0)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'subtotal_amount', roundMoney(subtotalAmount))
+      next = assignPathValue(next, 'tax_amount', roundMoney(taxAmount))
+      next = assignPathValue(next, 'total_amount', roundMoney(totalAmount))
+      return next
+    }
+    case 'procurement_receipt_lines': {
+      const normalizedRows = rows.map((row) => {
+        const orderedQty = toNumber(row.ordered_qty || row.quantity)
+        const receivedQty = Math.max(toNumber(row.received_qty), 0)
+        const previouslyReceived = Math.max(toNumber(row.previously_received_qty), 0)
+        return {
+          ...row,
+          ordered_qty: orderedQty,
+          received_qty: receivedQty,
+          cumulative_received_qty: roundMoney(previouslyReceived + receivedQty),
+        }
+      })
+      next = assignPathValue(next, path, normalizedRows)
+      return next
+    }
+    case 'procurement_allocations': {
+      const normalizedRows = rows.map((row) => ({ ...row, amount: toNumber(row.amount) }))
+      const currentAmountPaid = toNumber(resolvePath(current, 'amount_paid'))
+      const appliedAmount = normalizedRows.reduce((sum, row) => sum + toNumber(row.amount), 0)
+      const amountPaid = currentAmountPaid > 0 ? currentAmountPaid : roundMoney(appliedAmount)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'amount_paid', amountPaid)
+      next = assignPathValue(next, 'unapplied_amount', roundMoney(Math.max(amountPaid - appliedAmount, 0)))
+      return next
+    }
+    case 'fulfillment_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'reserved_quantity_total', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
+    case 'delivery_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'delivered_quantity_total', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
+    case 'return_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'total_quantity', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
+    case 'supplier_return_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'total_quantity', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
+    case 'inventory_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'total_quantity', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
+    case 'production_component_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'reserved_quantity_total', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.reserved_quantity), 0)))
+      next = assignPathValue(next, 'shortage_quantity_total', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.shortage_quantity), 0)))
+      return next
+    }
+    case 'production_issue_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'total_quantity', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
+    case 'production_stage_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      return next
+    }
+    case 'trace_batches': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      return next
+    }
+    case 'inventory_transfer_lines': {
+      const normalizedRows = normalizeCommercialRows(rows, widget, catalog, current)
+      next = assignPathValue(next, path, normalizedRows)
+      next = assignPathValue(next, 'total_quantity', roundMoney(normalizedRows.reduce((sum, row) => sum + toNumber(row.quantity), 0)))
+      return next
+    }
     default:
       return next
   }
@@ -2340,6 +4378,29 @@ function applyFieldUpdate(current: FormState, path: string, value: unknown, cata
     if (lines.length) {
       return applyCommercialArrayUpdate(next, 'lines', 'commercial_lines', lines, catalog)
     }
+  }
+  if (path === 'product_code') {
+    const productCode = String(value || '')
+    const product = catalog?.productsByCode?.[productCode]
+    let withProduct = next
+    const inheritedFields = ['category_code', 'uom_code', 'currency_code', 'tax_code', 'revenue_account_code', 'inventory_tracking_mode', 'default_issue_strategy']
+    for (const fieldKey of inheritedFields) {
+      const inheritedValue = resolvePath(product, `values.${fieldKey}`)
+      if ((typeof inheritedValue === 'string' && inheritedValue && !String(resolvePath(withProduct, fieldKey) || '')) || (typeof inheritedValue === 'number' && !Number.isNaN(inheritedValue as number) && !resolvePath(withProduct, fieldKey))) {
+        withProduct = assignPathValue(withProduct, fieldKey, inheritedValue)
+      }
+    }
+    for (const fieldKey of ['inventory_enabled', 'expiry_tracking_enabled', 'allow_negative_stock']) {
+      const inheritedValue = resolvePath(product, `values.${fieldKey}`)
+      if (typeof inheritedValue === 'boolean' && !resolvePath(withProduct, fieldKey)) {
+        withProduct = assignPathValue(withProduct, fieldKey, inheritedValue)
+      }
+    }
+    if (!String(resolvePath(withProduct, 'name') || '')) {
+      const productName = String(resolvePath(product, 'values.name') || '')
+      if (productName) withProduct = assignPathValue(withProduct, 'name', productName)
+    }
+    return withProduct
   }
   if (path === 'party_id') {
     const partyID = String(value || '')
@@ -2384,6 +4445,52 @@ function applyFieldUpdate(current: FormState, path: string, value: unknown, cata
       return applyCommercialArrayUpdate(withParty, 'lines', 'commercial_lines', lines, catalog)
     }
     return withParty
+  }
+  if (path === 'vendor_id') {
+    const vendorID = String(value || '')
+    const vendor = catalog?.vendorsByID?.[vendorID]
+    let withVendor = next
+    const vendorName = String(resolvePath(vendor, 'values.vendor_name') || '')
+    const currencyCode = String(resolvePath(vendor, 'values.currency_code') || '')
+    const taxProfileCode = String(resolvePath(vendor, 'values.tax_profile_code') || '')
+    const paymentTermDays = resolvePath(vendor, 'values.payment_term_days')
+    const payableAccount = String(resolvePath(vendor, 'values.payable_account_code') || '')
+    const expenseAccount = String(resolvePath(vendor, 'values.expense_account_code') || '')
+    const defaultPaymentMethod = String(resolvePath(vendor, 'values.default_payment_method_code') || '')
+    if (vendorName) withVendor = assignPathValue(withVendor, 'vendor_name', vendorName)
+    if (currencyCode && !String(resolvePath(withVendor, 'currency_code') || '')) {
+      withVendor = assignPathValue(withVendor, 'currency_code', currencyCode)
+    }
+    if (taxProfileCode && !String(resolvePath(withVendor, 'tax_profile_code') || '')) {
+      withVendor = assignPathValue(withVendor, 'tax_profile_code', taxProfileCode)
+    }
+    if (paymentTermDays != null && paymentTermDays !== '' && !toNumber(resolvePath(withVendor, 'payment_term_days'))) {
+      withVendor = assignPathValue(withVendor, 'payment_term_days', toNumber(paymentTermDays))
+      const baseDate = String(resolvePath(withVendor, 'bill_date') || resolvePath(withVendor, 'order_date') || '')
+      if (baseDate) {
+        const dueDate = addDaysToDate(baseDate, toNumber(paymentTermDays))
+        if (dueDate) {
+          withVendor = assignPathValue(withVendor, 'due_date', dueDate)
+        }
+      }
+    }
+    if (payableAccount && !String(resolvePath(withVendor, 'payable_account_code') || '')) {
+      withVendor = assignPathValue(withVendor, 'payable_account_code', payableAccount)
+    }
+    if (expenseAccount && !String(resolvePath(withVendor, 'expense_account_code') || '')) {
+      withVendor = assignPathValue(withVendor, 'expense_account_code', expenseAccount)
+    }
+    if (defaultPaymentMethod && !String(resolvePath(withVendor, 'payment_method_code') || '')) {
+      withVendor = applyFieldUpdate(withVendor, 'payment_method_code', defaultPaymentMethod, catalog)
+    }
+    const lines = asRecordList(resolvePath(withVendor, 'lines'))
+    if (lines.length && String(resolvePath(withVendor, 'source_purchase_order_id') || '') !== '') {
+      return applyCommercialArrayUpdate(withVendor, 'lines', 'procurement_receipt_lines', lines, catalog)
+    }
+    if (lines.length) {
+      return applyCommercialArrayUpdate(withVendor, 'lines', 'procurement_lines', lines, catalog)
+    }
+    return withVendor
   }
   if (path === 'price_list_code') {
     const lines = asRecordList(resolvePath(next, 'lines'))
@@ -2433,6 +4540,13 @@ function applyFieldUpdate(current: FormState, path: string, value: unknown, cata
     if (typeof clearingAccount === 'string' && clearingAccount) {
       return assignPathValue(next, 'clearing_account_code', clearingAccount)
     }
+  }
+  if (path === 'amount_paid') {
+    const allocations = asRecordList(resolvePath(next, 'allocations'))
+    if (allocations.length) {
+      return applyCommercialArrayUpdate(next, 'allocations', 'procurement_allocations', allocations, catalog)
+    }
+    return assignPathValue(next, 'unapplied_amount', roundMoney(Math.max(toNumber(value), 0)))
   }
   if (path === 'source_payment_id') {
     const paymentID = String(value || '')
@@ -2510,6 +4624,24 @@ function normalizeCommercialFormState(current: FormState, documentType: string, 
       next = assignPathValue(next, 'payment_term_days', paymentTermDays)
     }
   }
+  const vendorID = String(resolvePath(next, 'vendor_id') || '')
+  const vendor = catalog.vendorsByID[vendorID]
+  if (vendor) {
+    const vendorName = String(resolvePath(vendor, 'values.vendor_name') || '')
+    const currencyCode = String(resolvePath(vendor, 'values.currency_code') || '')
+    const taxProfileCode = String(resolvePath(vendor, 'values.tax_profile_code') || '')
+    const paymentTermDays = toNumber(resolvePath(vendor, 'values.payment_term_days'))
+    const payableAccount = String(resolvePath(vendor, 'values.payable_account_code') || '')
+    const expenseAccount = String(resolvePath(vendor, 'values.expense_account_code') || '')
+    const defaultPaymentMethod = String(resolvePath(vendor, 'values.default_payment_method_code') || '')
+    if (!resolvePath(next, 'vendor_name') && vendorName) next = assignPathValue(next, 'vendor_name', vendorName)
+    if (!resolvePath(next, 'currency_code') && currencyCode) next = assignPathValue(next, 'currency_code', currencyCode)
+    if (!resolvePath(next, 'tax_profile_code') && taxProfileCode) next = assignPathValue(next, 'tax_profile_code', taxProfileCode)
+    if (!resolvePath(next, 'payment_term_days') && paymentTermDays > 0) next = assignPathValue(next, 'payment_term_days', paymentTermDays)
+    if (!resolvePath(next, 'payable_account_code') && payableAccount) next = assignPathValue(next, 'payable_account_code', payableAccount)
+    if (!resolvePath(next, 'expense_account_code') && expenseAccount) next = assignPathValue(next, 'expense_account_code', expenseAccount)
+    if (!resolvePath(next, 'payment_method_code') && defaultPaymentMethod) next = applyFieldUpdate(next, 'payment_method_code', defaultPaymentMethod, catalog)
+  }
   if (documentType === 'sales_order' || documentType === 'invoice') {
     const baseDate = String(resolvePath(next, 'invoice_date') || resolvePath(next, 'order_date') || '')
     const paymentTermDays = toNumber(resolvePath(next, 'payment_term_days'))
@@ -2519,6 +4651,93 @@ function normalizeCommercialFormState(current: FormState, documentType: string, 
     const lines = asRecordList(resolvePath(next, 'lines'))
     if (lines.length) {
       return applyCommercialArrayUpdate(next, 'lines', 'commercial_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'purchase_request' || documentType === 'purchase_order' || documentType === 'vendor_bill' || documentType === 'vendor_credit_note') {
+    const baseDate = String(resolvePath(next, 'bill_date') || resolvePath(next, 'order_date') || resolvePath(next, 'request_date') || '')
+    const paymentTermDays = toNumber(resolvePath(next, 'payment_term_days'))
+    if (baseDate && paymentTermDays > 0 && !resolvePath(next, 'due_date')) {
+      next = assignPathValue(next, 'due_date', addDaysToDate(baseDate, paymentTermDays))
+    }
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'procurement_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'goods_receipt') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'procurement_receipt_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'sales_fulfillment') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'fulfillment_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'delivery_order') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'delivery_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'sales_return' || documentType === 'return_receipt') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'return_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'supplier_return') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'supplier_return_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'stock_receipt' || documentType === 'stock_issue' || documentType === 'stock_adjustment') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'inventory_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'stock_transfer') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'inventory_transfer_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'production_order') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    const stages = asRecordList(resolvePath(next, 'stages'))
+    if (lines.length) {
+      next = applyCommercialArrayUpdate(next, 'lines', 'production_component_lines', lines, catalog)
+    }
+    if (stages.length) {
+      next = applyCommercialArrayUpdate(next, 'stages', 'production_stage_lines', stages, catalog)
+    }
+    return next
+  }
+  if (documentType === 'production_issue') {
+    const lines = asRecordList(resolvePath(next, 'lines'))
+    if (lines.length) {
+      return applyCommercialArrayUpdate(next, 'lines', 'production_issue_lines', lines, catalog)
+    }
+    return next
+  }
+  if (documentType === 'payment_out') {
+    next = applyFieldUpdate(next, 'payment_method_code', resolvePath(next, 'payment_method_code'), catalog)
+    const allocations = asRecordList(resolvePath(next, 'allocations'))
+    if (allocations.length) {
+      return applyCommercialArrayUpdate(next, 'allocations', 'procurement_allocations', allocations, catalog)
     }
     return next
   }
@@ -2562,10 +4781,226 @@ function normalizeCommercialRows(rows: Array<Record<string, unknown>>, widget: s
       }
     })
   }
-  if (widget !== 'commercial_lines') return rows
+  if (widget === 'procurement_receipt_lines') {
+    return rows.map((row) => {
+      const orderedQty = toNumber(row.ordered_qty || row.quantity)
+      const receivedQty = Math.max(toNumber(row.received_qty), 0)
+      const previouslyReceived = Math.max(toNumber(row.previously_received_qty), 0)
+      const variantItemCode = resolveVariantItemCodeFromRow(row, catalog)
+      const itemCode = variantItemCode || String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      return {
+        ...row,
+        product_code: String(row.product_code || resolvePath(item, 'values.product_code') || ''),
+        variant_signature: String(row.variant_signature || resolvePath(item, 'values.variant_signature') || ''),
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        ordered_qty: orderedQty,
+        received_qty: receivedQty,
+        cumulative_received_qty: roundMoney(previouslyReceived + receivedQty),
+      }
+    })
+  }
+  if (widget === 'fulfillment_lines') {
+    return rows.map((row) => {
+      const itemCode = String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      return {
+        ...row,
+        product_code: String(row.product_code || resolvePath(item, 'values.product_code') || ''),
+        variant_signature: String(row.variant_signature || resolvePath(item, 'values.variant_signature') || ''),
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        ordered_quantity: toNumber(row.ordered_quantity || row.quantity),
+        quantity: toNumber(row.quantity),
+        available_quantity: toNumber(row.available_quantity),
+      }
+    })
+  }
+  if (widget === 'delivery_lines') {
+    return rows.map((row) => {
+      const itemCode = String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      return {
+        ...row,
+        product_code: String(row.product_code || resolvePath(item, 'values.product_code') || ''),
+        variant_signature: String(row.variant_signature || resolvePath(item, 'values.variant_signature') || ''),
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        batch_code: String(row.batch_code || ''),
+        expiration_date: String(row.expiration_date || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        fulfilled_quantity: toNumber(row.fulfilled_quantity),
+        quantity: toNumber(row.quantity),
+        tracking_number: String(row.tracking_number || resolvePath(values || {}, 'tracking_number') || ''),
+        note: String(row.note || ''),
+      }
+    })
+  }
+  if (widget === 'return_lines') {
+    return rows.map((row) => {
+      const itemCode = String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      return {
+        ...row,
+        product_code: String(row.product_code || resolvePath(item, 'values.product_code') || ''),
+        variant_signature: String(row.variant_signature || resolvePath(item, 'values.variant_signature') || ''),
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        batch_code: String(row.batch_code || ''),
+        expiration_date: String(row.expiration_date || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        fulfilled_quantity: toNumber(row.fulfilled_quantity),
+        quantity: toNumber(row.quantity),
+        disposition: String(row.disposition || 'restock'),
+        note: String(row.note || ''),
+      }
+    })
+  }
+  if (widget === 'supplier_return_lines') {
+    return rows.map((row) => {
+      const itemCode = String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      return {
+        ...row,
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        batch_code: String(row.batch_code || ''),
+        expiration_date: String(row.expiration_date || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        received_quantity: toNumber(row.received_quantity),
+        quantity: toNumber(row.quantity),
+        note: String(row.note || ''),
+      }
+    })
+  }
+  if (widget === 'inventory_lines') {
+    return rows.map((row) => {
+      const variantItemCode = resolveVariantItemCodeFromRow(row, catalog)
+      const itemCode = variantItemCode || String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      const productCode = String(row.product_code || resolvePath(item, 'values.product_code') || '')
+      const variantSignature = String(row.variant_signature || resolvePath(item, 'values.variant_signature') || '')
+      return {
+        ...row,
+        product_code: productCode,
+        variant_signature: variantSignature,
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        quantity: toNumber(row.quantity),
+      }
+    })
+  }
+  if (widget === 'inventory_transfer_lines') {
+    return rows.map((row) => {
+      const variantItemCode = resolveVariantItemCodeFromRow(row, catalog)
+      const itemCode = variantItemCode || String(row.item_code || '')
+      const item = catalog?.itemsByCode?.[itemCode]
+      const productCode = String(row.product_code || resolvePath(item, 'values.product_code') || '')
+      const variantSignature = String(row.variant_signature || resolvePath(item, 'values.variant_signature') || '')
+      return {
+        ...row,
+        product_code: productCode,
+        variant_signature: variantSignature,
+        item_code: itemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        quantity: toNumber(row.quantity),
+      }
+    })
+  }
+  if (widget === 'production_component_lines') {
+    return rows.map((row) => {
+      const componentItemCode = String(row.component_item_code || row.item_code || '')
+      const actualItemCode = String(row.actual_item_code || componentItemCode || '')
+      const item = catalog?.itemsByCode?.[actualItemCode || componentItemCode]
+      return {
+        ...row,
+        component_item_code: componentItemCode,
+        actual_item_code: actualItemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        quantity_per_unit: toNumber(row.quantity_per_unit),
+        quantity: toNumber(row.quantity),
+        issued_quantity: toNumber(row.issued_quantity),
+        reserved_quantity: toNumber(row.reserved_quantity),
+        shortage_quantity: toNumber(row.shortage_quantity),
+        available_quantity: toNumber(row.available_quantity),
+        allowed_substitute_item_codes: Array.isArray(row.allowed_substitute_item_codes) ? row.allowed_substitute_item_codes.map((item) => String(item || '')).filter(Boolean).join(', ') : String(row.allowed_substitute_item_codes || ''),
+        reservation_status: String(row.reservation_status || 'unreserved'),
+        substitution_status: String(row.substitution_status || (actualItemCode && actualItemCode !== componentItemCode ? 'substituted' : 'planned')),
+      }
+    })
+  }
+  if (widget === 'production_issue_lines') {
+    return rows.map((row) => {
+      const plannedItemCode = String(row.planned_item_code || row.component_item_code || '')
+      const actualItemCode = String(row.actual_item_code || row.item_code || plannedItemCode || '')
+      const item = catalog?.itemsByCode?.[actualItemCode || plannedItemCode]
+      return {
+        ...row,
+        planned_item_code: plannedItemCode,
+        actual_item_code: actualItemCode,
+        item_code: actualItemCode,
+        description: String(row.description || resolvePath(item, 'values.description') || resolvePath(item, 'values.name') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(values || {}, 'warehouse_code') || ''),
+        batch_code: String(row.batch_code || ''),
+        expiration_date: String(row.expiration_date || ''),
+        uom_code: String(row.uom_code || resolvePath(item, 'values.uom_code') || ''),
+        quantity: toNumber(row.quantity),
+        reserved_quantity: toNumber(row.reserved_quantity),
+        available_quantity: toNumber(row.available_quantity),
+        allowed_substitute_item_codes: Array.isArray(row.allowed_substitute_item_codes) ? row.allowed_substitute_item_codes.map((item) => String(item || '')).filter(Boolean).join(', ') : String(row.allowed_substitute_item_codes || ''),
+        substitution_status: String(row.substitution_status || (actualItemCode && actualItemCode !== plannedItemCode ? 'substituted' : 'planned')),
+      }
+    })
+  }
+  if (widget === 'production_stage_lines') {
+    return rows.map((row, index) => ({
+      ...row,
+      stage_code: String(row.stage_code || ''),
+      stage_name: String(row.stage_name || row.stage_code || ''),
+      sequence: toNumber(row.sequence) || index + 1,
+      work_center_code: String(row.work_center_code || ''),
+      status: String(row.status || 'pending'),
+      required: typeof row.required === 'boolean' ? row.required : String(row.required || 'true') !== 'false',
+      note: String(row.note || ''),
+    }))
+  }
+  if (widget === 'trace_batches') {
+    return rows.map((row) => {
+      const batchID = String(row.batch_id || '')
+      const batch = catalog?.inventoryBatchesByID?.[batchID]
+      return {
+        ...row,
+        batch_id: batchID,
+        item_code: String(row.item_code || resolvePath(batch, 'values.item_code') || ''),
+        warehouse_code: String(row.warehouse_code || resolvePath(batch, 'values.warehouse_code') || ''),
+        batch_code: String(row.batch_code || resolvePath(batch, 'values.batch_code') || ''),
+        expiration_date: String(row.expiration_date || resolvePath(batch, 'values.expiration_date') || ''),
+        status: String(row.status || resolvePath(batch, 'values.status') || ''),
+        on_hand_quantity: toNumber(row.on_hand_quantity || resolvePath(batch, 'values.on_hand_quantity')),
+        reserved_quantity: toNumber(row.reserved_quantity || resolvePath(batch, 'values.reserved_quantity')),
+        available_quantity: toNumber(row.available_quantity || resolvePath(batch, 'values.available_quantity')),
+      }
+    })
+  }
+  if (widget !== 'commercial_lines' && widget !== 'procurement_lines') return rows
   return rows.map((row) => {
-    const itemCode = String(row.item_code || '')
+    const variantItemCode = resolveVariantItemCodeFromRow(row, catalog)
+    const itemCode = variantItemCode || String(row.item_code || '')
     const item = catalog?.itemsByCode?.[itemCode]
+    const productCode = String(row.product_code || resolvePath(item, 'values.product_code') || '')
+    const variantSignature = String(row.variant_signature || resolvePath(item, 'values.variant_signature') || '')
     const itemDescription = resolvePath(item, 'values.description') || resolvePath(item, 'values.name')
     const itemUOMCode = resolvePath(item, 'values.uom_code')
     const priceListCode = String(resolvePath(values || {}, 'price_list_code') || '')
@@ -2573,6 +5008,7 @@ function normalizeCommercialRows(rows: Array<Record<string, unknown>>, widget: s
     const itemUnitPrice = resolvePath(priceListItem, 'values.unit_price') ?? resolvePath(item, 'values.base_price') ?? resolvePath(item, 'values.unit_price')
     const itemTaxCode = resolvePath(item, 'values.tax_code')
     const itemRevenueAccount = resolvePath(item, 'values.revenue_account_code')
+    const itemExpenseAccount = resolvePath(item, 'values.expense_account_code')
     const priceListTaxCode = resolvePath(priceListItem, 'values.tax_code')
     const priceListRevenueAccount = resolvePath(priceListItem, 'values.revenue_account_code')
     const profile = catalog?.taxProfilesByCode?.[String(resolvePath(values || {}, 'tax_profile_code') || row.tax_profile_code || '')]
@@ -2590,6 +5026,9 @@ function normalizeCommercialRows(rows: Array<Record<string, unknown>>, widget: s
     const breakdown = calculateTaxBreakdown(grossAmount, taxRate, taxMode)
     return {
       ...row,
+      product_code: productCode,
+      variant_signature: variantSignature,
+      item_code: itemCode,
       description: String(row.description || itemDescription || ''),
       uom_code: String(row.uom_code || itemUOMCode || ''),
       unit_price: unitPrice,
@@ -2597,6 +5036,7 @@ function normalizeCommercialRows(rows: Array<Record<string, unknown>>, widget: s
       tax_rate: taxRate,
       tax_mode: taxMode,
       revenue_account_code: row.revenue_account_code || priceListRevenueAccount || itemRevenueAccount || '',
+      expense_account_code: row.expense_account_code || itemExpenseAccount || '',
       tax_account_code: row.tax_account_code || resolvePath(tax, 'values.tax_account_code') || '',
       quantity,
       discount_amount: discountAmount,
@@ -2773,17 +5213,56 @@ function actionVisibleForStatus(actionKey: string, status: string, documentType:
       if (normalizedType === 'invoice' && normalizedStatus === 'issued') return true
       if (normalizedType === 'payment_receipt' && normalizedStatus === 'received') return true
       if (normalizedType === 'payment_refund' && normalizedStatus === 'refunded') return true
+      if (normalizedType === 'goods_receipt' && normalizedStatus === 'received') return true
+      if (normalizedType === 'vendor_bill' && (normalizedStatus === 'issued' || normalizedStatus === 'partially_paid')) return true
+      if (normalizedType === 'payment_out' && normalizedStatus === 'paid') return true
+      if (normalizedType === 'vendor_credit_note' && normalizedStatus === 'issued') return true
+      if (normalizedType === 'supplier_return' && normalizedStatus === 'approved') return true
       return false
     case 'reopen':
       return normalizedStatus !== 'draft' && normalizedStatus !== 'submitted'
     case 'generate_invoice':
+    case 'generate_fulfillment':
+    case 'generate_production_order':
       return normalizedStatus === 'confirmed'
+    case 'register_delivery':
+      return normalizedStatus === 'issued'
+    case 'mark_delivered':
+      return normalizedStatus === 'dispatched'
     case 'register_payment':
       return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid'
     case 'issue_credit_note':
+      if (normalizedType === 'sales_return') return normalizedStatus === 'approved' || normalizedStatus === 'received'
       return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid' || normalizedStatus === 'paid'
     case 'register_refund':
+      if (normalizedType === 'sales_return') return normalizedStatus === 'approved' || normalizedStatus === 'received'
       return normalizedStatus === 'issued'
+    case 'register_return':
+      return normalizedStatus === 'issued'
+    case 'register_return_receipt':
+      return normalizedStatus === 'approved'
+    case 'create_replacement_order':
+      return normalizedType === 'sales_return' && (normalizedStatus === 'approved' || normalizedStatus === 'received')
+    case 'register_supplier_return':
+      if (normalizedType === 'goods_receipt') return normalizedStatus === 'received'
+      if (normalizedType === 'vendor_bill') return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid' || normalizedStatus === 'paid'
+      return false
+    case 'generate_purchase_order':
+      return normalizedStatus === 'approved'
+    case 'register_receipt':
+      return normalizedStatus === 'approved' || normalizedStatus === 'partially_received'
+    case 'register_vendor_bill':
+      if (normalizedType === 'purchase_order') return normalizedStatus === 'approved' || normalizedStatus === 'partially_received' || normalizedStatus === 'received'
+      if (normalizedType === 'goods_receipt') return normalizedStatus === 'received'
+      return false
+    case 'register_payment_out':
+      return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid'
+    case 'issue_vendor_credit_note':
+      if (normalizedType === 'supplier_return') return normalizedStatus === 'approved'
+      return normalizedStatus === 'issued' || normalizedStatus === 'partially_paid' || normalizedStatus === 'paid'
+    case 'register_production_issue':
+    case 'register_production_output':
+      return normalizedStatus === 'approved' || normalizedStatus === 'in_progress'
     default:
       return true
   }
@@ -2793,6 +5272,54 @@ function isCommercialDocumentLocked(documentType: string, status: string): boole
   const normalizedType = documentType.toLowerCase()
   const normalizedStatus = status.toLowerCase()
   if (!['sales_order', 'invoice', 'credit_note', 'payment_receipt', 'payment_refund', 'ledger_posting'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
+}
+
+function isProcurementDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['purchase_request', 'purchase_order', 'goods_receipt', 'vendor_bill', 'payment_out', 'vendor_credit_note'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
+}
+
+function isFulfillmentDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['sales_fulfillment', 'delivery_order'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
+}
+
+function isReturnsDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['sales_return', 'return_receipt'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
+}
+
+function isSupplierReturnsDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['supplier_return'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
+}
+
+function isProductionDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['production_order', 'production_issue', 'production_output'].includes(normalizedType)) return false
+  if (!normalizedStatus) return false
+  return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
+}
+
+function isRecallDocumentLocked(documentType: string, status: string): boolean {
+  const normalizedType = documentType.toLowerCase()
+  const normalizedStatus = status.toLowerCase()
+  if (!['recall_case', 'recall_action'].includes(normalizedType)) return false
   if (!normalizedStatus) return false
   return normalizedStatus !== 'draft' && normalizedStatus !== 'rejected'
 }

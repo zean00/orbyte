@@ -60,31 +60,111 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, deliverySvc *application.DeliveryCoreService, returnsSvc *application.ReturnsCoreService, supplierReturnsSvc *application.SupplierReturnsCoreService, productionSvc *application.ProductionCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+	_ = traceabilitySvc
 	if commercialSvc != nil {
-		mux.HandleFunc("POST /commercial/orders/", func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasSuffix(r.URL.Path, "/generate-invoice") {
+		mux.HandleFunc("POST /commercial/products/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/generate-variants") {
 				http.NotFound(w, r)
 				return
 			}
-			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/orders/"), "/generate-invoice")
-			order, err := docs.Get(documentID)
-			if err != nil {
-				respondError(w, err)
-				return
-			}
-			p, ok := requireAuthorization(w, r, ident, "document.create", order.Header.LocationID, "")
+			p, ok := requireInteractivePrincipal(w, r)
 			if !ok {
 				return
 			}
-			record, err := commercialSvc.GenerateInvoiceFromOrder(documentID, principalEffectiveUserID(p))
+			if !principalAllowsAll(ident, p, []string{"product.read", "item.create"}) {
+				respondError(w, shared.Forbidden("variant generation is not allowed"))
+				return
+			}
+			productID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/products/"), "/generate-variants")
+			var req struct {
+				Dimensions []application.VariantDimensionSelection `json:"dimensions"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid variant generation payload"))
+				return
+			}
+			records, err := commercialSvc.GenerateVariantsForProduct(productID, principalEffectiveUserID(p), req.Dimensions)
 			if err != nil {
 				respondError(w, err)
 				return
 			}
-			refreshDocumentSearch(searchSvc, record)
-			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
-			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			respondJSON(w, http.StatusCreated, map[string]any{"items": records})
+		})
+
+		mux.HandleFunc("POST /commercial/orders/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/generate-invoice"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/orders/"), "/generate-invoice")
+				order, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", order.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := commercialSvc.GenerateInvoiceFromOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/generate-fulfillment"):
+				if fulfillmentSvc == nil {
+					http.NotFound(w, r)
+					return
+				}
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/orders/"), "/generate-fulfillment")
+				order, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", order.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := fulfillmentSvc.GenerateFulfillmentFromOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/generate-production-order"):
+				if productionSvc == nil {
+					http.NotFound(w, r)
+					return
+				}
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/commercial/orders/"), "/generate-production-order")
+				order, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", order.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				records, err := productionSvc.GenerateProductionOrdersFromSalesOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				items := make([]document.Record, 0, len(records))
+				for _, item := range records {
+					refreshDocumentSearch(searchSvc, item)
+					items = append(items, sanitizeDocumentRecord(fieldSecurity, ident, p, docs.Render(item, document.ViewExpanded, modules.EnabledMap()), "api"))
+				}
+				respondJSON(w, http.StatusCreated, map[string]any{"items": items})
+			default:
+				http.NotFound(w, r)
+			}
 		})
 
 		mux.HandleFunc("POST /commercial/invoices/", func(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +237,397 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
 		})
 	}
+	if procurementSvc != nil {
+		mux.HandleFunc("POST /procurement/requests/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/generate-purchase-order") {
+				http.NotFound(w, r)
+				return
+			}
+			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/requests/"), "/generate-purchase-order")
+			source, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			record, err := procurementSvc.GeneratePurchaseOrderFromRequest(documentID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			refreshDocumentSearch(searchSvc, record)
+			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+		})
+		mux.HandleFunc("POST /procurement/orders/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/register-receipt"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/orders/"), "/register-receipt")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := procurementSvc.CreateGoodsReceiptFromOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/register-vendor-bill"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/orders/"), "/register-vendor-bill")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := procurementSvc.CreateVendorBillFromOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		mux.HandleFunc("POST /procurement/receipts/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/register-vendor-bill"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/receipts/"), "/register-vendor-bill")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := procurementSvc.CreateVendorBillFromReceipt(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/register-supplier-return"):
+				if supplierReturnsSvc == nil {
+					http.NotFound(w, r)
+					return
+				}
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/receipts/"), "/register-supplier-return")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := supplierReturnsSvc.GenerateSupplierReturnFromReceipt(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		mux.HandleFunc("POST /procurement/bills/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/register-payment"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/bills/"), "/register-payment")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := procurementSvc.CreatePaymentOutFromBill(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/issue-credit-note"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/bills/"), "/issue-credit-note")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := procurementSvc.CreateVendorCreditFromBill(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/register-supplier-return"):
+				if supplierReturnsSvc == nil {
+					http.NotFound(w, r)
+					return
+				}
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/procurement/bills/"), "/register-supplier-return")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := supplierReturnsSvc.GenerateSupplierReturnFromBill(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+	}
+	if supplierReturnsSvc != nil {
+		mux.HandleFunc("POST /supplier-returns/returns/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/issue-vendor-credit") {
+				http.NotFound(w, r)
+				return
+			}
+			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/supplier-returns/returns/"), "/issue-vendor-credit")
+			source, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			record, err := supplierReturnsSvc.CreateVendorCreditFromReturn(documentID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			refreshDocumentSearch(searchSvc, record)
+			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+		})
+	}
+	if deliverySvc != nil {
+		mux.HandleFunc("POST /delivery/fulfillments/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/register-delivery") {
+				http.NotFound(w, r)
+				return
+			}
+			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/delivery/fulfillments/"), "/register-delivery")
+			source, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			record, err := deliverySvc.GenerateDeliveryFromFulfillment(documentID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			refreshDocumentSearch(searchSvc, record)
+			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+		})
+	}
+	if returnsSvc != nil {
+		mux.HandleFunc("POST /returns/fulfillments/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/register-return") {
+				http.NotFound(w, r)
+				return
+			}
+			documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/returns/fulfillments/"), "/register-return")
+			source, err := docs.Get(documentID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+			if !ok {
+				return
+			}
+			record, err := returnsSvc.GenerateReturnFromFulfillment(documentID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			refreshDocumentSearch(searchSvc, record)
+			rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+			respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+		})
+		mux.HandleFunc("POST /returns/returns/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/register-receipt"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/returns/returns/"), "/register-receipt")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := returnsSvc.CreateReturnReceiptFromReturn(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/issue-credit-note"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/returns/returns/"), "/issue-credit-note")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := returnsSvc.CreateCreditNoteFromReturn(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/register-refund"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/returns/returns/"), "/register-refund")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := returnsSvc.CreateRefundFromReturn(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/create-replacement-order"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/returns/returns/"), "/create-replacement-order")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := returnsSvc.CreateReplacementOrderFromReturn(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+	}
+	if productionSvc != nil {
+		mux.HandleFunc("POST /production/orders/", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/register-issue"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/production/orders/"), "/register-issue")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := productionSvc.CreateProductionIssueFromOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			case strings.HasSuffix(r.URL.Path, "/register-output"):
+				documentID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/production/orders/"), "/register-output")
+				source, err := docs.Get(documentID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				p, ok := requireAuthorization(w, r, ident, "document.create", source.Header.LocationID, "")
+				if !ok {
+					return
+				}
+				record, err := productionSvc.CreateProductionOutputFromOrder(documentID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				refreshDocumentSearch(searchSvc, record)
+				rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
+				respondJSON(w, http.StatusCreated, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+	}
 
 	mux.HandleFunc("GET /documents", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "document.list", effectiveLocationID(r), "")
@@ -201,8 +672,24 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Validation("organization_id is required"))
 			return
 		}
-		if commercialSvc != nil {
+		if commercialSvc != nil && isCommercialManagedType(req.Type) {
 			req.Payload = commercialSvc.NormalizePayload(req.Type, req.Payload)
+		} else if procurementSvc != nil && isProcurementManagedType(req.Type) {
+			req.Payload = procurementSvc.NormalizePayload(req.Type, req.Payload)
+		} else if inventorySvc != nil && isInventoryManagedType(req.Type) {
+			req.Payload = inventorySvc.NormalizePayload(req.Type, req.Payload)
+		} else if fulfillmentSvc != nil && isFulfillmentManagedType(req.Type) {
+			req.Payload = fulfillmentSvc.NormalizePayload(req.Type, req.Payload)
+		} else if deliverySvc != nil && isDeliveryManagedType(req.Type) {
+			req.Payload = deliverySvc.NormalizePayload(req.Type, req.Payload)
+		} else if returnsSvc != nil && isReturnsManagedType(req.Type) {
+			req.Payload = returnsSvc.NormalizePayload(req.Type, req.Payload)
+		} else if supplierReturnsSvc != nil && isSupplierReturnsManagedType(req.Type) {
+			req.Payload = supplierReturnsSvc.NormalizePayload(req.Type, req.Payload)
+		} else if productionSvc != nil && isProductionManagedType(req.Type) {
+			req.Payload = productionSvc.NormalizePayload(req.Type, req.Payload)
+		} else if recallSvc != nil && isRecallManagedType(req.Type) {
+			req.Payload = recallSvc.NormalizePayload(req.Type, req.Payload)
 		}
 		p, ok := requireAuthorization(w, r, ident, "document.create", req.LocationID, "")
 		if !ok {
@@ -389,8 +876,8 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 			return
 		}
-		if commercialDocumentUpdateLocked(current.Header.Type, current.Header.Status) {
-			respondError(w, shared.Conflict("commercial documents can only be edited while draft or rejected"))
+		if commercialDocumentUpdateLocked(current.Header.Type, current.Header.Status) || procurementDocumentUpdateLocked(current.Header.Type, current.Header.Status) || inventoryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || deliveryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || returnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || supplierReturnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || productionDocumentUpdateLocked(current.Header.Type, current.Header.Status) || recallDocumentUpdateLocked(current.Header.Type, current.Header.Status) {
+			respondError(w, shared.Conflict("business documents can only be edited while draft or rejected"))
 			return
 		}
 		var req updateDocumentRequest
@@ -398,8 +885,24 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Validation("invalid document update payload"))
 			return
 		}
-		if commercialSvc != nil {
+		if commercialSvc != nil && isCommercialManagedType(current.Header.Type) {
 			req.Payload = commercialSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if procurementSvc != nil && isProcurementManagedType(current.Header.Type) {
+			req.Payload = procurementSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if inventorySvc != nil && isInventoryManagedType(current.Header.Type) {
+			req.Payload = inventorySvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if fulfillmentSvc != nil && isFulfillmentManagedType(current.Header.Type) {
+			req.Payload = fulfillmentSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if deliverySvc != nil && isDeliveryManagedType(current.Header.Type) {
+			req.Payload = deliverySvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if returnsSvc != nil && isReturnsManagedType(current.Header.Type) {
+			req.Payload = returnsSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if supplierReturnsSvc != nil && isSupplierReturnsManagedType(current.Header.Type) {
+			req.Payload = supplierReturnsSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if productionSvc != nil && isProductionManagedType(current.Header.Type) {
+			req.Payload = productionSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if recallSvc != nil && isRecallManagedType(current.Header.Type) {
+			req.Payload = recallSvc.NormalizePayload(current.Header.Type, req.Payload)
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, current, req.Payload, "", "api"); err != nil {
 			respondError(w, err)
@@ -485,11 +988,12 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		}
 
 		permissionByAction := map[string]string{
-			"submit":  "document.submit",
-			"approve": "document.approve",
-			"reject":  "document.reject",
-			"reopen":  "document.reopen",
-			"cancel":  "document.cancel",
+			"submit":         "document.submit",
+			"approve":        "document.approve",
+			"mark_delivered": "document.approve",
+			"reject":         "document.reject",
+			"reopen":         "document.reopen",
+			"cancel":         "document.cancel",
 		}
 		permissionKey, exists := permissionByAction[req.Action]
 		if !exists {
@@ -511,13 +1015,127 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 			return
 		}
-		if commercialSvc != nil {
+		if commercialSvc != nil && isCommercialManagedType(current.Header.Type) {
 			var validationErr error
 			switch req.Action {
 			case "approve":
 				validationErr = commercialSvc.ValidateApprove(current)
 			case "cancel":
 				validationErr = commercialSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if procurementSvc != nil && isProcurementManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = procurementSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = procurementSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if inventorySvc != nil && isInventoryManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = inventorySvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = inventorySvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if fulfillmentSvc != nil && isFulfillmentManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = fulfillmentSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = fulfillmentSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if deliverySvc != nil && isDeliveryManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = deliverySvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = deliverySvc.ValidateCancel(current)
+			case "mark_delivered":
+				validationErr = deliverySvc.ValidateMarkDelivered(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if returnsSvc != nil && isReturnsManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = returnsSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = returnsSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if supplierReturnsSvc != nil && isSupplierReturnsManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = supplierReturnsSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = supplierReturnsSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if productionSvc != nil && isProductionManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = productionSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = productionSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if recallSvc != nil && isRecallManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = recallSvc.ValidateApprove(current)
+			case "cancel":
+				validationErr = recallSvc.ValidateCancel(current)
 			}
 			if validationErr != nil {
 				incActionMetric(obs, req.Action, "error")
@@ -538,13 +1156,15 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			record, err = docActions.Reopen(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
 		case "cancel":
 			record, err = docActions.Cancel(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag)
+		default:
+			record, err = docActions.Transition(documentID, requestActingContext(r, p), req.ExpectedVersion, req.ExpectedETag, req.Action, "document."+req.Action)
 		}
 		if err != nil {
 			incActionMetric(obs, req.Action, "error")
 			respondError(w, err)
 			return
 		}
-		if commercialSvc != nil && (req.Action == "approve" || req.Action == "cancel") {
+		if commercialSvc != nil && isCommercialManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
 			postCommitWarning := ""
 			var sideEffectErr error
 			switch req.Action {
@@ -556,6 +1176,184 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			if sideEffectErr != nil {
 				postCommitWarning = "commercial post-commit synchronization failed"
 				log.Printf("documents: commercial post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if procurementSvc != nil && isProcurementManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = procurementSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = procurementSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "procurement post-commit synchronization failed"
+				log.Printf("documents: procurement post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if inventorySvc != nil && isInventoryManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = inventorySvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = inventorySvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "inventory post-commit synchronization failed"
+				log.Printf("documents: inventory post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if fulfillmentSvc != nil && isFulfillmentManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = fulfillmentSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = fulfillmentSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "fulfillment post-commit synchronization failed"
+				log.Printf("documents: fulfillment post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if deliverySvc != nil && isDeliveryManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel" || req.Action == "mark_delivered") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = deliverySvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = deliverySvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			case "mark_delivered":
+				sideEffectErr = deliverySvc.HandleMarkedDelivered(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "delivery post-commit synchronization failed"
+				log.Printf("documents: delivery post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if returnsSvc != nil && isReturnsManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = returnsSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = returnsSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "returns post-commit synchronization failed"
+				log.Printf("documents: returns post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if supplierReturnsSvc != nil && isSupplierReturnsManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = supplierReturnsSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = supplierReturnsSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "supplier return post-commit synchronization failed"
+				log.Printf("documents: supplier return post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if productionSvc != nil && isProductionManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = productionSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = productionSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "production post-commit synchronization failed"
+				log.Printf("documents: production post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
+			}
+			record, err = docs.Get(record.Header.ID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if postCommitWarning != "" {
+				w.Header().Set("X-Orbyte-Warning", postCommitWarning)
+			}
+		}
+		if recallSvc != nil && isRecallManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+			postCommitWarning := ""
+			var sideEffectErr error
+			switch req.Action {
+			case "approve":
+				sideEffectErr = recallSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
+			case "cancel":
+				sideEffectErr = recallSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
+			}
+			if sideEffectErr != nil {
+				postCommitWarning = "recall post-commit synchronization failed"
+				log.Printf("documents: recall post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
 			}
 			record, err = docs.Get(record.Header.ID)
 			if err != nil {
@@ -614,6 +1412,161 @@ func commercialDocumentUpdateLocked(documentType string, status string) bool {
 	case "sales_order", "invoice", "credit_note", "payment_receipt", "payment_refund", "ledger_posting":
 		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
 		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func procurementDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "purchase_request", "purchase_order", "goods_receipt", "vendor_bill", "payment_out", "vendor_credit_note":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func isCommercialManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "sales_order", "invoice", "credit_note", "payment_receipt", "payment_refund":
+		return true
+	default:
+		return false
+	}
+}
+
+func isProcurementManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "purchase_request", "purchase_order", "goods_receipt", "vendor_bill", "payment_out", "vendor_credit_note":
+		return true
+	default:
+		return false
+	}
+}
+
+func inventoryDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "stock_receipt", "stock_issue", "stock_adjustment", "stock_transfer", "stock_movement", "sales_fulfillment":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func isInventoryManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "stock_receipt", "stock_issue", "stock_adjustment", "stock_transfer", "goods_receipt":
+		return true
+	default:
+		return false
+	}
+}
+
+func isFulfillmentManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "sales_fulfillment":
+		return true
+	default:
+		return false
+	}
+}
+
+func deliveryDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "delivery_order":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func isDeliveryManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "delivery_order":
+		return true
+	default:
+		return false
+	}
+}
+
+func returnsDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "sales_return", "return_receipt":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func supplierReturnsDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "supplier_return":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func productionDocumentUpdateLocked(documentType string, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "production_order", "production_issue", "production_output":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func isReturnsManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "sales_return", "return_receipt":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSupplierReturnsManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "supplier_return":
+		return true
+	default:
+		return false
+	}
+}
+
+func isProductionManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "production_order", "production_issue", "production_output":
+		return true
+	default:
+		return false
+	}
+}
+
+func isRecallManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "recall_case", "recall_action":
+		return true
+	default:
+		return false
+	}
+}
+
+func recallDocumentUpdateLocked(documentType, status string) bool {
+	normalizedType := strings.ToLower(strings.TrimSpace(documentType))
+	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+	if normalizedStatus == "" {
+		return false
+	}
+	switch normalizedType {
+	case "recall_case", "recall_action":
+		return normalizedStatus != "draft" && normalizedStatus != "rejected"
 	default:
 		return false
 	}

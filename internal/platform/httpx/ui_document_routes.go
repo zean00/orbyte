@@ -28,12 +28,13 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 		documentType := strings.TrimSpace(r.URL.Query().Get("type"))
 		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
 		receivableState := strings.TrimSpace(r.URL.Query().Get("receivable_state"))
+		payableState := strings.TrimSpace(r.URL.Query().Get("payable_state"))
 		includePayload := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_payload")), "1") || strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_payload")), "true")
 		sortKey := strings.TrimSpace(r.URL.Query().Get("sort"))
 		today := time.Now().UTC().Format("2006-01-02")
 		items := searchSvc.ListDocuments()
 		filtered := make([]map[string]any, 0, len(items))
-		if !includePayload && receivableState == "" {
+		if !includePayload && receivableState == "" && payableState == "" {
 			for _, item := range items {
 				if documentType != "" && item.DocumentType != documentType {
 					continue
@@ -73,6 +74,9 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			rendered := docs.Render(record, document.ViewNormal, modules.EnabledMap())
 			rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "ui")
 			if !matchesReceivableStateFilter(receivableState, rendered, today) {
+				continue
+			}
+			if !matchesPayableStateFilter(payableState, rendered, today) {
 				continue
 			}
 			filtered = append(filtered, map[string]any{
@@ -213,6 +217,32 @@ func matchesReceivableStateFilter(filter string, record document.Record, today s
 		return true
 	}
 	if record.Header.Type != "invoice" {
+		return false
+	}
+	payload := record.Body.Payload
+	balance := recordNumberValue(payload["balance_due_amount"])
+	dueDate := strings.TrimSpace(recordStringValue(payload["due_date"]))
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "open":
+		return balance > 0 && (record.Header.Status == "issued" || record.Header.Status == "partially_paid")
+	case "due_today":
+		return balance > 0 && dueDate == today
+	case "overdue":
+		return balance > 0 && dueDate != "" && dueDate < today
+	case "current":
+		return balance > 0 && (dueDate == "" || dueDate > today)
+	case "paid":
+		return record.Header.Status == "paid" || balance <= 0
+	default:
+		return true
+	}
+}
+
+func matchesPayableStateFilter(filter string, record document.Record, today string) bool {
+	if strings.TrimSpace(filter) == "" {
+		return true
+	}
+	if record.Header.Type != "vendor_bill" {
 		return false
 	}
 	payload := record.Body.Payload

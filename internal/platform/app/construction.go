@@ -84,6 +84,16 @@ type serviceGraph struct {
 	docActions        *application.DocumentActions
 	modelActions      *application.ModelActions
 	commercialCore    *application.CommercialCoreService
+	procurementCore   *application.ProcurementCoreService
+	inventoryCore     *application.InventoryCoreService
+	fulfillmentCore   *application.FulfillmentCoreService
+	deliveryCore      *application.DeliveryCoreService
+	returnsCore       *application.ReturnsCoreService
+	supplierReturns   *application.SupplierReturnsCoreService
+	planningCore      *application.PlanningCoreService
+	productionCore    *application.ProductionCoreService
+	traceabilityCore  *application.TraceabilityCoreService
+	recallCore        *application.RecallCoreService
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
 	queryMonitor      *store.QueryMonitor
@@ -239,6 +249,16 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.docActions.AttachActivities(graph.activities)
 	graph.docActions.AttachNotifications(graph.notifications)
 	graph.commercialCore = application.NewCommercialCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.procurementCore = application.NewProcurementCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.inventoryCore = application.NewInventoryCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.fulfillmentCore = application.NewFulfillmentCoreService(graph.documents, graph.search, graph.inventoryCore)
+	graph.deliveryCore = application.NewDeliveryCoreService(graph.documents, graph.search)
+	graph.returnsCore = application.NewReturnsCoreService(graph.documents, graph.search, graph.inventoryCore, graph.commercialCore, graph.fulfillmentCore)
+	graph.supplierReturns = application.NewSupplierReturnsCoreService(graph.documents, graph.search, graph.inventoryCore, graph.procurementCore)
+	graph.planningCore = application.NewPlanningCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.fulfillmentCore, graph.procurementCore)
+	graph.productionCore = application.NewProductionCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore)
+	graph.traceabilityCore = application.NewTraceabilityCoreService(graph.documents, graph.models, graph.inventoryCore)
+	graph.recallCore = application.NewRecallCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.traceabilityCore)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)

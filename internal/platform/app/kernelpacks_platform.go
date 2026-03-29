@@ -47,3 +47,15 @@ func integrationKernelPackManifests() []module.Manifest {
 func commercialCoreKernelPackManifests() []module.Manifest {
 	return []module.Manifest{commercialCoreKernelPackManifest()}
 }
+
+func procurementCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{procurementCoreKernelPackManifest()}
+}
+
+func inventoryCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{inventoryCoreKernelPackManifest()}
+}
+
+func planningCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{planningCoreKernelPackManifest()}
+}

@@ -60,8 +60,121 @@ type refundAllocation struct {
 	note          string
 }
 
+type VariantDimensionSelection struct {
+	DimensionCode string   `json:"dimension_code"`
+	ValueCodes    []string `json:"value_codes"`
+}
+
 func NewCommercialCoreService(documents *document.Service, configSvc *config.Service, models *model.Service, searchSvc *search.Service) *CommercialCoreService {
 	return &CommercialCoreService{documents: documents, config: configSvc, models: models, search: searchSvc}
+}
+
+func (s *CommercialCoreService) GenerateVariantsForProduct(productID, actorID string, selections []VariantDimensionSelection) ([]model.Record, error) {
+	product, err := s.models.Get("commercial_product", strings.TrimSpace(productID))
+	if err != nil {
+		return nil, err
+	}
+	productCode := textValue(product.Values["code"])
+	if productCode == "" {
+		return nil, shared.Validation("product code is required")
+	}
+	dimensionOrder := orderedVariantDimensions(product.Values["variant_dimension_codes"])
+	if len(dimensionOrder) == 0 {
+		for _, selection := range selections {
+			if code := strings.TrimSpace(selection.DimensionCode); code != "" {
+				dimensionOrder = append(dimensionOrder, code)
+			}
+		}
+	}
+	if len(dimensionOrder) == 0 {
+		return nil, shared.Validation("at least one variant dimension is required")
+	}
+	valuesByDimension := map[string][]model.Record{}
+	for _, selection := range selections {
+		dimensionCode := strings.TrimSpace(selection.DimensionCode)
+		if dimensionCode == "" {
+			continue
+		}
+		for _, valueCode := range selection.ValueCodes {
+			valueCode = strings.TrimSpace(valueCode)
+			if valueCode == "" {
+				continue
+			}
+			items, _, listErr := s.models.List("commercial_variant_value", model.Query{
+				Filters: map[string]string{
+					"dimension_code": dimensionCode,
+					"code":           valueCode,
+					"status":         "active",
+				},
+				PageSize: 10,
+			})
+			if listErr != nil {
+				return nil, listErr
+			}
+			if len(items) == 0 {
+				return nil, shared.Validation("variant value not found for selected dimension")
+			}
+			valuesByDimension[dimensionCode] = append(valuesByDimension[dimensionCode], items[0])
+		}
+	}
+	for _, dimensionCode := range dimensionOrder {
+		if len(valuesByDimension[dimensionCode]) == 0 {
+			return nil, shared.Validation("each variant dimension must have at least one selected value")
+		}
+	}
+
+	combos := buildVariantValueCombos(dimensionOrder, valuesByDimension)
+	if len(combos) == 0 {
+		return nil, shared.Validation("no variants were generated")
+	}
+	created := make([]model.Record, 0, len(combos))
+	for _, combo := range combos {
+		signature, label, skuSuffix, valuesJSON := variantDescriptor(combo)
+		existing, _, listErr := s.models.List("commercial_item", model.Query{
+			Filters: map[string]string{
+				"product_code":      productCode,
+				"variant_signature": signature,
+			},
+			PageSize: 2,
+		})
+		if listErr != nil {
+			return nil, listErr
+		}
+		if len(existing) > 0 {
+			continue
+		}
+		nextValues := map[string]any{
+			"product_code":            productCode,
+			"sku":                     variantSKU(productCode, skuSuffix),
+			"name":                    variantName(textValue(product.Values["name"]), label),
+			"description":             textValue(product.Values["description"]),
+			"is_variant":              true,
+			"variant_signature":       signature,
+			"variant_label":           label,
+			"variant_values":          valuesJSON,
+			"item_type":               firstNonEmptyString(textValue(product.Values["item_type"]), "product"),
+			"kind":                    "variant",
+			"category_code":           textValue(product.Values["category_code"]),
+			"tags":                    textValue(product.Values["tags"]),
+			"is_sellable":             true,
+			"uom_code":                textValue(product.Values["uom_code"]),
+			"currency_code":           textValue(product.Values["currency_code"]),
+			"tax_code":                textValue(product.Values["tax_code"]),
+			"revenue_account_code":    textValue(product.Values["revenue_account_code"]),
+			"inventory_enabled":       boolFieldValue(product.Values["inventory_enabled"]),
+			"inventory_tracking_mode": firstNonEmptyString(textValue(product.Values["inventory_tracking_mode"]), "none"),
+			"expiry_tracking_enabled": boolFieldValue(product.Values["expiry_tracking_enabled"]),
+			"allow_negative_stock":    boolFieldValue(product.Values["allow_negative_stock"]),
+			"default_issue_strategy":  firstNonEmptyString(textValue(product.Values["default_issue_strategy"]), "manual"),
+			"status":                  firstNonEmptyString(textValue(product.Values["status"]), "active"),
+		}
+		record, createErr := s.models.Create("commercial_item", actorID, nextValues)
+		if createErr != nil {
+			return nil, createErr
+		}
+		created = append(created, record)
+	}
+	return created, nil
 }
 
 func (s *CommercialCoreService) GenerateInvoiceFromOrder(orderID, actorID string) (document.Record, error) {
@@ -1331,6 +1444,9 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 	for _, row := range rows {
 		normalized := cloneMap(row)
 		defaultTaxCode := textValue(next["default_tax_code"])
+		if resolvedItemCode := s.resolveVariantItemCode(textValue(normalized["product_code"]), textValue(normalized["variant_signature"])); resolvedItemCode != "" {
+			normalized["item_code"] = resolvedItemCode
+		}
 		itemCode := textValue(normalized["item_code"])
 		if textValue(normalized["description"]) == "" {
 			normalized["description"] = firstNonEmptyString(
@@ -1406,6 +1522,114 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 		next["currency_code"] = "IDR"
 	}
 	return next
+}
+
+func (s *CommercialCoreService) resolveVariantItemCode(productCode, variantSignature string) string {
+	productCode = strings.TrimSpace(productCode)
+	variantSignature = strings.TrimSpace(variantSignature)
+	if productCode == "" || variantSignature == "" {
+		return ""
+	}
+	items, _, err := s.models.List("commercial_item", model.Query{
+		Filters: map[string]string{
+			"product_code":      productCode,
+			"variant_signature": variantSignature,
+		},
+		PageSize: 2,
+	})
+	if err != nil || len(items) == 0 {
+		return ""
+	}
+	return textValue(items[0].Values["sku"])
+}
+
+func orderedVariantDimensions(value any) []string {
+	parts := strings.Split(textValue(value), ",")
+	result := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, part := range parts {
+		code := strings.TrimSpace(part)
+		if code == "" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	return result
+}
+
+func buildVariantValueCombos(order []string, valuesByDimension map[string][]model.Record) [][]model.Record {
+	combos := [][]model.Record{{}}
+	for _, dimensionCode := range order {
+		values := valuesByDimension[dimensionCode]
+		next := make([][]model.Record, 0, len(combos)*maxInt(len(values), 1))
+		for _, combo := range combos {
+			for _, value := range values {
+				item := append([]model.Record{}, combo...)
+				item = append(item, value)
+				next = append(next, item)
+			}
+		}
+		combos = next
+	}
+	return combos
+}
+
+func variantDescriptor(combo []model.Record) (signature, label, skuSuffix, valuesJSON string) {
+	signatureParts := make([]string, 0, len(combo))
+	labelParts := make([]string, 0, len(combo))
+	skuParts := make([]string, 0, len(combo))
+	jsonParts := make([]string, 0, len(combo))
+	for _, value := range combo {
+		dimensionCode := textValue(value.Values["dimension_code"])
+		valueCode := textValue(value.Values["code"])
+		valueName := firstNonEmptyString(textValue(value.Values["name"]), valueCode)
+		signatureParts = append(signatureParts, dimensionCode+"="+valueCode)
+		labelParts = append(labelParts, valueName)
+		skuParts = append(skuParts, strings.ToUpper(strings.ReplaceAll(valueCode, " ", "_")))
+		jsonParts = append(jsonParts, fmt.Sprintf(`{"dimension_code":"%s","value_code":"%s","value_name":"%s"}`, escapeJSONString(dimensionCode), escapeJSONString(valueCode), escapeJSONString(valueName)))
+	}
+	return strings.Join(signatureParts, "|"), strings.Join(labelParts, " / "), strings.Join(skuParts, "-"), "[" + strings.Join(jsonParts, ",") + "]"
+}
+
+func variantSKU(productCode, suffix string) string {
+	productCode = strings.TrimSpace(productCode)
+	suffix = strings.TrimSpace(suffix)
+	if suffix == "" {
+		return productCode
+	}
+	return productCode + "-" + suffix
+}
+
+func variantName(productName, label string) string {
+	productName = strings.TrimSpace(productName)
+	label = strings.TrimSpace(label)
+	if productName == "" {
+		return label
+	}
+	if label == "" {
+		return productName
+	}
+	return productName + " / " + label
+}
+
+func escapeJSONString(value string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return replacer.Replace(value)
+}
+
+func boolFieldValue(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
 }
 
 func (s *CommercialCoreService) applyPartyCommercialDefaults(payload map[string]any) map[string]any {

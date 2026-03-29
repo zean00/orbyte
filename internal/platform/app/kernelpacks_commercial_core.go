@@ -75,7 +75,10 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					TitleI18n: localize("Catalog Setup", "Setup Katalog"),
 					Links: []module.AdminConsoleLinkDefinition{
 						adminConsoleLink("catalog", "Catalog", "Katalog", "/ui/commercial/catalog", "Open the primary sellable catalog.", "Buka katalog jual utama.", "item.list"),
+						adminConsoleLink("products", "Products", "Produk", "/ui/commercial/products", "Manage parent products and their variant setup.", "Kelola produk induk dan pengaturan variannya.", "product.list"),
 						adminConsoleLink("items", "Items", "Item", "/ui/commercial/items", "Manage products and services.", "Kelola produk dan layanan.", "item.list"),
+						adminConsoleLink("variant_dimensions", "Variant Dimensions", "Dimensi Varian", "/ui/commercial/variant-dimensions", "Maintain reusable variant dimensions such as color or size.", "Pelihara dimensi varian seperti warna atau ukuran.", "variant_dimension.list"),
+						adminConsoleLink("variant_values", "Variant Values", "Nilai Varian", "/ui/commercial/variant-values", "Maintain allowed values for each variant dimension.", "Pelihara nilai yang diizinkan untuk setiap dimensi varian.", "variant_value.list"),
 						adminConsoleLink("item_categories", "Item Categories", "Kategori Item", "/ui/commercial/item-categories", "Maintain commercial item groupings.", "Pelihara pengelompokan item komersial.", "item_category.list"),
 						adminConsoleLink("uoms", "Units", "Satuan", "/ui/commercial/uoms", "Manage units of measure.", "Kelola satuan ukur.", "uom.list"),
 						adminConsoleLink("tax_codes", "Tax Codes", "Kode Pajak", "/ui/commercial/tax-codes", "Manage tax calculation rules.", "Kelola aturan perhitungan pajak.", "tax_code.list"),
@@ -93,6 +96,7 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					TitleI18n: localize("Commercial Operations", "Operasi Komersial"),
 					Links: []module.AdminConsoleLinkDefinition{
 						adminConsoleLink("orders", "Orders", "Order", "/ui/commercial/orders", "Open sales orders.", "Buka order penjualan.", "document.list"),
+						adminConsoleLink("fulfillments", "Fulfillments", "Fulfillment", "/ui/fulfillment/fulfillments", "Open sales fulfillments.", "Buka fulfillment penjualan.", "document.list"),
 						adminConsoleLink("invoices", "Invoices", "Invoice", "/ui/commercial/invoices", "Open invoices.", "Buka invoice.", "document.list"),
 						adminConsoleLink("credit_notes", "Credit Notes", "Credit Note", "/ui/commercial/credit-notes", "Open credit notes.", "Buka credit note.", "document.list"),
 						adminConsoleLink("receivables", "Receivables", "Piutang", "/ui/commercial/receivables", "Open the receivables dashboard.", "Buka dashboard piutang.", "document.list"),
@@ -133,6 +137,62 @@ func commercialCoreKernelPackManifest() module.Manifest {
 		},
 		Models: []model.Definition{
 			commercialCatalogModelDefinition(
+				"commercial_product",
+				"Commercial Product",
+				"Commercial Products",
+				"product",
+				[]model.FieldDefinition{
+					{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Type: "string", Required: true},
+					{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
+					{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Type: "string"},
+					{Key: "brand", Label: "Brand", LabelI18n: localize("Brand", "Merek"), Type: "string"},
+					{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Type: "string", Required: true, DefaultValue: "product"},
+					{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Type: "string"},
+					{Key: "tags", Label: "Tags", LabelI18n: localize("Tags", "Tag"), Type: "string"},
+					{Key: "variant_dimension_codes", Label: "Variant Dimensions", LabelI18n: localize("Variant Dimensions", "Dimensi Varian"), Type: "string"},
+					{Key: "uom_code", Label: "UOM", LabelI18n: localize("UOM", "Satuan"), Type: "string"},
+					{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Type: "string"},
+					{Key: "tax_code", Label: "Tax Code", LabelI18n: localize("Tax Code", "Kode Pajak"), Type: "string"},
+					{Key: "revenue_account_code", Label: "Revenue Account", LabelI18n: localize("Revenue Account", "Akun Pendapatan"), Type: "string"},
+					{Key: "inventory_enabled", Label: "Inventory Enabled", LabelI18n: localize("Inventory Enabled", "Inventori Aktif"), Type: "bool"},
+					{Key: "inventory_tracking_mode", Label: "Inventory Tracking", LabelI18n: localize("Inventory Tracking", "Pelacakan Inventori"), Type: "string", DefaultValue: "none"},
+					{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Type: "bool"},
+					{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Type: "bool"},
+					{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Type: "string", DefaultValue: "manual"},
+					{Key: "replenishment_enabled", Label: "Replenishment Enabled", LabelI18n: localize("Replenishment Enabled", "Replenishment Aktif"), Type: "bool"},
+					{Key: "replenishment_mode", Label: "Replenishment Mode", LabelI18n: localize("Replenishment Mode", "Mode Replenishment"), Type: "string", DefaultValue: "manual"},
+					{Key: "reorder_point_quantity", Label: "Reorder Point", LabelI18n: localize("Reorder Point", "Titik Pemesanan Ulang"), Type: "number"},
+					{Key: "target_stock_quantity", Label: "Target Stock", LabelI18n: localize("Target Stock", "Target Stok"), Type: "number"},
+					{Key: "default_replenishment_warehouse_code", Label: "Default Replenishment Warehouse", LabelI18n: localize("Default Replenishment Warehouse", "Gudang Replenishment Default"), Type: "string"},
+					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "active"},
+				},
+			),
+			commercialCatalogModelDefinition(
+				"commercial_variant_dimension",
+				"Variant Dimension",
+				"Variant Dimensions",
+				"variant_dimension",
+				[]model.FieldDefinition{
+					{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Type: "string", Required: true},
+					{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
+					{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Type: "string"},
+					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "active"},
+				},
+			),
+			commercialCatalogModelDefinition(
+				"commercial_variant_value",
+				"Variant Value",
+				"Variant Values",
+				"variant_value",
+				[]model.FieldDefinition{
+					{Key: "dimension_code", Label: "Dimension", LabelI18n: localize("Dimension", "Dimensi"), Type: "string", Required: true},
+					{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Type: "string", Required: true},
+					{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
+					{Key: "sort_order", Label: "Sort Order", LabelI18n: localize("Sort Order", "Urutan"), Type: "number"},
+					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "active"},
+				},
+			),
+			commercialCatalogModelDefinition(
 				"commercial_item",
 				"Commercial Item",
 				"Commercial Items",
@@ -141,6 +201,11 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					{Key: "sku", Label: "SKU", LabelI18n: localize("SKU", "SKU"), Type: "string", Required: true},
 					{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
 					{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Type: "string"},
+					{Key: "product_code", Label: "Product", LabelI18n: localize("Product", "Produk"), Type: "string"},
+					{Key: "is_variant", Label: "Variant SKU", LabelI18n: localize("Variant SKU", "SKU Varian"), Type: "bool"},
+					{Key: "variant_signature", Label: "Variant Signature", LabelI18n: localize("Variant Signature", "Signature Varian"), Type: "string"},
+					{Key: "variant_label", Label: "Variant Label", LabelI18n: localize("Variant Label", "Label Varian"), Type: "string"},
+					{Key: "variant_values", Label: "Variant Values", LabelI18n: localize("Variant Values", "Nilai Varian"), Type: "string"},
 					{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Type: "string", Required: true, DefaultValue: "service"},
 					{Key: "kind", Label: "Kind", LabelI18n: localize("Kind", "Jenis"), Type: "string", Required: true},
 					{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Type: "string"},
@@ -156,6 +221,11 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					{Key: "standard_duration_minutes", Label: "Standard Duration Minutes", LabelI18n: localize("Standard Duration Minutes", "Durasi Standar Menit"), Type: "number"},
 					{Key: "product_unit", Label: "Product Unit", LabelI18n: localize("Product Unit", "Unit Produk"), Type: "string"},
 					{Key: "fulfillment_mode", Label: "Fulfillment Mode", LabelI18n: localize("Fulfillment Mode", "Mode Pemenuhan"), Type: "string"},
+					{Key: "inventory_enabled", Label: "Inventory Enabled", LabelI18n: localize("Inventory Enabled", "Inventori Aktif"), Type: "bool"},
+					{Key: "inventory_tracking_mode", Label: "Inventory Tracking", LabelI18n: localize("Inventory Tracking", "Pelacakan Inventori"), Type: "string", DefaultValue: "none"},
+					{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Type: "bool"},
+					{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Type: "bool"},
+					{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Type: "string", DefaultValue: "manual"},
 					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "active"},
 				},
 			),
@@ -284,10 +354,14 @@ func commercialCoreKernelPackManifest() module.Manifest {
 			commercialWorkflowDefinition("ledger_posting_flow", "posted", false),
 		},
 		Datasets: []module.DatasetDefinition{
+			{Key: "commercial.product.summary", Title: "Product Summary", TitleI18n: localize("Product Summary", "Ringkasan Produk"), SourceKind: "model", ModelKey: "commercial_product", Dimensions: []module.DatasetDimension{{Key: "by_category", Label: "By Category", LabelI18n: localize("By Category", "Berdasarkan Kategori"), Path: "category_code"}}, Measures: []module.DatasetMeasure{{Key: "total", Label: "Total", LabelI18n: localize("Total", "Total"), Kind: "count"}}},
 			{Key: "commercial.item.summary", Title: "Item Summary", TitleI18n: localize("Item Summary", "Ringkasan Item"), SourceKind: "model", ModelKey: "commercial_item", Dimensions: []module.DatasetDimension{{Key: "by_type", Label: "By Type", LabelI18n: localize("By Type", "Berdasarkan Tipe"), Path: "item_type"}, {Key: "by_category", Label: "By Category", LabelI18n: localize("By Category", "Berdasarkan Kategori"), Path: "category_code"}}, Measures: []module.DatasetMeasure{{Key: "total", Label: "Total", LabelI18n: localize("Total", "Total"), Kind: "count"}}},
 			{Key: "commercial.account.summary", Title: "Account Summary", TitleI18n: localize("Account Summary", "Ringkasan Akun"), SourceKind: "model", ModelKey: "commercial_account", Dimensions: []module.DatasetDimension{{Key: "by_category", Label: "By Category", LabelI18n: localize("By Category", "Berdasarkan Kategori"), Path: "category"}}, Measures: []module.DatasetMeasure{{Key: "total", Label: "Total", LabelI18n: localize("Total", "Total"), Kind: "count"}}},
 		},
 		SearchIndexes: append([]search.IndexDefinition{
+			commercialModelSearchIndex("commercial.products.search", "Product Search", "commercial_product", "commercial.products.list", []string{"code", "name", "category_code", "status"}),
+			commercialModelSearchIndex("commercial.variant_dimensions.search", "Variant Dimension Search", "commercial_variant_dimension", "commercial.variant_dimensions.list", []string{"code", "name", "status"}),
+			commercialModelSearchIndex("commercial.variant_values.search", "Variant Value Search", "commercial_variant_value", "commercial.variant_values.list", []string{"dimension_code", "code", "name", "status"}),
 			commercialModelSearchIndex("commercial.items.search", "Item Search", "commercial_item", "commercial.items.list", []string{"sku", "name", "item_type", "category_code", "status"}),
 			commercialModelSearchIndex("commercial.item_categories.search", "Item Category Search", "commercial_item_category", "commercial.item_categories.list", []string{"code", "name", "status"}),
 			commercialModelSearchIndex("commercial.uoms.search", "UOM Search", "commercial_uom", "commercial.uoms.list", []string{"code", "name", "symbol", "status"}),
@@ -306,7 +380,18 @@ func commercialCoreKernelPackManifest() module.Manifest {
 							append(
 								append(
 									append(
-										append([]module.PermissionDefinition{}, commercialModelPermissions("item", "Item")...),
+										append(
+											append(
+												append(
+													append([]module.PermissionDefinition{},
+														commercialModelPermissions("product", "Product")...,
+													),
+													commercialModelPermissions("variant_dimension", "Variant Dimension")...,
+												),
+												commercialModelPermissions("variant_value", "Variant Value")...,
+											),
+											commercialModelPermissions("item", "Item")...,
+										),
 										commercialModelPermissions("item_category", "Item Category")...,
 									),
 									commercialModelPermissions("uom", "Unit of Measure")...,
@@ -330,7 +415,7 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					Name:           "Commercial Catalog Manager",
 					NameI18n:       localize("Commercial Catalog Manager", "Pengelola Katalog Komersial"),
 					AllowedScopes:  []string{"deployment", "location"},
-					PermissionKeys: []string{"item.create", "item.list", "item.read", "item.update", "item_category.create", "item_category.list", "item_category.read", "item_category.update", "uom.create", "uom.list", "uom.read", "uom.update", "tax_code.create", "tax_code.list", "tax_code.read", "tax_code.update", "tax_profile.create", "tax_profile.list", "tax_profile.read", "tax_profile.update", "price_list.create", "price_list.list", "price_list.read", "price_list.update", "price_list_item.create", "price_list_item.list", "price_list_item.read", "price_list_item.update", "account.create", "account.list", "account.read", "account.update", "payment_method.create", "payment_method.list", "payment_method.read", "payment_method.update"},
+					PermissionKeys: []string{"product.create", "product.list", "product.read", "product.update", "variant_dimension.create", "variant_dimension.list", "variant_dimension.read", "variant_dimension.update", "variant_value.create", "variant_value.list", "variant_value.read", "variant_value.update", "item.create", "item.list", "item.read", "item.update", "item_category.create", "item_category.list", "item_category.read", "item_category.update", "uom.create", "uom.list", "uom.read", "uom.update", "tax_code.create", "tax_code.list", "tax_code.read", "tax_code.update", "tax_profile.create", "tax_profile.list", "tax_profile.read", "tax_profile.update", "price_list.create", "price_list.list", "price_list.read", "price_list.update", "price_list_item.create", "price_list_item.list", "price_list_item.read", "price_list_item.update", "account.create", "account.list", "account.read", "account.update", "payment_method.create", "payment_method.list", "payment_method.read", "payment_method.update"},
 				},
 			},
 		},
@@ -447,7 +532,7 @@ func commercialDocumentDefinition(documentType, displayName, workflowKey, number
 		WorkflowKey:            workflowKey,
 		NumberingKey:           numberingKey,
 		OwnerModuleKey:         "commercial_core",
-		AllowedLinkTypes:       []string{"related_to", "source_order", "invoice_for", "payment_for", "refund_for", "posting_for"},
+		AllowedLinkTypes:       []string{"related_to", "source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for", "delivery_for", "return_for", "exchange_for"},
 		AllowedAttachmentTypes: []string{"note", "image", "document"},
 	}
 }
@@ -485,15 +570,18 @@ func commercialModelPermissions(resource, display string) []module.PermissionDef
 func commercialModelMenus() []module.MenuDefinition {
 	return []module.MenuDefinition{
 		{Key: "commercial.catalog", Label: "Catalog", LabelI18n: localize("Catalog", "Katalog"), ActionKey: "commercial.catalog.list", Order: 19, RequiredPermissions: []string{"item.list"}},
-		{Key: "commercial.items", Label: "Items", LabelI18n: localize("Items", "Item"), ActionKey: "commercial.items.list", Order: 20, RequiredPermissions: []string{"item.list"}},
-		{Key: "commercial.item_categories", Label: "Item Categories", LabelI18n: localize("Item Categories", "Kategori Item"), ActionKey: "commercial.item_categories.list", Order: 21, RequiredPermissions: []string{"item_category.list"}},
-		{Key: "commercial.uoms", Label: "Units", LabelI18n: localize("Units", "Satuan"), ActionKey: "commercial.uoms.list", Order: 22, RequiredPermissions: []string{"uom.list"}},
-		{Key: "commercial.tax_codes", Label: "Tax Codes", LabelI18n: localize("Tax Codes", "Kode Pajak"), ActionKey: "commercial.tax_codes.list", Order: 23, RequiredPermissions: []string{"tax_code.list"}},
-		{Key: "commercial.tax_profiles", Label: "Tax Profiles", LabelI18n: localize("Tax Profiles", "Profil Pajak"), ActionKey: "commercial.tax_profiles.list", Order: 24, RequiredPermissions: []string{"tax_profile.list"}},
-		{Key: "commercial.price_lists", Label: "Price Lists", LabelI18n: localize("Price Lists", "Daftar Harga"), ActionKey: "commercial.price_lists.list", Order: 25, RequiredPermissions: []string{"price_list.list"}},
-		{Key: "commercial.price_list_items", Label: "Price List Items", LabelI18n: localize("Price List Items", "Item Daftar Harga"), ActionKey: "commercial.price_list_items.list", Order: 26, RequiredPermissions: []string{"price_list_item.list"}},
-		{Key: "commercial.accounts", Label: "Accounts", LabelI18n: localize("Accounts", "Akun"), ActionKey: "commercial.accounts.list", Order: 27, RequiredPermissions: []string{"account.list"}},
-		{Key: "commercial.payment_methods", Label: "Payment Methods", LabelI18n: localize("Payment Methods", "Metode Pembayaran"), ActionKey: "commercial.payment_methods.list", Order: 28, RequiredPermissions: []string{"payment_method.list"}},
+		{Key: "commercial.products", Label: "Products", LabelI18n: localize("Products", "Produk"), ActionKey: "commercial.products.list", Order: 20, RequiredPermissions: []string{"product.list"}},
+		{Key: "commercial.items", Label: "Items", LabelI18n: localize("Items", "Item"), ActionKey: "commercial.items.list", Order: 21, RequiredPermissions: []string{"item.list"}},
+		{Key: "commercial.variant_dimensions", Label: "Variant Dimensions", LabelI18n: localize("Variant Dimensions", "Dimensi Varian"), ActionKey: "commercial.variant_dimensions.list", Order: 22, RequiredPermissions: []string{"variant_dimension.list"}},
+		{Key: "commercial.variant_values", Label: "Variant Values", LabelI18n: localize("Variant Values", "Nilai Varian"), ActionKey: "commercial.variant_values.list", Order: 23, RequiredPermissions: []string{"variant_value.list"}},
+		{Key: "commercial.item_categories", Label: "Item Categories", LabelI18n: localize("Item Categories", "Kategori Item"), ActionKey: "commercial.item_categories.list", Order: 24, RequiredPermissions: []string{"item_category.list"}},
+		{Key: "commercial.uoms", Label: "Units", LabelI18n: localize("Units", "Satuan"), ActionKey: "commercial.uoms.list", Order: 25, RequiredPermissions: []string{"uom.list"}},
+		{Key: "commercial.tax_codes", Label: "Tax Codes", LabelI18n: localize("Tax Codes", "Kode Pajak"), ActionKey: "commercial.tax_codes.list", Order: 26, RequiredPermissions: []string{"tax_code.list"}},
+		{Key: "commercial.tax_profiles", Label: "Tax Profiles", LabelI18n: localize("Tax Profiles", "Profil Pajak"), ActionKey: "commercial.tax_profiles.list", Order: 27, RequiredPermissions: []string{"tax_profile.list"}},
+		{Key: "commercial.price_lists", Label: "Price Lists", LabelI18n: localize("Price Lists", "Daftar Harga"), ActionKey: "commercial.price_lists.list", Order: 28, RequiredPermissions: []string{"price_list.list"}},
+		{Key: "commercial.price_list_items", Label: "Price List Items", LabelI18n: localize("Price List Items", "Item Daftar Harga"), ActionKey: "commercial.price_list_items.list", Order: 29, RequiredPermissions: []string{"price_list_item.list"}},
+		{Key: "commercial.accounts", Label: "Accounts", LabelI18n: localize("Accounts", "Akun"), ActionKey: "commercial.accounts.list", Order: 30, RequiredPermissions: []string{"account.list"}},
+		{Key: "commercial.payment_methods", Label: "Payment Methods", LabelI18n: localize("Payment Methods", "Metode Pembayaran"), ActionKey: "commercial.payment_methods.list", Order: 31, RequiredPermissions: []string{"payment_method.list"}},
 	}
 }
 
@@ -502,9 +590,18 @@ func commercialModelActions() []module.ActionDefinition {
 		{Key: "commercial.catalog.list", Label: "Catalog", LabelI18n: localize("Catalog", "Katalog"), Kind: "navigate", RoutePath: "/commercial/catalog", ViewKey: "commercial.items.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item.list"}},
 		{Key: "commercial.catalog.detail", Label: "Catalog Detail", LabelI18n: localize("Catalog Detail", "Detail Katalog"), Kind: "navigate", RoutePath: "/commercial/catalog/detail", ViewKey: "commercial.items.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item.read"}},
 		{Key: "commercial.catalog.form", Label: "Catalog Form", LabelI18n: localize("Catalog Form", "Form Katalog"), Kind: "navigate", RoutePath: "/commercial/catalog/form", ViewKey: "commercial.items.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item.update"}},
+		{Key: "commercial.products.list", Label: "Products", LabelI18n: localize("Products", "Produk"), Kind: "navigate", RoutePath: "/commercial/products", ViewKey: "commercial.products.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"product.list"}},
+		{Key: "commercial.products.detail", Label: "Product Detail", LabelI18n: localize("Product Detail", "Detail Produk"), Kind: "navigate", RoutePath: "/commercial/products/detail", ViewKey: "commercial.products.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"product.read"}},
+		{Key: "commercial.products.form", Label: "Product Form", LabelI18n: localize("Product Form", "Form Produk"), Kind: "navigate", RoutePath: "/commercial/products/form", ViewKey: "commercial.products.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"product.update"}},
 		{Key: "commercial.items.list", Label: "Items", LabelI18n: localize("Items", "Item"), Kind: "navigate", RoutePath: "/commercial/items", ViewKey: "commercial.items.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item.list"}},
 		{Key: "commercial.items.detail", Label: "Item Detail", LabelI18n: localize("Item Detail", "Detail Item"), Kind: "navigate", RoutePath: "/commercial/items/detail", ViewKey: "commercial.items.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item.read"}},
 		{Key: "commercial.items.form", Label: "Item Form", LabelI18n: localize("Item Form", "Form Item"), Kind: "navigate", RoutePath: "/commercial/items/form", ViewKey: "commercial.items.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item.update"}},
+		{Key: "commercial.variant_dimensions.list", Label: "Variant Dimensions", LabelI18n: localize("Variant Dimensions", "Dimensi Varian"), Kind: "navigate", RoutePath: "/commercial/variant-dimensions", ViewKey: "commercial.variant_dimensions.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"variant_dimension.list"}},
+		{Key: "commercial.variant_dimensions.detail", Label: "Variant Dimension Detail", LabelI18n: localize("Variant Dimension Detail", "Detail Dimensi Varian"), Kind: "navigate", RoutePath: "/commercial/variant-dimensions/detail", ViewKey: "commercial.variant_dimensions.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"variant_dimension.read"}},
+		{Key: "commercial.variant_dimensions.form", Label: "Variant Dimension Form", LabelI18n: localize("Variant Dimension Form", "Form Dimensi Varian"), Kind: "navigate", RoutePath: "/commercial/variant-dimensions/form", ViewKey: "commercial.variant_dimensions.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"variant_dimension.update"}},
+		{Key: "commercial.variant_values.list", Label: "Variant Values", LabelI18n: localize("Variant Values", "Nilai Varian"), Kind: "navigate", RoutePath: "/commercial/variant-values", ViewKey: "commercial.variant_values.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"variant_value.list"}},
+		{Key: "commercial.variant_values.detail", Label: "Variant Value Detail", LabelI18n: localize("Variant Value Detail", "Detail Nilai Varian"), Kind: "navigate", RoutePath: "/commercial/variant-values/detail", ViewKey: "commercial.variant_values.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"variant_value.read"}},
+		{Key: "commercial.variant_values.form", Label: "Variant Value Form", LabelI18n: localize("Variant Value Form", "Form Nilai Varian"), Kind: "navigate", RoutePath: "/commercial/variant-values/form", ViewKey: "commercial.variant_values.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"variant_value.update"}},
 		{Key: "commercial.item_categories.list", Label: "Item Categories", LabelI18n: localize("Item Categories", "Kategori Item"), Kind: "navigate", RoutePath: "/commercial/item-categories", ViewKey: "commercial.item_categories.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item_category.list"}},
 		{Key: "commercial.item_categories.detail", Label: "Item Category Detail", LabelI18n: localize("Item Category Detail", "Detail Kategori Item"), Kind: "navigate", RoutePath: "/commercial/item-categories/detail", ViewKey: "commercial.item_categories.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item_category.read"}},
 		{Key: "commercial.item_categories.form", Label: "Item Category Form", LabelI18n: localize("Item Category Form", "Form Kategori Item"), Kind: "navigate", RoutePath: "/commercial/item-categories/form", ViewKey: "commercial.item_categories.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"item_category.update"}},
@@ -534,6 +631,15 @@ func commercialModelActions() []module.ActionDefinition {
 
 func commercialModelViews() []module.ViewDefinition {
 	return []module.ViewDefinition{
+		commercialProductListView(),
+		commercialProductDetailView(),
+		commercialProductFormView(),
+		commercialModelListView("commercial.variant_dimensions.list", "Variant Dimensions", "commercial_variant_dimension", []module.ColumnDefinition{{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code"}, {Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name"}, {Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status"}}, []string{"active", "inactive"}),
+		commercialModelDetailView("commercial.variant_dimensions.detail", "Variant Dimension Detail", "commercial_variant_dimension", []module.FieldDefinition{{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code", Type: "string"}, {Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string"}, {Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Path: "values.description", Type: "string"}, {Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string"}}),
+		commercialModelFormView("commercial.variant_dimensions.form", "Variant Dimension Form", "commercial_variant_dimension", []module.FieldDefinition{{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code", Type: "string", Widget: "text", Required: true}, {Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string", Widget: "text", Required: true}, {Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Path: "values.description", Type: "string", Widget: "textarea"}, {Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive"}}}),
+		commercialModelListView("commercial.variant_values.list", "Variant Values", "commercial_variant_value", []module.ColumnDefinition{{Key: "dimension_code", Label: "Dimension", LabelI18n: localize("Dimension", "Dimensi"), Path: "values.dimension_code"}, {Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code"}, {Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name"}, {Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status"}}, []string{"active", "inactive"}),
+		commercialModelDetailView("commercial.variant_values.detail", "Variant Value Detail", "commercial_variant_value", []module.FieldDefinition{{Key: "dimension_code", Label: "Dimension", LabelI18n: localize("Dimension", "Dimensi"), Path: "values.dimension_code", Type: "string"}, {Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code", Type: "string"}, {Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string"}, {Key: "sort_order", Label: "Sort Order", LabelI18n: localize("Sort Order", "Urutan"), Path: "values.sort_order", Type: "number"}, {Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string"}}),
+		commercialModelFormView("commercial.variant_values.form", "Variant Value Form", "commercial_variant_value", []module.FieldDefinition{{Key: "dimension_code", Label: "Dimension", LabelI18n: localize("Dimension", "Dimensi"), Path: "values.dimension_code", Type: "string", Widget: "select", Required: true}, {Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code", Type: "string", Widget: "text", Required: true}, {Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string", Widget: "text", Required: true}, {Key: "sort_order", Label: "Sort Order", LabelI18n: localize("Sort Order", "Urutan"), Path: "values.sort_order", Type: "number"}, {Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive"}}}),
 		commercialItemListView(),
 		commercialItemDetailView(),
 		commercialItemFormView(),
@@ -566,11 +672,23 @@ func commercialModelViews() []module.ViewDefinition {
 
 func commercialModelListView(key, title, modelKey string, columns []module.ColumnDefinition, statusOptions []string) module.ViewDefinition {
 	filters := []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "enum", Options: statusOptions}}
+	if modelKey == "commercial_product" {
+		filters = append(filters,
+			module.FilterDefinition{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Type: "string"},
+			module.FilterDefinition{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Type: "enum", Options: []string{"product", "service", "fee"}},
+		)
+	}
 	if modelKey == "commercial_item" {
 		filters = append(filters,
+			module.FilterDefinition{Key: "product_code", Label: "Product", LabelI18n: localize("Product", "Produk"), Type: "string"},
 			module.FilterDefinition{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Type: "enum", Options: []string{"product", "service", "fee"}},
 			module.FilterDefinition{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Type: "string"},
+			module.FilterDefinition{Key: "is_variant", Label: "Variant SKU", LabelI18n: localize("Variant SKU", "SKU Varian"), Type: "enum", Options: []string{"true", "false"}},
 			module.FilterDefinition{Key: "is_sellable", Label: "Sellable", LabelI18n: localize("Sellable", "Dapat Dijual"), Type: "enum", Options: []string{"true", "false"}},
+			module.FilterDefinition{Key: "inventory_enabled", Label: "Inventory", LabelI18n: localize("Inventory", "Inventori"), Type: "enum", Options: []string{"true", "false"}},
+			module.FilterDefinition{Key: "inventory_tracking_mode", Label: "Tracking", LabelI18n: localize("Tracking", "Pelacakan"), Type: "enum", Options: []string{"none", "quantity", "batch"}},
+			module.FilterDefinition{Key: "replenishment_enabled", Label: "Replenishment", LabelI18n: localize("Replenishment", "Replenishment"), Type: "enum", Options: []string{"true", "false"}},
+			module.FilterDefinition{Key: "replenishment_mode", Label: "Replenishment Mode", LabelI18n: localize("Replenishment Mode", "Mode Replenishment"), Type: "enum", Options: []string{"manual", "reorder_point_target"}},
 		)
 	}
 	return module.ViewDefinition{
@@ -590,11 +708,16 @@ func commercialModelListView(key, title, modelKey string, columns []module.Colum
 
 func commercialItemListView() module.ViewDefinition {
 	return commercialModelListView("commercial.items.list", "Items", "commercial_item", []module.ColumnDefinition{
+		{Key: "product_code", Label: "Product", LabelI18n: localize("Product", "Produk"), Path: "values.product_code"},
 		{Key: "sku", Label: "SKU", LabelI18n: localize("SKU", "SKU"), Path: "values.sku"},
 		{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name"},
+		{Key: "variant_label", Label: "Variant", LabelI18n: localize("Variant", "Varian"), Path: "values.variant_label"},
 		{Key: "item_type", Label: "Type", LabelI18n: localize("Type", "Tipe"), Path: "values.item_type"},
 		{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Path: "values.category_code"},
 		{Key: "base_price", Label: "Base Price", LabelI18n: localize("Base Price", "Harga Dasar"), Path: "values.base_price"},
+		{Key: "inventory_tracking_mode", Label: "Tracking", LabelI18n: localize("Tracking", "Pelacakan"), Path: "values.inventory_tracking_mode"},
+		{Key: "replenishment_enabled", Label: "Replenishment", LabelI18n: localize("Replenishment", "Replenishment"), Path: "values.replenishment_enabled"},
+		{Key: "target_stock_quantity", Label: "Target Stock", LabelI18n: localize("Target Stock", "Target Stok"), Path: "values.target_stock_quantity"},
 		{Key: "uom_code", Label: "UOM", LabelI18n: localize("UOM", "Satuan"), Path: "values.uom_code"},
 		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status"},
 	}, []string{"active", "inactive"})
@@ -602,9 +725,14 @@ func commercialItemListView() module.ViewDefinition {
 
 func commercialItemDetailView() module.ViewDefinition {
 	return commercialModelDetailView("commercial.items.detail", "Item Detail", "commercial_item", []module.FieldDefinition{
+		{Key: "product_code", Label: "Product", LabelI18n: localize("Product", "Produk"), Path: "values.product_code", Type: "string"},
 		{Key: "sku", Label: "SKU", LabelI18n: localize("SKU", "SKU"), Path: "values.sku", Type: "string"},
 		{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string"},
 		{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Path: "values.description", Type: "string"},
+		{Key: "is_variant", Label: "Variant SKU", LabelI18n: localize("Variant SKU", "SKU Varian"), Path: "values.is_variant", Type: "bool"},
+		{Key: "variant_signature", Label: "Variant Signature", LabelI18n: localize("Variant Signature", "Signature Varian"), Path: "values.variant_signature", Type: "string"},
+		{Key: "variant_label", Label: "Variant Label", LabelI18n: localize("Variant Label", "Label Varian"), Path: "values.variant_label", Type: "string"},
+		{Key: "variant_values", Label: "Variant Values", LabelI18n: localize("Variant Values", "Nilai Varian"), Path: "values.variant_values", Type: "string"},
 		{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Path: "values.item_type", Type: "string"},
 		{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Path: "values.category_code", Type: "string"},
 		{Key: "is_sellable", Label: "Sellable", LabelI18n: localize("Sellable", "Dapat Dijual"), Path: "values.is_sellable", Type: "bool"},
@@ -613,15 +741,30 @@ func commercialItemDetailView() module.ViewDefinition {
 		{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Path: "values.currency_code", Type: "string"},
 		{Key: "tax_code", Label: "Tax Code", LabelI18n: localize("Tax Code", "Kode Pajak"), Path: "values.tax_code", Type: "string"},
 		{Key: "revenue_account_code", Label: "Revenue Account", LabelI18n: localize("Revenue Account", "Akun Pendapatan"), Path: "values.revenue_account_code", Type: "string"},
+		{Key: "inventory_enabled", Label: "Inventory Enabled", LabelI18n: localize("Inventory Enabled", "Inventori Aktif"), Path: "values.inventory_enabled", Type: "bool"},
+		{Key: "inventory_tracking_mode", Label: "Inventory Tracking", LabelI18n: localize("Inventory Tracking", "Pelacakan Inventori"), Path: "values.inventory_tracking_mode", Type: "string"},
+		{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Path: "values.expiry_tracking_enabled", Type: "bool"},
+		{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Path: "values.allow_negative_stock", Type: "bool"},
+		{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Path: "values.default_issue_strategy", Type: "string"},
+		{Key: "replenishment_enabled", Label: "Replenishment Enabled", LabelI18n: localize("Replenishment Enabled", "Replenishment Aktif"), Path: "values.replenishment_enabled", Type: "bool"},
+		{Key: "replenishment_mode", Label: "Replenishment Mode", LabelI18n: localize("Replenishment Mode", "Mode Replenishment"), Path: "values.replenishment_mode", Type: "string"},
+		{Key: "reorder_point_quantity", Label: "Reorder Point", LabelI18n: localize("Reorder Point", "Titik Pemesanan Ulang"), Path: "values.reorder_point_quantity", Type: "number"},
+		{Key: "target_stock_quantity", Label: "Target Stock", LabelI18n: localize("Target Stock", "Target Stok"), Path: "values.target_stock_quantity", Type: "number"},
+		{Key: "default_replenishment_warehouse_code", Label: "Default Replenishment Warehouse", LabelI18n: localize("Default Replenishment Warehouse", "Gudang Replenishment Default"), Path: "values.default_replenishment_warehouse_code", Type: "string"},
 		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string"},
 	})
 }
 
 func commercialItemFormView() module.ViewDefinition {
 	return commercialModelFormView("commercial.items.form", "Item Form", "commercial_item", []module.FieldDefinition{
+		{Key: "product_code", Label: "Product", LabelI18n: localize("Product", "Produk"), Path: "values.product_code", Type: "string", Widget: "select"},
 		{Key: "sku", Label: "SKU", LabelI18n: localize("SKU", "SKU"), Path: "values.sku", Type: "string", Widget: "text", Required: true},
 		{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string", Widget: "text", Required: true},
 		{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Path: "values.description", Type: "string", Widget: "textarea"},
+		{Key: "is_variant", Label: "Variant SKU", LabelI18n: localize("Variant SKU", "SKU Varian"), Path: "values.is_variant", Type: "bool"},
+		{Key: "variant_signature", Label: "Variant Signature", LabelI18n: localize("Variant Signature", "Signature Varian"), Path: "values.variant_signature", Type: "string", Widget: "text"},
+		{Key: "variant_label", Label: "Variant Label", LabelI18n: localize("Variant Label", "Label Varian"), Path: "values.variant_label", Type: "string", Widget: "text"},
+		{Key: "variant_values", Label: "Variant Values", LabelI18n: localize("Variant Values", "Nilai Varian"), Path: "values.variant_values", Type: "string", Widget: "textarea"},
 		{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Path: "values.item_type", Type: "string", Widget: "select", Options: []string{"product", "service", "fee"}, Required: true},
 		{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Path: "values.category_code", Type: "string", Widget: "select"},
 		{Key: "tags", Label: "Tags", LabelI18n: localize("Tags", "Tag"), Path: "values.tags", Type: "string", Widget: "text"},
@@ -635,6 +778,73 @@ func commercialItemFormView() module.ViewDefinition {
 		{Key: "standard_duration_minutes", Label: "Standard Duration Minutes", LabelI18n: localize("Standard Duration Minutes", "Durasi Standar Menit"), Path: "values.standard_duration_minutes", Type: "number"},
 		{Key: "product_unit", Label: "Product Unit", LabelI18n: localize("Product Unit", "Unit Produk"), Path: "values.product_unit", Type: "string", Widget: "text"},
 		{Key: "fulfillment_mode", Label: "Fulfillment Mode", LabelI18n: localize("Fulfillment Mode", "Mode Pemenuhan"), Path: "values.fulfillment_mode", Type: "string", Widget: "select", Options: []string{"manual", "delivery", "digital", "pickup"}},
+		{Key: "inventory_enabled", Label: "Inventory Enabled", LabelI18n: localize("Inventory Enabled", "Inventori Aktif"), Path: "values.inventory_enabled", Type: "bool"},
+		{Key: "inventory_tracking_mode", Label: "Inventory Tracking", LabelI18n: localize("Inventory Tracking", "Pelacakan Inventori"), Path: "values.inventory_tracking_mode", Type: "string", Widget: "select", Options: []string{"none", "quantity", "batch"}},
+		{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Path: "values.expiry_tracking_enabled", Type: "bool"},
+		{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Path: "values.allow_negative_stock", Type: "bool"},
+		{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Path: "values.default_issue_strategy", Type: "string", Widget: "select", Options: []string{"manual", "fifo", "fefo"}},
+		{Key: "replenishment_enabled", Label: "Replenishment Enabled", LabelI18n: localize("Replenishment Enabled", "Replenishment Aktif"), Path: "values.replenishment_enabled", Type: "bool"},
+		{Key: "replenishment_mode", Label: "Replenishment Mode", LabelI18n: localize("Replenishment Mode", "Mode Replenishment"), Path: "values.replenishment_mode", Type: "string", Widget: "select", Options: []string{"manual", "reorder_point_target"}},
+		{Key: "reorder_point_quantity", Label: "Reorder Point", LabelI18n: localize("Reorder Point", "Titik Pemesanan Ulang"), Path: "values.reorder_point_quantity", Type: "number"},
+		{Key: "target_stock_quantity", Label: "Target Stock", LabelI18n: localize("Target Stock", "Target Stok"), Path: "values.target_stock_quantity", Type: "number"},
+		{Key: "default_replenishment_warehouse_code", Label: "Default Replenishment Warehouse", LabelI18n: localize("Default Replenishment Warehouse", "Gudang Replenishment Default"), Path: "values.default_replenishment_warehouse_code", Type: "string", Widget: "select"},
+		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive"}},
+	})
+}
+
+func commercialProductListView() module.ViewDefinition {
+	return commercialModelListView("commercial.products.list", "Products", "commercial_product", []module.ColumnDefinition{
+		{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code"},
+		{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name"},
+		{Key: "brand", Label: "Brand", LabelI18n: localize("Brand", "Merek"), Path: "values.brand"},
+		{Key: "item_type", Label: "Type", LabelI18n: localize("Type", "Tipe"), Path: "values.item_type"},
+		{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Path: "values.category_code"},
+		{Key: "variant_dimension_codes", Label: "Variant Dimensions", LabelI18n: localize("Variant Dimensions", "Dimensi Varian"), Path: "values.variant_dimension_codes"},
+		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status"},
+	}, []string{"active", "inactive"})
+}
+
+func commercialProductDetailView() module.ViewDefinition {
+	return commercialModelDetailView("commercial.products.detail", "Product Detail", "commercial_product", []module.FieldDefinition{
+		{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code", Type: "string"},
+		{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string"},
+		{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Path: "values.description", Type: "string"},
+		{Key: "brand", Label: "Brand", LabelI18n: localize("Brand", "Merek"), Path: "values.brand", Type: "string"},
+		{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Path: "values.item_type", Type: "string"},
+		{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Path: "values.category_code", Type: "string"},
+		{Key: "variant_dimension_codes", Label: "Variant Dimensions", LabelI18n: localize("Variant Dimensions", "Dimensi Varian"), Path: "values.variant_dimension_codes", Type: "string"},
+		{Key: "uom_code", Label: "UOM", LabelI18n: localize("UOM", "Satuan"), Path: "values.uom_code", Type: "string"},
+		{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Path: "values.currency_code", Type: "string"},
+		{Key: "tax_code", Label: "Tax Code", LabelI18n: localize("Tax Code", "Kode Pajak"), Path: "values.tax_code", Type: "string"},
+		{Key: "revenue_account_code", Label: "Revenue Account", LabelI18n: localize("Revenue Account", "Akun Pendapatan"), Path: "values.revenue_account_code", Type: "string"},
+		{Key: "inventory_enabled", Label: "Inventory Enabled", LabelI18n: localize("Inventory Enabled", "Inventori Aktif"), Path: "values.inventory_enabled", Type: "bool"},
+		{Key: "inventory_tracking_mode", Label: "Inventory Tracking", LabelI18n: localize("Inventory Tracking", "Pelacakan Inventori"), Path: "values.inventory_tracking_mode", Type: "string"},
+		{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Path: "values.expiry_tracking_enabled", Type: "bool"},
+		{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Path: "values.allow_negative_stock", Type: "bool"},
+		{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Path: "values.default_issue_strategy", Type: "string"},
+		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string"},
+	})
+}
+
+func commercialProductFormView() module.ViewDefinition {
+	return commercialModelFormView("commercial.products.form", "Product Form", "commercial_product", []module.FieldDefinition{
+		{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code", Type: "string", Widget: "text", Required: true},
+		{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Path: "values.name", Type: "string", Widget: "text", Required: true},
+		{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Path: "values.description", Type: "string", Widget: "textarea"},
+		{Key: "brand", Label: "Brand", LabelI18n: localize("Brand", "Merek"), Path: "values.brand", Type: "string", Widget: "text"},
+		{Key: "item_type", Label: "Item Type", LabelI18n: localize("Item Type", "Tipe Item"), Path: "values.item_type", Type: "string", Widget: "select", Options: []string{"product", "service", "fee"}, Required: true},
+		{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Path: "values.category_code", Type: "string", Widget: "select"},
+		{Key: "tags", Label: "Tags", LabelI18n: localize("Tags", "Tag"), Path: "values.tags", Type: "string", Widget: "text"},
+		{Key: "variant_dimension_codes", Label: "Variant Dimensions", LabelI18n: localize("Variant Dimensions", "Dimensi Varian"), Path: "values.variant_dimension_codes", Type: "string", Widget: "text", HelpText: "Comma-separated dimension codes such as color,size."},
+		{Key: "uom_code", Label: "UOM", LabelI18n: localize("UOM", "Satuan"), Path: "values.uom_code", Type: "string", Widget: "select"},
+		{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Path: "values.currency_code", Type: "string", Widget: "text"},
+		{Key: "tax_code", Label: "Tax Code", LabelI18n: localize("Tax Code", "Kode Pajak"), Path: "values.tax_code", Type: "string", Widget: "select"},
+		{Key: "revenue_account_code", Label: "Revenue Account", LabelI18n: localize("Revenue Account", "Akun Pendapatan"), Path: "values.revenue_account_code", Type: "string", Widget: "text"},
+		{Key: "inventory_enabled", Label: "Inventory Enabled", LabelI18n: localize("Inventory Enabled", "Inventori Aktif"), Path: "values.inventory_enabled", Type: "bool"},
+		{Key: "inventory_tracking_mode", Label: "Inventory Tracking", LabelI18n: localize("Inventory Tracking", "Pelacakan Inventori"), Path: "values.inventory_tracking_mode", Type: "string", Widget: "select", Options: []string{"none", "quantity", "batch"}},
+		{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Path: "values.expiry_tracking_enabled", Type: "bool"},
+		{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Path: "values.allow_negative_stock", Type: "bool"},
+		{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Path: "values.default_issue_strategy", Type: "string", Widget: "select", Options: []string{"manual", "fifo", "fefo"}},
 		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive"}},
 	})
 }
@@ -726,11 +936,25 @@ func commercialDetailActions(documentType string) []string {
 	actions := []string{"submit", "approve", "reject", "reopen", "cancel"}
 	switch documentType {
 	case "sales_order":
-		return append(actions, "generate_invoice")
+		return append(actions, "generate_fulfillment", "generate_invoice", "generate_production_order")
 	case "invoice":
 		return append(actions, "register_payment", "issue_credit_note")
 	case "credit_note":
 		return append(actions, "register_refund")
+	case "purchase_request":
+		return append(actions, "generate_purchase_order")
+	case "purchase_order":
+		return append(actions, "register_receipt", "register_vendor_bill")
+	case "goods_receipt":
+		return append(actions, "register_vendor_bill", "register_supplier_return")
+	case "vendor_bill":
+		return append(actions, "register_payment_out", "issue_vendor_credit_note", "register_supplier_return")
+	case "sales_return":
+		return append(actions, "register_return_receipt", "issue_credit_note", "register_refund")
+	case "production_order":
+		return append(actions, "register_production_issue", "register_production_output")
+	case "supplier_return":
+		return append(actions, "issue_vendor_credit_note")
 	default:
 		return actions
 	}
@@ -1244,6 +1468,12 @@ func ledgerFormSections() []module.SectionDefinition {
 
 func modelPermissionPrefix(modelKey string) string {
 	switch modelKey {
+	case "commercial_product":
+		return "product"
+	case "commercial_variant_dimension":
+		return "variant_dimension"
+	case "commercial_variant_value":
+		return "variant_value"
 	case "commercial_item":
 		return "item"
 	case "commercial_item_category":
@@ -1262,6 +1492,8 @@ func modelPermissionPrefix(modelKey string) string {
 		return "account"
 	case "payment_method":
 		return "payment_method"
+	case "vendor_profile":
+		return "vendor"
 	default:
 		return modelKey
 	}

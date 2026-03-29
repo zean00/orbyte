@@ -77,18 +77,28 @@ type ModelDeps struct {
 }
 
 type DocumentDeps struct {
-	Config        *config.Service
-	Identity      *identity.Service
-	Modules       *module.Service
-	Documents     *document.Service
-	Actions       *application.DocumentActions
-	Commercial    *application.CommercialCoreService
-	Audit         *audit.Service
-	Policy        *policy.Service
-	Search        *search.Service
-	FieldSecurity *securityfields.Service
-	Observability *observability.Service
-	Idempotency   *idempotency.Service
+	Config          *config.Service
+	Identity        *identity.Service
+	Modules         *module.Service
+	Documents       *document.Service
+	Actions         *application.DocumentActions
+	Commercial      *application.CommercialCoreService
+	Procurement     *application.ProcurementCoreService
+	Inventory       *application.InventoryCoreService
+	Fulfillment     *application.FulfillmentCoreService
+	Delivery        *application.DeliveryCoreService
+	Returns         *application.ReturnsCoreService
+	SupplierReturns *application.SupplierReturnsCoreService
+	Planning        *application.PlanningCoreService
+	Production      *application.ProductionCoreService
+	Traceability    *application.TraceabilityCoreService
+	Recall          *application.RecallCoreService
+	Audit           *audit.Service
+	Policy          *policy.Service
+	Search          *search.Service
+	FieldSecurity   *securityfields.Service
+	Observability   *observability.Service
+	Idempotency     *idempotency.Service
 }
 
 type OpsDeps struct {
@@ -139,22 +149,31 @@ type TemplateDeps struct {
 }
 
 type UIDeps struct {
-	Identity      *identity.Service
-	Modules       *module.Service
-	Models        *model.Service
-	Activities    *activity.Service
-	Reporting     *reporting.Service
-	Documents     *document.Service
-	Workflows     *workflow.Service
-	Search        *search.Service
-	Analytics     *analytics.Service
-	Monitoring    *monitoring.Service
-	Commercial    *application.CommercialCoreService
-	Policy        *policy.Service
-	FieldSecurity *securityfields.Service
-	UIPreferences *UIPreferencesService
-	ACP           *acp.Service
-	Notifications *notification.Service
+	Identity        *identity.Service
+	Modules         *module.Service
+	Models          *model.Service
+	Activities      *activity.Service
+	Reporting       *reporting.Service
+	Documents       *document.Service
+	Workflows       *workflow.Service
+	Search          *search.Service
+	Analytics       *analytics.Service
+	Monitoring      *monitoring.Service
+	Commercial      *application.CommercialCoreService
+	Procurement     *application.ProcurementCoreService
+	Inventory       *application.InventoryCoreService
+	Fulfillment     *application.FulfillmentCoreService
+	Delivery        *application.DeliveryCoreService
+	Planning        *application.PlanningCoreService
+	Production      *application.ProductionCoreService
+	SupplierReturns *application.SupplierReturnsCoreService
+	Traceability    *application.TraceabilityCoreService
+	Recall          *application.RecallCoreService
+	Policy          *policy.Service
+	FieldSecurity   *securityfields.Service
+	UIPreferences   *UIPreferencesService
+	ACP             *acp.Service
+	Notifications   *notification.Service
 }
 
 type ACPDeps struct {
@@ -238,7 +257,7 @@ func RegisterModelSurface(deps ModelDeps) RouteRegistrar {
 
 func RegisterDocumentSurface(deps DocumentDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Commercial, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
+		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Delivery, deps.Returns, deps.SupplierReturns, deps.Production, deps.Traceability, deps.Recall, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
 		registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
 	}
 }
@@ -305,6 +324,6 @@ func RegisterNotificationSurface(deps NotificationDeps) RouteRegistrar {
 
 func RegisterUISurface(deps UIDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.Traceability, deps.Recall, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
 	}
 }

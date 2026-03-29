@@ -1,0 +1,187 @@
+package app
+
+import (
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/module"
+)
+
+func planningCoreKernelPackManifest() module.Manifest {
+	return module.Manifest{
+		Key:          "planning_core",
+		Name:         "Planning Core",
+		NameI18n:     localize("Planning Core", "Inti Perencanaan"),
+		Version:      "1.0.0",
+		DomainFamily: "business",
+		DependencyRequirements: []module.DependencyRequirement{
+			{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+			{ModuleKey: "commercial_core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+			{ModuleKey: "procurement_core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+			{ModuleKey: "inventory_core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+			{ModuleKey: "fulfillment_core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
+			{ModuleKey: "delivery_core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindOptional},
+		},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Planning Console",
+			TitleI18n:       localize("Planning Console", "Konsol Perencanaan"),
+			Description:     "Warehouse-level replenishment planning, saved planning runs, and procurement shortcuts.",
+			DescriptionI18n: localize("Warehouse-level replenishment planning, saved planning runs, and procurement shortcuts.", "Perencanaan replenishment per gudang, planning run tersimpan, dan pintasan pengadaan."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "operations",
+					Title:     "Planning Operations",
+					TitleI18n: localize("Planning Operations", "Operasi Perencanaan"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("replenishment", "Replenishment", "Replenishment", "/ui/planning/replenishment", "Open live replenishment workbench.", "Buka workbench replenishment langsung.", "document.list"),
+						adminConsoleLink("planning_runs", "Planning Runs", "Planning Run", "/ui/planning/runs", "Review saved planning runs and proposals.", "Tinjau planning run dan proposal tersimpan.", "document.list"),
+						adminConsoleLink("purchase_requests", "Purchase Requests", "Permintaan Pembelian", "/ui/procurement/requests", "Open generated purchase requests.", "Buka permintaan pembelian yang dihasilkan.", "document.list"),
+						adminConsoleLink("purchase_orders", "Purchase Orders", "Pesanan Pembelian", "/ui/procurement/orders", "Open committed inbound orders.", "Buka pesanan inbound yang telah dikomit.", "document.list"),
+					},
+				},
+				{
+					Key:       "policy",
+					Title:     "Planning Policy",
+					TitleI18n: localize("Planning Policy", "Kebijakan Perencanaan"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("items", "Items", "Item", "/ui/commercial/items", "Manage replenishment policy on item SKUs.", "Kelola kebijakan replenishment pada SKU item.", "item.list"),
+						adminConsoleLink("warehouses", "Warehouses", "Gudang", "/ui/inventory/warehouses", "Manage replenishment warehouses.", "Kelola gudang replenishment.", "warehouse.list"),
+						adminConsoleLink("vendor_items", "Vendor Items", "Item Vendor", "/ui/procurement/vendor-items", "Manage preferred vendor defaults per SKU.", "Kelola default vendor utama per SKU.", "vendor_item.list"),
+					},
+				},
+			},
+		},
+		Models: []model.Definition{
+			{
+				Key:                 "planning_run",
+				DisplayName:         "Planning Run",
+				DisplayNameI18n:     localize("Planning Run", "Planning Run"),
+				OwnerModuleKey:      "planning_core",
+				Version:             "v1",
+				CreatePermissionKey: "planning_run.create",
+				ListPermissionKey:   "planning_run.list",
+				ReadPermissionKey:   "planning_run.read",
+				UpdatePermissionKey: "planning_run.update",
+				DefaultSort:         "run_date",
+				Fields: []model.FieldDefinition{
+					{Key: "organization_id", Label: "Organization", LabelI18n: localize("Organization", "Organisasi"), Type: "string"},
+					{Key: "location_id", Label: "Location", LabelI18n: localize("Location", "Lokasi"), Type: "string"},
+					{Key: "run_date", Label: "Run Date", LabelI18n: localize("Run Date", "Tanggal Run"), Type: "string"},
+					{Key: "warehouse_code", Label: "Warehouse", LabelI18n: localize("Warehouse", "Gudang"), Type: "string"},
+					{Key: "item_code", Label: "Item", LabelI18n: localize("Item", "Item"), Type: "string"},
+					{Key: "category_code", Label: "Category", LabelI18n: localize("Category", "Kategori"), Type: "string"},
+					{Key: "coverage_status", Label: "Coverage Status", LabelI18n: localize("Coverage Status", "Status Coverage"), Type: "string"},
+					{Key: "forecast_method", Label: "Forecast Method", LabelI18n: localize("Forecast Method", "Metode Forecast"), Type: "string"},
+					{Key: "forecast_window_days", Label: "Forecast Window", LabelI18n: localize("Forecast Window", "Jendela Forecast"), Type: "number"},
+					{Key: "seasonal_history_weeks", Label: "History Weeks", LabelI18n: localize("History Weeks", "Minggu Riwayat"), Type: "number"},
+					{Key: "proposal_count", Label: "Proposal Count", LabelI18n: localize("Proposal Count", "Jumlah Proposal"), Type: "number"},
+					{Key: "projected_shortage_item_count", Label: "Shortage Items", LabelI18n: localize("Shortage Items", "Item Kekurangan"), Type: "number"},
+					{Key: "total_shortage_quantity", Label: "Total Shortage", LabelI18n: localize("Total Shortage", "Total Kekurangan"), Type: "number"},
+					{Key: "total_forecast_demand_quantity", Label: "Forecast Demand", LabelI18n: localize("Forecast Demand", "Forecast Demand"), Type: "number"},
+					{Key: "total_normalized_request_quantity", Label: "Normalized Request", LabelI18n: localize("Normalized Request", "Permintaan Ternormalisasi"), Type: "number"},
+					{Key: "due_soon_count", Label: "Due Soon", LabelI18n: localize("Due Soon", "Segera Jatuh Tempo"), Type: "number"},
+					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "completed"},
+				},
+			},
+			{
+				Key:                 "planning_proposal",
+				DisplayName:         "Planning Proposal",
+				DisplayNameI18n:     localize("Planning Proposal", "Proposal Perencanaan"),
+				OwnerModuleKey:      "planning_core",
+				Version:             "v1",
+				CreatePermissionKey: "planning_proposal.create",
+				ListPermissionKey:   "planning_proposal.list",
+				ReadPermissionKey:   "planning_proposal.read",
+				UpdatePermissionKey: "planning_proposal.update",
+				DefaultSort:         "projected_shortage_date",
+				Fields: []model.FieldDefinition{
+					{Key: "planning_run_id", Label: "Planning Run", LabelI18n: localize("Planning Run", "Planning Run"), Type: "string", Required: true},
+					{Key: "organization_id", Label: "Organization", LabelI18n: localize("Organization", "Organisasi"), Type: "string"},
+					{Key: "location_id", Label: "Location", LabelI18n: localize("Location", "Lokasi"), Type: "string"},
+					{Key: "item_code", Label: "Item", LabelI18n: localize("Item", "Item"), Type: "string"},
+					{Key: "warehouse_code", Label: "Warehouse", LabelI18n: localize("Warehouse", "Gudang"), Type: "string"},
+					{Key: "preferred_vendor_name", Label: "Preferred Vendor", LabelI18n: localize("Preferred Vendor", "Vendor Utama"), Type: "string"},
+					{Key: "forecast_demand_quantity", Label: "Forecast Demand", LabelI18n: localize("Forecast Demand", "Forecast Demand"), Type: "number"},
+					{Key: "projected_shortage_date", Label: "Shortage Date", LabelI18n: localize("Shortage Date", "Tanggal Kekurangan"), Type: "string"},
+					{Key: "recommended_order_by_date", Label: "Order By", LabelI18n: localize("Order By", "Pesan Pada"), Type: "string"},
+					{Key: "normalized_request_quantity", Label: "Normalized Request", LabelI18n: localize("Normalized Request", "Permintaan Ternormalisasi"), Type: "number"},
+					{Key: "conversion_status", Label: "Conversion Status", LabelI18n: localize("Conversion Status", "Status Konversi"), Type: "string", DefaultValue: "open"},
+				},
+			},
+		},
+		Security: module.SecurityDefinition{
+			Permissions: append(
+				append([]module.PermissionDefinition{}, commercialModelPermissions("planning_run", "Planning Run")...),
+				commercialModelPermissions("planning_proposal", "Planning Proposal")...,
+			),
+			RoleTemplates: []module.RoleTemplateDefinition{
+				{
+					Key:            "planner",
+					Name:           "Planner",
+					NameI18n:       localize("Planner", "Planner"),
+					AllowedScopes:  []string{"deployment", "location"},
+					PermissionKeys: []string{"planning_run.create", "planning_run.list", "planning_run.read", "planning_run.update", "planning_proposal.create", "planning_proposal.list", "planning_proposal.read", "planning_proposal.update", "document.list", "document.create", "document.read"},
+				},
+			},
+		},
+		Frontend: module.FrontendDefinition{
+			Menus: []module.MenuDefinition{
+				{Key: "planning.replenishment", Label: "Replenishment", LabelI18n: localize("Replenishment", "Replenishment"), ActionKey: "planning.replenishment.dashboard", Order: 58, RequiredPermissions: []string{"document.list"}},
+				{Key: "planning.runs", Label: "Planning Runs", LabelI18n: localize("Planning Runs", "Planning Run"), ActionKey: "planning.runs.dashboard", Order: 59, RequiredPermissions: []string{"planning_run.list"}},
+			},
+			Actions: []module.ActionDefinition{
+				{Key: "planning.replenishment.dashboard", Label: "Replenishment", LabelI18n: localize("Replenishment", "Replenishment"), Kind: "navigate", RoutePath: "/planning/replenishment", ViewKey: "planning.replenishment.dashboard", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"document.list"}},
+				{Key: "planning.runs.dashboard", Label: "Planning Runs", LabelI18n: localize("Planning Runs", "Planning Run"), Kind: "navigate", RoutePath: "/planning/runs", ViewKey: "planning.runs.dashboard", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"planning_run.list"}},
+				{Key: "planning.proposals.dashboard", Label: "Planning Proposals", LabelI18n: localize("Planning Proposals", "Proposal Perencanaan"), Kind: "navigate", RoutePath: "/planning/proposals", ViewKey: "planning.proposals.dashboard", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"planning_run.read"}},
+			},
+			Views: []module.ViewDefinition{
+				{
+					Key:                 "planning.replenishment.dashboard",
+					Title:               "Replenishment",
+					TitleI18n:           localize("Replenishment", "Replenishment"),
+					Kind:                "dashboard",
+					ProjectionKey:       "planning.replenishment.summary",
+					RequiredPermissions: []string{"document.list"},
+					Cards: []module.CardDefinition{
+						{Key: "shortage_item_count", Label: "Shortage Items", LabelI18n: localize("Shortage Items", "Item Kekurangan"), Path: "shortage_item_count", ActionKey: "planning.replenishment.dashboard"},
+						{Key: "total_shortage_quantity", Label: "Shortage Qty", LabelI18n: localize("Shortage Qty", "Qty Kekurangan"), Path: "total_shortage_quantity", ActionKey: "planning.replenishment.dashboard"},
+						{Key: "total_suggested_request_quantity", Label: "Suggested Qty", LabelI18n: localize("Suggested Qty", "Qty Disarankan"), Path: "total_suggested_request_quantity", ActionKey: "planning.replenishment.dashboard"},
+						{Key: "total_forecast_demand_quantity", Label: "Forecast Demand", LabelI18n: localize("Forecast Demand", "Forecast Demand"), Path: "total_forecast_demand_quantity", ActionKey: "planning.replenishment.dashboard"},
+						{Key: "due_soon_count", Label: "Due Soon", LabelI18n: localize("Due Soon", "Segera Jatuh Tempo"), Path: "due_soon_count", ActionKey: "planning.replenishment.dashboard"},
+						{Key: "warehouse_count", Label: "Warehouses", LabelI18n: localize("Warehouses", "Gudang"), Path: "warehouse_count", ActionKey: "inventory.warehouses.list"},
+					},
+				},
+				{
+					Key:                 "planning.runs.dashboard",
+					Title:               "Planning Runs",
+					TitleI18n:           localize("Planning Runs", "Planning Run"),
+					Kind:                "dashboard",
+					ProjectionKey:       "planning.runs.summary",
+					RequiredPermissions: []string{"planning_run.list"},
+					Cards: []module.CardDefinition{
+						{Key: "run_count", Label: "Runs", LabelI18n: localize("Runs", "Run"), Path: "run_count", ActionKey: "planning.runs.dashboard"},
+						{Key: "open_run_count", Label: "Open Runs", LabelI18n: localize("Open Runs", "Run Terbuka"), Path: "open_run_count", ActionKey: "planning.runs.dashboard"},
+						{Key: "proposal_count", Label: "Proposals", LabelI18n: localize("Proposals", "Proposal"), Path: "proposal_count", ActionKey: "planning.runs.dashboard"},
+						{Key: "projected_shortage_item_count", Label: "Shortages", LabelI18n: localize("Shortages", "Kekurangan"), Path: "projected_shortage_item_count", ActionKey: "planning.runs.dashboard"},
+						{Key: "time_critical_proposal_count", Label: "Time Critical", LabelI18n: localize("Time Critical", "Kritis Waktu"), Path: "time_critical_proposal_count", ActionKey: "planning.runs.dashboard"},
+					},
+				},
+				{
+					Key:                 "planning.proposals.dashboard",
+					Title:               "Planning Proposals",
+					TitleI18n:           localize("Planning Proposals", "Proposal Perencanaan"),
+					Kind:                "dashboard",
+					ProjectionKey:       "planning.proposals.summary",
+					RequiredPermissions: []string{"planning_run.read"},
+					Cards: []module.CardDefinition{
+						{Key: "proposal_count", Label: "Proposals", LabelI18n: localize("Proposals", "Proposal"), Path: "proposal_count", ActionKey: "planning.proposals.dashboard"},
+						{Key: "converted_proposal_count", Label: "Converted", LabelI18n: localize("Converted", "Terkonversi"), Path: "converted_proposal_count", ActionKey: "planning.proposals.dashboard"},
+						{Key: "time_critical_proposal_count", Label: "Time Critical", LabelI18n: localize("Time Critical", "Kritis Waktu"), Path: "time_critical_proposal_count", ActionKey: "planning.proposals.dashboard"},
+						{Key: "total_forecast_demand_quantity", Label: "Forecast Demand", LabelI18n: localize("Forecast Demand", "Forecast Demand"), Path: "total_forecast_demand_quantity", ActionKey: "planning.proposals.dashboard"},
+						{Key: "total_normalized_quantity", Label: "Normalized Qty", LabelI18n: localize("Normalized Qty", "Qty Ternormalisasi"), Path: "total_normalized_quantity", ActionKey: "planning.proposals.dashboard"},
+					},
+				},
+			},
+		},
+	}
+}

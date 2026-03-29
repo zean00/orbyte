@@ -114,6 +114,10 @@ func (a *DocumentActions) Cancel(documentID string, acting ActingContext, expect
 	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, "cancel", "document.cancelled")
 }
 
+func (a *DocumentActions) Transition(documentID string, acting ActingContext, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
+	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, action, eventType)
+}
+
 func (a *DocumentActions) transitionDocument(documentID string, acting ActingContext, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
 	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, action, eventType)
 }

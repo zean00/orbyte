@@ -11,16 +11,16 @@ export function Sidebar() {
       initial={false}
       animate={{ width: sidebarOpen ? 256 : 72 }}
       transition={{ duration: 0.2 }}
-      className="fixed left-0 top-0 h-full bg-surface border-r border-line z-40"
+      className="fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-line bg-surface"
     >
-      <div className="flex items-center h-16 px-4 border-b border-line">
+      <div className="flex h-16 items-center border-b border-line px-4 shrink-0">
         {sidebarOpen && <span className="font-display font-bold text-lg text-accent">Orbyte</span>}
         <button onClick={toggleSidebar} className="ml-auto p-2 text-muted hover:text-body transition-colors">
           <MenuIcon className="w-5 h-5" />
         </button>
       </div>
 
-      <nav className="p-3 space-y-1">
+      <nav className="min-h-0 flex-1 overflow-y-auto p-3 space-y-1">
         {routes.map((item) => (
           <NavLink
             key={item.key}
@@ -39,7 +39,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-line">
+      <div className="shrink-0 border-t border-line p-3">
         {shellKind === 'workspace' && adminAccess && (
           <button
             type="button"

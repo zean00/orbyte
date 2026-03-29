@@ -1423,12 +1423,12 @@ func TestReceivablesSummaryScopedByLocation(t *testing.T) {
 func mustRegisterCommercialDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{
-		{Type: "sales_order", DisplayName: "Sales Order", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for"}},
-		{Type: "invoice", DisplayName: "Invoice", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for"}},
-		{Type: "credit_note", DisplayName: "Credit Note", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for"}},
-		{Type: "payment_receipt", DisplayName: "Payment Receipt", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for"}},
-		{Type: "payment_refund", DisplayName: "Payment Refund", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for"}},
-		{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for"}},
+		{Type: "sales_order", DisplayName: "Sales Order", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for"}},
+		{Type: "invoice", DisplayName: "Invoice", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for"}},
+		{Type: "credit_note", DisplayName: "Credit Note", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for"}},
+		{Type: "payment_receipt", DisplayName: "Payment Receipt", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for"}},
+		{Type: "payment_refund", DisplayName: "Payment Refund", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for"}},
+		{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for"}},
 	} {
 		if err := docs.Register(def); err != nil {
 			t.Fatalf("register document definition %s: %v", def.Type, err)
