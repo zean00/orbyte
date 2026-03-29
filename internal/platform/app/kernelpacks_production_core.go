@@ -221,6 +221,23 @@ func productionCoreKernelPackManifest() module.Manifest {
 }
 
 func productionModelDefinition(key, singular, permissionPrefix string, fields []model.FieldDefinition) model.Definition {
+	defaultSort := "code"
+	hasField := func(fieldKey string) bool {
+		for _, field := range fields {
+			if field.Key == fieldKey {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case hasField("code"):
+		defaultSort = "code"
+	case hasField("version_code"):
+		defaultSort = "version_code"
+	case len(fields) > 0:
+		defaultSort = fields[0].Key
+	}
 	return model.Definition{
 		Key:                 key,
 		DisplayName:         singular,
@@ -231,7 +248,7 @@ func productionModelDefinition(key, singular, permissionPrefix string, fields []
 		ListPermissionKey:   permissionPrefix + ".list",
 		ReadPermissionKey:   permissionPrefix + ".read",
 		UpdatePermissionKey: permissionPrefix + ".update",
-		DefaultSort:         "code",
+		DefaultSort:         defaultSort,
 		Fields:              fields,
 	}
 }

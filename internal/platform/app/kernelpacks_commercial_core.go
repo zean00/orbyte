@@ -226,6 +226,11 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					{Key: "expiry_tracking_enabled", Label: "Expiry Tracking", LabelI18n: localize("Expiry Tracking", "Pelacakan Kedaluwarsa"), Type: "bool"},
 					{Key: "allow_negative_stock", Label: "Allow Negative Stock", LabelI18n: localize("Allow Negative Stock", "Izinkan Stok Negatif"), Type: "bool"},
 					{Key: "default_issue_strategy", Label: "Issue Strategy", LabelI18n: localize("Issue Strategy", "Strategi Pengeluaran"), Type: "string", DefaultValue: "manual"},
+					{Key: "replenishment_enabled", Label: "Replenishment Enabled", LabelI18n: localize("Replenishment Enabled", "Replenishment Aktif"), Type: "bool"},
+					{Key: "replenishment_mode", Label: "Replenishment Mode", LabelI18n: localize("Replenishment Mode", "Mode Replenishment"), Type: "string", DefaultValue: "manual"},
+					{Key: "reorder_point_quantity", Label: "Reorder Point", LabelI18n: localize("Reorder Point", "Titik Pemesanan Ulang"), Type: "number"},
+					{Key: "target_stock_quantity", Label: "Target Stock", LabelI18n: localize("Target Stock", "Target Stok"), Type: "number"},
+					{Key: "default_replenishment_warehouse_code", Label: "Default Replenishment Warehouse", LabelI18n: localize("Default Replenishment Warehouse", "Gudang Replenishment Default"), Type: "string"},
 					{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "active"},
 				},
 			),
@@ -532,7 +537,7 @@ func commercialDocumentDefinition(documentType, displayName, workflowKey, number
 		WorkflowKey:            workflowKey,
 		NumberingKey:           numberingKey,
 		OwnerModuleKey:         "commercial_core",
-		AllowedLinkTypes:       []string{"related_to", "source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for", "delivery_for", "return_for", "exchange_for"},
+		AllowedLinkTypes:       []string{"related_to", "source_order", "invoice_for", "payment_for", "refund_for", "posting_for", "fulfillment_for", "delivery_for", "return_for", "exchange_for", "production_for"},
 		AllowedAttachmentTypes: []string{"note", "image", "document"},
 	}
 }

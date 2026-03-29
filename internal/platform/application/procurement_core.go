@@ -136,6 +136,14 @@ func (s *ProcurementCoreService) CreateGoodsReceiptFromOrder(orderID, actorID st
 			"item_code":               textValue(line["item_code"]),
 			"description":             textValue(line["description"]),
 			"uom_code":                textValue(line["uom_code"]),
+			"warehouse_code":          textValue(line["warehouse_code"]),
+			"unit_price":              roundMoney(numberValue(line["unit_price"])),
+			"discount_amount":         roundMoney(numberValue(line["discount_amount"])),
+			"tax_code":                textValue(line["tax_code"]),
+			"tax_rate":                roundMoney(numberValue(line["tax_rate"])),
+			"tax_mode":                textValue(line["tax_mode"]),
+			"tax_account_code":        textValue(line["tax_account_code"]),
+			"expense_account_code":    textValue(line["expense_account_code"]),
 			"ordered_qty":             orderedQty,
 			"receipt_qty":             remaining,
 			"cumulative_received_qty": receivedQty,
@@ -571,7 +579,8 @@ func (s *ProcurementCoreService) createVendorBillFromSource(source document.Reco
 	if termDays <= 0 {
 		termDays = 30
 	}
-	lines := incrementProcurementLineMetrics(recordList(payload["lines"]), "billed_qty", "quantity")
+	lines := s.vendorBillLinesFromSource(payload, sourceType)
+	subtotalAmount, taxAmount, totalAmount := commercialLineTotals(lines)
 	billPayload := map[string]any{
 		"vendor_id":                    textValue(payload["vendor_id"]),
 		"vendor_name":                  textValue(payload["vendor_name"]),
@@ -587,12 +596,12 @@ func (s *ProcurementCoreService) createVendorBillFromSource(source document.Reco
 		"source_goods_receipt_number":  "",
 		"payable_account_code":         firstNonEmptyString(textValue(payload["payable_account_code"]), s.lookupVendorValue(textValue(payload["vendor_id"]), "payable_account_code")),
 		"expense_account_code":         firstNonEmptyString(textValue(payload["expense_account_code"]), s.lookupVendorValue(textValue(payload["vendor_id"]), "expense_account_code")),
-		"subtotal_amount":              numberValue(payload["subtotal_amount"]),
-		"tax_amount":                   numberValue(payload["tax_amount"]),
-		"total_amount":                 numberValue(payload["total_amount"]),
+		"subtotal_amount":              subtotalAmount,
+		"tax_amount":                   taxAmount,
+		"total_amount":                 totalAmount,
 		"paid_amount":                  0.0,
 		"credited_amount":              0.0,
-		"balance_due_amount":           numberValue(payload["total_amount"]),
+		"balance_due_amount":           totalAmount,
 		"lines":                        lines,
 		"notes":                        textValue(payload["notes"]),
 	}
@@ -623,6 +632,37 @@ func (s *ProcurementCoreService) createVendorBillFromSource(source document.Reco
 	}
 	s.refreshDocuments(created, source)
 	return created, nil
+}
+
+func (s *ProcurementCoreService) vendorBillLinesFromSource(payload map[string]any, sourceType string) []map[string]any {
+	rawLines := recordList(payload["lines"])
+	switch sourceType {
+	case "goods_receipt":
+		rows := make([]map[string]any, 0, len(rawLines))
+		for _, line := range rawLines {
+			next := cloneMap(line)
+			receiptQty := roundMoney(numberValue(next["receipt_qty"]))
+			if receiptQty <= 0 {
+				receiptQty = roundMoney(numberValue(next["quantity"]))
+			}
+			if receiptQty <= 0 {
+				continue
+			}
+			next["quantity"] = receiptQty
+			next["billed_qty"] = receiptQty
+			rows = append(rows, next)
+		}
+		normalized := s.normalizeProcurementLines(map[string]any{
+			"currency_code":        textValue(payload["currency_code"]),
+			"default_tax_code":     textValue(payload["default_tax_code"]),
+			"tax_profile_code":     textValue(payload["tax_profile_code"]),
+			"expense_account_code": textValue(payload["expense_account_code"]),
+			"lines":                rows,
+		})
+		return recordList(normalized["lines"])
+	default:
+		return incrementProcurementLineMetrics(rawLines, "billed_qty", "quantity")
+	}
 }
 
 func incrementProcurementLineMetrics(lines []map[string]any, fieldKey, quantityKey string) []map[string]any {

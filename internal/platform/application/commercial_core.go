@@ -275,6 +275,7 @@ func (s *CommercialCoreService) CreatePaymentReceiptFromInvoice(invoiceID, actor
 		"receipt_date":        now.Format("2006-01-02"),
 		"payment_method_code": "",
 		"payment_reference":   firstNonEmptyString(invoice.Header.Number, invoice.Header.ID),
+		"receivable_account_code": textValue(payload["receivable_account_code"]),
 		"currency_code":       firstNonEmptyString(textValue(payload["currency_code"]), invoice.Header.TotalAmount.Currency, "IDR"),
 		"amount_received":     openAmount,
 		"unapplied_amount":    0.0,
@@ -1303,33 +1304,82 @@ func (s *CommercialCoreService) invoicePostingLines(payload map[string]any) []ma
 		postingConfig["invoice_issue_receivable_account_code"],
 		"1100-AR",
 	)
-	revenueAccount := firstNonEmptyString(
-		s.resolveRevenueAccount(payload),
-		postingConfig["invoice_issue_revenue_account_code"],
-		"4000-REV",
-	)
-	taxAccount := firstNonEmptyString(
-		s.resolveTaxAccount(payload),
-		postingConfig["invoice_issue_tax_account_code"],
-		"2100-TAX",
-	)
 	lines := []map[string]any{{
 		"account_code": receivableAccount,
 		"description":  "Accounts Receivable",
 		"debit":        totalAmount,
 		"credit":       0.0,
-	}, {
-		"account_code": revenueAccount,
-		"description":  "Revenue",
-		"debit":        0.0,
-		"credit":       subtotal,
 	}}
-	if taxAmount > 0 {
+	revenueAccountDefault := firstNonEmptyString(
+		s.resolveRevenueAccount(payload),
+		postingConfig["invoice_issue_revenue_account_code"],
+		"4000-REV",
+	)
+	revenueByAccount := map[string]float64{}
+	taxByAccount := map[string]float64{}
+	revenueTotal := 0.0
+	taxTotal := 0.0
+	for _, line := range recordList(payload["lines"]) {
+		revenueAccount := firstNonEmptyString(textValue(line["revenue_account_code"]), revenueAccountDefault)
+		lineSubtotal := roundMoney(numberValue(line["line_subtotal"]))
+		revenueByAccount[revenueAccount] = roundMoney(revenueByAccount[revenueAccount] + lineSubtotal)
+		revenueTotal = roundMoney(revenueTotal + lineSubtotal)
+		taxLineAmount := roundMoney(numberValue(line["tax_amount"]))
+		if taxLineAmount <= 0 {
+			continue
+		}
+		taxAccount := firstNonEmptyString(
+			textValue(line["tax_account_code"]),
+			s.lookupAccountCode("commercial_tax_code", "code", textValue(line["tax_code"]), "tax_account_code"),
+			postingConfig["invoice_issue_tax_account_code"],
+			"2100-TAX",
+		)
+		taxByAccount[taxAccount] = roundMoney(taxByAccount[taxAccount] + taxLineAmount)
+		taxTotal = roundMoney(taxTotal + taxLineAmount)
+	}
+	if revenueTotal == 0 && subtotal > 0 {
+		revenueByAccount[revenueAccountDefault] = subtotal
+	}
+	revenueAccounts := make([]string, 0, len(revenueByAccount))
+	for accountCode := range revenueByAccount {
+		revenueAccounts = append(revenueAccounts, accountCode)
+	}
+	sort.Strings(revenueAccounts)
+	for _, accountCode := range revenueAccounts {
+		amount := revenueByAccount[accountCode]
+		if amount <= 0 {
+			continue
+		}
 		lines = append(lines, map[string]any{
-			"account_code": taxAccount,
+			"account_code": accountCode,
+			"description":  "Revenue",
+			"debit":        0.0,
+			"credit":       amount,
+		})
+	}
+	if taxTotal == 0 && taxAmount > 0 {
+		taxAccount := firstNonEmptyString(
+			s.resolveTaxAccount(payload),
+			postingConfig["invoice_issue_tax_account_code"],
+			"2100-TAX",
+		)
+		taxByAccount[taxAccount] = taxAmount
+	}
+	taxAccounts := make([]string, 0, len(taxByAccount))
+	for accountCode := range taxByAccount {
+		taxAccounts = append(taxAccounts, accountCode)
+	}
+	sort.Strings(taxAccounts)
+	for _, accountCode := range taxAccounts {
+		amount := taxByAccount[accountCode]
+		if amount <= 0 {
+			continue
+		}
+		lines = append(lines, map[string]any{
+			"account_code": accountCode,
 			"description":  "Tax Payable",
 			"debit":        0.0,
-			"credit":       taxAmount,
+			"credit":       amount,
 		})
 	}
 	return lines
@@ -1455,7 +1505,10 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 			)
 		}
 		if textValue(normalized["uom_code"]) == "" {
-			normalized["uom_code"] = s.lookupAccountCode("commercial_item", "sku", itemCode, "uom_code")
+			normalized["uom_code"] = firstNonEmptyString(
+				s.lookupAccountCode("commercial_item", "sku", itemCode, "uom_code"),
+				s.lookupAccountCode("commercial_product", "code", textValue(normalized["product_code"]), "uom_code"),
+			)
 		}
 		if numberValue(normalized["unit_price"]) == 0 {
 			if to := s.lookupPriceListUnitPrice(priceListCode, itemCode); to > 0 {
@@ -1464,6 +1517,10 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 				normalized["unit_price"] = to
 			} else if to := s.lookupNumberValue("commercial_item", "sku", itemCode, "unit_price"); to > 0 {
 				normalized["unit_price"] = to
+			} else if to := s.lookupProductNumberValue(textValue(normalized["product_code"]), "base_price"); to > 0 {
+				normalized["unit_price"] = to
+			} else if to := s.lookupProductNumberValue(textValue(normalized["product_code"]), "unit_price"); to > 0 {
+				normalized["unit_price"] = to
 			}
 		}
 		if textValue(normalized["tax_code"]) == "" {
@@ -1471,12 +1528,14 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 				defaultTaxCode,
 				s.lookupAccountCode("commercial_price_list_item", "price_list_code|item_code", priceListCode+"|"+itemCode, "tax_code"),
 				s.lookupAccountCode("commercial_item", "sku", itemCode, "tax_code"),
+				s.lookupAccountCode("commercial_product", "code", textValue(normalized["product_code"]), "tax_code"),
 			)
 		}
 		if textValue(normalized["revenue_account_code"]) == "" {
 			normalized["revenue_account_code"] = firstNonEmptyString(
 				s.lookupAccountCode("commercial_price_list_item", "price_list_code|item_code", priceListCode+"|"+itemCode, "revenue_account_code"),
 				s.lookupAccountCode("commercial_item", "sku", itemCode, "revenue_account_code"),
+				s.lookupAccountCode("commercial_product", "code", textValue(normalized["product_code"]), "revenue_account_code"),
 			)
 		}
 		taxMode := strings.ToLower(s.lookupAccountCode("commercial_tax_code", "code", textValue(normalized["tax_code"]), "mode"))
@@ -2001,6 +2060,10 @@ func (s *CommercialCoreService) lookupNumberValue(modelKey, filterKey, filterVal
 		return 0
 	}
 	return roundMoney(numberValue(items[0].Values[valueKey]))
+}
+
+func (s *CommercialCoreService) lookupProductNumberValue(productCode, valueKey string) float64 {
+	return s.lookupNumberValue("commercial_product", "code", productCode, valueKey)
 }
 
 func (s *CommercialCoreService) lookupModelValueByID(modelKey, id, valueKey string) string {

@@ -5223,8 +5223,9 @@ function actionVisibleForStatus(actionKey: string, status: string, documentType:
       return normalizedStatus !== 'draft' && normalizedStatus !== 'submitted'
     case 'generate_invoice':
     case 'generate_fulfillment':
-    case 'generate_production_order':
       return normalizedStatus === 'confirmed'
+    case 'generate_production_order':
+      return normalizedStatus === 'confirmed' || normalizedStatus === 'approved'
     case 'register_delivery':
       return normalizedStatus === 'issued'
     case 'mark_delivered':

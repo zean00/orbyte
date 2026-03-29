@@ -161,7 +161,7 @@ func TestGenerateProductionOrderIssueAndOutput(t *testing.T) {
 	}
 
 	balances := inventorySvc.currentBalances("org_default", "loc_main")
-	if got := inventorySvc.sumBalance(balances, "BURGER", "MAIN", "LOT-BURGER-001"); got != 3.0 {
+	if got := inventorySvc.sumBalance(balances, "BURGER", "MAIN", ""); got != 3.0 {
 		t.Fatalf("expected finished stock 3, got %v", got)
 	}
 	if got := inventorySvc.sumBalance(balances, "BUN", "MAIN", ""); got != 7.0 {
@@ -176,6 +176,194 @@ func TestGenerateProductionOrderIssueAndOutput(t *testing.T) {
 	}
 	if updatedOrder.Header.Status != "completed" {
 		t.Fatalf("expected completed production order, got %s", updatedOrder.Header.Status)
+	}
+}
+
+func TestGenerateProductionOrderFindsTrimmedActiveBOM(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProductionTestDocumentTypes(t, docs)
+	mustRegisterProductionTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "PASTA",
+		"name":              "Pasta",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create finished item: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "NOODLE",
+		"name":              "Noodle",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create component item: %v", err)
+	}
+
+	bom, err := models.Create("production_bom", "user_admin", map[string]any{
+		"code":               "BOM-PASTA",
+		"name":               "Pasta Recipe",
+		"finished_item_code": "PASTA ",
+		"status":             "active",
+	})
+	if err != nil {
+		t.Fatalf("create bom: %v", err)
+	}
+	if _, err := models.Create("production_bom_version", "user_admin", map[string]any{
+		"bom_id":         bom.ID,
+		"bom_code":       "BOM-PASTA",
+		"version_code":   "v1",
+		"yield_quantity": 1.0,
+		"is_active":      true,
+		"status":         "active",
+		"lines": []map[string]any{
+			{"component_item_code": "NOODLE", "quantity_per_unit": 1.0, "uom_code": "EA", "warehouse_code": "MAIN"},
+		},
+	}); err != nil {
+		t.Fatalf("create bom version: %v", err)
+	}
+
+	order, err := docs.Create("sales_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_name": "Walk In",
+		"lines": []map[string]any{
+			{"item_code": "PASTA", "quantity": 2.0, "description": "Pasta"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create sales order: %v", err)
+	}
+	order.Header.Status = "confirmed"
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save sales order: %v", err)
+	}
+
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	productionSvc := NewProductionCoreService(docs, models, nil, inventorySvc)
+	orders, err := productionSvc.GenerateProductionOrdersFromSalesOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("generate production orders: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("expected 1 generated production order, got %d", len(orders))
+	}
+}
+
+func TestGenerateProductionOrderFromApprovedSalesOrder(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProductionTestDocumentTypes(t, docs)
+	mustRegisterProductionTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "BURGER-APPROVED",
+		"name":              "Burger Approved",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create finished item: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "BUN-APPROVED",
+		"name":              "Bun Approved",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create component item: %v", err)
+	}
+
+	bom, err := models.Create("production_bom", "user_admin", map[string]any{
+		"code":                 "BOM-BURGER-APPROVED",
+		"name":                 "Burger Approved Recipe",
+		"finished_item_code":   "BURGER-APPROVED",
+		"default_version_code": "v1",
+		"status":               "active",
+	})
+	if err != nil {
+		t.Fatalf("create bom: %v", err)
+	}
+	if _, err := models.Create("production_bom_version", "user_admin", map[string]any{
+		"bom_id":         bom.ID,
+		"bom_code":       "BOM-BURGER-APPROVED",
+		"version_code":   "v1",
+		"yield_quantity": 1.0,
+		"is_active":      true,
+		"status":         "active",
+		"lines": []map[string]any{
+			{"component_item_code": "BUN-APPROVED", "quantity_per_unit": 1.0, "uom_code": "EA", "warehouse_code": "MAIN"},
+		},
+	}); err != nil {
+		t.Fatalf("create bom version: %v", err)
+	}
+
+	order, err := docs.Create("sales_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_name": "Walk In",
+		"lines": []map[string]any{
+			{"item_code": "BURGER-APPROVED", "quantity": 2.0, "description": "Burger Approved"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create sales order: %v", err)
+	}
+	order.Header.Status = "approved"
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save sales order: %v", err)
+	}
+
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	productionSvc := NewProductionCoreService(docs, models, nil, inventorySvc)
+	orders, err := productionSvc.GenerateProductionOrdersFromSalesOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("generate production orders from approved sales order: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("expected 1 generated production order, got %d", len(orders))
+	}
+}
+
+func TestQuantityTrackedProductionOutputUsesNonBatchBalance(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProductionTestDocumentTypes(t, docs)
+	mustRegisterProductionTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "SOUP",
+		"name":              "Soup",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create finished item: %v", err)
+	}
+
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	service := NewProductionCoreService(docs, models, nil, inventorySvc)
+	record, err := docs.Create("production_output", "org_default", "loc_main", "user_admin", map[string]any{
+		"finished_item_code":  "SOUP",
+		"finished_item_name":  "Soup",
+		"warehouse_code":      "MAIN",
+		"production_lot_code": "SOUP-LOT-001",
+		"output_quantity":     2.0,
+		"uom_code":            "EA",
+	})
+	if err != nil {
+		t.Fatalf("create output: %v", err)
+	}
+	record.Header.Status = "posted"
+	if err := docs.Save(record); err != nil {
+		t.Fatalf("save output: %v", err)
+	}
+	if err := service.HandleApprovedDocument(record, "user_admin"); err != nil {
+		t.Fatalf("handle approved output: %v", err)
+	}
+
+	updatedBalances := inventorySvc.currentBalances("org_default", "loc_main")
+	if got := inventorySvc.sumBalance(updatedBalances, "SOUP", "MAIN", ""); got != 2.0 {
+		t.Fatalf("expected quantity-tracked stock in non-batch balance, got %v", got)
+	}
+	if got := inventorySvc.sumBalance(updatedBalances, "SOUP", "MAIN", "SOUP-LOT-001"); got != 0.0 {
+		t.Fatalf("expected no batch-specific balance for quantity-tracked item, got %v", got)
 	}
 }
 
@@ -329,12 +517,12 @@ func TestProductionIssueAllowsApprovedSubstitute(t *testing.T) {
 		"planned_quantity":         2.0,
 		"expected_output_quantity": 2.0,
 		"lines": []map[string]any{{
-			"component_item_code":          "SAUCE",
-			"actual_item_code":             "SAUCE-ALT",
-			"warehouse_code":               "MAIN",
-			"uom_code":                     "EA",
-			"quantity_per_unit":            1.0,
-			"quantity":                     2.0,
+			"component_item_code":           "SAUCE",
+			"actual_item_code":              "SAUCE-ALT",
+			"warehouse_code":                "MAIN",
+			"uom_code":                      "EA",
+			"quantity_per_unit":             1.0,
+			"quantity":                      2.0,
 			"allowed_substitute_item_codes": []string{"SAUCE-ALT"},
 		}},
 	})

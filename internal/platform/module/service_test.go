@@ -625,6 +625,33 @@ func TestRegisterRejectsUnknownRoleTemplatePermissionAndInvalidDependencyRange(t
 	}
 }
 
+func TestRegisterAllowsCrossManifestRolePermissionsRegardlessOfManifestSortOrder(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Manifest{
+		Key: "z.documents",
+		Security: SecurityDefinition{
+			Permissions: []PermissionDefinition{
+				{Key: "document.list", Action: "list", Resource: "document"},
+			},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register provider manifest: %v", err)
+	}
+	if err := svc.Register(Manifest{
+		Key: "a.delivery",
+		Security: SecurityDefinition{
+			RoleTemplates: []RoleTemplateDefinition{{
+				Key: "delivery_operator", Name: "Delivery Operator", PermissionKeys: []string{"document.list"},
+			}},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register consumer manifest: %v", err)
+	}
+	if err := svc.Register(Manifest{Key: "m.other"}, "system"); err != nil {
+		t.Fatalf("register unrelated manifest should not re-fail due to sorted lint order: %v", err)
+	}
+}
+
 func TestRegisterValidatesMCPContracts(t *testing.T) {
 	svc := NewService()
 	err := svc.Register(Manifest{

@@ -78,8 +78,8 @@ func (s *ProductionCoreService) GenerateProductionOrdersFromSalesOrder(orderID, 
 	if order.Header.Type != "sales_order" {
 		return nil, shared.Validation("source document must be a sales order")
 	}
-	if order.Header.Status != "confirmed" {
-		return nil, shared.Conflict("production can only be generated from a confirmed order")
+	if order.Header.Status != "confirmed" && order.Header.Status != "approved" {
+		return nil, shared.Conflict("production can only be generated from an approved sales order")
 	}
 	payload := clonedPayload(order.Body.Payload)
 	lines := recordList(payload["lines"])
@@ -434,15 +434,18 @@ func (s *ProductionCoreService) handleApprovedProductionOutput(record document.R
 		return s.refreshLinkedProductionOrder(record)
 	}
 	payload := clonedPayload(record.Body.Payload)
+	itemPolicy := s.inventory.lookupItemPolicy(textValue(payload["finished_item_code"]))
 	line := map[string]any{
 		"item_code":       textValue(payload["finished_item_code"]),
 		"description":     textValue(payload["finished_item_name"]),
 		"warehouse_code":  textValue(payload["warehouse_code"]),
-		"batch_code":      textValue(payload["production_lot_code"]),
 		"expiration_date": textValue(payload["expiration_date"]),
 		"quantity":        roundMoney(numberValue(payload["output_quantity"])),
 		"uom_code":        textValue(payload["uom_code"]),
-		"note":            textValue(payload["notes"]),
+		"note":            firstNonEmptyString(textValue(payload["notes"]), textValue(payload["production_lot_code"])),
+	}
+	if strings.EqualFold(itemPolicy.TrackingMode, "batch") {
+		line["batch_code"] = textValue(payload["production_lot_code"])
 	}
 	if err := s.inventory.validateInventoryLine(line, true); err != nil {
 		return err
@@ -489,19 +492,19 @@ func (s *ProductionCoreService) normalizeProductionIssueLines(lines []map[string
 			continue
 		}
 		normalized = append(normalized, map[string]any{
-			"source_component_line_index": index,
-			"planned_item_code":           textValue(line["component_item_code"]),
-			"item_code":                   itemCode,
-			"actual_item_code":            itemCode,
-			"description":                 firstNonEmptyString(textValue(line["description"]), policy.Name),
-			"warehouse_code":              firstNonEmptyString(textValue(line["warehouse_code"]), warehouseCode),
-			"batch_code":                  textValue(line["batch_code"]),
-			"expiration_date":             textValue(line["expiration_date"]),
-			"quantity":                    qty,
-			"uom_code":                    firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
-			"note":                        textValue(line["note"]),
-			"available_quantity":          roundMoney(numberValue(line["available_quantity"])),
-			"reserved_quantity":           roundMoney(numberValue(line["reserved_quantity"])),
+			"source_component_line_index":   index,
+			"planned_item_code":             textValue(line["component_item_code"]),
+			"item_code":                     itemCode,
+			"actual_item_code":              itemCode,
+			"description":                   firstNonEmptyString(textValue(line["description"]), policy.Name),
+			"warehouse_code":                firstNonEmptyString(textValue(line["warehouse_code"]), warehouseCode),
+			"batch_code":                    textValue(line["batch_code"]),
+			"expiration_date":               textValue(line["expiration_date"]),
+			"quantity":                      qty,
+			"uom_code":                      firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
+			"note":                          textValue(line["note"]),
+			"available_quantity":            roundMoney(numberValue(line["available_quantity"])),
+			"reserved_quantity":             roundMoney(numberValue(line["reserved_quantity"])),
 			"allowed_substitute_item_codes": normalizeStringList(line["allowed_substitute_item_codes"]),
 			"substitution_status":           textValue(line["substitution_status"]),
 		})
@@ -554,20 +557,20 @@ func (s *ProductionCoreService) componentPlanLines(payload map[string]any) []map
 		policy := s.inventory.lookupItemPolicy(itemCode)
 		qtyPerUnit := roundMoney(firstPositiveNumber(line["quantity_per_unit"], line["quantity"]))
 		lines = append(lines, map[string]any{
-			"component_item_code":          itemCode,
-			"actual_item_code":             itemCode,
-			"description":                  firstNonEmptyString(textValue(line["description"]), policy.Name),
-			"warehouse_code":               textValue(line["warehouse_code"]),
-			"uom_code":                     firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
-			"quantity_per_unit":            qtyPerUnit,
-			"quantity":                     roundMoney(qtyPerUnit * scale),
-			"issued_quantity":              0.0,
-			"reserved_quantity":            0.0,
-			"shortage_quantity":            0.0,
-			"available_quantity":           0.0,
+			"component_item_code":           itemCode,
+			"actual_item_code":              itemCode,
+			"description":                   firstNonEmptyString(textValue(line["description"]), policy.Name),
+			"warehouse_code":                textValue(line["warehouse_code"]),
+			"uom_code":                      firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
+			"quantity_per_unit":             qtyPerUnit,
+			"quantity":                      roundMoney(qtyPerUnit * scale),
+			"issued_quantity":               0.0,
+			"reserved_quantity":             0.0,
+			"shortage_quantity":             0.0,
+			"available_quantity":            0.0,
 			"allowed_substitute_item_codes": normalizeStringList(line["allowed_substitute_item_codes"]),
-			"substitution_status":          "planned",
-			"reservation_status":           "unreserved",
+			"substitution_status":           "planned",
+			"reservation_status":            "unreserved",
 		})
 	}
 	return s.normalizeProductionComponentLines(lines)
@@ -663,12 +666,27 @@ func (s *ProductionCoreService) resolveDefaultBOMForItem(itemCode string) (model
 	if s.models == nil || strings.TrimSpace(itemCode) == "" {
 		return model.Record{}, model.Record{}, false
 	}
+	normalizedItemCode := strings.TrimSpace(itemCode)
 	items, _, err := s.models.List("production_bom", model.Query{
-		Filters: map[string]string{"finished_item_code": strings.TrimSpace(itemCode)},
+		Filters: map[string]string{"finished_item_code": normalizedItemCode},
 		Page:    1, PageSize: 1000,
 	})
-	if err != nil || len(items) == 0 {
+	if err != nil {
 		return model.Record{}, model.Record{}, false
+	}
+	if len(items) == 0 {
+		allItems, _, listErr := s.models.List("production_bom", model.Query{Page: 1, PageSize: 1000})
+		if listErr != nil {
+			return model.Record{}, model.Record{}, false
+		}
+		for _, item := range allItems {
+			if strings.EqualFold(strings.TrimSpace(textValue(item.Values["finished_item_code"])), normalizedItemCode) {
+				items = append(items, item)
+			}
+		}
+		if len(items) == 0 {
+			return model.Record{}, model.Record{}, false
+		}
 	}
 	sort.Slice(items, func(i, j int) bool {
 		leftStatus := textValue(items[i].Values["status"])

@@ -145,6 +145,54 @@ func TestGenerateAndApproveCreditNoteFromIssuedInvoice(t *testing.T) {
 	}
 }
 
+func TestCreatePaymentReceiptFromInvoiceCopiesReceivableAccount(t *testing.T) {
+	docs := document.NewService()
+	mustRegisterCommercialDocumentTypes(t, docs)
+	service := NewCommercialCoreService(docs, nil, nil, nil)
+
+	invoice, err := docs.Create("invoice", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_id":                "party_1",
+		"party_name":              "Walk In Customer",
+		"currency_code":           "USD",
+		"invoice_date":            "2026-03-29",
+		"due_date":                "2026-04-28",
+		"subtotal_amount":         36.0,
+		"tax_amount":              3.96,
+		"total_amount":            39.96,
+		"paid_amount":             0.0,
+		"balance_due_amount":      39.96,
+		"receivable_account_code": "1105-AR-TRADE",
+		"lines": []map[string]any{{
+			"item_code":             "BURGER",
+			"description":           "Burger",
+			"quantity":              3.0,
+			"unit_price":            12.0,
+			"tax_rate":              11.0,
+			"line_subtotal":         36.0,
+			"tax_amount":            3.96,
+			"line_total":            39.96,
+			"revenue_account_code":  "4000-REV",
+			"tax_account_code":      "2100-VAT",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create invoice: %v", err)
+	}
+	invoice.Header.Status = "issued"
+	invoice.Header.Number = "INV-PAY-001"
+	if err := docs.Save(invoice); err != nil {
+		t.Fatalf("save invoice: %v", err)
+	}
+
+	payment, err := service.CreatePaymentReceiptFromInvoice(invoice.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create payment receipt: %v", err)
+	}
+	if got := textValue(payment.Body.Payload["receivable_account_code"]); got != "1105-AR-TRADE" {
+		t.Fatalf("expected receivable account copied from invoice, got %s", got)
+	}
+}
+
 func TestGenerateAndApprovePartialCreditNoteFromPartiallyPaidInvoice(t *testing.T) {
 	docs := document.NewService()
 	mustRegisterCommercialDocumentTypes(t, docs)
@@ -966,6 +1014,107 @@ func TestPostingLinesUseCommercialConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestInvoicePostingLinesGroupRevenueByLineAccount(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	configSvc := config.NewService()
+	mustRegisterCommercialDocumentTypes(t, docs)
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(docs, configSvc, models, nil)
+
+	lines := service.invoicePostingLines(map[string]any{
+		"subtotal_amount":         300.0,
+		"tax_amount":              33.0,
+		"total_amount":            333.0,
+		"receivable_account_code": "1105-AR-TRADE",
+		"lines": []map[string]any{
+			{
+				"item_code":            "CONSULT",
+				"line_subtotal":        100.0,
+				"tax_amount":           11.0,
+				"revenue_account_code": "4100-SVC",
+				"tax_account_code":     "2110-VAT-OUT",
+			},
+			{
+				"item_code":            "AMOX",
+				"line_subtotal":        200.0,
+				"tax_amount":           22.0,
+				"revenue_account_code": "4200-DRUG",
+				"tax_account_code":     "2110-VAT-OUT",
+			},
+		},
+	})
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 posting lines, got %+v", lines)
+	}
+	if got := textValue(lines[1]["account_code"]); got != "4100-SVC" || numberValue(lines[1]["credit"]) != 100.0 {
+		t.Fatalf("expected service revenue line, got %+v", lines[1])
+	}
+	if got := textValue(lines[2]["account_code"]); got != "4200-DRUG" || numberValue(lines[2]["credit"]) != 200.0 {
+		t.Fatalf("expected drug revenue line, got %+v", lines[2])
+	}
+	if got := textValue(lines[3]["account_code"]); got != "2110-VAT-OUT" || numberValue(lines[3]["credit"]) != 33.0 {
+		t.Fatalf("expected grouped tax line, got %+v", lines[3])
+	}
+}
+
+func TestNormalizeCommercialLinesFallsBackToProductDefaultsForVariant(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	configSvc := config.NewService()
+	mustRegisterCommercialDocumentTypes(t, docs)
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(docs, configSvc, models, nil)
+
+	if _, err := models.Create("commercial_product", "user_admin", map[string]any{
+		"code":                 "TSHIRT",
+		"name":                 "T-Shirt",
+		"uom_code":             "EA",
+		"base_price":           150000.0,
+		"tax_code":             "PPN",
+		"revenue_account_code": "4100-APPAREL",
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":          "TSHIRT-BLACK-L",
+		"name":         "T-Shirt Black L",
+		"kind":         "product",
+		"product_code": "TSHIRT",
+		"is_variant":   true,
+		"status":       "active",
+	}); err != nil {
+		t.Fatalf("create variant item: %v", err)
+	}
+
+	normalized := service.normalizeCommercialLines(map[string]any{
+		"lines": []map[string]any{{
+			"item_code":         "TSHIRT-BLACK-L",
+			"product_code":      "TSHIRT",
+			"quantity":          2.0,
+			"variant_signature": "color=black|size=l",
+		}},
+	})
+	lines := recordList(normalized["lines"])
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 normalized line, got %d", len(lines))
+	}
+	line := lines[0]
+	if got := numberValue(line["unit_price"]); got != 150000.0 {
+		t.Fatalf("expected parent fallback unit price, got %v", got)
+	}
+	if got := textValue(line["uom_code"]); got != "EA" {
+		t.Fatalf("expected parent fallback uom, got %s", got)
+	}
+	if got := textValue(line["tax_code"]); got != "PPN" {
+		t.Fatalf("expected parent fallback tax code, got %s", got)
+	}
+	if got := textValue(line["revenue_account_code"]); got != "4100-APPAREL" {
+		t.Fatalf("expected parent fallback revenue account, got %s", got)
+	}
+}
+
 func TestNormalizeCommercialLinesSupportsHeaderDefaultAndInclusiveTax(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -1455,6 +1604,21 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 			},
 		},
 		{
+			Key:         "commercial_product",
+			DisplayName: "Commercial Product",
+			DefaultSort: "code",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "name", Type: "string", Required: true},
+				{Key: "uom_code", Type: "string"},
+				{Key: "base_price", Type: "number"},
+				{Key: "unit_price", Type: "number"},
+				{Key: "tax_code", Type: "string"},
+				{Key: "revenue_account_code", Type: "string"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
 			Key:         "commercial_item",
 			DisplayName: "Commercial Item",
 			DefaultSort: "sku",
@@ -1462,6 +1626,9 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 				{Key: "sku", Type: "string", Required: true},
 				{Key: "name", Type: "string", Required: true},
 				{Key: "description", Type: "string"},
+				{Key: "product_code", Type: "string"},
+				{Key: "is_variant", Type: "bool"},
+				{Key: "variant_signature", Type: "string"},
 				{Key: "item_type", Type: "string"},
 				{Key: "kind", Type: "string", Required: true},
 				{Key: "uom_code", Type: "string"},

@@ -74,13 +74,15 @@ func (s *Service) Lint(manifests []Manifest) LintReport {
 	report := LintReport{}
 	existing := map[string]Manifest{}
 	for _, manifest := range manifests {
+		existing[manifest.Key] = manifest
+	}
+	for _, manifest := range manifests {
 		if err := validateManifest(existing, manifest); err != nil {
 			report.Diagnostics = append(report.Diagnostics, diagnosticFromError(manifest.Key, err))
 		}
 		report.Diagnostics = append(report.Diagnostics, lintOwnedContracts(manifest)...)
 		report.Diagnostics = append(report.Diagnostics, lintReferences(manifest)...)
 		report.Diagnostics = append(report.Diagnostics, s.KernelCompatibility(manifest)...)
-		existing[manifest.Key] = manifest
 	}
 	sort.Slice(report.Diagnostics, func(i, j int) bool {
 		if report.Diagnostics[i].ModuleKey == report.Diagnostics[j].ModuleKey {

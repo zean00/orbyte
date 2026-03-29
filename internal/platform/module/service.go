@@ -916,7 +916,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		for _, permissionKey := range role.PermissionKeys {
 			if _, ok := permissions[permissionKey]; !ok {
-				return shared.Validation("role template permission key is not registered")
+				return shared.Validation(fmt.Sprintf("role template permission key %q is not registered for manifest %q role %q", permissionKey, manifest.Key, role.Key))
 			}
 		}
 		roleTemplates[role.Key] = manifest.Key
