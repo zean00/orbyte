@@ -18,6 +18,7 @@ type InventoryCoreService struct {
 	config    *config.Service
 	models    *model.Service
 	search    *search.Service
+	finance   *FinanceReportingCoreService
 }
 
 type InventorySummary struct {
@@ -86,6 +87,10 @@ type inventoryBatchState struct {
 
 func NewInventoryCoreService(documents *document.Service, configSvc *config.Service, models *model.Service, searchSvc *search.Service) *InventoryCoreService {
 	return &InventoryCoreService{documents: documents, config: configSvc, models: models, search: searchSvc}
+}
+
+func (s *InventoryCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
+	s.finance = finance
 }
 
 func (s *InventoryCoreService) NormalizePayload(documentType string, payload map[string]any) map[string]any {
@@ -1695,7 +1700,7 @@ func (s *InventoryCoreService) createFulfillmentCostPosting(record document.Reco
 	for account, amount := range creditByAccount {
 		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory", "debit": 0.0, "credit": amount})
 	}
-	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, map[string]any{
+	postingPayload := map[string]any{
 		"source_document_type": record.Header.Type,
 		"source_document_id":   record.Header.ID,
 		"posting_date":         time.Now().UTC().Format("2006-01-02"),
@@ -1704,7 +1709,13 @@ func (s *InventoryCoreService) createFulfillmentCostPosting(record document.Reco
 		"total_amount":         totalCost,
 		"journal_lines":        journalLines,
 		"notes":                fmt.Sprintf("Auto-posted COGS from fulfillment %s", firstNonEmptyString(record.Header.Number, record.Header.ID)),
-	})
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
+	}
+	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, postingPayload)
 	if err != nil {
 		return err
 	}

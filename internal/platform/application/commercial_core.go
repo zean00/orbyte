@@ -21,6 +21,7 @@ type CommercialCoreService struct {
 	config    *config.Service
 	models    *model.Service
 	search    *search.Service
+	finance   *FinanceReportingCoreService
 }
 
 type ReceivablesSummary struct {
@@ -479,6 +480,9 @@ func (s *CommercialCoreService) HandleApprovedDocument(record document.Record, a
 }
 
 func (s *CommercialCoreService) ValidateApprove(record document.Record) error {
+	if record.Header.Type == "ledger_posting" && s.finance != nil {
+		return s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(record.Body.Payload["posting_date"]))
+	}
 	switch record.Header.Type {
 	case "credit_note":
 		if strings.TrimSpace(textValue(record.Body.Payload["source_invoice_id"])) == "" {
@@ -493,6 +497,10 @@ func (s *CommercialCoreService) ValidateApprove(record document.Record) error {
 		}
 	}
 	return nil
+}
+
+func (s *CommercialCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
+	s.finance = finance
 }
 
 func (s *CommercialCoreService) ValidateCancel(record document.Record) error {
@@ -845,6 +853,11 @@ func (s *CommercialCoreService) handleIssuedInvoice(invoice document.Record, act
 		"journal_lines":        journalLines,
 		"notes":                fmt.Sprintf("Auto-posted from invoice %s", firstNonEmptyString(invoice.Header.Number, invoice.Header.ID)),
 	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(invoice.Header.OrganizationID, invoice.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
+	}
 	posting, err := s.documents.Create("ledger_posting", invoice.Header.OrganizationID, invoice.Header.LocationID, actorID, postingPayload)
 	if err != nil {
 		return err
@@ -920,6 +933,11 @@ func (s *CommercialCoreService) handleIssuedCreditNote(creditNote document.Recor
 		"journal_lines":        journalLines,
 		"notes":                fmt.Sprintf("Auto-posted from credit note %s", firstNonEmptyString(creditNote.Header.Number, creditNote.Header.ID)),
 	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(creditNote.Header.OrganizationID, creditNote.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
+	}
 	posting, err := s.documents.Create("ledger_posting", creditNote.Header.OrganizationID, creditNote.Header.LocationID, actorID, postingPayload)
 	if err != nil {
 		return err
@@ -970,6 +988,11 @@ func (s *CommercialCoreService) handleReceivedPayment(payment document.Record, a
 		"total_amount":         amountReceived,
 		"journal_lines":        journalLines,
 		"notes":                fmt.Sprintf("Auto-posted from payment %s", firstNonEmptyString(payment.Header.Number, payment.Header.ID)),
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(payment.Header.OrganizationID, payment.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
 	}
 	posting, err := s.documents.Create("ledger_posting", payment.Header.OrganizationID, payment.Header.LocationID, actorID, postingPayload)
 	if err != nil {
@@ -1077,6 +1100,11 @@ func (s *CommercialCoreService) handleRefundedPayment(refund document.Record, ac
 		"total_amount":         refundAmount,
 		"journal_lines":        journalLines,
 		"notes":                fmt.Sprintf("Auto-posted from refund %s", firstNonEmptyString(refund.Header.Number, refund.Header.ID)),
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(refund.Header.OrganizationID, refund.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
 	}
 	posting, err := s.documents.Create("ledger_posting", refund.Header.OrganizationID, refund.Header.LocationID, actorID, postingPayload)
 	if err != nil {
@@ -1333,6 +1361,11 @@ func (s *CommercialCoreService) createReversalPosting(source document.Record, ac
 	payload["journal_lines"] = lines
 	payload["notes"] = fmt.Sprintf("Reversal of %s", firstNonEmptyString(originalPosting.Header.Number, originalPosting.Header.ID))
 	payload["total_amount"] = roundMoney(numberValue(originalPosting.Body.Payload["total_amount"]))
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(source.Header.OrganizationID, source.Header.LocationID, textValue(payload["posting_date"])); err != nil {
+			return err
+		}
+	}
 	reversal, err := s.documents.Create("ledger_posting", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
 	if err != nil {
 		return err

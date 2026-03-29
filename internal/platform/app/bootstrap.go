@@ -609,6 +609,14 @@ func seedModelRules(modelSvc *model.Service) {
 			return shared.Validation("party status must be active, inactive, or blocked")
 		}
 	})
+	modelSvc.SetConstraintEvaluator("accounting_period.date_range", func(input model.RuleInput) error {
+		startDate := strings.TrimSpace(stringValue(input.Values["start_date"]))
+		endDate := strings.TrimSpace(stringValue(input.Values["end_date"]))
+		if startDate != "" && endDate != "" && startDate > endDate {
+			return shared.Validation("accounting period start_date cannot be after end_date")
+		}
+		return nil
+	})
 }
 
 func seedModelData(modelSvc *model.Service) {

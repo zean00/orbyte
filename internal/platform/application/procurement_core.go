@@ -18,6 +18,7 @@ type ProcurementCoreService struct {
 	config    *config.Service
 	models    *model.Service
 	search    *search.Service
+	finance   *FinanceReportingCoreService
 }
 
 type PayablesSummary struct {
@@ -46,6 +47,10 @@ type VendorPayablesSummary struct {
 
 func NewProcurementCoreService(documents *document.Service, configSvc *config.Service, models *model.Service, searchSvc *search.Service) *ProcurementCoreService {
 	return &ProcurementCoreService{documents: documents, config: configSvc, models: models, search: searchSvc}
+}
+
+func (s *ProcurementCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
+	s.finance = finance
 }
 
 func (s *ProcurementCoreService) NormalizePayload(documentType string, payload map[string]any) map[string]any {
@@ -761,6 +766,11 @@ func (s *ProcurementCoreService) handleIssuedVendorBill(bill document.Record, ac
 		"journal_lines":        s.vendorBillPostingLines(payload),
 		"notes":                fmt.Sprintf("Auto-posted from vendor bill %s", firstNonEmptyString(bill.Header.Number, bill.Header.ID)),
 	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(bill.Header.OrganizationID, bill.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
+	}
 	posting, err := s.documents.Create("ledger_posting", bill.Header.OrganizationID, bill.Header.LocationID, actorID, postingPayload)
 	if err != nil {
 		return err
@@ -804,6 +814,11 @@ func (s *ProcurementCoreService) handlePaidOut(payment document.Record, actorID 
 		"total_amount":         amountPaid,
 		"journal_lines":        s.paymentOutPostingLines(payload),
 		"notes":                fmt.Sprintf("Auto-posted from payment out %s", firstNonEmptyString(payment.Header.Number, payment.Header.ID)),
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(payment.Header.OrganizationID, payment.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
 	}
 	posting, err := s.documents.Create("ledger_posting", payment.Header.OrganizationID, payment.Header.LocationID, actorID, postingPayload)
 	if err != nil {
@@ -868,6 +883,11 @@ func (s *ProcurementCoreService) handleIssuedVendorCredit(credit document.Record
 		"total_amount":         creditAmount,
 		"journal_lines":        reverseJournalLines(s.vendorBillPostingLines(payload)),
 		"notes":                fmt.Sprintf("Auto-posted from vendor credit %s", firstNonEmptyString(credit.Header.Number, credit.Header.ID)),
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(credit.Header.OrganizationID, credit.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
 	}
 	posting, err := s.documents.Create("ledger_posting", credit.Header.OrganizationID, credit.Header.LocationID, actorID, postingPayload)
 	if err != nil {
@@ -1628,6 +1648,11 @@ func (s *ProcurementCoreService) createReversalPosting(source document.Record, a
 	payload["journal_lines"] = lines
 	payload["notes"] = fmt.Sprintf("Reversal of %s", firstNonEmptyString(originalPosting.Header.Number, originalPosting.Header.ID))
 	payload["total_amount"] = roundMoney(numberValue(originalPosting.Body.Payload["total_amount"]))
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(source.Header.OrganizationID, source.Header.LocationID, textValue(payload["posting_date"])); err != nil {
+			return err
+		}
+	}
 	reversal, err := s.documents.Create("ledger_posting", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
 	if err != nil {
 		return err

@@ -17,6 +17,7 @@ type ProductionCoreService struct {
 	models    *model.Service
 	search    *search.Service
 	inventory *InventoryCoreService
+	finance   *FinanceReportingCoreService
 }
 
 func NewProductionCoreService(documents *document.Service, models *model.Service, searchSvc *search.Service, inventorySvc *InventoryCoreService) *ProductionCoreService {
@@ -26,6 +27,10 @@ func NewProductionCoreService(documents *document.Service, models *model.Service
 		search:    searchSvc,
 		inventory: inventorySvc,
 	}
+}
+
+func (s *ProductionCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
+	s.finance = finance
 }
 
 func (s *ProductionCoreService) NormalizePayload(documentType string, payload map[string]any) map[string]any {
@@ -945,7 +950,7 @@ func (s *ProductionCoreService) createProductionPosting(record document.Record, 
 	for account, amount := range creditByAccount {
 		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory / WIP", "debit": 0.0, "credit": amount})
 	}
-	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, map[string]any{
+	postingPayload := map[string]any{
 		"source_document_type": record.Header.Type,
 		"source_document_id":   record.Header.ID,
 		"posting_date":         time.Now().UTC().Format("2006-01-02"),
@@ -954,7 +959,13 @@ func (s *ProductionCoreService) createProductionPosting(record document.Record, 
 		"total_amount":         totalCost,
 		"journal_lines":        journalLines,
 		"notes":                fmt.Sprintf("%s %s", notePrefix, firstNonEmptyString(record.Header.Number, record.Header.ID)),
-	})
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
+	}
+	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, postingPayload)
 	if err != nil {
 		return err
 	}
@@ -997,6 +1008,11 @@ func (s *ProductionCoreService) createReversalPosting(source document.Record, ac
 	payload["journal_lines"] = lines
 	payload["notes"] = fmt.Sprintf("Reversal of %s", firstNonEmptyString(originalPosting.Header.Number, originalPosting.Header.ID))
 	payload["total_amount"] = roundMoney(numberValue(originalPosting.Body.Payload["total_amount"]))
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(source.Header.OrganizationID, source.Header.LocationID, textValue(payload["posting_date"])); err != nil {
+			return err
+		}
+	}
 	reversal, err := s.documents.Create("ledger_posting", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
 	if err != nil {
 		return err

@@ -95,6 +95,7 @@ type serviceGraph struct {
 	posCore           *application.POSCoreService
 	traceabilityCore  *application.TraceabilityCoreService
 	recallCore        *application.RecallCoreService
+	financeReporting  *application.FinanceReportingCoreService
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
 	queryMonitor      *store.QueryMonitor
@@ -261,6 +262,11 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.posCore = application.NewPOSCoreService(graph.documents, graph.models, graph.search, graph.docActions, graph.commercialCore, graph.inventoryCore, graph.fulfillmentCore, graph.returnsCore)
 	graph.traceabilityCore = application.NewTraceabilityCoreService(graph.documents, graph.models, graph.inventoryCore)
 	graph.recallCore = application.NewRecallCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.traceabilityCore)
+	graph.financeReporting = application.NewFinanceReportingCoreService(graph.documents, graph.models, graph.config)
+	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
+	graph.procurementCore.SetFinanceReporting(graph.financeReporting)
+	graph.inventoryCore.SetFinanceReporting(graph.financeReporting)
+	graph.productionCore.SetFinanceReporting(graph.financeReporting)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)
