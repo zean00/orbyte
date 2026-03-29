@@ -19,6 +19,7 @@ type ProcurementCoreService struct {
 	models    *model.Service
 	search    *search.Service
 	finance   *FinanceReportingCoreService
+	inventory *InventoryCoreService
 }
 
 type PayablesSummary struct {
@@ -51,6 +52,10 @@ func NewProcurementCoreService(documents *document.Service, configSvc *config.Se
 
 func (s *ProcurementCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
 	s.finance = finance
+}
+
+func (s *ProcurementCoreService) SetInventoryCore(inventory *InventoryCoreService) {
+	s.inventory = inventory
 }
 
 func (s *ProcurementCoreService) NormalizePayload(documentType string, payload map[string]any) map[string]any {
@@ -608,6 +613,7 @@ func (s *ProcurementCoreService) createVendorBillFromSource(source document.Reco
 		"credited_amount":              0.0,
 		"balance_due_amount":           totalAmount,
 		"lines":                        lines,
+		"landed_cost_lines":            recordList(payload["landed_cost_lines"]),
 		"notes":                        textValue(payload["notes"]),
 	}
 	switch sourceType {
@@ -619,7 +625,21 @@ func (s *ProcurementCoreService) createVendorBillFromSource(source document.Reco
 		billPayload["source_goods_receipt_number"] = firstNonEmptyString(source.Header.Number, source.Header.ID)
 		billPayload["source_purchase_order_id"] = textValue(payload["source_purchase_order_id"])
 		billPayload["source_purchase_order_number"] = textValue(payload["source_purchase_order_number"])
+		for idx, row := range recordList(payload["lines"]) {
+			if idx >= len(lines) {
+				break
+			}
+			lines[idx]["source_goods_receipt_id"] = source.Header.ID
+			lines[idx]["source_goods_receipt_line_index"] = idx
+			lines[idx]["receipt_unit_cost"] = firstPositiveNumber(row["effective_unit_cost"], row["unit_cost"], row["unit_price"])
+			lines[idx]["receipt_total_cost"] = roundMoney(firstPositiveNumber(row["receipt_total_cost"], numberValue(row["receipt_qty"])*firstPositiveNumber(row["effective_unit_cost"], row["unit_cost"], row["unit_price"])))
+		}
 	}
+	billPayload["lines"] = lines
+	billPayload = s.normalizeProcurementLines(billPayload)
+	billPayload["paid_amount"] = 0.0
+	billPayload["credited_amount"] = 0.0
+	billPayload["balance_due_amount"] = roundMoney(numberValue(billPayload["total_amount"]))
 	record, err := s.documents.Create("vendor_bill", source.Header.OrganizationID, source.Header.LocationID, actorID, billPayload)
 	if err != nil {
 		return document.Record{}, err
@@ -743,6 +763,8 @@ func (s *ProcurementCoreService) handleReceivedGoodsReceipt(receipt document.Rec
 
 func (s *ProcurementCoreService) handleIssuedVendorBill(bill document.Record, actorID string) error {
 	payload := clonedPayload(bill.Body.Payload)
+	breakdown := s.vendorBillCostBreakdown(bill.Header.OrganizationID, bill.Header.LocationID, payload)
+	payload["purchase_price_variance_amount"] = breakdown.varianceTotal
 	totalAmount := roundMoney(numberValue(payload["total_amount"]))
 	paidAmount := roundMoney(numberValue(payload["paid_amount"]))
 	creditedAmount := roundMoney(numberValue(payload["credited_amount"]))
@@ -750,39 +772,47 @@ func (s *ProcurementCoreService) handleIssuedVendorBill(bill document.Record, ac
 	if err := s.updateDocumentPayload(bill, actorID, payload); err != nil {
 		return err
 	}
+	postingLinked := s.hasPostingLink(bill, "vendor_bill_issue")
+	costApplied := s.hasReceiptBackedCostAdjustmentApplied(bill.Header.ID)
 	if orderID := textValue(payload["source_purchase_order_id"]); orderID != "" {
 		_ = s.bumpOrderBilledQuantities(orderID, recordList(payload["lines"]), actorID, false)
 	}
-	if s.hasPostingLink(bill, "vendor_bill_issue") {
-		return nil
-	}
-	postingPayload := map[string]any{
-		"source_document_type": bill.Header.Type,
-		"source_document_id":   bill.Header.ID,
-		"posting_date":         time.Now().UTC().Format("2006-01-02"),
-		"currency_code":        firstNonEmptyString(textValue(payload["currency_code"]), bill.Header.TotalAmount.Currency, "IDR"),
-		"posting_rule_key":     "vendor_bill_issue_default",
-		"total_amount":         totalAmount,
-		"journal_lines":        s.vendorBillPostingLines(payload),
-		"notes":                fmt.Sprintf("Auto-posted from vendor bill %s", firstNonEmptyString(bill.Header.Number, bill.Header.ID)),
-	}
-	if s.finance != nil {
-		if err := s.finance.ValidatePostingDateOpen(bill.Header.OrganizationID, bill.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+	if !postingLinked {
+		postingPayload := map[string]any{
+			"source_document_type": bill.Header.Type,
+			"source_document_id":   bill.Header.ID,
+			"posting_date":         time.Now().UTC().Format("2006-01-02"),
+			"currency_code":        firstNonEmptyString(textValue(payload["currency_code"]), bill.Header.TotalAmount.Currency, "IDR"),
+			"posting_rule_key":     "vendor_bill_issue_default",
+			"total_amount":         totalAmount,
+			"journal_lines":        s.vendorBillPostingLinesFromBreakdown(payload, breakdown),
+			"notes":                fmt.Sprintf("Auto-posted from vendor bill %s", firstNonEmptyString(bill.Header.Number, bill.Header.ID)),
+		}
+		if s.finance != nil {
+			if err := s.finance.ValidatePostingDateOpen(bill.Header.OrganizationID, bill.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+				return err
+			}
+		}
+		posting, err := s.documents.Create("ledger_posting", bill.Header.OrganizationID, bill.Header.LocationID, actorID, postingPayload)
+		if err != nil {
+			return err
+		}
+		if err := s.finalizeSystemPosting(posting, actorID, "posted"); err != nil {
+			return err
+		}
+		if _, err := s.documents.AddLink(posting.Header.ID, bill.Header.ID, "posting_for", map[string]any{"posting_reason": "vendor_bill_issue"}); err != nil {
+			return err
+		}
+		if _, err := s.documents.AddLink(bill.Header.ID, posting.Header.ID, "posting_for", map[string]any{"posting_reason": "vendor_bill_issue"}); err != nil {
 			return err
 		}
 	}
-	posting, err := s.documents.Create("ledger_posting", bill.Header.OrganizationID, bill.Header.LocationID, actorID, postingPayload)
-	if err != nil {
-		return err
+	if !costApplied {
+		if err := s.applyReceiptBackedCostAdjustments(bill.Header.ID, bill.Header.OrganizationID, bill.Header.LocationID, payload, actorID); err != nil {
+			return err
+		}
 	}
-	if err := s.finalizeSystemPosting(posting, actorID, "posted"); err != nil {
-		return err
-	}
-	if _, err := s.documents.AddLink(posting.Header.ID, bill.Header.ID, "posting_for", map[string]any{"posting_reason": "vendor_bill_issue"}); err != nil {
-		return err
-	}
-	_, err = s.documents.AddLink(bill.Header.ID, posting.Header.ID, "posting_for", map[string]any{"posting_reason": "vendor_bill_issue"})
-	return err
+	return nil
 }
 
 func (s *ProcurementCoreService) handlePaidOut(payment document.Record, actorID string) error {
@@ -1114,53 +1144,94 @@ func (s *ProcurementCoreService) bumpOrderBilledQuantities(orderID string, billL
 	return s.saveMutatedDocument(order, actorID, orderPayload)
 }
 
+type vendorBillCostBreakdown struct {
+	debitByAccount         map[string]float64
+	taxAmount              float64
+	totalAmount            float64
+	payableAccount         string
+	varianceTotal          float64
+	landedCostCapitalized  float64
+	inventoryAdjustedTotal float64
+}
+
 func (s *ProcurementCoreService) vendorBillPostingLines(payload map[string]any) []map[string]any {
+	breakdown := s.vendorBillCostBreakdown("", "", payload)
+	return s.vendorBillPostingLinesFromBreakdown(payload, breakdown)
+}
+
+func (s *ProcurementCoreService) vendorBillPostingLinesFromBreakdown(payload map[string]any, breakdown vendorBillCostBreakdown) []map[string]any {
+	lines := make([]map[string]any, 0, len(breakdown.debitByAccount)+2)
+	for accountCode, amount := range breakdown.debitByAccount {
+		if amount == 0 {
+			continue
+		}
+		lines = append(lines, map[string]any{
+			"account_code": accountCode,
+			"description":  "Expense / Inventory / Variance",
+			"debit":        amount,
+			"credit":       0.0,
+		})
+	}
+	if breakdown.taxAmount > 0 {
+		lines = append(lines, map[string]any{
+			"account_code": firstNonEmptyString(s.resolveTaxAccount(payload), s.postingConfig()["vendor_bill_tax_account_code"], "2100-TAX"),
+			"description":  "Tax Receivable / Input Tax",
+			"debit":        breakdown.taxAmount,
+			"credit":       0.0,
+		})
+	}
+	lines = append(lines, map[string]any{
+		"account_code": breakdown.payableAccount,
+		"description":  "Accounts Payable",
+		"debit":        0.0,
+		"credit":       breakdown.totalAmount,
+	})
+	return lines
+}
+
+func (s *ProcurementCoreService) vendorBillCostBreakdown(organizationID, locationID string, payload map[string]any) vendorBillCostBreakdown {
 	taxAmount := roundMoney(numberValue(payload["tax_amount"]))
 	totalAmount := roundMoney(numberValue(payload["total_amount"]))
 	postingConfig := s.postingConfig()
 	payableAccount := firstNonEmptyString(textValue(payload["payable_account_code"]), postingConfig["vendor_bill_payable_account_code"], "2000-AP")
 	expenseAccount := firstNonEmptyString(s.resolveExpenseAccount(payload), postingConfig["vendor_bill_expense_account_code"], "5000-EXP")
 	inventoryAccountDefault := firstNonEmptyString(postingConfig["vendor_bill_inventory_account_code"], "1200-INV")
-	taxAccount := firstNonEmptyString(s.resolveTaxAccount(payload), postingConfig["vendor_bill_tax_account_code"], "2100-TAX")
+	varianceAccount := firstNonEmptyString(postingConfig["purchase_price_variance_account_code"], "5100-PPV")
 	debitByAccount := map[string]float64{}
+	varianceTotal := 0.0
+	receiptPayload := s.sourceReceiptPayload(payload)
 	for _, line := range recordList(payload["lines"]) {
 		lineSubtotal := roundMoney(numberValue(line["line_subtotal"]))
-		if lineSubtotal <= 0 {
+		allocatedLandedCost := roundMoney(numberValue(line["allocated_landed_cost"]))
+		if lineSubtotal <= 0 && allocatedLandedCost <= 0 {
 			continue
 		}
 		accountCode := expenseAccount
 		if s.shouldCapitalizeVendorBillLine(payload, line) {
 			accountCode = firstNonEmptyString(textValue(line["inventory_asset_account_code"]), inventoryAccountDefault)
+			provisionalTotal, inventoryAdjustment, purchaseVariance := s.receiptBackedLineCostPlan(organizationID, locationID, line, receiptPayload)
+			debitByAccount[accountCode] = roundMoney(debitByAccount[accountCode] + provisionalTotal + inventoryAdjustment)
+			varianceTotal = roundMoney(varianceTotal + purchaseVariance)
+			if purchaseVariance > 0 {
+				debitByAccount[varianceAccount] = roundMoney(debitByAccount[varianceAccount] + purchaseVariance)
+			} else if purchaseVariance < 0 {
+				debitByAccount[accountCode] = roundMoney(debitByAccount[accountCode] + purchaseVariance)
+				debitByAccount[varianceAccount] = roundMoney(debitByAccount[varianceAccount] - purchaseVariance)
+			}
+			continue
 		}
-		debitByAccount[accountCode] = roundMoney(debitByAccount[accountCode] + lineSubtotal)
+		debitByAccount[accountCode] = roundMoney(debitByAccount[accountCode] + lineSubtotal + allocatedLandedCost)
 	}
 	if len(debitByAccount) == 0 {
 		debitByAccount[expenseAccount] = roundMoney(numberValue(payload["subtotal_amount"]))
 	}
-	lines := make([]map[string]any, 0, len(debitByAccount)+2)
-	for accountCode, amount := range debitByAccount {
-		lines = append(lines, map[string]any{
-			"account_code": accountCode,
-			"description":  "Expense / Inventory",
-			"debit":        amount,
-			"credit":       0.0,
-		})
+	return vendorBillCostBreakdown{
+		debitByAccount: debitByAccount,
+		taxAmount:      taxAmount,
+		totalAmount:    totalAmount,
+		payableAccount: payableAccount,
+		varianceTotal:  varianceTotal,
 	}
-	if taxAmount > 0 {
-		lines = append(lines, map[string]any{
-			"account_code": taxAccount,
-			"description":  "Tax Receivable / Input Tax",
-			"debit":        taxAmount,
-			"credit":       0.0,
-		})
-	}
-	lines = append(lines, map[string]any{
-		"account_code": payableAccount,
-		"description":  "Accounts Payable",
-		"debit":        0.0,
-		"credit":       totalAmount,
-	})
-	return lines
 }
 
 func (s *ProcurementCoreService) shouldCapitalizeVendorBillLine(payload map[string]any, line map[string]any) bool {
@@ -1168,6 +1239,130 @@ func (s *ProcurementCoreService) shouldCapitalizeVendorBillLine(payload map[stri
 		return false
 	}
 	return strings.TrimSpace(textValue(payload["source_goods_receipt_id"])) != ""
+}
+
+func (s *ProcurementCoreService) sourceReceiptPayload(payload map[string]any) map[string]any {
+	receiptID := strings.TrimSpace(textValue(payload["source_goods_receipt_id"]))
+	if receiptID == "" {
+		return nil
+	}
+	receipt, err := s.documents.Get(receiptID)
+	if err != nil || receipt.Header.Type != "goods_receipt" {
+		return nil
+	}
+	return clonedPayload(receipt.Body.Payload)
+}
+
+func (s *ProcurementCoreService) receiptBackedLineCostPlan(organizationID, locationID string, line map[string]any, receiptPayload map[string]any) (float64, float64, float64) {
+	quantity := roundMoney(numberValue(line["quantity"]))
+	if quantity <= 0 {
+		quantity = roundMoney(numberValue(line["billed_qty"]))
+	}
+	if quantity <= 0 {
+		quantity = 1
+	}
+	provisionalUnit := firstPositiveNumber(line["receipt_unit_cost"])
+	if provisionalUnit <= 0 {
+		provisionalUnit = s.lookupReceiptUnitCost(line, receiptPayload)
+	}
+	billedTotal := roundMoney(numberValue(line["line_subtotal"]) + numberValue(line["allocated_landed_cost"]))
+	provisionalTotal := roundMoney(quantity * provisionalUnit)
+	varianceTotal := roundMoney(billedTotal - provisionalTotal)
+	if varianceTotal == 0 {
+		return provisionalTotal, 0, 0
+	}
+	onHandQty := quantity
+	if s.inventory != nil {
+		onHandQty = minFloat(quantity, s.inventory.CurrentOnHandQuantity(
+			organizationID,
+			locationID,
+			textValue(line["item_code"]),
+			textValue(line["warehouse_code"]),
+			textValue(line["batch_code"]),
+		))
+	}
+	inventoryAdjustment := 0.0
+	if quantity > 0 && onHandQty > 0 {
+		inventoryAdjustment = roundMoney(varianceTotal * onHandQty / quantity)
+	}
+	return provisionalTotal, inventoryAdjustment, roundMoney(varianceTotal - inventoryAdjustment)
+}
+
+func (s *ProcurementCoreService) lookupReceiptUnitCost(line map[string]any, receiptPayload map[string]any) float64 {
+	if receiptPayload == nil {
+		return 0
+	}
+	rows := recordList(receiptPayload["lines"])
+	indexValue := line["source_goods_receipt_line_index"]
+	if textValue(indexValue) != "" || numberValue(indexValue) != 0 {
+		index := int(numberValue(indexValue))
+		if index >= 0 && index < len(rows) {
+			return roundMoney(firstPositiveNumber(rows[index]["effective_unit_cost"], rows[index]["unit_cost"], rows[index]["unit_price"]))
+		}
+	}
+	itemCode := textValue(line["item_code"])
+	warehouseCode := textValue(line["warehouse_code"])
+	batchCode := textValue(line["batch_code"])
+	for _, row := range rows {
+		if textValue(row["item_code"]) != itemCode {
+			continue
+		}
+		if warehouseCode != "" && textValue(row["warehouse_code"]) != warehouseCode {
+			continue
+		}
+		if batchCode != "" && textValue(row["batch_code"]) != batchCode {
+			continue
+		}
+		return roundMoney(firstPositiveNumber(row["effective_unit_cost"], row["unit_cost"], row["unit_price"]))
+	}
+	return 0
+}
+
+func (s *ProcurementCoreService) applyReceiptBackedCostAdjustments(billID, organizationID, locationID string, payload map[string]any, actorID string) error {
+	if s.inventory == nil || strings.TrimSpace(textValue(payload["source_goods_receipt_id"])) == "" {
+		return nil
+	}
+	receiptPayload := s.sourceReceiptPayload(payload)
+	for _, line := range recordList(payload["lines"]) {
+		if !s.shouldCapitalizeVendorBillLine(payload, line) {
+			continue
+		}
+		_, inventoryAdjustment, _ := s.receiptBackedLineCostPlan(organizationID, locationID, line, receiptPayload)
+		if inventoryAdjustment == 0 {
+			continue
+		}
+		if err := s.inventory.ApplyCostAdjustment(actorID, organizationID, locationID, map[string]any{
+			"item_code":            textValue(line["item_code"]),
+			"warehouse_code":       textValue(line["warehouse_code"]),
+			"batch_code":           textValue(line["batch_code"]),
+			"source_document_type": "vendor_bill",
+			"source_document_id":   billID,
+			"event_type":           "vendor_bill_variance",
+			"quantity_basis":       roundMoney(numberValue(line["quantity"])),
+			"unit_cost":            0.0,
+			"total_cost":           inventoryAdjustment,
+			"currency_code":        firstNonEmptyString(textValue(payload["currency_code"]), "IDR"),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ProcurementCoreService) hasReceiptBackedCostAdjustmentApplied(billID string) bool {
+	if s.models == nil || strings.TrimSpace(billID) == "" {
+		return false
+	}
+	items, _, err := s.models.List("inventory_cost_layer", model.Query{
+		Filters: map[string]string{
+			"source_document_type": "vendor_bill",
+			"source_document_id":   strings.TrimSpace(billID),
+			"event_type":           "vendor_bill_variance",
+		},
+		Page:     1,
+		PageSize: 1,
+	})
+	return err == nil && len(items) > 0
 }
 
 func (s *ProcurementCoreService) paymentOutPostingLines(payload map[string]any) []map[string]any {
@@ -1195,16 +1390,17 @@ func (s *ProcurementCoreService) paymentOutPostingLines(payload map[string]any) 
 
 func (s *ProcurementCoreService) postingConfig() map[string]string {
 	defaults := map[string]string{
-		"vendor_bill_payable_account_code":    "2000-AP",
-		"vendor_bill_expense_account_code":    "5000-EXP",
-		"vendor_bill_inventory_account_code":  "1200-INV",
-		"vendor_bill_tax_account_code":        "2100-TAX",
-		"payment_out_clearing_account_code":   "1000-CASH",
-		"payment_out_payable_account_code":    "2000-AP",
-		"vendor_credit_payable_account_code":  "2000-AP",
-		"vendor_credit_expense_account_code":  "5000-EXP",
-		"vendor_credit_tax_account_code":      "2100-TAX",
-		"goods_receipt_clearing_account_code": "2050-GRIR",
+		"vendor_bill_payable_account_code":     "2000-AP",
+		"vendor_bill_expense_account_code":     "5000-EXP",
+		"vendor_bill_inventory_account_code":   "1200-INV",
+		"purchase_price_variance_account_code": "5100-PPV",
+		"vendor_bill_tax_account_code":         "2100-TAX",
+		"payment_out_clearing_account_code":    "1000-CASH",
+		"payment_out_payable_account_code":     "2000-AP",
+		"vendor_credit_payable_account_code":   "2000-AP",
+		"vendor_credit_expense_account_code":   "5000-EXP",
+		"vendor_credit_tax_account_code":       "2100-TAX",
+		"goods_receipt_clearing_account_code":  "2050-GRIR",
 	}
 	if s.config == nil {
 		return defaults
@@ -1259,6 +1455,8 @@ func (s *ProcurementCoreService) normalizeProcurementLines(payload map[string]an
 		}
 	}
 	rows := recordList(next["lines"])
+	landedCostRows, landedCostTotal := normalizeLandedCostLines(recordList(next["landed_cost_lines"]))
+	next["landed_cost_lines"] = landedCostRows
 	normalizedRows := make([]map[string]any, 0, len(rows))
 	subtotalAmount := 0.0
 	taxAmount := 0.0
@@ -1320,6 +1518,9 @@ func (s *ProcurementCoreService) normalizeProcurementLines(payload map[string]an
 		normalized["discount_amount"] = discountAmount
 		normalized["tax_rate"] = taxRate
 		normalized["tax_mode"] = taxMode
+		normalized["allocated_landed_cost"] = roundMoney(numberValue(normalized["allocated_landed_cost"]))
+		normalized["unit_landed_cost"] = roundMoney(numberValue(normalized["unit_landed_cost"]))
+		normalized["effective_unit_cost"] = roundMoney(firstPositiveNumber(normalized["effective_unit_cost"], unitPrice))
 		normalized["line_subtotal"] = lineSubtotal
 		normalized["tax_amount"] = lineTax
 		normalized["line_total"] = lineTotal
@@ -1328,10 +1529,13 @@ func (s *ProcurementCoreService) normalizeProcurementLines(payload map[string]an
 		totalAmount += lineTotal
 		normalizedRows = append(normalizedRows, normalized)
 	}
+	normalizedRows = s.allocateLandedCostToLines(normalizedRows, landedCostRows, "quantity")
 	next["lines"] = normalizedRows
-	next["subtotal_amount"] = roundMoney(subtotalAmount)
+	subtotalAmount, taxAmount, totalAmount = commercialLineTotals(normalizedRows)
+	next["landed_cost_amount"] = landedCostTotal
+	next["subtotal_amount"] = roundMoney(subtotalAmount + landedCostTotal)
 	next["tax_amount"] = roundMoney(taxAmount)
-	next["total_amount"] = roundMoney(totalAmount)
+	next["total_amount"] = roundMoney(totalAmount + landedCostTotal)
 	if strings.TrimSpace(textValue(next["currency_code"])) == "" {
 		next["currency_code"] = "IDR"
 	}
@@ -1360,6 +1564,8 @@ func (s *ProcurementCoreService) resolveVariantItemCode(productCode, variantSign
 func (s *ProcurementCoreService) normalizeReceiptLines(payload map[string]any) map[string]any {
 	next := document.NormalizePayload(cloneMap(payload))
 	rows := recordList(next["lines"])
+	landedCostRows, landedCostTotal := normalizeLandedCostLines(recordList(next["landed_cost_lines"]))
+	next["landed_cost_lines"] = landedCostRows
 	totalAmount := 0.0
 	normalizedRows := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
@@ -1371,12 +1577,29 @@ func (s *ProcurementCoreService) normalizeReceiptLines(payload map[string]any) m
 		if receiptQty < 0 {
 			receiptQty = 0
 		}
-		lineTotal := roundMoney(numberValue(normalized["line_total"]))
+		unitPrice := roundMoney(numberValue(normalized["unit_price"]))
+		discountAmount := roundMoney(numberValue(normalized["discount_amount"]))
+		taxRate := roundMoney(numberValue(normalized["tax_rate"]))
+		taxMode := firstNonEmptyString(textValue(normalized["tax_mode"]), "exclusive")
+		grossAmount := roundMoney(maxFloat(receiptQty*unitPrice-discountAmount, 0))
+		lineSubtotal, lineTax, lineTotal := commercialTaxBreakdown(grossAmount, taxRate, taxMode)
 		normalized["receipt_qty"] = receiptQty
+		normalized["line_subtotal"] = lineSubtotal
+		normalized["tax_amount"] = lineTax
+		normalized["line_total"] = lineTotal
+		normalized["allocated_landed_cost"] = roundMoney(numberValue(normalized["allocated_landed_cost"]))
+		normalized["unit_landed_cost"] = roundMoney(numberValue(normalized["unit_landed_cost"]))
+		normalized["effective_unit_cost"] = roundMoney(firstPositiveNumber(normalized["effective_unit_cost"], unitPrice))
 		totalAmount += lineTotal
 		normalizedRows = append(normalizedRows, normalized)
 	}
+	normalizedRows = s.allocateLandedCostToLines(normalizedRows, landedCostRows, "receipt_qty")
 	next["lines"] = normalizedRows
+	totalAmount = landedCostTotal
+	for _, row := range normalizedRows {
+		totalAmount = roundMoney(totalAmount + numberValue(row["line_total"]))
+	}
+	next["landed_cost_amount"] = landedCostTotal
 	next["total_amount"] = roundMoney(totalAmount)
 	if strings.TrimSpace(textValue(next["currency_code"])) == "" {
 		next["currency_code"] = "IDR"
@@ -1421,6 +1644,82 @@ func (s *ProcurementCoreService) normalizeBillAllocations(payload map[string]any
 		next["clearing_account_code"] = s.lookupAccountCode("payment_method", "code", methodCode, "clearing_account_code")
 	}
 	return next
+}
+
+func normalizeLandedCostLines(rows []map[string]any) ([]map[string]any, float64) {
+	normalized := make([]map[string]any, 0, len(rows))
+	total := 0.0
+	for _, row := range rows {
+		next := cloneMap(row)
+		amount := roundMoney(numberValue(next["amount"]))
+		if amount <= 0 {
+			continue
+		}
+		next["amount"] = amount
+		next["allocation_basis"] = firstNonEmptyString(textValue(next["allocation_basis"]), "line_value")
+		total = roundMoney(total + amount)
+		normalized = append(normalized, next)
+	}
+	return normalized, total
+}
+
+func (s *ProcurementCoreService) allocateLandedCostToLines(lines []map[string]any, landedCostRows []map[string]any, qtyKey string) []map[string]any {
+	totalLanded := 0.0
+	for _, row := range landedCostRows {
+		totalLanded = roundMoney(totalLanded + numberValue(row["amount"]))
+	}
+	if totalLanded <= 0 || len(lines) == 0 {
+		for idx := range lines {
+			lines[idx]["allocated_landed_cost"] = roundMoney(numberValue(lines[idx]["allocated_landed_cost"]))
+			lines[idx]["unit_landed_cost"] = roundMoney(numberValue(lines[idx]["unit_landed_cost"]))
+			baseUnit := firstPositiveNumber(lines[idx]["unit_price"], lines[idx]["unit_cost"], lines[idx]["receipt_unit_cost"])
+			lines[idx]["effective_unit_cost"] = roundMoney(baseUnit + numberValue(lines[idx]["unit_landed_cost"]))
+		}
+		return lines
+	}
+	type eligibleLine struct {
+		index int
+		base  float64
+	}
+	eligible := make([]eligibleLine, 0)
+	baseTotal := 0.0
+	for idx, line := range lines {
+		if !s.isInventoryPurchaseLine(line) {
+			continue
+		}
+		base := roundMoney(numberValue(line["line_subtotal"]))
+		if base <= 0 {
+			base = roundMoney(numberValue(line[qtyKey]) * firstPositiveNumber(line["unit_price"], line["unit_cost"], line["receipt_unit_cost"]))
+		}
+		if base <= 0 {
+			continue
+		}
+		baseTotal = roundMoney(baseTotal + base)
+		eligible = append(eligible, eligibleLine{index: idx, base: base})
+	}
+	if len(eligible) == 0 || baseTotal <= 0 {
+		return lines
+	}
+	remaining := totalLanded
+	for pos, item := range eligible {
+		allocated := 0.0
+		if pos == len(eligible)-1 {
+			allocated = remaining
+		} else {
+			allocated = roundMoney(totalLanded * item.base / baseTotal)
+			remaining = roundMoney(remaining - allocated)
+		}
+		qty := roundMoney(numberValue(lines[item.index][qtyKey]))
+		unitLanded := 0.0
+		if qty > 0 {
+			unitLanded = roundMoney(allocated / qty)
+		}
+		baseUnit := firstPositiveNumber(lines[item.index]["unit_price"], lines[item.index]["unit_cost"], lines[item.index]["receipt_unit_cost"])
+		lines[item.index]["allocated_landed_cost"] = allocated
+		lines[item.index]["unit_landed_cost"] = unitLanded
+		lines[item.index]["effective_unit_cost"] = roundMoney(baseUnit + unitLanded)
+	}
+	return lines
 }
 
 func (s *ProcurementCoreService) applyVendorDefaults(payload map[string]any) map[string]any {

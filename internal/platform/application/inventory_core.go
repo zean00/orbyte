@@ -616,7 +616,7 @@ func (s *InventoryCoreService) handleApprovedGoodsReceipt(receipt document.Recor
 			"expiration_date":              textValue(line["expiration_date"]),
 			"quantity":                     qty,
 			"uom_code":                     firstNonEmptyString(textValue(line["uom_code"]), policy.UOMCode),
-			"unit_cost":                    firstPositiveNumber(line["unit_cost"], line["unit_price"]),
+			"unit_cost":                    firstPositiveNumber(line["effective_unit_cost"], line["unit_cost"], line["unit_price"]),
 			"currency_code":                firstNonEmptyString(textValue(line["currency_code"]), textValue(receipt.Body.Payload["currency_code"]), "IDR"),
 			"inventory_asset_account_code": firstNonEmptyString(textValue(line["inventory_asset_account_code"]), policy.InventoryAccount),
 			"cogs_account_code":            firstNonEmptyString(textValue(line["cogs_account_code"]), policy.COGSAccount),
@@ -1112,9 +1112,54 @@ func (s *InventoryCoreService) CurrentAverageUnitCost(organizationID, locationID
 	return roundMoney(snapshot.AverageUnitCost)
 }
 
+func (s *InventoryCoreService) CurrentOnHandQuantity(organizationID, locationID, itemCode, warehouseCode, batchCode string) float64 {
+	return roundMoney(s.sumBalance(s.currentBalances(organizationID, locationID), itemCode, warehouseCode, batchCode))
+}
+
 func (s *InventoryCoreService) CostAccounts(itemCode string) (string, string, string) {
 	policy := s.lookupItemPolicy(itemCode)
 	return policy.InventoryAccount, policy.COGSAccount, policy.WIPAccount
+}
+
+func (s *InventoryCoreService) ApplyCostAdjustment(actorID, organizationID, locationID string, values map[string]any) error {
+	if s.models == nil {
+		return nil
+	}
+	itemCode := textValue(values["item_code"])
+	warehouseCode := textValue(values["warehouse_code"])
+	if itemCode == "" || warehouseCode == "" {
+		return nil
+	}
+	totalCost := roundMoney(numberValue(values["total_cost"]))
+	if totalCost == 0 {
+		return nil
+	}
+	quantityBasis := roundMoney(numberValue(values["quantity_basis"]))
+	unitCost := roundMoney(numberValue(values["unit_cost"]))
+	if unitCost == 0 && quantityBasis > 0 {
+		unitCost = roundMoney(totalCost / quantityBasis)
+	}
+	movement := document.Record{
+		Header: document.Header{
+			OrganizationID: organizationID,
+			LocationID:     locationID,
+		},
+		Body: document.Body{
+			Payload: map[string]any{
+				"item_code":            itemCode,
+				"warehouse_code":       warehouseCode,
+				"batch_code":           textValue(values["batch_code"]),
+				"source_document_type": textValue(values["source_document_type"]),
+				"source_document_id":   textValue(values["source_document_id"]),
+				"movement_reason":      textValue(values["event_type"]),
+				"currency_code":        firstNonEmptyString(textValue(values["currency_code"]), "IDR"),
+			},
+		},
+	}
+	if err := s.recordCostLayer(movement, actorID, itemCode, warehouseCode, 0, unitCost, totalCost); err != nil {
+		return err
+	}
+	return s.applyValuationDelta(actorID, organizationID, locationID, itemCode, warehouseCode, 0, totalCost)
 }
 
 func (s *InventoryCoreService) currentBalances(organizationID, locationID string) []inventoryBalance {

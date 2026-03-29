@@ -583,7 +583,9 @@ func procurementReceiptSections() []module.SectionDefinition {
 		{Key: "vendor_name", Label: "Vendor", LabelI18n: localize("Vendor", "Vendor"), Path: "body.payload.vendor_name", Type: "string"},
 		{Key: "receipt_date", Label: "Receipt Date", LabelI18n: localize("Receipt Date", "Tanggal Penerimaan"), Path: "body.payload.receipt_date", Type: "string"},
 		{Key: "source_purchase_order_number", Label: "Source PO", LabelI18n: localize("Source PO", "PO Sumber"), Path: "body.payload.source_purchase_order_number", Type: "string"},
+		{Key: "landed_cost_amount", Label: "Landed Cost", LabelI18n: localize("Landed Cost", "Biaya Pendaratan"), Path: "body.payload.landed_cost_amount", Type: "number"},
 		{Key: "lines", Label: "Receipt Lines", LabelI18n: localize("Receipt Lines", "Baris Penerimaan"), Path: "body.payload.lines", Type: "object", Widget: "procurement_receipt_lines"},
+		{Key: "landed_cost_lines", Label: "Landed Cost Lines", LabelI18n: localize("Landed Cost Lines", "Baris Biaya Pendaratan"), Path: "body.payload.landed_cost_lines", Type: "object", Widget: "json"},
 	}}}
 }
 
@@ -594,6 +596,7 @@ func procurementReceiptFormSections() []module.SectionDefinition {
 		{Key: "receipt_date", Label: "Receipt Date", LabelI18n: localize("Receipt Date", "Tanggal Penerimaan"), Path: "body.payload.receipt_date", Type: "string", Widget: "text"},
 		{Key: "source_purchase_order_id", Label: "Source PO", LabelI18n: localize("Source PO", "PO Sumber"), Path: "body.payload.source_purchase_order_id", Type: "string", Widget: "text"},
 		{Key: "lines", Label: "Receipt Lines", LabelI18n: localize("Receipt Lines", "Baris Penerimaan"), Path: "body.payload.lines", Type: "object", Widget: "procurement_receipt_lines"},
+		{Key: "landed_cost_lines", Label: "Landed Cost Lines", LabelI18n: localize("Landed Cost Lines", "Baris Biaya Pendaratan"), Path: "body.payload.landed_cost_lines", Type: "object", Widget: "json"},
 		{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "body.payload.notes", Type: "string", Widget: "textarea"},
 	}}}
 }
@@ -607,11 +610,14 @@ func procurementBillSections() []module.SectionDefinition {
 		{Key: "due_date", Label: "Due Date", LabelI18n: localize("Due Date", "Jatuh Tempo"), Path: "body.payload.due_date", Type: "string"},
 		{Key: "source_purchase_order_number", Label: "Source PO", LabelI18n: localize("Source PO", "PO Sumber"), Path: "body.payload.source_purchase_order_number", Type: "string"},
 		{Key: "source_goods_receipt_number", Label: "Source Receipt", LabelI18n: localize("Source Receipt", "Penerimaan Sumber"), Path: "body.payload.source_goods_receipt_number", Type: "string"},
+		{Key: "landed_cost_amount", Label: "Landed Cost", LabelI18n: localize("Landed Cost", "Biaya Pendaratan"), Path: "body.payload.landed_cost_amount", Type: "number"},
+		{Key: "purchase_price_variance_amount", Label: "Purchase Variance", LabelI18n: localize("Purchase Variance", "Selisih Harga Beli"), Path: "body.payload.purchase_price_variance_amount", Type: "number"},
 		{Key: "total_amount", Label: "Total", LabelI18n: localize("Total", "Total"), Path: "body.payload.total_amount", Type: "number"},
 		{Key: "paid_amount", Label: "Paid", LabelI18n: localize("Paid", "Dibayar"), Path: "body.payload.paid_amount", Type: "number"},
 		{Key: "credited_amount", Label: "Credited", LabelI18n: localize("Credited", "Dikreditkan"), Path: "body.payload.credited_amount", Type: "number"},
 		{Key: "balance_due_amount", Label: "Balance Due", LabelI18n: localize("Balance Due", "Saldo Jatuh Tempo"), Path: "body.payload.balance_due_amount", Type: "number"},
 		{Key: "lines", Label: "Line Items", LabelI18n: localize("Line Items", "Baris"), Path: "body.payload.lines", Type: "object", Widget: "procurement_lines"},
+		{Key: "landed_cost_lines", Label: "Landed Cost Lines", LabelI18n: localize("Landed Cost Lines", "Baris Biaya Pendaratan"), Path: "body.payload.landed_cost_lines", Type: "object", Widget: "json"},
 	}}}
 }
 
@@ -628,6 +634,7 @@ func procurementBillFormSections() []module.SectionDefinition {
 		{Key: "payable_account_code", Label: "Payable Account", LabelI18n: localize("Payable Account", "Akun Utang"), Path: "body.payload.payable_account_code", Type: "string", Widget: "text"},
 		{Key: "expense_account_code", Label: "Expense Account", LabelI18n: localize("Expense Account", "Akun Beban"), Path: "body.payload.expense_account_code", Type: "string", Widget: "text"},
 		{Key: "lines", Label: "Line Items", LabelI18n: localize("Line Items", "Baris"), Path: "body.payload.lines", Type: "object", Widget: "procurement_lines"},
+		{Key: "landed_cost_lines", Label: "Landed Cost Lines", LabelI18n: localize("Landed Cost Lines", "Baris Biaya Pendaratan"), Path: "body.payload.landed_cost_lines", Type: "object", Widget: "json"},
 		{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "body.payload.notes", Type: "string", Widget: "textarea"},
 	}}}
 }

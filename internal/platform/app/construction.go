@@ -267,6 +267,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.financeReconcile = application.NewFinanceReconciliationCoreService(graph.documents, graph.models, graph.financeReporting)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.procurementCore.SetFinanceReporting(graph.financeReporting)
+	graph.procurementCore.SetInventoryCore(graph.inventoryCore)
 	graph.inventoryCore.SetFinanceReporting(graph.financeReporting)
 	graph.productionCore.SetFinanceReporting(graph.financeReporting)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
