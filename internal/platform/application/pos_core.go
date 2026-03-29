@@ -82,34 +82,36 @@ type POSTenderInput struct {
 }
 
 type POSHoldSaleInput struct {
-	SaleID        string             `json:"sale_id,omitempty"`
-	StoreCode     string             `json:"store_code"`
-	RegisterCode  string             `json:"register_code"`
-	ShiftID       string             `json:"shift_id"`
-	PartyID       string             `json:"party_id,omitempty"`
-	PartyName     string             `json:"party_name,omitempty"`
-	Notes         string             `json:"notes,omitempty"`
-	CheckoutMode  string             `json:"checkout_mode,omitempty"`
-	Lines         []POSCartLineInput `json:"lines"`
-	Tenders       []POSTenderInput   `json:"tenders,omitempty"`
-	Reference     string             `json:"reference,omitempty"`
-	DeviceID      string             `json:"device_id,omitempty"`
-	OfflineCached bool               `json:"offline_cached,omitempty"`
+	SaleID         string             `json:"sale_id,omitempty"`
+	StoreCode      string             `json:"store_code"`
+	RegisterCode   string             `json:"register_code"`
+	ShiftID        string             `json:"shift_id"`
+	PartyID        string             `json:"party_id,omitempty"`
+	PartyName      string             `json:"party_name,omitempty"`
+	Notes          string             `json:"notes,omitempty"`
+	CheckoutMode   string             `json:"checkout_mode,omitempty"`
+	Lines          []POSCartLineInput `json:"lines"`
+	Tenders        []POSTenderInput   `json:"tenders,omitempty"`
+	PromotionCodes []string           `json:"promotion_codes,omitempty"`
+	Reference      string             `json:"reference,omitempty"`
+	DeviceID       string             `json:"device_id,omitempty"`
+	OfflineCached  bool               `json:"offline_cached,omitempty"`
 }
 
 type POSCheckoutInput struct {
-	StoreCode     string             `json:"store_code"`
-	RegisterCode  string             `json:"register_code"`
-	ShiftID       string             `json:"shift_id"`
-	PartyID       string             `json:"party_id,omitempty"`
-	PartyName     string             `json:"party_name,omitempty"`
-	Notes         string             `json:"notes,omitempty"`
-	CheckoutMode  string             `json:"checkout_mode,omitempty"`
-	Lines         []POSCartLineInput `json:"lines"`
-	Tenders       []POSTenderInput   `json:"tenders"`
-	Reference     string             `json:"reference,omitempty"`
-	DeviceID      string             `json:"device_id,omitempty"`
-	OfflineCached bool               `json:"offline_cached,omitempty"`
+	StoreCode      string             `json:"store_code"`
+	RegisterCode   string             `json:"register_code"`
+	ShiftID        string             `json:"shift_id"`
+	PartyID        string             `json:"party_id,omitempty"`
+	PartyName      string             `json:"party_name,omitempty"`
+	Notes          string             `json:"notes,omitempty"`
+	CheckoutMode   string             `json:"checkout_mode,omitempty"`
+	Lines          []POSCartLineInput `json:"lines"`
+	Tenders        []POSTenderInput   `json:"tenders"`
+	PromotionCodes []string           `json:"promotion_codes,omitempty"`
+	Reference      string             `json:"reference,omitempty"`
+	DeviceID       string             `json:"device_id,omitempty"`
+	OfflineCached  bool               `json:"offline_cached,omitempty"`
 }
 
 type POSCheckoutResult struct {
@@ -206,6 +208,8 @@ func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, qu
 			"price_list_code":  priceListCode,
 			"tax_profile_code": taxProfileCode,
 			"default_tax_code": defaultTaxCode,
+			"sales_channel":    "pos",
+			"store_code":       textValue(store.Values["code"]),
 			"lines": []map[string]any{{
 				"item_code": itemCode,
 				"quantity":  1,
@@ -303,7 +307,7 @@ func (s *POSCoreService) HoldSale(input POSHoldSaleInput, actorID string) (model
 	if err != nil {
 		return model.Record{}, err
 	}
-	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.Lines)
+	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.PromotionCodes, input.Lines)
 	if err != nil {
 		return model.Record{}, err
 	}
@@ -326,6 +330,7 @@ func (s *POSCoreService) HoldSale(input POSHoldSaleInput, actorID string) (model
 		"warehouse_code":       textValue(store.Values["warehouse_code"]),
 		"price_list_code":      textValue(orderPayload["price_list_code"]),
 		"tax_profile_code":     textValue(orderPayload["tax_profile_code"]),
+		"promotion_codes_json": marshalJSONString(anyStringSlice(orderPayload["promotion_codes"])),
 		"lines_json":           marshalJSONString(cartSummary),
 		"tenders_json":         marshalJSONString(input.Tenders),
 		"source_document_type": "",
@@ -390,7 +395,7 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 	if len(input.Tenders) == 0 {
 		return POSCheckoutResult{}, shared.Validation("pos sale requires at least one tender")
 	}
-	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.Lines)
+	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.PromotionCodes, input.Lines)
 	if err != nil {
 		return POSCheckoutResult{}, err
 	}
@@ -491,6 +496,7 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 		"warehouse_code":       textValue(store.Values["warehouse_code"]),
 		"price_list_code":      textValue(orderPayload["price_list_code"]),
 		"tax_profile_code":     textValue(orderPayload["tax_profile_code"]),
+		"promotion_codes_json": marshalJSONString(anyStringSlice(orderPayload["promotion_codes"])),
 		"lines_json":           marshalJSONString(cartSummary),
 		"tenders_json":         marshalJSONString(normalizedTenders),
 		"source_document_type": firstNonEmptyString(mapCheckoutPrimaryType(checkoutMode), "invoice"),
@@ -701,7 +707,7 @@ func (s *POSCoreService) normalizeTenders(inputs []POSTenderInput) ([]normalized
 	return items, roundMoney(total), nil
 }
 
-func (s *POSCoreService) buildOrderPayload(store model.Record, partyID, partyName, notes string, lines []POSCartLineInput) (map[string]any, []map[string]any, error) {
+func (s *POSCoreService) buildOrderPayload(store model.Record, partyID, partyName, notes string, promotionCodes []string, lines []POSCartLineInput) (map[string]any, []map[string]any, error) {
 	orderLines := make([]map[string]any, 0, len(lines))
 	for _, line := range lines {
 		if roundMoney(line.Quantity) <= 0 {
@@ -720,20 +726,41 @@ func (s *POSCoreService) buildOrderPayload(store model.Record, partyID, partyNam
 	if len(orderLines) == 0 {
 		return nil, nil, shared.Validation("pos sale requires at least one valid line")
 	}
+	now := s.businessTime()
 	payload := map[string]any{
 		"party_id":         strings.TrimSpace(partyID),
 		"party_name":       strings.TrimSpace(partyName),
-		"order_date":       time.Now().UTC().Format("2006-01-02"),
+		"order_date":       now.Format("2006-01-02"),
+		"order_datetime":   now.Format(time.RFC3339),
 		"price_list_code":  textValue(store.Values["price_list_code"]),
 		"tax_profile_code": textValue(store.Values["tax_profile_code"]),
 		"default_tax_code": textValue(store.Values["default_tax_code"]),
 		"currency_code":    firstNonEmptyString(textValue(store.Values["currency_code"]), "IDR"),
 		"reference":        firstNonEmptyString(textValue(store.Values["name"]), textValue(store.Values["code"])),
+		"sales_channel":    "pos",
+		"store_code":       textValue(store.Values["code"]),
+		"promotion_codes":  promotionCodes,
 		"notes":            notes,
 		"lines":            orderLines,
 	}
 	normalized := s.commercial.NormalizePayload("sales_order", payload)
 	return normalized, recordList(normalized["lines"]), nil
+}
+
+func (s *POSCoreService) businessTime() time.Time {
+	now := time.Now()
+	if s.commercial == nil {
+		return now
+	}
+	policy := s.commercial.discountPolicy()
+	if policy.TimeZone == "" {
+		return now
+	}
+	location, err := time.LoadLocation(policy.TimeZone)
+	if err != nil {
+		return now
+	}
+	return now.In(location)
 }
 
 func (s *POSCoreService) validateSaleContext(storeCode, registerCode, shiftID, actorID string) (model.Record, model.Record, model.Record, error) {

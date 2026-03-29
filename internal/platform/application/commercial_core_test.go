@@ -65,6 +65,230 @@ func TestGenerateInvoiceFromConfirmedOrder(t *testing.T) {
 	}
 }
 
+func TestGenerateInvoiceFromOrderPreservesDiscountedLines(t *testing.T) {
+	models := model.NewService()
+	docs := document.NewService()
+	mustRegisterCommercialModels(t, models)
+	mustRegisterCommercialDocumentTypes(t, docs)
+	service := NewCommercialCoreService(docs, config.NewService(), models, nil)
+
+	party, err := models.Create("party", "user_admin", map[string]any{
+		"name":          "Member Customer",
+		"member_status": "active",
+		"status":        "active",
+	})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                     "DISC-ITEM",
+		"name":                    "Discounted Item",
+		"kind":                    "simple",
+		"item_type":               "product",
+		"inventory_enabled":       true,
+		"inventory_tracking_mode": "quantity",
+		"unit_price":              100,
+		"tax_code":                "VAT11",
+		"revenue_account_code":    "4000-REV",
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("commercial_tax_code", "user_admin", map[string]any{
+		"code":             "VAT11",
+		"rate_percent":     11.0,
+		"mode":             "exclusive",
+		"tax_account_code": "2100-VATOUT",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create tax code: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":             "DISC10",
+		"name":             "Disc 10",
+		"scope":            "line",
+		"rule_kind":        "line_percent",
+		"item_codes":       "DISC-ITEM",
+		"member_statuses":  "active",
+		"discount_percent": 10,
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	orderPayload := service.NormalizePayload("sales_order", map[string]any{
+		"party_id":   party.ID,
+		"order_date": "2026-03-29",
+		"lines": []map[string]any{{
+			"item_code": "DISC-ITEM",
+			"quantity":  2.0,
+		}},
+	})
+	order, err := docs.Create("sales_order", "org_default", "loc_main", "user_admin", orderPayload)
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+	order.Header.Status = "confirmed"
+	order.Header.Number = "SO-DISC-001"
+	order.Header.UpdatedAt = time.Now().UTC()
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save order: %v", err)
+	}
+
+	invoice, err := service.GenerateInvoiceFromOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("generate invoice: %v", err)
+	}
+
+	orderLine := recordList(order.Body.Payload["lines"])[0]
+	invoiceLine := recordList(invoice.Body.Payload["lines"])[0]
+	if got, want := numberValue(invoice.Body.Payload["total_amount"]), numberValue(order.Body.Payload["total_amount"]); got != want {
+		t.Fatalf("expected invoice total %v to match order total %v", got, want)
+	}
+	if got, want := numberValue(invoice.Body.Payload["discount_amount_total"]), numberValue(order.Body.Payload["discount_amount_total"]); got != want {
+		t.Fatalf("expected invoice discount total %v to match order discount total %v", got, want)
+	}
+	if got, want := numberValue(invoiceLine["discount_amount"]), numberValue(orderLine["discount_amount"]); got != want {
+		t.Fatalf("expected invoice line discount %v to match order line discount %v", got, want)
+	}
+	if got, want := numberValue(invoiceLine["auto_discount_amount"]), numberValue(orderLine["auto_discount_amount"]); got != want {
+		t.Fatalf("expected invoice auto discount %v to match order auto discount %v", got, want)
+	}
+}
+
+func TestNormalizeCommercialLinesAppliesPromotionCodeForScopedCampaign(t *testing.T) {
+	models := model.NewService()
+	docs := document.NewService()
+	mustRegisterCommercialModels(t, models)
+	mustRegisterCommercialDocumentTypes(t, docs)
+	service := NewCommercialCoreService(docs, config.NewService(), models, nil)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                  "PROMO-ITEM",
+		"name":                 "Promo Item",
+		"kind":                 "simple",
+		"item_type":            "product",
+		"unit_price":           100,
+		"tax_code":             "VAT11",
+		"revenue_account_code": "4000-REV",
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("commercial_tax_code", "user_admin", map[string]any{
+		"code":             "VAT11",
+		"name":             "VAT 11",
+		"rate_percent":     11.0,
+		"mode":             "exclusive",
+		"tax_account_code": "2100-VATOUT",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create tax code: %v", err)
+	}
+	if _, err := models.Create("promotion_campaign", "user_admin", map[string]any{
+		"code":           "LUNCH",
+		"name":           "Lunch Promo",
+		"trigger_mode":   "code",
+		"sales_channels": "pos",
+		"store_codes":    "STORE1",
+		"status":         "active",
+	}); err != nil {
+		t.Fatalf("create campaign: %v", err)
+	}
+	if _, err := models.Create("promotion_code", "user_admin", map[string]any{
+		"code":                    "LUNCH10",
+		"promotion_campaign_code": "LUNCH",
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create code: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":                    "PROMO-LINE10",
+		"name":                    "Promo Line 10",
+		"promotion_campaign_code": "LUNCH",
+		"scope":                   "line",
+		"rule_kind":               "line_percent",
+		"item_codes":              "PROMO-ITEM",
+		"discount_percent":        10,
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create discount rule: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"sales_channel":   "pos",
+		"store_code":      "STORE1",
+		"promotion_codes": []string{"LUNCH10"},
+		"order_datetime":  "2026-03-29T12:30:00+07:00",
+		"lines": []map[string]any{{
+			"item_code": "PROMO-ITEM",
+			"quantity":  1,
+		}},
+	})
+	if got := numberValue(normalized["discount_amount_total"]); got != 10 {
+		t.Fatalf("expected promotion discount 10, got %v", got)
+	}
+	if len(recordList(normalized["promotion_breakdown"])) == 0 {
+		t.Fatal("expected promotion breakdown on normalized payload")
+	}
+	line := firstRecord(normalized["lines"])
+	if got := textValue(firstRecord(recordList(line["promotion_breakdown"]))["promotion_code"]); got != "LUNCH10" {
+		t.Fatalf("expected applied promo code LUNCH10, got %q", got)
+	}
+}
+
+func TestRecordPromotionRedemptionsSumsMatchingPromotionDiscounts(t *testing.T) {
+	models := model.NewService()
+	docs := document.NewService()
+	mustRegisterCommercialModels(t, models)
+	mustRegisterCommercialDocumentTypes(t, docs)
+	service := NewCommercialCoreService(docs, config.NewService(), models, nil)
+
+	invoice, err := docs.Create("invoice", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_id":      "party_1",
+		"sales_channel": "pos",
+		"store_code":    "STORE1",
+		"promotion_breakdown": []map[string]any{
+			{
+				"rules": []map[string]any{
+					{
+						"promotion_campaign_code": "PROMO1",
+						"promotion_code":          "PROMO-CODE",
+						"discount_value":          10.0,
+					},
+				},
+			},
+			{
+				"rules": []map[string]any{
+					{
+						"promotion_campaign_code": "PROMO1",
+						"promotion_code":          "PROMO-CODE",
+						"discount_value":          5.0,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create invoice: %v", err)
+	}
+
+	if err := service.recordPromotionRedemptions(invoice, "user_admin"); err != nil {
+		t.Fatalf("record promotion redemptions: %v", err)
+	}
+
+	items, _, err := models.List("promotion_redemption", model.Query{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("list redemptions: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 promotion redemption, got %d", len(items))
+	}
+	if got := numberValue(items[0].Values["discount_amount_total"]); got != 15 {
+		t.Fatalf("expected aggregated redemption discount 15, got %v", got)
+	}
+}
+
 func TestGenerateAndApproveCreditNoteFromIssuedInvoice(t *testing.T) {
 	docs := document.NewService()
 	mustRegisterCommercialDocumentTypes(t, docs)
@@ -163,16 +387,16 @@ func TestCreatePaymentReceiptFromInvoiceCopiesReceivableAccount(t *testing.T) {
 		"balance_due_amount":      39.96,
 		"receivable_account_code": "1105-AR-TRADE",
 		"lines": []map[string]any{{
-			"item_code":             "BURGER",
-			"description":           "Burger",
-			"quantity":              3.0,
-			"unit_price":            12.0,
-			"tax_rate":              11.0,
-			"line_subtotal":         36.0,
-			"tax_amount":            3.96,
-			"line_total":            39.96,
-			"revenue_account_code":  "4000-REV",
-			"tax_account_code":      "2100-VAT",
+			"item_code":            "BURGER",
+			"description":          "Burger",
+			"quantity":             3.0,
+			"unit_price":           12.0,
+			"tax_rate":             11.0,
+			"line_subtotal":        36.0,
+			"tax_amount":           3.96,
+			"line_total":           39.96,
+			"revenue_account_code": "4000-REV",
+			"tax_account_code":     "2100-VAT",
 		}},
 	})
 	if err != nil {
@@ -1569,6 +1793,378 @@ func TestReceivablesSummaryScopedByLocation(t *testing.T) {
 	}
 }
 
+func TestNormalizeCommercialLinesAppliesVariantAndBulkDiscountRules(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	configSvc := config.NewService()
+	service := NewCommercialCoreService(document.NewService(), configSvc, models, nil)
+
+	if _, err := models.Create("commercial_product", "user_admin", map[string]any{
+		"code": "TEE",
+		"name": "Tee",
+	}); err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "TEE-BLACK-M",
+		"name":              "Tee Black M",
+		"product_code":      "TEE",
+		"variant_signature": "color=black|size=m",
+		"category_code":     "APPAREL",
+		"kind":              "variant",
+		"item_type":         "product",
+		"unit_price":        100,
+		"status":            "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":               "VAR10",
+		"name":               "Variant 10",
+		"scope":              "line",
+		"rule_kind":          "line_percent",
+		"variant_signatures": "color=black|size=m",
+		"discount_percent":   10,
+		"priority":           10,
+		"status":             "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":                  "BULK5",
+		"name":                  "Bulk 5",
+		"scope":                 "line",
+		"rule_kind":             "bulk_percent",
+		"item_codes":            "TEE-BLACK-M",
+		"minimum_line_quantity": 5,
+		"discount_percent":      5,
+		"priority":              20,
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+	if err := configSvc.Save(config.Entry{
+		Key:       "discount.policy",
+		Scope:     "deployment",
+		Value:     map[string]any{"stacking_mode": "fully_stackable", "time_zone": "Asia/Jakarta"},
+		UpdatedAt: time.Now().UTC(),
+		UpdatedBy: "user_admin",
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"order_date": "2026-03-29",
+		"lines": []map[string]any{{
+			"item_code":         "TEE-BLACK-M",
+			"product_code":      "TEE",
+			"variant_signature": "color=black|size=m",
+			"quantity":          5.0,
+		}},
+	})
+
+	lines := recordList(normalized["lines"])
+	if got := numberValue(lines[0]["discount_amount"]); got != 75 {
+		t.Fatalf("expected stacked discount 75, got %v", got)
+	}
+	if got := numberValue(normalized["discount_amount_total"]); got != 75 {
+		t.Fatalf("expected discount total 75, got %v", got)
+	}
+}
+
+func TestNormalizeCommercialLinesAppliesBuyXGetYRule(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(document.NewService(), config.NewService(), models, nil)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":        "SNACK",
+		"name":       "Snack",
+		"kind":       "simple",
+		"item_type":  "product",
+		"unit_price": 10,
+		"status":     "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":            "B2G1",
+		"name":            "Buy 2 Get 1",
+		"scope":           "line",
+		"rule_kind":       "bxgy",
+		"item_codes":      "SNACK",
+		"buy_quantity":    2,
+		"reward_quantity": 1,
+		"reward_percent":  100,
+		"status":          "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"order_date": "2026-03-29",
+		"lines": []map[string]any{{
+			"item_code": "SNACK",
+			"quantity":  3.0,
+		}},
+	})
+	lines := recordList(normalized["lines"])
+	if got := numberValue(lines[0]["discount_amount"]); got != 10 {
+		t.Fatalf("expected bxgy discount 10, got %v", got)
+	}
+}
+
+func TestNormalizeCommercialLinesDoesNotCompoundAutoDiscountOnRenormalize(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(document.NewService(), config.NewService(), models, nil)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":        "AUTO-DISC",
+		"name":       "Auto Disc",
+		"kind":       "simple",
+		"item_type":  "product",
+		"unit_price": 100,
+		"status":     "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":             "AUTO10",
+		"name":             "Auto 10",
+		"scope":            "line",
+		"rule_kind":        "line_percent",
+		"item_codes":       "AUTO-DISC",
+		"discount_percent": 10,
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	first := service.NormalizePayload("sales_order", map[string]any{
+		"order_date": "2026-03-29",
+		"lines": []map[string]any{{
+			"item_code": "AUTO-DISC",
+			"quantity":  1.0,
+		}},
+	})
+	second := service.NormalizePayload("sales_order", first)
+	firstLine := recordList(first["lines"])[0]
+	secondLine := recordList(second["lines"])[0]
+	if got := numberValue(firstLine["discount_amount"]); got != 10 {
+		t.Fatalf("expected first discount 10, got %v", got)
+	}
+	if got := numberValue(secondLine["discount_amount"]); got != 10 {
+		t.Fatalf("expected re-normalized discount to stay 10, got %v", got)
+	}
+	if got := numberValue(secondLine["manual_discount_amount"]); got != 0 {
+		t.Fatalf("expected manual discount seed 0, got %v", got)
+	}
+}
+
+func TestDiscountEvaluationTimePrefersCurrentOrderTimestamp(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(document.NewService(), config.NewService(), models, nil)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":        "TIME-DISC",
+		"name":       "Time Disc",
+		"kind":       "simple",
+		"item_type":  "product",
+		"unit_price": 100,
+		"status":     "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":             "LUNCH10",
+		"name":             "Lunch 10",
+		"scope":            "line",
+		"rule_kind":        "line_percent",
+		"item_codes":       "TIME-DISC",
+		"discount_percent": 10,
+		"weekdays":         "sunday",
+		"start_time":       "12:00",
+		"end_time":         "15:00",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"order_date":            "2026-03-29",
+		"order_datetime":        "2026-03-29T13:00:00+07:00",
+		"discount_evaluated_at": "2026-03-29T09:00:00+07:00",
+		"lines": []map[string]any{{
+			"item_code": "TIME-DISC",
+			"quantity":  1.0,
+		}},
+	})
+	line := recordList(normalized["lines"])[0]
+	if got := numberValue(line["discount_amount"]); got != 10 {
+		t.Fatalf("expected rule to use current order timestamp and discount 10, got %v", got)
+	}
+}
+
+func TestWithinClockWindowSupportsOvernightWindow(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	atLate := time.Date(2026, 3, 29, 23, 30, 0, 0, loc)
+	atEarly := time.Date(2026, 3, 30, 1, 30, 0, 0, loc)
+	atOutside := time.Date(2026, 3, 30, 3, 0, 0, 0, loc)
+
+	if !withinClockWindow(atLate, "22:00", "02:00") {
+		t.Fatalf("expected 23:30 to match overnight window")
+	}
+	if !withinClockWindow(atEarly, "22:00", "02:00") {
+		t.Fatalf("expected 01:30 to match overnight window")
+	}
+	if withinClockWindow(atOutside, "22:00", "02:00") {
+		t.Fatalf("expected 03:00 to fall outside overnight window")
+	}
+}
+
+func TestNormalizeCommercialLinesAppliesMemberAndOrderExclusionDiscounts(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	configSvc := config.NewService()
+	service := NewCommercialCoreService(document.NewService(), configSvc, models, nil)
+
+	if err := configSvc.Save(config.Entry{
+		Key:       "discount.policy",
+		Scope:     "deployment",
+		Value:     map[string]any{"stacking_mode": "stack_by_scope", "time_zone": "Asia/Jakarta"},
+		UpdatedAt: time.Now().UTC(),
+		UpdatedBy: "user_admin",
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	party, err := models.Create("party", "user_admin", map[string]any{
+		"name":          "Alice",
+		"member_status": "active",
+		"member_tier":   "gold",
+		"status":        "active",
+	})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	for _, item := range []map[string]any{
+		{"sku": "MEMBER-ITEM", "name": "Member Item", "kind": "simple", "item_type": "product", "unit_price": 100, "category_code": "APPAREL", "status": "active"},
+		{"sku": "EXCLUDED", "name": "Excluded Item", "kind": "simple", "item_type": "product", "unit_price": 50, "category_code": "APPAREL", "status": "active"},
+	} {
+		if _, err := models.Create("commercial_item", "user_admin", item); err != nil {
+			t.Fatalf("create item: %v", err)
+		}
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":             "MEMBER5",
+		"name":             "Member 5",
+		"scope":            "line",
+		"rule_kind":        "line_percent",
+		"member_statuses":  "active",
+		"item_codes":       "MEMBER-ITEM",
+		"discount_percent": 5,
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":                "ORDER10",
+		"name":                "Order 10",
+		"scope":               "order",
+		"rule_kind":           "order_percent",
+		"discount_percent":    10,
+		"excluded_item_codes": "EXCLUDED",
+		"status":              "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"party_id":   party.ID,
+		"order_date": "2026-03-29",
+		"lines": []map[string]any{
+			{"item_code": "MEMBER-ITEM", "quantity": 1.0},
+			{"item_code": "EXCLUDED", "quantity": 1.0},
+		},
+	})
+	lines := recordList(normalized["lines"])
+	if got := numberValue(lines[0]["discount_amount"]); got != 15 {
+		t.Fatalf("expected member item discount 15, got %v", got)
+	}
+	if got := numberValue(lines[1]["discount_amount"]); got != 0 {
+		t.Fatalf("expected excluded line discount 0, got %v", got)
+	}
+}
+
+func TestNormalizeCommercialLinesAppliesTimeAndCategoryDiscount(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	configSvc := config.NewService()
+	service := NewCommercialCoreService(document.NewService(), configSvc, models, nil)
+
+	if err := configSvc.Save(config.Entry{
+		Key:       "discount.policy",
+		Scope:     "deployment",
+		Value:     map[string]any{"stacking_mode": "best_one_only", "time_zone": "Asia/Jakarta"},
+		UpdatedAt: time.Now().UTC(),
+		UpdatedBy: "user_admin",
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":           "LUNCH-ITEM",
+		"name":          "Lunch Item",
+		"kind":          "simple",
+		"item_type":     "product",
+		"unit_price":    100,
+		"category_code": "FOOD",
+		"status":        "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":             "LUNCH20",
+		"name":             "Lunch 20",
+		"scope":            "line",
+		"rule_kind":        "line_percent",
+		"item_codes":       "LUNCH-ITEM",
+		"weekdays":         "monday,tuesday,wednesday,thursday,friday",
+		"start_time":       "12:00",
+		"end_time":         "15:00",
+		"discount_percent": 20,
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":             "FOOD10",
+		"name":             "Food 10",
+		"scope":            "line",
+		"rule_kind":        "category_percent",
+		"category_codes":   "FOOD",
+		"discount_percent": 10,
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"order_datetime": "2026-03-27T13:00:00+07:00",
+		"lines": []map[string]any{{
+			"item_code": "LUNCH-ITEM",
+			"quantity":  1.0,
+		}},
+	})
+	lines := recordList(normalized["lines"])
+	if got := numberValue(lines[0]["discount_amount"]); got != 20 {
+		t.Fatalf("expected best-one time discount 20, got %v", got)
+	}
+}
+
 func mustRegisterCommercialDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{
@@ -1597,6 +2193,11 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 				{Key: "display_name", Type: "string"},
 				{Key: "email", Type: "string"},
 				{Key: "currency_code", Type: "string"},
+				{Key: "customer_type", Type: "string"},
+				{Key: "member_status", Type: "string"},
+				{Key: "member_tier", Type: "string"},
+				{Key: "member_valid_from", Type: "string"},
+				{Key: "member_valid_to", Type: "string"},
 				{Key: "tax_profile_code", Type: "string"},
 				{Key: "default_price_list_code", Type: "string"},
 				{Key: "payment_term_days", Type: "number"},
@@ -1629,6 +2230,7 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 				{Key: "product_code", Type: "string"},
 				{Key: "is_variant", Type: "bool"},
 				{Key: "variant_signature", Type: "string"},
+				{Key: "category_code", Type: "string"},
 				{Key: "item_type", Type: "string"},
 				{Key: "kind", Type: "string", Required: true},
 				{Key: "uom_code", Type: "string"},
@@ -1662,6 +2264,99 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 				{Key: "currency_code", Type: "string"},
 				{Key: "tax_code", Type: "string"},
 				{Key: "revenue_account_code", Type: "string"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "discount_rule",
+			DisplayName: "Discount Rule",
+			DefaultSort: "priority",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "name", Type: "string", Required: true},
+				{Key: "promotion_campaign_code", Type: "string"},
+				{Key: "campaign_name", Type: "string"},
+				{Key: "event_code", Type: "string"},
+				{Key: "scope", Type: "string"},
+				{Key: "rule_kind", Type: "string"},
+				{Key: "priority", Type: "number"},
+				{Key: "start_at", Type: "string"},
+				{Key: "end_at", Type: "string"},
+				{Key: "weekdays", Type: "string"},
+				{Key: "start_time", Type: "string"},
+				{Key: "end_time", Type: "string"},
+				{Key: "party_ids", Type: "string"},
+				{Key: "customer_types", Type: "string"},
+				{Key: "member_statuses", Type: "string"},
+				{Key: "member_tiers", Type: "string"},
+				{Key: "item_codes", Type: "string"},
+				{Key: "product_codes", Type: "string"},
+				{Key: "variant_signatures", Type: "string"},
+				{Key: "category_codes", Type: "string"},
+				{Key: "reward_item_codes", Type: "string"},
+				{Key: "excluded_item_codes", Type: "string"},
+				{Key: "excluded_product_codes", Type: "string"},
+				{Key: "excluded_category_codes", Type: "string"},
+				{Key: "minimum_order_total", Type: "number"},
+				{Key: "minimum_line_quantity", Type: "number"},
+				{Key: "buy_quantity", Type: "number"},
+				{Key: "reward_quantity", Type: "number"},
+				{Key: "discount_percent", Type: "number"},
+				{Key: "discount_amount", Type: "number"},
+				{Key: "fixed_price", Type: "number"},
+				{Key: "reward_percent", Type: "number"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "promotion_campaign",
+			DisplayName: "Promotion Campaign",
+			DefaultSort: "code",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "name", Type: "string", Required: true},
+				{Key: "trigger_mode", Type: "string"},
+				{Key: "start_at", Type: "string"},
+				{Key: "end_at", Type: "string"},
+				{Key: "sales_channels", Type: "string"},
+				{Key: "store_codes", Type: "string"},
+				{Key: "global_usage_cap", Type: "number"},
+				{Key: "per_customer_usage_cap", Type: "number"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "promotion_code",
+			DisplayName: "Promotion Code",
+			DefaultSort: "code",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "promotion_campaign_code", Type: "string", Required: true},
+				{Key: "start_at", Type: "string"},
+				{Key: "end_at", Type: "string"},
+				{Key: "party_ids", Type: "string"},
+				{Key: "member_statuses", Type: "string"},
+				{Key: "member_tiers", Type: "string"},
+				{Key: "total_redemption_limit", Type: "number"},
+				{Key: "per_customer_redemption_limit", Type: "number"},
+				{Key: "total_redemptions", Type: "number"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "promotion_redemption",
+			DisplayName: "Promotion Redemption",
+			DefaultSort: "redeemed_at",
+			Fields: []model.FieldDefinition{
+				{Key: "promotion_campaign_code", Type: "string", Required: true},
+				{Key: "promotion_code", Type: "string"},
+				{Key: "source_document_type", Type: "string", Required: true},
+				{Key: "source_document_id", Type: "string", Required: true},
+				{Key: "party_id", Type: "string"},
+				{Key: "sales_channel", Type: "string"},
+				{Key: "store_code", Type: "string"},
+				{Key: "discount_amount_total", Type: "number"},
+				{Key: "redeemed_at", Type: "string"},
 				{Key: "status", Type: "string"},
 			},
 		},

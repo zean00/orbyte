@@ -1073,6 +1073,51 @@
       "view_key": "delivery.orders.form"
     },
     {
+      "key": "discount.rules.detail",
+      "kind": "navigate",
+      "label": "Discount Rule Detail",
+      "label_i18n": {
+        "en": "Discount Rule Detail",
+        "id": "Detail Aturan Diskon"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "discount_rule.read"
+      ],
+      "route_path": "/discount/rules/detail",
+      "view_key": "discount.rules.detail"
+    },
+    {
+      "key": "discount.rules.form",
+      "kind": "navigate",
+      "label": "Discount Rule Form",
+      "label_i18n": {
+        "en": "Discount Rule Form",
+        "id": "Form Aturan Diskon"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "discount_rule.update"
+      ],
+      "route_path": "/discount/rules/form",
+      "view_key": "discount.rules.form"
+    },
+    {
+      "key": "discount.rules.list",
+      "kind": "navigate",
+      "label": "Discount Rules",
+      "label_i18n": {
+        "en": "Discount Rules",
+        "id": "Aturan Diskon"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "discount_rule.list"
+      ],
+      "route_path": "/discount/rules",
+      "view_key": "discount.rules.list"
+    },
+    {
       "flow_key": "documents.requests.intake",
       "key": "documents.requests.create",
       "kind": "navigate",
@@ -2649,6 +2694,141 @@
       "view_key": "production.work_centers.list"
     },
     {
+      "key": "promotion.campaigns.detail",
+      "kind": "navigate",
+      "label": "Promotion Campaign Detail",
+      "label_i18n": {
+        "en": "Promotion Campaign Detail",
+        "id": "Detail Kampanye Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_campaign.read"
+      ],
+      "route_path": "/promotion/campaigns/detail",
+      "view_key": "promotion.campaigns.detail"
+    },
+    {
+      "key": "promotion.campaigns.form",
+      "kind": "navigate",
+      "label": "Promotion Campaign Form",
+      "label_i18n": {
+        "en": "Promotion Campaign Form",
+        "id": "Form Kampanye Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_campaign.update"
+      ],
+      "route_path": "/promotion/campaigns/form",
+      "view_key": "promotion.campaigns.form"
+    },
+    {
+      "key": "promotion.campaigns.list",
+      "kind": "navigate",
+      "label": "Promotion Campaigns",
+      "label_i18n": {
+        "en": "Promotion Campaigns",
+        "id": "Kampanye Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_campaign.list"
+      ],
+      "route_path": "/promotion/campaigns",
+      "view_key": "promotion.campaigns.list"
+    },
+    {
+      "key": "promotion.codes.detail",
+      "kind": "navigate",
+      "label": "Promotion Code Detail",
+      "label_i18n": {
+        "en": "Promotion Code Detail",
+        "id": "Detail Kode Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_code.read"
+      ],
+      "route_path": "/promotion/codes/detail",
+      "view_key": "promotion.codes.detail"
+    },
+    {
+      "key": "promotion.codes.form",
+      "kind": "navigate",
+      "label": "Promotion Code Form",
+      "label_i18n": {
+        "en": "Promotion Code Form",
+        "id": "Form Kode Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_code.update"
+      ],
+      "route_path": "/promotion/codes/form",
+      "view_key": "promotion.codes.form"
+    },
+    {
+      "key": "promotion.codes.list",
+      "kind": "navigate",
+      "label": "Promotion Codes",
+      "label_i18n": {
+        "en": "Promotion Codes",
+        "id": "Kode Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_code.list"
+      ],
+      "route_path": "/promotion/codes",
+      "view_key": "promotion.codes.list"
+    },
+    {
+      "key": "promotion.redemptions.detail",
+      "kind": "navigate",
+      "label": "Promotion Redemption Detail",
+      "label_i18n": {
+        "en": "Promotion Redemption Detail",
+        "id": "Detail Redemption Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_redemption.read"
+      ],
+      "route_path": "/promotion/redemptions/detail",
+      "view_key": "promotion.redemptions.detail"
+    },
+    {
+      "key": "promotion.redemptions.form",
+      "kind": "navigate",
+      "label": "Promotion Redemption Form",
+      "label_i18n": {
+        "en": "Promotion Redemption Form",
+        "id": "Form Redemption Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_redemption.update"
+      ],
+      "route_path": "/promotion/redemptions/form",
+      "view_key": "promotion.redemptions.form"
+    },
+    {
+      "key": "promotion.redemptions.list",
+      "kind": "navigate",
+      "label": "Promotion Redemptions",
+      "label_i18n": {
+        "en": "Promotion Redemptions",
+        "id": "Redemption Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "promotion_redemption.list"
+      ],
+      "route_path": "/promotion/redemptions",
+      "view_key": "promotion.redemptions.list"
+    },
+    {
       "key": "recall.actions.detail",
       "kind": "navigate",
       "label": "Recall Action",
@@ -3449,6 +3629,19 @@
       ]
     },
     {
+      "action_key": "discount.rules.list",
+      "key": "discount.rules",
+      "label": "Discount Rules",
+      "label_i18n": {
+        "en": "Discount Rules",
+        "id": "Aturan Diskon"
+      },
+      "order": 28,
+      "required_permissions": [
+        "discount_rule.list"
+      ]
+    },
+    {
       "action_key": "commercial.price_list_items.list",
       "key": "commercial.price_list_items",
       "label": "Price List Items",
@@ -3459,6 +3652,19 @@
       "order": 29,
       "required_permissions": [
         "price_list_item.list"
+      ]
+    },
+    {
+      "action_key": "promotion.campaigns.list",
+      "key": "promotion.campaigns",
+      "label": "Promotion Campaigns",
+      "label_i18n": {
+        "en": "Promotion Campaigns",
+        "id": "Kampanye Promosi"
+      },
+      "order": 29,
+      "required_permissions": [
+        "promotion_campaign.list"
       ]
     },
     {
@@ -3501,6 +3707,19 @@
       ]
     },
     {
+      "action_key": "promotion.codes.list",
+      "key": "promotion.codes",
+      "label": "Promotion Codes",
+      "label_i18n": {
+        "en": "Promotion Codes",
+        "id": "Kode Promosi"
+      },
+      "order": 30,
+      "required_permissions": [
+        "promotion_code.list"
+      ]
+    },
+    {
       "action_key": "commercial.invoices.list",
       "key": "commercial.invoices",
       "label": "Invoices",
@@ -3524,6 +3743,19 @@
       "order": 31,
       "required_permissions": [
         "payment_method.list"
+      ]
+    },
+    {
+      "action_key": "promotion.redemptions.list",
+      "key": "promotion.redemptions",
+      "label": "Promotion Redemptions",
+      "label_i18n": {
+        "en": "Promotion Redemptions",
+        "id": "Redemption Promosi"
+      },
+      "order": 31,
+      "required_permissions": [
+        "promotion_redemption.list"
       ]
     },
     {
@@ -4543,6 +4775,16 @@
               "type": "number"
             },
             {
+              "key": "discount_amount_total",
+              "label": "Discount",
+              "label_i18n": {
+                "en": "Discount",
+                "id": "Diskon"
+              },
+              "path": "body.payload.discount_amount_total",
+              "type": "number"
+            },
+            {
               "key": "tax_amount",
               "label": "Tax Amount",
               "label_i18n": {
@@ -4977,6 +5219,36 @@
               "type": "string"
             },
             {
+              "key": "sales_channel",
+              "label": "Sales Channel",
+              "label_i18n": {
+                "en": "Sales Channel",
+                "id": "Kanal Penjualan"
+              },
+              "path": "body.payload.sales_channel",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "body.payload.store_code",
+              "type": "string"
+            },
+            {
+              "key": "promotion_codes",
+              "label": "Promotion Codes",
+              "label_i18n": {
+                "en": "Promotion Codes",
+                "id": "Kode Promosi"
+              },
+              "path": "body.payload.promotion_codes",
+              "type": "string"
+            },
+            {
               "key": "payment_term_days",
               "label": "Payment Terms",
               "label_i18n": {
@@ -4995,6 +5267,26 @@
               },
               "path": "body.payload.default_tax_code",
               "type": "string"
+            },
+            {
+              "key": "discount_amount_total",
+              "label": "Discount",
+              "label_i18n": {
+                "en": "Discount",
+                "id": "Diskon"
+              },
+              "path": "body.payload.discount_amount_total",
+              "type": "number"
+            },
+            {
+              "key": "promotion_breakdown",
+              "label": "Promotions",
+              "label_i18n": {
+                "en": "Promotions",
+                "id": "Promosi"
+              },
+              "path": "body.payload.promotion_breakdown",
+              "type": "object"
             },
             {
               "key": "total_amount",
@@ -5166,6 +5458,39 @@
               "widget": "select"
             },
             {
+              "key": "sales_channel",
+              "label": "Sales Channel",
+              "label_i18n": {
+                "en": "Sales Channel",
+                "id": "Kanal Penjualan"
+              },
+              "path": "body.payload.sales_channel",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "body.payload.store_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "promotion_codes",
+              "label": "Promotion Codes",
+              "label_i18n": {
+                "en": "Promotion Codes",
+                "id": "Kode Promosi"
+              },
+              "path": "body.payload.promotion_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
               "key": "payment_term_days",
               "label": "Payment Term Days",
               "label_i18n": {
@@ -5256,6 +5581,16 @@
               },
               "path": "body.payload.balance_due_amount",
               "type": "number"
+            },
+            {
+              "key": "promotion_breakdown",
+              "label": "Promotions",
+              "label_i18n": {
+                "en": "Promotions",
+                "id": "Promosi"
+              },
+              "path": "body.payload.promotion_breakdown",
+              "type": "object"
             },
             {
               "help_text": "Add invoice line items directly. Totals are derived from the rows below.",
@@ -6994,6 +7329,36 @@
               "type": "string"
             },
             {
+              "key": "sales_channel",
+              "label": "Sales Channel",
+              "label_i18n": {
+                "en": "Sales Channel",
+                "id": "Kanal Penjualan"
+              },
+              "path": "body.payload.sales_channel",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "body.payload.store_code",
+              "type": "string"
+            },
+            {
+              "key": "promotion_codes",
+              "label": "Promotion Codes",
+              "label_i18n": {
+                "en": "Promotion Codes",
+                "id": "Kode Promosi"
+              },
+              "path": "body.payload.promotion_codes",
+              "type": "string"
+            },
+            {
               "key": "payment_term_days",
               "label": "Payment Terms",
               "label_i18n": {
@@ -7012,6 +7377,26 @@
               },
               "path": "body.payload.default_tax_code",
               "type": "string"
+            },
+            {
+              "key": "discount_amount_total",
+              "label": "Discount",
+              "label_i18n": {
+                "en": "Discount",
+                "id": "Diskon"
+              },
+              "path": "body.payload.discount_amount_total",
+              "type": "number"
+            },
+            {
+              "key": "promotion_breakdown",
+              "label": "Promotions",
+              "label_i18n": {
+                "en": "Promotions",
+                "id": "Promosi"
+              },
+              "path": "body.payload.promotion_breakdown",
+              "type": "object"
             },
             {
               "key": "total_amount",
@@ -7151,6 +7536,39 @@
               "widget": "select"
             },
             {
+              "key": "sales_channel",
+              "label": "Sales Channel",
+              "label_i18n": {
+                "en": "Sales Channel",
+                "id": "Kanal Penjualan"
+              },
+              "path": "body.payload.sales_channel",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "body.payload.store_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "promotion_codes",
+              "label": "Promotion Codes",
+              "label_i18n": {
+                "en": "Promotion Codes",
+                "id": "Kode Promosi"
+              },
+              "path": "body.payload.promotion_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
               "key": "payment_term_days",
               "label": "Payment Term Days",
               "label_i18n": {
@@ -7191,6 +7609,26 @@
               },
               "path": "body.payload.subtotal_amount",
               "type": "number"
+            },
+            {
+              "key": "discount_amount_total",
+              "label": "Discount",
+              "label_i18n": {
+                "en": "Discount",
+                "id": "Diskon"
+              },
+              "path": "body.payload.discount_amount_total",
+              "type": "number"
+            },
+            {
+              "key": "promotion_breakdown",
+              "label": "Promotions",
+              "label_i18n": {
+                "en": "Promotions",
+                "id": "Promosi"
+              },
+              "path": "body.payload.promotion_breakdown",
+              "type": "object"
             },
             {
               "key": "tax_amount",
@@ -11290,6 +11728,942 @@
       }
     },
     {
+      "key": "discount.rules.detail",
+      "kind": "detail",
+      "model_key": "discount_rule",
+      "required_permissions": [
+        "discount_rule.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "code",
+                  "label": "Code",
+                  "label_i18n": {
+                    "en": "Code",
+                    "id": "Kode"
+                  },
+                  "path": "values.code",
+                  "type": "string"
+                },
+                {
+                  "key": "name",
+                  "label": "Name",
+                  "label_i18n": {
+                    "en": "Name",
+                    "id": "Nama"
+                  },
+                  "path": "values.name",
+                  "type": "string"
+                },
+                {
+                  "key": "promotion_campaign_code",
+                  "label": "Promotion Campaign",
+                  "label_i18n": {
+                    "en": "Promotion Campaign",
+                    "id": "Kampanye Promosi"
+                  },
+                  "path": "values.promotion_campaign_code",
+                  "type": "string"
+                },
+                {
+                  "key": "campaign_name",
+                  "label": "Campaign",
+                  "label_i18n": {
+                    "en": "Campaign",
+                    "id": "Kampanye"
+                  },
+                  "path": "values.campaign_name",
+                  "type": "string"
+                },
+                {
+                  "key": "event_code",
+                  "label": "Event Code",
+                  "label_i18n": {
+                    "en": "Event Code",
+                    "id": "Kode Event"
+                  },
+                  "path": "values.event_code",
+                  "type": "string"
+                },
+                {
+                  "key": "scope",
+                  "label": "Scope",
+                  "label_i18n": {
+                    "en": "Scope",
+                    "id": "Cakupan"
+                  },
+                  "options": [
+                    "line",
+                    "order"
+                  ],
+                  "path": "values.scope",
+                  "type": "string"
+                },
+                {
+                  "key": "rule_kind",
+                  "label": "Rule Kind",
+                  "label_i18n": {
+                    "en": "Rule Kind",
+                    "id": "Jenis Aturan"
+                  },
+                  "options": [
+                    "line_percent",
+                    "line_fixed_amount",
+                    "line_fixed_price",
+                    "bulk_percent",
+                    "threshold_item_price",
+                    "order_percent",
+                    "bxgy",
+                    "category_percent"
+                  ],
+                  "path": "values.rule_kind",
+                  "type": "string"
+                },
+                {
+                  "key": "priority",
+                  "label": "Priority",
+                  "label_i18n": {
+                    "en": "Priority",
+                    "id": "Prioritas"
+                  },
+                  "path": "values.priority",
+                  "type": "number"
+                },
+                {
+                  "key": "start_at",
+                  "label": "Start At",
+                  "label_i18n": {
+                    "en": "Start At",
+                    "id": "Mulai"
+                  },
+                  "path": "values.start_at",
+                  "type": "string"
+                },
+                {
+                  "key": "end_at",
+                  "label": "End At",
+                  "label_i18n": {
+                    "en": "End At",
+                    "id": "Selesai"
+                  },
+                  "path": "values.end_at",
+                  "type": "string"
+                },
+                {
+                  "key": "weekdays",
+                  "label": "Weekdays",
+                  "label_i18n": {
+                    "en": "Weekdays",
+                    "id": "Hari"
+                  },
+                  "path": "values.weekdays",
+                  "type": "string"
+                },
+                {
+                  "key": "start_time",
+                  "label": "Start Time",
+                  "label_i18n": {
+                    "en": "Start Time",
+                    "id": "Jam Mulai"
+                  },
+                  "path": "values.start_time",
+                  "type": "string"
+                },
+                {
+                  "key": "end_time",
+                  "label": "End Time",
+                  "label_i18n": {
+                    "en": "End Time",
+                    "id": "Jam Selesai"
+                  },
+                  "path": "values.end_time",
+                  "type": "string"
+                },
+                {
+                  "key": "party_ids",
+                  "label": "Party IDs",
+                  "label_i18n": {
+                    "en": "Party IDs",
+                    "id": "ID Pihak"
+                  },
+                  "path": "values.party_ids",
+                  "type": "string"
+                },
+                {
+                  "key": "customer_types",
+                  "label": "Customer Types",
+                  "label_i18n": {
+                    "en": "Customer Types",
+                    "id": "Tipe Pelanggan"
+                  },
+                  "path": "values.customer_types",
+                  "type": "string"
+                },
+                {
+                  "key": "member_statuses",
+                  "label": "Member Statuses",
+                  "label_i18n": {
+                    "en": "Member Statuses",
+                    "id": "Status Member"
+                  },
+                  "path": "values.member_statuses",
+                  "type": "string"
+                },
+                {
+                  "key": "member_tiers",
+                  "label": "Member Tiers",
+                  "label_i18n": {
+                    "en": "Member Tiers",
+                    "id": "Tier Member"
+                  },
+                  "path": "values.member_tiers",
+                  "type": "string"
+                },
+                {
+                  "key": "item_codes",
+                  "label": "Item Codes",
+                  "label_i18n": {
+                    "en": "Item Codes",
+                    "id": "Kode Item"
+                  },
+                  "path": "values.item_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "product_codes",
+                  "label": "Product Codes",
+                  "label_i18n": {
+                    "en": "Product Codes",
+                    "id": "Kode Produk"
+                  },
+                  "path": "values.product_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "variant_signatures",
+                  "label": "Variant Signatures",
+                  "label_i18n": {
+                    "en": "Variant Signatures",
+                    "id": "Signature Varian"
+                  },
+                  "path": "values.variant_signatures",
+                  "type": "string"
+                },
+                {
+                  "key": "category_codes",
+                  "label": "Category Codes",
+                  "label_i18n": {
+                    "en": "Category Codes",
+                    "id": "Kode Kategori"
+                  },
+                  "path": "values.category_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "reward_item_codes",
+                  "label": "Reward Item Codes",
+                  "label_i18n": {
+                    "en": "Reward Item Codes",
+                    "id": "Kode Item Reward"
+                  },
+                  "path": "values.reward_item_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "excluded_item_codes",
+                  "label": "Excluded Item Codes",
+                  "label_i18n": {
+                    "en": "Excluded Item Codes",
+                    "id": "Kode Item Dikecualikan"
+                  },
+                  "path": "values.excluded_item_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "excluded_product_codes",
+                  "label": "Excluded Product Codes",
+                  "label_i18n": {
+                    "en": "Excluded Product Codes",
+                    "id": "Kode Produk Dikecualikan"
+                  },
+                  "path": "values.excluded_product_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "excluded_category_codes",
+                  "label": "Excluded Category Codes",
+                  "label_i18n": {
+                    "en": "Excluded Category Codes",
+                    "id": "Kode Kategori Dikecualikan"
+                  },
+                  "path": "values.excluded_category_codes",
+                  "type": "string"
+                },
+                {
+                  "key": "minimum_order_total",
+                  "label": "Minimum Order Total",
+                  "label_i18n": {
+                    "en": "Minimum Order Total",
+                    "id": "Minimum Total Order"
+                  },
+                  "path": "values.minimum_order_total",
+                  "type": "number"
+                },
+                {
+                  "key": "minimum_line_quantity",
+                  "label": "Minimum Line Quantity",
+                  "label_i18n": {
+                    "en": "Minimum Line Quantity",
+                    "id": "Minimum Kuantitas Baris"
+                  },
+                  "path": "values.minimum_line_quantity",
+                  "type": "number"
+                },
+                {
+                  "key": "buy_quantity",
+                  "label": "Buy Quantity",
+                  "label_i18n": {
+                    "en": "Buy Quantity",
+                    "id": "Kuantitas Beli"
+                  },
+                  "path": "values.buy_quantity",
+                  "type": "number"
+                },
+                {
+                  "key": "reward_quantity",
+                  "label": "Reward Quantity",
+                  "label_i18n": {
+                    "en": "Reward Quantity",
+                    "id": "Kuantitas Reward"
+                  },
+                  "path": "values.reward_quantity",
+                  "type": "number"
+                },
+                {
+                  "key": "discount_percent",
+                  "label": "Discount Percent",
+                  "label_i18n": {
+                    "en": "Discount Percent",
+                    "id": "Persen Diskon"
+                  },
+                  "path": "values.discount_percent",
+                  "type": "number"
+                },
+                {
+                  "key": "discount_amount",
+                  "label": "Discount Amount",
+                  "label_i18n": {
+                    "en": "Discount Amount",
+                    "id": "Jumlah Diskon"
+                  },
+                  "path": "values.discount_amount",
+                  "type": "number"
+                },
+                {
+                  "key": "fixed_price",
+                  "label": "Fixed Price",
+                  "label_i18n": {
+                    "en": "Fixed Price",
+                    "id": "Harga Tetap"
+                  },
+                  "path": "values.fixed_price",
+                  "type": "number"
+                },
+                {
+                  "key": "reward_percent",
+                  "label": "Reward Percent",
+                  "label_i18n": {
+                    "en": "Reward Percent",
+                    "id": "Persen Reward"
+                  },
+                  "path": "values.reward_percent",
+                  "type": "number"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "active",
+                    "inactive"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                }
+              ],
+              "key": "rule",
+              "title": "Rule",
+              "title_i18n": {
+                "en": "Rule",
+                "id": "Aturan"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Discount Rule Detail",
+      "title_i18n": {
+        "en": "Discount Rule Detail",
+        "id": "Detail Aturan Diskon"
+      }
+    },
+    {
+      "key": "discount.rules.form",
+      "kind": "form",
+      "model_key": "discount_rule",
+      "required_permissions": [
+        "discount_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "promotion_campaign_code",
+              "label": "Promotion Campaign",
+              "label_i18n": {
+                "en": "Promotion Campaign",
+                "id": "Kampanye Promosi"
+              },
+              "path": "values.promotion_campaign_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "campaign_name",
+              "label": "Campaign",
+              "label_i18n": {
+                "en": "Campaign",
+                "id": "Kampanye"
+              },
+              "path": "values.campaign_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "event_code",
+              "label": "Event Code",
+              "label_i18n": {
+                "en": "Event Code",
+                "id": "Kode Event"
+              },
+              "path": "values.event_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "scope",
+              "label": "Scope",
+              "label_i18n": {
+                "en": "Scope",
+                "id": "Cakupan"
+              },
+              "options": [
+                "line",
+                "order"
+              ],
+              "path": "values.scope",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "rule_kind",
+              "label": "Rule Kind",
+              "label_i18n": {
+                "en": "Rule Kind",
+                "id": "Jenis Aturan"
+              },
+              "options": [
+                "line_percent",
+                "line_fixed_amount",
+                "line_fixed_price",
+                "bulk_percent",
+                "threshold_item_price",
+                "order_percent",
+                "bxgy",
+                "category_percent"
+              ],
+              "path": "values.rule_kind",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "path": "values.priority",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "start_at",
+              "label": "Start At",
+              "label_i18n": {
+                "en": "Start At",
+                "id": "Mulai"
+              },
+              "path": "values.start_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_at",
+              "label": "End At",
+              "label_i18n": {
+                "en": "End At",
+                "id": "Selesai"
+              },
+              "path": "values.end_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "weekdays",
+              "label": "Weekdays",
+              "label_i18n": {
+                "en": "Weekdays",
+                "id": "Hari"
+              },
+              "path": "values.weekdays",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "start_time",
+              "label": "Start Time",
+              "label_i18n": {
+                "en": "Start Time",
+                "id": "Jam Mulai"
+              },
+              "path": "values.start_time",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_time",
+              "label": "End Time",
+              "label_i18n": {
+                "en": "End Time",
+                "id": "Jam Selesai"
+              },
+              "path": "values.end_time",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_ids",
+              "label": "Party IDs",
+              "label_i18n": {
+                "en": "Party IDs",
+                "id": "ID Pihak"
+              },
+              "path": "values.party_ids",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "customer_types",
+              "label": "Customer Types",
+              "label_i18n": {
+                "en": "Customer Types",
+                "id": "Tipe Pelanggan"
+              },
+              "path": "values.customer_types",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "member_statuses",
+              "label": "Member Statuses",
+              "label_i18n": {
+                "en": "Member Statuses",
+                "id": "Status Member"
+              },
+              "path": "values.member_statuses",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "member_tiers",
+              "label": "Member Tiers",
+              "label_i18n": {
+                "en": "Member Tiers",
+                "id": "Tier Member"
+              },
+              "path": "values.member_tiers",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "item_codes",
+              "label": "Item Codes",
+              "label_i18n": {
+                "en": "Item Codes",
+                "id": "Kode Item"
+              },
+              "path": "values.item_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "product_codes",
+              "label": "Product Codes",
+              "label_i18n": {
+                "en": "Product Codes",
+                "id": "Kode Produk"
+              },
+              "path": "values.product_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "variant_signatures",
+              "label": "Variant Signatures",
+              "label_i18n": {
+                "en": "Variant Signatures",
+                "id": "Signature Varian"
+              },
+              "path": "values.variant_signatures",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "category_codes",
+              "label": "Category Codes",
+              "label_i18n": {
+                "en": "Category Codes",
+                "id": "Kode Kategori"
+              },
+              "path": "values.category_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "reward_item_codes",
+              "label": "Reward Item Codes",
+              "label_i18n": {
+                "en": "Reward Item Codes",
+                "id": "Kode Item Reward"
+              },
+              "path": "values.reward_item_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "excluded_item_codes",
+              "label": "Excluded Item Codes",
+              "label_i18n": {
+                "en": "Excluded Item Codes",
+                "id": "Kode Item Dikecualikan"
+              },
+              "path": "values.excluded_item_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "excluded_product_codes",
+              "label": "Excluded Product Codes",
+              "label_i18n": {
+                "en": "Excluded Product Codes",
+                "id": "Kode Produk Dikecualikan"
+              },
+              "path": "values.excluded_product_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "excluded_category_codes",
+              "label": "Excluded Category Codes",
+              "label_i18n": {
+                "en": "Excluded Category Codes",
+                "id": "Kode Kategori Dikecualikan"
+              },
+              "path": "values.excluded_category_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "minimum_order_total",
+              "label": "Minimum Order Total",
+              "label_i18n": {
+                "en": "Minimum Order Total",
+                "id": "Minimum Total Order"
+              },
+              "path": "values.minimum_order_total",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "minimum_line_quantity",
+              "label": "Minimum Line Quantity",
+              "label_i18n": {
+                "en": "Minimum Line Quantity",
+                "id": "Minimum Kuantitas Baris"
+              },
+              "path": "values.minimum_line_quantity",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "buy_quantity",
+              "label": "Buy Quantity",
+              "label_i18n": {
+                "en": "Buy Quantity",
+                "id": "Kuantitas Beli"
+              },
+              "path": "values.buy_quantity",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "reward_quantity",
+              "label": "Reward Quantity",
+              "label_i18n": {
+                "en": "Reward Quantity",
+                "id": "Kuantitas Reward"
+              },
+              "path": "values.reward_quantity",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "discount_percent",
+              "label": "Discount Percent",
+              "label_i18n": {
+                "en": "Discount Percent",
+                "id": "Persen Diskon"
+              },
+              "path": "values.discount_percent",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "discount_amount",
+              "label": "Discount Amount",
+              "label_i18n": {
+                "en": "Discount Amount",
+                "id": "Jumlah Diskon"
+              },
+              "path": "values.discount_amount",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "fixed_price",
+              "label": "Fixed Price",
+              "label_i18n": {
+                "en": "Fixed Price",
+                "id": "Harga Tetap"
+              },
+              "path": "values.fixed_price",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "reward_percent",
+              "label": "Reward Percent",
+              "label_i18n": {
+                "en": "Reward Percent",
+                "id": "Persen Reward"
+              },
+              "path": "values.reward_percent",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit Rule",
+          "title_i18n": {
+            "en": "Edit Rule",
+            "id": "Ubah Aturan"
+          }
+        }
+      ],
+      "title": "Discount Rule Form",
+      "title_i18n": {
+        "en": "Discount Rule Form",
+        "id": "Form Aturan Diskon"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "promotion_campaign_code",
+          "label": "Promotion Campaign",
+          "label_i18n": {
+            "en": "Promotion Campaign",
+            "id": "Kampanye Promosi"
+          },
+          "path": "values.promotion_campaign_code"
+        },
+        {
+          "key": "campaign_name",
+          "label": "Campaign",
+          "label_i18n": {
+            "en": "Campaign",
+            "id": "Kampanye"
+          },
+          "path": "values.campaign_name"
+        },
+        {
+          "key": "rule_kind",
+          "label": "Rule Kind",
+          "label_i18n": {
+            "en": "Rule Kind",
+            "id": "Jenis Aturan"
+          },
+          "path": "values.rule_kind"
+        },
+        {
+          "key": "scope",
+          "label": "Scope",
+          "label_i18n": {
+            "en": "Scope",
+            "id": "Cakupan"
+          },
+          "path": "values.scope"
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "label_i18n": {
+            "en": "Priority",
+            "id": "Prioritas"
+          },
+          "path": "values.priority"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "scope",
+          "label": "Scope",
+          "label_i18n": {
+            "en": "Scope",
+            "id": "Cakupan"
+          },
+          "options": [
+            "line",
+            "order"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "rule_kind",
+          "label": "Rule Kind",
+          "label_i18n": {
+            "en": "Rule Kind",
+            "id": "Jenis Aturan"
+          },
+          "type": "string"
+        }
+      ],
+      "key": "discount.rules.list",
+      "kind": "list",
+      "model_key": "discount_rule",
+      "required_permissions": [
+        "discount_rule.list"
+      ],
+      "title": "Discount Rules",
+      "title_i18n": {
+        "en": "Discount Rules",
+        "id": "Aturan Diskon"
+      }
+    },
+    {
       "action_placements": [
         {
           "action_key": "submit",
@@ -13757,6 +15131,56 @@
                   "type": "string"
                 },
                 {
+                  "key": "customer_type",
+                  "label": "Customer Type",
+                  "label_i18n": {
+                    "en": "Customer Type",
+                    "id": "Tipe Pelanggan"
+                  },
+                  "path": "values.customer_type",
+                  "type": "string"
+                },
+                {
+                  "key": "member_status",
+                  "label": "Member Status",
+                  "label_i18n": {
+                    "en": "Member Status",
+                    "id": "Status Member"
+                  },
+                  "path": "values.member_status",
+                  "type": "string"
+                },
+                {
+                  "key": "member_tier",
+                  "label": "Member Tier",
+                  "label_i18n": {
+                    "en": "Member Tier",
+                    "id": "Tier Member"
+                  },
+                  "path": "values.member_tier",
+                  "type": "string"
+                },
+                {
+                  "key": "member_valid_from",
+                  "label": "Member Valid From",
+                  "label_i18n": {
+                    "en": "Member Valid From",
+                    "id": "Member Berlaku Dari"
+                  },
+                  "path": "values.member_valid_from",
+                  "type": "string"
+                },
+                {
+                  "key": "member_valid_to",
+                  "label": "Member Valid To",
+                  "label_i18n": {
+                    "en": "Member Valid To",
+                    "id": "Member Berlaku Sampai"
+                  },
+                  "path": "values.member_valid_to",
+                  "type": "string"
+                },
+                {
                   "key": "tax_profile_code",
                   "label": "Tax Profile",
                   "label_i18n": {
@@ -13893,6 +15317,87 @@
               "widget": "text"
             },
             {
+              "key": "customer_type",
+              "label": "Customer Type",
+              "label_i18n": {
+                "en": "Customer Type",
+                "id": "Tipe Pelanggan"
+              },
+              "options": [
+                "retail",
+                "member",
+                "vip",
+                "corporate"
+              ],
+              "path": "values.customer_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "member_status",
+              "label": "Member Status",
+              "label_i18n": {
+                "en": "Member Status",
+                "id": "Status Member"
+              },
+              "options": [
+                "inactive",
+                "active",
+                "expired"
+              ],
+              "path": "values.member_status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "member_tier",
+              "label": "Member Tier",
+              "label_i18n": {
+                "en": "Member Tier",
+                "id": "Tier Member"
+              },
+              "path": "values.member_tier",
+              "placeholder": "Member tier",
+              "placeholder_i18n": {
+                "en": "Member tier",
+                "id": "Tier member"
+              },
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "member_valid_from",
+              "label": "Member Valid From",
+              "label_i18n": {
+                "en": "Member Valid From",
+                "id": "Member Berlaku Dari"
+              },
+              "path": "values.member_valid_from",
+              "placeholder": "YYYY-MM-DD",
+              "placeholder_i18n": {
+                "en": "YYYY-MM-DD",
+                "id": "YYYY-MM-DD"
+              },
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "member_valid_to",
+              "label": "Member Valid To",
+              "label_i18n": {
+                "en": "Member Valid To",
+                "id": "Member Berlaku Sampai"
+              },
+              "path": "values.member_valid_to",
+              "placeholder": "YYYY-MM-DD",
+              "placeholder_i18n": {
+                "en": "YYYY-MM-DD",
+                "id": "YYYY-MM-DD"
+              },
+              "type": "string",
+              "widget": "text"
+            },
+            {
               "key": "tax_profile_code",
               "label": "Tax Profile Code",
               "label_i18n": {
@@ -13984,6 +15489,33 @@
             "id": "Email"
           },
           "path": "values.email"
+        },
+        {
+          "key": "customer_type",
+          "label": "Customer Type",
+          "label_i18n": {
+            "en": "Customer Type",
+            "id": "Tipe Pelanggan"
+          },
+          "path": "values.customer_type"
+        },
+        {
+          "key": "member_status",
+          "label": "Member Status",
+          "label_i18n": {
+            "en": "Member Status",
+            "id": "Status Member"
+          },
+          "path": "values.member_status"
+        },
+        {
+          "key": "member_tier",
+          "label": "Member Tier",
+          "label_i18n": {
+            "en": "Member Tier",
+            "id": "Tier Member"
+          },
+          "path": "values.member_tier"
         },
         {
           "key": "tax_profile_code",
@@ -14695,6 +16227,16 @@
               "type": "string"
             },
             {
+              "key": "promotion_codes_json",
+              "label": "Promotion Codes",
+              "label_i18n": {
+                "en": "Promotion Codes",
+                "id": "Kode Promosi"
+              },
+              "path": "values.promotion_codes_json",
+              "type": "string"
+            },
+            {
               "key": "total_amount",
               "label": "Total",
               "label_i18n": {
@@ -14862,6 +16404,17 @@
               "path": "values.checkout_mode",
               "type": "string",
               "widget": "select"
+            },
+            {
+              "key": "promotion_codes_json",
+              "label": "Promotion Codes",
+              "label_i18n": {
+                "en": "Promotion Codes",
+                "id": "Kode Promosi"
+              },
+              "path": "values.promotion_codes_json",
+              "type": "string",
+              "widget": "textarea"
             },
             {
               "key": "status",
@@ -20308,6 +21861,1243 @@
       "title_i18n": {
         "en": "Work Centers",
         "id": "Work Centers"
+      }
+    },
+    {
+      "key": "promotion.campaigns.detail",
+      "kind": "detail",
+      "model_key": "promotion_campaign",
+      "required_permissions": [
+        "promotion_campaign.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Deskripsi"
+              },
+              "path": "values.description",
+              "type": "string"
+            },
+            {
+              "key": "trigger_mode",
+              "label": "Trigger Mode",
+              "label_i18n": {
+                "en": "Trigger Mode",
+                "id": "Mode Pemicu"
+              },
+              "options": [
+                "auto",
+                "code"
+              ],
+              "path": "values.trigger_mode",
+              "type": "string"
+            },
+            {
+              "key": "start_at",
+              "label": "Start At",
+              "label_i18n": {
+                "en": "Start At",
+                "id": "Mulai"
+              },
+              "path": "values.start_at",
+              "type": "string"
+            },
+            {
+              "key": "end_at",
+              "label": "End At",
+              "label_i18n": {
+                "en": "End At",
+                "id": "Selesai"
+              },
+              "path": "values.end_at",
+              "type": "string"
+            },
+            {
+              "key": "sales_channels",
+              "label": "Sales Channels",
+              "label_i18n": {
+                "en": "Sales Channels",
+                "id": "Kanal Penjualan"
+              },
+              "path": "values.sales_channels",
+              "type": "string"
+            },
+            {
+              "key": "store_codes",
+              "label": "Store Codes",
+              "label_i18n": {
+                "en": "Store Codes",
+                "id": "Kode Toko"
+              },
+              "path": "values.store_codes",
+              "type": "string"
+            },
+            {
+              "key": "global_usage_cap",
+              "label": "Global Usage Cap",
+              "label_i18n": {
+                "en": "Global Usage Cap",
+                "id": "Batas Penggunaan Global"
+              },
+              "path": "values.global_usage_cap",
+              "type": "number"
+            },
+            {
+              "key": "per_customer_usage_cap",
+              "label": "Per Customer Usage Cap",
+              "label_i18n": {
+                "en": "Per Customer Usage Cap",
+                "id": "Batas Penggunaan per Pelanggan"
+              },
+              "path": "values.per_customer_usage_cap",
+              "type": "number"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "path": "values.priority",
+              "type": "number"
+            },
+            {
+              "key": "banner_text",
+              "label": "Banner Text",
+              "label_i18n": {
+                "en": "Banner Text",
+                "id": "Teks Banner"
+              },
+              "path": "values.banner_text",
+              "type": "string"
+            },
+            {
+              "key": "combinability_mode",
+              "label": "Combinability",
+              "label_i18n": {
+                "en": "Combinability",
+                "id": "Kombinasi"
+              },
+              "options": [
+                "inherit",
+                "exclusive",
+                "stackable"
+              ],
+              "path": "values.combinability_mode",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "draft",
+                "active",
+                "inactive",
+                "expired"
+              ],
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Promotion Campaign Detail",
+      "title_i18n": {
+        "en": "Promotion Campaign Detail",
+        "id": "Promotion Campaign Detail"
+      }
+    },
+    {
+      "key": "promotion.campaigns.form",
+      "kind": "form",
+      "model_key": "promotion_campaign",
+      "required_permissions": [
+        "promotion_campaign.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Deskripsi"
+              },
+              "path": "values.description",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "trigger_mode",
+              "label": "Trigger Mode",
+              "label_i18n": {
+                "en": "Trigger Mode",
+                "id": "Mode Pemicu"
+              },
+              "options": [
+                "auto",
+                "code"
+              ],
+              "path": "values.trigger_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "start_at",
+              "label": "Start At",
+              "label_i18n": {
+                "en": "Start At",
+                "id": "Mulai"
+              },
+              "path": "values.start_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_at",
+              "label": "End At",
+              "label_i18n": {
+                "en": "End At",
+                "id": "Selesai"
+              },
+              "path": "values.end_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "sales_channels",
+              "label": "Sales Channels",
+              "label_i18n": {
+                "en": "Sales Channels",
+                "id": "Kanal Penjualan"
+              },
+              "path": "values.sales_channels",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_codes",
+              "label": "Store Codes",
+              "label_i18n": {
+                "en": "Store Codes",
+                "id": "Kode Toko"
+              },
+              "path": "values.store_codes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "global_usage_cap",
+              "label": "Global Usage Cap",
+              "label_i18n": {
+                "en": "Global Usage Cap",
+                "id": "Batas Penggunaan Global"
+              },
+              "path": "values.global_usage_cap",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "per_customer_usage_cap",
+              "label": "Per Customer Usage Cap",
+              "label_i18n": {
+                "en": "Per Customer Usage Cap",
+                "id": "Batas Penggunaan per Pelanggan"
+              },
+              "path": "values.per_customer_usage_cap",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "path": "values.priority",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "banner_text",
+              "label": "Banner Text",
+              "label_i18n": {
+                "en": "Banner Text",
+                "id": "Teks Banner"
+              },
+              "path": "values.banner_text",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "combinability_mode",
+              "label": "Combinability",
+              "label_i18n": {
+                "en": "Combinability",
+                "id": "Kombinasi"
+              },
+              "options": [
+                "inherit",
+                "exclusive",
+                "stackable"
+              ],
+              "path": "values.combinability_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "draft",
+                "active",
+                "inactive",
+                "expired"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Promotion Campaign Form",
+          "title_i18n": {
+            "en": "Promotion Campaign Form",
+            "id": "Promotion Campaign Form"
+          }
+        }
+      ],
+      "title": "Promotion Campaign Form",
+      "title_i18n": {
+        "en": "Promotion Campaign Form",
+        "id": "Promotion Campaign Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "trigger_mode",
+          "label": "Trigger Mode",
+          "label_i18n": {
+            "en": "Trigger Mode",
+            "id": "Mode Pemicu"
+          },
+          "path": "values.trigger_mode"
+        },
+        {
+          "key": "sales_channels",
+          "label": "Channels",
+          "label_i18n": {
+            "en": "Channels",
+            "id": "Kanal"
+          },
+          "path": "values.sales_channels"
+        },
+        {
+          "key": "store_codes",
+          "label": "Stores",
+          "label_i18n": {
+            "en": "Stores",
+            "id": "Toko"
+          },
+          "path": "values.store_codes"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "active",
+            "inactive",
+            "expired"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "promotion.campaigns.list",
+      "kind": "list",
+      "model_key": "promotion_campaign",
+      "required_permissions": [
+        "promotion_campaign.list"
+      ],
+      "title": "Promotion Campaigns",
+      "title_i18n": {
+        "en": "Promotion Campaigns",
+        "id": "Promotion Campaigns"
+      }
+    },
+    {
+      "key": "promotion.codes.detail",
+      "kind": "detail",
+      "model_key": "promotion_code",
+      "required_permissions": [
+        "promotion_code.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "promotion_campaign_code",
+              "label": "Campaign",
+              "label_i18n": {
+                "en": "Campaign",
+                "id": "Kampanye"
+              },
+              "path": "values.promotion_campaign_code",
+              "type": "string"
+            },
+            {
+              "key": "start_at",
+              "label": "Start At",
+              "label_i18n": {
+                "en": "Start At",
+                "id": "Mulai"
+              },
+              "path": "values.start_at",
+              "type": "string"
+            },
+            {
+              "key": "end_at",
+              "label": "End At",
+              "label_i18n": {
+                "en": "End At",
+                "id": "Selesai"
+              },
+              "path": "values.end_at",
+              "type": "string"
+            },
+            {
+              "key": "party_ids",
+              "label": "Party IDs",
+              "label_i18n": {
+                "en": "Party IDs",
+                "id": "ID Pihak"
+              },
+              "path": "values.party_ids",
+              "type": "string"
+            },
+            {
+              "key": "member_statuses",
+              "label": "Member Statuses",
+              "label_i18n": {
+                "en": "Member Statuses",
+                "id": "Status Member"
+              },
+              "path": "values.member_statuses",
+              "type": "string"
+            },
+            {
+              "key": "member_tiers",
+              "label": "Member Tiers",
+              "label_i18n": {
+                "en": "Member Tiers",
+                "id": "Tier Member"
+              },
+              "path": "values.member_tiers",
+              "type": "string"
+            },
+            {
+              "key": "total_redemption_limit",
+              "label": "Total Redemption Limit",
+              "label_i18n": {
+                "en": "Total Redemption Limit",
+                "id": "Batas Redemption Total"
+              },
+              "path": "values.total_redemption_limit",
+              "type": "number"
+            },
+            {
+              "key": "per_customer_redemption_limit",
+              "label": "Per Customer Redemption Limit",
+              "label_i18n": {
+                "en": "Per Customer Redemption Limit",
+                "id": "Batas Redemption per Pelanggan"
+              },
+              "path": "values.per_customer_redemption_limit",
+              "type": "number"
+            },
+            {
+              "key": "total_redemptions",
+              "label": "Total Redemptions",
+              "label_i18n": {
+                "en": "Total Redemptions",
+                "id": "Total Redemption"
+              },
+              "path": "values.total_redemptions",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive",
+                "expired"
+              ],
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Promotion Code Detail",
+      "title_i18n": {
+        "en": "Promotion Code Detail",
+        "id": "Promotion Code Detail"
+      }
+    },
+    {
+      "key": "promotion.codes.form",
+      "kind": "form",
+      "model_key": "promotion_code",
+      "required_permissions": [
+        "promotion_code.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "promotion_campaign_code",
+              "label": "Campaign",
+              "label_i18n": {
+                "en": "Campaign",
+                "id": "Kampanye"
+              },
+              "path": "values.promotion_campaign_code",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "start_at",
+              "label": "Start At",
+              "label_i18n": {
+                "en": "Start At",
+                "id": "Mulai"
+              },
+              "path": "values.start_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_at",
+              "label": "End At",
+              "label_i18n": {
+                "en": "End At",
+                "id": "Selesai"
+              },
+              "path": "values.end_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_ids",
+              "label": "Party IDs",
+              "label_i18n": {
+                "en": "Party IDs",
+                "id": "ID Pihak"
+              },
+              "path": "values.party_ids",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "member_statuses",
+              "label": "Member Statuses",
+              "label_i18n": {
+                "en": "Member Statuses",
+                "id": "Status Member"
+              },
+              "path": "values.member_statuses",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "member_tiers",
+              "label": "Member Tiers",
+              "label_i18n": {
+                "en": "Member Tiers",
+                "id": "Tier Member"
+              },
+              "path": "values.member_tiers",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "total_redemption_limit",
+              "label": "Total Redemption Limit",
+              "label_i18n": {
+                "en": "Total Redemption Limit",
+                "id": "Batas Redemption Total"
+              },
+              "path": "values.total_redemption_limit",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "per_customer_redemption_limit",
+              "label": "Per Customer Redemption Limit",
+              "label_i18n": {
+                "en": "Per Customer Redemption Limit",
+                "id": "Batas Redemption per Pelanggan"
+              },
+              "path": "values.per_customer_redemption_limit",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "total_redemptions",
+              "label": "Total Redemptions",
+              "label_i18n": {
+                "en": "Total Redemptions",
+                "id": "Total Redemption"
+              },
+              "path": "values.total_redemptions",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive",
+                "expired"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Promotion Code Form",
+          "title_i18n": {
+            "en": "Promotion Code Form",
+            "id": "Promotion Code Form"
+          }
+        }
+      ],
+      "title": "Promotion Code Form",
+      "title_i18n": {
+        "en": "Promotion Code Form",
+        "id": "Promotion Code Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "promotion_campaign_code",
+          "label": "Campaign",
+          "label_i18n": {
+            "en": "Campaign",
+            "id": "Kampanye"
+          },
+          "path": "values.promotion_campaign_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "total_redemptions",
+          "label": "Redemptions",
+          "label_i18n": {
+            "en": "Redemptions",
+            "id": "Redemption"
+          },
+          "path": "values.total_redemptions"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "expired"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "promotion.codes.list",
+      "kind": "list",
+      "model_key": "promotion_code",
+      "required_permissions": [
+        "promotion_code.list"
+      ],
+      "title": "Promotion Codes",
+      "title_i18n": {
+        "en": "Promotion Codes",
+        "id": "Promotion Codes"
+      }
+    },
+    {
+      "key": "promotion.redemptions.detail",
+      "kind": "detail",
+      "model_key": "promotion_redemption",
+      "required_permissions": [
+        "promotion_redemption.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "promotion_campaign_code",
+              "label": "Campaign",
+              "label_i18n": {
+                "en": "Campaign",
+                "id": "Kampanye"
+              },
+              "path": "values.promotion_campaign_code",
+              "type": "string"
+            },
+            {
+              "key": "promotion_code",
+              "label": "Promotion Code",
+              "label_i18n": {
+                "en": "Promotion Code",
+                "id": "Kode Promosi"
+              },
+              "path": "values.promotion_code",
+              "type": "string"
+            },
+            {
+              "key": "source_document_type",
+              "label": "Source Type",
+              "label_i18n": {
+                "en": "Source Type",
+                "id": "Tipe Sumber"
+              },
+              "path": "values.source_document_type",
+              "type": "string"
+            },
+            {
+              "key": "source_document_id",
+              "label": "Source Document ID",
+              "label_i18n": {
+                "en": "Source Document ID",
+                "id": "ID Dokumen Sumber"
+              },
+              "path": "values.source_document_id",
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party ID",
+              "label_i18n": {
+                "en": "Party ID",
+                "id": "ID Pihak"
+              },
+              "path": "values.party_id",
+              "type": "string"
+            },
+            {
+              "key": "sales_channel",
+              "label": "Sales Channel",
+              "label_i18n": {
+                "en": "Sales Channel",
+                "id": "Kanal Penjualan"
+              },
+              "path": "values.sales_channel",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string"
+            },
+            {
+              "key": "discount_amount_total",
+              "label": "Discount Amount",
+              "label_i18n": {
+                "en": "Discount Amount",
+                "id": "Jumlah Diskon"
+              },
+              "path": "values.discount_amount_total",
+              "type": "number"
+            },
+            {
+              "key": "redeemed_at",
+              "label": "Redeemed At",
+              "label_i18n": {
+                "en": "Redeemed At",
+                "id": "Diredeem Pada"
+              },
+              "path": "values.redeemed_at",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "released"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Promotion Redemption Detail",
+      "title_i18n": {
+        "en": "Promotion Redemption Detail",
+        "id": "Promotion Redemption Detail"
+      }
+    },
+    {
+      "key": "promotion.redemptions.form",
+      "kind": "form",
+      "model_key": "promotion_redemption",
+      "required_permissions": [
+        "promotion_redemption.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "promotion_campaign_code",
+              "label": "Campaign",
+              "label_i18n": {
+                "en": "Campaign",
+                "id": "Kampanye"
+              },
+              "path": "values.promotion_campaign_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "promotion_code",
+              "label": "Promotion Code",
+              "label_i18n": {
+                "en": "Promotion Code",
+                "id": "Kode Promosi"
+              },
+              "path": "values.promotion_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_document_type",
+              "label": "Source Type",
+              "label_i18n": {
+                "en": "Source Type",
+                "id": "Tipe Sumber"
+              },
+              "path": "values.source_document_type",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_document_id",
+              "label": "Source Document ID",
+              "label_i18n": {
+                "en": "Source Document ID",
+                "id": "ID Dokumen Sumber"
+              },
+              "path": "values.source_document_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party ID",
+              "label_i18n": {
+                "en": "Party ID",
+                "id": "ID Pihak"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "sales_channel",
+              "label": "Sales Channel",
+              "label_i18n": {
+                "en": "Sales Channel",
+                "id": "Kanal Penjualan"
+              },
+              "path": "values.sales_channel",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "discount_amount_total",
+              "label": "Discount Amount",
+              "label_i18n": {
+                "en": "Discount Amount",
+                "id": "Jumlah Diskon"
+              },
+              "path": "values.discount_amount_total",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "redeemed_at",
+              "label": "Redeemed At",
+              "label_i18n": {
+                "en": "Redeemed At",
+                "id": "Diredeem Pada"
+              },
+              "path": "values.redeemed_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "released"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Promotion Redemption Form",
+          "title_i18n": {
+            "en": "Promotion Redemption Form",
+            "id": "Promotion Redemption Form"
+          }
+        }
+      ],
+      "title": "Promotion Redemption Form",
+      "title_i18n": {
+        "en": "Promotion Redemption Form",
+        "id": "Promotion Redemption Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "promotion_campaign_code",
+          "label": "Campaign",
+          "label_i18n": {
+            "en": "Campaign",
+            "id": "Kampanye"
+          },
+          "path": "values.promotion_campaign_code"
+        },
+        {
+          "key": "promotion_code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.promotion_code"
+        },
+        {
+          "key": "source_document_type",
+          "label": "Source Type",
+          "label_i18n": {
+            "en": "Source Type",
+            "id": "Tipe Sumber"
+          },
+          "path": "values.source_document_type"
+        },
+        {
+          "key": "source_document_id",
+          "label": "Source Document",
+          "label_i18n": {
+            "en": "Source Document",
+            "id": "Dokumen Sumber"
+          },
+          "path": "values.source_document_id"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "label_i18n": {
+            "en": "Party",
+            "id": "Pihak"
+          },
+          "path": "values.party_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "released"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "promotion.redemptions.list",
+      "kind": "list",
+      "model_key": "promotion_redemption",
+      "required_permissions": [
+        "promotion_redemption.list"
+      ],
+      "title": "Promotion Redemptions",
+      "title_i18n": {
+        "en": "Promotion Redemptions",
+        "id": "Promotion Redemptions"
       }
     },
     {

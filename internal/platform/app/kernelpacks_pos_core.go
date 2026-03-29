@@ -125,6 +125,7 @@ func posCoreKernelPackManifest() module.Manifest {
 				{Key: "warehouse_code", Label: "Warehouse", LabelI18n: localize("Warehouse", "Gudang"), Type: "string"},
 				{Key: "price_list_code", Label: "Price List", LabelI18n: localize("Price List", "Daftar Harga"), Type: "string"},
 				{Key: "tax_profile_code", Label: "Tax Profile", LabelI18n: localize("Tax Profile", "Profil Pajak"), Type: "string"},
+				{Key: "promotion_codes_json", Label: "Promotion Codes JSON", LabelI18n: localize("Promotion Codes JSON", "JSON Kode Promosi"), Type: "string"},
 				{Key: "lines_json", Label: "Lines JSON", LabelI18n: localize("Lines JSON", "JSON Baris"), Type: "string"},
 				{Key: "tenders_json", Label: "Tenders JSON", LabelI18n: localize("Tenders JSON", "JSON Tender"), Type: "string"},
 				{Key: "source_document_type", Label: "Source Type", LabelI18n: localize("Source Type", "Tipe Sumber"), Type: "string"},
@@ -462,6 +463,7 @@ func posSaleDetailView() module.ViewDefinition {
 		{Key: "shift_id", Label: "Shift", LabelI18n: localize("Shift", "Shift"), Path: "values.shift_id", Type: "string"},
 		{Key: "party_name", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Path: "values.party_name", Type: "string"},
 		{Key: "checkout_mode", Label: "Checkout Mode", LabelI18n: localize("Checkout Mode", "Mode Checkout"), Path: "values.checkout_mode", Type: "string"},
+		{Key: "promotion_codes_json", Label: "Promotion Codes", LabelI18n: localize("Promotion Codes", "Kode Promosi"), Path: "values.promotion_codes_json", Type: "string"},
 		{Key: "total_amount", Label: "Total", LabelI18n: localize("Total", "Total"), Path: "values.total_amount", Type: "number"},
 		{Key: "tendered_amount", Label: "Tendered", LabelI18n: localize("Tendered", "Dibayar"), Path: "values.tendered_amount", Type: "number"},
 		{Key: "change_due_amount", Label: "Change Due", LabelI18n: localize("Change Due", "Kembalian"), Path: "values.change_due_amount", Type: "number"},
@@ -480,6 +482,7 @@ func posSaleFormView() module.ViewDefinition {
 		{Key: "shift_id", Label: "Shift", LabelI18n: localize("Shift", "Shift"), Path: "values.shift_id", Type: "string", Widget: "text", Required: true},
 		{Key: "party_name", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Path: "values.party_name", Type: "string", Widget: "text"},
 		{Key: "checkout_mode", Label: "Checkout Mode", LabelI18n: localize("Checkout Mode", "Mode Checkout"), Path: "values.checkout_mode", Type: "string", Widget: "select", Options: []string{"invoice_first", "sales_order_first"}},
+		{Key: "promotion_codes_json", Label: "Promotion Codes", LabelI18n: localize("Promotion Codes", "Kode Promosi"), Path: "values.promotion_codes_json", Type: "string", Widget: "textarea"},
 		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: "select", Options: []string{"held", "completed", "voided"}},
 		{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "values.notes", Type: "string", Widget: "textarea"},
 	})

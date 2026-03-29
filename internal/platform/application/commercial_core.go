@@ -65,6 +65,78 @@ type VariantDimensionSelection struct {
 	ValueCodes    []string `json:"value_codes"`
 }
 
+type discountRuleRecord struct {
+	record                model.Record
+	code                  string
+	name                  string
+	promotionCampaignCode string
+	scopeKey              string
+	kind                  string
+	priority              int
+	partyIDs              map[string]struct{}
+	customerTypes         map[string]struct{}
+	memberStatuses        map[string]struct{}
+	memberTiers           map[string]struct{}
+	itemCodes             map[string]struct{}
+	productCodes          map[string]struct{}
+	variantSignatures     map[string]struct{}
+	categoryCodes         map[string]struct{}
+	rewardItemCodes       map[string]struct{}
+	excludedItemCodes     map[string]struct{}
+	excludedProductCodes  map[string]struct{}
+	excludedCategoryCodes map[string]struct{}
+	weekdays              map[string]struct{}
+	startAt               string
+	endAt                 string
+	startTime             string
+	endTime               string
+	minimumOrderTotal     float64
+	minimumLineQuantity   float64
+	buyQuantity           int
+	rewardQuantity        int
+	discountPercent       float64
+	discountAmount        float64
+	fixedPrice            float64
+	rewardPercent         float64
+	campaignName          string
+	eventCode             string
+}
+
+type promotionCampaignRecord struct {
+	record              model.Record
+	code                string
+	name                string
+	triggerMode         string
+	startAt             string
+	endAt               string
+	salesChannels       map[string]struct{}
+	storeCodes          map[string]struct{}
+	globalUsageCap      int
+	perCustomerUsageCap int
+	bannerText          string
+	combinabilityMode   string
+}
+
+type promotionCodeRecord struct {
+	record                     model.Record
+	code                       string
+	promotionCampaignCode      string
+	startAt                    string
+	endAt                      string
+	partyIDs                   map[string]struct{}
+	memberStatuses             map[string]struct{}
+	memberTiers                map[string]struct{}
+	totalRedemptionLimit       int
+	perCustomerRedemptionLimit int
+}
+
+type discountCandidate struct {
+	rule          discountRuleRecord
+	amount        float64
+	promotionCode string
+	tiebreak      string
+}
+
 func NewCommercialCoreService(documents *document.Service, configSvc *config.Service, models *model.Service, searchSvc *search.Service) *CommercialCoreService {
 	return &CommercialCoreService{documents: documents, config: configSvc, models: models, search: searchSvc}
 }
@@ -188,13 +260,13 @@ func (s *CommercialCoreService) GenerateInvoiceFromOrder(orderID, actorID string
 	if order.Header.Status != "confirmed" {
 		return document.Record{}, shared.Conflict("invoice can only be generated from a confirmed order")
 	}
-	payload := s.NormalizePayload(order.Header.Type, order.Body.Payload)
+	payload := clonedPayload(order.Body.Payload)
 	now := time.Now().UTC()
 	paymentTermDays := int(numberValue(payload["payment_term_days"]))
 	if paymentTermDays <= 0 {
 		paymentTermDays = 30
 	}
-	lines := recordList(payload["lines"])
+	lines := cloneRecordList(recordList(payload["lines"]))
 	invoicePayload := map[string]any{
 		"party_id":                textValue(payload["party_id"]),
 		"party_name":              textValue(payload["party_name"]),
@@ -205,12 +277,20 @@ func (s *CommercialCoreService) GenerateInvoiceFromOrder(orderID, actorID string
 		"source_order_number":     order.Header.Number,
 		"price_list_code":         textValue(payload["price_list_code"]),
 		"tax_profile_code":        textValue(payload["tax_profile_code"]),
+		"promotion_codes":         anyStringSlice(payload["promotion_codes"]),
+		"sales_channel":           firstNonEmptyString(textValue(payload["sales_channel"]), "invoice"),
+		"store_code":              textValue(payload["store_code"]),
 		"payment_term_days":       paymentTermDays,
 		"default_tax_code":        textValue(payload["default_tax_code"]),
 		"receivable_account_code": firstNonEmptyString(textValue(payload["receivable_account_code"]), "1100-AR"),
 		"subtotal_amount":         numberValue(payload["subtotal_amount"]),
 		"tax_amount":              numberValue(payload["tax_amount"]),
 		"total_amount":            numberValue(payload["total_amount"]),
+		"discount_amount_total":   numberValue(payload["discount_amount_total"]),
+		"discount_breakdown":      recordList(payload["discount_breakdown"]),
+		"promotion_breakdown":     recordList(payload["promotion_breakdown"]),
+		"discount_evaluated_at":   textValue(payload["discount_evaluated_at"]),
+		"discount_locked":         true,
 		"paid_amount":             0.0,
 		"balance_due_amount":      numberValue(payload["total_amount"]),
 		"lines":                   lines,
@@ -235,17 +315,32 @@ func (s *CommercialCoreService) GenerateInvoiceFromOrder(orderID, actorID string
 }
 
 func (s *CommercialCoreService) NormalizePayload(documentType string, payload map[string]any) map[string]any {
+	next := cloneMap(payload)
+	switch strings.TrimSpace(documentType) {
+	case "sales_order":
+		if strings.TrimSpace(textValue(next["sales_channel"])) == "" {
+			next["sales_channel"] = "sales_order"
+		}
+	case "invoice":
+		if strings.TrimSpace(textValue(next["sales_channel"])) == "" {
+			next["sales_channel"] = "invoice"
+		}
+	case "credit_note":
+		if strings.TrimSpace(textValue(next["sales_channel"])) == "" {
+			next["sales_channel"] = "credit_note"
+		}
+	}
 	switch strings.TrimSpace(documentType) {
 	case "sales_order", "invoice", "credit_note":
-		return s.normalizeCommercialLines(payload)
+		return s.normalizeCommercialLines(next)
 	case "payment_receipt":
-		return s.normalizeCommercialAllocations(payload)
+		return s.normalizeCommercialAllocations(next)
 	case "payment_refund":
-		return s.normalizeCommercialRefund(payload)
+		return s.normalizeCommercialRefund(next)
 	case "ledger_posting":
-		return s.normalizeJournalLines(payload)
+		return s.normalizeJournalLines(next)
 	default:
-		return document.NormalizePayload(cloneMap(payload))
+		return document.NormalizePayload(next)
 	}
 }
 
@@ -270,15 +365,15 @@ func (s *CommercialCoreService) CreatePaymentReceiptFromInvoice(invoiceID, actor
 	}
 	now := time.Now().UTC()
 	paymentPayload := map[string]any{
-		"party_id":            textValue(payload["party_id"]),
-		"party_name":          textValue(payload["party_name"]),
-		"receipt_date":        now.Format("2006-01-02"),
-		"payment_method_code": "",
-		"payment_reference":   firstNonEmptyString(invoice.Header.Number, invoice.Header.ID),
+		"party_id":                textValue(payload["party_id"]),
+		"party_name":              textValue(payload["party_name"]),
+		"receipt_date":            now.Format("2006-01-02"),
+		"payment_method_code":     "",
+		"payment_reference":       firstNonEmptyString(invoice.Header.Number, invoice.Header.ID),
 		"receivable_account_code": textValue(payload["receivable_account_code"]),
-		"currency_code":       firstNonEmptyString(textValue(payload["currency_code"]), invoice.Header.TotalAmount.Currency, "IDR"),
-		"amount_received":     openAmount,
-		"unapplied_amount":    0.0,
+		"currency_code":           firstNonEmptyString(textValue(payload["currency_code"]), invoice.Header.TotalAmount.Currency, "IDR"),
+		"amount_received":         openAmount,
+		"unapplied_amount":        0.0,
 		"allocations": []map[string]any{{
 			"invoice_number": invoice.Header.Number,
 			"invoice_id":     invoice.Header.ID,
@@ -367,7 +462,10 @@ func (s *CommercialCoreService) CreateCreditNoteFromInvoice(invoiceID, actorID s
 func (s *CommercialCoreService) HandleApprovedDocument(record document.Record, actorID string) error {
 	switch record.Header.Type {
 	case "invoice":
-		return s.handleIssuedInvoice(record, actorID)
+		if err := s.handleIssuedInvoice(record, actorID); err != nil {
+			return err
+		}
+		return s.recordPromotionRedemptions(record, actorID)
 	case "credit_note":
 		return s.handleIssuedCreditNote(record, actorID)
 	case "payment_receipt":
@@ -424,7 +522,10 @@ func (s *CommercialCoreService) HandleCanceledDocument(record document.Record, a
 	}
 	switch record.Header.Type {
 	case "invoice":
-		return s.handleCancelledInvoice(record, actorID)
+		if err := s.handleCancelledInvoice(record, actorID); err != nil {
+			return err
+		}
+		return s.releasePromotionRedemptions(record.Header.ID, actorID)
 	case "payment_receipt":
 		return s.handleCancelledPayment(record, actorID)
 	case "payment_refund":
@@ -1503,6 +1604,8 @@ func (s *CommercialCoreService) postingConfig() map[string]string {
 func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any) map[string]any {
 	next := document.NormalizePayload(cloneMap(payload))
 	next = s.applyPartyCommercialDefaults(next)
+	next["promotion_codes"] = anyStringSlice(next["promotion_codes"])
+	preserveDiscounts := boolFieldValue(next["discount_locked"])
 	priceListCode := textValue(next["price_list_code"])
 	profileCode := textValue(next["tax_profile_code"])
 	profileTaxCode := s.lookupAccountCode("commercial_tax_profile", "code", profileCode, "default_tax_code")
@@ -1524,9 +1627,6 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 	}
 	rows := recordList(next["lines"])
 	normalizedRows := make([]map[string]any, 0, len(rows))
-	subtotalAmount := 0.0
-	taxAmount := 0.0
-	totalAmount := 0.0
 	for _, row := range rows {
 		normalized := cloneMap(row)
 		defaultTaxCode := textValue(next["default_tax_code"])
@@ -1546,6 +1646,11 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 				s.lookupAccountCode("commercial_product", "code", textValue(normalized["product_code"]), "uom_code"),
 			)
 		}
+		normalized["resolved_category_code"] = firstNonEmptyString(
+			textValue(normalized["category_code"]),
+			s.lookupAccountCode("commercial_item", "sku", itemCode, "category_code"),
+			s.lookupAccountCode("commercial_product", "code", textValue(normalized["product_code"]), "category_code"),
+		)
 		if numberValue(normalized["unit_price"]) == 0 {
 			if to := s.lookupPriceListUnitPrice(priceListCode, itemCode); to > 0 {
 				normalized["unit_price"] = to
@@ -1592,31 +1697,881 @@ func (s *CommercialCoreService) normalizeCommercialLines(payload map[string]any)
 			quantity = 1
 		}
 		unitPrice := numberValue(normalized["unit_price"])
-		discountAmount := numberValue(normalized["discount_amount"])
 		taxRate := numberValue(normalized["tax_rate"])
-		grossAmount := roundMoney(maxFloat(quantity*unitPrice-discountAmount, 0))
-		lineSubtotal, lineTax, lineTotal := commercialTaxBreakdown(grossAmount, taxRate, taxMode)
 		normalized["quantity"] = quantity
 		normalized["unit_price"] = unitPrice
-		normalized["discount_amount"] = discountAmount
+		normalized["base_unit_price"] = roundMoney(maxFloat(numberValue(normalized["base_unit_price"]), unitPrice))
+		if preserveDiscounts {
+			manualDiscount := roundMoney(numberValue(normalized["manual_discount_amount"]))
+			autoDiscount := roundMoney(numberValue(normalized["auto_discount_amount"]))
+			discountAmount := roundMoney(numberValue(normalized["discount_amount"]))
+			if discountAmount == 0 {
+				discountAmount = roundMoney(manualDiscount + autoDiscount)
+			}
+			normalized["manual_discount_amount"] = manualDiscount
+			normalized["auto_discount_amount"] = autoDiscount
+			normalized["discount_amount"] = discountAmount
+			if len(anyStringSlice(normalized["discount_rule_codes"])) == 0 {
+				normalized["discount_rule_codes"] = []string{}
+			}
+			if len(recordList(normalized["discount_breakdown"])) == 0 {
+				normalized["discount_breakdown"] = []map[string]any{}
+			}
+			if len(recordList(normalized["promotion_breakdown"])) == 0 {
+				normalized["promotion_breakdown"] = []map[string]any{}
+			}
+		} else {
+			normalized["manual_discount_amount"] = roundMoney(s.manualDiscountSeed(normalized))
+			normalized["auto_discount_amount"] = 0.0
+			normalized["discount_rule_codes"] = []string{}
+			normalized["discount_breakdown"] = []map[string]any{}
+			normalized["promotion_breakdown"] = []map[string]any{}
+		}
 		normalized["tax_rate"] = taxRate
 		normalized["tax_mode"] = taxMode
+		normalizedRows = append(normalizedRows, normalized)
+	}
+	if !preserveDiscounts {
+		normalizedRows = s.applyDiscountRules(next, normalizedRows)
+	}
+	subtotalAmount := 0.0
+	taxAmount := 0.0
+	totalAmount := 0.0
+	discountAmountTotal := 0.0
+	discountBreakdown := make([]map[string]any, 0, len(normalizedRows))
+	promotionBreakdown := make([]map[string]any, 0, len(normalizedRows))
+	for index, normalized := range normalizedRows {
+		quantity := numberValue(normalized["quantity"])
+		unitPrice := numberValue(normalized["unit_price"])
+		discountAmount := roundMoney(numberValue(normalized["discount_amount"]))
+		taxRate := numberValue(normalized["tax_rate"])
+		taxMode := textValue(normalized["tax_mode"])
+		grossAmount := roundMoney(maxFloat(quantity*unitPrice-discountAmount, 0))
+		lineSubtotal, lineTax, lineTotal := commercialTaxBreakdown(grossAmount, taxRate, taxMode)
+		normalized["discount_amount"] = discountAmount
 		normalized["line_subtotal"] = lineSubtotal
 		normalized["tax_amount"] = lineTax
 		normalized["line_total"] = lineTotal
 		subtotalAmount += lineSubtotal
 		taxAmount += lineTax
 		totalAmount += lineTotal
-		normalizedRows = append(normalizedRows, normalized)
+		discountAmountTotal += discountAmount
+		if breakdown := recordList(normalized["discount_breakdown"]); len(breakdown) > 0 {
+			discountBreakdown = append(discountBreakdown, map[string]any{
+				"line_index": index,
+				"item_code":  textValue(normalized["item_code"]),
+				"rules":      breakdown,
+			})
+		}
+		if breakdown := recordList(normalized["promotion_breakdown"]); len(breakdown) > 0 {
+			promotionBreakdown = append(promotionBreakdown, map[string]any{
+				"line_index": index,
+				"item_code":  textValue(normalized["item_code"]),
+				"rules":      breakdown,
+			})
+		}
+		normalizedRows[index] = normalized
 	}
 	next["lines"] = normalizedRows
 	next["subtotal_amount"] = roundMoney(subtotalAmount)
 	next["tax_amount"] = roundMoney(taxAmount)
 	next["total_amount"] = roundMoney(totalAmount)
+	next["discount_amount_total"] = roundMoney(discountAmountTotal)
+	next["discount_breakdown"] = discountBreakdown
+	next["promotion_breakdown"] = promotionBreakdown
 	if strings.TrimSpace(textValue(next["currency_code"])) == "" {
 		next["currency_code"] = "IDR"
 	}
+	if strings.TrimSpace(textValue(next["discount_evaluated_at"])) == "" {
+		next["discount_evaluated_at"] = s.discountEvaluationTime(next).Format(time.RFC3339)
+	}
 	return next
+}
+
+func cloneRecordList(rows []map[string]any) []map[string]any {
+	if len(rows) == 0 {
+		return nil
+	}
+	cloned := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		cloned = append(cloned, cloneMap(row))
+	}
+	return cloned
+}
+
+func (s *CommercialCoreService) applyDiscountRules(payload map[string]any, rows []map[string]any) []map[string]any {
+	if len(rows) == 0 || s.models == nil {
+		return rows
+	}
+	rules := s.listActiveDiscountRules()
+	if len(rules) == 0 {
+		return rows
+	}
+	evalTime := s.discountEvaluationTime(payload)
+	partyValues := s.partyDiscountFields(textValue(payload["party_id"]))
+	channel := strings.ToLower(strings.TrimSpace(textValue(payload["sales_channel"])))
+	storeCode := strings.TrimSpace(textValue(payload["store_code"]))
+	promotionCodes := anyStringSlice(payload["promotion_codes"])
+	campaigns := s.listActivePromotionCampaigns()
+	codes := s.listPromotionCodes()
+	policy := s.discountPolicy()
+	baseOrderTotal := 0.0
+	for _, row := range rows {
+		baseOrderTotal += roundMoney(maxFloat(numberValue(row["quantity"])*numberValue(row["unit_price"])-numberValue(row["manual_discount_amount"]), 0))
+	}
+	lineCandidates := make([][]discountCandidate, len(rows))
+	orderCandidates := make([][]discountCandidate, len(rows))
+	for _, rule := range rules {
+		if !rule.appliesAt(evalTime) || !rule.matchesParty(partyValues, evalTime) {
+			continue
+		}
+		matchedPromotionCode := ""
+		if !s.rulePromotionAllowed(rule, campaigns, codes, promotionCodes, channel, storeCode, partyValues, evalTime, textValue(payload["party_id"]), &matchedPromotionCode) {
+			continue
+		}
+		switch rule.scopeKey {
+		case "order":
+			eligibleIndexes := make([]int, 0, len(rows))
+			eligibleBasis := make([]float64, 0, len(rows))
+			totalEligibleBasis := 0.0
+			for index, row := range rows {
+				if !rule.matchesLine(row, true) {
+					continue
+				}
+				basis := roundMoney(maxFloat(numberValue(row["quantity"])*numberValue(row["unit_price"])-numberValue(row["manual_discount_amount"]), 0))
+				if basis <= 0 {
+					continue
+				}
+				eligibleIndexes = append(eligibleIndexes, index)
+				eligibleBasis = append(eligibleBasis, basis)
+				totalEligibleBasis += basis
+			}
+			if len(eligibleIndexes) == 0 || baseOrderTotal < rule.minimumOrderTotal {
+				continue
+			}
+			totalDiscount := rule.orderDiscountAmount(totalEligibleBasis)
+			if totalDiscount <= 0 {
+				continue
+			}
+			allocated := allocateDiscount(totalDiscount, eligibleBasis)
+			for idx, rowIndex := range eligibleIndexes {
+				if allocated[idx] <= 0 {
+					continue
+				}
+				orderCandidates[rowIndex] = append(orderCandidates[rowIndex], discountCandidate{
+					rule:          rule,
+					amount:        allocated[idx],
+					promotionCode: matchedPromotionCode,
+					tiebreak:      firstNonEmptyString(rule.code, rule.name),
+				})
+			}
+		default:
+			for index, row := range rows {
+				if !rule.matchesLine(row, false) {
+					continue
+				}
+				amount := rule.lineDiscountAmount(row, baseOrderTotal)
+				if amount <= 0 {
+					continue
+				}
+				lineCandidates[index] = append(lineCandidates[index], discountCandidate{
+					rule:          rule,
+					amount:        amount,
+					promotionCode: matchedPromotionCode,
+					tiebreak:      firstNonEmptyString(rule.code, rule.name),
+				})
+			}
+		}
+	}
+	for index, row := range rows {
+		manualDiscount := roundMoney(numberValue(row["manual_discount_amount"]))
+		lineApplied := selectDiscountCandidates(lineCandidates[index], policy.StackingMode)
+		orderApplied := selectDiscountCandidates(orderCandidates[index], policy.StackingMode)
+		autoDiscount := 0.0
+		breakdown := make([]map[string]any, 0, len(lineApplied)+len(orderApplied))
+		switch policy.StackingMode {
+		case "best_one_only":
+			best := discountCandidate{}
+			for _, item := range append(append([]discountCandidate{}, lineApplied...), orderApplied...) {
+				if item.amount > best.amount || (item.amount == best.amount && item.tiebreak < best.tiebreak) {
+					best = item
+				}
+			}
+			if best.amount > 0 {
+				autoDiscount = roundMoney(best.amount)
+				breakdown = append(breakdown, discountBreakdownEntry(best.rule, best.amount, best.promotionCode))
+			}
+		default:
+			for _, item := range append(lineApplied, orderApplied...) {
+				autoDiscount += item.amount
+				breakdown = append(breakdown, discountBreakdownEntry(item.rule, item.amount, item.promotionCode))
+			}
+			autoDiscount = roundMoney(autoDiscount)
+		}
+		maxDiscount := roundMoney(numberValue(row["quantity"]) * numberValue(row["unit_price"]))
+		totalDiscount := roundMoney(minCommercialFloat(manualDiscount+autoDiscount, maxDiscount))
+		row["auto_discount_amount"] = autoDiscount
+		row["discount_amount"] = totalDiscount
+		ruleCodes := make([]string, 0, len(breakdown))
+		for _, item := range breakdown {
+			code := textValue(item["rule_code"])
+			if code != "" {
+				ruleCodes = append(ruleCodes, code)
+			}
+		}
+		row["discount_rule_codes"] = ruleCodes
+		row["discount_breakdown"] = breakdown
+		row["promotion_breakdown"] = promotionEntries(breakdown)
+		rows[index] = row
+	}
+	return rows
+}
+
+type discountPolicyConfig struct {
+	StackingMode string
+	TimeZone     string
+}
+
+func (s *CommercialCoreService) discountPolicy() discountPolicyConfig {
+	policy := discountPolicyConfig{
+		StackingMode: "best_one_only",
+		TimeZone:     "Asia/Jakarta",
+	}
+	if s.config == nil {
+		return policy
+	}
+	value, ok := s.config.Resolve("discount.policy", "", "")
+	if !ok {
+		return policy
+	}
+	policy.StackingMode = firstNonEmptyString(textValue(value.Value["stacking_mode"]), policy.StackingMode)
+	policy.TimeZone = firstNonEmptyString(textValue(value.Value["time_zone"]), policy.TimeZone)
+	return policy
+}
+
+func (s *CommercialCoreService) discountEvaluationTime(payload map[string]any) time.Time {
+	if parsed, ok := parseFlexibleTime(firstNonEmptyString(textValue(payload["order_datetime"]), textValue(payload["invoice_datetime"]))); ok {
+		return parsed
+	}
+	if parsed, ok := parseFlexibleTime(textValue(payload["discount_evaluated_at"])); ok {
+		return parsed
+	}
+	policy := s.discountPolicy()
+	location := time.Local
+	if policy.TimeZone != "" {
+		if loaded, err := time.LoadLocation(policy.TimeZone); err == nil {
+			location = loaded
+		}
+	}
+	if parsed, ok := parseFlexibleDate(firstNonEmptyString(textValue(payload["invoice_date"]), textValue(payload["order_date"])), location); ok {
+		now := time.Now().In(location)
+		return time.Date(parsed.Year(), parsed.Month(), parsed.Day(), now.Hour(), now.Minute(), now.Second(), 0, location)
+	}
+	return time.Now().In(location)
+}
+
+func (s *CommercialCoreService) partyDiscountFields(partyID string) map[string]string {
+	values := map[string]string{}
+	if s.models == nil || strings.TrimSpace(partyID) == "" {
+		return values
+	}
+	record, err := s.models.Get("party", partyID)
+	if err != nil {
+		return values
+	}
+	values["party_id"] = partyID
+	values["customer_type"] = textValue(record.Values["customer_type"])
+	values["member_status"] = textValue(record.Values["member_status"])
+	values["member_tier"] = textValue(record.Values["member_tier"])
+	values["member_valid_from"] = textValue(record.Values["member_valid_from"])
+	values["member_valid_to"] = textValue(record.Values["member_valid_to"])
+	return values
+}
+
+func (s *CommercialCoreService) listActiveDiscountRules() []discountRuleRecord {
+	if s.models == nil {
+		return nil
+	}
+	items, _, err := s.models.List("discount_rule", model.Query{
+		Filters:  map[string]string{"status": "active"},
+		Page:     1,
+		PageSize: 1000,
+	})
+	if err != nil {
+		return nil
+	}
+	rules := make([]discountRuleRecord, 0, len(items))
+	for _, item := range items {
+		rule := discountRuleRecord{
+			record:                item,
+			code:                  textValue(item.Values["code"]),
+			name:                  textValue(item.Values["name"]),
+			promotionCampaignCode: textValue(item.Values["promotion_campaign_code"]),
+			scopeKey:              firstNonEmptyString(textValue(item.Values["scope"]), "line"),
+			kind:                  textValue(item.Values["rule_kind"]),
+			priority:              int(numberValue(item.Values["priority"])),
+			partyIDs:              parseStringSet(item.Values["party_ids"]),
+			customerTypes:         parseStringSet(item.Values["customer_types"]),
+			memberStatuses:        parseStringSet(item.Values["member_statuses"]),
+			memberTiers:           parseStringSet(item.Values["member_tiers"]),
+			itemCodes:             parseStringSet(item.Values["item_codes"]),
+			productCodes:          parseStringSet(item.Values["product_codes"]),
+			variantSignatures:     parseStringSet(item.Values["variant_signatures"]),
+			categoryCodes:         parseStringSet(item.Values["category_codes"]),
+			rewardItemCodes:       parseStringSet(item.Values["reward_item_codes"]),
+			excludedItemCodes:     parseStringSet(item.Values["excluded_item_codes"]),
+			excludedProductCodes:  parseStringSet(item.Values["excluded_product_codes"]),
+			excludedCategoryCodes: parseStringSet(item.Values["excluded_category_codes"]),
+			weekdays:              parseStringSet(item.Values["weekdays"]),
+			startAt:               textValue(item.Values["start_at"]),
+			endAt:                 textValue(item.Values["end_at"]),
+			startTime:             textValue(item.Values["start_time"]),
+			endTime:               textValue(item.Values["end_time"]),
+			minimumOrderTotal:     roundMoney(numberValue(item.Values["minimum_order_total"])),
+			minimumLineQuantity:   roundMoney(numberValue(item.Values["minimum_line_quantity"])),
+			buyQuantity:           int(numberValue(item.Values["buy_quantity"])),
+			rewardQuantity:        int(numberValue(item.Values["reward_quantity"])),
+			discountPercent:       roundMoney(numberValue(item.Values["discount_percent"])),
+			discountAmount:        roundMoney(numberValue(item.Values["discount_amount"])),
+			fixedPrice:            roundMoney(numberValue(item.Values["fixed_price"])),
+			rewardPercent:         roundMoney(numberValue(item.Values["reward_percent"])),
+			campaignName:          textValue(item.Values["campaign_name"]),
+			eventCode:             textValue(item.Values["event_code"]),
+		}
+		rules = append(rules, rule)
+	}
+	sort.SliceStable(rules, func(i, j int) bool {
+		if rules[i].priority == rules[j].priority {
+			return firstNonEmptyString(rules[i].code, rules[i].name) < firstNonEmptyString(rules[j].code, rules[j].name)
+		}
+		return rules[i].priority < rules[j].priority
+	})
+	return rules
+}
+
+func (s *CommercialCoreService) listActivePromotionCampaigns() map[string]promotionCampaignRecord {
+	if s.models == nil {
+		return nil
+	}
+	items, _, err := s.models.List("promotion_campaign", model.Query{
+		Filters:  map[string]string{"status": "active"},
+		Page:     1,
+		PageSize: 1000,
+	})
+	if err != nil {
+		return nil
+	}
+	campaigns := make(map[string]promotionCampaignRecord, len(items))
+	for _, item := range items {
+		code := strings.TrimSpace(textValue(item.Values["code"]))
+		if code == "" {
+			continue
+		}
+		campaigns[strings.ToLower(code)] = promotionCampaignRecord{
+			record:              item,
+			code:                code,
+			name:                textValue(item.Values["name"]),
+			triggerMode:         firstNonEmptyString(textValue(item.Values["trigger_mode"]), "auto"),
+			startAt:             textValue(item.Values["start_at"]),
+			endAt:               textValue(item.Values["end_at"]),
+			salesChannels:       parseStringSet(item.Values["sales_channels"]),
+			storeCodes:          parseStringSet(item.Values["store_codes"]),
+			globalUsageCap:      int(numberValue(item.Values["global_usage_cap"])),
+			perCustomerUsageCap: int(numberValue(item.Values["per_customer_usage_cap"])),
+			bannerText:          textValue(item.Values["banner_text"]),
+			combinabilityMode:   textValue(item.Values["combinability_mode"]),
+		}
+	}
+	return campaigns
+}
+
+func (s *CommercialCoreService) listPromotionCodes() map[string]promotionCodeRecord {
+	if s.models == nil {
+		return nil
+	}
+	items, _, err := s.models.List("promotion_code", model.Query{
+		Page:     1,
+		PageSize: 1000,
+	})
+	if err != nil {
+		return nil
+	}
+	codes := make(map[string]promotionCodeRecord, len(items))
+	for _, item := range items {
+		status := strings.ToLower(strings.TrimSpace(textValue(item.Values["status"])))
+		if status != "" && status != "active" {
+			continue
+		}
+		code := strings.TrimSpace(textValue(item.Values["code"]))
+		if code == "" {
+			continue
+		}
+		codes[strings.ToLower(code)] = promotionCodeRecord{
+			record:                     item,
+			code:                       code,
+			promotionCampaignCode:      textValue(item.Values["promotion_campaign_code"]),
+			startAt:                    textValue(item.Values["start_at"]),
+			endAt:                      textValue(item.Values["end_at"]),
+			partyIDs:                   parseStringSet(item.Values["party_ids"]),
+			memberStatuses:             parseStringSet(item.Values["member_statuses"]),
+			memberTiers:                parseStringSet(item.Values["member_tiers"]),
+			totalRedemptionLimit:       int(numberValue(item.Values["total_redemption_limit"])),
+			perCustomerRedemptionLimit: int(numberValue(item.Values["per_customer_redemption_limit"])),
+		}
+	}
+	return codes
+}
+
+func (s *CommercialCoreService) rulePromotionAllowed(rule discountRuleRecord, campaigns map[string]promotionCampaignRecord, codes map[string]promotionCodeRecord, enteredCodes []string, channel, storeCode string, partyValues map[string]string, at time.Time, partyID string, matchedCode *string) bool {
+	if matchedCode != nil {
+		*matchedCode = ""
+	}
+	campaignCode := strings.ToLower(strings.TrimSpace(rule.promotionCampaignCode))
+	if campaignCode == "" {
+		return true
+	}
+	campaign, ok := campaigns[campaignCode]
+	if !ok {
+		return false
+	}
+	if !withinDateWindow(at, campaign.startAt, campaign.endAt) {
+		return false
+	}
+	if len(campaign.salesChannels) > 0 {
+		if _, ok := campaign.salesChannels[strings.ToLower(strings.TrimSpace(channel))]; !ok {
+			return false
+		}
+	}
+	if len(campaign.storeCodes) > 0 {
+		if storeCode == "" {
+			return false
+		}
+		if _, ok := campaign.storeCodes[strings.ToLower(strings.TrimSpace(storeCode))]; !ok {
+			return false
+		}
+	}
+	if s.promotionCampaignUsageCount(campaign.code, "") >= campaign.globalUsageCap && campaign.globalUsageCap > 0 {
+		return false
+	}
+	if strings.TrimSpace(partyID) != "" && campaign.perCustomerUsageCap > 0 && s.promotionCampaignUsageCount(campaign.code, partyID) >= campaign.perCustomerUsageCap {
+		return false
+	}
+	if strings.EqualFold(campaign.triggerMode, "code") {
+		for _, entered := range enteredCodes {
+			code, ok := codes[strings.ToLower(strings.TrimSpace(entered))]
+			if !ok {
+				continue
+			}
+			if !strings.EqualFold(strings.TrimSpace(code.promotionCampaignCode), campaign.code) {
+				continue
+			}
+			if !withinDateWindow(at, code.startAt, code.endAt) {
+				continue
+			}
+			if !promotionCodeMatchesParty(code, partyValues, at) {
+				continue
+			}
+			if code.totalRedemptionLimit > 0 && s.promotionCodeUsageCount(code.code, "") >= code.totalRedemptionLimit {
+				continue
+			}
+			if strings.TrimSpace(partyID) != "" && code.perCustomerRedemptionLimit > 0 && s.promotionCodeUsageCount(code.code, partyID) >= code.perCustomerRedemptionLimit {
+				continue
+			}
+			if matchedCode != nil {
+				*matchedCode = code.code
+			}
+			return true
+		}
+		return false
+	}
+	return true
+}
+
+func (r discountRuleRecord) appliesAt(at time.Time) bool {
+	if !withinDateWindow(at, r.startAt, r.endAt) {
+		return false
+	}
+	if len(r.weekdays) > 0 {
+		if _, ok := r.weekdays[strings.ToLower(at.Weekday().String())]; !ok {
+			if _, ok := r.weekdays[strings.ToLower(at.Format("Mon"))]; !ok {
+				return false
+			}
+		}
+	}
+	if !withinClockWindow(at, r.startTime, r.endTime) {
+		return false
+	}
+	return true
+}
+
+func (r discountRuleRecord) matchesParty(values map[string]string, at time.Time) bool {
+	if len(r.partyIDs) > 0 {
+		if _, ok := r.partyIDs[strings.ToLower(strings.TrimSpace(values["party_id"]))]; !ok {
+			return false
+		}
+	}
+	if len(r.customerTypes) > 0 {
+		if _, ok := r.customerTypes[strings.ToLower(values["customer_type"])]; !ok {
+			return false
+		}
+	}
+	if len(r.memberStatuses) > 0 {
+		if _, ok := r.memberStatuses[strings.ToLower(values["member_status"])]; !ok {
+			return false
+		}
+	}
+	if len(r.memberTiers) > 0 {
+		if _, ok := r.memberTiers[strings.ToLower(values["member_tier"])]; !ok {
+			return false
+		}
+	}
+	return memberValidityAllowed(values["member_valid_from"], values["member_valid_to"], at)
+}
+
+func (r discountRuleRecord) matchesLine(row map[string]any, orderScope bool) bool {
+	itemCode := textValue(row["item_code"])
+	productCode := textValue(row["product_code"])
+	variantSignature := textValue(row["variant_signature"])
+	categoryCode := textValue(row["category_code"])
+	if categoryCode == "" {
+		categoryCode = textValue(row["resolved_category_code"])
+	}
+	if len(r.itemCodes) > 0 {
+		if _, ok := r.itemCodes[strings.ToLower(itemCode)]; !ok {
+			return false
+		}
+	}
+	if len(r.productCodes) > 0 {
+		if _, ok := r.productCodes[strings.ToLower(productCode)]; !ok {
+			return false
+		}
+	}
+	if len(r.variantSignatures) > 0 {
+		if _, ok := r.variantSignatures[strings.ToLower(variantSignature)]; !ok {
+			return false
+		}
+	}
+	if len(r.categoryCodes) > 0 {
+		if _, ok := r.categoryCodes[strings.ToLower(categoryCode)]; !ok {
+			return false
+		}
+	}
+	if _, ok := r.excludedItemCodes[strings.ToLower(itemCode)]; ok {
+		return false
+	}
+	if _, ok := r.excludedProductCodes[strings.ToLower(productCode)]; ok {
+		return false
+	}
+	if _, ok := r.excludedCategoryCodes[strings.ToLower(categoryCode)]; ok {
+		return false
+	}
+	if orderScope {
+		return true
+	}
+	if r.minimumLineQuantity > 0 && numberValue(row["quantity"]) < r.minimumLineQuantity {
+		return false
+	}
+	return true
+}
+
+func (r discountRuleRecord) lineDiscountAmount(row map[string]any, orderTotal float64) float64 {
+	quantity := numberValue(row["quantity"])
+	unitPrice := numberValue(row["unit_price"])
+	manualDiscount := numberValue(row["manual_discount_amount"])
+	lineGross := roundMoney(maxFloat(quantity*unitPrice-manualDiscount, 0))
+	if lineGross <= 0 {
+		return 0
+	}
+	if r.minimumOrderTotal > 0 && orderTotal < r.minimumOrderTotal {
+		return 0
+	}
+	switch r.kind {
+	case "line_percent", "category_percent":
+		return roundMoney(lineGross * r.discountPercent / 100)
+	case "line_fixed_amount":
+		return roundMoney(minCommercialFloat(r.discountAmount, lineGross))
+	case "line_fixed_price", "threshold_item_price":
+		if r.fixedPrice <= 0 {
+			return 0
+		}
+		target := roundMoney(quantity * r.fixedPrice)
+		return roundMoney(maxFloat(lineGross-target, 0))
+	case "bulk_percent":
+		if r.minimumLineQuantity > 0 && quantity < r.minimumLineQuantity {
+			return 0
+		}
+		return roundMoney(lineGross * r.discountPercent / 100)
+	case "bxgy":
+		buyQty := maxInt(r.buyQuantity, 0)
+		rewardQty := maxInt(r.rewardQuantity, 0)
+		if buyQty <= 0 || rewardQty <= 0 {
+			return 0
+		}
+		cycleQty := buyQty + rewardQty
+		if cycleQty <= 0 {
+			return 0
+		}
+		cycles := int(quantity) / cycleQty
+		rewardUnits := cycles * rewardQty
+		if rewardUnits <= 0 {
+			return 0
+		}
+		rewardPercent := r.rewardPercent
+		if rewardPercent <= 0 {
+			rewardPercent = 100
+		}
+		return roundMoney(float64(rewardUnits) * unitPrice * rewardPercent / 100)
+	default:
+		return 0
+	}
+}
+
+func (r discountRuleRecord) orderDiscountAmount(totalEligibleBasis float64) float64 {
+	if totalEligibleBasis <= 0 {
+		return 0
+	}
+	switch r.kind {
+	case "order_percent":
+		return roundMoney(totalEligibleBasis * r.discountPercent / 100)
+	default:
+		return 0
+	}
+}
+
+func selectDiscountCandidates(candidates []discountCandidate, stackingMode string) []discountCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+	switch stackingMode {
+	case "fully_stackable":
+		return candidates
+	default:
+		best := candidates[0]
+		for _, item := range candidates[1:] {
+			if item.amount > best.amount || (item.amount == best.amount && item.tiebreak < best.tiebreak) {
+				best = item
+			}
+		}
+		return []discountCandidate{best}
+	}
+}
+
+func discountBreakdownEntry(rule discountRuleRecord, amount float64, promotionCode string) map[string]any {
+	return map[string]any{
+		"rule_code":               firstNonEmptyString(rule.code, rule.name),
+		"rule_name":               rule.name,
+		"promotion_campaign_code": rule.promotionCampaignCode,
+		"promotion_code":          strings.TrimSpace(promotionCode),
+		"campaign_name":           rule.campaignName,
+		"event_code":              rule.eventCode,
+		"scope":                   rule.scopeKey,
+		"rule_kind":               rule.kind,
+		"discount_value":          roundMoney(amount),
+	}
+}
+
+func promotionEntries(breakdown []map[string]any) []map[string]any {
+	if len(breakdown) == 0 {
+		return []map[string]any{}
+	}
+	entries := make([]map[string]any, 0, len(breakdown))
+	for _, item := range breakdown {
+		if strings.TrimSpace(textValue(item["promotion_campaign_code"])) == "" && strings.TrimSpace(textValue(item["promotion_code"])) == "" {
+			continue
+		}
+		entries = append(entries, map[string]any{
+			"promotion_campaign_code": textValue(item["promotion_campaign_code"]),
+			"promotion_code":          textValue(item["promotion_code"]),
+			"campaign_name":           textValue(item["campaign_name"]),
+			"event_code":              textValue(item["event_code"]),
+			"discount_value":          roundMoney(numberValue(item["discount_value"])),
+		})
+	}
+	return entries
+}
+
+func promotionCodeMatchesParty(code promotionCodeRecord, values map[string]string, at time.Time) bool {
+	if len(code.partyIDs) > 0 {
+		if _, ok := code.partyIDs[strings.ToLower(strings.TrimSpace(values["party_id"]))]; !ok {
+			return false
+		}
+	}
+	if len(code.memberStatuses) > 0 {
+		if _, ok := code.memberStatuses[strings.ToLower(values["member_status"])]; !ok {
+			return false
+		}
+	}
+	if len(code.memberTiers) > 0 {
+		if _, ok := code.memberTiers[strings.ToLower(values["member_tier"])]; !ok {
+			return false
+		}
+	}
+	return memberValidityAllowed(values["member_valid_from"], values["member_valid_to"], at)
+}
+
+func (s *CommercialCoreService) promotionCampaignUsageCount(campaignCode, partyID string) int {
+	items, _, err := s.models.List("promotion_redemption", model.Query{
+		Filters:  map[string]string{"status": "active"},
+		Page:     1,
+		PageSize: 1000,
+	})
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, item := range items {
+		if !strings.EqualFold(strings.TrimSpace(textValue(item.Values["promotion_campaign_code"])), strings.TrimSpace(campaignCode)) {
+			continue
+		}
+		if strings.TrimSpace(partyID) != "" && textValue(item.Values["party_id"]) != strings.TrimSpace(partyID) {
+			continue
+		}
+		total++
+	}
+	return total
+}
+
+func (s *CommercialCoreService) promotionCodeUsageCount(code, partyID string) int {
+	items, _, err := s.models.List("promotion_redemption", model.Query{
+		Filters:  map[string]string{"status": "active"},
+		Page:     1,
+		PageSize: 1000,
+	})
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, item := range items {
+		if !strings.EqualFold(strings.TrimSpace(textValue(item.Values["promotion_code"])), strings.TrimSpace(code)) {
+			continue
+		}
+		if strings.TrimSpace(partyID) != "" && textValue(item.Values["party_id"]) != strings.TrimSpace(partyID) {
+			continue
+		}
+		total++
+	}
+	return total
+}
+
+func (s *CommercialCoreService) recordPromotionRedemptions(record document.Record, actorID string) error {
+	if s.models == nil || record.Header.Type != "invoice" {
+		return nil
+	}
+	breakdown := recordList(record.Body.Payload["promotion_breakdown"])
+	if len(breakdown) == 0 {
+		return nil
+	}
+	type redemptionAggregate struct {
+		campaignCode  string
+		promotionCode string
+		discountTotal float64
+	}
+	aggregates := map[string]*redemptionAggregate{}
+	for _, item := range breakdown {
+		rules := recordList(item["rules"])
+		for _, rule := range rules {
+			campaignCode := strings.TrimSpace(textValue(rule["promotion_campaign_code"]))
+			promotionCode := strings.TrimSpace(textValue(rule["promotion_code"]))
+			if campaignCode == "" && promotionCode == "" {
+				continue
+			}
+			key := campaignCode + "|" + promotionCode
+			aggregate, exists := aggregates[key]
+			if !exists {
+				aggregate = &redemptionAggregate{
+					campaignCode:  campaignCode,
+					promotionCode: promotionCode,
+				}
+				aggregates[key] = aggregate
+			}
+			aggregate.discountTotal += roundMoney(numberValue(rule["discount_value"]))
+		}
+	}
+	for _, aggregate := range aggregates {
+		if s.hasPromotionRedemption(record.Header.ID, aggregate.campaignCode, aggregate.promotionCode) {
+			continue
+		}
+		if _, err := s.models.Create("promotion_redemption", actorID, map[string]any{
+			"promotion_campaign_code": aggregate.campaignCode,
+			"promotion_code":          aggregate.promotionCode,
+			"source_document_type":    record.Header.Type,
+			"source_document_id":      record.Header.ID,
+			"party_id":                textValue(record.Body.Payload["party_id"]),
+			"sales_channel":           textValue(record.Body.Payload["sales_channel"]),
+			"store_code":              textValue(record.Body.Payload["store_code"]),
+			"discount_amount_total":   roundMoney(aggregate.discountTotal),
+			"redeemed_at":             time.Now().UTC().Format(time.RFC3339),
+			"status":                  "active",
+		}); err != nil {
+			return err
+		}
+		if aggregate.promotionCode != "" {
+			s.incrementPromotionCodeCounter(aggregate.promotionCode, actorID)
+		}
+	}
+	return nil
+}
+
+func (s *CommercialCoreService) releasePromotionRedemptions(sourceDocumentID, actorID string) error {
+	if s.models == nil || strings.TrimSpace(sourceDocumentID) == "" {
+		return nil
+	}
+	items, _, err := s.models.List("promotion_redemption", model.Query{
+		Page:     1,
+		PageSize: 1000,
+	})
+	if err != nil {
+		return nil
+	}
+	for _, item := range items {
+		if textValue(item.Values["source_document_id"]) != strings.TrimSpace(sourceDocumentID) {
+			continue
+		}
+		if textValue(item.Values["status"]) == "released" {
+			continue
+		}
+		values := cloneMap(item.Values)
+		values["status"] = "released"
+		if _, err := s.models.Update("promotion_redemption", item.ID, actorID, values, item.Version); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *CommercialCoreService) hasPromotionRedemption(sourceDocumentID, campaignCode, promotionCode string) bool {
+	items, _, err := s.models.List("promotion_redemption", model.Query{
+		Filters:  map[string]string{"source_document_id": sourceDocumentID},
+		Page:     1,
+		PageSize: 100,
+	})
+	if err != nil {
+		return false
+	}
+	for _, item := range items {
+		if textValue(item.Values["promotion_campaign_code"]) == campaignCode && textValue(item.Values["promotion_code"]) == promotionCode && textValue(item.Values["status"]) == "active" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *CommercialCoreService) incrementPromotionCodeCounter(code, actorID string) {
+	if s.models == nil || strings.TrimSpace(code) == "" {
+		return
+	}
+	items, _, err := s.models.List("promotion_code", model.Query{
+		Filters:  map[string]string{"code": strings.TrimSpace(code)},
+		Page:     1,
+		PageSize: 2,
+	})
+	if err != nil || len(items) == 0 {
+		return
+	}
+	item := items[0]
+	values := cloneMap(item.Values)
+	values["total_redemptions"] = numberValue(values["total_redemptions"]) + 1
+	_, _ = s.models.Update("promotion_code", item.ID, actorID, values, item.Version)
 }
 
 func (s *CommercialCoreService) resolveVariantItemCode(productCode, variantSignature string) string {
@@ -2257,6 +3212,13 @@ func maxFloat(a, b float64) float64 {
 	return b
 }
 
+func minCommercialFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func maxInt(a, b int) int {
 	if a > b {
 		return a
@@ -2291,6 +3253,191 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func parseStringSet(value any) map[string]struct{} {
+	result := map[string]struct{}{}
+	for _, item := range splitStringValues(value) {
+		result[strings.ToLower(item)] = struct{}{}
+	}
+	return result
+}
+
+func splitStringValues(value any) []string {
+	raw := strings.TrimSpace(textValue(value))
+	if raw == "" {
+		return nil
+	}
+	fields := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r' || r == ';'
+	})
+	values := make([]string, 0, len(fields))
+	for _, field := range fields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+	return values
+}
+
+func anyStringSlice(value any) []string {
+	switch typed := value.(type) {
+	case []string:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if trimmed := strings.TrimSpace(textValue(item)); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	default:
+		return splitStringValues(value)
+	}
+}
+
+func parseFlexibleTime(value string) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func parseFlexibleDate(value string, location *time.Location) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false
+	}
+	if location == nil {
+		location = time.Local
+	}
+	if parsed, err := time.ParseInLocation("2006-01-02", value, location); err == nil {
+		return parsed, true
+	}
+	return time.Time{}, false
+}
+
+func withinDateWindow(at time.Time, startValue, endValue string) bool {
+	if startValue != "" {
+		if startAt, ok := parseFlexibleTime(startValue); ok && at.Before(startAt) {
+			return false
+		}
+	}
+	if endValue != "" {
+		if endAt, ok := parseFlexibleTime(endValue); ok && at.After(endAt) {
+			return false
+		}
+	}
+	return true
+}
+
+func withinClockWindow(at time.Time, startValue, endValue string) bool {
+	if strings.TrimSpace(startValue) == "" && strings.TrimSpace(endValue) == "" {
+		return true
+	}
+	current := at.Format("15:04")
+	startValue = normalizeClockValue(startValue)
+	endValue = normalizeClockValue(endValue)
+	if startValue != "" && endValue != "" {
+		if startValue <= endValue {
+			return current >= startValue && current <= endValue
+		}
+		return current >= startValue || current <= endValue
+	}
+	if startValue != "" {
+		return current >= startValue
+	}
+	if endValue != "" {
+		return current <= endValue
+	}
+	return true
+}
+
+func (s *CommercialCoreService) manualDiscountSeed(row map[string]any) float64 {
+	manual := roundMoney(numberValue(row["manual_discount_amount"]))
+	if manual > 0 {
+		return manual
+	}
+	auto := roundMoney(numberValue(row["auto_discount_amount"]))
+	if auto > 0 || len(anyStringSlice(row["discount_rule_codes"])) > 0 || len(recordList(row["discount_breakdown"])) > 0 {
+		return 0
+	}
+	return roundMoney(numberValue(row["discount_amount"]))
+}
+
+func normalizeClockValue(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	layouts := []string{"15:04", "15:04:05"}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.Format("15:04")
+		}
+	}
+	return value
+}
+
+func memberValidityAllowed(validFrom, validTo string, at time.Time) bool {
+	if at.IsZero() {
+		at = time.Now()
+	}
+	if parsed, ok := parseFlexibleDate(validFrom, at.Location()); ok && at.Before(parsed) {
+		return false
+	}
+	if parsed, ok := parseFlexibleDate(validTo, at.Location()); ok && at.After(parsed.Add(24*time.Hour-time.Second)) {
+		return false
+	}
+	return true
+}
+
+func allocateDiscount(total float64, basis []float64) []float64 {
+	allocated := make([]float64, len(basis))
+	if total <= 0 || len(basis) == 0 {
+		return allocated
+	}
+	totalBasis := 0.0
+	for _, item := range basis {
+		totalBasis += item
+	}
+	if totalBasis <= 0 {
+		return allocated
+	}
+	remaining := roundMoney(total)
+	for index, item := range basis {
+		if index == len(basis)-1 {
+			allocated[index] = roundMoney(maxFloat(remaining, 0))
+			break
+		}
+		share := roundMoney(total * item / totalBasis)
+		if share > remaining {
+			share = remaining
+		}
+		allocated[index] = share
+		remaining = roundMoney(remaining - share)
+	}
+	return allocated
 }
 
 func (s *CommercialCoreService) refreshDocuments(records ...document.Record) {

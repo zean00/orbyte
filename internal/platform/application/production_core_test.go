@@ -179,6 +179,137 @@ func TestGenerateProductionOrderIssueAndOutput(t *testing.T) {
 	}
 }
 
+func TestProductionIssueAndOutputRefreshLinkedOrderReservations(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProductionTestDocumentTypes(t, docs)
+	mustRegisterProductionTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                    "SOUP",
+		"name":                   "Soup",
+		"uom_code":               "EA",
+		"inventory_enabled":      true,
+		"inventory_tracking_mode": "quantity",
+	}); err != nil {
+		t.Fatalf("create finished item: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                    "BROTH",
+		"name":                   "Broth",
+		"uom_code":               "EA",
+		"inventory_enabled":      true,
+		"inventory_tracking_mode": "quantity",
+	}); err != nil {
+		t.Fatalf("create broth item: %v", err)
+	}
+	bom, err := models.Create("production_bom", "user_admin", map[string]any{
+		"code":                 "BOM-SOUP",
+		"name":                 "Soup Recipe",
+		"finished_item_code":   "SOUP",
+		"default_version_code": "v1",
+		"status":               "active",
+	})
+	if err != nil {
+		t.Fatalf("create bom: %v", err)
+	}
+	if _, err := models.Create("production_bom_version", "user_admin", map[string]any{
+		"bom_id":         bom.ID,
+		"bom_code":       "BOM-SOUP",
+		"version_code":   "v1",
+		"yield_quantity": 1.0,
+		"is_active":      true,
+		"status":         "active",
+		"lines": []map[string]any{
+			{"component_item_code": "BROTH", "quantity_per_unit": 1.0, "uom_code": "EA", "warehouse_code": "MAIN"},
+		},
+	}); err != nil {
+		t.Fatalf("create bom version: %v", err)
+	}
+
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{
+		"item_code":          "BROTH",
+		"warehouse_code":     "MAIN",
+		"quantity_delta":     5.0,
+		"movement_reason":    "seed",
+		"movement_date":      time.Now().UTC().Format("2006-01-02"),
+		"movement_direction": "in",
+	})
+
+	order, err := docs.Create("sales_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_name": "Walk In",
+		"lines": []map[string]any{
+			{"item_code": "SOUP", "quantity": 2.0, "description": "Soup"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create sales order: %v", err)
+	}
+	order.Header.Status = "confirmed"
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save sales order: %v", err)
+	}
+
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	productionSvc := NewProductionCoreService(docs, models, nil, inventorySvc)
+
+	productionOrders, err := productionSvc.GenerateProductionOrdersFromSalesOrder(order.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("generate production orders: %v", err)
+	}
+	productionOrder := productionOrders[0]
+	productionOrder.Header.Status = "approved"
+	if err := docs.Save(productionOrder); err != nil {
+		t.Fatalf("approve production order: %v", err)
+	}
+	if err := productionSvc.HandleApprovedDocument(productionOrder, "user_admin"); err != nil {
+		t.Fatalf("apply production reservations: %v", err)
+	}
+
+	issue, err := productionSvc.CreateProductionIssueFromOrder(productionOrder.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create production issue: %v", err)
+	}
+	issue.Header.Status = "issued"
+	if err := docs.Save(issue); err != nil {
+		t.Fatalf("save production issue: %v", err)
+	}
+	if err := productionSvc.HandleApprovedDocument(issue, "user_admin"); err != nil {
+		t.Fatalf("approve production issue: %v", err)
+	}
+
+	output, err := productionSvc.CreateProductionOutputFromOrder(productionOrder.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create production output: %v", err)
+	}
+	output.Body.Payload["output_quantity"] = 2.0
+	output.Body.Payload["production_lot_code"] = "LOT-SOUP-1"
+	output.Body.Payload["stages"] = []map[string]any{}
+	output.Body.Payload = productionSvc.NormalizePayload("production_output", output.Body.Payload)
+	output.Header.Status = "posted"
+	if err := docs.Save(output); err != nil {
+		t.Fatalf("save production output: %v", err)
+	}
+	if err := productionSvc.HandleApprovedDocument(output, "user_admin"); err != nil {
+		t.Fatalf("approve production output: %v", err)
+	}
+
+	updatedOrder, err := docs.Get(productionOrder.Header.ID)
+	if err != nil {
+		t.Fatalf("reload production order: %v", err)
+	}
+	if got := updatedOrder.Header.Status; got != "completed" {
+		t.Fatalf("expected completed production order, got %s", got)
+	}
+	lines := recordList(updatedOrder.Body.Payload["lines"])
+	if got := numberValue(lines[0]["reserved_quantity"]); got != 0 {
+		t.Fatalf("expected reservation released after issue/output, got %v", got)
+	}
+	if got := numberValue(updatedOrder.Body.Payload["reserved_quantity_total"]); got != 0 {
+		t.Fatalf("expected reserved quantity total 0, got %v", got)
+	}
+}
+
 func TestGenerateProductionOrderFindsTrimmedActiveBOM(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()

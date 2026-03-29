@@ -309,12 +309,12 @@ func (s *ProductionCoreService) HandleCanceledDocument(record document.Record, a
 		if err := s.inventory.reverseMovements(record, actorID, "production_issue", "production_issue_reversal"); err != nil {
 			return err
 		}
-		return s.refreshLinkedProductionOrder(record)
+		return s.refreshLinkedProductionOrder(record, actorID)
 	case "production_output":
 		if err := s.inventory.reverseMovements(record, actorID, "production_output", "production_output_reversal"); err != nil {
 			return err
 		}
-		return s.refreshLinkedProductionOrder(record)
+		return s.refreshLinkedProductionOrder(record, actorID)
 	default:
 		return nil
 	}
@@ -404,7 +404,7 @@ func (s *ProductionCoreService) validateProductionOutput(record document.Record)
 
 func (s *ProductionCoreService) handleApprovedProductionIssue(record document.Record, actorID string) error {
 	if s.inventory.hasMovementLink(record, "production_issue") {
-		return s.refreshLinkedProductionOrder(record)
+		return s.refreshLinkedProductionOrder(record, actorID)
 	}
 	movementLines, err := s.inventory.resolveIssueMovementLines(record.Header.OrganizationID, record.Header.LocationID, record.Body.Payload)
 	if err != nil {
@@ -426,12 +426,12 @@ func (s *ProductionCoreService) handleApprovedProductionIssue(record document.Re
 			return err
 		}
 	}
-	return s.refreshLinkedProductionOrder(record)
+	return s.refreshLinkedProductionOrder(record, actorID)
 }
 
 func (s *ProductionCoreService) handleApprovedProductionOutput(record document.Record, actorID string) error {
 	if s.inventory.hasMovementLink(record, "production_output") {
-		return s.refreshLinkedProductionOrder(record)
+		return s.refreshLinkedProductionOrder(record, actorID)
 	}
 	payload := clonedPayload(record.Body.Payload)
 	itemPolicy := s.inventory.lookupItemPolicy(textValue(payload["finished_item_code"]))
@@ -453,7 +453,7 @@ func (s *ProductionCoreService) handleApprovedProductionOutput(record document.R
 	if err := s.inventory.createMovement(record, actorID, "production_output", line, "in"); err != nil {
 		return err
 	}
-	return s.refreshLinkedProductionOrder(record)
+	return s.refreshLinkedProductionOrder(record, actorID)
 }
 
 func (s *ProductionCoreService) normalizeProductionComponentLines(lines []map[string]any) []map[string]any {
@@ -737,8 +737,15 @@ func (s *ProductionCoreService) hasLinkedDocument(sourceID, documentType, linkTy
 	return false
 }
 
-func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Record) error {
+func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Record, actorID string) error {
 	order, ok := s.findLinkedProductionOrder(record)
+	if !ok && strings.TrimSpace(record.Header.ID) != "" {
+		fresh, err := s.documents.Get(record.Header.ID)
+		if err == nil {
+			record = fresh
+			order, ok = s.findLinkedProductionOrder(record)
+		}
+	}
 	if !ok {
 		return s.refreshDocuments(record)
 	}
@@ -830,7 +837,10 @@ func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Rec
 	payload["issued_quantity_total"] = issuedTotal
 	payload["reserved_quantity_total"] = reservedTotal
 	payload["shortage_quantity_total"] = shortageTotal
-	if err := s.updateDocumentPayload(order, "system", payload); err != nil {
+	if strings.TrimSpace(actorID) == "" {
+		actorID = "user_admin"
+	}
+	if err := s.updateDocumentPayload(order, actorID, payload); err != nil {
 		return err
 	}
 	updated, err := s.documents.Get(order.Header.ID)

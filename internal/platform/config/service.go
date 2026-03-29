@@ -278,6 +278,23 @@ func BuiltInDefinitions() []Definition {
 			{Key: "goods_receipt_clearing_account_code", Label: "Goods Receipt Clearing Account", Type: "string"},
 		},
 	}, {
+		Key:             "discount.policy",
+		ModuleKey:       "discount_core",
+		Category:        "commercial",
+		DisplayName:     "Discount Policy",
+		DisplayNameI18n: i18n.LocalizedText{"en": "Discount Policy", "id": "Kebijakan Diskon"},
+		Description:     "Global discount stacking and evaluation defaults.",
+		DescriptionI18n: i18n.LocalizedText{"en": "Global discount stacking and evaluation defaults.", "id": "Nilai baku global untuk stacking dan evaluasi diskon."},
+		AllowedScopes:   []string{"deployment", "organization", "location"},
+		DefaultValue: map[string]any{
+			"stacking_mode": "best_one_only",
+			"time_zone":     "Asia/Jakarta",
+		},
+		Fields: []FieldDefinition{
+			{Key: "stacking_mode", Label: "Stacking Mode", Type: "string", Required: true},
+			{Key: "time_zone", Label: "Time Zone", Type: "string"},
+		},
+	}, {
 		Key:             "inventory.policy",
 		ModuleKey:       "inventory_core",
 		Category:        "inventory",

@@ -29,6 +29,8 @@ func builtInModulePacks() []modulePack {
 		staticModulePack{manifests: identityKernelPackManifests},
 		staticModulePack{manifests: documentsKernelPackManifests},
 		staticModulePack{manifests: commercialCoreKernelPackManifests},
+		staticModulePack{manifests: discountCoreKernelPackManifests},
+		staticModulePack{manifests: promotionCoreKernelPackManifests},
 		staticModulePack{manifests: procurementCoreKernelPackManifests},
 		staticModulePack{manifests: inventoryCoreKernelPackManifests},
 		staticModulePack{manifests: fulfillmentCoreKernelPackManifests},

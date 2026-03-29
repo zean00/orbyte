@@ -21,6 +21,7 @@ func POSTerminalBundle() string {
         heldSales: [],
         transactions: [],
         lookupQuery: "",
+        promotionCodes: "",
         busy: false,
         message: "",
       };
@@ -64,6 +65,7 @@ func POSTerminalBundle() string {
             shiftId: state.shiftId,
             cart: state.cart,
             tenders: state.tenders,
+            promotionCodes: state.promotionCodes,
           }));
         } catch (_) {}
       };
@@ -78,6 +80,7 @@ func POSTerminalBundle() string {
             state.shiftId = state.shiftId || String(payload.shiftId || "");
             state.cart = Array.isArray(payload.cart) ? payload.cart : state.cart;
             state.tenders = Array.isArray(payload.tenders) && payload.tenders.length ? payload.tenders : state.tenders;
+            state.promotionCodes = String(payload.promotionCodes || "");
           }
         } catch (_) {}
       };
@@ -258,6 +261,12 @@ func POSTerminalBundle() string {
         });
       }
 
+      function payloadPromotionCodes() {
+        return String(state.promotionCodes || "").split(/[\n,;]+/).map(function(item) {
+          return String(item || "").trim();
+        }).filter(Boolean);
+      }
+
       function payloadTenders() {
         return state.tenders.filter(function(tender) { return String(tender.tender_type_code || "").trim() !== "" && number(tender.amount) > 0; }).map(function(tender) {
           return {
@@ -335,12 +344,14 @@ func POSTerminalBundle() string {
             shift_id: state.shiftId,
             lines: payloadLines(),
             tenders: payloadTenders(),
+            promotion_codes: payloadPromotionCodes(),
             offline_cached: !navigator.onLine,
           }),
         });
         await loadHeldSales();
         state.cart = [];
         state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
+        state.promotionCodes = "";
         persist();
         notify(text("Sale held.", "Penjualan disimpan."));
         render();
@@ -351,6 +362,7 @@ func POSTerminalBundle() string {
         try {
           state.cart = JSON.parse(String(((record || {}).values || {}).lines_json || "[]"));
           state.tenders = JSON.parse(String(((record || {}).values || {}).tenders_json || "[{\"tender_type_code\":\"\",\"amount\":0}]"));
+          state.promotionCodes = String(((record || {}).values || {}).promotion_codes_json || "");
           if (!Array.isArray(state.tenders) || !state.tenders.length) {
             state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
           }
@@ -388,6 +400,7 @@ func POSTerminalBundle() string {
               shift_id: state.shiftId,
               lines: payloadLines(),
               tenders: payloadTenders(),
+              promotion_codes: payloadPromotionCodes(),
               offline_cached: false,
             }),
           });
@@ -395,6 +408,7 @@ func POSTerminalBundle() string {
           emitHardwareEvent("orbyte:pos-cash-drawer-open", { total: totals().total, change: totals().change });
           state.cart = [];
           state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
+          state.promotionCodes = "";
           persist();
           await loadHeldSales();
           notify(text("Checkout completed.", "Checkout selesai."));
@@ -484,6 +498,7 @@ func POSTerminalBundle() string {
           +     '<div class="pos-terminal__list">'
           +       '<article class="pos-terminal__card">'
           +         '<div class="pos-terminal__section-title">' + escapeHTML(text("Cart", "Keranjang")) + '</div>'
+          +         '<div class="pos-terminal__row" style="margin-bottom:0.75rem"><div class="pos-terminal__field"><span>' + escapeHTML(text("Promotion Codes", "Kode Promosi")) + '</span><input id="pos-promotion-codes" name="pos_promotion_codes" value="' + escapeHTML(state.promotionCodes) + '" placeholder="' + escapeHTML(text("PROMO10, LUNCH", "PROMO10, LUNCH")) + '"></div></div>'
           +         (state.cart.length ? '<table class="pos-terminal__table"><thead><tr><th>' + escapeHTML(text("Item", "Item")) + '</th><th>' + escapeHTML(text("Qty", "Qty")) + '</th><th>' + escapeHTML(text("Price", "Harga")) + '</th><th>' + escapeHTML(text("Discount", "Diskon")) + '</th><th>' + escapeHTML(text("Total", "Total")) + '</th><th></th></tr></thead><tbody>' + state.cart.map(function(line, index) {
                       return '<tr><td><div class="pos-terminal__item-title">' + escapeHTML(line.description || line.item_code) + '</div><div class="pos-terminal__item-meta">' + escapeHTML(String(line.item_code || "")) + '</div></td><td><input id="pos-line-qty-' + String(index) + '" name="pos_line_qty_' + String(index) + '" type="number" min="0" step="1" data-line-qty="' + String(index) + '" value="' + escapeHTML(String(line.quantity || 0)) + '"></td><td><input id="pos-line-price-' + String(index) + '" name="pos_line_price_' + String(index) + '" type="number" min="0" step="0.01" data-line-price="' + String(index) + '" value="' + escapeHTML(String(line.unit_price || 0)) + '"></td><td><input id="pos-line-discount-' + String(index) + '" name="pos_line_discount_' + String(index) + '" type="number" min="0" step="0.01" data-line-discount="' + String(index) + '" value="' + escapeHTML(String(line.discount_amount || 0)) + '"></td><td><strong>' + escapeHTML(money(line.line_total || 0)) + '</strong></td><td><button type="button" class="pos-terminal__button pos-terminal__button--warn" data-remove-line="' + String(index) + '">' + escapeHTML(text("Remove", "Hapus")) + '</button></td></tr>';
                     }).join("") + '</tbody></table>' : '<div class="pos-terminal__empty">' + escapeHTML(text("No items in cart.", "Belum ada item di keranjang.")) + '</div>')
@@ -536,6 +551,10 @@ func POSTerminalBundle() string {
         });
         mount.querySelector("#pos-lookup")?.addEventListener("input", function(event) {
           state.lookupQuery = String(event.target.value || "");
+        });
+        mount.querySelector("#pos-promotion-codes")?.addEventListener("input", function(event) {
+          state.promotionCodes = String(event.target.value || "");
+          persist();
         });
         mount.querySelectorAll("[data-add-result]").forEach(function(node) {
           node.addEventListener("click", function() {
