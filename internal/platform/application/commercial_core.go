@@ -1135,6 +1135,45 @@ func (s *CommercialCoreService) handleRefundedPayment(refund document.Record, ac
 	return err
 }
 
+func (s *CommercialCoreService) AllocatePaymentReceipt(paymentID, invoiceID string, amount float64, actorID string) error {
+	if s.documents == nil {
+		return shared.NotFound("documents service is not available")
+	}
+	payment, err := s.documents.Get(strings.TrimSpace(paymentID))
+	if err != nil {
+		return err
+	}
+	if payment.Header.Type != "payment_receipt" {
+		return shared.Validation("allocation source must be a payment receipt")
+	}
+	if payment.Header.Status == "cancelled" || payment.Header.Status == "draft" {
+		return shared.Validation("payment receipt must be active before allocation")
+	}
+	payload := clonedPayload(payment.Body.Payload)
+	unapplied := roundMoney(numberValue(payload["unapplied_amount"]))
+	if amount <= 0 {
+		amount = unapplied
+	}
+	if amount <= 0 || amount-unapplied > 0.0001 {
+		return shared.Validation("allocation exceeds payment receipt unapplied amount")
+	}
+	invoiceID = strings.TrimSpace(invoiceID)
+	if err := s.validateInvoiceAllocation(invoiceID, amount); err != nil {
+		return err
+	}
+	allocations := append(recordList(payload["allocations"]), map[string]any{
+		"invoice_id":     invoiceID,
+		"invoice_number": invoiceID,
+		"amount":         amount,
+	})
+	payload["allocations"] = allocations
+	payload["unapplied_amount"] = roundMoney(maxFloat(unapplied-amount, 0))
+	if err := s.updateDocumentPayload(payment, actorID, payload); err != nil {
+		return err
+	}
+	return s.applyAllocationToInvoice(payment, invoiceID, amount, actorID)
+}
+
 func (s *CommercialCoreService) applyAllocationToInvoice(payment document.Record, invoiceID string, amount float64, actorID string) error {
 	if amount <= 0 {
 		return nil
@@ -1168,6 +1207,26 @@ func (s *CommercialCoreService) applyAllocationToInvoice(payment document.Record
 	}
 	if _, err := s.documents.AddLink(invoice.Header.ID, payment.Header.ID, "payment_for", map[string]any{"allocated_amount": amount}); err != nil && !isConflict(err) {
 		return err
+	}
+	return nil
+}
+
+func (s *CommercialCoreService) validateInvoiceAllocation(invoiceID string, amount float64) error {
+	if amount <= 0 {
+		return nil
+	}
+	invoice, err := s.documents.Get(invoiceID)
+	if err != nil {
+		return err
+	}
+	if invoice.Header.Type != "invoice" {
+		return shared.Validation("allocation target must be an invoice")
+	}
+	payload := clonedPayload(invoice.Body.Payload)
+	totalAmount := roundMoney(numberValue(payload["total_amount"]))
+	paidAmount := roundMoney(numberValue(payload["paid_amount"]) + amount)
+	if paidAmount-totalAmount > 0.0001 {
+		return shared.Validation("allocation exceeds invoice balance")
 	}
 	return nil
 }

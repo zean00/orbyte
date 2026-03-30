@@ -98,6 +98,7 @@ type serviceGraph struct {
 	financeReporting  *application.FinanceReportingCoreService
 	financeReconcile  *application.FinanceReconciliationCoreService
 	financePeriodEnd  *application.FinancePeriodEndCoreService
+	financeCollections *application.FinanceCollectionsCoreService
 	analyticsRepo     analytics.Repository
 	submitStore       application.SubmitStore
 	queryMonitor      *store.QueryMonitor
@@ -267,6 +268,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.financeReporting = application.NewFinanceReportingCoreService(graph.documents, graph.models, graph.config)
 	graph.financeReconcile = application.NewFinanceReconciliationCoreService(graph.documents, graph.models, graph.financeReporting)
 	graph.financePeriodEnd = application.NewFinancePeriodEndCoreService(graph.documents, graph.models, graph.financeReporting)
+	graph.financeCollections = application.NewFinanceCollectionsCoreService(graph.documents, graph.models, graph.financeReconcile, graph.commercialCore, graph.procurementCore, graph.financeReporting)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.commercialCore.SetPeriodEnd(graph.financePeriodEnd)
 	graph.procurementCore.SetFinanceReporting(graph.financeReporting)

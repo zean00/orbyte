@@ -8,6 +8,10 @@ func FinanceReportsBundle() string {
       const text = function(en, id) { return ctx.locale === 'id' ? id : en; };
       const path = window.location.pathname || '';
       const reportKey = path.includes('period-close') ? 'period-close'
+        : path.includes('ar-statements') ? 'ar-statements'
+        : path.includes('ap-statements') ? 'ap-statements'
+        : path.includes('collections') ? 'collections'
+        : path.includes('settlement-exceptions') ? 'settlement-exceptions'
         : path.includes('trial-balance') ? 'trial-balance'
         : path.includes('profit-and-loss') ? 'profit-and-loss'
         : path.includes('balance-sheet') ? 'balance-sheet'
@@ -18,6 +22,10 @@ func FinanceReportsBundle() string {
         : path.includes('ap-reconciliation') ? 'ap-reconciliation'
         : 'journal-ledger';
       const title = reportKey === 'period-close' ? text('Period Close', 'Tutup Periode')
+        : reportKey === 'ar-statements' ? text('AR Statements', 'Statement Piutang')
+        : reportKey === 'ap-statements' ? text('AP Statements', 'Statement Utang')
+        : reportKey === 'collections' ? text('Collections', 'Penagihan')
+        : reportKey === 'settlement-exceptions' ? text('Settlement Exceptions', 'Pengecualian Settlement')
         : reportKey === 'trial-balance' ? text('Trial Balance', 'Neraca Saldo')
         : reportKey === 'profit-and-loss' ? text('Profit and Loss', 'Laba Rugi')
         : reportKey === 'balance-sheet' ? text('Balance Sheet', 'Neraca')
@@ -37,9 +45,11 @@ func FinanceReportsBundle() string {
         vendor_id: params.get('vendor_id') || '',
         account_code: params.get('account_code') || '',
         aging_bucket: params.get('aging_bucket') || '',
-        period_id: params.get('period_id') || ''
+        period_id: params.get('period_id') || '',
+        kind: params.get('kind') || '',
+        status: params.get('status') || ''
       };
-      const usesAsOf = reportKey === 'balance-sheet' || reportKey === 'ar-aging' || reportKey === 'ap-aging' || reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation';
+      const usesAsOf = reportKey === 'balance-sheet' || reportKey === 'ar-aging' || reportKey === 'ap-aging' || reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation' || reportKey === 'ar-statements' || reportKey === 'ap-statements' || reportKey === 'settlement-exceptions';
       function escapeHTML(value) {
         return String(value == null ? '' : value).replace(/[&<>"]/g, function(char) {
           return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char];
@@ -121,6 +131,12 @@ func FinanceReportsBundle() string {
           }
           return { periods: periods, pack: pack };
         }
+        if (reportKey === 'collections') {
+          const query = new URLSearchParams();
+          if (filters.kind) query.set('kind', filters.kind);
+          if (filters.status) query.set('status', filters.status);
+          return apiJSON('/ui/data/finance/collections' + (query.toString() ? '?' + query.toString() : ''));
+        }
         const query = new URLSearchParams();
         if (usesAsOf) {
           if (filters.as_of_date) query.set('as_of_date', filters.as_of_date);
@@ -130,8 +146,11 @@ func FinanceReportsBundle() string {
         }
         if (filters.party_id && (reportKey === 'ar-aging' || reportKey === 'ar-reconciliation')) query.set('party_id', filters.party_id);
         if (filters.vendor_id && (reportKey === 'ap-aging' || reportKey === 'ap-reconciliation')) query.set('vendor_id', filters.vendor_id);
+        if (filters.party_id && reportKey === 'ar-statements') query.set('party_id', filters.party_id);
+        if (filters.vendor_id && reportKey === 'ap-statements') query.set('vendor_id', filters.vendor_id);
         if (filters.account_code && (reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation')) query.set('account_code', filters.account_code);
         if (filters.aging_bucket && (reportKey === 'ar-aging' || reportKey === 'ap-aging')) query.set('aging_bucket', filters.aging_bucket);
+        if (filters.kind && reportKey === 'settlement-exceptions') query.set('kind', filters.kind);
         return apiJSON('/ui/data/finance/' + reportKey + (query.toString() ? '?' + query.toString() : ''));
       }
       function renderRows(payload) {
@@ -164,6 +183,28 @@ func FinanceReportsBundle() string {
         if (reportKey === 'ar-aging' || reportKey === 'ap-aging') {
           return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Counterparty', 'Mitra') + '</th><th>' + text('Document', 'Dokumen') + '</th><th>' + text('Date', 'Tanggal') + '</th><th>' + text('Due', 'Jatuh Tempo') + '</th><th>' + text('Account', 'Akun') + '</th><th>' + text('Bucket', 'Kelompok') + '</th><th>' + text('Open', 'Terbuka') + '</th></tr></thead><tbody>' + (payload.items || []).map(function(row) {
             return '<tr><td>' + escapeHTML(row.counterparty_name) + '</td><td>' + escapeHTML(row.document_number) + '</td><td>' + escapeHTML(row.document_date) + '</td><td>' + escapeHTML(row.due_date) + '</td><td>' + escapeHTML(row.account_code) + '</td><td>' + escapeHTML(row.aging_bucket) + '</td><td>' + money(row.open_amount) + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        }
+        if (reportKey === 'ar-statements' || reportKey === 'ap-statements') {
+          return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Document', 'Dokumen') + '</th><th>' + text('Date', 'Tanggal') + '</th><th>' + text('Due', 'Jatuh Tempo') + '</th><th>' + text('Account', 'Akun') + '</th><th>' + text('Settled', 'Terselesaikan') + '</th><th>' + text('Write-off', 'Write-off') + '</th><th>' + text('Open', 'Terbuka') + '</th><th>' + text('Bucket', 'Kelompok') + '</th></tr></thead><tbody>' + (payload.rows || []).map(function(row) {
+            return '<tr><td>' + escapeHTML(row.document_number) + '</td><td>' + escapeHTML(row.document_date) + '</td><td>' + escapeHTML(row.due_date) + '</td><td>' + escapeHTML(row.account_code) + '</td><td>' + money(row.settled_amount) + '</td><td>' + money(row.writeoff_amount) + '</td><td>' + money(row.open_amount) + '</td><td>' + escapeHTML(row.aging_bucket) + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        }
+        if (reportKey === 'collections') {
+          return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Counterparty', 'Mitra') + '</th><th>' + text('Kind', 'Jenis') + '</th><th>' + text('Status', 'Status') + '</th><th>' + text('Assignee', 'Penanggung Jawab') + '</th><th>' + text('Open', 'Terbuka') + '</th><th>' + text('Overdue', 'Lewat Jatuh Tempo') + '</th><th>' + text('Follow Up', 'Tindak Lanjut') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + (payload.items || []).map(function(row) {
+            return '<tr><td>' + escapeHTML(row.counterparty_name) + '</td><td>' + escapeHTML(row.kind) + '</td><td>' + escapeHTML(row.status) + '</td><td>' + escapeHTML(row.assignee_user_id) + '</td><td>' + money(row.total_open_amount) + '</td><td>' + money(row.overdue_amount) + '</td><td>' + escapeHTML(row.follow_up_date) + '</td><td><button class="finance-report__button" data-case-refresh="' + escapeHTML(row.id) + '">' + escapeHTML(text('Refresh', 'Refresh')) + '</button></td></tr>';
+          }).join('') + '</tbody></table></div>';
+        }
+        if (reportKey === 'settlement-exceptions') {
+          return '<section class="finance-report__panel"><div class="finance-report__actions"><button class="finance-report__button finance-report__button--primary" data-sync-exceptions="1">' + escapeHTML(text('Refresh Snapshot', 'Refresh Snapshot')) + '</button></div></section>'
+            + '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Counterparty', 'Mitra') + '</th><th>' + text('Type', 'Tipe') + '</th><th>' + text('Document/Payment', 'Dokumen/Pembayaran') + '</th><th>' + text('Account', 'Akun') + '</th><th>' + text('Open', 'Terbuka') + '</th><th>' + text('Unapplied', 'Belum Dialokasikan') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + (payload.items || []).map(function(row) {
+            const reference = row.source_document_number || row.source_payment_number || '';
+            const actionKey = row.id || '';
+            const applyButton = actionKey && row.source_payment_id ? '<button class="finance-report__button" data-exception-apply="' + escapeHTML(actionKey) + '">' + escapeHTML(text('Apply', 'Alokasikan')) + '</button>' : '';
+            const writeoffButton = actionKey && row.source_document_id ? '<button class="finance-report__button" data-exception-writeoff="' + escapeHTML(actionKey) + '">' + escapeHTML(text('Write-off', 'Write-off')) + '</button>' : '';
+            const caseButton = actionKey ? '<button class="finance-report__button" data-exception-case="' + escapeHTML(actionKey) + '">' + escapeHTML(text('Open Case', 'Buka Kasus')) + '</button>' : '';
+            const actionCell = actionKey ? '<div class="finance-report__actions">' + applyButton + writeoffButton + caseButton + '</div>' : '<span class="finance-report__pill">' + escapeHTML(text('Sync first', 'Sync dulu')) + '</span>';
+            return '<tr><td>' + escapeHTML(row.counterparty_name) + '</td><td>' + escapeHTML(row.exception_type) + '</td><td>' + escapeHTML(reference) + '</td><td>' + escapeHTML(row.account_code) + '</td><td>' + money(row.open_amount) + '</td><td>' + money(row.unapplied_amount) + '</td><td>' + actionCell + '</td></tr>';
           }).join('') + '</tbody></table></div>';
         }
         if (reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation') {
@@ -210,6 +251,12 @@ func FinanceReportsBundle() string {
         if (reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation') {
           return '<section class="finance-report__cards"><article class="finance-report__card"><span>' + text('Subledger', 'Subledger') + '</span><strong>' + money(payload.subledger_total) + '</strong></article><article class="finance-report__card"><span>' + text('GL', 'GL') + '</span><strong>' + money(payload.gl_total) + '</strong></article><article class="finance-report__card"><span>' + text('Difference', 'Selisih') + '</span><strong>' + money(payload.difference) + '</strong></article></section>';
         }
+        if (reportKey === 'ar-statements' || reportKey === 'ap-statements' || reportKey === 'settlement-exceptions') {
+          const totals = payload.totals || {};
+          return '<section class="finance-report__cards">' + Object.keys(totals).map(function(key) {
+            return '<article class="finance-report__card"><span>' + escapeHTML(key.replace(/_/g, ' ')) + '</span><strong>' + money(totals[key]) + '</strong></article>';
+          }).join('') + '</section>';
+        }
         const totals = payload.totals || {};
         const keys = Object.keys(totals);
         if (!keys.length) return '';
@@ -220,6 +267,10 @@ func FinanceReportsBundle() string {
       function navItems() {
         return [
           { key: 'period-close', label: text('Period Close', 'Tutup Periode'), path: '/ui/finance/period-close' },
+          { key: 'ar-statements', label: text('AR Statements', 'Statement Piutang'), path: '/ui/finance/ar-statements' },
+          { key: 'ap-statements', label: text('AP Statements', 'Statement Utang'), path: '/ui/finance/ap-statements' },
+          { key: 'collections', label: text('Collections', 'Penagihan'), path: '/ui/finance/collections' },
+          { key: 'settlement-exceptions', label: text('Settlement Exceptions', 'Pengecualian Settlement'), path: '/ui/finance/settlement-exceptions' },
           { key: 'trial-balance', label: text('Trial Balance', 'Neraca Saldo'), path: '/ui/finance/trial-balance' },
           { key: 'profit-and-loss', label: text('Profit and Loss', 'Laba Rugi'), path: '/ui/finance/profit-and-loss' },
           { key: 'balance-sheet', label: text('Balance Sheet', 'Neraca'), path: '/ui/finance/balance-sheet' },
@@ -240,14 +291,21 @@ func FinanceReportsBundle() string {
           return '<section class="finance-report__panel"><div class="finance-report__filters"><label class="finance-report__field"><span>' + text('Accounting Period', 'Periode Akuntansi') + '</span><select data-filter="period_id">' + options + '</select></label><button class="finance-report__button finance-report__button--primary" data-apply>' + escapeHTML(text('Load', 'Muat')) + '</button></div></section>';
         }
         return '<section class="finance-report__panel"><div class="finance-report__filters">'
-          + (usesAsOf
+          + (reportKey === 'collections'
+              ? ''
+              : (usesAsOf
               ? '<label class="finance-report__field"><span>' + text('As Of', 'Per Tanggal') + '</span><input data-filter="as_of_date" type="date" value="' + escapeHTML(filters.as_of_date) + '" /></label>'
-              : '<label class="finance-report__field"><span>' + text('From', 'Dari') + '</span><input data-filter="from_date" type="date" value="' + escapeHTML(filters.from_date) + '" /></label><label class="finance-report__field"><span>' + text('To', 'Sampai') + '</span><input data-filter="to_date" type="date" value="' + escapeHTML(filters.to_date) + '" /></label>')
+              : '<label class="finance-report__field"><span>' + text('From', 'Dari') + '</span><input data-filter="from_date" type="date" value="' + escapeHTML(filters.from_date) + '" /></label><label class="finance-report__field"><span>' + text('To', 'Sampai') + '</span><input data-filter="to_date" type="date" value="' + escapeHTML(filters.to_date) + '" /></label>'))
           + ((reportKey === 'ar-aging' || reportKey === 'ar-reconciliation') ? '<label class="finance-report__field"><span>' + text('Party', 'Pihak') + '</span><input data-filter="party_id" value="' + escapeHTML(filters.party_id) + '" /></label>' : '')
           + ((reportKey === 'ap-aging' || reportKey === 'ap-reconciliation') ? '<label class="finance-report__field"><span>' + text('Vendor', 'Vendor') + '</span><input data-filter="vendor_id" value="' + escapeHTML(filters.vendor_id) + '" /></label>' : '')
+          + (reportKey === 'ar-statements' ? '<label class="finance-report__field"><span>' + text('Party', 'Pihak') + '</span><input data-filter="party_id" value="' + escapeHTML(filters.party_id) + '" /></label>' : '')
+          + (reportKey === 'ap-statements' ? '<label class="finance-report__field"><span>' + text('Vendor', 'Vendor') + '</span><input data-filter="vendor_id" value="' + escapeHTML(filters.vendor_id) + '" /></label>' : '')
           + ((reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation') ? '<label class="finance-report__field"><span>' + text('Account', 'Akun') + '</span><input data-filter="account_code" value="' + escapeHTML(filters.account_code) + '" /></label>' : '')
           + ((reportKey === 'ar-aging' || reportKey === 'ap-aging') ? '<label class="finance-report__field"><span>' + text('Bucket', 'Kelompok') + '</span><input data-filter="aging_bucket" value="' + escapeHTML(filters.aging_bucket) + '" /></label>' : '')
+          + (reportKey === 'collections' || reportKey === 'settlement-exceptions' ? '<label class="finance-report__field"><span>' + text('Kind', 'Jenis') + '</span><input data-filter="kind" value="' + escapeHTML(filters.kind) + '" /></label>' : '')
+          + (reportKey === 'collections' ? '<label class="finance-report__field"><span>' + text('Status', 'Status') + '</span><input data-filter="status" value="' + escapeHTML(filters.status) + '" /></label>' : '')
           + '<button class="finance-report__button finance-report__button--primary" data-apply>' + escapeHTML(text('Apply', 'Terapkan')) + '</button>'
+          + ((reportKey === 'ar-statements' || reportKey === 'ap-statements') ? '<button class="finance-report__button" data-generate-statement="' + escapeHTML(reportKey) + '">' + escapeHTML(text('Generate Snapshot', 'Generate Snapshot')) + '</button>' : '')
           + '</div></section>';
       }
       ensureStyles();
@@ -283,9 +341,57 @@ func FinanceReportsBundle() string {
           if (filters.vendor_id) next.searchParams.set('vendor_id', filters.vendor_id); else next.searchParams.delete('vendor_id');
           if (filters.account_code) next.searchParams.set('account_code', filters.account_code); else next.searchParams.delete('account_code');
           if (filters.aging_bucket) next.searchParams.set('aging_bucket', filters.aging_bucket); else next.searchParams.delete('aging_bucket');
+          if (filters.kind) next.searchParams.set('kind', filters.kind); else next.searchParams.delete('kind');
+          if (filters.status) next.searchParams.set('status', filters.status); else next.searchParams.delete('status');
           window.location.assign(next.toString());
         });
       }
+      mount.querySelectorAll('[data-generate-statement]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          if (reportKey === 'ar-statements') {
+            await postJSON('/ui/data/finance/ar-statements/generate', { party_id: filters.party_id, as_of_date: filters.as_of_date });
+          } else if (reportKey === 'ap-statements') {
+            await postJSON('/ui/data/finance/ap-statements/generate', { vendor_id: filters.vendor_id, as_of_date: filters.as_of_date });
+          }
+          window.location.reload();
+        });
+      });
+      mount.querySelectorAll('[data-sync-exceptions]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          await postJSON('/ui/data/finance/settlement-exceptions/sync', { as_of_date: filters.as_of_date, kind: filters.kind });
+          window.location.reload();
+        });
+      });
+      mount.querySelectorAll('[data-exception-case]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          await postJSON('/ui/data/finance/settlement-exceptions/' + encodeURIComponent(node.getAttribute('data-exception-case')) + '/open-case');
+          window.location.assign('/ui/finance/collection-cases');
+        });
+      });
+      mount.querySelectorAll('[data-exception-apply]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          const targetDocumentID = window.prompt(text('Enter target invoice or bill ID', 'Masukkan ID invoice atau bill tujuan'));
+          if (!targetDocumentID) return;
+          const amountValue = window.prompt(text('Enter amount to apply', 'Masukkan jumlah alokasi'));
+          await postJSON('/ui/data/finance/settlement-exceptions/' + encodeURIComponent(node.getAttribute('data-exception-apply')) + '/apply', { target_document_id: targetDocumentID, amount: Number(amountValue || 0) });
+          window.location.reload();
+        });
+      });
+      mount.querySelectorAll('[data-exception-writeoff]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          const postingDate = window.prompt(text('Enter posting date (YYYY-MM-DD)', 'Masukkan tanggal posting (YYYY-MM-DD)'));
+          if (!postingDate) return;
+          const amountValue = window.prompt(text('Enter write-off amount', 'Masukkan jumlah write-off'));
+          await postJSON('/ui/data/finance/settlement-exceptions/' + encodeURIComponent(node.getAttribute('data-exception-writeoff')) + '/write-off', { posting_date: postingDate, amount: Number(amountValue || 0) });
+          window.location.reload();
+        });
+      });
+      mount.querySelectorAll('[data-case-refresh]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          await postJSON('/ui/data/finance/collections/' + encodeURIComponent(node.getAttribute('data-case-refresh')) + '/refresh');
+          window.location.reload();
+        });
+      });
       mount.querySelectorAll('[data-generate-journals]').forEach(function(node) {
         node.addEventListener('click', async function() {
           const periodID = node.getAttribute('data-generate-journals');

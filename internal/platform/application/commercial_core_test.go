@@ -1120,6 +1120,46 @@ func TestHandleCancelledInvoiceCreatesReversalPosting(t *testing.T) {
 	}
 }
 
+func TestAllocatePaymentReceiptDoesNotMutatePaymentWhenTargetValidationFails(t *testing.T) {
+	docs := document.NewService()
+	mustRegisterCommercialDocumentTypes(t, docs)
+	service := NewCommercialCoreService(docs, nil, nil, nil)
+
+	payment, err := docs.Create("payment_receipt", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_id":                "party_1",
+		"party_name":              "Walk In Customer",
+		"receipt_date":            "2026-03-27",
+		"amount_received":         220.0,
+		"refunded_amount":         0.0,
+		"unapplied_amount":        220.0,
+		"receivable_account_code": "1100-AR",
+		"allocations":             []map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("create payment: %v", err)
+	}
+	payment.Header.Status = "received"
+	if err := docs.Save(payment); err != nil {
+		t.Fatalf("save payment: %v", err)
+	}
+
+	err = service.AllocatePaymentReceipt(payment.Header.ID, "doc_missing_invoice", 100.0, "user_admin")
+	if err == nil {
+		t.Fatal("expected allocation validation error")
+	}
+
+	reloadedPayment, err := docs.Get(payment.Header.ID)
+	if err != nil {
+		t.Fatalf("reload payment: %v", err)
+	}
+	if got := numberValue(reloadedPayment.Body.Payload["unapplied_amount"]); got != 220.0 {
+		t.Fatalf("expected unapplied amount 220, got %v", got)
+	}
+	if got := len(recordList(reloadedPayment.Body.Payload["allocations"])); got != 0 {
+		t.Fatalf("expected no persisted allocations, got %d", got)
+	}
+}
+
 func TestPostingLinesResolveCommercialAccountsFromCatalogs(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()

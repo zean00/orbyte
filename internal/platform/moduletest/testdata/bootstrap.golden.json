@@ -1178,6 +1178,466 @@
       "view_key": "documents.requests.list"
     },
     {
+      "key": "finance.accounts.detail",
+      "kind": "navigate",
+      "label": "Finance Account Detail",
+      "label_i18n": {
+        "en": "Finance Account Detail",
+        "id": "Detail Akun Keuangan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance_account.read"
+      ],
+      "route_path": "/finance/accounts/detail",
+      "view_key": "finance.accounts.detail"
+    },
+    {
+      "key": "finance.accounts.form",
+      "kind": "navigate",
+      "label": "Finance Account Form",
+      "label_i18n": {
+        "en": "Finance Account Form",
+        "id": "Form Akun Keuangan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance_account.update"
+      ],
+      "route_path": "/finance/accounts/form",
+      "view_key": "finance.accounts.form"
+    },
+    {
+      "key": "finance.accounts.list",
+      "kind": "navigate",
+      "label": "Finance Accounts",
+      "label_i18n": {
+        "en": "Finance Accounts",
+        "id": "Akun Keuangan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance_account.list"
+      ],
+      "route_path": "/finance/accounts",
+      "view_key": "finance.accounts.list"
+    },
+    {
+      "custom_entry_key": "finance.ap_aging",
+      "key": "finance.ap_aging",
+      "kind": "navigate",
+      "label": "AP Aging",
+      "label_i18n": {
+        "en": "AP Aging",
+        "id": "Umur Utang"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/ap-aging"
+    },
+    {
+      "custom_entry_key": "finance.ap_reconciliation",
+      "key": "finance.ap_reconciliation",
+      "kind": "navigate",
+      "label": "AP Reconciliation",
+      "label_i18n": {
+        "en": "AP Reconciliation",
+        "id": "Rekonsiliasi Utang"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/ap-reconciliation"
+    },
+    {
+      "custom_entry_key": "finance.ap_statements",
+      "key": "finance.ap_statements",
+      "kind": "navigate",
+      "label": "AP Statements",
+      "label_i18n": {
+        "en": "AP Statements",
+        "id": "Statement Utang"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/ap-statements"
+    },
+    {
+      "custom_entry_key": "finance.ar_aging",
+      "key": "finance.ar_aging",
+      "kind": "navigate",
+      "label": "AR Aging",
+      "label_i18n": {
+        "en": "AR Aging",
+        "id": "Umur Piutang"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/ar-aging"
+    },
+    {
+      "custom_entry_key": "finance.ar_reconciliation",
+      "key": "finance.ar_reconciliation",
+      "kind": "navigate",
+      "label": "AR Reconciliation",
+      "label_i18n": {
+        "en": "AR Reconciliation",
+        "id": "Rekonsiliasi Piutang"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/ar-reconciliation"
+    },
+    {
+      "custom_entry_key": "finance.ar_statements",
+      "key": "finance.ar_statements",
+      "kind": "navigate",
+      "label": "AR Statements",
+      "label_i18n": {
+        "en": "AR Statements",
+        "id": "Statement Piutang"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/ar-statements"
+    },
+    {
+      "custom_entry_key": "finance.balance_sheet",
+      "key": "finance.balance_sheet",
+      "kind": "navigate",
+      "label": "Balance Sheet",
+      "label_i18n": {
+        "en": "Balance Sheet",
+        "id": "Neraca"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/balance-sheet"
+    },
+    {
+      "key": "finance.collection_cases.detail",
+      "kind": "navigate",
+      "label": "Collection Case Detail",
+      "label_i18n": {
+        "en": "Collection Case Detail",
+        "id": "Detail Kasus Penagihan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "collection_case.read"
+      ],
+      "route_path": "/finance/collection-cases/detail",
+      "view_key": "finance.collection_cases.detail"
+    },
+    {
+      "key": "finance.collection_cases.form",
+      "kind": "navigate",
+      "label": "Collection Case Form",
+      "label_i18n": {
+        "en": "Collection Case Form",
+        "id": "Form Kasus Penagihan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "collection_case.update"
+      ],
+      "route_path": "/finance/collection-cases/form",
+      "view_key": "finance.collection_cases.form"
+    },
+    {
+      "key": "finance.collection_cases.list",
+      "kind": "navigate",
+      "label": "Collection Cases",
+      "label_i18n": {
+        "en": "Collection Cases",
+        "id": "Kasus Penagihan"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "collection_case.list"
+      ],
+      "route_path": "/finance/collection-cases",
+      "view_key": "finance.collection_cases.list"
+    },
+    {
+      "custom_entry_key": "finance.collections",
+      "key": "finance.collections",
+      "kind": "navigate",
+      "label": "Collections",
+      "label_i18n": {
+        "en": "Collections",
+        "id": "Penagihan"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "collection_case.read"
+      ],
+      "route_path": "/finance/collections"
+    },
+    {
+      "custom_entry_key": "finance.journal_ledger",
+      "key": "finance.journal_ledger",
+      "kind": "navigate",
+      "label": "Journal Ledger",
+      "label_i18n": {
+        "en": "Journal Ledger",
+        "id": "Buku Jurnal"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ],
+      "route_path": "/finance/journal-ledger"
+    },
+    {
+      "key": "finance.journal_runs.detail",
+      "kind": "navigate",
+      "label": "Journal Run Detail",
+      "label_i18n": {
+        "en": "Journal Run Detail",
+        "id": "Detail Run Jurnal"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "journal_run.read"
+      ],
+      "route_path": "/finance/journal-runs/detail",
+      "view_key": "finance.journal_runs.detail"
+    },
+    {
+      "key": "finance.journal_runs.list",
+      "kind": "navigate",
+      "label": "Journal Runs",
+      "label_i18n": {
+        "en": "Journal Runs",
+        "id": "Run Jurnal"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "journal_run.list"
+      ],
+      "route_path": "/finance/journal-runs",
+      "view_key": "finance.journal_runs.list"
+    },
+    {
+      "key": "finance.journal_templates.detail",
+      "kind": "navigate",
+      "label": "Journal Template Detail",
+      "label_i18n": {
+        "en": "Journal Template Detail",
+        "id": "Detail Template Jurnal"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "journal_template.read"
+      ],
+      "route_path": "/finance/journal-templates/detail",
+      "view_key": "finance.journal_templates.detail"
+    },
+    {
+      "key": "finance.journal_templates.form",
+      "kind": "navigate",
+      "label": "Journal Template Form",
+      "label_i18n": {
+        "en": "Journal Template Form",
+        "id": "Form Template Jurnal"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "journal_template.update"
+      ],
+      "route_path": "/finance/journal-templates/form",
+      "view_key": "finance.journal_templates.form"
+    },
+    {
+      "key": "finance.journal_templates.list",
+      "kind": "navigate",
+      "label": "Journal Templates",
+      "label_i18n": {
+        "en": "Journal Templates",
+        "id": "Template Jurnal"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "journal_template.list"
+      ],
+      "route_path": "/finance/journal-templates",
+      "view_key": "finance.journal_templates.list"
+    },
+    {
+      "custom_entry_key": "finance.period_close",
+      "key": "finance.period_close",
+      "kind": "navigate",
+      "label": "Period Close",
+      "label_i18n": {
+        "en": "Period Close",
+        "id": "Tutup Periode"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "accounting_period.read"
+      ],
+      "route_path": "/finance/period-close"
+    },
+    {
+      "key": "finance.period_tasks.detail",
+      "kind": "navigate",
+      "label": "Period Task Detail",
+      "label_i18n": {
+        "en": "Period Task Detail",
+        "id": "Detail Tugas Periode"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "accounting_period_task.read"
+      ],
+      "route_path": "/finance/period-tasks/detail",
+      "view_key": "finance.period_tasks.detail"
+    },
+    {
+      "key": "finance.period_tasks.list",
+      "kind": "navigate",
+      "label": "Period Tasks",
+      "label_i18n": {
+        "en": "Period Tasks",
+        "id": "Tugas Tutup Periode"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "accounting_period_task.list"
+      ],
+      "route_path": "/finance/period-tasks",
+      "view_key": "finance.period_tasks.list"
+    },
+    {
+      "key": "finance.periods.detail",
+      "kind": "navigate",
+      "label": "Accounting Period Detail",
+      "label_i18n": {
+        "en": "Accounting Period Detail",
+        "id": "Detail Periode Akuntansi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "accounting_period.read"
+      ],
+      "route_path": "/finance/periods/detail",
+      "view_key": "finance.periods.detail"
+    },
+    {
+      "key": "finance.periods.form",
+      "kind": "navigate",
+      "label": "Accounting Period Form",
+      "label_i18n": {
+        "en": "Accounting Period Form",
+        "id": "Form Periode Akuntansi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "accounting_period.update"
+      ],
+      "route_path": "/finance/periods/form",
+      "view_key": "finance.periods.form"
+    },
+    {
+      "key": "finance.periods.list",
+      "kind": "navigate",
+      "label": "Accounting Periods",
+      "label_i18n": {
+        "en": "Accounting Periods",
+        "id": "Periode Akuntansi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "accounting_period.list"
+      ],
+      "route_path": "/finance/periods",
+      "view_key": "finance.periods.list"
+    },
+    {
+      "custom_entry_key": "finance.profit_and_loss",
+      "key": "finance.profit_and_loss",
+      "kind": "navigate",
+      "label": "Profit and Loss",
+      "label_i18n": {
+        "en": "Profit and Loss",
+        "id": "Laba Rugi"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/profit-and-loss"
+    },
+    {
+      "custom_entry_key": "finance.settlement_exceptions",
+      "key": "finance.settlement_exceptions",
+      "kind": "navigate",
+      "label": "Settlement Exceptions",
+      "label_i18n": {
+        "en": "Settlement Exceptions",
+        "id": "Pengecualian Settlement"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read",
+        "settlement_exception.read"
+      ],
+      "route_path": "/finance/settlement-exceptions"
+    },
+    {
+      "custom_entry_key": "finance.tax_summary",
+      "key": "finance.tax_summary",
+      "kind": "navigate",
+      "label": "Tax Summary",
+      "label_i18n": {
+        "en": "Tax Summary",
+        "id": "Ringkasan Pajak"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/tax-summary"
+    },
+    {
+      "custom_entry_key": "finance.trial_balance",
+      "key": "finance.trial_balance",
+      "kind": "navigate",
+      "label": "Trial Balance",
+      "label_i18n": {
+        "en": "Trial Balance",
+        "id": "Neraca Saldo"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/trial-balance"
+    },
+    {
       "key": "fulfillment.fulfillments.detail",
       "kind": "navigate",
       "label": "Fulfillment",
@@ -4303,6 +4763,263 @@
       "required_permissions": [
         "pos_sale.list"
       ]
+    },
+    {
+      "action_key": "finance.accounts.list",
+      "key": "finance.accounts",
+      "label": "Finance Accounts",
+      "label_i18n": {
+        "en": "Finance Accounts",
+        "id": "Akun Keuangan"
+      },
+      "order": 88,
+      "required_permissions": [
+        "finance_account.list"
+      ]
+    },
+    {
+      "action_key": "finance.periods.list",
+      "key": "finance.periods",
+      "label": "Accounting Periods",
+      "label_i18n": {
+        "en": "Accounting Periods",
+        "id": "Periode Akuntansi"
+      },
+      "order": 89,
+      "required_permissions": [
+        "accounting_period.list"
+      ]
+    },
+    {
+      "action_key": "finance.journal_templates.list",
+      "key": "finance.journal_templates",
+      "label": "Journal Templates",
+      "label_i18n": {
+        "en": "Journal Templates",
+        "id": "Template Jurnal"
+      },
+      "order": 90,
+      "required_permissions": [
+        "journal_template.list"
+      ]
+    },
+    {
+      "action_key": "finance.journal_runs.list",
+      "key": "finance.journal_runs",
+      "label": "Journal Runs",
+      "label_i18n": {
+        "en": "Journal Runs",
+        "id": "Run Jurnal"
+      },
+      "order": 91,
+      "required_permissions": [
+        "journal_run.list"
+      ]
+    },
+    {
+      "action_key": "finance.period_close",
+      "key": "finance.period_close",
+      "label": "Period Close",
+      "label_i18n": {
+        "en": "Period Close",
+        "id": "Tutup Periode"
+      },
+      "order": 92,
+      "required_permissions": [
+        "finance.read",
+        "accounting_period.read"
+      ]
+    },
+    {
+      "action_key": "finance.trial_balance",
+      "key": "finance.trial_balance",
+      "label": "Trial Balance",
+      "label_i18n": {
+        "en": "Trial Balance",
+        "id": "Neraca Saldo"
+      },
+      "order": 93,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.profit_and_loss",
+      "key": "finance.profit_loss",
+      "label": "Profit and Loss",
+      "label_i18n": {
+        "en": "Profit and Loss",
+        "id": "Laba Rugi"
+      },
+      "order": 94,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.balance_sheet",
+      "key": "finance.balance_sheet",
+      "label": "Balance Sheet",
+      "label_i18n": {
+        "en": "Balance Sheet",
+        "id": "Neraca"
+      },
+      "order": 95,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.tax_summary",
+      "key": "finance.tax_summary",
+      "label": "Tax Summary",
+      "label_i18n": {
+        "en": "Tax Summary",
+        "id": "Ringkasan Pajak"
+      },
+      "order": 96,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.ar_aging",
+      "key": "finance.ar_aging",
+      "label": "AR Aging",
+      "label_i18n": {
+        "en": "AR Aging",
+        "id": "Umur Piutang"
+      },
+      "order": 97,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.ap_aging",
+      "key": "finance.ap_aging",
+      "label": "AP Aging",
+      "label_i18n": {
+        "en": "AP Aging",
+        "id": "Umur Utang"
+      },
+      "order": 98,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.ar_reconciliation",
+      "key": "finance.ar_reconciliation",
+      "label": "AR Reconciliation",
+      "label_i18n": {
+        "en": "AR Reconciliation",
+        "id": "Rekonsiliasi Piutang"
+      },
+      "order": 99,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.ap_reconciliation",
+      "key": "finance.ap_reconciliation",
+      "label": "AP Reconciliation",
+      "label_i18n": {
+        "en": "AP Reconciliation",
+        "id": "Rekonsiliasi Utang"
+      },
+      "order": 100,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.journal_ledger",
+      "key": "finance.journal_ledger",
+      "label": "Journal Ledger",
+      "label_i18n": {
+        "en": "Journal Ledger",
+        "id": "Buku Jurnal"
+      },
+      "order": 101,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.ar_statements",
+      "key": "finance.ar_statements",
+      "label": "AR Statements",
+      "label_i18n": {
+        "en": "AR Statements",
+        "id": "Statement Piutang"
+      },
+      "order": 102,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.ap_statements",
+      "key": "finance.ap_statements",
+      "label": "AP Statements",
+      "label_i18n": {
+        "en": "AP Statements",
+        "id": "Statement Utang"
+      },
+      "order": 103,
+      "required_permissions": [
+        "finance.read",
+        "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.collections",
+      "key": "finance.collections",
+      "label": "Collections",
+      "label_i18n": {
+        "en": "Collections",
+        "id": "Penagihan"
+      },
+      "order": 104,
+      "required_permissions": [
+        "finance.read",
+        "collection_case.read"
+      ]
+    },
+    {
+      "action_key": "finance.settlement_exceptions",
+      "key": "finance.settlement_exceptions",
+      "label": "Settlement Exceptions",
+      "label_i18n": {
+        "en": "Settlement Exceptions",
+        "id": "Pengecualian Settlement"
+      },
+      "order": 105,
+      "required_permissions": [
+        "finance.read",
+        "settlement_exception.read"
+      ]
+    },
+    {
+      "action_key": "finance.collection_cases.list",
+      "key": "finance.collection_cases",
+      "label": "Collection Cases",
+      "label_i18n": {
+        "en": "Collection Cases",
+        "id": "Kasus Penagihan"
+      },
+      "order": 106,
+      "required_permissions": [
+        "collection_case.list"
+      ]
     }
   ],
   "page_floorplans": [
@@ -6117,6 +6834,36 @@
               "type": "string"
             },
             {
+              "key": "inventory_asset_account_code",
+              "label": "Inventory Asset Account",
+              "label_i18n": {
+                "en": "Inventory Asset Account",
+                "id": "Akun Aset Inventori"
+              },
+              "path": "values.inventory_asset_account_code",
+              "type": "string"
+            },
+            {
+              "key": "cogs_account_code",
+              "label": "COGS Account",
+              "label_i18n": {
+                "en": "COGS Account",
+                "id": "Akun HPP"
+              },
+              "path": "values.cogs_account_code",
+              "type": "string"
+            },
+            {
+              "key": "wip_account_code",
+              "label": "WIP Account",
+              "label_i18n": {
+                "en": "WIP Account",
+                "id": "Akun BDP"
+              },
+              "path": "values.wip_account_code",
+              "type": "string"
+            },
+            {
               "key": "inventory_enabled",
               "label": "Inventory Enabled",
               "label_i18n": {
@@ -6440,6 +7187,39 @@
                 "id": "Akun Pendapatan"
               },
               "path": "values.revenue_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "inventory_asset_account_code",
+              "label": "Inventory Asset Account",
+              "label_i18n": {
+                "en": "Inventory Asset Account",
+                "id": "Akun Aset Inventori"
+              },
+              "path": "values.inventory_asset_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cogs_account_code",
+              "label": "COGS Account",
+              "label_i18n": {
+                "en": "COGS Account",
+                "id": "Akun HPP"
+              },
+              "path": "values.cogs_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "wip_account_code",
+              "label": "WIP Account",
+              "label_i18n": {
+                "en": "WIP Account",
+                "id": "Akun BDP"
+              },
+              "path": "values.wip_account_code",
               "type": "string",
               "widget": "text"
             },
@@ -6978,6 +7758,76 @@
               "type": "string"
             },
             {
+              "key": "journal_source_kind",
+              "label": "Journal Source Kind",
+              "label_i18n": {
+                "en": "Journal Source Kind",
+                "id": "Jenis Sumber Jurnal"
+              },
+              "path": "body.payload.journal_source_kind",
+              "type": "string"
+            },
+            {
+              "key": "journal_template_id",
+              "label": "Journal Template ID",
+              "label_i18n": {
+                "en": "Journal Template ID",
+                "id": "ID Template Jurnal"
+              },
+              "path": "body.payload.journal_template_id",
+              "type": "string"
+            },
+            {
+              "key": "journal_run_id",
+              "label": "Journal Run ID",
+              "label_i18n": {
+                "en": "Journal Run ID",
+                "id": "ID Run Jurnal"
+              },
+              "path": "body.payload.journal_run_id",
+              "type": "string"
+            },
+            {
+              "key": "accounting_period_id",
+              "label": "Accounting Period ID",
+              "label_i18n": {
+                "en": "Accounting Period ID",
+                "id": "ID Periode Akuntansi"
+              },
+              "path": "body.payload.accounting_period_id",
+              "type": "string"
+            },
+            {
+              "key": "reversal_of_posting_id",
+              "label": "Reversal Of Posting ID",
+              "label_i18n": {
+                "en": "Reversal Of Posting ID",
+                "id": "ID Posting Asal Reversal"
+              },
+              "path": "body.payload.reversal_of_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "reversed_by_posting_id",
+              "label": "Reversed By Posting ID",
+              "label_i18n": {
+                "en": "Reversed By Posting ID",
+                "id": "ID Posting Reversal"
+              },
+              "path": "body.payload.reversed_by_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "reversal_status",
+              "label": "Reversal Status",
+              "label_i18n": {
+                "en": "Reversal Status",
+                "id": "Status Reversal"
+              },
+              "path": "body.payload.reversal_status",
+              "type": "string"
+            },
+            {
               "key": "total_amount",
               "label": "Total",
               "label_i18n": {
@@ -7079,6 +7929,89 @@
                 "id": "Aturan Posting"
               },
               "path": "body.payload.posting_rule_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "journal_source_kind",
+              "label": "Journal Source Kind",
+              "label_i18n": {
+                "en": "Journal Source Kind",
+                "id": "Jenis Sumber Jurnal"
+              },
+              "options": [
+                "manual",
+                "recurring",
+                "accrual",
+                "reversal"
+              ],
+              "path": "body.payload.journal_source_kind",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "journal_template_id",
+              "label": "Journal Template ID",
+              "label_i18n": {
+                "en": "Journal Template ID",
+                "id": "ID Template Jurnal"
+              },
+              "path": "body.payload.journal_template_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "journal_run_id",
+              "label": "Journal Run ID",
+              "label_i18n": {
+                "en": "Journal Run ID",
+                "id": "ID Run Jurnal"
+              },
+              "path": "body.payload.journal_run_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "accounting_period_id",
+              "label": "Accounting Period ID",
+              "label_i18n": {
+                "en": "Accounting Period ID",
+                "id": "ID Periode Akuntansi"
+              },
+              "path": "body.payload.accounting_period_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reversal_of_posting_id",
+              "label": "Reversal Of Posting ID",
+              "label_i18n": {
+                "en": "Reversal Of Posting ID",
+                "id": "ID Posting Asal Reversal"
+              },
+              "path": "body.payload.reversal_of_posting_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reversed_by_posting_id",
+              "label": "Reversed By Posting ID",
+              "label_i18n": {
+                "en": "Reversed By Posting ID",
+                "id": "ID Posting Reversal"
+              },
+              "path": "body.payload.reversed_by_posting_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reversal_status",
+              "label": "Reversal Status",
+              "label_i18n": {
+                "en": "Reversal Status",
+                "id": "Status Reversal"
+              },
+              "path": "body.payload.reversal_status",
               "type": "string",
               "widget": "text"
             },
@@ -9141,6 +10074,36 @@
               "type": "string"
             },
             {
+              "key": "inventory_asset_account_code",
+              "label": "Inventory Asset Account",
+              "label_i18n": {
+                "en": "Inventory Asset Account",
+                "id": "Akun Aset Inventori"
+              },
+              "path": "values.inventory_asset_account_code",
+              "type": "string"
+            },
+            {
+              "key": "cogs_account_code",
+              "label": "COGS Account",
+              "label_i18n": {
+                "en": "COGS Account",
+                "id": "Akun HPP"
+              },
+              "path": "values.cogs_account_code",
+              "type": "string"
+            },
+            {
+              "key": "wip_account_code",
+              "label": "WIP Account",
+              "label_i18n": {
+                "en": "WIP Account",
+                "id": "Akun BDP"
+              },
+              "path": "values.wip_account_code",
+              "type": "string"
+            },
+            {
               "key": "inventory_enabled",
               "label": "Inventory Enabled",
               "label_i18n": {
@@ -9363,6 +10326,39 @@
                 "id": "Akun Pendapatan"
               },
               "path": "values.revenue_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "inventory_asset_account_code",
+              "label": "Inventory Asset Account",
+              "label_i18n": {
+                "en": "Inventory Asset Account",
+                "id": "Akun Aset Inventori"
+              },
+              "path": "values.inventory_asset_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cogs_account_code",
+              "label": "COGS Account",
+              "label_i18n": {
+                "en": "COGS Account",
+                "id": "Akun HPP"
+              },
+              "path": "values.cogs_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "wip_account_code",
+              "label": "WIP Account",
+              "label_i18n": {
+                "en": "WIP Account",
+                "id": "Akun BDP"
+              },
+              "path": "values.wip_account_code",
               "type": "string",
               "widget": "text"
             },
@@ -12983,6 +13979,1828 @@
       "title_i18n": {
         "en": "Requests",
         "id": "Permintaan"
+      }
+    },
+    {
+      "key": "finance.accounts.detail",
+      "kind": "detail",
+      "model_key": "finance_account",
+      "required_permissions": [
+        "finance_account.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "account_type",
+              "label": "Account Type",
+              "label_i18n": {
+                "en": "Account Type",
+                "id": "Tipe Akun"
+              },
+              "path": "values.account_type",
+              "type": "string"
+            },
+            {
+              "key": "report_group",
+              "label": "Report Group",
+              "label_i18n": {
+                "en": "Report Group",
+                "id": "Grup Laporan"
+              },
+              "path": "values.report_group",
+              "type": "string"
+            },
+            {
+              "key": "normal_balance",
+              "label": "Normal Balance",
+              "label_i18n": {
+                "en": "Normal Balance",
+                "id": "Saldo Normal"
+              },
+              "path": "values.normal_balance",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Finance Account Detail",
+      "title_i18n": {
+        "en": "Finance Account Detail",
+        "id": "Finance Account Detail"
+      }
+    },
+    {
+      "key": "finance.accounts.form",
+      "kind": "form",
+      "model_key": "finance_account",
+      "required_permissions": [
+        "finance_account.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "account_type",
+              "label": "Account Type",
+              "label_i18n": {
+                "en": "Account Type",
+                "id": "Tipe Akun"
+              },
+              "options": [
+                "asset",
+                "liability",
+                "equity",
+                "revenue",
+                "expense"
+              ],
+              "path": "values.account_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "report_group",
+              "label": "Report Group",
+              "label_i18n": {
+                "en": "Report Group",
+                "id": "Grup Laporan"
+              },
+              "path": "values.report_group",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "normal_balance",
+              "label": "Normal Balance",
+              "label_i18n": {
+                "en": "Normal Balance",
+                "id": "Saldo Normal"
+              },
+              "options": [
+                "debit",
+                "credit"
+              ],
+              "path": "values.normal_balance",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Finance Account Form",
+          "title_i18n": {
+            "en": "Finance Account Form",
+            "id": "Finance Account Form"
+          }
+        }
+      ],
+      "title": "Finance Account Form",
+      "title_i18n": {
+        "en": "Finance Account Form",
+        "id": "Finance Account Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "account_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.account_type"
+        },
+        {
+          "key": "report_group",
+          "label": "Group",
+          "label_i18n": {
+            "en": "Group",
+            "id": "Grup"
+          },
+          "path": "values.report_group"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.accounts.list",
+      "kind": "list",
+      "model_key": "finance_account",
+      "required_permissions": [
+        "finance_account.list"
+      ],
+      "title": "Finance Accounts",
+      "title_i18n": {
+        "en": "Finance Accounts",
+        "id": "Finance Accounts"
+      }
+    },
+    {
+      "key": "finance.collection_cases.detail",
+      "kind": "detail",
+      "model_key": "collection_case",
+      "required_permissions": [
+        "collection_case.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "kind",
+              "label": "Kind",
+              "label_i18n": {
+                "en": "Kind",
+                "id": "Jenis"
+              },
+              "path": "values.kind",
+              "type": "string"
+            },
+            {
+              "key": "counterparty_name",
+              "label": "Counterparty",
+              "label_i18n": {
+                "en": "Counterparty",
+                "id": "Mitra"
+              },
+              "path": "values.counterparty_name",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "path": "values.priority",
+              "type": "string"
+            },
+            {
+              "key": "assignee_user_id",
+              "label": "Assignee",
+              "label_i18n": {
+                "en": "Assignee",
+                "id": "Penanggung Jawab"
+              },
+              "path": "values.assignee_user_id",
+              "type": "string"
+            },
+            {
+              "key": "follow_up_date",
+              "label": "Follow Up Date",
+              "label_i18n": {
+                "en": "Follow Up Date",
+                "id": "Tanggal Tindak Lanjut"
+              },
+              "path": "values.follow_up_date",
+              "type": "string"
+            },
+            {
+              "key": "promised_payment_date",
+              "label": "Promised Payment Date",
+              "label_i18n": {
+                "en": "Promised Payment Date",
+                "id": "Tanggal Janji Bayar"
+              },
+              "path": "values.promised_payment_date",
+              "type": "string"
+            },
+            {
+              "key": "last_contact_date",
+              "label": "Last Contact",
+              "label_i18n": {
+                "en": "Last Contact",
+                "id": "Kontak Terakhir"
+              },
+              "path": "values.last_contact_date",
+              "type": "string"
+            },
+            {
+              "key": "total_open_amount",
+              "label": "Open Amount",
+              "label_i18n": {
+                "en": "Open Amount",
+                "id": "Saldo Terbuka"
+              },
+              "path": "values.total_open_amount",
+              "type": "number"
+            },
+            {
+              "key": "overdue_amount",
+              "label": "Overdue Amount",
+              "label_i18n": {
+                "en": "Overdue Amount",
+                "id": "Saldo Lewat Jatuh Tempo"
+              },
+              "path": "values.overdue_amount",
+              "type": "number"
+            },
+            {
+              "key": "oldest_due_date",
+              "label": "Oldest Due Date",
+              "label_i18n": {
+                "en": "Oldest Due Date",
+                "id": "Tanggal Jatuh Tempo Tertua"
+              },
+              "path": "values.oldest_due_date",
+              "type": "string"
+            },
+            {
+              "key": "source_document_numbers",
+              "label": "Source Documents",
+              "label_i18n": {
+                "en": "Source Documents",
+                "id": "Dokumen Sumber"
+              },
+              "path": "values.source_document_numbers",
+              "type": "object"
+            },
+            {
+              "key": "note",
+              "label": "Note",
+              "label_i18n": {
+                "en": "Note",
+                "id": "Catatan"
+              },
+              "path": "values.note",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Collection Case Detail",
+      "title_i18n": {
+        "en": "Collection Case Detail",
+        "id": "Collection Case Detail"
+      }
+    },
+    {
+      "key": "finance.collection_cases.form",
+      "kind": "form",
+      "model_key": "collection_case",
+      "required_permissions": [
+        "collection_case.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "open",
+                "promised",
+                "disputed",
+                "escalated",
+                "resolved",
+                "closed"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "options": [
+                "low",
+                "normal",
+                "high",
+                "critical"
+              ],
+              "path": "values.priority",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "assignee_user_id",
+              "label": "Assignee",
+              "label_i18n": {
+                "en": "Assignee",
+                "id": "Penanggung Jawab"
+              },
+              "path": "values.assignee_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "follow_up_date",
+              "label": "Follow Up Date",
+              "label_i18n": {
+                "en": "Follow Up Date",
+                "id": "Tanggal Tindak Lanjut"
+              },
+              "path": "values.follow_up_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "promised_payment_date",
+              "label": "Promised Payment Date",
+              "label_i18n": {
+                "en": "Promised Payment Date",
+                "id": "Tanggal Janji Bayar"
+              },
+              "path": "values.promised_payment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "last_contact_date",
+              "label": "Last Contact",
+              "label_i18n": {
+                "en": "Last Contact",
+                "id": "Kontak Terakhir"
+              },
+              "path": "values.last_contact_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "note",
+              "label": "Note",
+              "label_i18n": {
+                "en": "Note",
+                "id": "Catatan"
+              },
+              "path": "values.note",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Collection Case Form",
+          "title_i18n": {
+            "en": "Collection Case Form",
+            "id": "Collection Case Form"
+          }
+        }
+      ],
+      "title": "Collection Case Form",
+      "title_i18n": {
+        "en": "Collection Case Form",
+        "id": "Collection Case Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "counterparty_name",
+          "label": "Counterparty",
+          "label_i18n": {
+            "en": "Counterparty",
+            "id": "Mitra"
+          },
+          "path": "values.counterparty_name"
+        },
+        {
+          "key": "kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "path": "values.kind"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "assignee_user_id",
+          "label": "Assignee",
+          "label_i18n": {
+            "en": "Assignee",
+            "id": "Penanggung Jawab"
+          },
+          "path": "values.assignee_user_id"
+        },
+        {
+          "key": "total_open_amount",
+          "label": "Open",
+          "label_i18n": {
+            "en": "Open",
+            "id": "Terbuka"
+          },
+          "path": "values.total_open_amount"
+        },
+        {
+          "key": "overdue_amount",
+          "label": "Overdue",
+          "label_i18n": {
+            "en": "Overdue",
+            "id": "Lewat Jatuh Tempo"
+          },
+          "path": "values.overdue_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "open",
+            "promised",
+            "disputed",
+            "escalated",
+            "resolved",
+            "closed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.collection_cases.list",
+      "kind": "list",
+      "model_key": "collection_case",
+      "required_permissions": [
+        "collection_case.list"
+      ],
+      "title": "Collection Cases",
+      "title_i18n": {
+        "en": "Collection Cases",
+        "id": "Collection Cases"
+      }
+    },
+    {
+      "key": "finance.journal_runs.detail",
+      "kind": "detail",
+      "model_key": "journal_run",
+      "required_permissions": [
+        "journal_run.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "period_key",
+              "label": "Period",
+              "label_i18n": {
+                "en": "Period",
+                "id": "Periode"
+              },
+              "path": "values.period_key",
+              "type": "string"
+            },
+            {
+              "key": "template_code",
+              "label": "Template Code",
+              "label_i18n": {
+                "en": "Template Code",
+                "id": "Kode Template"
+              },
+              "path": "values.template_code",
+              "type": "string"
+            },
+            {
+              "key": "template_name",
+              "label": "Template Name",
+              "label_i18n": {
+                "en": "Template Name",
+                "id": "Nama Template"
+              },
+              "path": "values.template_name",
+              "type": "string"
+            },
+            {
+              "key": "journal_kind",
+              "label": "Journal Kind",
+              "label_i18n": {
+                "en": "Journal Kind",
+                "id": "Jenis Jurnal"
+              },
+              "path": "values.journal_kind",
+              "type": "string"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "path": "values.cadence",
+              "type": "string"
+            },
+            {
+              "key": "posting_date",
+              "label": "Posting Date",
+              "label_i18n": {
+                "en": "Posting Date",
+                "id": "Tanggal Posting"
+              },
+              "path": "values.posting_date",
+              "type": "string"
+            },
+            {
+              "key": "generated_posting_id",
+              "label": "Posting ID",
+              "label_i18n": {
+                "en": "Posting ID",
+                "id": "ID Posting"
+              },
+              "path": "values.generated_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "generated_posting_number",
+              "label": "Posting Number",
+              "label_i18n": {
+                "en": "Posting Number",
+                "id": "Nomor Posting"
+              },
+              "path": "values.generated_posting_number",
+              "type": "string"
+            },
+            {
+              "key": "generated_posting_status",
+              "label": "Posting Status",
+              "label_i18n": {
+                "en": "Posting Status",
+                "id": "Status Posting"
+              },
+              "path": "values.generated_posting_status",
+              "type": "string"
+            },
+            {
+              "key": "reversal_status",
+              "label": "Reversal Status",
+              "label_i18n": {
+                "en": "Reversal Status",
+                "id": "Status Reversal"
+              },
+              "path": "values.reversal_status",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Journal Run Detail",
+      "title_i18n": {
+        "en": "Journal Run Detail",
+        "id": "Journal Run Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "period_key",
+          "label": "Period",
+          "label_i18n": {
+            "en": "Period",
+            "id": "Periode"
+          },
+          "path": "values.period_key"
+        },
+        {
+          "key": "template_code",
+          "label": "Template",
+          "label_i18n": {
+            "en": "Template",
+            "id": "Template"
+          },
+          "path": "values.template_code"
+        },
+        {
+          "key": "journal_kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "path": "values.journal_kind"
+        },
+        {
+          "key": "posting_date",
+          "label": "Posting Date",
+          "label_i18n": {
+            "en": "Posting Date",
+            "id": "Tanggal Posting"
+          },
+          "path": "values.posting_date"
+        },
+        {
+          "key": "generated_posting_status",
+          "label": "Posting Status",
+          "label_i18n": {
+            "en": "Posting Status",
+            "id": "Status Posting"
+          },
+          "path": "values.generated_posting_status"
+        },
+        {
+          "key": "status",
+          "label": "Run Status",
+          "label_i18n": {
+            "en": "Run Status",
+            "id": "Status Run"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "generated",
+            "submitted",
+            "posted",
+            "reversed",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.journal_runs.list",
+      "kind": "list",
+      "model_key": "journal_run",
+      "required_permissions": [
+        "journal_run.list"
+      ],
+      "title": "Journal Runs",
+      "title_i18n": {
+        "en": "Journal Runs",
+        "id": "Journal Runs"
+      }
+    },
+    {
+      "key": "finance.journal_templates.detail",
+      "kind": "detail",
+      "model_key": "journal_template",
+      "required_permissions": [
+        "journal_template.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "journal_kind",
+              "label": "Journal Kind",
+              "label_i18n": {
+                "en": "Journal Kind",
+                "id": "Jenis Jurnal"
+              },
+              "path": "values.journal_kind",
+              "type": "string"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "path": "values.cadence",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "description_template",
+              "label": "Description Template",
+              "label_i18n": {
+                "en": "Description Template",
+                "id": "Template Deskripsi"
+              },
+              "path": "values.description_template",
+              "type": "string"
+            },
+            {
+              "key": "required_for_period_close",
+              "label": "Required For Close",
+              "label_i18n": {
+                "en": "Required For Close",
+                "id": "Wajib Untuk Tutup"
+              },
+              "path": "values.required_for_period_close",
+              "type": "bool"
+            },
+            {
+              "key": "journal_lines",
+              "label": "Journal Lines",
+              "label_i18n": {
+                "en": "Journal Lines",
+                "id": "Baris Jurnal"
+              },
+              "path": "values.journal_lines",
+              "type": "object",
+              "widget": "json"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Journal Template Detail",
+      "title_i18n": {
+        "en": "Journal Template Detail",
+        "id": "Journal Template Detail"
+      }
+    },
+    {
+      "key": "finance.journal_templates.form",
+      "kind": "form",
+      "model_key": "journal_template",
+      "required_permissions": [
+        "journal_template.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "journal_kind",
+              "label": "Journal Kind",
+              "label_i18n": {
+                "en": "Journal Kind",
+                "id": "Jenis Jurnal"
+              },
+              "options": [
+                "recurring",
+                "accrual"
+              ],
+              "path": "values.journal_kind",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "options": [
+                "monthly",
+                "quarterly",
+                "yearly"
+              ],
+              "path": "values.cadence",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "description_template",
+              "label": "Description Template",
+              "label_i18n": {
+                "en": "Description Template",
+                "id": "Template Deskripsi"
+              },
+              "path": "values.description_template",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "required_for_period_close",
+              "label": "Required For Close",
+              "label_i18n": {
+                "en": "Required For Close",
+                "id": "Wajib Untuk Tutup"
+              },
+              "path": "values.required_for_period_close",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "journal_lines",
+              "label": "Journal Lines",
+              "label_i18n": {
+                "en": "Journal Lines",
+                "id": "Baris Jurnal"
+              },
+              "path": "values.journal_lines",
+              "type": "object",
+              "widget": "json"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Journal Template Form",
+          "title_i18n": {
+            "en": "Journal Template Form",
+            "id": "Journal Template Form"
+          }
+        }
+      ],
+      "title": "Journal Template Form",
+      "title_i18n": {
+        "en": "Journal Template Form",
+        "id": "Journal Template Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "journal_kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "path": "values.journal_kind"
+        },
+        {
+          "key": "cadence",
+          "label": "Cadence",
+          "label_i18n": {
+            "en": "Cadence",
+            "id": "Cadence"
+          },
+          "path": "values.cadence"
+        },
+        {
+          "key": "required_for_period_close",
+          "label": "Required",
+          "label_i18n": {
+            "en": "Required",
+            "id": "Wajib"
+          },
+          "path": "values.required_for_period_close"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.journal_templates.list",
+      "kind": "list",
+      "model_key": "journal_template",
+      "required_permissions": [
+        "journal_template.list"
+      ],
+      "title": "Journal Templates",
+      "title_i18n": {
+        "en": "Journal Templates",
+        "id": "Journal Templates"
+      }
+    },
+    {
+      "key": "finance.period_tasks.detail",
+      "kind": "detail",
+      "model_key": "accounting_period_task",
+      "required_permissions": [
+        "accounting_period_task.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "period_key",
+              "label": "Period",
+              "label_i18n": {
+                "en": "Period",
+                "id": "Periode"
+              },
+              "path": "values.period_key",
+              "type": "string"
+            },
+            {
+              "key": "task_code",
+              "label": "Task Code",
+              "label_i18n": {
+                "en": "Task Code",
+                "id": "Kode Tugas"
+              },
+              "path": "values.task_code",
+              "type": "string"
+            },
+            {
+              "key": "label",
+              "label": "Label",
+              "label_i18n": {
+                "en": "Label",
+                "id": "Label"
+              },
+              "path": "values.label",
+              "type": "string"
+            },
+            {
+              "key": "task_type",
+              "label": "Task Type",
+              "label_i18n": {
+                "en": "Task Type",
+                "id": "Tipe Tugas"
+              },
+              "path": "values.task_type",
+              "type": "string"
+            },
+            {
+              "key": "required",
+              "label": "Required",
+              "label_i18n": {
+                "en": "Required",
+                "id": "Wajib"
+              },
+              "path": "values.required",
+              "type": "bool"
+            },
+            {
+              "key": "journal_template_id",
+              "label": "Journal Template ID",
+              "label_i18n": {
+                "en": "Journal Template ID",
+                "id": "ID Template Jurnal"
+              },
+              "path": "values.journal_template_id",
+              "type": "string"
+            },
+            {
+              "key": "journal_run_id",
+              "label": "Journal Run ID",
+              "label_i18n": {
+                "en": "Journal Run ID",
+                "id": "ID Run Jurnal"
+              },
+              "path": "values.journal_run_id",
+              "type": "string"
+            },
+            {
+              "key": "posting_id",
+              "label": "Posting ID",
+              "label_i18n": {
+                "en": "Posting ID",
+                "id": "ID Posting"
+              },
+              "path": "values.posting_id",
+              "type": "string"
+            },
+            {
+              "key": "posting_number",
+              "label": "Posting Number",
+              "label_i18n": {
+                "en": "Posting Number",
+                "id": "Nomor Posting"
+              },
+              "path": "values.posting_number",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "completed_at",
+              "label": "Completed At",
+              "label_i18n": {
+                "en": "Completed At",
+                "id": "Diselesaikan Pada"
+              },
+              "path": "values.completed_at",
+              "type": "string"
+            },
+            {
+              "key": "completed_by",
+              "label": "Completed By",
+              "label_i18n": {
+                "en": "Completed By",
+                "id": "Diselesaikan Oleh"
+              },
+              "path": "values.completed_by",
+              "type": "string"
+            },
+            {
+              "key": "note",
+              "label": "Note",
+              "label_i18n": {
+                "en": "Note",
+                "id": "Catatan"
+              },
+              "path": "values.note",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Period Task Detail",
+      "title_i18n": {
+        "en": "Period Task Detail",
+        "id": "Period Task Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "period_key",
+          "label": "Period",
+          "label_i18n": {
+            "en": "Period",
+            "id": "Periode"
+          },
+          "path": "values.period_key"
+        },
+        {
+          "key": "task_code",
+          "label": "Task",
+          "label_i18n": {
+            "en": "Task",
+            "id": "Tugas"
+          },
+          "path": "values.task_code"
+        },
+        {
+          "key": "label",
+          "label": "Label",
+          "label_i18n": {
+            "en": "Label",
+            "id": "Label"
+          },
+          "path": "values.label"
+        },
+        {
+          "key": "task_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.task_type"
+        },
+        {
+          "key": "required",
+          "label": "Required",
+          "label_i18n": {
+            "en": "Required",
+            "id": "Wajib"
+          },
+          "path": "values.required"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "pending",
+            "completed",
+            "waived"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.period_tasks.list",
+      "kind": "list",
+      "model_key": "accounting_period_task",
+      "required_permissions": [
+        "accounting_period_task.list"
+      ],
+      "title": "Period Close Tasks",
+      "title_i18n": {
+        "en": "Period Close Tasks",
+        "id": "Period Close Tasks"
+      }
+    },
+    {
+      "key": "finance.periods.detail",
+      "kind": "detail",
+      "model_key": "accounting_period",
+      "required_permissions": [
+        "accounting_period.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "period_key",
+              "label": "Period",
+              "label_i18n": {
+                "en": "Period",
+                "id": "Periode"
+              },
+              "path": "values.period_key",
+              "type": "string"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "start_date",
+              "label": "Start Date",
+              "label_i18n": {
+                "en": "Start Date",
+                "id": "Tanggal Mulai"
+              },
+              "path": "values.start_date",
+              "type": "string"
+            },
+            {
+              "key": "end_date",
+              "label": "End Date",
+              "label_i18n": {
+                "en": "End Date",
+                "id": "Tanggal Selesai"
+              },
+              "path": "values.end_date",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "closed_at",
+              "label": "Closed At",
+              "label_i18n": {
+                "en": "Closed At",
+                "id": "Ditutup Pada"
+              },
+              "path": "values.closed_at",
+              "type": "string"
+            },
+            {
+              "key": "closed_by",
+              "label": "Closed By",
+              "label_i18n": {
+                "en": "Closed By",
+                "id": "Ditutup Oleh"
+              },
+              "path": "values.closed_by",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Accounting Period Detail",
+      "title_i18n": {
+        "en": "Accounting Period Detail",
+        "id": "Accounting Period Detail"
+      }
+    },
+    {
+      "key": "finance.periods.form",
+      "kind": "form",
+      "model_key": "accounting_period",
+      "required_permissions": [
+        "accounting_period.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "period_key",
+              "label": "Period Key",
+              "label_i18n": {
+                "en": "Period Key",
+                "id": "Kunci Periode"
+              },
+              "path": "values.period_key",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "start_date",
+              "label": "Start Date",
+              "label_i18n": {
+                "en": "Start Date",
+                "id": "Tanggal Mulai"
+              },
+              "path": "values.start_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_date",
+              "label": "End Date",
+              "label_i18n": {
+                "en": "End Date",
+                "id": "Tanggal Selesai"
+              },
+              "path": "values.end_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Accounting Period Form",
+          "title_i18n": {
+            "en": "Accounting Period Form",
+            "id": "Accounting Period Form"
+          }
+        }
+      ],
+      "title": "Accounting Period Form",
+      "title_i18n": {
+        "en": "Accounting Period Form",
+        "id": "Accounting Period Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "period_key",
+          "label": "Period",
+          "label_i18n": {
+            "en": "Period",
+            "id": "Periode"
+          },
+          "path": "values.period_key"
+        },
+        {
+          "key": "organization_id",
+          "label": "Organization",
+          "label_i18n": {
+            "en": "Organization",
+            "id": "Organisasi"
+          },
+          "path": "values.organization_id"
+        },
+        {
+          "key": "location_id",
+          "label": "Location",
+          "label_i18n": {
+            "en": "Location",
+            "id": "Lokasi"
+          },
+          "path": "values.location_id"
+        },
+        {
+          "key": "start_date",
+          "label": "Start",
+          "label_i18n": {
+            "en": "Start",
+            "id": "Mulai"
+          },
+          "path": "values.start_date"
+        },
+        {
+          "key": "end_date",
+          "label": "End",
+          "label_i18n": {
+            "en": "End",
+            "id": "Selesai"
+          },
+          "path": "values.end_date"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "open",
+            "closed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.periods.list",
+      "kind": "list",
+      "model_key": "accounting_period",
+      "required_permissions": [
+        "accounting_period.list"
+      ],
+      "title": "Accounting Periods",
+      "title_i18n": {
+        "en": "Accounting Periods",
+        "id": "Accounting Periods"
       }
     },
     {
@@ -17641,6 +20459,26 @@
               "type": "string"
             },
             {
+              "key": "landed_cost_amount",
+              "label": "Landed Cost",
+              "label_i18n": {
+                "en": "Landed Cost",
+                "id": "Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_amount",
+              "type": "number"
+            },
+            {
+              "key": "purchase_price_variance_amount",
+              "label": "Purchase Variance",
+              "label_i18n": {
+                "en": "Purchase Variance",
+                "id": "Selisih Harga Beli"
+              },
+              "path": "body.payload.purchase_price_variance_amount",
+              "type": "number"
+            },
+            {
               "key": "total_amount",
               "label": "Total",
               "label_i18n": {
@@ -17690,6 +20528,17 @@
               "path": "body.payload.lines",
               "type": "object",
               "widget": "procurement_lines"
+            },
+            {
+              "key": "landed_cost_lines",
+              "label": "Landed Cost Lines",
+              "label_i18n": {
+                "en": "Landed Cost Lines",
+                "id": "Baris Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_lines",
+              "type": "object",
+              "widget": "json"
             }
           ],
           "key": "summary",
@@ -17835,6 +20684,17 @@
               "path": "body.payload.lines",
               "type": "object",
               "widget": "procurement_lines"
+            },
+            {
+              "key": "landed_cost_lines",
+              "label": "Landed Cost Lines",
+              "label_i18n": {
+                "en": "Landed Cost Lines",
+                "id": "Baris Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_lines",
+              "type": "object",
+              "widget": "json"
             },
             {
               "key": "notes",
@@ -18195,6 +21055,17 @@
               "path": "body.payload.lines",
               "type": "object",
               "widget": "procurement_lines"
+            },
+            {
+              "key": "landed_cost_lines",
+              "label": "Landed Cost Lines",
+              "label_i18n": {
+                "en": "Landed Cost Lines",
+                "id": "Baris Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_lines",
+              "type": "object",
+              "widget": "json"
             },
             {
               "key": "notes",
@@ -19170,6 +22041,16 @@
               "type": "string"
             },
             {
+              "key": "landed_cost_amount",
+              "label": "Landed Cost",
+              "label_i18n": {
+                "en": "Landed Cost",
+                "id": "Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_amount",
+              "type": "number"
+            },
+            {
               "key": "lines",
               "label": "Receipt Lines",
               "label_i18n": {
@@ -19179,6 +22060,17 @@
               "path": "body.payload.lines",
               "type": "object",
               "widget": "procurement_receipt_lines"
+            },
+            {
+              "key": "landed_cost_lines",
+              "label": "Landed Cost Lines",
+              "label_i18n": {
+                "en": "Landed Cost Lines",
+                "id": "Baris Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_lines",
+              "type": "object",
+              "widget": "json"
             }
           ],
           "key": "summary",
@@ -19259,6 +22151,17 @@
               "path": "body.payload.lines",
               "type": "object",
               "widget": "procurement_receipt_lines"
+            },
+            {
+              "key": "landed_cost_lines",
+              "label": "Landed Cost Lines",
+              "label_i18n": {
+                "en": "Landed Cost Lines",
+                "id": "Baris Biaya Pendaratan"
+              },
+              "path": "body.payload.landed_cost_lines",
+              "type": "object",
+              "widget": "json"
             },
             {
               "key": "notes",

@@ -231,6 +231,47 @@ func TestVendorBillPostingLinesCapitalizesInventoryItems(t *testing.T) {
 	}
 }
 
+func TestAllocatePaymentOutDoesNotMutatePaymentWhenTargetValidationFails(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProcurementGenerationDocumentTypes(t, docs)
+	mustRegisterProcurementGenerationModels(t, models)
+
+	service := NewProcurementCoreService(docs, nil, models, nil)
+	payment, err := docs.Create("payment_out", "org_default", "loc_main", "user_admin", map[string]any{
+		"vendor_id":        "vendor-1",
+		"vendor_name":      "Supplier A",
+		"payment_date":     "2026-03-27",
+		"amount_paid":      220.0,
+		"refunded_amount":  0.0,
+		"unapplied_amount": 220.0,
+		"allocations":      []map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("create payment out: %v", err)
+	}
+	payment.Header.Status = "paid"
+	if err := docs.Save(payment); err != nil {
+		t.Fatalf("save payment out: %v", err)
+	}
+
+	err = service.AllocatePaymentOut(payment.Header.ID, "doc_missing_bill", 100.0, "user_admin")
+	if err == nil {
+		t.Fatal("expected allocation validation error")
+	}
+
+	reloadedPayment, err := docs.Get(payment.Header.ID)
+	if err != nil {
+		t.Fatalf("reload payment out: %v", err)
+	}
+	if got := numberValue(reloadedPayment.Body.Payload["unapplied_amount"]); got != 220.0 {
+		t.Fatalf("expected unapplied amount 220, got %v", got)
+	}
+	if got := len(recordList(reloadedPayment.Body.Payload["allocations"])); got != 0 {
+		t.Fatalf("expected no persisted allocations, got %d", got)
+	}
+}
+
 func TestVendorBillPostingLinesFromPurchaseOrderDoNotCapitalizeInventoryBeforeReceipt(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -682,6 +723,7 @@ func mustRegisterProcurementGenerationDocumentTypes(t *testing.T, docs *document
 		{Type: "purchase_order", DisplayName: "Purchase Order", SchemaVersion: "v1", AllowedLinkTypes: []string{"receipt_for", "bill_for", "posting_for"}},
 		{Type: "goods_receipt", DisplayName: "Goods Receipt", SchemaVersion: "v1", AllowedLinkTypes: []string{"receipt_for", "bill_for", "movement_for"}},
 		{Type: "vendor_bill", DisplayName: "Vendor Bill", SchemaVersion: "v1", AllowedLinkTypes: []string{"bill_for", "posting_for"}},
+		{Type: "payment_out", DisplayName: "Payment Out", SchemaVersion: "v1", AllowedLinkTypes: []string{"payment_for", "posting_for"}},
 	} {
 		if err := docs.Register(def); err != nil {
 			t.Fatalf("register document definition %s: %v", def.Type, err)

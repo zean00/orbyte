@@ -173,6 +173,7 @@ type UIDeps struct {
 	Finance         *application.FinanceReportingCoreService
 	Reconciliation  *application.FinanceReconciliationCoreService
 	PeriodEnd       *application.FinancePeriodEndCoreService
+	Collections     *application.FinanceCollectionsCoreService
 	Policy          *policy.Service
 	FieldSecurity   *securityfields.Service
 	UIPreferences   *UIPreferencesService
@@ -328,6 +329,6 @@ func RegisterNotificationSurface(deps NotificationDeps) RouteRegistrar {
 
 func RegisterUISurface(deps UIDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.POS, deps.Traceability, deps.Recall, deps.Finance, deps.Reconciliation, deps.PeriodEnd, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.POS, deps.Traceability, deps.Recall, deps.Finance, deps.Reconciliation, deps.PeriodEnd, deps.Collections, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
 	}
 }

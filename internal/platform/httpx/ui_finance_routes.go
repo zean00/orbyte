@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, collectionsSvc *application.FinanceCollectionsCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -174,6 +174,246 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				strings.TrimSpace(query.Get("vendor_id")),
 				strings.TrimSpace(query.Get("account_code")),
 			))
+		})
+	}
+	if collectionsSvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/ar-statements", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "document.read"}) {
+				respondError(w, shared.Forbidden("ar statements are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, collectionsSvc.ARStatement(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("party_id")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/ap-statements", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "document.read"}) {
+				respondError(w, shared.Forbidden("ap statements are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, collectionsSvc.APStatement(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("vendor_id")),
+			))
+		})
+		mux.HandleFunc("POST /ui/data/finance/ar-statements/generate", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.collections.manage", "party_statement_run.create"}) {
+				respondError(w, shared.Forbidden("statement generation is not allowed"))
+				return
+			}
+			var req struct {
+				PartyID  string `json:"party_id"`
+				AsOfDate string `json:"as_of_date"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			record, err := collectionsSvc.GenerateARStatementRun(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(req.PartyID), strings.TrimSpace(req.AsOfDate), principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, record)
+		})
+		mux.HandleFunc("POST /ui/data/finance/ap-statements/generate", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.collections.manage", "vendor_statement_run.create"}) {
+				respondError(w, shared.Forbidden("statement generation is not allowed"))
+				return
+			}
+			var req struct {
+				VendorID string `json:"vendor_id"`
+				AsOfDate string `json:"as_of_date"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			record, err := collectionsSvc.GenerateAPStatementRun(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(req.VendorID), strings.TrimSpace(req.AsOfDate), principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, record)
+		})
+		mux.HandleFunc("GET /ui/data/finance/collections", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "collection_case.read"}) {
+				respondError(w, shared.Forbidden("collections are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			items, err := collectionsSvc.CollectionCases(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("kind")),
+				strings.TrimSpace(query.Get("status")),
+			)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"items": items})
+		})
+		mux.HandleFunc("GET /ui/data/finance/settlement-exceptions", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "settlement_exception.read"}) {
+				respondError(w, shared.Forbidden("settlement exceptions are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			report, err := collectionsSvc.SettlementExceptionRecords(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("kind")),
+			)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			if len(report.Items) == 0 {
+				report = collectionsSvc.SettlementExceptions(
+					organizationIDForPrincipal(p),
+					p.currentLocationID,
+					strings.TrimSpace(query.Get("as_of_date")),
+					strings.TrimSpace(query.Get("kind")),
+				)
+			}
+			respondJSON(w, http.StatusOK, report)
+		})
+		mux.HandleFunc("POST /ui/data/finance/settlement-exceptions/sync", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.collections.manage", "settlement_exception.create", "settlement_exception.update"}) {
+				respondError(w, shared.Forbidden("settlement exception sync is not allowed"))
+				return
+			}
+			var req struct {
+				AsOfDate string `json:"as_of_date"`
+				Kind     string `json:"kind"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			report, err := collectionsSvc.SyncSettlementExceptions(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(req.AsOfDate),
+				strings.TrimSpace(req.Kind),
+				principalEffectiveUserID(p),
+			)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, report)
+		})
+		mux.HandleFunc("POST /ui/data/finance/settlement-exceptions/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/settlement-exceptions/")
+			switch {
+			case strings.HasSuffix(path, "/open-case"):
+				if !principalAllowsAll(ident, p, []string{"finance.collections.manage", "collection_case.create", "settlement_exception.update"}) {
+					respondError(w, shared.Forbidden("open collection case is not allowed"))
+					return
+				}
+				exceptionID := strings.TrimSuffix(path, "/open-case")
+				record, err := collectionsSvc.OpenCollectionCaseFromException(exceptionID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, record)
+				return
+			case strings.HasSuffix(path, "/apply"):
+				if !principalAllowsAll(ident, p, []string{"finance.collections.manage", "settlement_exception.update", "document.update_draft"}) {
+					respondError(w, shared.Forbidden("apply settlement exception is not allowed"))
+					return
+				}
+				var req struct {
+					TargetDocumentID string  `json:"target_document_id"`
+					Amount           float64 `json:"amount"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				exceptionID := strings.TrimSuffix(path, "/apply")
+				record, err := collectionsSvc.ApplySettlementException(exceptionID, strings.TrimSpace(req.TargetDocumentID), req.Amount, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+				return
+			case strings.HasSuffix(path, "/write-off"):
+				if !principalAllowsAll(ident, p, []string{"finance.writeoff", "settlement_exception.update", "document.create"}) {
+					respondError(w, shared.Forbidden("write-off is not allowed"))
+					return
+				}
+				var req struct {
+					PostingDate string  `json:"posting_date"`
+					Amount      float64 `json:"amount"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				exceptionID := strings.TrimSuffix(path, "/write-off")
+				record, err := collectionsSvc.WriteOffSettlementException(exceptionID, strings.TrimSpace(req.PostingDate), req.Amount, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, record)
+				return
+			default:
+				http.NotFound(w, r)
+				return
+			}
+		})
+		mux.HandleFunc("POST /ui/data/finance/collections/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.collections.manage", "collection_case.update"}) {
+				respondError(w, shared.Forbidden("collection case refresh is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/collections/")
+			if !strings.HasSuffix(path, "/refresh") {
+				http.NotFound(w, r)
+				return
+			}
+			caseID := strings.TrimSuffix(path, "/refresh")
+			record, err := collectionsSvc.RefreshCollectionCase(caseID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, record)
 		})
 	}
 	if periodEndSvc != nil {

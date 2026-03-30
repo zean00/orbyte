@@ -1000,6 +1000,66 @@ func (s *ProcurementCoreService) reverseAllocationOnBill(payment document.Record
 	return s.saveMutatedDocument(bill, actorID, payload)
 }
 
+func (s *ProcurementCoreService) AllocatePaymentOut(paymentID, billID string, amount float64, actorID string) error {
+	if s.documents == nil {
+		return shared.NotFound("documents service is not available")
+	}
+	payment, err := s.documents.Get(strings.TrimSpace(paymentID))
+	if err != nil {
+		return err
+	}
+	if payment.Header.Type != "payment_out" {
+		return shared.Validation("allocation source must be a payment out")
+	}
+	if payment.Header.Status == "cancelled" || payment.Header.Status == "draft" {
+		return shared.Validation("payment out must be active before allocation")
+	}
+	payload := clonedPayload(payment.Body.Payload)
+	unapplied := roundMoney(numberValue(payload["unapplied_amount"]))
+	if amount <= 0 {
+		amount = unapplied
+	}
+	if amount <= 0 || amount-unapplied > 0.0001 {
+		return shared.Validation("allocation exceeds payment out unapplied amount")
+	}
+	billID = strings.TrimSpace(billID)
+	if err := s.validateBillAllocation(billID, amount); err != nil {
+		return err
+	}
+	allocations := append(recordList(payload["allocations"]), map[string]any{
+		"bill_id":     billID,
+		"bill_number": billID,
+		"amount":      amount,
+	})
+	payload["allocations"] = allocations
+	payload["unapplied_amount"] = roundMoney(maxFloat(unapplied-amount, 0))
+	if err := s.updateDocumentPayload(payment, actorID, payload); err != nil {
+		return err
+	}
+	return s.applyAllocationToBill(payment, billID, amount, actorID)
+}
+
+func (s *ProcurementCoreService) validateBillAllocation(billID string, amount float64) error {
+	if amount <= 0 || billID == "" {
+		return nil
+	}
+	bill, err := s.documents.Get(billID)
+	if err != nil {
+		return err
+	}
+	if bill.Header.Type != "vendor_bill" {
+		return shared.Validation("allocation target must be a vendor bill")
+	}
+	payload := clonedPayload(bill.Body.Payload)
+	totalAmount := roundMoney(numberValue(payload["total_amount"]))
+	paidAmount := roundMoney(numberValue(payload["paid_amount"]) + amount)
+	creditedAmount := roundMoney(numberValue(payload["credited_amount"]))
+	if paidAmount+creditedAmount-totalAmount > 0.0001 {
+		return shared.Validation("allocation exceeds vendor bill balance")
+	}
+	return nil
+}
+
 func (s *ProcurementCoreService) handleCancelledGoodsReceipt(receipt document.Record, actorID string) error {
 	payload := clonedPayload(receipt.Body.Payload)
 	orderID := textValue(payload["source_purchase_order_id"])
