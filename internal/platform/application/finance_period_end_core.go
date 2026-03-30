@@ -167,6 +167,14 @@ func (s *FinancePeriodEndCoreService) WaiveTask(taskID, actorID, organizationID,
 }
 
 func (s *FinancePeriodEndCoreService) ReverseAccrualPosting(postingID, reversalDate, actorID, organizationID, locationID string) (document.Record, error) {
+	return s.reverseJournalPosting(postingID, reversalDate, actorID, organizationID, locationID, map[string]struct{}{"accrual": {}})
+}
+
+func (s *FinancePeriodEndCoreService) ReverseJournalPosting(postingID, reversalDate, actorID, organizationID, locationID string) (document.Record, error) {
+	return s.reverseJournalPosting(postingID, reversalDate, actorID, organizationID, locationID, map[string]struct{}{"accrual": {}, "manual": {}})
+}
+
+func (s *FinancePeriodEndCoreService) reverseJournalPosting(postingID, reversalDate, actorID, organizationID, locationID string, allowedKinds map[string]struct{}) (document.Record, error) {
 	if s.documents == nil {
 		return document.Record{}, shared.Validation("documents are unavailable")
 	}
@@ -184,11 +192,12 @@ func (s *FinancePeriodEndCoreService) ReverseAccrualPosting(postingID, reversalD
 		return document.Record{}, shared.Forbidden("posting is outside the current location scope")
 	}
 	if strings.TrimSpace(source.Header.Status) != "posted" {
-		return document.Record{}, shared.Conflict("only posted accrual journals can be reversed")
+		return document.Record{}, shared.Conflict("only posted journals can be reversed")
 	}
 	payload := cloneMap(source.Body.Payload)
-	if strings.TrimSpace(textValue(payload["journal_source_kind"])) != "accrual" {
-		return document.Record{}, shared.Conflict("only accrual journals can be reversed from period-end actions")
+	journalKind := strings.TrimSpace(textValue(payload["journal_source_kind"]))
+	if _, ok := allowedKinds[journalKind]; !ok {
+		return document.Record{}, shared.Conflict("journal type cannot be reversed from this action")
 	}
 	if strings.TrimSpace(textValue(payload["reversed_by_posting_id"])) != "" {
 		return document.Record{}, shared.Conflict("journal already has a reversal")
@@ -206,18 +215,18 @@ func (s *FinancePeriodEndCoreService) ReverseAccrualPosting(postingID, reversalD
 		}
 	}
 	reversalPayload := map[string]any{
-		"source_document_type":  "ledger_posting",
-		"source_document_id":    source.Header.ID,
-		"posting_date":          reversalDate,
-		"currency_code":         firstNonEmptyString(textValue(payload["currency_code"]), source.Header.TotalAmount.Currency, "IDR"),
-		"posting_rule_key":      "period_end_reversal",
-		"total_amount":          roundMoney(numberValue(payload["total_amount"])),
-		"journal_lines":         reverseJournalLines(recordList(payload["journal_lines"])),
-		"notes":                 fmt.Sprintf("Reversal of %s", firstNonEmptyString(source.Header.Number, source.Header.ID)),
-		"journal_source_kind":   "reversal",
+		"source_document_type":   "ledger_posting",
+		"source_document_id":     source.Header.ID,
+		"posting_date":           reversalDate,
+		"currency_code":          firstNonEmptyString(textValue(payload["currency_code"]), source.Header.TotalAmount.Currency, "IDR"),
+		"posting_rule_key":       "journal_reversal",
+		"total_amount":           roundMoney(numberValue(payload["total_amount"])),
+		"journal_lines":          reverseJournalLines(recordList(payload["journal_lines"])),
+		"notes":                  fmt.Sprintf("Reversal of %s", firstNonEmptyString(source.Header.Number, source.Header.ID)),
+		"journal_source_kind":    "reversal",
 		"reversal_of_posting_id": source.Header.ID,
-		"reversal_status":       "not_applicable",
-		"accounting_period_id":  s.periodIDForDate(source.Header.OrganizationID, source.Header.LocationID, reversalDate),
+		"reversal_status":        "not_applicable",
+		"accounting_period_id":   s.periodIDForDate(source.Header.OrganizationID, source.Header.LocationID, reversalDate),
 	}
 	reversal, err := s.documents.Create("ledger_posting", source.Header.OrganizationID, source.Header.LocationID, actorID, reversalPayload)
 	if err != nil {

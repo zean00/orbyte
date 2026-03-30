@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -658,26 +658,43 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			if !ok {
 				return
 			}
-			if !principalAllowsAll(ident, p, []string{"finance.reverse", "document.create"}) {
-				respondError(w, shared.Forbidden("journal reversal is not allowed"))
-				return
-			}
 			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/journals/")
-			if !strings.HasSuffix(path, "/reverse") {
+			switch {
+			case strings.HasSuffix(path, "/reverse"):
+				if !principalAllowsAll(ident, p, []string{"finance.reverse", "document.create"}) {
+					respondError(w, shared.Forbidden("journal reversal is not allowed"))
+					return
+				}
+				var req struct {
+					ReversalDate string `json:"reversal_date"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				postingID := strings.TrimSuffix(path, "/reverse")
+				record, err := periodEndSvc.ReverseJournalPosting(postingID, strings.TrimSpace(req.ReversalDate), principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, record)
+			case strings.HasSuffix(path, "/correction"):
+				if manualJournalSvc == nil {
+					http.NotFound(w, r)
+					return
+				}
+				if !principalAllowsAll(ident, p, []string{"finance.journal.read", "finance.journal.create", "document.create"}) {
+					respondError(w, shared.Forbidden("journal correction is not allowed"))
+					return
+				}
+				postingID := strings.TrimSuffix(path, "/correction")
+				record, err := manualJournalSvc.CreateCorrectionJournal(postingID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, record)
+			default:
 				http.NotFound(w, r)
-				return
 			}
-			var req struct {
-				ReversalDate string `json:"reversal_date"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&req)
-			postingID := strings.TrimSuffix(path, "/reverse")
-			record, err := periodEndSvc.ReverseAccrualPosting(postingID, strings.TrimSpace(req.ReversalDate), principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
-			if err != nil {
-				respondError(w, err)
-				return
-			}
-			respondJSON(w, http.StatusCreated, record)
 		})
 	}
 	if periodEndSvc == nil {

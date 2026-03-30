@@ -1591,6 +1591,81 @@
       "view_key": "finance.journal_templates.list"
     },
     {
+      "key": "finance.manual_journals.detail",
+      "kind": "navigate",
+      "label": "Manual Journal Detail",
+      "label_i18n": {
+        "en": "Manual Journal Detail",
+        "id": "Detail Jurnal Manual"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance.journal.read"
+      ],
+      "route_path": "/finance/manual-journals/detail",
+      "view_key": "finance.manual_journals.detail"
+    },
+    {
+      "key": "finance.manual_journals.form",
+      "kind": "navigate",
+      "label": "Manual Journal Form",
+      "label_i18n": {
+        "en": "Manual Journal Form",
+        "id": "Form Jurnal Manual"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance.journal.create"
+      ],
+      "route_path": "/finance/manual-journals/form",
+      "view_key": "finance.manual_journals.form"
+    },
+    {
+      "key": "finance.manual_journals.list",
+      "kind": "navigate",
+      "label": "Manual Journals",
+      "label_i18n": {
+        "en": "Manual Journals",
+        "id": "Jurnal Manual"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance.journal.read"
+      ],
+      "route_path": "/finance/manual-journals",
+      "view_key": "finance.manual_journals.list"
+    },
+    {
+      "key": "finance.manual_journals.new",
+      "kind": "navigate",
+      "label": "New Manual Journal",
+      "label_i18n": {
+        "en": "New Manual Journal",
+        "id": "Jurnal Manual Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance.journal.create"
+      ],
+      "route_path": "/finance/manual-journals/new",
+      "view_key": "finance.manual_journals.form"
+    },
+    {
+      "key": "finance.manual_journals.pending",
+      "kind": "navigate",
+      "label": "Journal Approvals",
+      "label_i18n": {
+        "en": "Journal Approvals",
+        "id": "Persetujuan Jurnal"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "finance.journal.approve"
+      ],
+      "route_path": "/finance/manual-journals/pending",
+      "view_key": "finance.manual_journals.pending"
+    },
+    {
       "custom_entry_key": "finance.period_close",
       "key": "finance.period_close",
       "kind": "navigate",
@@ -5130,6 +5205,19 @@
       ]
     },
     {
+      "action_key": "finance.manual_journals.list",
+      "key": "finance.manual_journals",
+      "label": "Manual Journals",
+      "label_i18n": {
+        "en": "Manual Journals",
+        "id": "Jurnal Manual"
+      },
+      "order": 102,
+      "required_permissions": [
+        "finance.journal.read"
+      ]
+    },
+    {
       "action_key": "finance.ap_statements",
       "key": "finance.ap_statements",
       "label": "AP Statements",
@@ -5141,6 +5229,19 @@
       "required_permissions": [
         "finance.read",
         "document.read"
+      ]
+    },
+    {
+      "action_key": "finance.manual_journals.pending",
+      "key": "finance.manual_journal_approvals",
+      "label": "Journal Approvals",
+      "label_i18n": {
+        "en": "Journal Approvals",
+        "id": "Persetujuan Jurnal"
+      },
+      "order": 103,
+      "required_permissions": [
+        "finance.journal.approve"
       ]
     },
     {
@@ -7996,6 +8097,26 @@
               "type": "string"
             },
             {
+              "key": "manual_journal_type",
+              "label": "Manual Journal Type",
+              "label_i18n": {
+                "en": "Manual Journal Type",
+                "id": "Tipe Jurnal Manual"
+              },
+              "path": "body.payload.manual_journal_type",
+              "type": "string"
+            },
+            {
+              "key": "requires_approval",
+              "label": "Requires Approval",
+              "label_i18n": {
+                "en": "Requires Approval",
+                "id": "Perlu Persetujuan"
+              },
+              "path": "body.payload.requires_approval",
+              "type": "bool"
+            },
+            {
               "key": "journal_template_id",
               "label": "Journal Template ID",
               "label_i18n": {
@@ -8053,6 +8174,96 @@
                 "id": "Status Reversal"
               },
               "path": "body.payload.reversal_status",
+              "type": "string"
+            },
+            {
+              "key": "correction_of_posting_id",
+              "label": "Correction Of Posting ID",
+              "label_i18n": {
+                "en": "Correction Of Posting ID",
+                "id": "ID Posting Koreksi"
+              },
+              "path": "body.payload.correction_of_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "corrected_by_posting_id",
+              "label": "Corrected By Posting ID",
+              "label_i18n": {
+                "en": "Corrected By Posting ID",
+                "id": "ID Posting Pengoreksi"
+              },
+              "path": "body.payload.corrected_by_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "supporting_reference",
+              "label": "Supporting Reference",
+              "label_i18n": {
+                "en": "Supporting Reference",
+                "id": "Referensi Pendukung"
+              },
+              "path": "body.payload.supporting_reference",
+              "type": "string"
+            },
+            {
+              "key": "submission_note",
+              "label": "Submission Note",
+              "label_i18n": {
+                "en": "Submission Note",
+                "id": "Catatan Pengajuan"
+              },
+              "path": "body.payload.submission_note",
+              "type": "string"
+            },
+            {
+              "key": "approval_note",
+              "label": "Approval Note",
+              "label_i18n": {
+                "en": "Approval Note",
+                "id": "Catatan Persetujuan"
+              },
+              "path": "body.payload.approval_note",
+              "type": "string"
+            },
+            {
+              "key": "submitted_by",
+              "label": "Submitted By",
+              "label_i18n": {
+                "en": "Submitted By",
+                "id": "Diajukan Oleh"
+              },
+              "path": "body.payload.submitted_by",
+              "type": "string"
+            },
+            {
+              "key": "submitted_at",
+              "label": "Submitted At",
+              "label_i18n": {
+                "en": "Submitted At",
+                "id": "Diajukan Pada"
+              },
+              "path": "body.payload.submitted_at",
+              "type": "string"
+            },
+            {
+              "key": "approved_by",
+              "label": "Approved By",
+              "label_i18n": {
+                "en": "Approved By",
+                "id": "Disetujui Oleh"
+              },
+              "path": "body.payload.approved_by",
+              "type": "string"
+            },
+            {
+              "key": "approved_at",
+              "label": "Approved At",
+              "label_i18n": {
+                "en": "Approved At",
+                "id": "Disetujui Pada"
+              },
+              "path": "body.payload.approved_at",
               "type": "string"
             },
             {
@@ -8109,7 +8320,6 @@
                 "id": "Tipe Dokumen Sumber"
               },
               "path": "body.payload.source_document_type",
-              "required": true,
               "type": "string",
               "widget": "text"
             },
@@ -8121,7 +8331,6 @@
                 "id": "ID Dokumen Sumber"
               },
               "path": "body.payload.source_document_id",
-              "required": true,
               "type": "string",
               "widget": "text"
             },
@@ -8176,6 +8385,34 @@
               "path": "body.payload.journal_source_kind",
               "type": "string",
               "widget": "select"
+            },
+            {
+              "key": "manual_journal_type",
+              "label": "Manual Journal Type",
+              "label_i18n": {
+                "en": "Manual Journal Type",
+                "id": "Tipe Jurnal Manual"
+              },
+              "options": [
+                "adjusting",
+                "opening_balance",
+                "reclass",
+                "correction",
+                "other"
+              ],
+              "path": "body.payload.manual_journal_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "requires_approval",
+              "label": "Requires Approval",
+              "label_i18n": {
+                "en": "Requires Approval",
+                "id": "Perlu Persetujuan"
+              },
+              "path": "body.payload.requires_approval",
+              "type": "bool"
             },
             {
               "key": "journal_template_id",
@@ -8240,6 +8477,110 @@
                 "id": "Status Reversal"
               },
               "path": "body.payload.reversal_status",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "correction_of_posting_id",
+              "label": "Correction Of Posting ID",
+              "label_i18n": {
+                "en": "Correction Of Posting ID",
+                "id": "ID Posting Koreksi"
+              },
+              "path": "body.payload.correction_of_posting_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "corrected_by_posting_id",
+              "label": "Corrected By Posting ID",
+              "label_i18n": {
+                "en": "Corrected By Posting ID",
+                "id": "ID Posting Pengoreksi"
+              },
+              "path": "body.payload.corrected_by_posting_id",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "supporting_reference",
+              "label": "Supporting Reference",
+              "label_i18n": {
+                "en": "Supporting Reference",
+                "id": "Referensi Pendukung"
+              },
+              "path": "body.payload.supporting_reference",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "submission_note",
+              "label": "Submission Note",
+              "label_i18n": {
+                "en": "Submission Note",
+                "id": "Catatan Pengajuan"
+              },
+              "path": "body.payload.submission_note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "approval_note",
+              "label": "Approval Note",
+              "label_i18n": {
+                "en": "Approval Note",
+                "id": "Catatan Persetujuan"
+              },
+              "path": "body.payload.approval_note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "submitted_by",
+              "label": "Submitted By",
+              "label_i18n": {
+                "en": "Submitted By",
+                "id": "Diajukan Oleh"
+              },
+              "path": "body.payload.submitted_by",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "submitted_at",
+              "label": "Submitted At",
+              "label_i18n": {
+                "en": "Submitted At",
+                "id": "Diajukan Pada"
+              },
+              "path": "body.payload.submitted_at",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "approved_by",
+              "label": "Approved By",
+              "label_i18n": {
+                "en": "Approved By",
+                "id": "Disetujui Oleh"
+              },
+              "path": "body.payload.approved_by",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "approved_at",
+              "label": "Approved At",
+              "label_i18n": {
+                "en": "Approved At",
+                "id": "Disetujui Pada"
+              },
+              "path": "body.payload.approved_at",
+              "read_only": true,
               "type": "string",
               "widget": "text"
             },
@@ -8303,6 +8644,24 @@
           "path": "header.number"
         },
         {
+          "key": "journal_source_kind",
+          "label": "Source Kind",
+          "label_i18n": {
+            "en": "Source Kind",
+            "id": "Jenis Sumber"
+          },
+          "path": "body.payload.journal_source_kind"
+        },
+        {
+          "key": "manual_journal_type",
+          "label": "Journal Type",
+          "label_i18n": {
+            "en": "Journal Type",
+            "id": "Tipe Jurnal"
+          },
+          "path": "body.payload.manual_journal_type"
+        },
+        {
           "key": "source_document_type",
           "label": "Source Type",
           "label_i18n": {
@@ -8337,6 +8696,24 @@
             "id": "Tanggal Posting"
           },
           "path": "body.payload.posting_date"
+        },
+        {
+          "key": "submitted_by",
+          "label": "Submitted By",
+          "label_i18n": {
+            "en": "Submitted By",
+            "id": "Diajukan Oleh"
+          },
+          "path": "body.payload.submitted_by"
+        },
+        {
+          "key": "approved_by",
+          "label": "Approved By",
+          "label_i18n": {
+            "en": "Approved By",
+            "id": "Disetujui Oleh"
+          },
+          "path": "body.payload.approved_by"
         },
         {
           "key": "total_amount",
@@ -15769,6 +16146,930 @@
       "title_i18n": {
         "en": "Journal Templates",
         "id": "Journal Templates"
+      }
+    },
+    {
+      "document_type": "ledger_posting",
+      "key": "finance.manual_journals.detail",
+      "kind": "detail",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "finance.journal.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "number",
+              "label": "Posting Number",
+              "label_i18n": {
+                "en": "Posting Number",
+                "id": "Nomor Posting"
+              },
+              "path": "header.number",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "source_document_type",
+              "label": "Source Type",
+              "label_i18n": {
+                "en": "Source Type",
+                "id": "Tipe Sumber"
+              },
+              "path": "body.payload.source_document_type",
+              "type": "string"
+            },
+            {
+              "key": "source_document_id",
+              "label": "Source ID",
+              "label_i18n": {
+                "en": "Source ID",
+                "id": "ID Sumber"
+              },
+              "path": "body.payload.source_document_id",
+              "type": "string"
+            },
+            {
+              "key": "posting_date",
+              "label": "Posting Date",
+              "label_i18n": {
+                "en": "Posting Date",
+                "id": "Tanggal Posting"
+              },
+              "path": "body.payload.posting_date",
+              "type": "string"
+            },
+            {
+              "key": "posting_rule_key",
+              "label": "Posting Rule",
+              "label_i18n": {
+                "en": "Posting Rule",
+                "id": "Aturan Posting"
+              },
+              "path": "body.payload.posting_rule_key",
+              "type": "string"
+            },
+            {
+              "key": "journal_source_kind",
+              "label": "Journal Source Kind",
+              "label_i18n": {
+                "en": "Journal Source Kind",
+                "id": "Jenis Sumber Jurnal"
+              },
+              "path": "body.payload.journal_source_kind",
+              "type": "string"
+            },
+            {
+              "key": "manual_journal_type",
+              "label": "Manual Journal Type",
+              "label_i18n": {
+                "en": "Manual Journal Type",
+                "id": "Tipe Jurnal Manual"
+              },
+              "path": "body.payload.manual_journal_type",
+              "type": "string"
+            },
+            {
+              "key": "requires_approval",
+              "label": "Requires Approval",
+              "label_i18n": {
+                "en": "Requires Approval",
+                "id": "Perlu Persetujuan"
+              },
+              "path": "body.payload.requires_approval",
+              "type": "bool"
+            },
+            {
+              "key": "journal_template_id",
+              "label": "Journal Template ID",
+              "label_i18n": {
+                "en": "Journal Template ID",
+                "id": "ID Template Jurnal"
+              },
+              "path": "body.payload.journal_template_id",
+              "type": "string"
+            },
+            {
+              "key": "journal_run_id",
+              "label": "Journal Run ID",
+              "label_i18n": {
+                "en": "Journal Run ID",
+                "id": "ID Run Jurnal"
+              },
+              "path": "body.payload.journal_run_id",
+              "type": "string"
+            },
+            {
+              "key": "accounting_period_id",
+              "label": "Accounting Period ID",
+              "label_i18n": {
+                "en": "Accounting Period ID",
+                "id": "ID Periode Akuntansi"
+              },
+              "path": "body.payload.accounting_period_id",
+              "type": "string"
+            },
+            {
+              "key": "reversal_of_posting_id",
+              "label": "Reversal Of Posting ID",
+              "label_i18n": {
+                "en": "Reversal Of Posting ID",
+                "id": "ID Posting Asal Reversal"
+              },
+              "path": "body.payload.reversal_of_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "reversed_by_posting_id",
+              "label": "Reversed By Posting ID",
+              "label_i18n": {
+                "en": "Reversed By Posting ID",
+                "id": "ID Posting Reversal"
+              },
+              "path": "body.payload.reversed_by_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "reversal_status",
+              "label": "Reversal Status",
+              "label_i18n": {
+                "en": "Reversal Status",
+                "id": "Status Reversal"
+              },
+              "path": "body.payload.reversal_status",
+              "type": "string"
+            },
+            {
+              "key": "correction_of_posting_id",
+              "label": "Correction Of Posting ID",
+              "label_i18n": {
+                "en": "Correction Of Posting ID",
+                "id": "ID Posting Koreksi"
+              },
+              "path": "body.payload.correction_of_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "corrected_by_posting_id",
+              "label": "Corrected By Posting ID",
+              "label_i18n": {
+                "en": "Corrected By Posting ID",
+                "id": "ID Posting Pengoreksi"
+              },
+              "path": "body.payload.corrected_by_posting_id",
+              "type": "string"
+            },
+            {
+              "key": "supporting_reference",
+              "label": "Supporting Reference",
+              "label_i18n": {
+                "en": "Supporting Reference",
+                "id": "Referensi Pendukung"
+              },
+              "path": "body.payload.supporting_reference",
+              "type": "string"
+            },
+            {
+              "key": "submission_note",
+              "label": "Submission Note",
+              "label_i18n": {
+                "en": "Submission Note",
+                "id": "Catatan Pengajuan"
+              },
+              "path": "body.payload.submission_note",
+              "type": "string"
+            },
+            {
+              "key": "approval_note",
+              "label": "Approval Note",
+              "label_i18n": {
+                "en": "Approval Note",
+                "id": "Catatan Persetujuan"
+              },
+              "path": "body.payload.approval_note",
+              "type": "string"
+            },
+            {
+              "key": "submitted_by",
+              "label": "Submitted By",
+              "label_i18n": {
+                "en": "Submitted By",
+                "id": "Diajukan Oleh"
+              },
+              "path": "body.payload.submitted_by",
+              "type": "string"
+            },
+            {
+              "key": "submitted_at",
+              "label": "Submitted At",
+              "label_i18n": {
+                "en": "Submitted At",
+                "id": "Diajukan Pada"
+              },
+              "path": "body.payload.submitted_at",
+              "type": "string"
+            },
+            {
+              "key": "approved_by",
+              "label": "Approved By",
+              "label_i18n": {
+                "en": "Approved By",
+                "id": "Disetujui Oleh"
+              },
+              "path": "body.payload.approved_by",
+              "type": "string"
+            },
+            {
+              "key": "approved_at",
+              "label": "Approved At",
+              "label_i18n": {
+                "en": "Approved At",
+                "id": "Disetujui Pada"
+              },
+              "path": "body.payload.approved_at",
+              "type": "string"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "journal_lines",
+              "label": "Journal Lines",
+              "label_i18n": {
+                "en": "Journal Lines",
+                "id": "Baris Jurnal"
+              },
+              "path": "body.payload.journal_lines",
+              "type": "object",
+              "widget": "commercial_journal_lines"
+            }
+          ],
+          "key": "summary",
+          "title": "Posting Summary",
+          "title_i18n": {
+            "en": "Posting Summary",
+            "id": "Ringkasan Posting"
+          }
+        }
+      ],
+      "title": "Manual Journal Detail",
+      "title_i18n": {
+        "en": "Manual Journal Detail",
+        "id": "Detail Jurnal Manual"
+      }
+    },
+    {
+      "document_type": "ledger_posting",
+      "key": "finance.manual_journals.form",
+      "kind": "form",
+      "required_permissions": [
+        "finance.journal.create"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "source_document_type",
+              "label": "Source Document Type",
+              "label_i18n": {
+                "en": "Source Document Type",
+                "id": "Tipe Dokumen Sumber"
+              },
+              "path": "body.payload.source_document_type",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_document_id",
+              "label": "Source Document ID",
+              "label_i18n": {
+                "en": "Source Document ID",
+                "id": "ID Dokumen Sumber"
+              },
+              "path": "body.payload.source_document_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "posting_date",
+              "label": "Posting Date",
+              "label_i18n": {
+                "en": "Posting Date",
+                "id": "Tanggal Posting"
+              },
+              "path": "body.payload.posting_date",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "body.payload.currency_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "posting_rule_key",
+              "label": "Posting Rule",
+              "label_i18n": {
+                "en": "Posting Rule",
+                "id": "Aturan Posting"
+              },
+              "path": "body.payload.posting_rule_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "journal_source_kind",
+              "label": "Journal Source Kind",
+              "label_i18n": {
+                "en": "Journal Source Kind",
+                "id": "Jenis Sumber Jurnal"
+              },
+              "options": [
+                "manual",
+                "recurring",
+                "accrual",
+                "reversal"
+              ],
+              "path": "body.payload.journal_source_kind",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "manual_journal_type",
+              "label": "Manual Journal Type",
+              "label_i18n": {
+                "en": "Manual Journal Type",
+                "id": "Tipe Jurnal Manual"
+              },
+              "options": [
+                "adjusting",
+                "opening_balance",
+                "reclass",
+                "correction",
+                "other"
+              ],
+              "path": "body.payload.manual_journal_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "requires_approval",
+              "label": "Requires Approval",
+              "label_i18n": {
+                "en": "Requires Approval",
+                "id": "Perlu Persetujuan"
+              },
+              "path": "body.payload.requires_approval",
+              "type": "bool"
+            },
+            {
+              "key": "journal_template_id",
+              "label": "Journal Template ID",
+              "label_i18n": {
+                "en": "Journal Template ID",
+                "id": "ID Template Jurnal"
+              },
+              "path": "body.payload.journal_template_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "journal_run_id",
+              "label": "Journal Run ID",
+              "label_i18n": {
+                "en": "Journal Run ID",
+                "id": "ID Run Jurnal"
+              },
+              "path": "body.payload.journal_run_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "accounting_period_id",
+              "label": "Accounting Period ID",
+              "label_i18n": {
+                "en": "Accounting Period ID",
+                "id": "ID Periode Akuntansi"
+              },
+              "path": "body.payload.accounting_period_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reversal_of_posting_id",
+              "label": "Reversal Of Posting ID",
+              "label_i18n": {
+                "en": "Reversal Of Posting ID",
+                "id": "ID Posting Asal Reversal"
+              },
+              "path": "body.payload.reversal_of_posting_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reversed_by_posting_id",
+              "label": "Reversed By Posting ID",
+              "label_i18n": {
+                "en": "Reversed By Posting ID",
+                "id": "ID Posting Reversal"
+              },
+              "path": "body.payload.reversed_by_posting_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "reversal_status",
+              "label": "Reversal Status",
+              "label_i18n": {
+                "en": "Reversal Status",
+                "id": "Status Reversal"
+              },
+              "path": "body.payload.reversal_status",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "correction_of_posting_id",
+              "label": "Correction Of Posting ID",
+              "label_i18n": {
+                "en": "Correction Of Posting ID",
+                "id": "ID Posting Koreksi"
+              },
+              "path": "body.payload.correction_of_posting_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "corrected_by_posting_id",
+              "label": "Corrected By Posting ID",
+              "label_i18n": {
+                "en": "Corrected By Posting ID",
+                "id": "ID Posting Pengoreksi"
+              },
+              "path": "body.payload.corrected_by_posting_id",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "supporting_reference",
+              "label": "Supporting Reference",
+              "label_i18n": {
+                "en": "Supporting Reference",
+                "id": "Referensi Pendukung"
+              },
+              "path": "body.payload.supporting_reference",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "submission_note",
+              "label": "Submission Note",
+              "label_i18n": {
+                "en": "Submission Note",
+                "id": "Catatan Pengajuan"
+              },
+              "path": "body.payload.submission_note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "approval_note",
+              "label": "Approval Note",
+              "label_i18n": {
+                "en": "Approval Note",
+                "id": "Catatan Persetujuan"
+              },
+              "path": "body.payload.approval_note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "submitted_by",
+              "label": "Submitted By",
+              "label_i18n": {
+                "en": "Submitted By",
+                "id": "Diajukan Oleh"
+              },
+              "path": "body.payload.submitted_by",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "submitted_at",
+              "label": "Submitted At",
+              "label_i18n": {
+                "en": "Submitted At",
+                "id": "Diajukan Pada"
+              },
+              "path": "body.payload.submitted_at",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "approved_by",
+              "label": "Approved By",
+              "label_i18n": {
+                "en": "Approved By",
+                "id": "Disetujui Oleh"
+              },
+              "path": "body.payload.approved_by",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "approved_at",
+              "label": "Approved At",
+              "label_i18n": {
+                "en": "Approved At",
+                "id": "Disetujui Pada"
+              },
+              "path": "body.payload.approved_at",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total",
+              "label_i18n": {
+                "en": "Total",
+                "id": "Total"
+              },
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "help_text": "Enter debit and credit lines directly.",
+              "key": "journal_lines",
+              "label": "Journal Lines",
+              "label_i18n": {
+                "en": "Journal Lines",
+                "id": "Baris Jurnal"
+              },
+              "path": "body.payload.journal_lines",
+              "type": "object",
+              "widget": "commercial_journal_lines"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "posting",
+          "title": "Posting Details",
+          "title_i18n": {
+            "en": "Posting Details",
+            "id": "Detail Posting"
+          }
+        }
+      ],
+      "title": "Manual Journal Form",
+      "title_i18n": {
+        "en": "Manual Journal Form",
+        "id": "Form Jurnal Manual"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Posting",
+          "label_i18n": {
+            "en": "Posting",
+            "id": "Posting"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "journal_source_kind",
+          "label": "Source Kind",
+          "label_i18n": {
+            "en": "Source Kind",
+            "id": "Jenis Sumber"
+          },
+          "path": "body.payload.journal_source_kind"
+        },
+        {
+          "key": "manual_journal_type",
+          "label": "Journal Type",
+          "label_i18n": {
+            "en": "Journal Type",
+            "id": "Tipe Jurnal"
+          },
+          "path": "body.payload.manual_journal_type"
+        },
+        {
+          "key": "source_document_type",
+          "label": "Source Type",
+          "label_i18n": {
+            "en": "Source Type",
+            "id": "Tipe Sumber"
+          },
+          "path": "body.payload.source_document_type"
+        },
+        {
+          "key": "source_document_id",
+          "label": "Source ID",
+          "label_i18n": {
+            "en": "Source ID",
+            "id": "ID Sumber"
+          },
+          "path": "body.payload.source_document_id"
+        },
+        {
+          "key": "posting_rule_key",
+          "label": "Posting Rule",
+          "label_i18n": {
+            "en": "Posting Rule",
+            "id": "Aturan Posting"
+          },
+          "path": "body.payload.posting_rule_key"
+        },
+        {
+          "key": "posting_date",
+          "label": "Posting Date",
+          "label_i18n": {
+            "en": "Posting Date",
+            "id": "Tanggal Posting"
+          },
+          "path": "body.payload.posting_date"
+        },
+        {
+          "key": "submitted_by",
+          "label": "Submitted By",
+          "label_i18n": {
+            "en": "Submitted By",
+            "id": "Diajukan Oleh"
+          },
+          "path": "body.payload.submitted_by"
+        },
+        {
+          "key": "approved_by",
+          "label": "Approved By",
+          "label_i18n": {
+            "en": "Approved By",
+            "id": "Disetujui Oleh"
+          },
+          "path": "body.payload.approved_by"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "ledger_posting",
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "posted",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "journal_source_kind",
+          "label": "Source Kind",
+          "label_i18n": {
+            "en": "Source Kind",
+            "id": "Jenis Sumber"
+          },
+          "options": [
+            "manual"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "manual_journal_type",
+          "label": "Journal Type",
+          "label_i18n": {
+            "en": "Journal Type",
+            "id": "Tipe Jurnal"
+          },
+          "options": [
+            "adjusting",
+            "opening_balance",
+            "reclass",
+            "correction",
+            "other"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.manual_journals.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "finance.journal.read"
+      ],
+      "title": "Manual Journals",
+      "title_i18n": {
+        "en": "Manual Journals",
+        "id": "Jurnal Manual"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Posting",
+          "label_i18n": {
+            "en": "Posting",
+            "id": "Posting"
+          },
+          "path": "header.number"
+        },
+        {
+          "key": "journal_source_kind",
+          "label": "Source Kind",
+          "label_i18n": {
+            "en": "Source Kind",
+            "id": "Jenis Sumber"
+          },
+          "path": "body.payload.journal_source_kind"
+        },
+        {
+          "key": "manual_journal_type",
+          "label": "Journal Type",
+          "label_i18n": {
+            "en": "Journal Type",
+            "id": "Tipe Jurnal"
+          },
+          "path": "body.payload.manual_journal_type"
+        },
+        {
+          "key": "source_document_type",
+          "label": "Source Type",
+          "label_i18n": {
+            "en": "Source Type",
+            "id": "Tipe Sumber"
+          },
+          "path": "body.payload.source_document_type"
+        },
+        {
+          "key": "source_document_id",
+          "label": "Source ID",
+          "label_i18n": {
+            "en": "Source ID",
+            "id": "ID Sumber"
+          },
+          "path": "body.payload.source_document_id"
+        },
+        {
+          "key": "posting_rule_key",
+          "label": "Posting Rule",
+          "label_i18n": {
+            "en": "Posting Rule",
+            "id": "Aturan Posting"
+          },
+          "path": "body.payload.posting_rule_key"
+        },
+        {
+          "key": "posting_date",
+          "label": "Posting Date",
+          "label_i18n": {
+            "en": "Posting Date",
+            "id": "Tanggal Posting"
+          },
+          "path": "body.payload.posting_date"
+        },
+        {
+          "key": "submitted_by",
+          "label": "Submitted By",
+          "label_i18n": {
+            "en": "Submitted By",
+            "id": "Diajukan Oleh"
+          },
+          "path": "body.payload.submitted_by"
+        },
+        {
+          "key": "approved_by",
+          "label": "Approved By",
+          "label_i18n": {
+            "en": "Approved By",
+            "id": "Disetujui Oleh"
+          },
+          "path": "body.payload.approved_by"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "label_i18n": {
+            "en": "Total",
+            "id": "Total"
+          },
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "ledger_posting",
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "submitted"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "journal_source_kind",
+          "label": "Source Kind",
+          "label_i18n": {
+            "en": "Source Kind",
+            "id": "Jenis Sumber"
+          },
+          "options": [
+            "manual"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.manual_journals.pending",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "finance.journal.approve"
+      ],
+      "title": "Journal Approvals",
+      "title_i18n": {
+        "en": "Journal Approvals",
+        "id": "Persetujuan Jurnal"
       }
     },
     {

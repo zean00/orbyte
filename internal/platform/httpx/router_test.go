@@ -6087,6 +6087,47 @@ func TestDocumentRoutesAndOps(t *testing.T) {
 	}
 }
 
+func TestUIDocumentRoutesHideManualJournalsWithoutFinanceJournalRead(t *testing.T) {
+	h := newTestHarness(t)
+	if err := h.docs.Register(document.Definition{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"posting_for"}}); err != nil {
+		t.Fatalf("register ledger_posting: %v", err)
+	}
+	record, err := h.docs.Create("ledger_posting", "org_default", "loc_hq", "user_admin", map[string]any{
+		"posting_date":        "2099-03-31",
+		"currency_code":       "IDR",
+		"journal_source_kind": "manual",
+		"manual_journal_type": "adjusting",
+		"journal_lines": []map[string]any{
+			{"account_code": "6100-EXP", "debit": 100.0, "credit": 0.0},
+			{"account_code": "2100-ACC", "debit": 0.0, "credit": 100.0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create manual journal: %v", err)
+	}
+
+	detail := h.request(http.MethodGet, "/ui/data/documents/"+record.Header.ID, nil, true)
+	if detail.Code != http.StatusForbidden {
+		t.Fatalf("expected manual journal detail to be forbidden without finance.journal.read, got %d body=%s", detail.Code, detail.Body.String())
+	}
+
+	list := h.request(http.MethodGet, "/ui/data/documents?type=ledger_posting", nil, true)
+	if list.Code != http.StatusOK {
+		t.Fatalf("expected ui document list to succeed, got %d body=%s", list.Code, list.Body.String())
+	}
+	if strings.Contains(list.Body.String(), record.Header.ID) {
+		t.Fatalf("expected manual journal to be filtered from ui document list, body=%s", list.Body.String())
+	}
+
+	projections := h.request(http.MethodGet, "/ui/data/projections/documents", nil, true)
+	if projections.Code != http.StatusOK {
+		t.Fatalf("expected ui document projections to succeed, got %d body=%s", projections.Code, projections.Body.String())
+	}
+	if strings.Contains(projections.Body.String(), record.Header.ID) {
+		t.Fatalf("expected manual journal to be filtered from ui document projections, body=%s", projections.Body.String())
+	}
+}
+
 func TestCommercialDocumentsRejectUpdateOutsideDraft(t *testing.T) {
 	cases := []struct {
 		documentType string

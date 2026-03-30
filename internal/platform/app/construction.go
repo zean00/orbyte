@@ -98,6 +98,7 @@ type serviceGraph struct {
 	financeReporting   *application.FinanceReportingCoreService
 	financeReconcile   *application.FinanceReconciliationCoreService
 	financePeriodEnd   *application.FinancePeriodEndCoreService
+	financeManual      *application.FinanceManualJournalCoreService
 	financeCollections *application.FinanceCollectionsCoreService
 	inventoryFinance   *application.InventoryFinanceCoreService
 	analyticsRepo      analytics.Repository
@@ -269,10 +270,13 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.financeReporting = application.NewFinanceReportingCoreService(graph.documents, graph.models, graph.config)
 	graph.financeReconcile = application.NewFinanceReconciliationCoreService(graph.documents, graph.models, graph.financeReporting)
 	graph.financePeriodEnd = application.NewFinancePeriodEndCoreService(graph.documents, graph.models, graph.financeReporting)
+	graph.financeManual = application.NewFinanceManualJournalCoreService(graph.documents, graph.financeReporting)
 	graph.financeCollections = application.NewFinanceCollectionsCoreService(graph.documents, graph.models, graph.financeReconcile, graph.commercialCore, graph.procurementCore, graph.financeReporting)
 	graph.inventoryFinance = application.NewInventoryFinanceCoreService(graph.documents, graph.models, graph.inventoryCore, graph.financeReporting)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.commercialCore.SetPeriodEnd(graph.financePeriodEnd)
+	graph.commercialCore.SetManualJournals(graph.financeManual)
+	graph.financeManual.SetPeriodEnd(graph.financePeriodEnd)
 	graph.procurementCore.SetFinanceReporting(graph.financeReporting)
 	graph.procurementCore.SetInventoryCore(graph.inventoryCore)
 	graph.inventoryCore.SetFinanceReporting(graph.financeReporting)

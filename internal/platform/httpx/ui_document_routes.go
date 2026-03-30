@@ -48,6 +48,13 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 				if p.currentLocationID != "" && item.LocationID != "" && item.LocationID != p.currentLocationID {
 					continue
 				}
+				record, err := docs.Get(item.DocumentID)
+				if err != nil {
+					continue
+				}
+				if manualJournalReadBlocked(ident, p, record) {
+					continue
+				}
 				filtered = append(filtered, documentListProjectionItem(item))
 			}
 			sortDocumentProjectionItems(filtered, sortKey)
@@ -69,6 +76,9 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			}
 			record, err := docs.Get(item.DocumentID)
 			if err != nil {
+				continue
+			}
+			if manualJournalReadBlocked(ident, p, record) {
 				continue
 			}
 			rendered := docs.Render(record, document.ViewNormal, modules.EnabledMap())
@@ -126,6 +136,10 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			respondError(w, shared.Forbidden("document is not visible"))
 			return
 		}
+		if manualJournalReadBlocked(ident, p, record) {
+			respondError(w, shared.Forbidden("document is not visible"))
+			return
+		}
 		rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
 		rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
 		rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "ui")
@@ -162,6 +176,13 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 		filtered := make([]map[string]any, 0, len(items))
 		for _, item := range items {
 			if p.currentLocationID != "" && item.LocationID != "" && item.LocationID != p.currentLocationID {
+				continue
+			}
+			record, err := docs.Get(item.DocumentID)
+			if err != nil {
+				continue
+			}
+			if manualJournalReadBlocked(ident, p, record) {
 				continue
 			}
 			filtered = append(filtered, map[string]any{

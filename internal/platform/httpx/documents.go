@@ -38,6 +38,7 @@ type actionRequest struct {
 	Action          string `json:"action"`
 	ExpectedVersion int    `json:"expected_version,omitempty"`
 	ExpectedETag    string `json:"expected_etag,omitempty"`
+	Note            string `json:"note,omitempty"`
 }
 
 type updateDocumentExtensionRequest struct {
@@ -642,6 +643,9 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		if locationID != "" {
 			filtered := make([]document.Record, 0, len(items))
 			for _, item := range items {
+				if manualJournalReadBlocked(ident, p, item) {
+					continue
+				}
 				if item.Header.LocationID == locationID && searchVisible(item.Header, p, policySvc) {
 					rendered := docs.Render(item, document.ViewNormal, modules.EnabledMap())
 					filtered = append(filtered, sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "api"))
@@ -651,6 +655,9 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		} else {
 			filtered := make([]document.Record, 0, len(items))
 			for i := range items {
+				if manualJournalReadBlocked(ident, p, items[i]) {
+					continue
+				}
 				if !searchVisible(items[i].Header, p, policySvc) {
 					continue
 				}
@@ -693,6 +700,10 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		}
 		p, ok := requireAuthorization(w, r, ident, "document.create", req.LocationID, "")
 		if !ok {
+			return
+		}
+		if isManualJournalCreate(req.Type, req.Payload) && !principalAllowsPermission(ident, p, "finance.journal.create", locationIDForDocumentCreate(req.LocationID, p)) {
+			respondError(w, shared.Forbidden("manual journal creation is not allowed"))
 			return
 		}
 		if !principalAllowsDocumentType(p, req.Type) {
@@ -763,6 +774,10 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 				return
 			}
+			if manualJournalReadBlocked(ident, p, record) {
+				respondError(w, shared.Forbidden("manual journal access is not allowed"))
+				return
+			}
 			respondJSON(w, http.StatusOK, map[string]any{"items": sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api").Links})
 			return
 		}
@@ -778,6 +793,10 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			}
 			if !principalAllowsDocumentType(p, record.Header.Type) {
 				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+				return
+			}
+			if manualJournalReadBlocked(ident, p, record) {
+				respondError(w, shared.Forbidden("manual journal access is not allowed"))
 				return
 			}
 			respondJSON(w, http.StatusOK, map[string]any{"items": sanitizeDocumentRecord(fieldSecurity, ident, p, record, "api").Attachments})
@@ -799,6 +818,10 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		}
 		if !principalAllowsDocumentType(p, record.Header.Type) {
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+			return
+		}
+		if manualJournalReadBlocked(ident, p, record) {
+			respondError(w, shared.Forbidden("manual journal access is not allowed"))
 			return
 		}
 		viewMode := documentViewMode(r)
@@ -828,6 +851,10 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			}
 			if !principalAllowsDocumentType(p, current.Header.Type) {
 				respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+				return
+			}
+			if isManualJournalRecord(current) && !principalAllowsPermission(ident, p, "finance.journal.create", current.Header.LocationID) {
+				respondError(w, shared.Forbidden("manual journal draft updates are not allowed"))
 				return
 			}
 			if !modules.IsEnabled(moduleKey) {
@@ -874,6 +901,10 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 		}
 		if !principalAllowsDocumentType(p, current.Header.Type) {
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
+			return
+		}
+		if isManualJournalRecord(current) && !principalAllowsPermission(ident, p, "finance.journal.create", current.Header.LocationID) {
+			respondError(w, shared.Forbidden("manual journal draft updates are not allowed"))
 			return
 		}
 		if commercialDocumentUpdateLocked(current.Header.Type, current.Header.Status) || procurementDocumentUpdateLocked(current.Header.Type, current.Header.Status) || inventoryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || deliveryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || returnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || supplierReturnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || productionDocumentUpdateLocked(current.Header.Type, current.Header.Status) || recallDocumentUpdateLocked(current.Header.Type, current.Header.Status) {
@@ -1015,14 +1046,15 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Forbidden("delegation grant does not allow this document type"))
 			return
 		}
-		if commercialSvc != nil && isCommercialManagedType(current.Header.Type) {
-			var validationErr error
-			switch req.Action {
-			case "approve":
-				validationErr = commercialSvc.ValidateApprove(current)
-			case "cancel":
-				validationErr = commercialSvc.ValidateCancel(current)
+		if isManualJournalRecord(current) {
+			extraPermission := manualJournalPermissionForAction(req.Action)
+			if extraPermission != "" && !principalAllowsPermission(ident, p, extraPermission, current.Header.LocationID) {
+				respondError(w, shared.Forbidden("manual journal action is not allowed"))
+				return
 			}
+		}
+		if commercialSvc != nil && isCommercialManagedType(current.Header.Type) {
+			validationErr := commercialSvc.ValidateAction(current, req.Action, principalEffectiveUserID(p))
 			if validationErr != nil {
 				incActionMetric(obs, req.Action, "error")
 				respondError(w, validationErr)
@@ -1164,15 +1196,9 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, err)
 			return
 		}
-		if commercialSvc != nil && isCommercialManagedType(record.Header.Type) && (req.Action == "approve" || req.Action == "cancel") {
+		if commercialSvc != nil && isCommercialManagedType(record.Header.Type) && (req.Action == "submit" || req.Action == "approve" || req.Action == "reject" || req.Action == "cancel") {
 			postCommitWarning := ""
-			var sideEffectErr error
-			switch req.Action {
-			case "approve":
-				sideEffectErr = commercialSvc.HandleApprovedDocument(record, principalEffectiveUserID(p))
-			case "cancel":
-				sideEffectErr = commercialSvc.HandleCanceledDocument(record, principalEffectiveUserID(p))
-			}
+			sideEffectErr := commercialSvc.HandleAction(record, req.Action, principalEffectiveUserID(p), req.Note)
 			if sideEffectErr != nil {
 				postCommitWarning = "commercial post-commit synchronization failed"
 				log.Printf("documents: commercial post-commit sync failed for action=%s document_id=%s: %v", req.Action, record.Header.ID, sideEffectErr)
@@ -1577,6 +1603,52 @@ func refreshDocumentSearch(searchSvc *search.Service, record document.Record) {
 		return
 	}
 	searchSvc.RefreshDocument(record)
+}
+
+func isManualJournalRecord(record document.Record) bool {
+	return strings.TrimSpace(record.Header.Type) == "ledger_posting" && strings.TrimSpace(stringValue(record.Body.Payload["journal_source_kind"])) == "manual"
+}
+
+func isManualJournalCreate(documentType string, payload map[string]any) bool {
+	if strings.TrimSpace(documentType) != "ledger_posting" {
+		return false
+	}
+	kind := strings.TrimSpace(stringValue(payload["journal_source_kind"]))
+	return kind == "" || kind == "manual"
+}
+
+func manualJournalReadBlocked(ident *identity.Service, p principal, record document.Record) bool {
+	return isManualJournalRecord(record) && !principalAllowsPermission(ident, p, "finance.journal.read", record.Header.LocationID)
+}
+
+func manualJournalPermissionForAction(action string) string {
+	switch strings.TrimSpace(action) {
+	case "submit":
+		return "finance.journal.submit"
+	case "approve":
+		return "finance.journal.approve"
+	case "reject":
+		return "finance.journal.reject"
+	case "cancel":
+		return "finance.journal.cancel"
+	case "reopen":
+		return "finance.journal.create"
+	default:
+		return ""
+	}
+}
+
+func locationIDForDocumentCreate(locationID string, p principal) string {
+	locationID = strings.TrimSpace(locationID)
+	if locationID != "" {
+		return locationID
+	}
+	return p.currentLocationID
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return strings.TrimSpace(text)
 }
 
 func documentLinkCollectionPath(path string) (string, bool) {

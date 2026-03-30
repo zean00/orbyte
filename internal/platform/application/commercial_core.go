@@ -23,6 +23,7 @@ type CommercialCoreService struct {
 	search    *search.Service
 	finance   *FinanceReportingCoreService
 	periodEnd *FinancePeriodEndCoreService
+	manual    *FinanceManualJournalCoreService
 }
 
 type ReceivablesSummary struct {
@@ -341,7 +342,11 @@ func (s *CommercialCoreService) NormalizePayload(documentType string, payload ma
 	case "payment_refund":
 		return s.normalizeCommercialRefund(next)
 	case "ledger_posting":
-		return s.normalizeJournalLines(next)
+		next = s.normalizeJournalLines(next)
+		if s.manual != nil {
+			next = s.manual.NormalizePayload(next)
+		}
+		return next
 	default:
 		return document.NormalizePayload(next)
 	}
@@ -463,31 +468,92 @@ func (s *CommercialCoreService) CreateCreditNoteFromInvoice(invoiceID, actorID s
 }
 
 func (s *CommercialCoreService) HandleApprovedDocument(record document.Record, actorID string) error {
+	return s.HandleAction(record, "approve", actorID, "")
+}
+
+func (s *CommercialCoreService) HandleAction(record document.Record, action, actorID, note string) error {
 	switch record.Header.Type {
 	case "invoice":
-		if err := s.handleIssuedInvoice(record, actorID); err != nil {
-			return err
+		switch action {
+		case "approve":
+			if err := s.handleIssuedInvoice(record, actorID); err != nil {
+				return err
+			}
+			return s.recordPromotionRedemptions(record, actorID)
+		case "cancel":
+			if err := s.handleCancelledInvoice(record, actorID); err != nil {
+				return err
+			}
+			return s.releasePromotionRedemptions(record.Header.ID, actorID)
+		default:
+			return nil
 		}
-		return s.recordPromotionRedemptions(record, actorID)
 	case "credit_note":
+		if action != "approve" {
+			return nil
+		}
 		return s.handleIssuedCreditNote(record, actorID)
 	case "payment_receipt":
-		return s.handleReceivedPayment(record, actorID)
+		if action != "approve" && action != "cancel" {
+			return nil
+		}
+		if action == "approve" {
+			return s.handleReceivedPayment(record, actorID)
+		}
+		return s.handleCancelledPayment(record, actorID)
 	case "payment_refund":
-		return s.handleRefundedPayment(record, actorID)
+		if action != "approve" && action != "cancel" {
+			return nil
+		}
+		if action == "approve" {
+			return s.handleRefundedPayment(record, actorID)
+		}
+		return s.handleCancelledRefund(record, actorID)
 	case "ledger_posting":
+		if s.manual != nil {
+			if err := s.manual.HandleAction(record, action, actorID, note); err != nil {
+				return err
+			}
+		}
 		if s.periodEnd != nil {
-			return s.periodEnd.HandleApprovedLedgerPosting(record, actorID)
+			switch action {
+			case "approve":
+				return s.periodEnd.HandleApprovedLedgerPosting(record, actorID)
+			case "cancel":
+				return s.periodEnd.HandleCanceledLedgerPosting(record, actorID)
+			}
 		}
 		return nil
 	default:
+		if action != "approve" && action != "cancel" {
+			return nil
+		}
 		return nil
 	}
 }
 
 func (s *CommercialCoreService) ValidateApprove(record document.Record) error {
+	return s.ValidateAction(record, "approve", "")
+}
+
+func (s *CommercialCoreService) ValidateAction(record document.Record, action, actorID string) error {
+	if record.Header.Type == "ledger_posting" && s.manual != nil {
+		if err := s.manual.ValidateAction(record, action, actorID); err != nil {
+			return err
+		}
+	}
 	if record.Header.Type == "ledger_posting" && s.finance != nil {
-		return s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(record.Body.Payload["posting_date"]))
+		if action == "approve" {
+			if err := s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(record.Body.Payload["posting_date"])); err != nil {
+				return err
+			}
+		}
+	}
+	if action == "cancel" {
+		return s.validateCancelLegacy(record)
+	}
+	if action != "approve" {
+		return nil
 	}
 	switch record.Header.Type {
 	case "credit_note":
@@ -513,7 +579,15 @@ func (s *CommercialCoreService) SetPeriodEnd(periodEnd *FinancePeriodEndCoreServ
 	s.periodEnd = periodEnd
 }
 
+func (s *CommercialCoreService) SetManualJournals(manual *FinanceManualJournalCoreService) {
+	s.manual = manual
+}
+
 func (s *CommercialCoreService) ValidateCancel(record document.Record) error {
+	return s.validateCancelLegacy(record)
+}
+
+func (s *CommercialCoreService) validateCancelLegacy(record document.Record) error {
 	switch record.Header.Type {
 	case "invoice":
 		if record.Header.Status != "issued" {
@@ -535,6 +609,10 @@ func (s *CommercialCoreService) ValidateCancel(record document.Record) error {
 }
 
 func (s *CommercialCoreService) HandleCanceledDocument(record document.Record, actorID string) error {
+	return s.handleCanceledLegacy(record, actorID)
+}
+
+func (s *CommercialCoreService) handleCanceledLegacy(record document.Record, actorID string) error {
 	current, err := s.documents.Get(record.Header.ID)
 	if err == nil {
 		record = current
