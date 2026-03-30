@@ -1187,30 +1187,34 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				return
 			}
 			var req struct {
-				TreasuryAccountID string           `json:"treasury_account_id"`
-				StatementNumber   string           `json:"statement_number"`
-				StatementDate     string           `json:"statement_date"`
-				FromDate          string           `json:"from_date"`
-				ToDate            string           `json:"to_date"`
-				OpeningBalance    float64          `json:"opening_balance"`
-				ClosingBalance    float64          `json:"closing_balance"`
-				SourceFileName    string           `json:"source_file_name"`
-				CSVText           string           `json:"csv_text"`
-				Lines             []map[string]any `json:"lines"`
+				TreasuryAccountID    string           `json:"treasury_account_id"`
+				BankImportTemplateID string           `json:"bank_import_template_id"`
+				PresetKey            string           `json:"preset_key"`
+				StatementNumber      string           `json:"statement_number"`
+				StatementDate        string           `json:"statement_date"`
+				FromDate             string           `json:"from_date"`
+				ToDate               string           `json:"to_date"`
+				OpeningBalance       float64          `json:"opening_balance"`
+				ClosingBalance       float64          `json:"closing_balance"`
+				SourceFileName       string           `json:"source_file_name"`
+				CSVText              string           `json:"csv_text"`
+				Lines                []map[string]any `json:"lines"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				respondError(w, shared.Validation("invalid request body"))
 				return
 			}
 			payload := map[string]any{
-				"statement_number": req.StatementNumber,
-				"statement_date":   req.StatementDate,
-				"from_date":        req.FromDate,
-				"to_date":          req.ToDate,
-				"opening_balance":  req.OpeningBalance,
-				"closing_balance":  req.ClosingBalance,
-				"source_file_name": req.SourceFileName,
-				"lines":            req.Lines,
+				"bank_import_template_id": req.BankImportTemplateID,
+				"preset_key":              req.PresetKey,
+				"statement_number":        req.StatementNumber,
+				"statement_date":          req.StatementDate,
+				"from_date":               req.FromDate,
+				"to_date":                 req.ToDate,
+				"opening_balance":         req.OpeningBalance,
+				"closing_balance":         req.ClosingBalance,
+				"source_file_name":        req.SourceFileName,
+				"lines":                   req.Lines,
 			}
 			var result map[string]any
 			var err error
@@ -1224,6 +1228,49 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				return
 			}
 			respondJSON(w, http.StatusCreated, result)
+		})
+		mux.HandleFunc("POST /ui/data/finance/bank-statements/import-preview", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury.manage", "bank_statement.create", "bank_statement_line.create"}) {
+				respondError(w, shared.Forbidden("bank statement import preview is not allowed"))
+				return
+			}
+			var req struct {
+				TreasuryAccountID    string  `json:"treasury_account_id"`
+				BankImportTemplateID string  `json:"bank_import_template_id"`
+				PresetKey            string  `json:"preset_key"`
+				StatementNumber      string  `json:"statement_number"`
+				StatementDate        string  `json:"statement_date"`
+				FromDate             string  `json:"from_date"`
+				ToDate               string  `json:"to_date"`
+				OpeningBalance       float64 `json:"opening_balance"`
+				ClosingBalance       float64 `json:"closing_balance"`
+				SourceFileName       string  `json:"source_file_name"`
+				CSVText              string  `json:"csv_text"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid request body"))
+				return
+			}
+			preview, err := treasurySvc.PreviewStatementImport(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(req.TreasuryAccountID), map[string]any{
+				"bank_import_template_id": strings.TrimSpace(req.BankImportTemplateID),
+				"preset_key":              strings.TrimSpace(req.PresetKey),
+				"statement_number":        req.StatementNumber,
+				"statement_date":          req.StatementDate,
+				"from_date":               req.FromDate,
+				"to_date":                 req.ToDate,
+				"opening_balance":         req.OpeningBalance,
+				"closing_balance":         req.ClosingBalance,
+				"source_file_name":        req.SourceFileName,
+			}, req.CSVText)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, preview)
 		})
 		mux.HandleFunc("POST /ui/data/finance/bank-reconciliation/", func(w http.ResponseWriter, r *http.Request) {
 			p, ok := requireInteractivePrincipal(w, r)
@@ -1333,33 +1380,52 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			respondJSON(w, http.StatusOK, result)
 		})
 		mux.HandleFunc("POST /ui/data/finance/treasury-exceptions/", func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasSuffix(r.URL.Path, "/resolve") {
-				http.NotFound(w, r)
-				return
-			}
 			p, ok := requireInteractivePrincipal(w, r)
 			if !ok {
 				return
 			}
-			if !principalAllowsAll(ident, p, []string{"treasury.manage", "treasury_exception.update"}) {
-				respondError(w, shared.Forbidden("treasury exception update is not allowed"))
-				return
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/treasury-exceptions/")
+			switch {
+			case strings.HasSuffix(path, "/resolve"):
+				if !principalAllowsAll(ident, p, []string{"treasury.manage", "treasury_exception.update"}) {
+					respondError(w, shared.Forbidden("treasury exception update is not allowed"))
+					return
+				}
+				exceptionID := strings.TrimSuffix(path, "/resolve")
+				var req struct {
+					Status string `json:"status"`
+					Note   string `json:"note"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				record, err := treasurySvc.ResolveException(exceptionID, principalEffectiveUserID(p), req.Status, req.Note)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, map[string]any{"record": record})
+			case strings.HasSuffix(path, "/create-journal"):
+				if !principalAllowsAll(ident, p, []string{"treasury.manage", "treasury_exception.update", "document.create", "finance.journal.create"}) {
+					respondError(w, shared.Forbidden("treasury exception journal creation is not allowed"))
+					return
+				}
+				exceptionID := strings.TrimSuffix(path, "/create-journal")
+				var req map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				result, err := treasurySvc.CreateExceptionJournal(exceptionID, principalEffectiveUserID(p), req)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, result)
+			default:
+				http.NotFound(w, r)
 			}
-			exceptionID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/data/finance/treasury-exceptions/"), "/resolve")
-			var req struct {
-				Status string `json:"status"`
-				Note   string `json:"note"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				respondError(w, shared.Validation("invalid request body"))
-				return
-			}
-			record, err := treasurySvc.ResolveException(exceptionID, principalEffectiveUserID(p), req.Status, req.Note)
-			if err != nil {
-				respondError(w, err)
-				return
-			}
-			respondJSON(w, http.StatusOK, map[string]any{"record": record})
 		})
 	}
 }

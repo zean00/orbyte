@@ -2,9 +2,11 @@ package app
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/store"
 )
@@ -93,6 +95,60 @@ func TestTreasuryPostgresReconciliationAndTransfer(t *testing.T) {
 		t.Fatal("expected cash position rows")
 	}
 
+	template, err := graph.models.Create("bank_import_template", "user_admin", map[string]any{
+		"organization_id":     "org_default",
+		"location_id":         "loc_hq",
+		"treasury_account_id": account.ID,
+		"template_code":       "CSV-" + suffix,
+		"name":                "Treasury Import " + suffix,
+		"header_row_index":    0,
+		"date_column":         "Txn Date",
+		"reference_column":    "Ref",
+		"description_column":  "Desc",
+		"debit_column":        "Debit",
+		"credit_column":       "Credit",
+		"balance_column":      "Balance",
+		"date_format":         "02/01/2006",
+		"sign_convention":     "credit_minus_debit",
+		"status":              "active",
+	})
+	if err != nil {
+		t.Fatalf("create import template: %v", err)
+	}
+	imported, err := graph.treasuryCore.ImportStatementCSV("org_default", "loc_hq", account.ID, "user_admin", map[string]any{
+		"bank_import_template_id": template.ID,
+		"statement_number":        "STMT-CSV-" + suffix,
+		"statement_date":          "2099-11-01",
+		"source_file_name":        "statement.csv",
+	}, "Txn Date,Ref,Desc,Debit,Credit,Balance\n01/11/2099,FEE-"+suffix+",Monthly bank fee,10.00,0,115.00\n")
+	if err != nil {
+		t.Fatalf("import statement csv: %v", err)
+	}
+	importedStatement := imported["statement"].(model.Record)
+	importedRecon, err := graph.treasuryCore.SyncBankReconciliation("org_default", "loc_hq", importedStatement.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("sync imported reconciliation: %v", err)
+	}
+	_ = importedRecon
+	exceptions := graph.treasuryCore.ExceptionReport("org_default", "loc_hq", "2099-11-01", "open")
+	var feeException model.Record
+	for _, item := range exceptions.Items {
+		if textValue(item.Values["bank_statement_id"]) == importedStatement.ID && textValue(item.Values["exception_kind"]) == "bank_fee_candidate" {
+			feeException = item
+			break
+		}
+	}
+	if feeException.ID == "" {
+		t.Fatalf("expected bank fee candidate exception for imported statement, got %+v", exceptions.Items)
+	}
+	journalResult, err := graph.treasuryCore.CreateExceptionJournal(feeException.ID, "user_admin", map[string]any{"posting_date": "2099-11-01"})
+	if err != nil {
+		t.Fatalf("create exception journal: %v", err)
+	}
+	if record := journalResult["record"].(document.Record); strings.TrimSpace(textValue(record.Body.Payload["journal_source_kind"])) != "manual" {
+		t.Fatalf("expected manual draft journal, got %+v", record.Body.Payload)
+	}
+
 	petty, err := graph.models.Create("treasury_account", "user_admin", map[string]any{
 		"organization_id": "org_default",
 		"location_id":     "loc_hq",
@@ -125,7 +181,14 @@ func TestTreasuryPostgresReconciliationAndTransfer(t *testing.T) {
 		t.Fatal("expected posting id on transfer")
 	}
 	register := graph.treasuryCore.TransferRegister("org_default", "loc_hq", "2099-10-31", "")
-	if len(register.Rows) != 1 {
-		t.Fatalf("expected 1 transfer row, got %d", len(register.Rows))
+	foundTransfer := false
+	for _, row := range register.Rows {
+		if row.TransferID == updated.ID {
+			foundTransfer = true
+			break
+		}
+	}
+	if !foundTransfer {
+		t.Fatalf("expected transfer register to include %s, got %+v", updated.ID, register.Rows)
 	}
 }

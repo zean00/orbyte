@@ -1454,6 +1454,36 @@
       "route_path": "/finance/balance-sheet"
     },
     {
+      "key": "finance.bank_import_runs.list",
+      "kind": "navigate",
+      "label": "Statement Import Runs",
+      "label_i18n": {
+        "en": "Statement Import Runs",
+        "id": "Riwayat Impor Statement"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "bank_statement_import_run.list"
+      ],
+      "route_path": "/finance/bank-import-runs",
+      "view_key": "finance.bank_import_runs.list"
+    },
+    {
+      "key": "finance.bank_import_templates.list",
+      "kind": "navigate",
+      "label": "Bank Import Templates",
+      "label_i18n": {
+        "en": "Bank Import Templates",
+        "id": "Template Impor Bank"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "bank_import_template.list"
+      ],
+      "route_path": "/finance/bank-import-templates",
+      "view_key": "finance.bank_import_templates.list"
+    },
+    {
       "custom_entry_key": "finance.bank_reconciliation",
       "key": "finance.bank_reconciliation",
       "kind": "navigate",
@@ -6125,6 +6155,32 @@
       "order": 118,
       "required_permissions": [
         "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.bank_import_runs.list",
+      "key": "finance.bank_import_runs",
+      "label": "Statement Import Runs",
+      "label_i18n": {
+        "en": "Statement Import Runs",
+        "id": "Riwayat Impor Statement"
+      },
+      "order": 119,
+      "required_permissions": [
+        "bank_statement_import_run.list"
+      ]
+    },
+    {
+      "action_key": "finance.bank_import_templates.list",
+      "key": "finance.bank_import_templates",
+      "label": "Bank Import Templates",
+      "label_i18n": {
+        "en": "Bank Import Templates",
+        "id": "Template Impor Bank"
+      },
+      "order": 119,
+      "required_permissions": [
+        "bank_import_template.list"
       ]
     },
     {
@@ -16397,6 +16453,130 @@
       "title_i18n": {
         "en": "Asset Transfers",
         "id": "Asset Transfers"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "source_file_name",
+          "label": "Source",
+          "path": "values.source_file_name"
+        },
+        {
+          "key": "row_count",
+          "label": "Rows",
+          "path": "values.row_count"
+        },
+        {
+          "key": "duplicate_count",
+          "label": "Duplicates",
+          "path": "values.duplicate_count"
+        },
+        {
+          "key": "warning_count",
+          "label": "Warnings",
+          "path": "values.warning_count"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "parsed",
+            "imported",
+            "failed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.bank_import_runs.list",
+      "kind": "list",
+      "model_key": "bank_statement_import_run",
+      "required_permissions": [
+        "bank_statement_import_run.list"
+      ],
+      "title": "Statement Import Runs",
+      "title_i18n": {
+        "en": "Statement Import Runs",
+        "id": "Statement Import Runs"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "template_code",
+          "label": "Code",
+          "path": "values.template_code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "bank_name",
+          "label": "Bank",
+          "path": "values.bank_name"
+        },
+        {
+          "key": "format_key",
+          "label": "Format",
+          "path": "values.format_key"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.bank_import_templates.list",
+      "kind": "list",
+      "model_key": "bank_import_template",
+      "required_permissions": [
+        "bank_import_template.list"
+      ],
+      "title": "Bank Import Templates",
+      "title_i18n": {
+        "en": "Bank Import Templates",
+        "id": "Bank Import Templates"
       }
     },
     {

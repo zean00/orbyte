@@ -271,13 +271,19 @@ func FinanceReportsBundle() string {
         }
         if (reportKey === 'bank-reconciliation') {
           return '<section class="finance-report__panel"><div class="finance-report__actions"><button class="finance-report__button" data-sync-bank-reconciliation="' + escapeHTML(filters.period_id || '') + '">' + escapeHTML(text('Sync', 'Sinkronkan')) + '</button>' + (payload.reconciliation_id ? '<button class="finance-report__button finance-report__button--primary" data-approve-bank-reconciliation="' + escapeHTML(payload.reconciliation_id) + '">' + escapeHTML(text('Approve', 'Setujui')) + '</button>' : '') + '</div></section>'
-            + '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Date', 'Tanggal') + '</th><th>' + text('Reference', 'Referensi') + '</th><th>' + text('Description', 'Deskripsi') + '</th><th>' + text('Amount', 'Jumlah') + '</th><th>' + text('Matched', 'Cocok') + '</th><th>' + text('Remaining', 'Sisa') + '</th><th>' + text('Status', 'Status') + '</th></tr></thead><tbody>' + (payload.lines || []).map(function(row) {
-            return '<tr><td>' + escapeHTML(row.statement_date || '') + '</td><td>' + escapeHTML(row.reference || '') + '</td><td>' + escapeHTML(row.description || '') + '</td><td>' + money(row.amount) + '</td><td>' + money(row.matched_amount) + '</td><td>' + money(row.remaining_amount) + '</td><td>' + escapeHTML(row.match_status || '') + '</td></tr>';
+            + '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Date', 'Tanggal') + '</th><th>' + text('Reference', 'Referensi') + '</th><th>' + text('Description', 'Deskripsi') + '</th><th>' + text('Amount', 'Jumlah') + '</th><th>' + text('Matched', 'Cocok') + '</th><th>' + text('Remaining', 'Sisa') + '</th><th>' + text('Status', 'Status') + '</th><th>' + text('Suggestion', 'Saran') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + (payload.lines || []).map(function(row) {
+            const candidates = row.candidates || [];
+            const suggestion = candidates.length ? candidates[0] : null;
+            const suggestionLabel = suggestion ? ((suggestion.source_type || '') + ' ' + (suggestion.reference || suggestion.source_id || '') + ' (' + money(suggestion.amount) + ')') : '';
+            const action = suggestion && payload.reconciliation_id ? '<button class="finance-report__button" data-match-bank-line="' + escapeHTML(row.statement_line_id || '') + '" data-match-reconciliation="' + escapeHTML(payload.reconciliation_id) + '" data-match-source-type="' + escapeHTML(suggestion.source_type || '') + '" data-match-source-id="' + escapeHTML(suggestion.source_id || '') + '" data-match-amount="' + escapeHTML(row.remaining_amount || suggestion.amount) + '">' + escapeHTML(text('Apply Suggestion', 'Pakai Saran')) + '</button>' : '';
+            return '<tr><td>' + escapeHTML(row.statement_date || '') + '</td><td>' + escapeHTML(row.reference || '') + '</td><td>' + escapeHTML(row.description || '') + '</td><td>' + money(row.amount) + '</td><td>' + money(row.matched_amount) + '</td><td>' + money(row.remaining_amount) + '</td><td>' + escapeHTML(row.match_status || '') + '</td><td>' + escapeHTML(suggestionLabel) + '</td><td>' + action + '</td></tr>';
           }).join('') + '</tbody></table></div>';
         }
         if (reportKey === 'treasury-exceptions') {
           return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Kind', 'Jenis') + '</th><th>' + text('Description', 'Deskripsi') + '</th><th>' + text('Amount', 'Jumlah') + '</th><th>' + text('Status', 'Status') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + (payload.items || []).map(function(row) {
-            return '<tr><td>' + escapeHTML((row.values && row.values.exception_kind) || '') + '</td><td>' + escapeHTML((row.values && row.values.description) || '') + '</td><td>' + money(row.values && row.values.amount) + '</td><td>' + escapeHTML((row.values && row.values.status) || '') + '</td><td><button class=\"finance-report__button\" data-resolve-treasury-exception=\"' + escapeHTML(row.id || '') + '\">' + escapeHTML(text('Resolve', 'Selesaikan')) + '</button></td></tr>';
+            const kind = (row.values && row.values.exception_kind) || '';
+            const journal = (kind === 'bank_fee_candidate' || kind === 'interest_candidate') ? '<button class=\"finance-report__button\" data-create-treasury-journal=\"' + escapeHTML(row.id || '') + '\" data-journal-kind=\"' + escapeHTML(kind) + '\">' + escapeHTML(text('Draft Journal', 'Draft Jurnal')) + '</button>' : '';
+            return '<tr><td>' + escapeHTML(kind) + '</td><td>' + escapeHTML((row.values && row.values.description) || '') + '</td><td>' + money(row.values && row.values.amount) + '</td><td>' + escapeHTML((row.values && row.values.status) || '') + '</td><td><div class=\"finance-report__actions\">' + journal + '<button class=\"finance-report__button\" data-resolve-treasury-exception=\"' + escapeHTML(row.id || '') + '\">' + escapeHTML(text('Resolve', 'Selesaikan')) + '</button></div></td></tr>';
           }).join('') + '</tbody></table></div>';
         }
         if (reportKey === 'ar-aging' || reportKey === 'ap-aging') {
@@ -547,10 +553,31 @@ func FinanceReportsBundle() string {
           window.location.reload();
         });
       });
+      mount.querySelectorAll('[data-match-bank-line]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          await postJSON('/ui/data/finance/bank-reconciliation/' + encodeURIComponent(node.getAttribute('data-match-reconciliation')) + '/match', {
+            line_id: node.getAttribute('data-match-bank-line'),
+            source_type: node.getAttribute('data-match-source-type'),
+            source_id: node.getAttribute('data-match-source-id'),
+            amount: Number(node.getAttribute('data-match-amount') || 0),
+            match_kind: 'suggested'
+          });
+          window.location.reload();
+        });
+      });
       mount.querySelectorAll('[data-resolve-treasury-exception]').forEach(function(node) {
         node.addEventListener('click', async function() {
           const note = window.prompt(text('Resolution note', 'Catatan penyelesaian')) || '';
           await postJSON('/ui/data/finance/treasury-exceptions/' + encodeURIComponent(node.getAttribute('data-resolve-treasury-exception')) + '/resolve', { status: 'resolved', note: note });
+          window.location.reload();
+        });
+      });
+      mount.querySelectorAll('[data-create-treasury-journal]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          const kind = node.getAttribute('data-journal-kind') || '';
+          const postingDate = window.prompt(text('Posting date (YYYY-MM-DD)', 'Tanggal posting (YYYY-MM-DD)')) || '';
+          if (!postingDate) return;
+          await postJSON('/ui/data/finance/treasury-exceptions/' + encodeURIComponent(node.getAttribute('data-create-treasury-journal')) + '/create-journal', { posting_date: postingDate, notes: kind });
           window.location.reload();
         });
       });
