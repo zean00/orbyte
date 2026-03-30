@@ -1319,6 +1319,126 @@
       "route_path": "/finance/ar-statements"
     },
     {
+      "key": "finance.asset_disposals.detail",
+      "kind": "navigate",
+      "label": "Asset Disposal Detail",
+      "label_i18n": {
+        "en": "Asset Disposal Detail",
+        "id": "Detail Pelepasan Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_disposal.read"
+      ],
+      "route_path": "/finance/asset-disposals/detail",
+      "view_key": "finance.asset_disposals.detail"
+    },
+    {
+      "key": "finance.asset_disposals.list",
+      "kind": "navigate",
+      "label": "Asset Disposals",
+      "label_i18n": {
+        "en": "Asset Disposals",
+        "id": "Pelepasan Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_disposal.list"
+      ],
+      "route_path": "/finance/asset-disposals",
+      "view_key": "finance.asset_disposals.list"
+    },
+    {
+      "key": "finance.asset_impairments.detail",
+      "kind": "navigate",
+      "label": "Asset Impairment Detail",
+      "label_i18n": {
+        "en": "Asset Impairment Detail",
+        "id": "Detail Penurunan Nilai Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_impairment.read"
+      ],
+      "route_path": "/finance/asset-impairments/detail",
+      "view_key": "finance.asset_impairments.detail"
+    },
+    {
+      "key": "finance.asset_impairments.list",
+      "kind": "navigate",
+      "label": "Asset Impairments",
+      "label_i18n": {
+        "en": "Asset Impairments",
+        "id": "Penurunan Nilai Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_impairment.list"
+      ],
+      "route_path": "/finance/asset-impairments",
+      "view_key": "finance.asset_impairments.list"
+    },
+    {
+      "key": "finance.asset_revaluations.detail",
+      "kind": "navigate",
+      "label": "Asset Revaluation Detail",
+      "label_i18n": {
+        "en": "Asset Revaluation Detail",
+        "id": "Detail Revaluasi Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_revaluation.read"
+      ],
+      "route_path": "/finance/asset-revaluations/detail",
+      "view_key": "finance.asset_revaluations.detail"
+    },
+    {
+      "key": "finance.asset_revaluations.list",
+      "kind": "navigate",
+      "label": "Asset Revaluations",
+      "label_i18n": {
+        "en": "Asset Revaluations",
+        "id": "Revaluasi Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_revaluation.list"
+      ],
+      "route_path": "/finance/asset-revaluations",
+      "view_key": "finance.asset_revaluations.list"
+    },
+    {
+      "key": "finance.asset_transfers.detail",
+      "kind": "navigate",
+      "label": "Asset Transfer Detail",
+      "label_i18n": {
+        "en": "Asset Transfer Detail",
+        "id": "Detail Transfer Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_transfer.read"
+      ],
+      "route_path": "/finance/asset-transfers/detail",
+      "view_key": "finance.asset_transfers.detail"
+    },
+    {
+      "key": "finance.asset_transfers.list",
+      "kind": "navigate",
+      "label": "Asset Transfers",
+      "label_i18n": {
+        "en": "Asset Transfers",
+        "id": "Transfer Aset"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "asset_transfer.list"
+      ],
+      "route_path": "/finance/asset-transfers",
+      "view_key": "finance.asset_transfers.list"
+    },
+    {
       "custom_entry_key": "finance.balance_sheet",
       "key": "finance.balance_sheet",
       "kind": "navigate",
@@ -6123,6 +6243,58 @@
       "order": 124,
       "required_permissions": [
         "prepaid_schedule.list"
+      ]
+    },
+    {
+      "action_key": "finance.asset_disposals.list",
+      "key": "finance.asset_disposals",
+      "label": "Asset Disposals",
+      "label_i18n": {
+        "en": "Asset Disposals",
+        "id": "Pelepasan Aset"
+      },
+      "order": 125,
+      "required_permissions": [
+        "asset_disposal.list"
+      ]
+    },
+    {
+      "action_key": "finance.asset_transfers.list",
+      "key": "finance.asset_transfers",
+      "label": "Asset Transfers",
+      "label_i18n": {
+        "en": "Asset Transfers",
+        "id": "Transfer Aset"
+      },
+      "order": 126,
+      "required_permissions": [
+        "asset_transfer.list"
+      ]
+    },
+    {
+      "action_key": "finance.asset_impairments.list",
+      "key": "finance.asset_impairments",
+      "label": "Asset Impairments",
+      "label_i18n": {
+        "en": "Asset Impairments",
+        "id": "Penurunan Nilai Aset"
+      },
+      "order": 127,
+      "required_permissions": [
+        "asset_impairment.list"
+      ]
+    },
+    {
+      "action_key": "finance.asset_revaluations.list",
+      "key": "finance.asset_revaluations",
+      "label": "Asset Revaluations",
+      "label_i18n": {
+        "en": "Asset Revaluations",
+        "id": "Revaluasi Aset"
+      },
+      "order": 128,
+      "required_permissions": [
+        "asset_revaluation.list"
       ]
     },
     {
@@ -15662,6 +15834,572 @@
       }
     },
     {
+      "key": "finance.asset_disposals.detail",
+      "kind": "detail",
+      "model_key": "asset_disposal",
+      "required_permissions": [
+        "asset_disposal.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "fixed_asset_id",
+              "label": "Asset",
+              "label_i18n": {
+                "en": "Asset",
+                "id": "Aset"
+              },
+              "path": "values.fixed_asset_id",
+              "type": "string"
+            },
+            {
+              "key": "disposal_date",
+              "label": "Disposal Date",
+              "label_i18n": {
+                "en": "Disposal Date",
+                "id": "Tanggal Pelepasan"
+              },
+              "path": "values.disposal_date",
+              "type": "string"
+            },
+            {
+              "key": "disposal_type",
+              "label": "Disposal Type",
+              "label_i18n": {
+                "en": "Disposal Type",
+                "id": "Jenis Pelepasan"
+              },
+              "path": "values.disposal_type",
+              "type": "string"
+            },
+            {
+              "key": "proceeds_amount",
+              "label": "Proceeds",
+              "label_i18n": {
+                "en": "Proceeds",
+                "id": "Hasil Penjualan"
+              },
+              "path": "values.proceeds_amount",
+              "type": "number"
+            },
+            {
+              "key": "gain_loss_amount",
+              "label": "Gain Loss",
+              "label_i18n": {
+                "en": "Gain Loss",
+                "id": "Laba Rugi"
+              },
+              "path": "values.gain_loss_amount",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Asset Disposal Detail",
+      "title_i18n": {
+        "en": "Asset Disposal Detail",
+        "id": "Asset Disposal Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "fixed_asset_id",
+          "label": "Asset",
+          "label_i18n": {
+            "en": "Asset",
+            "id": "Aset"
+          },
+          "path": "values.fixed_asset_id"
+        },
+        {
+          "key": "disposal_date",
+          "label": "Date",
+          "label_i18n": {
+            "en": "Date",
+            "id": "Tanggal"
+          },
+          "path": "values.disposal_date"
+        },
+        {
+          "key": "disposal_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Jenis"
+          },
+          "path": "values.disposal_type"
+        },
+        {
+          "key": "gain_loss_amount",
+          "label": "Gain Loss",
+          "label_i18n": {
+            "en": "Gain Loss",
+            "id": "Laba Rugi"
+          },
+          "path": "values.gain_loss_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "posted"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.asset_disposals.list",
+      "kind": "list",
+      "model_key": "asset_disposal",
+      "required_permissions": [
+        "asset_disposal.list"
+      ],
+      "title": "Asset Disposals",
+      "title_i18n": {
+        "en": "Asset Disposals",
+        "id": "Asset Disposals"
+      }
+    },
+    {
+      "key": "finance.asset_impairments.detail",
+      "kind": "detail",
+      "model_key": "asset_impairment",
+      "required_permissions": [
+        "asset_impairment.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "fixed_asset_id",
+              "label": "Asset",
+              "label_i18n": {
+                "en": "Asset",
+                "id": "Aset"
+              },
+              "path": "values.fixed_asset_id",
+              "type": "string"
+            },
+            {
+              "key": "impairment_date",
+              "label": "Impairment Date",
+              "label_i18n": {
+                "en": "Impairment Date",
+                "id": "Tanggal Penurunan Nilai"
+              },
+              "path": "values.impairment_date",
+              "type": "string"
+            },
+            {
+              "key": "impairment_amount",
+              "label": "Impairment Amount",
+              "label_i18n": {
+                "en": "Impairment Amount",
+                "id": "Jumlah Penurunan Nilai"
+              },
+              "path": "values.impairment_amount",
+              "type": "number"
+            },
+            {
+              "key": "posting_id",
+              "label": "Posting",
+              "label_i18n": {
+                "en": "Posting",
+                "id": "Posting"
+              },
+              "path": "values.posting_id",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Asset Impairment Detail",
+      "title_i18n": {
+        "en": "Asset Impairment Detail",
+        "id": "Asset Impairment Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "fixed_asset_id",
+          "label": "Asset",
+          "label_i18n": {
+            "en": "Asset",
+            "id": "Aset"
+          },
+          "path": "values.fixed_asset_id"
+        },
+        {
+          "key": "impairment_date",
+          "label": "Date",
+          "label_i18n": {
+            "en": "Date",
+            "id": "Tanggal"
+          },
+          "path": "values.impairment_date"
+        },
+        {
+          "key": "impairment_amount",
+          "label": "Amount",
+          "label_i18n": {
+            "en": "Amount",
+            "id": "Jumlah"
+          },
+          "path": "values.impairment_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "posted"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.asset_impairments.list",
+      "kind": "list",
+      "model_key": "asset_impairment",
+      "required_permissions": [
+        "asset_impairment.list"
+      ],
+      "title": "Asset Impairments",
+      "title_i18n": {
+        "en": "Asset Impairments",
+        "id": "Asset Impairments"
+      }
+    },
+    {
+      "key": "finance.asset_revaluations.detail",
+      "kind": "detail",
+      "model_key": "asset_revaluation",
+      "required_permissions": [
+        "asset_revaluation.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "fixed_asset_id",
+              "label": "Asset",
+              "label_i18n": {
+                "en": "Asset",
+                "id": "Aset"
+              },
+              "path": "values.fixed_asset_id",
+              "type": "string"
+            },
+            {
+              "key": "revaluation_date",
+              "label": "Revaluation Date",
+              "label_i18n": {
+                "en": "Revaluation Date",
+                "id": "Tanggal Revaluasi"
+              },
+              "path": "values.revaluation_date",
+              "type": "string"
+            },
+            {
+              "key": "revaluation_amount",
+              "label": "Revaluation Amount",
+              "label_i18n": {
+                "en": "Revaluation Amount",
+                "id": "Jumlah Revaluasi"
+              },
+              "path": "values.revaluation_amount",
+              "type": "number"
+            },
+            {
+              "key": "target_carrying_amount",
+              "label": "Target Carrying Amount",
+              "label_i18n": {
+                "en": "Target Carrying Amount",
+                "id": "Target Nilai Tercatat"
+              },
+              "path": "values.target_carrying_amount",
+              "type": "number"
+            },
+            {
+              "key": "posting_id",
+              "label": "Posting",
+              "label_i18n": {
+                "en": "Posting",
+                "id": "Posting"
+              },
+              "path": "values.posting_id",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Asset Revaluation Detail",
+      "title_i18n": {
+        "en": "Asset Revaluation Detail",
+        "id": "Asset Revaluation Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "fixed_asset_id",
+          "label": "Asset",
+          "label_i18n": {
+            "en": "Asset",
+            "id": "Aset"
+          },
+          "path": "values.fixed_asset_id"
+        },
+        {
+          "key": "revaluation_date",
+          "label": "Date",
+          "label_i18n": {
+            "en": "Date",
+            "id": "Tanggal"
+          },
+          "path": "values.revaluation_date"
+        },
+        {
+          "key": "revaluation_amount",
+          "label": "Amount",
+          "label_i18n": {
+            "en": "Amount",
+            "id": "Jumlah"
+          },
+          "path": "values.revaluation_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "posted"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.asset_revaluations.list",
+      "kind": "list",
+      "model_key": "asset_revaluation",
+      "required_permissions": [
+        "asset_revaluation.list"
+      ],
+      "title": "Asset Revaluations",
+      "title_i18n": {
+        "en": "Asset Revaluations",
+        "id": "Asset Revaluations"
+      }
+    },
+    {
+      "key": "finance.asset_transfers.detail",
+      "kind": "detail",
+      "model_key": "asset_transfer",
+      "required_permissions": [
+        "asset_transfer.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "fixed_asset_id",
+              "label": "Asset",
+              "label_i18n": {
+                "en": "Asset",
+                "id": "Aset"
+              },
+              "path": "values.fixed_asset_id",
+              "type": "string"
+            },
+            {
+              "key": "effective_date",
+              "label": "Effective Date",
+              "label_i18n": {
+                "en": "Effective Date",
+                "id": "Tanggal Efektif"
+              },
+              "path": "values.effective_date",
+              "type": "string"
+            },
+            {
+              "key": "from_location_id",
+              "label": "From Location",
+              "label_i18n": {
+                "en": "From Location",
+                "id": "Dari Lokasi"
+              },
+              "path": "values.from_location_id",
+              "type": "string"
+            },
+            {
+              "key": "to_location_id",
+              "label": "To Location",
+              "label_i18n": {
+                "en": "To Location",
+                "id": "Ke Lokasi"
+              },
+              "path": "values.to_location_id",
+              "type": "string"
+            },
+            {
+              "key": "from_cost_center_code",
+              "label": "From Cost Center",
+              "label_i18n": {
+                "en": "From Cost Center",
+                "id": "Dari Pusat Biaya"
+              },
+              "path": "values.from_cost_center_code",
+              "type": "string"
+            },
+            {
+              "key": "to_cost_center_code",
+              "label": "To Cost Center",
+              "label_i18n": {
+                "en": "To Cost Center",
+                "id": "Ke Pusat Biaya"
+              },
+              "path": "values.to_cost_center_code",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Asset Transfer Detail",
+      "title_i18n": {
+        "en": "Asset Transfer Detail",
+        "id": "Asset Transfer Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "fixed_asset_id",
+          "label": "Asset",
+          "label_i18n": {
+            "en": "Asset",
+            "id": "Aset"
+          },
+          "path": "values.fixed_asset_id"
+        },
+        {
+          "key": "effective_date",
+          "label": "Effective Date",
+          "label_i18n": {
+            "en": "Effective Date",
+            "id": "Tanggal Efektif"
+          },
+          "path": "values.effective_date"
+        },
+        {
+          "key": "to_location_id",
+          "label": "To Location",
+          "label_i18n": {
+            "en": "To Location",
+            "id": "Ke Lokasi"
+          },
+          "path": "values.to_location_id"
+        },
+        {
+          "key": "to_cost_center_code",
+          "label": "To Cost Center",
+          "label_i18n": {
+            "en": "To Cost Center",
+            "id": "Ke Pusat Biaya"
+          },
+          "path": "values.to_cost_center_code"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "posted"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.asset_transfers.list",
+      "kind": "list",
+      "model_key": "asset_transfer",
+      "required_permissions": [
+        "asset_transfer.list"
+      ],
+      "title": "Asset Transfers",
+      "title_i18n": {
+        "en": "Asset Transfers",
+        "id": "Asset Transfers"
+      }
+    },
+    {
       "columns": [
         {
           "key": "statement_number",
@@ -16647,7 +17385,12 @@
           "options": [
             "active",
             "completed",
-            "suspended"
+            "suspended",
+            "disposed",
+            "retired",
+            "impaired",
+            "revalued",
+            "transferred"
           ],
           "type": "enum"
         }

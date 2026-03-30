@@ -6128,6 +6128,63 @@ func TestUIDocumentRoutesHideManualJournalsWithoutFinanceJournalRead(t *testing.
 	}
 }
 
+func TestUIFinanceAssetLifecycleRoutesRejectMalformedJSON(t *testing.T) {
+	h := newTestHarness(t)
+	for _, permissionKey := range []string{
+		"finance.asset.manage",
+		"fixed_asset.read",
+		"asset_disposal.create",
+		"asset_transfer.create",
+		"asset_impairment.create",
+		"asset_revaluation.create",
+		"document.create",
+	} {
+		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "finance_asset_core", Action: "manage", Resource: "fixed_asset"}); err != nil {
+			t.Fatalf("upsert finance asset permission failed: %v", err)
+		}
+		if err := h.ident.GrantRolePermission(identity.RolePermission{RoleID: "role_admin", PermissionKey: permissionKey}); err != nil {
+			t.Fatalf("grant finance asset permission failed: %v", err)
+		}
+	}
+	mux := http.NewServeMux()
+	registerUIFinanceRoutes(
+		mux,
+		h.ident,
+		&application.FinanceReportingCoreService{},
+		nil,
+		nil,
+		nil,
+		nil,
+		&application.FinanceAssetCoreService{},
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	for _, route := range []string{
+		"/ui/data/finance/fixed-assets/fixed_asset_test/dispose",
+		"/ui/data/finance/fixed-assets/fixed_asset_test/transfer",
+		"/ui/data/finance/fixed-assets/fixed_asset_test/impair",
+		"/ui/data/finance/fixed-assets/fixed_asset_test/revalue",
+	} {
+		req := httptest.NewRequest(http.MethodPost, route, bytes.NewReader([]byte("{")))
+		req.RemoteAddr = "192.0.2.10:1234"
+		req = req.WithContext(context.WithValue(req.Context(), principalContextKey, principal{
+			kind:              userPrincipal,
+			userID:            "user_admin",
+			effectiveUserID:   "user_admin",
+			sessionID:         h.ident.Sessions()[0].ID,
+			currentLocationID: h.ident.Sessions()[0].CurrentLocationID,
+		}))
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for malformed lifecycle json on %s, got %d body=%s", route, rr.Code, rr.Body.String())
+		}
+	}
+}
+
 func TestCommercialDocumentsRejectUpdateOutsideDraft(t *testing.T) {
 	cases := []struct {
 		documentType string

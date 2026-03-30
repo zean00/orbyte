@@ -19,13 +19,13 @@ func TestFinanceAssetCreateFixedAssetAndPreview(t *testing.T) {
 	svc := NewFinanceAssetCoreService(docs, models, config.NewService(), NewFinanceReportingCoreService(docs, models, config.NewService()))
 
 	result, err := svc.CreateFixedAsset("org-1", "loc-1", "tester", map[string]any{
-		"code":          "FA-LAPTOP-01",
-		"name":          "Office Laptop",
-		"basis_amount":  1200.0,
-		"salvage_amount": 0.0,
-		"method":        "straight_line",
-		"cadence":       "monthly",
-		"total_periods": 12,
+		"code":             "FA-LAPTOP-01",
+		"name":             "Office Laptop",
+		"basis_amount":     1200.0,
+		"salvage_amount":   0.0,
+		"method":           "straight_line",
+		"cadence":          "monthly",
+		"total_periods":    12,
 		"acquisition_date": "2099-10-03",
 	})
 	if err != nil {
@@ -70,14 +70,14 @@ func TestFinanceAssetPostingApprovalAndCancelAdvanceSchedule(t *testing.T) {
 	svc := NewFinanceAssetCoreService(docs, models, cfg, finance)
 
 	result, err := svc.CreateFixedAsset("org-1", "loc-1", "tester", map[string]any{
-		"code":             "FA-MACHINE-01",
-		"name":             "Machine",
-		"basis_amount":     1000.0,
-		"method":           "declining_balance",
+		"code":                   "FA-MACHINE-01",
+		"name":                   "Machine",
+		"basis_amount":           1000.0,
+		"method":                 "declining_balance",
 		"declining_rate_percent": 40.0,
-		"cadence":          "monthly",
-		"total_periods":    5,
-		"acquisition_date": "2099-10-01",
+		"cadence":                "monthly",
+		"total_periods":          5,
+		"acquisition_date":       "2099-10-01",
 	})
 	if err != nil {
 		t.Fatalf("create fixed asset: %v", err)
@@ -296,6 +296,121 @@ func TestFinanceAssetValidateActionRejectsOutOfSequenceApproval(t *testing.T) {
 	}
 }
 
+func TestFinanceAssetLifecycleDisposeTransferImpairAndRevalue(t *testing.T) {
+	docs := document.NewService()
+	if err := docs.Register(document.Definition{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"posting_for"}}); err != nil {
+		t.Fatalf("register ledger_posting: %v", err)
+	}
+	models := model.NewService()
+	registerFinanceAssetTestModels(t, models)
+	cfg := config.NewService()
+	finance := NewFinanceReportingCoreService(docs, models, cfg)
+	svc := NewFinanceAssetCoreService(docs, models, cfg, finance)
+
+	result, err := svc.CreateFixedAsset("org-1", "loc-1", "tester", map[string]any{
+		"code":             "FA-LIFE-01",
+		"name":             "Lifecycle Asset",
+		"basis_amount":     1200.0,
+		"method":           "straight_line",
+		"cadence":          "monthly",
+		"total_periods":    12,
+		"acquisition_date": "2099-10-01",
+		"cost_center_code": "OPS",
+	})
+	if err != nil {
+		t.Fatalf("create fixed asset: %v", err)
+	}
+	asset := result["asset"].(model.Record)
+	templateID := textValue(asset.Values["linked_journal_template_id"])
+	oct := mustCreatePostedJournalRun(t, docs, models, templateID, "2099-10-31", 100, time.Date(2099, 10, 31, 1, 0, 0, 0, time.UTC))
+	if err := svc.HandleApprovedLedgerPosting(oct, "tester"); err != nil {
+		t.Fatalf("approve depreciation: %v", err)
+	}
+
+	transfer, err := svc.TransferFixedAsset(asset.ID, "org-1", "loc-1", "tester", map[string]any{
+		"effective_date":      "2099-11-01",
+		"to_location_id":      "loc-2",
+		"to_cost_center_code": "FIN",
+	})
+	if err != nil {
+		t.Fatalf("transfer fixed asset: %v", err)
+	}
+	if got := textValue(transfer.Values["to_location_id"]); got != "loc-2" {
+		t.Fatalf("expected transfer target loc-2, got %q", got)
+	}
+
+	impairment, err := svc.ImpairFixedAsset(asset.ID, "org-1", "loc-2", "tester", map[string]any{
+		"impairment_date":   "2099-11-15",
+		"impairment_amount": 200.0,
+	})
+	if err != nil {
+		t.Fatalf("impair fixed asset: %v", err)
+	}
+	if got := textValue(impairment["posting"].(document.Record).Header.Status); got != "posted" {
+		t.Fatalf("expected posted impairment, got %q", got)
+	}
+
+	revaluation, err := svc.RevalueFixedAsset(asset.ID, "org-1", "loc-2", "tester", map[string]any{
+		"revaluation_date":   "2099-11-20",
+		"revaluation_amount": 50.0,
+	})
+	if err != nil {
+		t.Fatalf("revalue fixed asset: %v", err)
+	}
+	if got := numberValue(revaluation["event"].(model.Record).Values["revaluation_amount"]); got != 50 {
+		t.Fatalf("expected revaluation amount 50, got %v", got)
+	}
+
+	updatedAsset, err := models.Get("fixed_asset", asset.ID)
+	if err != nil {
+		t.Fatalf("get updated asset: %v", err)
+	}
+	if got := textValue(updatedAsset.Values["current_location_id"]); got != "loc-2" {
+		t.Fatalf("expected current location loc-2, got %q", got)
+	}
+	if got := textValue(updatedAsset.Values["current_cost_center_code"]); got != "FIN" {
+		t.Fatalf("expected current cost center FIN, got %q", got)
+	}
+	if got := numberValue(updatedAsset.Values["impairment_amount_total"]); got != 200 {
+		t.Fatalf("expected impairment total 200, got %v", got)
+	}
+	if got := numberValue(updatedAsset.Values["revaluation_amount_total"]); got != 50 {
+		t.Fatalf("expected revaluation total 50, got %v", got)
+	}
+	if got := numberValue(updatedAsset.Values["carrying_amount"]); got != 950 {
+		t.Fatalf("expected carrying amount 950, got %v", got)
+	}
+
+	disposal, err := svc.DisposeFixedAsset(asset.ID, "org-1", "loc-2", "tester", map[string]any{
+		"disposal_date":   "2099-11-25",
+		"disposal_type":   "sale",
+		"proceeds_amount": 970.0,
+	})
+	if err != nil {
+		t.Fatalf("dispose fixed asset: %v", err)
+	}
+	disposalEvent := disposal["event"].(model.Record)
+	if got := textValue(disposalEvent.Values["disposal_type"]); got != "sale" {
+		t.Fatalf("expected sale disposal, got %q", got)
+	}
+	finalAsset, err := models.Get("fixed_asset", asset.ID)
+	if err != nil {
+		t.Fatalf("get final asset: %v", err)
+	}
+	if got := textValue(finalAsset.Values["status"]); got != "disposed" {
+		t.Fatalf("expected disposed status, got %q", got)
+	}
+	if got := numberValue(finalAsset.Values["remaining_amount"]); got != 0 {
+		t.Fatalf("expected remaining amount 0 after disposal, got %v", got)
+	}
+	if got := numberValue(finalAsset.Values["carrying_amount"]); got != 0 {
+		t.Fatalf("expected carrying amount 0 after disposal, got %v", got)
+	}
+	if got := textValue(finalAsset.Values["next_posting_date"]); got != "" {
+		t.Fatalf("expected no next posting after disposal, got %q", got)
+	}
+}
+
 func registerFinanceAssetTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	registerFinancePeriodEndTestModels(t, models)
@@ -329,6 +444,21 @@ func registerFinanceAssetTestModels(t *testing.T, models *model.Service) {
 				{Key: "source_vendor_bill_id", Type: "string"},
 				{Key: "source_vendor_bill_number", Type: "string"},
 				{Key: "source_vendor_bill_line_index", Type: "int"},
+				{Key: "origin_location_id", Type: "string"},
+				{Key: "current_location_id", Type: "string"},
+				{Key: "cost_center_code", Type: "string"},
+				{Key: "origin_cost_center_code", Type: "string"},
+				{Key: "current_cost_center_code", Type: "string"},
+				{Key: "lifecycle_status", Type: "string"},
+				{Key: "impairment_amount_total", Type: "number"},
+				{Key: "revaluation_amount_total", Type: "number"},
+				{Key: "gross_amount_current", Type: "number"},
+				{Key: "carrying_amount", Type: "number"},
+				{Key: "last_lifecycle_event_type", Type: "string"},
+				{Key: "last_lifecycle_event_id", Type: "string"},
+				{Key: "disposal_date", Type: "string"},
+				{Key: "disposal_type", Type: "string"},
+				{Key: "disposal_posting_id", Type: "string"},
 			},
 		},
 		{
@@ -344,15 +474,19 @@ func registerFinanceAssetTestModels(t *testing.T, models *model.Service) {
 				{Key: "declining_rate_percent", Type: "number"},
 				{Key: "cadence", Type: "string"},
 				{Key: "basis_amount", Type: "number"},
+				{Key: "depreciable_basis_amount", Type: "number"},
 				{Key: "salvage_amount", Type: "number"},
 				{Key: "total_periods", Type: "int"},
 				{Key: "periods_booked", Type: "int"},
 				{Key: "booked_amount", Type: "number"},
 				{Key: "remaining_amount", Type: "number"},
+				{Key: "accumulated_adjustment_amount", Type: "number"},
 				{Key: "next_posting_date", Type: "string"},
 				{Key: "last_posting_id", Type: "string"},
 				{Key: "last_posting_date", Type: "string"},
 				{Key: "last_posting_amount", Type: "number"},
+				{Key: "last_rebase_date", Type: "string"},
+				{Key: "last_rebase_reason", Type: "string"},
 				{Key: "asset_account_code", Type: "string"},
 				{Key: "accumulated_depreciation_account_code", Type: "string"},
 				{Key: "depreciation_expense_account_code", Type: "string"},
@@ -413,6 +547,84 @@ func registerFinanceAssetTestModels(t *testing.T, models *model.Service) {
 				{Key: "linked_journal_template_id", Type: "string"},
 			},
 		},
+		{
+			Key:         "asset_disposal",
+			DisplayName: "Asset Disposal",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "fixed_asset_id", Type: "string", Required: true},
+				{Key: "fixed_asset_schedule_id", Type: "string"},
+				{Key: "disposal_date", Type: "string"},
+				{Key: "disposal_type", Type: "string"},
+				{Key: "status", Type: "string"},
+				{Key: "proceeds_amount", Type: "number"},
+				{Key: "gross_amount", Type: "number"},
+				{Key: "accumulated_depreciation_amount", Type: "number"},
+				{Key: "accumulated_impairment_amount", Type: "number"},
+				{Key: "carrying_amount", Type: "number"},
+				{Key: "gain_loss_amount", Type: "number"},
+				{Key: "proceeds_account_code", Type: "string"},
+				{Key: "disposal_gain_account_code", Type: "string"},
+				{Key: "disposal_loss_account_code", Type: "string"},
+				{Key: "posting_id", Type: "string"},
+				{Key: "posting_date", Type: "string"},
+				{Key: "notes", Type: "string"},
+			},
+		},
+		{
+			Key:         "asset_transfer",
+			DisplayName: "Asset Transfer",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "fixed_asset_id", Type: "string", Required: true},
+				{Key: "effective_date", Type: "string"},
+				{Key: "from_location_id", Type: "string"},
+				{Key: "to_location_id", Type: "string"},
+				{Key: "from_cost_center_code", Type: "string"},
+				{Key: "to_cost_center_code", Type: "string"},
+				{Key: "status", Type: "string"},
+				{Key: "notes", Type: "string"},
+			},
+		},
+		{
+			Key:         "asset_impairment",
+			DisplayName: "Asset Impairment",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "fixed_asset_id", Type: "string", Required: true},
+				{Key: "fixed_asset_schedule_id", Type: "string"},
+				{Key: "impairment_date", Type: "string"},
+				{Key: "impairment_amount", Type: "number"},
+				{Key: "status", Type: "string"},
+				{Key: "impairment_expense_account_code", Type: "string"},
+				{Key: "accumulated_impairment_account_code", Type: "string"},
+				{Key: "posting_id", Type: "string"},
+				{Key: "posting_date", Type: "string"},
+				{Key: "notes", Type: "string"},
+			},
+		},
+		{
+			Key:         "asset_revaluation",
+			DisplayName: "Asset Revaluation",
+			Fields: []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "fixed_asset_id", Type: "string", Required: true},
+				{Key: "fixed_asset_schedule_id", Type: "string"},
+				{Key: "revaluation_date", Type: "string"},
+				{Key: "revaluation_amount", Type: "number"},
+				{Key: "target_carrying_amount", Type: "number"},
+				{Key: "status", Type: "string"},
+				{Key: "revaluation_reserve_account_code", Type: "string"},
+				{Key: "revaluation_loss_account_code", Type: "string"},
+				{Key: "posting_id", Type: "string"},
+				{Key: "posting_date", Type: "string"},
+				{Key: "notes", Type: "string"},
+			},
+		},
 	}
 	for _, def := range defs {
 		if err := models.Register(def); err != nil {
@@ -459,7 +671,7 @@ func mustCreateDraftJournalRun(t *testing.T, docs *document.Service, models *mod
 	if _, err := models.Create("journal_run", "tester", map[string]any{
 		"organization_id":      textValue(template.Values["organization_id"]),
 		"location_id":          textValue(template.Values["location_id"]),
-		"accounting_period_id": "period-"+postingDate,
+		"accounting_period_id": "period-" + postingDate,
 		"period_key":           postingDate[:7],
 		"journal_template_id":  templateID,
 		"template_code":        textValue(template.Values["code"]),

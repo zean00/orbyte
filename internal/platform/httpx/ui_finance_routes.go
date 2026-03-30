@@ -541,6 +541,85 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			}
 			respondJSON(w, http.StatusOK, preview)
 		})
+		mux.HandleFunc("POST /ui/data/finance/fixed-assets/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/fixed-assets/")
+			switch {
+			case strings.HasSuffix(path, "/dispose"):
+				if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "fixed_asset.read", "asset_disposal.create", "document.create"}) {
+					respondError(w, shared.Forbidden("fixed asset disposal is not allowed"))
+					return
+				}
+				assetID := strings.TrimSuffix(path, "/dispose")
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				result, err := financeAssetSvc.DisposeFixedAsset(assetID, organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), payload)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, result)
+			case strings.HasSuffix(path, "/transfer"):
+				if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "fixed_asset.read", "asset_transfer.create"}) {
+					respondError(w, shared.Forbidden("fixed asset transfer is not allowed"))
+					return
+				}
+				assetID := strings.TrimSuffix(path, "/transfer")
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				record, err := financeAssetSvc.TransferFixedAsset(assetID, organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), payload)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, record)
+			case strings.HasSuffix(path, "/impair"):
+				if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "fixed_asset.read", "asset_impairment.create", "document.create"}) {
+					respondError(w, shared.Forbidden("fixed asset impairment is not allowed"))
+					return
+				}
+				assetID := strings.TrimSuffix(path, "/impair")
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				result, err := financeAssetSvc.ImpairFixedAsset(assetID, organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), payload)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, result)
+			case strings.HasSuffix(path, "/revalue"):
+				if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "fixed_asset.read", "asset_revaluation.create", "document.create"}) {
+					respondError(w, shared.Forbidden("fixed asset revaluation is not allowed"))
+					return
+				}
+				assetID := strings.TrimSuffix(path, "/revalue")
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				result, err := financeAssetSvc.RevalueFixedAsset(assetID, organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), payload)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusCreated, result)
+			default:
+				http.NotFound(w, r)
+			}
+		})
 	}
 	if productionCostingSvc != nil {
 		mux.HandleFunc("GET /ui/data/finance/production-cost-summary", func(w http.ResponseWriter, r *http.Request) {
@@ -1108,15 +1187,15 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				return
 			}
 			var req struct {
-				TreasuryAccountID string         `json:"treasury_account_id"`
-				StatementNumber   string         `json:"statement_number"`
-				StatementDate     string         `json:"statement_date"`
-				FromDate          string         `json:"from_date"`
-				ToDate            string         `json:"to_date"`
-				OpeningBalance    float64        `json:"opening_balance"`
-				ClosingBalance    float64        `json:"closing_balance"`
-				SourceFileName    string         `json:"source_file_name"`
-				CSVText           string         `json:"csv_text"`
+				TreasuryAccountID string           `json:"treasury_account_id"`
+				StatementNumber   string           `json:"statement_number"`
+				StatementDate     string           `json:"statement_date"`
+				FromDate          string           `json:"from_date"`
+				ToDate            string           `json:"to_date"`
+				OpeningBalance    float64          `json:"opening_balance"`
+				ClosingBalance    float64          `json:"closing_balance"`
+				SourceFileName    string           `json:"source_file_name"`
+				CSVText           string           `json:"csv_text"`
 				Lines             []map[string]any `json:"lines"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
