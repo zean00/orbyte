@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -175,7 +176,148 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			))
 		})
 	}
-	mux.HandleFunc("POST /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
+	if periodEndSvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "accounting_period.read"}) {
+				respondError(w, shared.Forbidden("period close pack is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/periods/")
+			if !strings.HasSuffix(path, "/close-pack") {
+				http.NotFound(w, r)
+				return
+			}
+			periodID := strings.TrimSuffix(path, "/close-pack")
+			pack, err := periodEndSvc.ReadClosePack(periodID, organizationIDForPrincipal(p), p.currentLocationID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, pack)
+		})
+		mux.HandleFunc("POST /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/periods/")
+			switch {
+			case strings.HasSuffix(path, "/generate-journals"):
+				if !principalAllowsAll(ident, p, []string{
+					"finance.period_end.manage",
+					"accounting_period.read",
+					"document.create",
+					"journal_run.create",
+					"journal_run.update",
+					"accounting_period_task.create",
+					"accounting_period_task.update",
+				}) {
+					respondError(w, shared.Forbidden("period-end journal generation is not allowed"))
+					return
+				}
+				periodID := strings.TrimSuffix(path, "/generate-journals")
+				pack, err := periodEndSvc.GenerateJournalRuns(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, pack)
+				return
+			case strings.HasSuffix(path, "/close"):
+				if !principalAllowsAll(ident, p, []string{"finance.close", "accounting_period.update"}) {
+					respondError(w, shared.Forbidden("accounting period transition is not allowed"))
+					return
+				}
+				periodID := strings.TrimSuffix(path, "/close")
+				record, err := periodEndSvc.CloseAccountingPeriod(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+				return
+			case strings.HasSuffix(path, "/reopen"):
+				if !principalAllowsAll(ident, p, []string{"finance.close", "accounting_period.update"}) {
+					respondError(w, shared.Forbidden("accounting period transition is not allowed"))
+					return
+				}
+				periodID := strings.TrimSuffix(path, "/reopen")
+				record, err := periodEndSvc.ReopenAccountingPeriod(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+				return
+			default:
+				http.NotFound(w, r)
+				return
+			}
+		})
+		mux.HandleFunc("POST /ui/data/finance/period-tasks/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.period_end.manage", "accounting_period_task.update"}) {
+				respondError(w, shared.Forbidden("period close task update is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/period-tasks/")
+			switch {
+			case strings.HasSuffix(path, "/complete"):
+				taskID := strings.TrimSuffix(path, "/complete")
+				record, err := periodEndSvc.CompleteTask(taskID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+			case strings.HasSuffix(path, "/waive"):
+				taskID := strings.TrimSuffix(path, "/waive")
+				record, err := periodEndSvc.WaiveTask(taskID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		mux.HandleFunc("POST /ui/data/finance/journals/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.reverse", "document.create"}) {
+				respondError(w, shared.Forbidden("journal reversal is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/journals/")
+			if !strings.HasSuffix(path, "/reverse") {
+				http.NotFound(w, r)
+				return
+			}
+			var req struct {
+				ReversalDate string `json:"reversal_date"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			postingID := strings.TrimSuffix(path, "/reverse")
+			record, err := periodEndSvc.ReverseAccrualPosting(postingID, strings.TrimSpace(req.ReversalDate), principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, record)
+		})
+	}
+	if periodEndSvc == nil {
+		mux.HandleFunc("POST /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {
 			return
@@ -206,4 +348,5 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			http.NotFound(w, r)
 		}
 	})
+	}
 }

@@ -22,6 +22,7 @@ type CommercialCoreService struct {
 	models    *model.Service
 	search    *search.Service
 	finance   *FinanceReportingCoreService
+	periodEnd *FinancePeriodEndCoreService
 }
 
 type ReceivablesSummary struct {
@@ -474,6 +475,11 @@ func (s *CommercialCoreService) HandleApprovedDocument(record document.Record, a
 		return s.handleReceivedPayment(record, actorID)
 	case "payment_refund":
 		return s.handleRefundedPayment(record, actorID)
+	case "ledger_posting":
+		if s.periodEnd != nil {
+			return s.periodEnd.HandleApprovedLedgerPosting(record, actorID)
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -501,6 +507,10 @@ func (s *CommercialCoreService) ValidateApprove(record document.Record) error {
 
 func (s *CommercialCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
 	s.finance = finance
+}
+
+func (s *CommercialCoreService) SetPeriodEnd(periodEnd *FinancePeriodEndCoreService) {
+	s.periodEnd = periodEnd
 }
 
 func (s *CommercialCoreService) ValidateCancel(record document.Record) error {
@@ -539,6 +549,11 @@ func (s *CommercialCoreService) HandleCanceledDocument(record document.Record, a
 		return s.handleCancelledPayment(record, actorID)
 	case "payment_refund":
 		return s.handleCancelledRefund(record, actorID)
+	case "ledger_posting":
+		if s.periodEnd != nil {
+			return s.periodEnd.HandleCanceledLedgerPosting(record, actorID)
+		}
+		return nil
 	default:
 		return nil
 	}

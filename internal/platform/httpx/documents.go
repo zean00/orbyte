@@ -1429,7 +1429,7 @@ func procurementDocumentUpdateLocked(documentType string, status string) bool {
 
 func isCommercialManagedType(documentType string) bool {
 	switch strings.ToLower(strings.TrimSpace(documentType)) {
-	case "sales_order", "invoice", "credit_note", "payment_receipt", "payment_refund":
+	case "sales_order", "invoice", "credit_note", "payment_receipt", "payment_refund", "ledger_posting":
 		return true
 	default:
 		return false
