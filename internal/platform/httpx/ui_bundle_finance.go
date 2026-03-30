@@ -8,6 +8,10 @@ func FinanceReportsBundle() string {
       const text = function(en, id) { return ctx.locale === 'id' ? id : en; };
       const path = window.location.pathname || '';
       const reportKey = path.includes('period-close') ? 'period-close'
+        : path.includes('inventory-valuation-as-of') ? 'inventory-valuation-as-of'
+        : path.includes('inventory-valuation') ? 'inventory-valuation'
+        : path.includes('inventory-gl-reconciliation') ? 'inventory-gl-reconciliation'
+        : path.includes('inventory-adjustment-review') ? 'inventory-adjustment-review'
         : path.includes('ar-statements') ? 'ar-statements'
         : path.includes('ap-statements') ? 'ap-statements'
         : path.includes('collections') ? 'collections'
@@ -22,6 +26,10 @@ func FinanceReportsBundle() string {
         : path.includes('ap-reconciliation') ? 'ap-reconciliation'
         : 'journal-ledger';
       const title = reportKey === 'period-close' ? text('Period Close', 'Tutup Periode')
+        : reportKey === 'inventory-valuation-as-of' ? text('Inventory Valuation As Of', 'Penilaian Inventori Per Tanggal')
+        : reportKey === 'inventory-valuation' ? text('Inventory Valuation', 'Penilaian Inventori')
+        : reportKey === 'inventory-gl-reconciliation' ? text('Inventory GL Reconciliation', 'Rekonsiliasi GL Inventori')
+        : reportKey === 'inventory-adjustment-review' ? text('Inventory Adjustment Review', 'Tinjauan Penyesuaian Inventori')
         : reportKey === 'ar-statements' ? text('AR Statements', 'Statement Piutang')
         : reportKey === 'ap-statements' ? text('AP Statements', 'Statement Utang')
         : reportKey === 'collections' ? text('Collections', 'Penagihan')
@@ -41,6 +49,7 @@ func FinanceReportsBundle() string {
         from_date: params.get('from_date') || '',
         to_date: params.get('to_date') || '',
         as_of_date: params.get('as_of_date') || '',
+        warehouse_code: params.get('warehouse_code') || '',
         party_id: params.get('party_id') || '',
         vendor_id: params.get('vendor_id') || '',
         account_code: params.get('account_code') || '',
@@ -49,7 +58,7 @@ func FinanceReportsBundle() string {
         kind: params.get('kind') || '',
         status: params.get('status') || ''
       };
-      const usesAsOf = reportKey === 'balance-sheet' || reportKey === 'ar-aging' || reportKey === 'ap-aging' || reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation' || reportKey === 'ar-statements' || reportKey === 'ap-statements' || reportKey === 'settlement-exceptions';
+      const usesAsOf = reportKey === 'balance-sheet' || reportKey === 'inventory-valuation-as-of' || reportKey === 'inventory-gl-reconciliation' || reportKey === 'ar-aging' || reportKey === 'ap-aging' || reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation' || reportKey === 'ar-statements' || reportKey === 'ap-statements' || reportKey === 'settlement-exceptions';
       function escapeHTML(value) {
         return String(value == null ? '' : value).replace(/[&<>"]/g, function(char) {
           return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char];
@@ -148,9 +157,11 @@ func FinanceReportsBundle() string {
         if (filters.vendor_id && (reportKey === 'ap-aging' || reportKey === 'ap-reconciliation')) query.set('vendor_id', filters.vendor_id);
         if (filters.party_id && reportKey === 'ar-statements') query.set('party_id', filters.party_id);
         if (filters.vendor_id && reportKey === 'ap-statements') query.set('vendor_id', filters.vendor_id);
-        if (filters.account_code && (reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation')) query.set('account_code', filters.account_code);
+        if (filters.account_code && (reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation' || reportKey === 'inventory-gl-reconciliation')) query.set('account_code', filters.account_code);
         if (filters.aging_bucket && (reportKey === 'ar-aging' || reportKey === 'ap-aging')) query.set('aging_bucket', filters.aging_bucket);
         if (filters.kind && reportKey === 'settlement-exceptions') query.set('kind', filters.kind);
+        if (filters.warehouse_code && (reportKey === 'inventory-valuation' || reportKey === 'inventory-valuation-as-of')) query.set('warehouse_code', filters.warehouse_code);
+        if (filters.status && reportKey === 'inventory-adjustment-review') query.set('status', filters.status);
         return apiJSON('/ui/data/finance/' + reportKey + (query.toString() ? '?' + query.toString() : ''));
       }
       function renderRows(payload) {
@@ -179,6 +190,28 @@ func FinanceReportsBundle() string {
             + (blockers ? '<section class="finance-report__panel"><h3>' + escapeHTML(text('Close Blockers', 'Pemblokir Tutup')) + '</h3><ul class="finance-report__blockers">' + blockers + '</ul></section>' : '')
             + '<section class="finance-report__panel"><h3>' + escapeHTML(text('Checklist Tasks', 'Tugas Checklist')) + '</h3><div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Task', 'Tugas') + '</th><th>' + text('Label', 'Label') + '</th><th>' + text('Type', 'Tipe') + '</th><th>' + text('Status', 'Status') + '</th><th>' + text('Required', 'Wajib') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + taskRows + '</tbody></table></div></section>'
             + '<section class="finance-report__panel"><h3>' + escapeHTML(text('Journal Runs', 'Run Jurnal')) + '</h3><div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Template', 'Template') + '</th><th>' + text('Name', 'Nama') + '</th><th>' + text('Kind', 'Jenis') + '</th><th>' + text('Posting Date', 'Tanggal Posting') + '</th><th>' + text('Run Status', 'Status Run') + '</th><th>' + text('Posting', 'Posting') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + runRows + '</tbody></table></div></section>';
+        }
+        if (reportKey === 'inventory-valuation' || reportKey === 'inventory-valuation-as-of') {
+          return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Warehouse', 'Gudang') + '</th><th>' + text('Item', 'Item') + '</th><th>' + text('Account', 'Akun') + '</th><th>' + text('On Hand', 'On Hand') + '</th><th>' + text('Avg Cost', 'Biaya Rata-Rata') + '</th><th>' + text('Value', 'Nilai') + '</th></tr></thead><tbody>' + (payload.rows || []).map(function(row) {
+            return '<tr><td>' + escapeHTML(row.warehouse_code) + '</td><td>' + escapeHTML((row.item_code || '') + ' ' + (row.item_name || '')) + '</td><td>' + escapeHTML(row.account_code) + '</td><td>' + money(row.quantity_on_hand) + '</td><td>' + money(row.average_unit_cost) + '</td><td>' + money(row.inventory_value) + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        }
+        if (reportKey === 'inventory-gl-reconciliation') {
+          const accountRows = (payload.accounts || []).map(function(row) {
+            const openCase = '<button class="finance-report__button" data-open-inventory-case="' + escapeHTML(row.account_code) + '" data-case-inventory="' + escapeHTML(row.inventory_value) + '" data-case-gl="' + escapeHTML(row.gl_value) + '" data-case-reason="' + escapeHTML(text('inventory and GL balances differ', 'saldo inventori dan GL berbeda')) + '">' + escapeHTML(text('Open Case', 'Buka Kasus')) + '</button>';
+            return '<tr><td>' + escapeHTML(row.account_code) + '</td><td>' + escapeHTML(row.account_name) + '</td><td>' + money(row.inventory_value) + '</td><td>' + money(row.gl_value) + '</td><td>' + money(row.difference) + '</td><td>' + (row.difference !== 0 ? openCase : '') + '</td></tr>';
+          }).join('');
+          const mismatchRows = (payload.mismatches || []).map(function(row) {
+            return '<tr><td>' + escapeHTML(row.account_code || '') + '</td><td>' + escapeHTML(row.reason || '') + '</td><td>' + money(row.inventory_value) + '</td><td>' + money(row.gl_value) + '</td><td>' + money(row.difference) + '</td></tr>';
+          }).join('');
+          return '<section class="finance-report__panel"><h3>' + escapeHTML(text('Account Comparison', 'Perbandingan Akun')) + '</h3><div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Account', 'Akun') + '</th><th>' + text('Name', 'Nama') + '</th><th>' + text('Inventory', 'Inventori') + '</th><th>' + text('GL', 'GL') + '</th><th>' + text('Difference', 'Selisih') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + accountRows + '</tbody></table></div></section>'
+            + '<section class="finance-report__panel"><h3>' + escapeHTML(text('Mismatches', 'Selisih')) + '</h3><div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Account', 'Akun') + '</th><th>' + text('Reason', 'Alasan') + '</th><th>' + text('Inventory', 'Inventori') + '</th><th>' + text('GL', 'GL') + '</th><th>' + text('Difference', 'Selisih') + '</th></tr></thead><tbody>' + mismatchRows + '</tbody></table></div></section>';
+        }
+        if (reportKey === 'inventory-adjustment-review') {
+          return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Document', 'Dokumen') + '</th><th>' + text('Status', 'Status') + '</th><th>' + text('Warehouse', 'Gudang') + '</th><th>' + text('Lines', 'Baris') + '</th><th>' + text('Qty Delta', 'Delta Qty') + '</th><th>' + text('Value Impact', 'Dampak Nilai') + '</th><th>' + text('Created By', 'Dibuat Oleh') + '</th><th>' + text('Action', 'Aksi') + '</th></tr></thead><tbody>' + (payload.items || []).map(function(row) {
+            const generate = row.count_session_id && !row.document_id ? '<button class="finance-report__button" data-generate-adjustment="' + escapeHTML(row.count_session_id) + '">' + escapeHTML(text('Generate Adjustment', 'Generate Penyesuaian')) + '</button>' : '';
+            return '<tr><td>' + escapeHTML(row.document_number) + '</td><td>' + escapeHTML(row.status) + '</td><td>' + escapeHTML(row.warehouse_code) + '</td><td>' + escapeHTML(String(row.line_count || 0)) + '</td><td>' + money(row.quantity_delta_total) + '</td><td>' + money(row.estimated_value_impact) + '</td><td>' + escapeHTML(row.created_by) + '</td><td>' + generate + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
         }
         if (reportKey === 'ar-aging' || reportKey === 'ap-aging') {
           return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Counterparty', 'Mitra') + '</th><th>' + text('Document', 'Dokumen') + '</th><th>' + text('Date', 'Tanggal') + '</th><th>' + text('Due', 'Jatuh Tempo') + '</th><th>' + text('Account', 'Akun') + '</th><th>' + text('Bucket', 'Kelompok') + '</th><th>' + text('Open', 'Terbuka') + '</th></tr></thead><tbody>' + (payload.items || []).map(function(row) {
@@ -251,6 +284,9 @@ func FinanceReportsBundle() string {
         if (reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation') {
           return '<section class="finance-report__cards"><article class="finance-report__card"><span>' + text('Subledger', 'Subledger') + '</span><strong>' + money(payload.subledger_total) + '</strong></article><article class="finance-report__card"><span>' + text('GL', 'GL') + '</span><strong>' + money(payload.gl_total) + '</strong></article><article class="finance-report__card"><span>' + text('Difference', 'Selisih') + '</span><strong>' + money(payload.difference) + '</strong></article></section>';
         }
+        if (reportKey === 'inventory-gl-reconciliation') {
+          return '<section class="finance-report__cards"><article class="finance-report__card"><span>' + text('Inventory', 'Inventori') + '</span><strong>' + money(payload.inventory_total) + '</strong></article><article class="finance-report__card"><span>' + text('GL', 'GL') + '</span><strong>' + money(payload.gl_total) + '</strong></article><article class="finance-report__card"><span>' + text('Difference', 'Selisih') + '</span><strong>' + money(payload.difference) + '</strong></article></section>';
+        }
         if (reportKey === 'ar-statements' || reportKey === 'ap-statements' || reportKey === 'settlement-exceptions') {
           const totals = payload.totals || {};
           return '<section class="finance-report__cards">' + Object.keys(totals).map(function(key) {
@@ -267,6 +303,10 @@ func FinanceReportsBundle() string {
       function navItems() {
         return [
           { key: 'period-close', label: text('Period Close', 'Tutup Periode'), path: '/ui/finance/period-close' },
+          { key: 'inventory-valuation', label: text('Inventory Valuation', 'Penilaian Inventori'), path: '/ui/finance/inventory-valuation' },
+          { key: 'inventory-valuation-as-of', label: text('Inventory Valuation As Of', 'Penilaian Inventori Per Tanggal'), path: '/ui/finance/inventory-valuation-as-of' },
+          { key: 'inventory-gl-reconciliation', label: text('Inventory GL Reconciliation', 'Rekonsiliasi GL Inventori'), path: '/ui/finance/inventory-gl-reconciliation' },
+          { key: 'inventory-adjustment-review', label: text('Adjustment Review', 'Tinjauan Penyesuaian'), path: '/ui/finance/inventory-adjustment-review' },
           { key: 'ar-statements', label: text('AR Statements', 'Statement Piutang'), path: '/ui/finance/ar-statements' },
           { key: 'ap-statements', label: text('AP Statements', 'Statement Utang'), path: '/ui/finance/ap-statements' },
           { key: 'collections', label: text('Collections', 'Penagihan'), path: '/ui/finance/collections' },
@@ -291,7 +331,7 @@ func FinanceReportsBundle() string {
           return '<section class="finance-report__panel"><div class="finance-report__filters"><label class="finance-report__field"><span>' + text('Accounting Period', 'Periode Akuntansi') + '</span><select data-filter="period_id">' + options + '</select></label><button class="finance-report__button finance-report__button--primary" data-apply>' + escapeHTML(text('Load', 'Muat')) + '</button></div></section>';
         }
         return '<section class="finance-report__panel"><div class="finance-report__filters">'
-          + (reportKey === 'collections'
+          + (reportKey === 'collections' || reportKey === 'inventory-adjustment-review'
               ? ''
               : (usesAsOf
               ? '<label class="finance-report__field"><span>' + text('As Of', 'Per Tanggal') + '</span><input data-filter="as_of_date" type="date" value="' + escapeHTML(filters.as_of_date) + '" /></label>'
@@ -300,10 +340,11 @@ func FinanceReportsBundle() string {
           + ((reportKey === 'ap-aging' || reportKey === 'ap-reconciliation') ? '<label class="finance-report__field"><span>' + text('Vendor', 'Vendor') + '</span><input data-filter="vendor_id" value="' + escapeHTML(filters.vendor_id) + '" /></label>' : '')
           + (reportKey === 'ar-statements' ? '<label class="finance-report__field"><span>' + text('Party', 'Pihak') + '</span><input data-filter="party_id" value="' + escapeHTML(filters.party_id) + '" /></label>' : '')
           + (reportKey === 'ap-statements' ? '<label class="finance-report__field"><span>' + text('Vendor', 'Vendor') + '</span><input data-filter="vendor_id" value="' + escapeHTML(filters.vendor_id) + '" /></label>' : '')
-          + ((reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation') ? '<label class="finance-report__field"><span>' + text('Account', 'Akun') + '</span><input data-filter="account_code" value="' + escapeHTML(filters.account_code) + '" /></label>' : '')
+          + ((reportKey === 'ar-reconciliation' || reportKey === 'ap-reconciliation' || reportKey === 'inventory-gl-reconciliation') ? '<label class="finance-report__field"><span>' + text('Account', 'Akun') + '</span><input data-filter="account_code" value="' + escapeHTML(filters.account_code) + '" /></label>' : '')
+          + ((reportKey === 'inventory-valuation' || reportKey === 'inventory-valuation-as-of') ? '<label class="finance-report__field"><span>' + text('Warehouse', 'Gudang') + '</span><input data-filter="warehouse_code" value="' + escapeHTML(filters.warehouse_code) + '" /></label>' : '')
           + ((reportKey === 'ar-aging' || reportKey === 'ap-aging') ? '<label class="finance-report__field"><span>' + text('Bucket', 'Kelompok') + '</span><input data-filter="aging_bucket" value="' + escapeHTML(filters.aging_bucket) + '" /></label>' : '')
           + (reportKey === 'collections' || reportKey === 'settlement-exceptions' ? '<label class="finance-report__field"><span>' + text('Kind', 'Jenis') + '</span><input data-filter="kind" value="' + escapeHTML(filters.kind) + '" /></label>' : '')
-          + (reportKey === 'collections' ? '<label class="finance-report__field"><span>' + text('Status', 'Status') + '</span><input data-filter="status" value="' + escapeHTML(filters.status) + '" /></label>' : '')
+          + (reportKey === 'collections' || reportKey === 'inventory-adjustment-review' ? '<label class="finance-report__field"><span>' + text('Status', 'Status') + '</span><input data-filter="status" value="' + escapeHTML(filters.status) + '" /></label>' : '')
           + '<button class="finance-report__button finance-report__button--primary" data-apply>' + escapeHTML(text('Apply', 'Terapkan')) + '</button>'
           + ((reportKey === 'ar-statements' || reportKey === 'ap-statements') ? '<button class="finance-report__button" data-generate-statement="' + escapeHTML(reportKey) + '">' + escapeHTML(text('Generate Snapshot', 'Generate Snapshot')) + '</button>' : '')
           + '</div></section>';
@@ -312,7 +353,7 @@ func FinanceReportsBundle() string {
       const payload = await loadReport();
       mount.innerHTML = ''
         + '<section class="finance-report">'
-        +   '<section class="finance-report__hero"><div><h2>' + escapeHTML(title) + '</h2><p>' + escapeHTML(reportKey === 'period-close' ? text('Period-end journal generation, checklist readiness, and close controls.', 'Generate jurnal akhir periode, kesiapan checklist, dan kontrol tutup periode.') : text('Finance statements and tax visibility from posted journals.', 'Laporan keuangan dan visibilitas pajak dari jurnal yang sudah diposting.')) + '</p></div><nav class="finance-report__nav">' + navItems().map(function(item) {
+        +   '<section class="finance-report__hero"><div><h2>' + escapeHTML(title) + '</h2><p>' + escapeHTML(reportKey === 'period-close' ? text('Period-end journal generation, checklist readiness, and close controls.', 'Generate jurnal akhir periode, kesiapan checklist, dan kontrol tutup periode.') : ((reportKey === 'inventory-valuation' || reportKey === 'inventory-valuation-as-of' || reportKey === 'inventory-gl-reconciliation' || reportKey === 'inventory-adjustment-review') ? text('Inventory valuation, reconciliation, and adjustment governance controls.', 'Kontrol penilaian inventori, rekonsiliasi, dan tata kelola penyesuaian.') : text('Finance statements and tax visibility from posted journals.', 'Laporan keuangan dan visibilitas pajak dari jurnal yang sudah diposting.'))) + '</p></div><nav class="finance-report__nav">' + navItems().map(function(item) {
               return '<a href="' + item.path + '" class="' + (item.key === reportKey ? 'is-active' : '') + '">' + escapeHTML(item.label) + '</a>';
             }).join('') + '</nav></section>'
         +   renderFilters(payload)
@@ -340,6 +381,7 @@ func FinanceReportsBundle() string {
           if (filters.party_id) next.searchParams.set('party_id', filters.party_id); else next.searchParams.delete('party_id');
           if (filters.vendor_id) next.searchParams.set('vendor_id', filters.vendor_id); else next.searchParams.delete('vendor_id');
           if (filters.account_code) next.searchParams.set('account_code', filters.account_code); else next.searchParams.delete('account_code');
+          if (filters.warehouse_code) next.searchParams.set('warehouse_code', filters.warehouse_code); else next.searchParams.delete('warehouse_code');
           if (filters.aging_bucket) next.searchParams.set('aging_bucket', filters.aging_bucket); else next.searchParams.delete('aging_bucket');
           if (filters.kind) next.searchParams.set('kind', filters.kind); else next.searchParams.delete('kind');
           if (filters.status) next.searchParams.set('status', filters.status); else next.searchParams.delete('status');
@@ -390,6 +432,24 @@ func FinanceReportsBundle() string {
         node.addEventListener('click', async function() {
           await postJSON('/ui/data/finance/collections/' + encodeURIComponent(node.getAttribute('data-case-refresh')) + '/refresh');
           window.location.reload();
+        });
+      });
+      mount.querySelectorAll('[data-open-inventory-case]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          await postJSON('/ui/data/finance/inventory-reconciliation-cases/open', {
+            as_of_date: filters.as_of_date,
+            account_code: node.getAttribute('data-open-inventory-case'),
+            inventory_value: Number(node.getAttribute('data-case-inventory') || 0),
+            gl_value: Number(node.getAttribute('data-case-gl') || 0),
+            reason: node.getAttribute('data-case-reason') || ''
+          });
+          window.location.assign('/ui/finance/inventory-reconciliation-cases');
+        });
+      });
+      mount.querySelectorAll('[data-generate-adjustment]').forEach(function(node) {
+        node.addEventListener('click', async function() {
+          await postJSON('/ui/data/inventory/count-sessions/' + encodeURIComponent(node.getAttribute('data-generate-adjustment')) + '/generate-adjustment');
+          window.location.assign('/ui/inventory/adjustments');
         });
       });
       mount.querySelectorAll('[data-generate-journals]').forEach(function(node) {

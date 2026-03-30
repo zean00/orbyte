@@ -47,63 +47,64 @@ import (
 )
 
 type serviceGraph struct {
-	config            *config.Service
-	flags             *featureflags.Service
-	secrets           *secretstore.Service
-	organization      *organization.Service
-	identity          *identity.Service
-	modules           *module.Service
-	models            *model.Service
-	activities        *activity.Service
-	reporting         *reporting.Service
-	reference         *reference.Service
-	documents         *document.Service
-	workflows         *workflow.Service
-	audit             *audit.Service
-	logger            *logging.Service
-	observability     *observability.Service
-	policy            *policy.Service
-	fieldSecurity     *securityfields.Service
-	integration       *integration.Service
-	jobs              *jobs.Service
-	eventing          *eventing.Service
-	search            *search.Service
-	analytics         *analytics.Service
-	acp               *acp.Service
-	mcpAnalytics      *mcp.AnalyticsStream
-	mcpServer         *mcp.Server
-	offline           *offline.Service
-	monitoring        *monitoring.Service
-	notifications     *notification.Service
-	templates         *templateoutput.Service
-	dataops           *dataops.Service
-	engagement        *engagement.Service
-	idempotency       *idempotency.Service
-	uiPreferences     *httpx.UIPreferencesService
-	runtimeHealth     *runtimehealth.Tracker
-	docActions        *application.DocumentActions
-	modelActions      *application.ModelActions
-	commercialCore    *application.CommercialCoreService
-	procurementCore   *application.ProcurementCoreService
-	inventoryCore     *application.InventoryCoreService
-	fulfillmentCore   *application.FulfillmentCoreService
-	deliveryCore      *application.DeliveryCoreService
-	returnsCore       *application.ReturnsCoreService
-	supplierReturns   *application.SupplierReturnsCoreService
-	planningCore      *application.PlanningCoreService
-	productionCore    *application.ProductionCoreService
-	posCore           *application.POSCoreService
-	traceabilityCore  *application.TraceabilityCoreService
-	recallCore        *application.RecallCoreService
-	financeReporting  *application.FinanceReportingCoreService
-	financeReconcile  *application.FinanceReconciliationCoreService
-	financePeriodEnd  *application.FinancePeriodEndCoreService
+	config             *config.Service
+	flags              *featureflags.Service
+	secrets            *secretstore.Service
+	organization       *organization.Service
+	identity           *identity.Service
+	modules            *module.Service
+	models             *model.Service
+	activities         *activity.Service
+	reporting          *reporting.Service
+	reference          *reference.Service
+	documents          *document.Service
+	workflows          *workflow.Service
+	audit              *audit.Service
+	logger             *logging.Service
+	observability      *observability.Service
+	policy             *policy.Service
+	fieldSecurity      *securityfields.Service
+	integration        *integration.Service
+	jobs               *jobs.Service
+	eventing           *eventing.Service
+	search             *search.Service
+	analytics          *analytics.Service
+	acp                *acp.Service
+	mcpAnalytics       *mcp.AnalyticsStream
+	mcpServer          *mcp.Server
+	offline            *offline.Service
+	monitoring         *monitoring.Service
+	notifications      *notification.Service
+	templates          *templateoutput.Service
+	dataops            *dataops.Service
+	engagement         *engagement.Service
+	idempotency        *idempotency.Service
+	uiPreferences      *httpx.UIPreferencesService
+	runtimeHealth      *runtimehealth.Tracker
+	docActions         *application.DocumentActions
+	modelActions       *application.ModelActions
+	commercialCore     *application.CommercialCoreService
+	procurementCore    *application.ProcurementCoreService
+	inventoryCore      *application.InventoryCoreService
+	fulfillmentCore    *application.FulfillmentCoreService
+	deliveryCore       *application.DeliveryCoreService
+	returnsCore        *application.ReturnsCoreService
+	supplierReturns    *application.SupplierReturnsCoreService
+	planningCore       *application.PlanningCoreService
+	productionCore     *application.ProductionCoreService
+	posCore            *application.POSCoreService
+	traceabilityCore   *application.TraceabilityCoreService
+	recallCore         *application.RecallCoreService
+	financeReporting   *application.FinanceReportingCoreService
+	financeReconcile   *application.FinanceReconciliationCoreService
+	financePeriodEnd   *application.FinancePeriodEndCoreService
 	financeCollections *application.FinanceCollectionsCoreService
-	analyticsRepo     analytics.Repository
-	submitStore       application.SubmitStore
-	queryMonitor      *store.QueryMonitor
-	otel              *otel.Service
-	businessManifests []module.Manifest
+	inventoryFinance   *application.InventoryFinanceCoreService
+	analyticsRepo      analytics.Repository
+	submitStore        application.SubmitStore
+	queryMonitor       *store.QueryMonitor
+	otel               *otel.Service
+	businessManifests  []module.Manifest
 }
 
 func constructServiceGraph(postgres *store.Postgres, businessManifests []module.Manifest) *serviceGraph {
@@ -269,6 +270,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.financeReconcile = application.NewFinanceReconciliationCoreService(graph.documents, graph.models, graph.financeReporting)
 	graph.financePeriodEnd = application.NewFinancePeriodEndCoreService(graph.documents, graph.models, graph.financeReporting)
 	graph.financeCollections = application.NewFinanceCollectionsCoreService(graph.documents, graph.models, graph.financeReconcile, graph.commercialCore, graph.procurementCore, graph.financeReporting)
+	graph.inventoryFinance = application.NewInventoryFinanceCoreService(graph.documents, graph.models, graph.inventoryCore, graph.financeReporting)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.commercialCore.SetPeriodEnd(graph.financePeriodEnd)
 	graph.procurementCore.SetFinanceReporting(graph.financeReporting)

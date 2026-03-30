@@ -149,36 +149,37 @@ type TemplateDeps struct {
 }
 
 type UIDeps struct {
-	Identity        *identity.Service
-	Modules         *module.Service
-	Models          *model.Service
-	Activities      *activity.Service
-	Reporting       *reporting.Service
-	Documents       *document.Service
-	Workflows       *workflow.Service
-	Search          *search.Service
-	Analytics       *analytics.Service
-	Monitoring      *monitoring.Service
-	Commercial      *application.CommercialCoreService
-	Procurement     *application.ProcurementCoreService
-	Inventory       *application.InventoryCoreService
-	Fulfillment     *application.FulfillmentCoreService
-	Delivery        *application.DeliveryCoreService
-	Planning        *application.PlanningCoreService
-	Production      *application.ProductionCoreService
-	POS             *application.POSCoreService
-	SupplierReturns *application.SupplierReturnsCoreService
-	Traceability    *application.TraceabilityCoreService
-	Recall          *application.RecallCoreService
-	Finance         *application.FinanceReportingCoreService
-	Reconciliation  *application.FinanceReconciliationCoreService
-	PeriodEnd       *application.FinancePeriodEndCoreService
-	Collections     *application.FinanceCollectionsCoreService
-	Policy          *policy.Service
-	FieldSecurity   *securityfields.Service
-	UIPreferences   *UIPreferencesService
-	ACP             *acp.Service
-	Notifications   *notification.Service
+	Identity         *identity.Service
+	Modules          *module.Service
+	Models           *model.Service
+	Activities       *activity.Service
+	Reporting        *reporting.Service
+	Documents        *document.Service
+	Workflows        *workflow.Service
+	Search           *search.Service
+	Analytics        *analytics.Service
+	Monitoring       *monitoring.Service
+	Commercial       *application.CommercialCoreService
+	Procurement      *application.ProcurementCoreService
+	Inventory        *application.InventoryCoreService
+	Fulfillment      *application.FulfillmentCoreService
+	Delivery         *application.DeliveryCoreService
+	Planning         *application.PlanningCoreService
+	Production       *application.ProductionCoreService
+	POS              *application.POSCoreService
+	SupplierReturns  *application.SupplierReturnsCoreService
+	Traceability     *application.TraceabilityCoreService
+	Recall           *application.RecallCoreService
+	Finance          *application.FinanceReportingCoreService
+	Reconciliation   *application.FinanceReconciliationCoreService
+	PeriodEnd        *application.FinancePeriodEndCoreService
+	Collections      *application.FinanceCollectionsCoreService
+	InventoryFinance *application.InventoryFinanceCoreService
+	Policy           *policy.Service
+	FieldSecurity    *securityfields.Service
+	UIPreferences    *UIPreferencesService
+	ACP              *acp.Service
+	Notifications    *notification.Service
 }
 
 type ACPDeps struct {
@@ -329,6 +330,6 @@ func RegisterNotificationSurface(deps NotificationDeps) RouteRegistrar {
 
 func RegisterUISurface(deps UIDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.POS, deps.Traceability, deps.Recall, deps.Finance, deps.Reconciliation, deps.PeriodEnd, deps.Collections, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.POS, deps.Traceability, deps.Recall, deps.Finance, deps.Reconciliation, deps.PeriodEnd, deps.Collections, deps.InventoryFinance, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
 	}
 }

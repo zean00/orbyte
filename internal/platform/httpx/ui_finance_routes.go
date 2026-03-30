@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, collectionsSvc *application.FinanceCollectionsCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -416,6 +416,130 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			respondJSON(w, http.StatusOK, record)
 		})
 	}
+	if inventoryFinanceSvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/inventory-valuation", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("inventory valuation is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, inventoryFinanceSvc.InventoryValuation(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("warehouse_code")),
+				"",
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/inventory-valuation-as-of", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("inventory valuation as of is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, inventoryFinanceSvc.InventoryValuation(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("warehouse_code")),
+				strings.TrimSpace(query.Get("as_of_date")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/inventory-gl-reconciliation", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("inventory GL reconciliation is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, inventoryFinanceSvc.InventoryGLReconciliation(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("account_code")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/inventory-adjustment-review", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"inventory.finance.review"}) {
+				respondError(w, shared.Forbidden("inventory adjustment review is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, inventoryFinanceSvc.InventoryAdjustmentReview(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("status")),
+			))
+		})
+		mux.HandleFunc("POST /ui/data/inventory/count-sessions/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"inventory_count_session.read", "inventory_count_session.update", "document.create"}) {
+				respondError(w, shared.Forbidden("count session adjustment generation is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/inventory/count-sessions/")
+			if !strings.HasSuffix(path, "/generate-adjustment") {
+				http.NotFound(w, r)
+				return
+			}
+			sessionID := strings.TrimSuffix(path, "/generate-adjustment")
+			record, err := inventoryFinanceSvc.GenerateAdjustmentFromCountSession(sessionID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, record)
+		})
+		mux.HandleFunc("POST /ui/data/finance/inventory-reconciliation-cases/open", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"inventory_reconciliation_case.create", "inventory.finance.review"}) {
+				respondError(w, shared.Forbidden("inventory reconciliation case creation is not allowed"))
+				return
+			}
+			var req struct {
+				AsOfDate       string  `json:"as_of_date"`
+				AccountCode    string  `json:"account_code"`
+				Reason         string  `json:"reason"`
+				InventoryValue float64 `json:"inventory_value"`
+				GLValue        float64 `json:"gl_value"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			record, err := inventoryFinanceSvc.OpenReconciliationCase(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(req.AsOfDate),
+				strings.TrimSpace(req.AccountCode),
+				strings.TrimSpace(req.Reason),
+				req.InventoryValue,
+				req.GLValue,
+				principalEffectiveUserID(p),
+			)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, record)
+		})
+	}
 	if periodEndSvc != nil {
 		mux.HandleFunc("GET /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
 			p, ok := requireInteractivePrincipal(w, r)
@@ -558,35 +682,35 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 	}
 	if periodEndSvc == nil {
 		mux.HandleFunc("POST /ui/data/finance/periods/", func(w http.ResponseWriter, r *http.Request) {
-		p, ok := requireInteractivePrincipal(w, r)
-		if !ok {
-			return
-		}
-		if !principalAllowsAll(ident, p, []string{"finance.close", "accounting_period.update"}) {
-			respondError(w, shared.Forbidden("accounting period transition is not allowed"))
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/periods/")
-		switch {
-		case strings.HasSuffix(path, "/close"):
-			periodID := strings.TrimSuffix(path, "/close")
-			record, err := financeSvc.CloseAccountingPeriod(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
-			if err != nil {
-				respondError(w, err)
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
 				return
 			}
-			respondJSON(w, http.StatusOK, record)
-		case strings.HasSuffix(path, "/reopen"):
-			periodID := strings.TrimSuffix(path, "/reopen")
-			record, err := financeSvc.ReopenAccountingPeriod(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
-			if err != nil {
-				respondError(w, err)
+			if !principalAllowsAll(ident, p, []string{"finance.close", "accounting_period.update"}) {
+				respondError(w, shared.Forbidden("accounting period transition is not allowed"))
 				return
 			}
-			respondJSON(w, http.StatusOK, record)
-		default:
-			http.NotFound(w, r)
-		}
-	})
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/periods/")
+			switch {
+			case strings.HasSuffix(path, "/close"):
+				periodID := strings.TrimSuffix(path, "/close")
+				record, err := financeSvc.CloseAccountingPeriod(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+			case strings.HasSuffix(path, "/reopen"):
+				periodID := strings.TrimSuffix(path, "/reopen")
+				record, err := financeSvc.ReopenAccountingPeriod(periodID, principalEffectiveUserID(p), organizationIDForPrincipal(p), p.currentLocationID)
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, record)
+			default:
+				http.NotFound(w, r)
+			}
+		})
 	}
 }

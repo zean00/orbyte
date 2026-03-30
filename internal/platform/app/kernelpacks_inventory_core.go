@@ -269,7 +269,7 @@ func inventoryDocumentDefinition(documentType, displayName, workflowKey, numberi
 		WorkflowKey:            workflowKey,
 		NumberingKey:           numberingKey,
 		OwnerModuleKey:         "inventory_core",
-		AllowedLinkTypes:       []string{"movement_for", "receipt_for", "issue_for", "transfer_for"},
+		AllowedLinkTypes:       []string{"movement_for", "receipt_for", "issue_for", "transfer_for", "posting_for"},
 		AllowedAttachmentTypes: []string{"note", "image", "document"},
 	}
 }

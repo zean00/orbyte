@@ -99,6 +99,9 @@ func (s *InventoryCoreService) NormalizePayload(documentType string, payload map
 	case "stock_receipt", "stock_issue", "stock_adjustment":
 		next["lines"] = s.normalizeInventoryLines(recordList(next["lines"]), false)
 		next["total_quantity"] = roundMoney(sumInventoryLineQuantity(recordList(next["lines"]), "quantity"))
+		if documentType == "stock_adjustment" {
+			next = s.previewStockAdjustmentPayload(next)
+		}
 	case "stock_transfer":
 		next["lines"] = s.normalizeInventoryLines(recordList(next["lines"]), true)
 		next["total_quantity"] = roundMoney(sumInventoryLineQuantity(recordList(next["lines"]), "quantity"))
@@ -141,6 +144,9 @@ func (s *InventoryCoreService) HandleApprovedDocument(record document.Record, ac
 	case "stock_issue":
 		return s.handleApprovedStockIssue(record, actorID)
 	case "stock_adjustment":
+		if boolValue(record.Body.Payload["finance_review_required"]) && record.Header.CreatedBy == actorID {
+			return shared.Validation("stock adjustment requires approval by a different user")
+		}
 		return s.handleApprovedStockAdjustment(record, actorID)
 	case "stock_transfer":
 		return s.handleApprovedStockTransfer(record, actorID)
@@ -158,7 +164,10 @@ func (s *InventoryCoreService) HandleCanceledDocument(record document.Record, ac
 	case "stock_issue":
 		return s.reverseMovements(record, actorID, "stock_issue", "stock_issue_reversal")
 	case "stock_adjustment":
-		return s.reverseMovements(record, actorID, "stock_adjustment", "stock_adjustment_reversal")
+		if err := s.reverseMovements(record, actorID, "stock_adjustment", "stock_adjustment_reversal"); err != nil {
+			return err
+		}
+		return s.reversePostingForReason(record, actorID, "stock_adjustment", "stock_adjustment_reversal")
 	case "stock_transfer":
 		return s.reverseMovements(record, actorID, "stock_transfer", "stock_transfer_reversal")
 	default:
@@ -687,6 +696,14 @@ func (s *InventoryCoreService) handleApprovedStockAdjustment(record document.Rec
 	if s.hasMovementLink(record, "stock_adjustment") {
 		return nil
 	}
+	payload := s.previewStockAdjustmentPayload(clonedPayload(record.Body.Payload))
+	if err := s.updateDocumentPayload(record, actorID, payload); err != nil {
+		return err
+	}
+	updated, err := s.documents.Get(record.Header.ID)
+	if err == nil {
+		record = updated
+	}
 	for _, line := range recordList(record.Body.Payload["lines"]) {
 		direction := "in"
 		if roundMoney(numberValue(line["quantity"])) < 0 {
@@ -699,7 +716,7 @@ func (s *InventoryCoreService) handleApprovedStockAdjustment(record document.Rec
 			return err
 		}
 	}
-	return nil
+	return s.createStockAdjustmentPosting(record, actorID)
 }
 
 func (s *InventoryCoreService) handleApprovedStockTransfer(record document.Record, actorID string) error {
@@ -1772,6 +1789,183 @@ func (s *InventoryCoreService) createFulfillmentCostPosting(record document.Reco
 	}
 	_, err = s.documents.AddLink(record.Header.ID, posting.Header.ID, "posting_for", map[string]any{"posting_reason": "fulfillment_issue_cogs"})
 	return err
+}
+
+func (s *InventoryCoreService) createStockAdjustmentPosting(record document.Record, actorID string) error {
+	if s.hasPostingLink(record, "stock_adjustment") {
+		return nil
+	}
+	payload := clonedPayload(record.Body.Payload)
+	debits := map[string]float64{}
+	credits := map[string]float64{}
+	totalAmount := 0.0
+	for _, line := range recordList(payload["lines"]) {
+		qty := roundMoney(numberValue(line["quantity"]))
+		if qty == 0 {
+			continue
+		}
+		unitCost := roundMoney(firstPositiveNumber(line["unit_cost"], s.CurrentAverageUnitCost(record.Header.OrganizationID, record.Header.LocationID, textValue(line["item_code"]), textValue(line["warehouse_code"]))))
+		absCost := roundMoney(absFloat(qty * unitCost))
+		if absCost <= 0 {
+			continue
+		}
+		inventoryAccount := firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV")
+		adjustmentAccount := firstNonEmptyString(textValue(line["adjustment_account_code"]), textValue(payload["adjustment_account_code"]), "5800-INV-ADJ")
+		totalAmount = roundMoney(totalAmount + absCost)
+		if qty > 0 {
+			debits[inventoryAccount] = roundMoney(debits[inventoryAccount] + absCost)
+			credits[adjustmentAccount] = roundMoney(credits[adjustmentAccount] + absCost)
+		} else {
+			debits[adjustmentAccount] = roundMoney(debits[adjustmentAccount] + absCost)
+			credits[inventoryAccount] = roundMoney(credits[inventoryAccount] + absCost)
+		}
+	}
+	if totalAmount <= 0 {
+		return nil
+	}
+	journalLines := make([]map[string]any, 0, len(debits)+len(credits))
+	for account, amount := range debits {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory adjustment", "debit": amount, "credit": 0.0})
+	}
+	for account, amount := range credits {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory adjustment", "debit": 0.0, "credit": amount})
+	}
+	postingPayload := map[string]any{
+		"source_document_type": record.Header.Type,
+		"source_document_id":   record.Header.ID,
+		"posting_date":         time.Now().UTC().Format("2006-01-02"),
+		"currency_code":        firstNonEmptyString(textValue(payload["currency_code"]), "IDR"),
+		"posting_rule_key":     "stock_adjustment_inventory_default",
+		"total_amount":         totalAmount,
+		"journal_lines":        journalLines,
+		"notes":                fmt.Sprintf("Auto-posted inventory adjustment %s", firstNonEmptyString(record.Header.Number, record.Header.ID)),
+	}
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(postingPayload["posting_date"])); err != nil {
+			return err
+		}
+	}
+	posting, err := s.documents.Create("ledger_posting", record.Header.OrganizationID, record.Header.LocationID, actorID, postingPayload)
+	if err != nil {
+		return err
+	}
+	if err := s.finalizeSystemPosting(posting, actorID, "posted"); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(posting.Header.ID, record.Header.ID, "posting_for", map[string]any{"posting_reason": "stock_adjustment"}); err != nil {
+		return err
+	}
+	_, err = s.documents.AddLink(record.Header.ID, posting.Header.ID, "posting_for", map[string]any{"posting_reason": "stock_adjustment"})
+	return err
+}
+
+func (s *InventoryCoreService) reversePostingForReason(source document.Record, actorID, reason, reversalReason string) error {
+	originalPosting, ok := s.findPostingForReason(source, reason)
+	if !ok {
+		return nil
+	}
+	payload := clonedPayload(originalPosting.Body.Payload)
+	reversedLines := make([]map[string]any, 0, len(recordList(payload["journal_lines"])))
+	for _, line := range recordList(payload["journal_lines"]) {
+		reversedLines = append(reversedLines, map[string]any{
+			"account_code": textValue(line["account_code"]),
+			"description":  fmt.Sprintf("Reversal of %s", textValue(line["description"])),
+			"debit":        roundMoney(numberValue(line["credit"])),
+			"credit":       roundMoney(numberValue(line["debit"])),
+		})
+	}
+	payload["journal_lines"] = reversedLines
+	payload["posting_date"] = time.Now().UTC().Format("2006-01-02")
+	payload["notes"] = fmt.Sprintf("Reversal of %s", firstNonEmptyString(originalPosting.Header.Number, originalPosting.Header.ID))
+	payload["total_amount"] = roundMoney(numberValue(originalPosting.Body.Payload["total_amount"]))
+	if s.finance != nil {
+		if err := s.finance.ValidatePostingDateOpen(source.Header.OrganizationID, source.Header.LocationID, textValue(payload["posting_date"])); err != nil {
+			return err
+		}
+	}
+	reversal, err := s.documents.Create("ledger_posting", source.Header.OrganizationID, source.Header.LocationID, actorID, payload)
+	if err != nil {
+		return err
+	}
+	if err := s.finalizeSystemPosting(reversal, actorID, "posted"); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(reversal.Header.ID, source.Header.ID, "posting_for", map[string]any{"posting_reason": reversalReason, "reversal_of": originalPosting.Header.ID}); err != nil {
+		return err
+	}
+	if _, err := s.documents.AddLink(source.Header.ID, reversal.Header.ID, "posting_for", map[string]any{"posting_reason": reversalReason, "reversal_of": originalPosting.Header.ID}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *InventoryCoreService) findPostingForReason(record document.Record, reason string) (document.Record, bool) {
+	for _, link := range record.Links {
+		if link.LinkType != "posting_for" {
+			continue
+		}
+		if textValue(link.Metadata["posting_reason"]) != reason {
+			continue
+		}
+		posting, err := s.documents.Get(link.LinkedDocumentID)
+		if err == nil && posting.Header.Type == "ledger_posting" {
+			return posting, true
+		}
+	}
+	return document.Record{}, false
+}
+
+func (s *InventoryCoreService) previewStockAdjustmentPayload(payload map[string]any) map[string]any {
+	next := clonedPayload(payload)
+	lines := make([]map[string]any, 0, len(recordList(next["lines"])))
+	journalLines := make([]map[string]any, 0)
+	debits := map[string]float64{}
+	credits := map[string]float64{}
+	valueImpact := 0.0
+	for _, line := range recordList(next["lines"]) {
+		row := cloneMap(line)
+		itemCode := textValue(row["item_code"])
+		warehouseCode := textValue(row["warehouse_code"])
+		unitCost := roundMoney(firstPositiveNumber(row["unit_cost"], s.CurrentAverageUnitCost("", "", itemCode, warehouseCode)))
+		row["unit_cost"] = unitCost
+		if textValue(row["inventory_asset_account_code"]) == "" {
+			inventoryAccount, _, _ := s.CostAccounts(itemCode)
+			row["inventory_asset_account_code"] = inventoryAccount
+		}
+		if textValue(row["adjustment_account_code"]) == "" {
+			row["adjustment_account_code"] = firstNonEmptyString(textValue(next["adjustment_account_code"]), "5800-INV-ADJ")
+		}
+		qty := roundMoney(numberValue(row["quantity"]))
+		impact := roundMoney(qty * unitCost)
+		row["estimated_value_impact"] = impact
+		valueImpact = roundMoney(valueImpact + impact)
+		absImpact := roundMoney(absFloat(impact))
+		if absImpact > 0 {
+			inventoryAccount := firstNonEmptyString(textValue(row["inventory_asset_account_code"]), "1200-INV")
+			adjustmentAccount := firstNonEmptyString(textValue(row["adjustment_account_code"]), "5800-INV-ADJ")
+			if impact >= 0 {
+				debits[inventoryAccount] = roundMoney(debits[inventoryAccount] + absImpact)
+				credits[adjustmentAccount] = roundMoney(credits[adjustmentAccount] + absImpact)
+			} else {
+				debits[adjustmentAccount] = roundMoney(debits[adjustmentAccount] + absImpact)
+				credits[inventoryAccount] = roundMoney(credits[inventoryAccount] + absImpact)
+			}
+		}
+		lines = append(lines, row)
+	}
+	for account, amount := range debits {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory adjustment", "debit": amount, "credit": 0.0})
+	}
+	for account, amount := range credits {
+		journalLines = append(journalLines, map[string]any{"account_code": account, "description": "Inventory adjustment", "debit": 0.0, "credit": amount})
+	}
+	sort.Slice(journalLines, func(i, j int) bool {
+		return textValue(journalLines[i]["account_code"]) < textValue(journalLines[j]["account_code"])
+	})
+	next["lines"] = lines
+	next["estimated_value_impact"] = valueImpact
+	next["preview_journal_lines"] = journalLines
+	return next
 }
 
 func (s *InventoryCoreService) hasPostingLink(record document.Record, reason string) bool {
