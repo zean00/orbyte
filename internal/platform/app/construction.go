@@ -101,6 +101,7 @@ type serviceGraph struct {
 	financeManual      *application.FinanceManualJournalCoreService
 	financeCollections *application.FinanceCollectionsCoreService
 	inventoryFinance   *application.InventoryFinanceCoreService
+	retailFinance      *application.RetailFinanceCoreService
 	analyticsRepo      analytics.Repository
 	submitStore        application.SubmitStore
 	queryMonitor       *store.QueryMonitor
@@ -273,6 +274,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.financeManual = application.NewFinanceManualJournalCoreService(graph.documents, graph.financeReporting)
 	graph.financeCollections = application.NewFinanceCollectionsCoreService(graph.documents, graph.models, graph.financeReconcile, graph.commercialCore, graph.procurementCore, graph.financeReporting)
 	graph.inventoryFinance = application.NewInventoryFinanceCoreService(graph.documents, graph.models, graph.inventoryCore, graph.financeReporting)
+	graph.retailFinance = application.NewRetailFinanceCoreService(graph.documents, graph.models, graph.config, graph.financeReporting)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.commercialCore.SetPeriodEnd(graph.financePeriodEnd)
 	graph.commercialCore.SetManualJournals(graph.financeManual)
@@ -281,6 +283,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.procurementCore.SetInventoryCore(graph.inventoryCore)
 	graph.inventoryCore.SetFinanceReporting(graph.financeReporting)
 	graph.productionCore.SetFinanceReporting(graph.financeReporting)
+	graph.posCore.SetRetailFinance(graph.retailFinance)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)

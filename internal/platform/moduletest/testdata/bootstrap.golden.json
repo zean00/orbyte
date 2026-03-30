@@ -1334,6 +1334,21 @@
       "route_path": "/finance/balance-sheet"
     },
     {
+      "custom_entry_key": "finance.cash_over_short",
+      "key": "finance.cash_over_short",
+      "kind": "navigate",
+      "label": "Cash Over Short",
+      "label_i18n": {
+        "en": "Cash Over Short",
+        "id": "Lebih Kurang Kas"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/cash-over-short"
+    },
+    {
       "key": "finance.collection_cases.detail",
       "kind": "navigate",
       "label": "Collection Case Detail",
@@ -1393,6 +1408,51 @@
         "collection_case.read"
       ],
       "route_path": "/finance/collections"
+    },
+    {
+      "key": "finance.gift_cards.detail",
+      "kind": "navigate",
+      "label": "Gift Card Detail",
+      "label_i18n": {
+        "en": "Gift Card Detail",
+        "id": "Detail Gift Card"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "gift_card.read"
+      ],
+      "route_path": "/finance/gift-cards/detail",
+      "view_key": "finance.gift_cards.detail"
+    },
+    {
+      "key": "finance.gift_cards.form",
+      "kind": "navigate",
+      "label": "Gift Card Form",
+      "label_i18n": {
+        "en": "Gift Card Form",
+        "id": "Form Gift Card"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "gift_card.update"
+      ],
+      "route_path": "/finance/gift-cards/form",
+      "view_key": "finance.gift_cards.form"
+    },
+    {
+      "key": "finance.gift_cards.list",
+      "kind": "navigate",
+      "label": "Gift Cards",
+      "label_i18n": {
+        "en": "Gift Cards",
+        "id": "Gift Card"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "gift_card.list"
+      ],
+      "route_path": "/finance/gift-cards",
+      "view_key": "finance.gift_cards.list"
     },
     {
       "custom_entry_key": "finance.inventory_adjustment_review",
@@ -1757,6 +1817,36 @@
       "view_key": "finance.periods.list"
     },
     {
+      "custom_entry_key": "finance.pos_shift_reconciliation",
+      "key": "finance.pos_shift_reconciliation",
+      "kind": "navigate",
+      "label": "POS Shift Reconciliation",
+      "label_i18n": {
+        "en": "POS Shift Reconciliation",
+        "id": "Rekonsiliasi Shift POS"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/pos-shift-reconciliation"
+    },
+    {
+      "custom_entry_key": "finance.pos_tender_settlements",
+      "key": "finance.pos_tender_settlements",
+      "kind": "navigate",
+      "label": "POS Tender Settlements",
+      "label_i18n": {
+        "en": "POS Tender Settlements",
+        "id": "Settlement Tender POS"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/pos-tender-settlements"
+    },
+    {
       "custom_entry_key": "finance.profit_and_loss",
       "key": "finance.profit_and_loss",
       "kind": "navigate",
@@ -1786,6 +1876,51 @@
         "settlement_exception.read"
       ],
       "route_path": "/finance/settlement-exceptions"
+    },
+    {
+      "key": "finance.store_credit_accounts.detail",
+      "kind": "navigate",
+      "label": "Store Credit Account Detail",
+      "label_i18n": {
+        "en": "Store Credit Account Detail",
+        "id": "Detail Akun Store Credit"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "store_credit_account.read"
+      ],
+      "route_path": "/finance/store-credit-accounts/detail",
+      "view_key": "finance.store_credit_accounts.detail"
+    },
+    {
+      "key": "finance.store_credit_accounts.form",
+      "kind": "navigate",
+      "label": "Store Credit Account Form",
+      "label_i18n": {
+        "en": "Store Credit Account Form",
+        "id": "Form Akun Store Credit"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "store_credit_account.update"
+      ],
+      "route_path": "/finance/store-credit-accounts/form",
+      "view_key": "finance.store_credit_accounts.form"
+    },
+    {
+      "key": "finance.store_credit_accounts.list",
+      "kind": "navigate",
+      "label": "Store Credit Accounts",
+      "label_i18n": {
+        "en": "Store Credit Accounts",
+        "id": "Akun Store Credit"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "store_credit_account.list"
+      ],
+      "route_path": "/finance/store-credit-accounts",
+      "view_key": "finance.store_credit_accounts.list"
     },
     {
       "custom_entry_key": "finance.tax_summary",
@@ -5348,6 +5483,71 @@
       "order": 111,
       "required_permissions": [
         "inventory_reconciliation_case.list"
+      ]
+    },
+    {
+      "action_key": "finance.pos_shift_reconciliation",
+      "key": "finance.pos_shift_reconciliation",
+      "label": "POS Shift Reconciliation",
+      "label_i18n": {
+        "en": "POS Shift Reconciliation",
+        "id": "Rekonsiliasi Shift POS"
+      },
+      "order": 112,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.pos_tender_settlements",
+      "key": "finance.pos_tender_settlements",
+      "label": "POS Tender Settlements",
+      "label_i18n": {
+        "en": "POS Tender Settlements",
+        "id": "Settlement Tender POS"
+      },
+      "order": 113,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.cash_over_short",
+      "key": "finance.cash_over_short",
+      "label": "Cash Over Short",
+      "label_i18n": {
+        "en": "Cash Over Short",
+        "id": "Lebih Kurang Kas"
+      },
+      "order": 114,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.gift_cards.list",
+      "key": "finance.gift_cards",
+      "label": "Gift Cards",
+      "label_i18n": {
+        "en": "Gift Cards",
+        "id": "Gift Card"
+      },
+      "order": 115,
+      "required_permissions": [
+        "gift_card.list"
+      ]
+    },
+    {
+      "action_key": "finance.store_credit_accounts.list",
+      "key": "finance.store_credit_accounts",
+      "label": "Store Credit",
+      "label_i18n": {
+        "en": "Store Credit",
+        "id": "Store Credit"
+      },
+      "order": 116,
+      "required_permissions": [
+        "store_credit_account.list"
       ]
     }
   ],
@@ -15226,6 +15426,209 @@
       }
     },
     {
+      "key": "finance.gift_cards.detail",
+      "kind": "detail",
+      "model_key": "gift_card",
+      "required_permissions": [
+        "gift_card.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "path": "values.party_name",
+              "type": "string"
+            },
+            {
+              "key": "issued_amount",
+              "label": "Issued",
+              "path": "values.issued_amount",
+              "type": "number"
+            },
+            {
+              "key": "remaining_balance",
+              "label": "Balance",
+              "path": "values.remaining_balance",
+              "type": "number"
+            },
+            {
+              "key": "liability_account_code",
+              "label": "Liability Account",
+              "path": "values.liability_account_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Gift Card Detail",
+      "title_i18n": {
+        "en": "Gift Card Detail",
+        "id": "Gift Card Detail"
+      }
+    },
+    {
+      "key": "finance.gift_cards.form",
+      "kind": "form",
+      "model_key": "gift_card",
+      "required_permissions": [
+        "gift_card.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "issued_amount",
+              "label": "Issued",
+              "path": "values.issued_amount",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "remaining_balance",
+              "label": "Balance",
+              "path": "values.remaining_balance",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "liability_account_code",
+              "label": "Liability Account",
+              "path": "values.liability_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "consumed",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Gift Card Form",
+          "title_i18n": {
+            "en": "Gift Card Form",
+            "id": "Gift Card Form"
+          }
+        }
+      ],
+      "title": "Gift Card Form",
+      "title_i18n": {
+        "en": "Gift Card Form",
+        "id": "Gift Card Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "path": "values.party_name"
+        },
+        {
+          "key": "issued_amount",
+          "label": "Issued",
+          "path": "values.issued_amount"
+        },
+        {
+          "key": "remaining_balance",
+          "label": "Balance",
+          "path": "values.remaining_balance"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "consumed",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.gift_cards.list",
+      "kind": "list",
+      "model_key": "gift_card",
+      "required_permissions": [
+        "gift_card.list"
+      ],
+      "title": "Gift Cards",
+      "title_i18n": {
+        "en": "Gift Cards",
+        "id": "Gift Cards"
+      }
+    },
+    {
       "key": "finance.inventory_reconciliation_cases.detail",
       "kind": "detail",
       "model_key": "inventory_reconciliation_case",
@@ -17616,6 +18019,182 @@
       "title_i18n": {
         "en": "Accounting Periods",
         "id": "Accounting Periods"
+      }
+    },
+    {
+      "key": "finance.store_credit_accounts.detail",
+      "kind": "detail",
+      "model_key": "store_credit_account",
+      "required_permissions": [
+        "store_credit_account.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "values.party_id",
+              "type": "string"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "path": "values.party_name",
+              "type": "string"
+            },
+            {
+              "key": "balance_amount",
+              "label": "Balance",
+              "path": "values.balance_amount",
+              "type": "number"
+            },
+            {
+              "key": "liability_account_code",
+              "label": "Liability Account",
+              "path": "values.liability_account_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Store Credit Account Detail",
+      "title_i18n": {
+        "en": "Store Credit Account Detail",
+        "id": "Store Credit Account Detail"
+      }
+    },
+    {
+      "key": "finance.store_credit_accounts.form",
+      "kind": "form",
+      "model_key": "store_credit_account",
+      "required_permissions": [
+        "store_credit_account.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "values.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer",
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "balance_amount",
+              "label": "Balance",
+              "path": "values.balance_amount",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "liability_account_code",
+              "label": "Liability Account",
+              "path": "values.liability_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Store Credit Account Form",
+          "title_i18n": {
+            "en": "Store Credit Account Form",
+            "id": "Store Credit Account Form"
+          }
+        }
+      ],
+      "title": "Store Credit Account Form",
+      "title_i18n": {
+        "en": "Store Credit Account Form",
+        "id": "Store Credit Account Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "party_id",
+          "label": "Party",
+          "path": "values.party_id"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "path": "values.party_name"
+        },
+        {
+          "key": "balance_amount",
+          "label": "Balance",
+          "path": "values.balance_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.store_credit_accounts.list",
+      "kind": "list",
+      "model_key": "store_credit_account",
+      "required_permissions": [
+        "store_credit_account.list"
+      ],
+      "title": "Store Credit Accounts",
+      "title_i18n": {
+        "en": "Store Credit Accounts",
+        "id": "Store Credit Accounts"
       }
     },
     {

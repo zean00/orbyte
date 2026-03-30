@@ -121,7 +121,7 @@ func TestPOSCheckoutCreatesOperationalDocuments(t *testing.T) {
 	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
 	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
 
-	shift, err := posSvc.OpenShift("STORE1", "REG1", "cashier_1", "cashier_1", 100.0, "")
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100.0, "")
 	if err != nil {
 		t.Fatalf("open shift: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestPOSCheckoutCreatesPromotionRedemptionFromPromoCode(t *testing.T) {
 	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
 	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
 
-	shift, err := posSvc.OpenShift("STORE1", "REG1", "cashier_1", "cashier_1", 100, "")
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100, "")
 	if err != nil {
 		t.Fatalf("open shift: %v", err)
 	}
@@ -488,7 +488,7 @@ func TestPOSRefundSaleCreatesReturnFlow(t *testing.T) {
 	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
 	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
 
-	shift, err := posSvc.OpenShift("STORE1", "REG1", "cashier_1", "cashier_1", 0, "")
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 0, "")
 	if err != nil {
 		t.Fatalf("open shift: %v", err)
 	}
@@ -659,7 +659,7 @@ func TestPOSCheckoutAppliesBuyXGetYDiscount(t *testing.T) {
 	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
 	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
 
-	shift, err := posSvc.OpenShift("STORE1", "REG1", "cashier_1", "cashier_1", 100.0, "")
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100.0, "")
 	if err != nil {
 		t.Fatalf("open shift: %v", err)
 	}
@@ -784,11 +784,11 @@ func TestPOSCloseShiftRequiresOwningCashier(t *testing.T) {
 	}
 
 	posSvc := NewPOSCoreService(docs, models, nil, nil, nil, nil, nil, nil)
-	shift, err := posSvc.OpenShift("STORE1", "REG1", "cashier_1", "cashier_1", 100, "")
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100, "")
 	if err != nil {
 		t.Fatalf("open shift: %v", err)
 	}
-	if _, err := posSvc.CloseShift(shift.ID, "cashier_2", 100, ""); err == nil {
+	if _, err := posSvc.CloseShift("org_default", "loc_main", shift.ID, "cashier_2", 100, ""); err == nil {
 		t.Fatalf("expected foreign cashier close to fail")
 	}
 }
@@ -853,7 +853,7 @@ func TestPOSValidateSaleContextRejectsMismatchedStoreRegisterAndShift(t *testing
 	}
 
 	posSvc := NewPOSCoreService(docs, models, nil, nil, NewCommercialCoreService(docs, nil, models, nil), NewInventoryCoreService(docs, nil, models, nil), nil, nil)
-	shift, err := posSvc.OpenShift("STORE1", "REG1", "cashier_1", "cashier_1", 0, "")
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 0, "")
 	if err != nil {
 		t.Fatalf("open shift: %v", err)
 	}

@@ -1,0 +1,258 @@
+package app
+
+import (
+	"orbyte/internal/platform/model"
+	"orbyte/internal/platform/module"
+)
+
+func retailFinanceCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{retailFinanceCoreKernelPackManifest()}
+}
+
+func retailFinanceCoreKernelPackManifest() module.Manifest {
+	return module.Manifest{
+		Key:          "retail_finance_core",
+		Name:         "Retail Finance Core",
+		NameI18n:     localize("Retail Finance Core", "Inti Keuangan Retail"),
+		Version:      "1.0.0",
+		DomainFamily: "business",
+		Dependencies: []string{"pos_core", "finance_reporting_core", "commercial_core"},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Retail Finance Console",
+			TitleI18n:       localize("Retail Finance Console", "Konsol Keuangan Retail"),
+			Description:     "POS tender reconciliation, tender settlements, gift cards, and store credit controls.",
+			DescriptionI18n: localize("POS tender reconciliation, tender settlements, gift cards, and store credit controls.", "Kontrol rekonsiliasi tender POS, settlement tender, gift card, dan store credit."),
+			Sections: []module.AdminConsoleSectionDefinition{{
+				Key:       "retail_finance",
+				Kind:      module.AdminConsoleSectionResourceLinks,
+				Title:     "Retail Finance",
+				TitleI18n: localize("Retail Finance", "Keuangan Retail"),
+				Links: []module.AdminConsoleLinkDefinition{
+					adminConsoleLink("pos_shift_reconciliation", "POS Shift Reconciliation", "Rekonsiliasi Shift POS", "/ui/finance/pos-shift-reconciliation", "Review shift tender reconciliation.", "Tinjau rekonsiliasi tender shift.", "finance.read"),
+					adminConsoleLink("pos_tender_settlements", "POS Tender Settlements", "Settlement Tender POS", "/ui/finance/pos-tender-settlements", "Review open and settled POS tender batches.", "Tinjau batch tender POS yang terbuka dan settled.", "finance.read"),
+					adminConsoleLink("cash_over_short", "Cash Over Short", "Lebih Kurang Kas", "/ui/finance/cash-over-short", "Review cashier over/short balances.", "Tinjau saldo lebih/kurang kasir.", "finance.read"),
+					adminConsoleLink("gift_cards", "Gift Cards", "Gift Card", "/ui/finance/gift-cards", "Manage gift cards.", "Kelola gift card.", "gift_card.list"),
+					adminConsoleLink("store_credit_accounts", "Store Credit", "Store Credit", "/ui/finance/store-credit-accounts", "Manage store credit balances.", "Kelola saldo store credit.", "store_credit_account.list"),
+				},
+			}},
+		},
+		Models: []model.Definition{
+			retailFinanceModelDefinition("pos_tender_reconciliation", "POS Tender Reconciliation", []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "shift_id", Type: "string", Required: true},
+				{Key: "shift_number", Type: "string"},
+				{Key: "store_code", Type: "string"},
+				{Key: "register_code", Type: "string"},
+				{Key: "cashier_user_id", Type: "string"},
+				{Key: "reconciliation_date", Type: "string"},
+				{Key: "expected_cash_amount", Type: "number"},
+				{Key: "actual_cash_amount", Type: "number"},
+				{Key: "over_short_amount", Type: "number"},
+				{Key: "expected_total_amount", Type: "number"},
+				{Key: "counted_total_amount", Type: "number"},
+				{Key: "tender_summary_json", Type: "string"},
+				{Key: "status", Type: "string", DefaultValue: "draft"},
+				{Key: "posting_id", Type: "string"},
+				{Key: "approved_by", Type: "string"},
+				{Key: "approved_at", Type: "string"},
+				{Key: "notes", Type: "string"},
+			}),
+			retailFinanceModelDefinition("pos_tender_settlement", "POS Tender Settlement", []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "reconciliation_id", Type: "string", Required: true},
+				{Key: "shift_id", Type: "string"},
+				{Key: "shift_number", Type: "string"},
+				{Key: "store_code", Type: "string"},
+				{Key: "register_code", Type: "string"},
+				{Key: "tender_type_code", Type: "string", Required: true},
+				{Key: "tender_kind", Type: "string"},
+				{Key: "clearing_account_code", Type: "string"},
+				{Key: "expected_amount", Type: "number"},
+				{Key: "settled_amount", Type: "number"},
+				{Key: "difference_amount", Type: "number"},
+				{Key: "settlement_date", Type: "string"},
+				{Key: "settlement_reference", Type: "string"},
+				{Key: "status", Type: "string", DefaultValue: "open"},
+				{Key: "notes", Type: "string"},
+			}),
+			retailFinanceModelDefinition("gift_card", "Gift Card", []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "code", Type: "string", Required: true},
+				{Key: "store_code", Type: "string"},
+				{Key: "party_id", Type: "string"},
+				{Key: "party_name", Type: "string"},
+				{Key: "currency_code", Type: "string", DefaultValue: "IDR"},
+				{Key: "issued_amount", Type: "number"},
+				{Key: "remaining_balance", Type: "number"},
+				{Key: "liability_account_code", Type: "string"},
+				{Key: "status", Type: "string", DefaultValue: "active"},
+				{Key: "last_activity_at", Type: "string"},
+				{Key: "notes", Type: "string"},
+			}),
+			retailFinanceModelDefinition("gift_card_transaction", "Gift Card Transaction", []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "gift_card_id", Type: "string", Required: true},
+				{Key: "gift_card_code", Type: "string"},
+				{Key: "party_id", Type: "string"},
+				{Key: "transaction_type", Type: "string", Required: true},
+				{Key: "amount", Type: "number"},
+				{Key: "balance_after", Type: "number"},
+				{Key: "pos_sale_id", Type: "string"},
+				{Key: "source_document_id", Type: "string"},
+				{Key: "reference", Type: "string"},
+				{Key: "status", Type: "string", DefaultValue: "posted"},
+			}),
+			retailFinanceModelDefinition("store_credit_account", "Store Credit Account", []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "party_id", Type: "string", Required: true},
+				{Key: "party_name", Type: "string"},
+				{Key: "currency_code", Type: "string", DefaultValue: "IDR"},
+				{Key: "balance_amount", Type: "number"},
+				{Key: "liability_account_code", Type: "string"},
+				{Key: "status", Type: "string", DefaultValue: "active"},
+				{Key: "last_activity_at", Type: "string"},
+			}),
+			retailFinanceModelDefinition("store_credit_transaction", "Store Credit Transaction", []model.FieldDefinition{
+				{Key: "organization_id", Type: "string", Required: true},
+				{Key: "location_id", Type: "string"},
+				{Key: "store_credit_account_id", Type: "string", Required: true},
+				{Key: "party_id", Type: "string"},
+				{Key: "transaction_type", Type: "string", Required: true},
+				{Key: "amount", Type: "number"},
+				{Key: "balance_after", Type: "number"},
+				{Key: "pos_sale_id", Type: "string"},
+				{Key: "source_document_id", Type: "string"},
+				{Key: "reference", Type: "string"},
+				{Key: "status", Type: "string", DefaultValue: "posted"},
+			}),
+		},
+		Security: module.SecurityDefinition{
+			Permissions: append(
+				append(
+					append(
+						commercialModelPermissions("pos_tender_reconciliation", "POS Tender Reconciliation"),
+						commercialModelPermissions("pos_tender_settlement", "POS Tender Settlement")...,
+					),
+					append(
+						commercialModelPermissions("gift_card", "Gift Card"),
+						commercialModelPermissions("gift_card_transaction", "Gift Card Transaction")...,
+					)...,
+				),
+				append(
+					append(
+						commercialModelPermissions("store_credit_account", "Store Credit Account"),
+						commercialModelPermissions("store_credit_transaction", "Store Credit Transaction")...,
+					),
+					module.PermissionDefinition{Key: "retail.finance.manage", Action: "manage", Resource: "retail_finance", DisplayName: "Manage Retail Finance", DisplayNameI18n: localize("Manage Retail Finance", "Kelola Keuangan Retail")},
+				)...,
+			),
+			RoleTemplates: []module.RoleTemplateDefinition{{
+				Key:           "retail_finance_manager",
+				Name:          "Retail Finance Manager",
+				NameI18n:      localize("Retail Finance Manager", "Manajer Keuangan Retail"),
+				AllowedScopes: []string{"deployment", "organization", "location"},
+				PermissionKeys: []string{
+					"pos_tender_reconciliation.create", "pos_tender_reconciliation.list", "pos_tender_reconciliation.read", "pos_tender_reconciliation.update",
+					"pos_tender_settlement.create", "pos_tender_settlement.list", "pos_tender_settlement.read", "pos_tender_settlement.update",
+					"gift_card.create", "gift_card.list", "gift_card.read", "gift_card.update",
+					"gift_card_transaction.create", "gift_card_transaction.list", "gift_card_transaction.read", "gift_card_transaction.update",
+					"store_credit_account.create", "store_credit_account.list", "store_credit_account.read", "store_credit_account.update",
+					"store_credit_transaction.create", "store_credit_transaction.list", "store_credit_transaction.read", "store_credit_transaction.update",
+					"finance.read", "document.create", "document.read", "retail.finance.manage",
+				},
+			}},
+		},
+		Frontend: module.FrontendDefinition{
+			Menus: []module.MenuDefinition{
+				{Key: "finance.pos_shift_reconciliation", Label: "POS Shift Reconciliation", LabelI18n: localize("POS Shift Reconciliation", "Rekonsiliasi Shift POS"), ActionKey: "finance.pos_shift_reconciliation", Order: 112, RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.pos_tender_settlements", Label: "POS Tender Settlements", LabelI18n: localize("POS Tender Settlements", "Settlement Tender POS"), ActionKey: "finance.pos_tender_settlements", Order: 113, RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.cash_over_short", Label: "Cash Over Short", LabelI18n: localize("Cash Over Short", "Lebih Kurang Kas"), ActionKey: "finance.cash_over_short", Order: 114, RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.gift_cards", Label: "Gift Cards", LabelI18n: localize("Gift Cards", "Gift Card"), ActionKey: "finance.gift_cards.list", Order: 115, RequiredPermissions: []string{"gift_card.list"}},
+				{Key: "finance.store_credit_accounts", Label: "Store Credit", LabelI18n: localize("Store Credit", "Store Credit"), ActionKey: "finance.store_credit_accounts.list", Order: 116, RequiredPermissions: []string{"store_credit_account.list"}},
+			},
+			Actions: []module.ActionDefinition{
+				{Key: "finance.pos_shift_reconciliation", Label: "POS Shift Reconciliation", LabelI18n: localize("POS Shift Reconciliation", "Rekonsiliasi Shift POS"), Kind: "navigate", RoutePath: "/finance/pos-shift-reconciliation", CustomEntryKey: "finance.pos_shift_reconciliation", RenderMode: module.RenderModeCustom, RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.pos_tender_settlements", Label: "POS Tender Settlements", LabelI18n: localize("POS Tender Settlements", "Settlement Tender POS"), Kind: "navigate", RoutePath: "/finance/pos-tender-settlements", CustomEntryKey: "finance.pos_tender_settlements", RenderMode: module.RenderModeCustom, RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.cash_over_short", Label: "Cash Over Short", LabelI18n: localize("Cash Over Short", "Lebih Kurang Kas"), Kind: "navigate", RoutePath: "/finance/cash-over-short", CustomEntryKey: "finance.cash_over_short", RenderMode: module.RenderModeCustom, RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.gift_cards.list", Label: "Gift Cards", LabelI18n: localize("Gift Cards", "Gift Card"), Kind: "navigate", RoutePath: "/finance/gift-cards", ViewKey: "finance.gift_cards.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"gift_card.list"}},
+				{Key: "finance.gift_cards.detail", Label: "Gift Card Detail", LabelI18n: localize("Gift Card Detail", "Detail Gift Card"), Kind: "navigate", RoutePath: "/finance/gift-cards/detail", ViewKey: "finance.gift_cards.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"gift_card.read"}},
+				{Key: "finance.gift_cards.form", Label: "Gift Card Form", LabelI18n: localize("Gift Card Form", "Form Gift Card"), Kind: "navigate", RoutePath: "/finance/gift-cards/form", ViewKey: "finance.gift_cards.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"gift_card.update"}},
+				{Key: "finance.store_credit_accounts.list", Label: "Store Credit Accounts", LabelI18n: localize("Store Credit Accounts", "Akun Store Credit"), Kind: "navigate", RoutePath: "/finance/store-credit-accounts", ViewKey: "finance.store_credit_accounts.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"store_credit_account.list"}},
+				{Key: "finance.store_credit_accounts.detail", Label: "Store Credit Account Detail", LabelI18n: localize("Store Credit Account Detail", "Detail Akun Store Credit"), Kind: "navigate", RoutePath: "/finance/store-credit-accounts/detail", ViewKey: "finance.store_credit_accounts.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"store_credit_account.read"}},
+				{Key: "finance.store_credit_accounts.form", Label: "Store Credit Account Form", LabelI18n: localize("Store Credit Account Form", "Form Akun Store Credit"), Kind: "navigate", RoutePath: "/finance/store-credit-accounts/form", ViewKey: "finance.store_credit_accounts.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"store_credit_account.update"}},
+			},
+			Views: []module.ViewDefinition{
+				commercialModelListView("finance.gift_cards.list", "Gift Cards", "gift_card", []module.ColumnDefinition{
+					{Key: "code", Label: "Code", Path: "values.code"},
+					{Key: "party_name", Label: "Customer", Path: "values.party_name"},
+					{Key: "issued_amount", Label: "Issued", Path: "values.issued_amount"},
+					{Key: "remaining_balance", Label: "Balance", Path: "values.remaining_balance"},
+					{Key: "status", Label: "Status", Path: "values.status"},
+				}, []string{"active", "consumed", "inactive"}),
+				commercialModelDetailView("finance.gift_cards.detail", "Gift Card Detail", "gift_card", []module.FieldDefinition{
+					{Key: "code", Label: "Code", Path: "values.code", Type: "string"},
+					{Key: "party_name", Label: "Customer", Path: "values.party_name", Type: "string"},
+					{Key: "issued_amount", Label: "Issued", Path: "values.issued_amount", Type: "number"},
+					{Key: "remaining_balance", Label: "Balance", Path: "values.remaining_balance", Type: "number"},
+					{Key: "liability_account_code", Label: "Liability Account", Path: "values.liability_account_code", Type: "string"},
+					{Key: "status", Label: "Status", Path: "values.status", Type: "string"},
+				}),
+				commercialModelFormView("finance.gift_cards.form", "Gift Card Form", "gift_card", []module.FieldDefinition{
+					{Key: "code", Label: "Code", Path: "values.code", Type: "string", Widget: "text", Required: true},
+					{Key: "party_id", Label: "Party", Path: "values.party_id", Type: "string", Widget: "text"},
+					{Key: "party_name", Label: "Customer", Path: "values.party_name", Type: "string", Widget: "text"},
+					{Key: "issued_amount", Label: "Issued", Path: "values.issued_amount", Type: "number", Widget: "number"},
+					{Key: "remaining_balance", Label: "Balance", Path: "values.remaining_balance", Type: "number", Widget: "number"},
+					{Key: "liability_account_code", Label: "Liability Account", Path: "values.liability_account_code", Type: "string", Widget: "text"},
+					{Key: "status", Label: "Status", Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "consumed", "inactive"}},
+				}),
+				commercialModelListView("finance.store_credit_accounts.list", "Store Credit Accounts", "store_credit_account", []module.ColumnDefinition{
+					{Key: "party_id", Label: "Party", Path: "values.party_id"},
+					{Key: "party_name", Label: "Customer", Path: "values.party_name"},
+					{Key: "balance_amount", Label: "Balance", Path: "values.balance_amount"},
+					{Key: "status", Label: "Status", Path: "values.status"},
+				}, []string{"active", "inactive"}),
+				commercialModelDetailView("finance.store_credit_accounts.detail", "Store Credit Account Detail", "store_credit_account", []module.FieldDefinition{
+					{Key: "party_id", Label: "Party", Path: "values.party_id", Type: "string"},
+					{Key: "party_name", Label: "Customer", Path: "values.party_name", Type: "string"},
+					{Key: "balance_amount", Label: "Balance", Path: "values.balance_amount", Type: "number"},
+					{Key: "liability_account_code", Label: "Liability Account", Path: "values.liability_account_code", Type: "string"},
+					{Key: "status", Label: "Status", Path: "values.status", Type: "string"},
+				}),
+				commercialModelFormView("finance.store_credit_accounts.form", "Store Credit Account Form", "store_credit_account", []module.FieldDefinition{
+					{Key: "party_id", Label: "Party", Path: "values.party_id", Type: "string", Widget: "text", Required: true},
+					{Key: "party_name", Label: "Customer", Path: "values.party_name", Type: "string", Widget: "text"},
+					{Key: "balance_amount", Label: "Balance", Path: "values.balance_amount", Type: "number", Widget: "number"},
+					{Key: "liability_account_code", Label: "Liability Account", Path: "values.liability_account_code", Type: "string", Widget: "text"},
+					{Key: "status", Label: "Status", Path: "values.status", Type: "string", Widget: "select", Options: []string{"active", "inactive"}},
+				}),
+			},
+			CustomEntries: []module.CustomEntryDefinition{
+				{Key: "finance.pos_shift_reconciliation", Title: "POS Shift Reconciliation", TitleI18n: localize("POS Shift Reconciliation", "Rekonsiliasi Shift POS"), RoutePath: "/finance/pos-shift-reconciliation", BundleKey: "finance-reports", ComponentExport: "render", RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.pos_tender_settlements", Title: "POS Tender Settlements", TitleI18n: localize("POS Tender Settlements", "Settlement Tender POS"), RoutePath: "/finance/pos-tender-settlements", BundleKey: "finance-reports", ComponentExport: "render", RequiredPermissions: []string{"finance.read"}},
+				{Key: "finance.cash_over_short", Title: "Cash Over Short", TitleI18n: localize("Cash Over Short", "Lebih Kurang Kas"), RoutePath: "/finance/cash-over-short", BundleKey: "finance-reports", ComponentExport: "render", RequiredPermissions: []string{"finance.read"}},
+			},
+		},
+	}
+}
+
+func retailFinanceModelDefinition(key, singular string, fields []model.FieldDefinition) model.Definition {
+	return model.Definition{
+		Key:                 key,
+		DisplayName:         singular,
+		DisplayNameI18n:     localize(singular, singular),
+		OwnerModuleKey:      "retail_finance_core",
+		Version:             "v1",
+		CreatePermissionKey: key + ".create",
+		ListPermissionKey:   key + ".list",
+		ReadPermissionKey:   key + ".read",
+		UpdatePermissionKey: key + ".update",
+		DefaultSort:         "updated_at",
+		Fields:              fields,
+	}
+}

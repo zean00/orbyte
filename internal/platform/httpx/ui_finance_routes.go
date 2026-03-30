@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -728,6 +728,153 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 			default:
 				http.NotFound(w, r)
 			}
+		})
+	}
+	if retailFinanceSvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/pos-shift-reconciliation", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("pos shift reconciliation is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, retailFinanceSvc.ShiftReconciliationReport(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("store_code")),
+				strings.TrimSpace(query.Get("register_code")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/pos-tender-settlements", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("pos tender settlements are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, retailFinanceSvc.TenderSettlementReport(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				strings.TrimSpace(query.Get("as_of_date")),
+				strings.TrimSpace(query.Get("store_code")),
+				strings.TrimSpace(query.Get("register_code")),
+				strings.TrimSpace(query.Get("status")),
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/cash-over-short", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("cash over short report is not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, retailFinanceSvc.CashOverShortReport(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+				firstNonEmptyString(strings.TrimSpace(query.Get("as_of_date")), strings.TrimSpace(query.Get("to_date"))),
+				strings.TrimSpace(query.Get("store_code")),
+				strings.TrimSpace(query.Get("register_code")),
+			))
+		})
+		mux.HandleFunc("POST /ui/data/finance/pos-shift-reconciliation/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/approve") {
+				http.NotFound(w, r)
+				return
+			}
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"retail.finance.manage", "pos_tender_reconciliation.update", "document.create", "document.submit", "document.approve"}) {
+				respondError(w, shared.Forbidden("pos shift reconciliation approval is not allowed"))
+				return
+			}
+			reconciliationID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/data/finance/pos-shift-reconciliation/"), "/approve")
+			record, err := retailFinanceSvc.ApproveShiftReconciliation(reconciliationID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": record})
+		})
+		mux.HandleFunc("POST /ui/data/finance/pos-tender-settlements/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/settle") {
+				http.NotFound(w, r)
+				return
+			}
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"retail.finance.manage", "pos_tender_settlement.update"}) {
+				respondError(w, shared.Forbidden("pos tender settlement is not allowed"))
+				return
+			}
+			settlementID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/data/finance/pos-tender-settlements/"), "/settle")
+			var req struct {
+				SettledAmount       float64 `json:"settled_amount"`
+				SettlementReference string  `json:"settlement_reference"`
+				SettlementDate      string  `json:"settlement_date"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid request body"))
+				return
+			}
+			record, err := retailFinanceSvc.SettleTenderSettlement(settlementID, principalEffectiveUserID(p), req.SettledAmount, strings.TrimSpace(req.SettlementDate), strings.TrimSpace(req.SettlementReference), "")
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": record})
+		})
+		mux.HandleFunc("POST /ui/data/finance/gift-cards/issue", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"retail.finance.manage", "gift_card.create", "gift_card_transaction.create", "document.create", "document.submit", "document.approve"}) {
+				respondError(w, shared.Forbidden("gift card issue is not allowed"))
+				return
+			}
+			var req struct {
+				Code               string  `json:"code"`
+				PartyID            string  `json:"party_id"`
+				StoreCode          string  `json:"store_code"`
+				OriginalAmount     float64 `json:"original_amount"`
+				ExpiryDate         string  `json:"expiry_date"`
+				PaymentAccountCode string  `json:"payment_account_code"`
+				Notes              string  `json:"notes"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid request body"))
+				return
+			}
+			record, err := retailFinanceSvc.IssueGiftCard(organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), map[string]any{
+				"code":                 strings.TrimSpace(req.Code),
+				"party_id":             strings.TrimSpace(req.PartyID),
+				"store_code":           strings.TrimSpace(req.StoreCode),
+				"amount":               req.OriginalAmount,
+				"original_amount":      req.OriginalAmount,
+				"remaining_balance":    req.OriginalAmount,
+				"expiry_date":          strings.TrimSpace(req.ExpiryDate),
+				"payment_account_code": strings.TrimSpace(req.PaymentAccountCode),
+				"notes":                strings.TrimSpace(req.Notes),
+			})
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, map[string]any{"record": record})
 		})
 	}
 }

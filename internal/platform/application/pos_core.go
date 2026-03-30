@@ -22,6 +22,7 @@ type POSCoreService struct {
 	inventory   *InventoryCoreService
 	fulfillment *FulfillmentCoreService
 	returns     *ReturnsCoreService
+	retail      *RetailFinanceCoreService
 }
 
 func NewPOSCoreService(documents *document.Service, models *model.Service, searchSvc *search.Service, actions *DocumentActions, commercialSvc *CommercialCoreService, inventorySvc *InventoryCoreService, fulfillmentSvc *FulfillmentCoreService, returnsSvc *ReturnsCoreService) *POSCoreService {
@@ -35,6 +36,10 @@ func NewPOSCoreService(documents *document.Service, models *model.Service, searc
 		fulfillment: fulfillmentSvc,
 		returns:     returnsSvc,
 	}
+}
+
+func (s *POSCoreService) SetRetailFinance(retail *RetailFinanceCoreService) {
+	s.retail = retail
 }
 
 type POSCatalogItem struct {
@@ -244,7 +249,7 @@ func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, qu
 	return results, nil
 }
 
-func (s *POSCoreService) OpenShift(storeCode, registerCode, cashierUserID, actorID string, openingCash float64, notes string) (model.Record, error) {
+func (s *POSCoreService) OpenShift(organizationID, locationID, storeCode, registerCode, cashierUserID, actorID string, openingCash float64, notes string) (model.Record, error) {
 	if cashierUserID == "" {
 		return model.Record{}, shared.Validation("cashier user is required")
 	}
@@ -258,6 +263,8 @@ func (s *POSCoreService) OpenShift(storeCode, registerCode, cashierUserID, actor
 		return model.Record{}, shared.Conflict("an open shift already exists for this register and cashier")
 	}
 	record, err := s.models.Create("pos_shift", actorID, map[string]any{
+		"organization_id":      organizationID,
+		"location_id":          locationID,
 		"shift_number":         posNumber("SHIFT"),
 		"store_code":           storeCode,
 		"register_code":        registerCode,
@@ -276,7 +283,7 @@ func (s *POSCoreService) OpenShift(storeCode, registerCode, cashierUserID, actor
 	return record, nil
 }
 
-func (s *POSCoreService) CloseShift(shiftID, actorID string, actualCash float64, notes string) (model.Record, error) {
+func (s *POSCoreService) CloseShift(organizationID, locationID, shiftID, actorID string, actualCash float64, notes string) (model.Record, error) {
 	shift, err := s.models.Get("pos_shift", shiftID)
 	if err != nil {
 		return model.Record{}, err
@@ -299,6 +306,11 @@ func (s *POSCoreService) CloseShift(shiftID, actorID string, actualCash float64,
 	if err != nil {
 		return model.Record{}, err
 	}
+	if s.retail != nil {
+		if _, syncErr := s.retail.SyncShiftReconciliation(organizationID, locationID, record.ID, actorID); syncErr != nil {
+			return model.Record{}, syncErr
+		}
+	}
 	return record, nil
 }
 
@@ -312,6 +324,8 @@ func (s *POSCoreService) HoldSale(input POSHoldSaleInput, actorID string) (model
 		return model.Record{}, err
 	}
 	values := map[string]any{
+		"organization_id":      textValue(shift.Values["organization_id"]),
+		"location_id":          textValue(shift.Values["location_id"]),
 		"sale_number":          posNumber("SALE"),
 		"store_code":           input.StoreCode,
 		"register_code":        input.RegisterCode,
@@ -403,6 +417,12 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 	if err != nil {
 		return POSCheckoutResult{}, err
 	}
+	if s.retail != nil {
+		normalizedTenders, err = s.retail.ResolveStoredValueTenders(organizationID, locationID, input.PartyID, normalizedTenders)
+		if err != nil {
+			return POSCheckoutResult{}, err
+		}
+	}
 	totalAmount := roundMoney(numberValue(orderPayload["total_amount"]))
 	if totalTendered < totalAmount {
 		return POSCheckoutResult{}, shared.Validation("tendered amount is less than total")
@@ -476,6 +496,8 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 	}
 
 	saleValues := map[string]any{
+		"organization_id":      organizationID,
+		"location_id":          locationID,
 		"sale_number":          posNumber("SALE"),
 		"store_code":           input.StoreCode,
 		"register_code":        input.RegisterCode,
@@ -514,6 +536,11 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 	sale, err := s.models.Create("pos_sale", actorID, saleValues)
 	if err != nil {
 		return POSCheckoutResult{}, err
+	}
+	if s.retail != nil {
+		if err := s.retail.RecordStoredValueRedemptions(organizationID, locationID, sale, payments, normalizedTenders, actorID, input.PartyID); err != nil {
+			return POSCheckoutResult{}, err
+		}
 	}
 	result := POSCheckoutResult{
 		Sale:         sale,
@@ -619,6 +646,60 @@ func (s *POSCoreService) RefundSale(saleID, actorID string) (map[string]any, err
 		"return_receipt": returnReceipt,
 		"credit_note":    creditNote,
 		"payment_refund": refund,
+	}, nil
+}
+
+func (s *POSCoreService) RefundSaleToStoreCredit(organizationID, locationID, saleID, actorID string) (map[string]any, error) {
+	if s.returns == nil || s.retail == nil {
+		return nil, shared.Validation("store credit refund is unavailable")
+	}
+	sale, err := s.models.Get("pos_sale", saleID)
+	if err != nil {
+		return nil, err
+	}
+	fulfillmentID := textValue(sale.Values["fulfillment_id"])
+	if fulfillmentID == "" {
+		return nil, shared.Validation("pos sale has no fulfillment to return")
+	}
+	salesReturn, err := s.returns.GenerateReturnFromFulfillment(fulfillmentID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	salesReturn, err = s.updateReturnResolution(salesReturn, "refund", actorID)
+	if err != nil {
+		return nil, err
+	}
+	salesReturn, err = s.submitAndApprove(salesReturn.Header.ID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	returnReceipt, err := s.returns.CreateReturnReceiptFromReturn(salesReturn.Header.ID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	returnReceipt, err = s.submitAndApprove(returnReceipt.Header.ID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	creditNote, err := s.returns.CreateCreditNoteFromReturn(salesReturn.Header.ID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	creditNote, err = s.submitAndApprove(creditNote.Header.ID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	storeCredit, err := s.retail.CreateStoreCreditFromPOSRefund(organizationID, locationID, sale, creditNote, actorID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"sales_return":         salesReturn,
+		"return_receipt":       returnReceipt,
+		"credit_note":          creditNote,
+		"store_credit_account": storeCredit["store_credit_account"],
+		"store_credit_txn":     storeCredit["store_credit_txn"],
+		"posting":              storeCredit["posting"],
 	}, nil
 }
 

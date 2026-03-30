@@ -17,8 +17,8 @@ func (p testModulePack) Manifests() []module.Manifest {
 
 func TestBuiltInModulePacksExposeExpectedKernelPacks(t *testing.T) {
 	packs := builtInModulePacks()
-	if len(packs) != 26 {
-		t.Fatalf("expected 26 built-in module packs, got %d", len(packs))
+	if len(packs) != 27 {
+		t.Fatalf("expected 27 built-in module packs, got %d", len(packs))
 	}
 
 	expectedKeys := []string{
@@ -34,6 +34,7 @@ func TestBuiltInModulePacksExposeExpectedKernelPacks(t *testing.T) {
 		"finance_manual_journal_core",
 		"finance_collections_core",
 		"inventory_finance_core",
+		"retail_finance_core",
 		"procurement_core",
 		"inventory_core",
 		"fulfillment_core",
@@ -76,6 +77,7 @@ func TestBuiltInModuleManifestsPreservePackOrder(t *testing.T) {
 		"finance_manual_journal_core",
 		"finance_collections_core",
 		"inventory_finance_core",
+		"retail_finance_core",
 		"procurement_core",
 		"inventory_core",
 		"fulfillment_core",

@@ -18,7 +18,7 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerUIDataRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, planningSvc *application.PlanningCoreService, productionSvc *application.ProductionCoreService, posSvc *application.POSCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
+func registerUIDataRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, planningSvc *application.PlanningCoreService, productionSvc *application.ProductionCoreService, posSvc *application.POSCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService, policySvc *policy.Service, fieldSecurity *securityfields.Service) {
 	registerUIDocumentRoutes(mux, ident, modules, docs, searchSvc, policySvc, fieldSecurity)
 	registerUIWorklistRoutes(mux, ident, docs, workflowSvc, analyticsSvc, monitoringSvc)
 	registerUIModelReportingRoutes(mux, ident, models, activities, reportingSvc, docs, inventorySvc, fieldSecurity)
@@ -27,7 +27,7 @@ func registerUIDataRoutes(mux *http.ServeMux, ident *identity.Service, modules *
 	registerUIInventoryRoutes(mux, ident, inventorySvc, traceabilitySvc)
 	registerUIPlanningRoutes(mux, ident, planningSvc)
 	registerUIPosRoutes(mux, ident, posSvc)
-	registerUIFinanceRoutes(mux, ident, financeSvc, reconciliationSvc, periodEndSvc, manualJournalSvc, collectionsSvc, inventoryFinanceSvc)
+	registerUIFinanceRoutes(mux, ident, financeSvc, reconciliationSvc, periodEndSvc, manualJournalSvc, collectionsSvc, inventoryFinanceSvc, retailFinanceSvc)
 	_ = fulfillmentSvc
 	_ = productionSvc
 	_ = recallSvc

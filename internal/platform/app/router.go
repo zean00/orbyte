@@ -70,6 +70,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 		ManualJournals:   graph.financeManual,
 		Collections:      graph.financeCollections,
 		InventoryFinance: graph.inventoryFinance,
+		RetailFinance:    graph.retailFinance,
 		Policy:           graph.policy,
 		FieldSecurity:    graph.fieldSecurity,
 		UIPreferences:    uiPreferences,

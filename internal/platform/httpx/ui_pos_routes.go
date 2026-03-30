@@ -80,7 +80,7 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 			return
 		}
 		cashierUserID := principalEffectiveUserID(p)
-		record, err := posSvc.OpenShift(req.StoreCode, req.RegisterCode, cashierUserID, principalEffectiveUserID(p), req.OpeningCash, req.Notes)
+		record, err := posSvc.OpenShift(organizationIDForPrincipal(p), p.currentLocationID, req.StoreCode, req.RegisterCode, cashierUserID, principalEffectiveUserID(p), req.OpeningCash, req.Notes)
 		if err != nil {
 			respondError(w, err)
 			return
@@ -110,7 +110,7 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 			respondError(w, shared.Validation("invalid request body"))
 			return
 		}
-		record, err := posSvc.CloseShift(shiftID, principalEffectiveUserID(p), req.ActualCash, req.Notes)
+		record, err := posSvc.CloseShift(organizationIDForPrincipal(p), p.currentLocationID, shiftID, principalEffectiveUserID(p), req.ActualCash, req.Notes)
 		if err != nil {
 			respondError(w, err)
 			return
@@ -224,6 +224,18 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 			}
 			saleID := strings.TrimSuffix(base, "/refund")
 			payload, err := posSvc.RefundSale(saleID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, payload)
+		case strings.HasSuffix(base, "/refund-store-credit"):
+			if !principalAllowsAll(ident, p, []string{"pos_sale.update", "document.create", "document.submit", "document.approve", "store_credit_account.create", "store_credit_transaction.create"}) {
+				respondError(w, shared.Forbidden("pos refund to store credit is not allowed"))
+				return
+			}
+			saleID := strings.TrimSuffix(base, "/refund-store-credit")
+			payload, err := posSvc.RefundSaleToStoreCredit(organizationIDForPrincipal(p), p.currentLocationID, saleID, principalEffectiveUserID(p))
 			if err != nil {
 				respondError(w, err)
 				return

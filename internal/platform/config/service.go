@@ -295,6 +295,27 @@ func BuiltInDefinitions() []Definition {
 			{Key: "time_zone", Label: "Time Zone", Type: "string"},
 		},
 	}, {
+		Key:             "retail_finance.posting",
+		ModuleKey:       "retail_finance_core",
+		Category:        "finance",
+		DisplayName:     "Retail Finance Posting Defaults",
+		DisplayNameI18n: i18n.LocalizedText{"en": "Retail Finance Posting Defaults", "id": "Default Posting Keuangan Retail"},
+		Description:     "Fallback account configuration for POS over/short and stored-value liability postings.",
+		DescriptionI18n: i18n.LocalizedText{"en": "Fallback account configuration for POS over/short and stored-value liability postings.", "id": "Konfigurasi akun fallback untuk posting lebih/kurang kas POS dan liabilitas stored-value."},
+		AllowedScopes:   []string{"deployment", "organization", "location"},
+		DefaultValue: map[string]any{
+			"cash_over_gain_account_code":         "4890-CASH-OVER",
+			"cash_over_short_loss_account_code":   "5890-CASH-SHORT",
+			"gift_card_liability_account_code":    "2250-GIFT-CARD",
+			"store_credit_liability_account_code": "2260-STORE-CREDIT",
+		},
+		Fields: []FieldDefinition{
+			{Key: "cash_over_gain_account_code", Label: "Cash Over Gain Account", Type: "string"},
+			{Key: "cash_over_short_loss_account_code", Label: "Cash Short Loss Account", Type: "string"},
+			{Key: "gift_card_liability_account_code", Label: "Gift Card Liability Account", Type: "string"},
+			{Key: "store_credit_liability_account_code", Label: "Store Credit Liability Account", Type: "string"},
+		},
+	}, {
 		Key:             "inventory.policy",
 		ModuleKey:       "inventory_core",
 		Category:        "inventory",
@@ -506,6 +527,20 @@ func BuiltInEntries(now time.Time) []Entry {
 		ScopeID:   "",
 		Value: map[string]any{
 			"near_expiry_days": 30,
+		},
+		UpdatedAt: now,
+		UpdatedBy: "system",
+	}, {
+		Key:       "retail_finance.posting",
+		ModuleKey: "retail_finance_core",
+		Category:  "finance",
+		Scope:     "deployment",
+		ScopeID:   "",
+		Value: map[string]any{
+			"cash_over_gain_account_code":         "4890-CASH-OVER",
+			"cash_over_short_loss_account_code":   "5890-CASH-SHORT",
+			"gift_card_liability_account_code":    "2250-GIFT-CARD",
+			"store_credit_liability_account_code": "2260-STORE-CREDIT",
 		},
 		UpdatedAt: now,
 		UpdatedBy: "system",
