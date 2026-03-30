@@ -1410,6 +1410,81 @@
       "route_path": "/finance/collections"
     },
     {
+      "key": "finance.fixed_asset_schedules.detail",
+      "kind": "navigate",
+      "label": "Fixed Asset Schedule Detail",
+      "label_i18n": {
+        "en": "Fixed Asset Schedule Detail",
+        "id": "Detail Jadwal Aset Tetap"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "fixed_asset_schedule.read"
+      ],
+      "route_path": "/finance/fixed-asset-schedules/detail",
+      "view_key": "finance.fixed_asset_schedules.detail"
+    },
+    {
+      "key": "finance.fixed_asset_schedules.list",
+      "kind": "navigate",
+      "label": "Fixed Asset Schedules",
+      "label_i18n": {
+        "en": "Fixed Asset Schedules",
+        "id": "Jadwal Aset Tetap"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "fixed_asset_schedule.list"
+      ],
+      "route_path": "/finance/fixed-asset-schedules",
+      "view_key": "finance.fixed_asset_schedules.list"
+    },
+    {
+      "key": "finance.fixed_assets.detail",
+      "kind": "navigate",
+      "label": "Fixed Asset Detail",
+      "label_i18n": {
+        "en": "Fixed Asset Detail",
+        "id": "Detail Aset Tetap"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "fixed_asset.read"
+      ],
+      "route_path": "/finance/fixed-assets/detail",
+      "view_key": "finance.fixed_assets.detail"
+    },
+    {
+      "key": "finance.fixed_assets.form",
+      "kind": "navigate",
+      "label": "Fixed Asset Form",
+      "label_i18n": {
+        "en": "Fixed Asset Form",
+        "id": "Form Aset Tetap"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "fixed_asset.update"
+      ],
+      "route_path": "/finance/fixed-assets/form",
+      "view_key": "finance.fixed_assets.form"
+    },
+    {
+      "key": "finance.fixed_assets.list",
+      "kind": "navigate",
+      "label": "Fixed Assets",
+      "label_i18n": {
+        "en": "Fixed Assets",
+        "id": "Aset Tetap"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "fixed_asset.list"
+      ],
+      "route_path": "/finance/fixed-assets",
+      "view_key": "finance.fixed_assets.list"
+    },
+    {
       "key": "finance.gift_cards.detail",
       "kind": "navigate",
       "label": "Gift Card Detail",
@@ -1845,6 +1920,81 @@
         "finance.read"
       ],
       "route_path": "/finance/pos-tender-settlements"
+    },
+    {
+      "key": "finance.prepaid_schedules.detail",
+      "kind": "navigate",
+      "label": "Prepaid Schedule Detail",
+      "label_i18n": {
+        "en": "Prepaid Schedule Detail",
+        "id": "Detail Jadwal Biaya Dibayar Dimuka"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "prepaid_schedule.read"
+      ],
+      "route_path": "/finance/prepaid-schedules/detail",
+      "view_key": "finance.prepaid_schedules.detail"
+    },
+    {
+      "key": "finance.prepaid_schedules.list",
+      "kind": "navigate",
+      "label": "Prepaid Schedules",
+      "label_i18n": {
+        "en": "Prepaid Schedules",
+        "id": "Jadwal Biaya Dibayar Dimuka"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "prepaid_schedule.list"
+      ],
+      "route_path": "/finance/prepaid-schedules",
+      "view_key": "finance.prepaid_schedules.list"
+    },
+    {
+      "key": "finance.prepaids.detail",
+      "kind": "navigate",
+      "label": "Prepaid Detail",
+      "label_i18n": {
+        "en": "Prepaid Detail",
+        "id": "Detail Biaya Dibayar Dimuka"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "prepaid_expense.read"
+      ],
+      "route_path": "/finance/prepaids/detail",
+      "view_key": "finance.prepaids.detail"
+    },
+    {
+      "key": "finance.prepaids.form",
+      "kind": "navigate",
+      "label": "Prepaid Form",
+      "label_i18n": {
+        "en": "Prepaid Form",
+        "id": "Form Biaya Dibayar Dimuka"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "prepaid_expense.update"
+      ],
+      "route_path": "/finance/prepaids/form",
+      "view_key": "finance.prepaids.form"
+    },
+    {
+      "key": "finance.prepaids.list",
+      "kind": "navigate",
+      "label": "Prepaids",
+      "label_i18n": {
+        "en": "Prepaids",
+        "id": "Biaya Dibayar Dimuka"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "prepaid_expense.list"
+      ],
+      "route_path": "/finance/prepaids",
+      "view_key": "finance.prepaids.list"
     },
     {
       "custom_entry_key": "finance.profit_and_loss",
@@ -5548,6 +5698,58 @@
       "order": 116,
       "required_permissions": [
         "store_credit_account.list"
+      ]
+    },
+    {
+      "action_key": "finance.fixed_assets.list",
+      "key": "finance.fixed_assets",
+      "label": "Fixed Assets",
+      "label_i18n": {
+        "en": "Fixed Assets",
+        "id": "Aset Tetap"
+      },
+      "order": 121,
+      "required_permissions": [
+        "fixed_asset.list"
+      ]
+    },
+    {
+      "action_key": "finance.fixed_asset_schedules.list",
+      "key": "finance.fixed_asset_schedules",
+      "label": "Fixed Asset Schedules",
+      "label_i18n": {
+        "en": "Fixed Asset Schedules",
+        "id": "Jadwal Aset Tetap"
+      },
+      "order": 122,
+      "required_permissions": [
+        "fixed_asset_schedule.list"
+      ]
+    },
+    {
+      "action_key": "finance.prepaids.list",
+      "key": "finance.prepaids",
+      "label": "Prepaids",
+      "label_i18n": {
+        "en": "Prepaids",
+        "id": "Biaya Dibayar Dimuka"
+      },
+      "order": 123,
+      "required_permissions": [
+        "prepaid_expense.list"
+      ]
+    },
+    {
+      "action_key": "finance.prepaid_schedules.list",
+      "key": "finance.prepaid_schedules",
+      "label": "Prepaid Schedules",
+      "label_i18n": {
+        "en": "Prepaid Schedules",
+        "id": "Jadwal Biaya Dibayar Dimuka"
+      },
+      "order": 124,
+      "required_permissions": [
+        "prepaid_schedule.list"
       ]
     }
   ],
@@ -15426,6 +15628,586 @@
       }
     },
     {
+      "key": "finance.fixed_asset_schedules.detail",
+      "kind": "detail",
+      "model_key": "fixed_asset_schedule",
+      "required_permissions": [
+        "fixed_asset_schedule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "fixed_asset_id",
+              "label": "Fixed Asset",
+              "label_i18n": {
+                "en": "Fixed Asset",
+                "id": "Aset Tetap"
+              },
+              "path": "values.fixed_asset_id",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "method",
+              "label": "Method",
+              "label_i18n": {
+                "en": "Method",
+                "id": "Metode"
+              },
+              "path": "values.method",
+              "type": "string"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "path": "values.cadence",
+              "type": "string"
+            },
+            {
+              "key": "next_posting_date",
+              "label": "Next Posting Date",
+              "label_i18n": {
+                "en": "Next Posting Date",
+                "id": "Tanggal Posting Berikutnya"
+              },
+              "path": "values.next_posting_date",
+              "type": "string"
+            },
+            {
+              "key": "booked_amount",
+              "label": "Booked Amount",
+              "label_i18n": {
+                "en": "Booked Amount",
+                "id": "Jumlah Dibukukan"
+              },
+              "path": "values.booked_amount",
+              "type": "number"
+            },
+            {
+              "key": "remaining_amount",
+              "label": "Remaining Amount",
+              "label_i18n": {
+                "en": "Remaining Amount",
+                "id": "Jumlah Tersisa"
+              },
+              "path": "values.remaining_amount",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Fixed Asset Schedule Detail",
+      "title_i18n": {
+        "en": "Fixed Asset Schedule Detail",
+        "id": "Fixed Asset Schedule Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "fixed_asset_id",
+          "label": "Fixed Asset",
+          "label_i18n": {
+            "en": "Fixed Asset",
+            "id": "Aset Tetap"
+          },
+          "path": "values.fixed_asset_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "next_posting_date",
+          "label": "Next Posting",
+          "label_i18n": {
+            "en": "Next Posting",
+            "id": "Posting Berikutnya"
+          },
+          "path": "values.next_posting_date"
+        },
+        {
+          "key": "remaining_amount",
+          "label": "Remaining",
+          "label_i18n": {
+            "en": "Remaining",
+            "id": "Sisa"
+          },
+          "path": "values.remaining_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "completed",
+            "suspended"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.fixed_asset_schedules.list",
+      "kind": "list",
+      "model_key": "fixed_asset_schedule",
+      "required_permissions": [
+        "fixed_asset_schedule.list"
+      ],
+      "title": "Fixed Asset Schedules",
+      "title_i18n": {
+        "en": "Fixed Asset Schedules",
+        "id": "Fixed Asset Schedules"
+      }
+    },
+    {
+      "key": "finance.fixed_assets.detail",
+      "kind": "detail",
+      "model_key": "fixed_asset",
+      "required_permissions": [
+        "fixed_asset.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "basis_amount",
+              "label": "Basis Amount",
+              "label_i18n": {
+                "en": "Basis Amount",
+                "id": "Nilai Dasar"
+              },
+              "path": "values.basis_amount",
+              "type": "number"
+            },
+            {
+              "key": "salvage_amount",
+              "label": "Salvage Amount",
+              "label_i18n": {
+                "en": "Salvage Amount",
+                "id": "Nilai Residu"
+              },
+              "path": "values.salvage_amount",
+              "type": "number"
+            },
+            {
+              "key": "method",
+              "label": "Method",
+              "label_i18n": {
+                "en": "Method",
+                "id": "Metode"
+              },
+              "path": "values.method",
+              "type": "string"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "path": "values.cadence",
+              "type": "string"
+            },
+            {
+              "key": "total_periods",
+              "label": "Total Periods",
+              "label_i18n": {
+                "en": "Total Periods",
+                "id": "Total Periode"
+              },
+              "path": "values.total_periods",
+              "type": "number"
+            },
+            {
+              "key": "periods_booked",
+              "label": "Booked Periods",
+              "label_i18n": {
+                "en": "Booked Periods",
+                "id": "Periode Dibukukan"
+              },
+              "path": "values.periods_booked",
+              "type": "number"
+            },
+            {
+              "key": "booked_amount",
+              "label": "Booked Amount",
+              "label_i18n": {
+                "en": "Booked Amount",
+                "id": "Jumlah Dibukukan"
+              },
+              "path": "values.booked_amount",
+              "type": "number"
+            },
+            {
+              "key": "remaining_amount",
+              "label": "Remaining Amount",
+              "label_i18n": {
+                "en": "Remaining Amount",
+                "id": "Jumlah Tersisa"
+              },
+              "path": "values.remaining_amount",
+              "type": "number"
+            },
+            {
+              "key": "next_posting_date",
+              "label": "Next Posting Date",
+              "label_i18n": {
+                "en": "Next Posting Date",
+                "id": "Tanggal Posting Berikutnya"
+              },
+              "path": "values.next_posting_date",
+              "type": "string"
+            },
+            {
+              "key": "source_vendor_bill_number",
+              "label": "Source Vendor Bill",
+              "label_i18n": {
+                "en": "Source Vendor Bill",
+                "id": "Tagihan Vendor Sumber"
+              },
+              "path": "values.source_vendor_bill_number",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Fixed Asset Detail",
+      "title_i18n": {
+        "en": "Fixed Asset Detail",
+        "id": "Fixed Asset Detail"
+      }
+    },
+    {
+      "key": "finance.fixed_assets.form",
+      "kind": "form",
+      "model_key": "fixed_asset",
+      "required_permissions": [
+        "fixed_asset.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "basis_amount",
+              "label": "Basis Amount",
+              "label_i18n": {
+                "en": "Basis Amount",
+                "id": "Nilai Dasar"
+              },
+              "path": "values.basis_amount",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "salvage_amount",
+              "label": "Salvage Amount",
+              "label_i18n": {
+                "en": "Salvage Amount",
+                "id": "Nilai Residu"
+              },
+              "path": "values.salvage_amount",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "method",
+              "label": "Method",
+              "label_i18n": {
+                "en": "Method",
+                "id": "Metode"
+              },
+              "options": [
+                "straight_line",
+                "declining_balance"
+              ],
+              "path": "values.method",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "declining_rate_percent",
+              "label": "Declining Rate %",
+              "label_i18n": {
+                "en": "Declining Rate %",
+                "id": "Tarif Menurun %"
+              },
+              "path": "values.declining_rate_percent",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "options": [
+                "monthly",
+                "quarterly",
+                "yearly"
+              ],
+              "path": "values.cadence",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "total_periods",
+              "label": "Total Periods",
+              "label_i18n": {
+                "en": "Total Periods",
+                "id": "Total Periode"
+              },
+              "path": "values.total_periods",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "asset_account_code",
+              "label": "Asset Account",
+              "label_i18n": {
+                "en": "Asset Account",
+                "id": "Akun Aset"
+              },
+              "path": "values.asset_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "accumulated_depreciation_account_code",
+              "label": "Accumulated Depreciation Account",
+              "label_i18n": {
+                "en": "Accumulated Depreciation Account",
+                "id": "Akun Akumulasi Depresiasi"
+              },
+              "path": "values.accumulated_depreciation_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "depreciation_expense_account_code",
+              "label": "Depreciation Expense Account",
+              "label_i18n": {
+                "en": "Depreciation Expense Account",
+                "id": "Akun Beban Depresiasi"
+              },
+              "path": "values.depreciation_expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Fixed Asset Form",
+          "title_i18n": {
+            "en": "Fixed Asset Form",
+            "id": "Fixed Asset Form"
+          }
+        }
+      ],
+      "title": "Fixed Asset Form",
+      "title_i18n": {
+        "en": "Fixed Asset Form",
+        "id": "Fixed Asset Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "basis_amount",
+          "label": "Basis",
+          "label_i18n": {
+            "en": "Basis",
+            "id": "Nilai Dasar"
+          },
+          "path": "values.basis_amount"
+        },
+        {
+          "key": "remaining_amount",
+          "label": "Remaining",
+          "label_i18n": {
+            "en": "Remaining",
+            "id": "Sisa"
+          },
+          "path": "values.remaining_amount"
+        },
+        {
+          "key": "next_posting_date",
+          "label": "Next Posting",
+          "label_i18n": {
+            "en": "Next Posting",
+            "id": "Posting Berikutnya"
+          },
+          "path": "values.next_posting_date"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "completed",
+            "suspended"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.fixed_assets.list",
+      "kind": "list",
+      "model_key": "fixed_asset",
+      "required_permissions": [
+        "fixed_asset.list"
+      ],
+      "title": "Fixed Assets",
+      "title_i18n": {
+        "en": "Fixed Assets",
+        "id": "Fixed Assets"
+      }
+    },
+    {
       "key": "finance.gift_cards.detail",
       "kind": "detail",
       "model_key": "gift_card",
@@ -18019,6 +18801,554 @@
       "title_i18n": {
         "en": "Accounting Periods",
         "id": "Accounting Periods"
+      }
+    },
+    {
+      "key": "finance.prepaid_schedules.detail",
+      "kind": "detail",
+      "model_key": "prepaid_schedule",
+      "required_permissions": [
+        "prepaid_schedule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "prepaid_expense_id",
+              "label": "Prepaid",
+              "label_i18n": {
+                "en": "Prepaid",
+                "id": "Biaya Dibayar Dimuka"
+              },
+              "path": "values.prepaid_expense_id",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "method",
+              "label": "Method",
+              "label_i18n": {
+                "en": "Method",
+                "id": "Metode"
+              },
+              "path": "values.method",
+              "type": "string"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "path": "values.cadence",
+              "type": "string"
+            },
+            {
+              "key": "next_posting_date",
+              "label": "Next Posting Date",
+              "label_i18n": {
+                "en": "Next Posting Date",
+                "id": "Tanggal Posting Berikutnya"
+              },
+              "path": "values.next_posting_date",
+              "type": "string"
+            },
+            {
+              "key": "booked_amount",
+              "label": "Booked Amount",
+              "label_i18n": {
+                "en": "Booked Amount",
+                "id": "Jumlah Dibukukan"
+              },
+              "path": "values.booked_amount",
+              "type": "number"
+            },
+            {
+              "key": "remaining_amount",
+              "label": "Remaining Amount",
+              "label_i18n": {
+                "en": "Remaining Amount",
+                "id": "Jumlah Tersisa"
+              },
+              "path": "values.remaining_amount",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Prepaid Schedule Detail",
+      "title_i18n": {
+        "en": "Prepaid Schedule Detail",
+        "id": "Prepaid Schedule Detail"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "prepaid_expense_id",
+          "label": "Prepaid",
+          "label_i18n": {
+            "en": "Prepaid",
+            "id": "Biaya Dibayar Dimuka"
+          },
+          "path": "values.prepaid_expense_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "next_posting_date",
+          "label": "Next Posting",
+          "label_i18n": {
+            "en": "Next Posting",
+            "id": "Posting Berikutnya"
+          },
+          "path": "values.next_posting_date"
+        },
+        {
+          "key": "remaining_amount",
+          "label": "Remaining",
+          "label_i18n": {
+            "en": "Remaining",
+            "id": "Sisa"
+          },
+          "path": "values.remaining_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "completed",
+            "suspended"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.prepaid_schedules.list",
+      "kind": "list",
+      "model_key": "prepaid_schedule",
+      "required_permissions": [
+        "prepaid_schedule.list"
+      ],
+      "title": "Prepaid Schedules",
+      "title_i18n": {
+        "en": "Prepaid Schedules",
+        "id": "Prepaid Schedules"
+      }
+    },
+    {
+      "key": "finance.prepaids.detail",
+      "kind": "detail",
+      "model_key": "prepaid_expense",
+      "required_permissions": [
+        "prepaid_expense.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            },
+            {
+              "key": "basis_amount",
+              "label": "Basis Amount",
+              "label_i18n": {
+                "en": "Basis Amount",
+                "id": "Nilai Dasar"
+              },
+              "path": "values.basis_amount",
+              "type": "number"
+            },
+            {
+              "key": "method",
+              "label": "Method",
+              "label_i18n": {
+                "en": "Method",
+                "id": "Metode"
+              },
+              "path": "values.method",
+              "type": "string"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "path": "values.cadence",
+              "type": "string"
+            },
+            {
+              "key": "total_periods",
+              "label": "Total Periods",
+              "label_i18n": {
+                "en": "Total Periods",
+                "id": "Total Periode"
+              },
+              "path": "values.total_periods",
+              "type": "number"
+            },
+            {
+              "key": "periods_booked",
+              "label": "Booked Periods",
+              "label_i18n": {
+                "en": "Booked Periods",
+                "id": "Periode Dibukukan"
+              },
+              "path": "values.periods_booked",
+              "type": "number"
+            },
+            {
+              "key": "booked_amount",
+              "label": "Booked Amount",
+              "label_i18n": {
+                "en": "Booked Amount",
+                "id": "Jumlah Dibukukan"
+              },
+              "path": "values.booked_amount",
+              "type": "number"
+            },
+            {
+              "key": "remaining_amount",
+              "label": "Remaining Amount",
+              "label_i18n": {
+                "en": "Remaining Amount",
+                "id": "Jumlah Tersisa"
+              },
+              "path": "values.remaining_amount",
+              "type": "number"
+            },
+            {
+              "key": "next_posting_date",
+              "label": "Next Posting Date",
+              "label_i18n": {
+                "en": "Next Posting Date",
+                "id": "Tanggal Posting Berikutnya"
+              },
+              "path": "values.next_posting_date",
+              "type": "string"
+            },
+            {
+              "key": "source_vendor_bill_number",
+              "label": "Source Vendor Bill",
+              "label_i18n": {
+                "en": "Source Vendor Bill",
+                "id": "Tagihan Vendor Sumber"
+              },
+              "path": "values.source_vendor_bill_number",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Prepaid Detail",
+      "title_i18n": {
+        "en": "Prepaid Detail",
+        "id": "Prepaid Detail"
+      }
+    },
+    {
+      "key": "finance.prepaids.form",
+      "kind": "form",
+      "model_key": "prepaid_expense",
+      "required_permissions": [
+        "prepaid_expense.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "basis_amount",
+              "label": "Basis Amount",
+              "label_i18n": {
+                "en": "Basis Amount",
+                "id": "Nilai Dasar"
+              },
+              "path": "values.basis_amount",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "method",
+              "label": "Method",
+              "label_i18n": {
+                "en": "Method",
+                "id": "Metode"
+              },
+              "options": [
+                "straight_line",
+                "declining_balance"
+              ],
+              "path": "values.method",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "declining_rate_percent",
+              "label": "Declining Rate %",
+              "label_i18n": {
+                "en": "Declining Rate %",
+                "id": "Tarif Menurun %"
+              },
+              "path": "values.declining_rate_percent",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "cadence",
+              "label": "Cadence",
+              "label_i18n": {
+                "en": "Cadence",
+                "id": "Cadence"
+              },
+              "options": [
+                "monthly",
+                "quarterly",
+                "yearly"
+              ],
+              "path": "values.cadence",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "total_periods",
+              "label": "Total Periods",
+              "label_i18n": {
+                "en": "Total Periods",
+                "id": "Total Periode"
+              },
+              "path": "values.total_periods",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "prepaid_asset_account_code",
+              "label": "Prepaid Asset Account",
+              "label_i18n": {
+                "en": "Prepaid Asset Account",
+                "id": "Akun Aset Dibayar Dimuka"
+              },
+              "path": "values.prepaid_asset_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_account_code",
+              "label": "Expense Account",
+              "label_i18n": {
+                "en": "Expense Account",
+                "id": "Akun Beban"
+              },
+              "path": "values.expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Catatan"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Prepaid Form",
+          "title_i18n": {
+            "en": "Prepaid Form",
+            "id": "Prepaid Form"
+          }
+        }
+      ],
+      "title": "Prepaid Form",
+      "title_i18n": {
+        "en": "Prepaid Form",
+        "id": "Prepaid Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "basis_amount",
+          "label": "Basis",
+          "label_i18n": {
+            "en": "Basis",
+            "id": "Nilai Dasar"
+          },
+          "path": "values.basis_amount"
+        },
+        {
+          "key": "remaining_amount",
+          "label": "Remaining",
+          "label_i18n": {
+            "en": "Remaining",
+            "id": "Sisa"
+          },
+          "path": "values.remaining_amount"
+        },
+        {
+          "key": "next_posting_date",
+          "label": "Next Posting",
+          "label_i18n": {
+            "en": "Next Posting",
+            "id": "Posting Berikutnya"
+          },
+          "path": "values.next_posting_date"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "completed",
+            "suspended"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.prepaids.list",
+      "kind": "list",
+      "model_key": "prepaid_expense",
+      "required_permissions": [
+        "prepaid_expense.list"
+      ],
+      "title": "Prepaids",
+      "title_i18n": {
+        "en": "Prepaids",
+        "id": "Prepaids"
       }
     },
     {

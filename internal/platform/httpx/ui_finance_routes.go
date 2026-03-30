@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, financeAssetSvc *application.FinanceAssetCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -414,6 +414,132 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				return
 			}
 			respondJSON(w, http.StatusOK, record)
+		})
+	}
+	if financeAssetSvc != nil {
+		mux.HandleFunc("POST /ui/data/finance/fixed-assets", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "fixed_asset.create", "fixed_asset_schedule.create", "journal_template.create"}) {
+				respondError(w, shared.Forbidden("fixed asset creation is not allowed"))
+				return
+			}
+			var payload map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			result, err := financeAssetSvc.CreateFixedAsset(organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), payload)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, result)
+		})
+		mux.HandleFunc("POST /ui/data/finance/prepaids", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "prepaid_expense.create", "prepaid_schedule.create", "journal_template.create"}) {
+				respondError(w, shared.Forbidden("prepaid creation is not allowed"))
+				return
+			}
+			var payload map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			result, err := financeAssetSvc.CreatePrepaidExpense(organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), payload)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, result)
+		})
+		mux.HandleFunc("POST /ui/data/finance/fixed-assets/from-vendor-bill", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "fixed_asset.create", "fixed_asset_schedule.create", "journal_template.create", "document.read"}) {
+				respondError(w, shared.Forbidden("fixed asset capitalization is not allowed"))
+				return
+			}
+			var req struct {
+				VendorBillID string         `json:"vendor_bill_id"`
+				LineIndex    int            `json:"line_index"`
+				Payload      map[string]any `json:"payload"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			result, err := financeAssetSvc.CreateFixedAssetFromVendorBill(strings.TrimSpace(req.VendorBillID), req.LineIndex, organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), req.Payload)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, result)
+		})
+		mux.HandleFunc("POST /ui/data/finance/prepaids/from-vendor-bill", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.asset.manage", "prepaid_expense.create", "prepaid_schedule.create", "journal_template.create", "document.read"}) {
+				respondError(w, shared.Forbidden("prepaid creation from vendor bill is not allowed"))
+				return
+			}
+			var req struct {
+				VendorBillID string         `json:"vendor_bill_id"`
+				LineIndex    int            `json:"line_index"`
+				Payload      map[string]any `json:"payload"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			result, err := financeAssetSvc.CreatePrepaidFromVendorBill(strings.TrimSpace(req.VendorBillID), req.LineIndex, organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), req.Payload)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, result)
+		})
+		mux.HandleFunc("GET /ui/data/finance/fixed-assets/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"fixed_asset.read"}) {
+				respondError(w, shared.Forbidden("fixed asset preview is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/fixed-assets/")
+			if !strings.HasSuffix(path, "/preview") {
+				http.NotFound(w, r)
+				return
+			}
+			assetID := strings.TrimSuffix(path, "/preview")
+			preview, err := financeAssetSvc.FixedAssetPreview(assetID, organizationIDForPrincipal(p), p.currentLocationID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, preview)
+		})
+		mux.HandleFunc("GET /ui/data/finance/prepaids/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"prepaid_expense.read"}) {
+				respondError(w, shared.Forbidden("prepaid preview is not allowed"))
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/prepaids/")
+			if !strings.HasSuffix(path, "/preview") {
+				http.NotFound(w, r)
+				return
+			}
+			prepaidID := strings.TrimSuffix(path, "/preview")
+			preview, err := financeAssetSvc.PrepaidPreview(prepaidID, organizationIDForPrincipal(p), p.currentLocationID)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, preview)
 		})
 	}
 	if inventoryFinanceSvc != nil {

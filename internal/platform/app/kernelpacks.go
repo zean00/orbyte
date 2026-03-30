@@ -34,6 +34,7 @@ func builtInModulePacks() []modulePack {
 		staticModulePack{manifests: financeReportingCoreKernelPackManifests},
 		staticModulePack{manifests: financeManualJournalCoreKernelPackManifests},
 		staticModulePack{manifests: financeCollectionsCoreKernelPackManifests},
+		staticModulePack{manifests: financeAssetCoreKernelPackManifests},
 		staticModulePack{manifests: inventoryFinanceCoreKernelPackManifests},
 		staticModulePack{manifests: retailFinanceCoreKernelPackManifests},
 		staticModulePack{manifests: procurementCoreKernelPackManifests},

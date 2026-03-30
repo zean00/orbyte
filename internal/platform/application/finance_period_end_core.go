@@ -350,6 +350,13 @@ func (s *FinancePeriodEndCoreService) dueTemplates(period model.Record) ([]model
 		if !templateDueForDate(strings.TrimSpace(textValue(item.Values["cadence"])), endTime) {
 			continue
 		}
+		nextDueDate := strings.TrimSpace(textValue(item.Values["next_due_date"]))
+		if nextDueDate != "" {
+			dueTime, parseErr := time.Parse("2006-01-02", nextDueDate)
+			if parseErr == nil && dueTime.After(endTime) {
+				continue
+			}
+		}
 		results = append(results, item)
 	}
 	sort.Slice(results, func(i, j int) bool {

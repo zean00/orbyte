@@ -24,6 +24,7 @@ type CommercialCoreService struct {
 	finance   *FinanceReportingCoreService
 	periodEnd *FinancePeriodEndCoreService
 	manual    *FinanceManualJournalCoreService
+	assets    *FinanceAssetCoreService
 }
 
 type ReceivablesSummary struct {
@@ -515,13 +516,31 @@ func (s *CommercialCoreService) HandleAction(record document.Record, action, act
 				return err
 			}
 		}
-		if s.periodEnd != nil {
-			switch action {
-			case "approve":
-				return s.periodEnd.HandleApprovedLedgerPosting(record, actorID)
-			case "cancel":
-				return s.periodEnd.HandleCanceledLedgerPosting(record, actorID)
+		if action == "approve" {
+			if s.periodEnd != nil {
+				if err := s.periodEnd.HandleApprovedLedgerPosting(record, actorID); err != nil {
+					return err
+				}
 			}
+			if s.assets != nil {
+				if err := s.assets.HandleApprovedLedgerPosting(record, actorID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if action == "cancel" {
+			if s.periodEnd != nil {
+				if err := s.periodEnd.HandleCanceledLedgerPosting(record, actorID); err != nil {
+					return err
+				}
+			}
+			if s.assets != nil {
+				if err := s.assets.HandleCanceledLedgerPosting(record, actorID); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
 		return nil
 	default:
@@ -547,6 +566,11 @@ func (s *CommercialCoreService) ValidateAction(record document.Record, action, a
 			if err := s.finance.ValidatePostingDateOpen(record.Header.OrganizationID, record.Header.LocationID, textValue(record.Body.Payload["posting_date"])); err != nil {
 				return err
 			}
+		}
+	}
+	if record.Header.Type == "ledger_posting" && s.assets != nil {
+		if err := s.assets.ValidateAction(record, action); err != nil {
+			return err
 		}
 	}
 	if action == "cancel" {
@@ -581,6 +605,10 @@ func (s *CommercialCoreService) SetPeriodEnd(periodEnd *FinancePeriodEndCoreServ
 
 func (s *CommercialCoreService) SetManualJournals(manual *FinanceManualJournalCoreService) {
 	s.manual = manual
+}
+
+func (s *CommercialCoreService) SetFinanceAssets(assets *FinanceAssetCoreService) {
+	s.assets = assets
 }
 
 func (s *CommercialCoreService) ValidateCancel(record document.Record) error {
@@ -629,7 +657,12 @@ func (s *CommercialCoreService) handleCanceledLegacy(record document.Record, act
 		return s.handleCancelledRefund(record, actorID)
 	case "ledger_posting":
 		if s.periodEnd != nil {
-			return s.periodEnd.HandleCanceledLedgerPosting(record, actorID)
+			if err := s.periodEnd.HandleCanceledLedgerPosting(record, actorID); err != nil {
+				return err
+			}
+		}
+		if s.assets != nil {
+			return s.assets.HandleCanceledLedgerPosting(record, actorID)
 		}
 		return nil
 	default:
