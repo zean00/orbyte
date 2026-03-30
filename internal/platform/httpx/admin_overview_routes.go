@@ -34,12 +34,14 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
 			return
 		}
+		items := modules.ListForScope(
+			strings.TrimSpace(r.URL.Query().Get("organization_id")),
+			strings.TrimSpace(r.URL.Query().Get("location_id")),
+			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+		)
 		respondJSON(w, http.StatusOK, map[string]any{
-			"items": modules.ListForScope(
-				strings.TrimSpace(r.URL.Query().Get("organization_id")),
-				strings.TrimSpace(r.URL.Query().Get("location_id")),
-				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
-			),
+			"items":            items,
+			"dependency_graph": buildAdminModuleDependencyGraph(items),
 		})
 	})
 
@@ -48,6 +50,18 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": modules.CompatibilityReport()})
+	})
+
+	mux.HandleFunc("GET /admin/api/modules/dependency-graph", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+			return
+		}
+		items := modules.ListForScope(
+			strings.TrimSpace(r.URL.Query().Get("organization_id")),
+			strings.TrimSpace(r.URL.Query().Get("location_id")),
+			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+		)
+		respondJSON(w, http.StatusOK, buildAdminModuleDependencyGraph(items))
 	})
 
 	mux.HandleFunc("GET /admin/api/security/role-templates", func(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,7 @@ import (
 	"orbyte/internal/platform/module"
 )
 
-func buildAdminModuleConsolePayload(cfg *config.Service, ident *identity.Service, p principal, detail module.ScopedDetail, organizationID, locationID string) map[string]any {
+func buildAdminModuleConsolePayload(cfg *config.Service, ident *identity.Service, p principal, detail module.ScopedDetail, organizationID, locationID string, dependencyGraph adminModuleDependencyGraph) map[string]any {
 	consoleDef := detail.Manifest.AdminConsole
 	title := strings.TrimSpace(consoleDef.Title)
 	if title == "" {
@@ -59,7 +59,8 @@ func buildAdminModuleConsolePayload(cfg *config.Service, ident *identity.Service
 		sections = append(sections, item)
 	}
 	return map[string]any{
-		"module": detail,
+		"module":           detail,
+		"dependency_graph": dependencyGraph,
 		"console": map[string]any{
 			"title":            title,
 			"title_i18n":       consoleDef.TitleI18n,

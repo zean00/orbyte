@@ -4676,6 +4676,58 @@ func TestAdminModuleConsolePayload(t *testing.T) {
 	if _, ok := first["entry"].(map[string]any); !ok {
 		t.Fatalf("expected resolved config entry in first section, got %+v", first["entry"])
 	}
+	if _, ok := payload["dependency_graph"].(map[string]any); !ok {
+		t.Fatalf("expected dependency graph in module console payload, got %+v", payload["dependency_graph"])
+	}
+}
+
+func TestAdminModuleDependencyGraphPayload(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/modules", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected module list to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode module payload: %v", err)
+	}
+	graph, ok := payload["dependency_graph"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected dependency graph in module list payload, got %+v", payload)
+	}
+	nodes, _ := graph["nodes"].([]any)
+	edges, _ := graph["edges"].([]any)
+	if len(nodes) == 0 || len(edges) == 0 {
+		t.Fatalf("expected dependency graph nodes and edges, got %+v", graph)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/modules/commercial_core/dependency-graph", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected focused dependency graph to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	graph = map[string]any{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &graph); err != nil {
+		t.Fatalf("decode focused dependency graph: %v", err)
+	}
+	nodes, _ = graph["nodes"].([]any)
+	found := false
+	for _, item := range nodes {
+		node, _ := item.(map[string]any)
+		if node["module_key"] == "commercial_core" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected focused dependency graph to contain commercial_core, got %+v", graph)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/modules/does-not-exist/dependency-graph", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected missing focused dependency graph to return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
 }
 
 func TestAdminModuleLocalExtensionAPIs(t *testing.T) {

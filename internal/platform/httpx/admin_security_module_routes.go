@@ -72,6 +72,32 @@ func registerAdminSecurityModuleRoutes(mux *http.ServeMux, cfg *config.Service, 
 	})
 
 	mux.HandleFunc("GET /admin/api/modules/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/dependency-graph") {
+			moduleKey := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/admin/api/modules/"), "/dependency-graph"))
+			if moduleKey == "" {
+				respondError(w, shared.NotFound("module not found"))
+				return
+			}
+			if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+				return
+			}
+			if _, found := modules.GetForScope(
+				moduleKey,
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			); !found {
+				respondError(w, shared.NotFound("module not found"))
+				return
+			}
+			items := modules.ListForScope(
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			)
+			respondJSON(w, http.StatusOK, buildFocusedAdminModuleDependencyGraph(items, moduleKey))
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/console") {
 			moduleKey := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/admin/api/modules/"), "/console"))
 			if moduleKey == "" {
@@ -92,6 +118,11 @@ func registerAdminSecurityModuleRoutes(mux *http.ServeMux, cfg *config.Service, 
 				respondError(w, shared.NotFound("module not found"))
 				return
 			}
+			allItems := modules.ListForScope(
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			)
 			respondJSON(w, http.StatusOK, buildAdminModuleConsolePayload(
 				cfg,
 				ident,
@@ -99,6 +130,7 @@ func registerAdminSecurityModuleRoutes(mux *http.ServeMux, cfg *config.Service, 
 				item,
 				strings.TrimSpace(r.URL.Query().Get("organization_id")),
 				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				buildFocusedAdminModuleDependencyGraph(allItems, moduleKey),
 			))
 			return
 		}
