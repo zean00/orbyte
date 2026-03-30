@@ -123,6 +123,8 @@ func requestedUISurface(r *http.Request) module.UISurface {
 		return module.UISurfaceWorklist
 	case module.UISurfaceSelfService:
 		return module.UISurfaceSelfService
+	case module.UISurfaceAgent:
+		return module.UISurfaceAgent
 	case module.UISurfacePOS:
 		return module.UISurfacePOS
 	case module.UISurfaceMobile:
@@ -153,6 +155,9 @@ func availableUISurfaces(ident *identity.Service, modules *module.Service, p pri
 	}
 	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceSelfService); len(menus) > 0 || len(actions) > 0 {
 		items = append(items, string(module.UISurfaceSelfService))
+	}
+	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAgent); len(menus) > 0 || len(actions) > 0 {
+		items = append(items, string(module.UISurfaceAgent))
 	}
 	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfacePOS); len(menus) > 0 || len(actions) > 0 {
 		items = append(items, string(module.UISurfacePOS))

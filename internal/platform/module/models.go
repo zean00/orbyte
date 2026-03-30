@@ -347,6 +347,7 @@ const (
 	UISurfaceBackoffice  UISurface = "backoffice"
 	UISurfaceWorklist    UISurface = "worklist"
 	UISurfaceSelfService UISurface = "self_service"
+	UISurfaceAgent       UISurface = "agent"
 	UISurfacePOS         UISurface = "pos"
 	UISurfaceMobile      UISurface = "mobile"
 )

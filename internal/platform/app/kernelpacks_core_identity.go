@@ -5,15 +5,15 @@ import (
 	"orbyte/internal/platform/module"
 )
 
-func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Manifest {
+func platformCoreKernelPackManifest(httpDefinition, acpDefinition, mcpDefinition config.Definition) module.Manifest {
 	return module.Manifest{
 		Key:                 "platform.core",
 		Name:                "Platform Core",
 		NameI18n:            localize("Platform Core", "Inti Platform"),
 		Version:             "1.0.0",
 		DomainFamily:        "platform",
-		OwnedPermissionKeys: []string{"platform.context.read", "module.read", "module.manage", "configuration.read", "configuration.manage", "search.manage", "template.read", "template.manage", "template.publish", "template.bind", "template.render"},
-		ConfigDefinitions:   []config.Definition{httpDefinition},
+		OwnedPermissionKeys: []string{"platform.context.read", "agent.workspace.use", "module.read", "module.manage", "configuration.read", "configuration.manage", "search.manage", "template.read", "template.manage", "template.publish", "template.bind", "template.render"},
+		ConfigDefinitions:   []config.Definition{httpDefinition, acpDefinition, mcpDefinition},
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Platform Core Console",
 			TitleI18n:       localize("Platform Core Console", "Konsol Inti Platform"),
@@ -38,6 +38,8 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					Links: []module.AdminConsoleLinkDefinition{
 						adminConsoleLink("modules", "Modules", "Modul", "/admin/modules", "Open the module inventory.", "Buka inventaris modul.", "module.read"),
 						adminConsoleLink("config", "Configuration", "Konfigurasi", "/admin/config", "Open global configuration entries.", "Buka entri konfigurasi global.", "configuration.read"),
+						adminConsoleLink("mcp", "MCP", "MCP", "/admin/mcp", "Inspect MCP endpoints and tool controls.", "Periksa endpoint MCP dan kontrol tool.", "configuration.read"),
+						adminConsoleLink("acp", "ACP", "ACP", "/admin/acp", "Configure ACP providers for the agent surface.", "Konfigurasikan penyedia ACP untuk surface agen.", "configuration.read"),
 						adminConsoleLink("definitions", "Definitions", "Definisi", "/admin/definitions", "Open platform definitions.", "Buka definisi platform.", "configuration.read"),
 						adminConsoleLink("observability", "Observability", "Observabilitas", "/admin/observability", "Open platform observability.", "Buka observabilitas platform.", "module.read"),
 					},
@@ -56,6 +58,7 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 		Security: module.SecurityDefinition{
 			Permissions: []module.PermissionDefinition{
 				{Key: "platform.context.read", Action: "read", Resource: "context", DisplayName: "Read Platform Context", DisplayNameI18n: localize("Read Platform Context", "Lihat Konteks Platform")},
+				{Key: "agent.workspace.use", Action: "use", Resource: "agent_workspace", DisplayName: "Use Agent Workspace", DisplayNameI18n: localize("Use Agent Workspace", "Gunakan Workspace Agen")},
 				{Key: "module.read", Action: "read", Resource: "module", DisplayName: "Read Modules", DisplayNameI18n: localize("Read Modules", "Lihat Modul")},
 				{Key: "module.manage", Action: "manage", Resource: "module", DisplayName: "Manage Modules", DisplayNameI18n: localize("Manage Modules", "Kelola Modul"), RiskLevel: "high"},
 				{Key: "configuration.read", Action: "read", Resource: "configuration", DisplayName: "Read Configuration", DisplayNameI18n: localize("Read Configuration", "Lihat Konfigurasi")},
@@ -72,11 +75,20 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 				Name:           "Platform Operator",
 				NameI18n:       localize("Platform Operator", "Operator Platform"),
 				AllowedScopes:  []string{"deployment"},
-				PermissionKeys: []string{"platform.context.read", "module.read", "configuration.read", "template.read", "template.render"},
+				PermissionKeys: []string{"platform.context.read", "agent.workspace.use", "module.read", "configuration.read", "template.read", "template.render"},
 			}},
 		},
 		Frontend: module.FrontendDefinition{
 			Menus: []module.MenuDefinition{
+				{
+					Key:                 "agent.workspace",
+					Label:               "Agent",
+					LabelI18n:           localize("Agent", "Agen"),
+					ActionKey:           "agent.workspace",
+					Order:               70,
+					Surface:             module.UISurfaceAgent,
+					RequiredPermissions: []string{"agent.workspace.use"},
+				},
 				{
 					Key:                 "admin.modules",
 					Label:               "Modules",
@@ -101,6 +113,24 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					LabelI18n:           localize("Configuration", "Konfigurasi"),
 					ActionKey:           "admin.configuration",
 					Order:               30,
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:                 "admin.mcp",
+					Label:               "MCP",
+					LabelI18n:           localize("MCP", "MCP"),
+					ActionKey:           "admin.mcp",
+					Order:               32,
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:                 "admin.acp",
+					Label:               "ACP",
+					LabelI18n:           localize("ACP", "ACP"),
+					ActionKey:           "admin.acp",
+					Order:               33,
 					Surface:             module.UISurfaceAdmin,
 					RequiredPermissions: []string{"configuration.read"},
 				},
@@ -159,7 +189,24 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					RequiredPermissions: []string{"module.read"},
 				},
 			},
+			Views: []module.ViewDefinition{{
+				Key:     "agent.workspace.view",
+				Title:   "Agent Workspace",
+				Kind:    "dashboard",
+				Surface: module.UISurfaceAgent,
+			}},
 			Actions: []module.ActionDefinition{
+				{
+					Key:                 "agent.workspace",
+					Label:               "Agent Workspace",
+					LabelI18n:           localize("Agent Workspace", "Workspace Agen"),
+					Kind:                "navigate",
+					RoutePath:           "/agent/workspace",
+					Surface:             module.UISurfaceAgent,
+					ViewKey:             "agent.workspace.view",
+					RenderMode:          module.RenderModeGeneric,
+					RequiredPermissions: []string{"agent.workspace.use"},
+				},
 				{
 					Key:                 "admin.modules",
 					Label:               "Modules",
@@ -184,6 +231,24 @@ func platformCoreKernelPackManifest(httpDefinition config.Definition) module.Man
 					LabelI18n:           localize("Configuration", "Konfigurasi"),
 					Kind:                "navigate",
 					RoutePath:           "/admin/config",
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:                 "admin.mcp",
+					Label:               "MCP",
+					LabelI18n:           localize("MCP", "MCP"),
+					Kind:                "navigate",
+					RoutePath:           "/admin/mcp",
+					Surface:             module.UISurfaceAdmin,
+					RequiredPermissions: []string{"configuration.read"},
+				},
+				{
+					Key:                 "admin.acp",
+					Label:               "ACP",
+					LabelI18n:           localize("ACP", "ACP"),
+					Kind:                "navigate",
+					RoutePath:           "/admin/acp",
 					Surface:             module.UISurfaceAdmin,
 					RequiredPermissions: []string{"configuration.read"},
 				},

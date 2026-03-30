@@ -20,7 +20,9 @@ func masterdataKernelPackManifests() []module.Manifest {
 
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
-	return []module.Manifest{platformCoreKernelPackManifest(httpDefinition)}
+	acpDefinition, _ := config.NewService().Definition("platform.acp")
+	mcpDefinition, _ := config.NewService().Definition("platform.mcp")
+	return []module.Manifest{platformCoreKernelPackManifest(httpDefinition, acpDefinition, mcpDefinition)}
 }
 
 func identityKernelPackManifests() []module.Manifest {

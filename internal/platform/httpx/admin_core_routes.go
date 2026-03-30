@@ -7,6 +7,7 @@ import (
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/mcp"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/organization"
@@ -14,8 +15,8 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerAdminCoreRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, acpSvc *acp.Service) {
-	registerAdminOverviewRoutes(mux, cfg, org, ident, modules, workflowSvc, policySvc, acpSvc)
+func registerAdminCoreRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, acpSvc *acp.Service, mcpServer *mcp.Server) {
+	registerAdminOverviewRoutes(mux, cfg, org, ident, modules, workflowSvc, policySvc, acpSvc, mcpServer)
 	registerAdminHierarchyRoutes(mux, ident)
 	registerAdminWorkflowRoutes(mux, ident, workflowSvc, auditSvc, policySvc, obsSvc)
 }

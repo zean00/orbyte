@@ -26,7 +26,7 @@ func buildACPBootstrap(service *acp.Service) map[string]any {
 
 func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *audit.Service, service *acp.Service) {
 	mux.HandleFunc("GET /agent/api/providers", func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := requireInteractivePrincipal(w, r); !ok {
+		if _, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use"); !ok {
 			return
 		}
 		if service == nil {
@@ -37,7 +37,7 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 	})
 
 	mux.HandleFunc("GET /agent/api/sessions", func(w http.ResponseWriter, r *http.Request) {
-		p, ok := requireInteractivePrincipal(w, r)
+		p, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use")
 		if !ok {
 			return
 		}
@@ -49,7 +49,7 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 	})
 
 	mux.HandleFunc("POST /agent/api/sessions", func(w http.ResponseWriter, r *http.Request) {
-		p, ok := requireInteractivePrincipal(w, r)
+		p, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use")
 		if !ok {
 			return
 		}
@@ -86,7 +86,7 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 	})
 
 	mux.HandleFunc("GET /agent/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
-		p, ok := requireInteractivePrincipal(w, r)
+		p, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use")
 		if !ok {
 			return
 		}
@@ -112,7 +112,7 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 	})
 
 	mux.HandleFunc("POST /agent/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
-		p, ok := requireInteractivePrincipal(w, r)
+		p, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use")
 		if !ok {
 			return
 		}

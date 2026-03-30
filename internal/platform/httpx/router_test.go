@@ -1933,6 +1933,43 @@ func TestACPBootstrapAndProviders(t *testing.T) {
 	}
 }
 
+func TestACPProvidersRequireAgentWorkspacePermission(t *testing.T) {
+	providersJSON := `[{"key":"codex","name":"Codex ACP","command":"/bin/echo","args":["ok"]}]`
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:       "platform.acp",
+		ModuleKey: "platform.core",
+		Category:  "platform",
+		Scope:     "deployment",
+		Value: map[string]any{
+			"enabled":        true,
+			"providers_json": providersJSON,
+		},
+	}})
+
+	if err := h.ident.RevokeRolePermission("role_admin", "agent.workspace.use"); err != nil {
+		t.Fatalf("revoke agent workspace permission failed: %v", err)
+	}
+
+	rr := h.request(http.MethodGet, "/agent/api/providers", nil, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected agent providers to be forbidden without agent.workspace.use, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected ui bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode ui bootstrap: %v", err)
+	}
+	for _, item := range payload["available_surfaces"].([]any) {
+		if item == string(module.UISurfaceAgent) {
+			t.Fatalf("expected agent surface to be hidden without agent.workspace.use, got %+v", payload["available_surfaces"])
+		}
+	}
+}
+
 func TestUIPreferencesRoundTrip(t *testing.T) {
 	h := newTestHarness(t)
 

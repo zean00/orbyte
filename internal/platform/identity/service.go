@@ -109,6 +109,11 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 		Action:   "read",
 		Resource: "context",
 	}, {
+		Key:      "agent.workspace.use",
+		Module:   "platform",
+		Action:   "use",
+		Resource: "agent_workspace",
+	}, {
 		Key:      "audit.read",
 		Module:   "audit",
 		Action:   "read",
@@ -303,6 +308,9 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "platform.context.read",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "agent.workspace.use",
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "audit.read",

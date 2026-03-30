@@ -28,6 +28,9 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 			continue
 		}
 		for _, def := range detail.Manifest.MCP.Tools {
+			if !s.ToolEnabled(def.Key) {
+				continue
+			}
 			if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
 				continue
 			}
@@ -181,6 +184,9 @@ func (s *Server) startToolSpan(ctx context.Context, actor ActorContext, name str
 func (s *Server) executeTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
 	if s == nil || s.modules == nil {
 		return nil, fmt.Errorf("mcp tools are unavailable")
+	}
+	if s.toolDefined(strings.TrimSpace(name)) && !s.ToolEnabled(strings.TrimSpace(name)) {
+		return nil, fmt.Errorf("tool is disabled")
 	}
 	if result, ok, err := s.callBuiltInTool(actor, strings.TrimSpace(name), arguments); ok {
 		return result, err

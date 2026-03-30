@@ -142,6 +142,23 @@ func BuiltInDefinitions() []Definition {
 			{Key: "providers_json", Label: "Providers JSON", LabelI18n: i18n.LocalizedText{"en": "Providers JSON", "id": "JSON Penyedia"}, Type: "string"},
 		},
 	}, {
+		Key:             "platform.mcp",
+		ModuleKey:       "platform.core",
+		Category:        "platform",
+		DisplayName:     "MCP Runtime",
+		DisplayNameI18n: i18n.LocalizedText{"en": "MCP Runtime", "id": "Runtime MCP"},
+		Description:     "Deployment-scoped MCP runtime and tool exposure settings.",
+		DescriptionI18n: i18n.LocalizedText{"en": "Deployment-scoped MCP runtime and tool exposure settings.", "id": "Pengaturan runtime MCP dan eksposur tool pada scope deployment."},
+		AllowedScopes:   []string{"deployment"},
+		DefaultValue: map[string]any{
+			"enabled":          true,
+			"tool_states_json": "{}",
+		},
+		Fields: []FieldDefinition{
+			{Key: "enabled", Label: "Enabled", LabelI18n: i18n.LocalizedText{"en": "Enabled", "id": "Aktif"}, Type: "bool"},
+			{Key: "tool_states_json", Label: "Tool States JSON", LabelI18n: i18n.LocalizedText{"en": "Tool States JSON", "id": "JSON Status Tool"}, Type: "string"},
+		},
+	}, {
 		Key:             "platform.db",
 		ModuleKey:       "platform.core",
 		Category:        "platform",

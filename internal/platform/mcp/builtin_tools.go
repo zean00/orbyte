@@ -23,6 +23,9 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 	items := make([]ToolDescriptor, 0, len(registry))
 	for _, reg := range registry {
 		def := reg.definition
+		if !s.ToolEnabled(def.name) {
+			continue
+		}
 		if !scopeMatches(actor.EndpointScope, builtInToolScope(def.name)) {
 			continue
 		}
@@ -49,6 +52,9 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 	}
 	if !scopeMatches(actor.EndpointScope, builtInToolScope(name)) && builtInToolScope(name) != "" {
 		return nil, true, fmt.Errorf("tool is not available on this endpoint")
+	}
+	if !s.ToolEnabled(name) {
+		return nil, true, fmt.Errorf("tool is disabled")
 	}
 	if !allowsAll(actor.PermissionChecker, []string{reg.definition.permission}) {
 		return nil, true, fmt.Errorf("tool is not allowed")

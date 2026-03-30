@@ -1107,6 +1107,9 @@ func (s *Server) lookupTool(endpointScope, key string) (module.MCPToolDefinition
 			continue
 		}
 		for _, item := range detail.Manifest.MCP.Tools {
+			if !s.ToolEnabled(item.Key) {
+				continue
+			}
 			if item.Key == key {
 				return item, true
 			}

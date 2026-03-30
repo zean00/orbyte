@@ -139,6 +139,7 @@ type AdminDeps struct {
 	Idempotency   *idempotency.Service
 	Health        *runtimehealth.Tracker
 	ACP           *acp.Service
+	MCP           *mcp.Server
 }
 
 type TemplateDeps struct {
@@ -149,42 +150,42 @@ type TemplateDeps struct {
 }
 
 type UIDeps struct {
-	Identity         *identity.Service
-	Modules          *module.Service
-	Models           *model.Service
-	Activities       *activity.Service
-	Reporting        *reporting.Service
-	Documents        *document.Service
-	Workflows        *workflow.Service
-	Search           *search.Service
-	Analytics        *analytics.Service
-	Monitoring       *monitoring.Service
-	Commercial       *application.CommercialCoreService
-	Procurement      *application.ProcurementCoreService
-	Inventory        *application.InventoryCoreService
-	Fulfillment      *application.FulfillmentCoreService
-	Delivery         *application.DeliveryCoreService
-	Planning         *application.PlanningCoreService
-	Production       *application.ProductionCoreService
+	Identity          *identity.Service
+	Modules           *module.Service
+	Models            *model.Service
+	Activities        *activity.Service
+	Reporting         *reporting.Service
+	Documents         *document.Service
+	Workflows         *workflow.Service
+	Search            *search.Service
+	Analytics         *analytics.Service
+	Monitoring        *monitoring.Service
+	Commercial        *application.CommercialCoreService
+	Procurement       *application.ProcurementCoreService
+	Inventory         *application.InventoryCoreService
+	Fulfillment       *application.FulfillmentCoreService
+	Delivery          *application.DeliveryCoreService
+	Planning          *application.PlanningCoreService
+	Production        *application.ProductionCoreService
 	ProductionCosting *application.ProductionCostingCoreService
-	POS              *application.POSCoreService
-	SupplierReturns  *application.SupplierReturnsCoreService
-	Traceability     *application.TraceabilityCoreService
-	Recall           *application.RecallCoreService
-	Finance          *application.FinanceReportingCoreService
-	Reconciliation   *application.FinanceReconciliationCoreService
-	PeriodEnd        *application.FinancePeriodEndCoreService
-	ManualJournals   *application.FinanceManualJournalCoreService
-	Collections      *application.FinanceCollectionsCoreService
-	FinanceAssets    *application.FinanceAssetCoreService
-	InventoryFinance *application.InventoryFinanceCoreService
-	RetailFinance    *application.RetailFinanceCoreService
-	Treasury         *application.TreasuryCoreService
-	Policy           *policy.Service
-	FieldSecurity    *securityfields.Service
-	UIPreferences    *UIPreferencesService
-	ACP              *acp.Service
-	Notifications    *notification.Service
+	POS               *application.POSCoreService
+	SupplierReturns   *application.SupplierReturnsCoreService
+	Traceability      *application.TraceabilityCoreService
+	Recall            *application.RecallCoreService
+	Finance           *application.FinanceReportingCoreService
+	Reconciliation    *application.FinanceReconciliationCoreService
+	PeriodEnd         *application.FinancePeriodEndCoreService
+	ManualJournals    *application.FinanceManualJournalCoreService
+	Collections       *application.FinanceCollectionsCoreService
+	FinanceAssets     *application.FinanceAssetCoreService
+	InventoryFinance  *application.InventoryFinanceCoreService
+	RetailFinance     *application.RetailFinanceCoreService
+	Treasury          *application.TreasuryCoreService
+	Policy            *policy.Service
+	FieldSecurity     *securityfields.Service
+	UIPreferences     *UIPreferencesService
+	ACP               *acp.Service
+	Notifications     *notification.Service
 }
 
 type ACPDeps struct {
@@ -287,7 +288,7 @@ func RegisterSearchSurface(deps SearchDeps) RouteRegistrar {
 
 func RegisterAdminSurface(deps AdminDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP)
+		registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP, deps.MCP)
 	}
 }
 
