@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/analytics"
+	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
@@ -21,6 +22,7 @@ import (
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
@@ -30,6 +32,7 @@ import (
 	"orbyte/internal/platform/reporting"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
 )
@@ -323,6 +326,352 @@ func TestServerDataOpsFlow(t *testing.T) {
 	job := result["job"].(jobs.Job)
 	if strings.TrimSpace(run.ID) == "" || strings.TrimSpace(job.ID) == "" {
 		t.Fatal("expected queued run and job from backup run")
+	}
+}
+
+func TestBusinessModuleToolsAndSyntheticWrappers(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                  "pricing",
+		Name:                 "Pricing",
+		Description:          "Pricing and promotion setup",
+		DomainFamily:         "commercial",
+		Category:             "pricing",
+		BusinessCapabilities: []string{"discounting", "promotions"},
+		DependencyRequirements: []module.DependencyRequirement{{
+			ModuleKey: "analytics",
+			Kind:      module.DependencyKindOptional,
+		}},
+		OwnedDocumentTypes: []string{"promotion_plan"},
+		Documents: []document.Definition{{
+			Type:          "promotion_plan",
+			DisplayName:   "Promotion Plan",
+			SchemaVersion: "v1",
+		}},
+	}, "system"); err != nil {
+		t.Fatalf("register pricing manifest failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.list", "document.read", "document.create", "document.update_draft":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	names := make([]string, 0, len(tools))
+	for _, item := range tools {
+		names = append(names, item.Name)
+	}
+	for _, expected := range []string{"business.module.list", "business.document.draft.create", "pricing.business.info.get", "pricing.business.document.draft.create"} {
+		if !contains(names, expected) {
+			t.Fatalf("expected tool %q in %+v", expected, names)
+		}
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.module.get", "arguments": map[string]any{"module_key": "pricing"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.module.get failed: %+v", resp.Error)
+	}
+	info := resp.Result.(map[string]any)["structuredContent"].(businessModuleInfo)
+	if info.Key != "pricing" || len(info.OwnedDocumentTypes) != 1 || info.OwnedDocumentTypes[0] != "promotion_plan" {
+		t.Fatalf("unexpected business module info: %+v", info)
+	}
+	if len(info.BusinessCapabilities) != 2 {
+		t.Fatalf("expected capabilities, got %+v", info)
+	}
+}
+
+func TestBusinessDocumentDraftCreateRequiresConfirmationAndSupportsSyntheticModuleTool(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                "pricing",
+		Name:               "Pricing",
+		DomainFamily:       "commercial",
+		Category:           "pricing",
+		OwnedDocumentTypes: []string{"promotion_plan"},
+		Documents: []document.Definition{{
+			Type:          "promotion_plan",
+			DisplayName:   "Promotion Plan",
+			SchemaVersion: "v1",
+		}},
+	}, "system"); err != nil {
+		t.Fatalf("register pricing manifest failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.create", "document.list", "document.read", "document.update_draft":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.document.draft.create",
+			"arguments": map[string]any{
+				"module_key":      "pricing",
+				"document_type":   "promotion_plan",
+				"location_id":     "loc_hq",
+				"organization_id": "org_default",
+				"payload":         map[string]any{"name": "Ramadan Promo"},
+			},
+		}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "confirm_apply") {
+		t.Fatalf("expected confirm_apply validation error, got %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "pricing.business.document.draft.create",
+			"arguments": map[string]any{
+				"document_type":   "promotion_plan",
+				"location_id":     "loc_hq",
+				"organization_id": "org_default",
+				"payload":         map[string]any{"name": "Ramadan Promo"},
+				"confirm_apply":   true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("synthetic business draft create failed: %+v", resp.Error)
+	}
+	record := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["record"].(document.Record)
+	if record.Header.Type != "promotion_plan" || record.Header.Status != "draft" {
+		t.Fatalf("expected promotion draft, got %+v", record)
+	}
+}
+
+func TestBusinessModelReadIsSanitized(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.models.Register(model.Definition{
+		Key:                 "discount_policy",
+		DisplayName:         "Discount Policy",
+		OwnerModuleKey:      "pricing",
+		ListPermissionKey:   "pricing.policy.list",
+		ReadPermissionKey:   "pricing.policy.read",
+		CreatePermissionKey: "pricing.policy.create",
+		UpdatePermissionKey: "pricing.policy.update",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string", Label: "Name"},
+			{Key: "internal_formula", Type: "string", Label: "Internal Formula", ReadPermissionKey: "pricing.policy.formula.read"},
+		},
+	}); err != nil {
+		t.Fatalf("register model failed: %v", err)
+	}
+	if _, err := server.models.Create("discount_policy", "user_admin", map[string]any{
+		"name":             "VIP Discount",
+		"internal_formula": "margin > 10%",
+	}); err != nil {
+		t.Fatalf("create model record failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "pricing.policy.list", "pricing.policy.read":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.record.search",
+			"arguments": map[string]any{
+				"resource_kind":        "model",
+				"model_key":            "discount_policy",
+				"include_full_payload": true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.record.search failed: %+v", resp.Error)
+	}
+	items := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]businessRecordSummary)
+	if len(items) != 1 {
+		t.Fatalf("expected one model record, got %+v", items)
+	}
+	values := items[0].Record["record"].(model.Record).Values
+	if _, ok := values["internal_formula"]; ok {
+		t.Fatalf("expected internal_formula to be sanitized, got %+v", values)
+	}
+}
+
+func TestBusinessRecordSearchDoesNotLeakDocumentsWithoutDocumentList(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                "pricing",
+		Name:               "Pricing",
+		DomainFamily:       "commercial",
+		Category:           "pricing",
+		OwnedDocumentTypes: []string{"promotion_plan"},
+		Documents: []document.Definition{{
+			Type:          "promotion_plan",
+			DisplayName:   "Promotion Plan",
+			SchemaVersion: "v1",
+		}},
+	}, "system"); err != nil {
+		t.Fatalf("register pricing manifest failed: %v", err)
+	}
+	if _, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{"name": "Secret Promo"}); err != nil {
+		t.Fatalf("create promotion draft failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "module.read"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.record.search",
+			"arguments": map[string]any{
+				"module_key": "pricing",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.record.search failed: %+v", resp.Error)
+	}
+	items := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]businessRecordSummary)
+	if len(items) != 0 {
+		t.Fatalf("expected no document leakage without document.list, got %+v", items)
+	}
+}
+
+func TestBusinessDocumentDraftUpdateValidatesMergedPayload(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                "pricing",
+		Name:               "Pricing",
+		DomainFamily:       "commercial",
+		Category:           "pricing",
+		OwnedDocumentTypes: []string{"promotion_plan"},
+		Documents: []document.Definition{{
+			Type:          "promotion_plan",
+			DisplayName:   "Promotion Plan",
+			SchemaVersion: "v1",
+		}},
+		Frontend: module.FrontendDefinition{
+			Views: []module.ViewDefinition{{
+				Key:          "pricing.promotion_plan.form",
+				Title:        "Promotion Plan Form",
+				Kind:         "form",
+				DocumentType: "promotion_plan",
+				Fields: []module.FieldDefinition{
+					{Key: "name", Label: "Name", Path: "body.payload.name", Type: "string", Required: true},
+					{Key: "description", Label: "Description", Path: "body.payload.description", Type: "string"},
+				},
+			}},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register pricing manifest failed: %v", err)
+	}
+	created, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{
+		"name":        "Ramadan Promo",
+		"description": "Before update",
+	})
+	if err != nil {
+		t.Fatalf("create promotion draft failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "document.update_draft":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.document.draft.update",
+			"arguments": map[string]any{
+				"document_id":   created.Header.ID,
+				"payload":       map[string]any{"description": "After update"},
+				"confirm_apply": true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.document.draft.update failed: %+v", resp.Error)
+	}
+	record := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["record"].(document.Record)
+	if got := record.Body.Payload["description"]; got != "After update" {
+		t.Fatalf("expected description patch applied, got %+v", record.Body.Payload)
 	}
 }
 
@@ -2961,12 +3310,16 @@ func newTestServer(t *testing.T) *Server {
 	jobSvc := jobs.NewService()
 	referenceSvc := reference.NewService()
 	obsSvc := observability.NewService()
+	models := model.NewService()
+	fieldSecurity := securityfields.NewService(policySvc)
 	analyticsSvc := analytics.NewService(documents, flows, eventingSvc, searchSvc, audit.NewService(), obsSvc)
 	offlineSvc := offline.NewService(modules, nil, searchSvc)
 	dataopsSvc := dataops.NewService(cfg, flags, modules, referenceSvc, ident, documents, integrationSvc)
 	dataopsSvc.AttachJobs(jobSvc)
 	engagementSvc := engagement.NewService()
 	engagementSvc.AttachRuntime(eventingSvc, jobSvc)
+	searchSvc.AttachSources(documents, models)
+	searchSvc.AttachFieldSecurity(fieldSecurity)
 	return NewServer(ServerDeps{
 		Modules:                   modules,
 		Analytics:                 analyticsSvc,
@@ -2977,8 +3330,11 @@ func newTestServer(t *testing.T) *Server {
 		Flags:                     flags,
 		Integration:               integrationSvc,
 		Documents:                 documents,
+		DocumentActions:           application.NewDocumentActions(documents, flows, ident, policySvc, application.NewMemorySubmitStore(documents, flows, auditSvc, eventingSvc)),
+		Models:                    models,
 		Reference:                 referenceSvc,
 		Search:                    searchSvc,
+		FieldSecurity:             fieldSecurity,
 		Policy:                    policySvc,
 		Eventing:                  eventingSvc,
 		Jobs:                      jobSvc,

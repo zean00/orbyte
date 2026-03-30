@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"orbyte/internal/platform/analytics"
+	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
@@ -21,6 +22,7 @@ import (
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
@@ -29,6 +31,7 @@ import (
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -94,8 +97,11 @@ type Server struct {
 	flags                     *featureflags.Service
 	integration               *integration.Service
 	documents                 *document.Service
+	documentActions           *application.DocumentActions
+	models                    *model.Service
 	reference                 *reference.Service
 	search                    *search.Service
+	fieldSecurity             *securityfields.Service
 	policy                    *policy.Service
 	eventing                  *eventing.Service
 	jobs                      *jobs.Service
@@ -125,8 +131,11 @@ type ServerDeps struct {
 	Flags                     *featureflags.Service
 	Integration               *integration.Service
 	Documents                 *document.Service
+	DocumentActions           *application.DocumentActions
+	Models                    *model.Service
 	Reference                 *reference.Service
 	Search                    *search.Service
+	FieldSecurity             *securityfields.Service
 	Policy                    *policy.Service
 	Eventing                  *eventing.Service
 	Jobs                      *jobs.Service
@@ -152,8 +161,11 @@ func NewServer(deps ServerDeps) *Server {
 		flags:                     deps.Flags,
 		integration:               deps.Integration,
 		documents:                 deps.Documents,
+		documentActions:           deps.DocumentActions,
+		models:                    deps.Models,
 		reference:                 deps.Reference,
 		search:                    deps.Search,
+		fieldSecurity:             deps.FieldSecurity,
 		policy:                    deps.Policy,
 		eventing:                  deps.Eventing,
 		jobs:                      deps.Jobs,

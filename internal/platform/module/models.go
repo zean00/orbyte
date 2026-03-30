@@ -16,11 +16,14 @@ type Manifest struct {
 	Key                    string                     `json:"key"`
 	Name                   string                     `json:"name"`
 	NameI18n               i18n.LocalizedText         `json:"name_i18n,omitempty"`
+	Description            string                     `json:"description,omitempty"`
+	DescriptionI18n        i18n.LocalizedText         `json:"description_i18n,omitempty"`
 	Version                string                     `json:"version"`
 	Role                   ModuleRole                 `json:"role,omitempty"`
 	LocalExtension         LocalExtensionDefinition   `json:"local_extension,omitempty"`
 	KernelVersionRange     string                     `json:"kernel_version_range,omitempty"`
 	RequiredCapabilities   []string                   `json:"required_capabilities,omitempty"`
+	BusinessCapabilities   []string                   `json:"business_capabilities,omitempty"`
 	DomainFamily           string                     `json:"domain_family"`
 	Category               string                     `json:"category,omitempty"`
 	Dependencies           []string                   `json:"dependencies,omitempty"`

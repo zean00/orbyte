@@ -19,6 +19,7 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 		return items
 	}
 	items = append(items, s.listBuiltInTools(actor)...)
+	items = append(items, s.listSyntheticTools(actor)...)
 	for _, detail := range s.modules.List() {
 		if !detail.Installed.Enabled {
 			continue
@@ -190,6 +191,15 @@ func (s *Server) executeTool(ctx context.Context, actor ActorContext, name strin
 	}
 	if result, ok, err := s.callBuiltInTool(actor, strings.TrimSpace(name), arguments); ok {
 		return result, err
+	}
+	if def, ok := s.syntheticToolDefinition(strings.TrimSpace(name), actor); ok {
+		if !s.ToolEnabled(def.Name) {
+			return nil, fmt.Errorf("tool is disabled")
+		}
+		if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+			return nil, fmt.Errorf("tool is not allowed")
+		}
+		return def.Handler(s, actor, arguments)
 	}
 	def, ok := s.lookupTool(actor.EndpointScope, strings.TrimSpace(name))
 	if !ok {

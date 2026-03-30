@@ -12,6 +12,7 @@ type ToolInventoryItem struct {
 	Description         string             `json:"description,omitempty"`
 	ModuleKey           string             `json:"module_key,omitempty"`
 	BuiltIn             bool               `json:"built_in,omitempty"`
+	Generated           bool               `json:"generated,omitempty"`
 	EndpointScope       string             `json:"endpoint_scope,omitempty"`
 	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 	Operation           string             `json:"operation,omitempty"`
@@ -78,6 +79,26 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 			RequiredPermissions: []string{def.permission},
 			Enabled:             s.ToolEnabled(def.name),
 			Contract:            builtInToolContract(def.name, def.permission, def.contract),
+		})
+	}
+	for _, def := range s.syntheticToolDefinitions(ActorContext{}) {
+		items = append(items, ToolInventoryItem{
+			Key:                 def.Name,
+			Title:               def.Title,
+			Description:         def.Description,
+			ModuleKey:           def.ModuleKey,
+			Generated:           true,
+			EndpointScope:       scopeForModule(def.ModuleKey),
+			RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
+			Enabled:             s.ToolEnabled(def.Name),
+			Contract: ContractDescriptor{
+				Version:             ContractVersion,
+				Stability:           "stable",
+				SideEffectClass:     defaultToolSideEffectClass(def.Name, ""),
+				Idempotency:         defaultToolIdempotency(def.Name, ""),
+				AuditAction:         "mcp.tool." + strings.TrimSpace(def.Name),
+				RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
+			},
 		})
 	}
 	if s != nil && s.modules != nil {
@@ -173,6 +194,9 @@ func (s *Server) toolDefined(name string) bool {
 		return false
 	}
 	if _, ok := s.mustBuiltInToolRegistrationIndex()[trimmed]; ok {
+		return true
+	}
+	if _, ok := s.syntheticToolDefinition(trimmed, ActorContext{}); ok {
 		return true
 	}
 	if s == nil || s.modules == nil {
