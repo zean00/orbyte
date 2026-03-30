@@ -339,6 +339,27 @@ func BuiltInDefinitions() []Definition {
 			{Key: "store_credit_liability_account_code", Label: "Store Credit Liability Account", Type: "string"},
 		},
 	}, {
+		Key:             "treasury.posting",
+		ModuleKey:       "treasury_core",
+		Category:        "finance",
+		DisplayName:     "Treasury Posting Defaults",
+		DisplayNameI18n: i18n.LocalizedText{"en": "Treasury Posting Defaults", "id": "Default Posting Treasury"},
+		Description:     "Fallback account configuration for treasury transfers, bank fees, interest, and suspense handling.",
+		DescriptionI18n: i18n.LocalizedText{"en": "Fallback account configuration for treasury transfers, bank fees, interest, and suspense handling.", "id": "Konfigurasi akun fallback untuk transfer treasury, biaya bank, bunga, dan suspense."},
+		AllowedScopes:   []string{"deployment", "organization", "location"},
+		DefaultValue: map[string]any{
+			"bank_transfer_clearing_account_code": "1095-TRANSFER-CLEARING",
+			"bank_fee_expense_account_code":       "6300-BANK-FEE",
+			"bank_interest_income_account_code":   "4800-BANK-INT",
+			"treasury_suspense_account_code":      "1099-TREASURY-SUSPENSE",
+		},
+		Fields: []FieldDefinition{
+			{Key: "bank_transfer_clearing_account_code", Label: "Transfer Clearing Account", Type: "string"},
+			{Key: "bank_fee_expense_account_code", Label: "Bank Fee Expense Account", Type: "string"},
+			{Key: "bank_interest_income_account_code", Label: "Bank Interest Income Account", Type: "string"},
+			{Key: "treasury_suspense_account_code", Label: "Treasury Suspense Account", Type: "string"},
+		},
+	}, {
 		Key:             "inventory.policy",
 		ModuleKey:       "inventory_core",
 		Category:        "inventory",
@@ -550,6 +571,20 @@ func BuiltInEntries(now time.Time) []Entry {
 		ScopeID:   "",
 		Value: map[string]any{
 			"near_expiry_days": 30,
+		},
+		UpdatedAt: now,
+		UpdatedBy: "system",
+	}, {
+		Key:       "treasury.posting",
+		ModuleKey: "treasury_core",
+		Category:  "finance",
+		Scope:     "deployment",
+		ScopeID:   "",
+		Value: map[string]any{
+			"bank_transfer_clearing_account_code": "1095-TRANSFER-CLEARING",
+			"bank_fee_expense_account_code":       "6300-BANK-FEE",
+			"bank_interest_income_account_code":   "4800-BANK-INT",
+			"treasury_suspense_account_code":      "1099-TREASURY-SUSPENSE",
 		},
 		UpdatedAt: now,
 		UpdatedBy: "system",

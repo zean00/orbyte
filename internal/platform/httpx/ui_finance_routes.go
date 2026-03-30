@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, financeAssetSvc *application.FinanceAssetCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, financeAssetSvc *application.FinanceAssetCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService, treasurySvc *application.TreasuryCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -1001,6 +1001,256 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				return
 			}
 			respondJSON(w, http.StatusCreated, map[string]any{"record": record})
+		})
+	}
+	if treasurySvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/cash-position", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("cash position is not allowed"))
+				return
+			}
+			asOfDate := strings.TrimSpace(r.URL.Query().Get("as_of_date"))
+			respondJSON(w, http.StatusOK, treasurySvc.CashPositionReport(organizationIDForPrincipal(p), p.currentLocationID, asOfDate))
+		})
+		mux.HandleFunc("GET /ui/data/finance/clearing-balance", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("clearing balance is not allowed"))
+				return
+			}
+			asOfDate := strings.TrimSpace(r.URL.Query().Get("as_of_date"))
+			respondJSON(w, http.StatusOK, treasurySvc.ClearingBalanceReport(organizationIDForPrincipal(p), p.currentLocationID, asOfDate))
+		})
+		mux.HandleFunc("GET /ui/data/finance/bank-reconciliation", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read", "bank_statement.read"}) {
+				respondError(w, shared.Forbidden("bank reconciliation is not allowed"))
+				return
+			}
+			statementID := strings.TrimSpace(r.URL.Query().Get("statement_id"))
+			if statementID == "" {
+				respondJSON(w, http.StatusOK, map[string]any{"message": "statement_id is required"})
+				return
+			}
+			respondJSON(w, http.StatusOK, treasurySvc.BankReconciliation(organizationIDForPrincipal(p), p.currentLocationID, statementID))
+		})
+		mux.HandleFunc("GET /ui/data/finance/treasury-exceptions", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury_exception.list"}) {
+				respondError(w, shared.Forbidden("treasury exceptions are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, treasurySvc.ExceptionReport(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(query.Get("as_of_date")), strings.TrimSpace(query.Get("status"))))
+		})
+		mux.HandleFunc("GET /ui/data/finance/treasury-transfers", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury_transfer.list"}) {
+				respondError(w, shared.Forbidden("treasury transfers are not allowed"))
+				return
+			}
+			query := r.URL.Query()
+			respondJSON(w, http.StatusOK, treasurySvc.TransferRegister(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(query.Get("as_of_date")), strings.TrimSpace(query.Get("status"))))
+		})
+		mux.HandleFunc("POST /ui/data/finance/bank-statements/import", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury.manage", "bank_statement.create", "bank_statement_line.create"}) {
+				respondError(w, shared.Forbidden("bank statement import is not allowed"))
+				return
+			}
+			var req struct {
+				TreasuryAccountID string         `json:"treasury_account_id"`
+				StatementNumber   string         `json:"statement_number"`
+				StatementDate     string         `json:"statement_date"`
+				FromDate          string         `json:"from_date"`
+				ToDate            string         `json:"to_date"`
+				OpeningBalance    float64        `json:"opening_balance"`
+				ClosingBalance    float64        `json:"closing_balance"`
+				SourceFileName    string         `json:"source_file_name"`
+				CSVText           string         `json:"csv_text"`
+				Lines             []map[string]any `json:"lines"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid request body"))
+				return
+			}
+			payload := map[string]any{
+				"statement_number": req.StatementNumber,
+				"statement_date":   req.StatementDate,
+				"from_date":        req.FromDate,
+				"to_date":          req.ToDate,
+				"opening_balance":  req.OpeningBalance,
+				"closing_balance":  req.ClosingBalance,
+				"source_file_name": req.SourceFileName,
+				"lines":            req.Lines,
+			}
+			var result map[string]any
+			var err error
+			if strings.TrimSpace(req.CSVText) != "" {
+				result, err = treasurySvc.ImportStatementCSV(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(req.TreasuryAccountID), principalEffectiveUserID(p), payload, req.CSVText)
+			} else {
+				result, err = treasurySvc.CreateManualStatement(organizationIDForPrincipal(p), p.currentLocationID, strings.TrimSpace(req.TreasuryAccountID), principalEffectiveUserID(p), payload)
+			}
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, result)
+		})
+		mux.HandleFunc("POST /ui/data/finance/bank-reconciliation/", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			path := strings.TrimPrefix(r.URL.Path, "/ui/data/finance/bank-reconciliation/")
+			switch {
+			case strings.HasSuffix(path, "/sync"):
+				if !principalAllowsAll(ident, p, []string{"treasury.reconcile", "bank_reconciliation.create", "bank_reconciliation.update"}) {
+					respondError(w, shared.Forbidden("bank reconciliation sync is not allowed"))
+					return
+				}
+				statementID := strings.TrimSuffix(path, "/sync")
+				record, err := treasurySvc.SyncBankReconciliation(organizationIDForPrincipal(p), p.currentLocationID, statementID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, map[string]any{"record": record})
+			case strings.HasSuffix(path, "/approve"):
+				if !principalAllowsAll(ident, p, []string{"treasury.reconcile", "bank_reconciliation.update"}) {
+					respondError(w, shared.Forbidden("bank reconciliation approval is not allowed"))
+					return
+				}
+				reconciliationID := strings.TrimSuffix(path, "/approve")
+				record, err := treasurySvc.ApproveBankReconciliation(reconciliationID, principalEffectiveUserID(p))
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, map[string]any{"record": record})
+			case strings.HasSuffix(path, "/match"):
+				if !principalAllowsAll(ident, p, []string{"treasury.reconcile", "bank_reconciliation_match.create", "bank_statement_line.update"}) {
+					respondError(w, shared.Forbidden("bank reconciliation matching is not allowed"))
+					return
+				}
+				reconciliationID := strings.TrimSuffix(path, "/match")
+				var req struct {
+					LineID     string  `json:"line_id"`
+					SourceType string  `json:"source_type"`
+					SourceID   string  `json:"source_id"`
+					Amount     float64 `json:"amount"`
+					MatchKind  string  `json:"match_kind"`
+					Notes      string  `json:"notes"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					respondError(w, shared.Validation("invalid request body"))
+					return
+				}
+				result, err := treasurySvc.MatchStatementLine(reconciliationID, req.LineID, principalEffectiveUserID(p), map[string]any{
+					"source_type": req.SourceType,
+					"source_id":   req.SourceID,
+					"amount":      req.Amount,
+					"match_kind":  req.MatchKind,
+					"notes":       req.Notes,
+				})
+				if err != nil {
+					respondError(w, err)
+					return
+				}
+				respondJSON(w, http.StatusOK, result)
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		mux.HandleFunc("POST /ui/data/finance/treasury-transfers", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury.manage", "treasury_transfer.create"}) {
+				respondError(w, shared.Forbidden("treasury transfer creation is not allowed"))
+				return
+			}
+			var req map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid request body"))
+				return
+			}
+			record, err := treasurySvc.CreateTransfer(organizationIDForPrincipal(p), p.currentLocationID, principalEffectiveUserID(p), req)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusCreated, map[string]any{"record": record})
+		})
+		mux.HandleFunc("POST /ui/data/finance/treasury-transfers/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/approve") {
+				http.NotFound(w, r)
+				return
+			}
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury.manage", "treasury_transfer.update", "document.create", "document.approve"}) {
+				respondError(w, shared.Forbidden("treasury transfer approval is not allowed"))
+				return
+			}
+			transferID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/data/finance/treasury-transfers/"), "/approve")
+			result, err := treasurySvc.ApproveTransfer(transferID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, result)
+		})
+		mux.HandleFunc("POST /ui/data/finance/treasury-exceptions/", func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/resolve") {
+				http.NotFound(w, r)
+				return
+			}
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"treasury.manage", "treasury_exception.update"}) {
+				respondError(w, shared.Forbidden("treasury exception update is not allowed"))
+				return
+			}
+			exceptionID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/ui/data/finance/treasury-exceptions/"), "/resolve")
+			var req struct {
+				Status string `json:"status"`
+				Note   string `json:"note"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				respondError(w, shared.Validation("invalid request body"))
+				return
+			}
+			record, err := treasurySvc.ResolveException(exceptionID, principalEffectiveUserID(p), req.Status, req.Note)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": record})
 		})
 	}
 }

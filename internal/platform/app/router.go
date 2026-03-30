@@ -72,6 +72,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 		FinanceAssets:    graph.financeAssets,
 		InventoryFinance: graph.inventoryFinance,
 		RetailFinance:    graph.retailFinance,
+		Treasury:         graph.treasuryCore,
 		Policy:           graph.policy,
 		FieldSecurity:    graph.fieldSecurity,
 		UIPreferences:    uiPreferences,

@@ -103,6 +103,7 @@ type serviceGraph struct {
 	financeAssets      *application.FinanceAssetCoreService
 	inventoryFinance   *application.InventoryFinanceCoreService
 	retailFinance      *application.RetailFinanceCoreService
+	treasuryCore       *application.TreasuryCoreService
 	analyticsRepo      analytics.Repository
 	submitStore        application.SubmitStore
 	queryMonitor       *store.QueryMonitor
@@ -277,6 +278,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.financeAssets = application.NewFinanceAssetCoreService(graph.documents, graph.models, graph.config, graph.financeReporting)
 	graph.inventoryFinance = application.NewInventoryFinanceCoreService(graph.documents, graph.models, graph.inventoryCore, graph.financeReporting)
 	graph.retailFinance = application.NewRetailFinanceCoreService(graph.documents, graph.models, graph.config, graph.financeReporting)
+	graph.treasuryCore = application.NewTreasuryCoreService(graph.documents, graph.models, graph.config, graph.financeReporting, graph.retailFinance)
 	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
 	graph.commercialCore.SetPeriodEnd(graph.financePeriodEnd)
 	graph.commercialCore.SetManualJournals(graph.financeManual)

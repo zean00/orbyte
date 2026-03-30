@@ -1334,6 +1334,36 @@
       "route_path": "/finance/balance-sheet"
     },
     {
+      "custom_entry_key": "finance.bank_reconciliation",
+      "key": "finance.bank_reconciliation",
+      "kind": "navigate",
+      "label": "Bank Reconciliation",
+      "label_i18n": {
+        "en": "Bank Reconciliation",
+        "id": "Rekonsiliasi Bank"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/bank-reconciliation"
+    },
+    {
+      "key": "finance.bank_statements.list",
+      "kind": "navigate",
+      "label": "Bank Statements",
+      "label_i18n": {
+        "en": "Bank Statements",
+        "id": "Mutasi Bank"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "bank_statement.list"
+      ],
+      "route_path": "/finance/bank-statements",
+      "view_key": "finance.bank_statements.list"
+    },
+    {
       "custom_entry_key": "finance.cash_over_short",
       "key": "finance.cash_over_short",
       "kind": "navigate",
@@ -1347,6 +1377,36 @@
         "finance.read"
       ],
       "route_path": "/finance/cash-over-short"
+    },
+    {
+      "custom_entry_key": "finance.cash_position",
+      "key": "finance.cash_position",
+      "kind": "navigate",
+      "label": "Cash Position",
+      "label_i18n": {
+        "en": "Cash Position",
+        "id": "Posisi Kas"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/cash-position"
+    },
+    {
+      "custom_entry_key": "finance.clearing_balance",
+      "key": "finance.clearing_balance",
+      "kind": "navigate",
+      "label": "Clearing Balance",
+      "label_i18n": {
+        "en": "Clearing Balance",
+        "id": "Saldo Clearing"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/clearing-balance"
     },
     {
       "key": "finance.collection_cases.detail",
@@ -2086,6 +2146,51 @@
         "finance.read"
       ],
       "route_path": "/finance/tax-summary"
+    },
+    {
+      "key": "finance.treasury_accounts.list",
+      "kind": "navigate",
+      "label": "Treasury Accounts",
+      "label_i18n": {
+        "en": "Treasury Accounts",
+        "id": "Akun Treasury"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "treasury_account.list"
+      ],
+      "route_path": "/finance/treasury-accounts",
+      "view_key": "finance.treasury_accounts.list"
+    },
+    {
+      "custom_entry_key": "finance.treasury_exceptions",
+      "key": "finance.treasury_exceptions",
+      "kind": "navigate",
+      "label": "Treasury Exceptions",
+      "label_i18n": {
+        "en": "Treasury Exceptions",
+        "id": "Exception Treasury"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "treasury_exception.list"
+      ],
+      "route_path": "/finance/treasury-exceptions"
+    },
+    {
+      "key": "finance.treasury_transfers.list",
+      "kind": "navigate",
+      "label": "Treasury Transfers",
+      "label_i18n": {
+        "en": "Treasury Transfers",
+        "id": "Transfer Treasury"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "treasury_transfer.list"
+      ],
+      "route_path": "/finance/treasury-transfers",
+      "view_key": "finance.treasury_transfers.list"
     },
     {
       "custom_entry_key": "finance.trial_balance",
@@ -5701,6 +5806,58 @@
       ]
     },
     {
+      "action_key": "finance.cash_position",
+      "key": "finance.cash_position",
+      "label": "Cash Position",
+      "label_i18n": {
+        "en": "Cash Position",
+        "id": "Posisi Kas"
+      },
+      "order": 117,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.clearing_balance",
+      "key": "finance.clearing_balance",
+      "label": "Clearing Balance",
+      "label_i18n": {
+        "en": "Clearing Balance",
+        "id": "Saldo Clearing"
+      },
+      "order": 118,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.bank_reconciliation",
+      "key": "finance.bank_reconciliation",
+      "label": "Bank Reconciliation",
+      "label_i18n": {
+        "en": "Bank Reconciliation",
+        "id": "Rekonsiliasi Bank"
+      },
+      "order": 119,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.treasury_exceptions",
+      "key": "finance.treasury_exceptions",
+      "label": "Treasury Exceptions",
+      "label_i18n": {
+        "en": "Treasury Exceptions",
+        "id": "Exception Treasury"
+      },
+      "order": 120,
+      "required_permissions": [
+        "treasury_exception.list"
+      ]
+    },
+    {
       "action_key": "finance.fixed_assets.list",
       "key": "finance.fixed_assets",
       "label": "Fixed Assets",
@@ -5711,6 +5868,32 @@
       "order": 121,
       "required_permissions": [
         "fixed_asset.list"
+      ]
+    },
+    {
+      "action_key": "finance.treasury_accounts.list",
+      "key": "finance.treasury_accounts",
+      "label": "Treasury Accounts",
+      "label_i18n": {
+        "en": "Treasury Accounts",
+        "id": "Akun Treasury"
+      },
+      "order": 121,
+      "required_permissions": [
+        "treasury_account.list"
+      ]
+    },
+    {
+      "action_key": "finance.bank_statements.list",
+      "key": "finance.bank_statements",
+      "label": "Bank Statements",
+      "label_i18n": {
+        "en": "Bank Statements",
+        "id": "Mutasi Bank"
+      },
+      "order": 122,
+      "required_permissions": [
+        "bank_statement.list"
       ]
     },
     {
@@ -5737,6 +5920,19 @@
       "order": 123,
       "required_permissions": [
         "prepaid_expense.list"
+      ]
+    },
+    {
+      "action_key": "finance.treasury_transfers.list",
+      "key": "finance.treasury_transfers",
+      "label": "Treasury Transfers",
+      "label_i18n": {
+        "en": "Treasury Transfers",
+        "id": "Transfer Treasury"
+      },
+      "order": 123,
+      "required_permissions": [
+        "treasury_transfer.list"
       ]
     },
     {
@@ -15263,6 +15459,64 @@
       }
     },
     {
+      "columns": [
+        {
+          "key": "statement_number",
+          "label": "Statement",
+          "path": "values.statement_number"
+        },
+        {
+          "key": "statement_date",
+          "label": "Date",
+          "path": "values.statement_date"
+        },
+        {
+          "key": "closing_balance",
+          "label": "Closing",
+          "path": "values.closing_balance"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "imported",
+            "reconciling",
+            "reconciled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.bank_statements.list",
+      "kind": "list",
+      "model_key": "bank_statement",
+      "required_permissions": [
+        "bank_statement.list"
+      ],
+      "title": "Bank Statements",
+      "title_i18n": {
+        "en": "Bank Statements",
+        "id": "Bank Statements"
+      }
+    },
+    {
       "key": "finance.collection_cases.detail",
       "kind": "detail",
       "model_key": "collection_case",
@@ -19525,6 +19779,129 @@
       "title_i18n": {
         "en": "Store Credit Accounts",
         "id": "Store Credit Accounts"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "account_code",
+          "label": "Code",
+          "path": "values.account_code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "treasury_type",
+          "label": "Type",
+          "path": "values.treasury_type"
+        },
+        {
+          "key": "gl_account_code",
+          "label": "GL Account",
+          "path": "values.gl_account_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.treasury_accounts.list",
+      "kind": "list",
+      "model_key": "treasury_account",
+      "required_permissions": [
+        "treasury_account.list"
+      ],
+      "title": "Treasury Accounts",
+      "title_i18n": {
+        "en": "Treasury Accounts",
+        "id": "Treasury Accounts"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "transfer_date",
+          "label": "Date",
+          "path": "values.transfer_date"
+        },
+        {
+          "key": "from_account_code",
+          "label": "From",
+          "path": "values.from_account_code"
+        },
+        {
+          "key": "to_account_code",
+          "label": "To",
+          "path": "values.to_account_code"
+        },
+        {
+          "key": "amount",
+          "label": "Amount",
+          "path": "values.amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "posted",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "finance.treasury_transfers.list",
+      "kind": "list",
+      "model_key": "treasury_transfer",
+      "required_permissions": [
+        "treasury_transfer.list"
+      ],
+      "title": "Treasury Transfers",
+      "title_i18n": {
+        "en": "Treasury Transfers",
+        "id": "Treasury Transfers"
       }
     },
     {
