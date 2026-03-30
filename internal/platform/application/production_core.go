@@ -18,6 +18,7 @@ type ProductionCoreService struct {
 	search    *search.Service
 	inventory *InventoryCoreService
 	finance   *FinanceReportingCoreService
+	costing   *ProductionCostingCoreService
 }
 
 func NewProductionCoreService(documents *document.Service, models *model.Service, searchSvc *search.Service, inventorySvc *InventoryCoreService) *ProductionCoreService {
@@ -31,6 +32,10 @@ func NewProductionCoreService(documents *document.Service, models *model.Service
 
 func (s *ProductionCoreService) SetFinanceReporting(finance *FinanceReportingCoreService) {
 	s.finance = finance
+}
+
+func (s *ProductionCoreService) SetCosting(costing *ProductionCostingCoreService) {
+	s.costing = costing
 }
 
 func (s *ProductionCoreService) NormalizePayload(documentType string, payload map[string]any) map[string]any {
@@ -302,6 +307,11 @@ func (s *ProductionCoreService) HandleApprovedDocument(record document.Record, a
 		if err := s.applyProductionReservations(record, actorID); err != nil {
 			return err
 		}
+		if s.costing != nil {
+			if err := s.costing.SyncProductionOrder(record, actorID); err != nil {
+				return err
+			}
+		}
 		return s.refreshDocuments(record)
 	default:
 		return nil
@@ -446,7 +456,10 @@ func (s *ProductionCoreService) handleApprovedProductionIssue(record document.Re
 	if err := s.createProductionIssueCostPosting(record, actorID, costedLines); err != nil {
 		return err
 	}
-	return s.refreshLinkedProductionOrder(record, actorID)
+	if err := s.refreshLinkedProductionOrder(record, actorID); err != nil {
+		return err
+	}
+	return s.syncLinkedProductionOrder(record, actorID)
 }
 
 func (s *ProductionCoreService) handleApprovedProductionOutput(record document.Record, actorID string) error {
@@ -454,41 +467,96 @@ func (s *ProductionCoreService) handleApprovedProductionOutput(record document.R
 		return s.refreshLinkedProductionOrder(record, actorID)
 	}
 	payload := clonedPayload(record.Body.Payload)
-	itemPolicy := s.inventory.lookupItemPolicy(textValue(payload["finished_item_code"]))
-	line := map[string]any{
-		"item_code":       textValue(payload["finished_item_code"]),
-		"description":     textValue(payload["finished_item_name"]),
-		"warehouse_code":  textValue(payload["warehouse_code"]),
-		"expiration_date": textValue(payload["expiration_date"]),
-		"quantity":        roundMoney(numberValue(payload["output_quantity"])),
-		"uom_code":        textValue(payload["uom_code"]),
-		"note":            firstNonEmptyString(textValue(payload["notes"]), textValue(payload["production_lot_code"])),
+	allocations := []map[string]any(nil)
+	if s.costing != nil {
+		var err error
+		payload, allocations, err = s.costing.BeforeApproveProductionOutput(record, actorID)
+		if err != nil {
+			return err
+		}
 	}
-	totalProductionCost := s.productionOutputTotalCost(payload)
-	outputQty := roundMoney(numberValue(payload["output_quantity"]))
-	if outputQty > 0 && totalProductionCost > 0 {
-		line["unit_cost"] = roundMoney(totalProductionCost / outputQty)
-		line["total_cost"] = totalProductionCost
+	if len(allocations) == 0 {
+		totalCost := s.productionOutputTotalCost(payload)
+		unitCost := 0.0
+		if qty := roundMoney(numberValue(payload["output_quantity"])); qty > 0 && totalCost > 0 {
+			unitCost = roundMoney(totalCost / qty)
+		}
+		allocations = []map[string]any{{
+			"output_item_code":         textValue(payload["finished_item_code"]),
+			"output_item_name":         textValue(payload["finished_item_name"]),
+			"warehouse_code":           textValue(payload["warehouse_code"]),
+			"output_quantity":          roundMoney(numberValue(payload["output_quantity"])),
+			"allocation_share_percent": 100.0,
+			"allocated_total_cost":     totalCost,
+			"allocated_unit_cost":      unitCost,
+		}}
 	}
-	if strings.EqualFold(itemPolicy.TrackingMode, "batch") {
-		line["batch_code"] = textValue(payload["production_lot_code"])
+	movementLines := make([]map[string]any, 0, len(allocations))
+	totalProductionCost := 0.0
+	for _, allocation := range allocations {
+		itemCode := textValue(allocation["output_item_code"])
+		itemPolicy := s.inventory.lookupItemPolicy(itemCode)
+		line := map[string]any{
+			"item_code":       itemCode,
+			"description":     firstNonEmptyString(textValue(allocation["output_item_name"]), textValue(payload["finished_item_name"])),
+			"warehouse_code":  firstNonEmptyString(textValue(allocation["warehouse_code"]), textValue(payload["warehouse_code"])),
+			"expiration_date": textValue(payload["expiration_date"]),
+			"quantity":        roundMoney(numberValue(allocation["output_quantity"])),
+			"uom_code":        firstNonEmptyString(textValue(allocation["uom_code"]), textValue(payload["uom_code"]), itemPolicy.UOMCode),
+			"note":            firstNonEmptyString(textValue(payload["notes"]), textValue(payload["production_lot_code"])),
+			"unit_cost":       roundMoney(numberValue(allocation["allocated_unit_cost"])),
+			"total_cost":      roundMoney(numberValue(allocation["allocated_total_cost"])),
+		}
+		if strings.EqualFold(itemPolicy.TrackingMode, "batch") {
+			line["batch_code"] = firstNonEmptyString(textValue(allocation["batch_code"]), textValue(payload["production_lot_code"]))
+		}
+		if err := s.inventory.validateInventoryLine(line, true); err != nil {
+			return err
+		}
+		line = s.inventory.prepareMovementLineForCost(record, "production_output", line, "in")
+		if err := s.inventory.createMovement(record, actorID, "production_output", line, "in"); err != nil {
+			return err
+		}
+		movementLines = append(movementLines, line)
+		totalProductionCost = roundMoney(totalProductionCost + numberValue(line["total_cost"]))
 	}
-	if err := s.inventory.validateInventoryLine(line, true); err != nil {
-		return err
-	}
-	line = s.inventory.prepareMovementLineForCost(record, "production_output", line, "in")
-	if err := s.inventory.createMovement(record, actorID, "production_output", line, "in"); err != nil {
-		return err
-	}
-	payload["output_unit_cost"] = roundMoney(numberValue(line["unit_cost"]))
+	primaryAllocation := s.primaryOutputAllocation(payload, allocations)
+	payload["output_unit_cost"] = roundMoney(numberValue(primaryAllocation["allocated_unit_cost"]))
 	payload["total_production_cost"] = totalProductionCost
+	payload["actual_total_cost"] = totalProductionCost
+	payload["output_allocations"] = allocations
 	if err := s.updateDocumentPayload(record, actorID, payload); err != nil {
 		return err
 	}
-	if err := s.createProductionOutputCostPosting(record, actorID, payload, line); err != nil {
+	if err := s.createProductionOutputCostPosting(record, actorID, payload, movementLines); err != nil {
 		return err
 	}
-	return s.refreshLinkedProductionOrder(record, actorID)
+	if s.costing != nil {
+		if err := s.costing.HandleApprovedProductionOutput(record, payload, allocations, actorID); err != nil {
+			return err
+		}
+	}
+	if err := s.refreshLinkedProductionOrder(record, actorID); err != nil {
+		return err
+	}
+	return s.syncLinkedProductionOrder(record, actorID)
+}
+
+func (s *ProductionCoreService) primaryOutputAllocation(payload map[string]any, allocations []map[string]any) map[string]any {
+	if len(allocations) == 0 {
+		return map[string]any{}
+	}
+	finishedItemCode := strings.TrimSpace(textValue(payload["finished_item_code"]))
+	warehouseCode := strings.TrimSpace(textValue(payload["warehouse_code"]))
+	for _, allocation := range allocations {
+		if strings.TrimSpace(textValue(allocation["output_item_code"])) != finishedItemCode {
+			continue
+		}
+		if warehouseCode == "" || strings.TrimSpace(textValue(allocation["warehouse_code"])) == warehouseCode {
+			return allocation
+		}
+	}
+	return allocations[0]
 }
 
 func (s *ProductionCoreService) normalizeProductionComponentLines(lines []map[string]any) []map[string]any {
@@ -888,7 +956,27 @@ func (s *ProductionCoreService) refreshLinkedProductionOrder(record document.Rec
 	return s.refreshDocuments(record, order)
 }
 
+func (s *ProductionCoreService) syncLinkedProductionOrder(record document.Record, actorID string) error {
+	if s.costing == nil {
+		return nil
+	}
+	fresh, err := s.documents.Get(record.Header.ID)
+	if err == nil {
+		record = fresh
+	}
+	order, ok := s.findLinkedProductionOrder(record)
+	if !ok {
+		return nil
+	}
+	return s.costing.SyncProductionOrder(order, actorID)
+}
+
 func (s *ProductionCoreService) productionOutputTotalCost(payload map[string]any) float64 {
+	if s.costing != nil {
+		if total := roundMoney(s.costing.totalProductionCost(payload)); total > 0 {
+			return total
+		}
+	}
 	if total := roundMoney(numberValue(payload["total_production_cost"])); total > 0 {
 		return total
 	}
@@ -925,7 +1013,7 @@ func (s *ProductionCoreService) createProductionIssueCostPosting(record document
 	return s.createProductionPosting(record, actorID, "production_issue_wip_default", "production_issue_wip", totalCost, debitByAccount, creditByAccount, "Auto-posted WIP from production issue")
 }
 
-func (s *ProductionCoreService) createProductionOutputCostPosting(record document.Record, actorID string, payload map[string]any, line map[string]any) error {
+func (s *ProductionCoreService) createProductionOutputCostPosting(record document.Record, actorID string, payload map[string]any, lines []map[string]any) error {
 	if s.hasPostingLink(record, "production_output_wip_clear") {
 		return nil
 	}
@@ -933,11 +1021,13 @@ func (s *ProductionCoreService) createProductionOutputCostPosting(record documen
 	if totalCost <= 0 {
 		return nil
 	}
-	debitByAccount := map[string]float64{
-		firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV"): totalCost,
+	debitByAccount := map[string]float64{}
+	for _, line := range lines {
+		account := firstNonEmptyString(textValue(line["inventory_asset_account_code"]), "1200-INV")
+		debitByAccount[account] = roundMoney(debitByAccount[account] + roundMoney(numberValue(line["total_cost"])))
 	}
 	creditByAccount := map[string]float64{
-		firstNonEmptyString(textValue(line["wip_account_code"]), "1300-WIP"): totalCost,
+		firstNonEmptyString(textValue(lines[0]["wip_account_code"]), "1300-WIP"): totalCost,
 	}
 	return s.createProductionPosting(record, actorID, "production_output_wip_clear_default", "production_output_wip_clear", totalCost, debitByAccount, creditByAccount, "Auto-posted finished goods from production output")
 }

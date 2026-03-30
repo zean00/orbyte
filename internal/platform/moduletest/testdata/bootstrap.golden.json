@@ -1344,7 +1344,8 @@
       },
       "render_mode": "custom",
       "required_permissions": [
-        "finance.read"
+        "finance.read",
+        "bank_statement.read"
       ],
       "route_path": "/finance/bank-reconciliation"
     },
@@ -2055,6 +2056,28 @@
       ],
       "route_path": "/finance/prepaids",
       "view_key": "finance.prepaids.list"
+    },
+    {
+      "custom_entry_key": "finance.production_cost_summary",
+      "key": "finance.production_cost_summary",
+      "kind": "navigate",
+      "label": "Production Cost Summary",
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/production-cost-summary"
+    },
+    {
+      "custom_entry_key": "finance.production_variance",
+      "key": "finance.production_variance",
+      "kind": "navigate",
+      "label": "Production Variance",
+      "render_mode": "custom",
+      "required_permissions": [
+        "finance.read"
+      ],
+      "route_path": "/finance/production-variance"
     },
     {
       "custom_entry_key": "finance.profit_and_loss",
@@ -3544,6 +3567,28 @@
       "view_key": "production.boms.list"
     },
     {
+      "key": "production.cost_captures.list",
+      "kind": "navigate",
+      "label": "Production Cost Captures",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_cost_capture.list"
+      ],
+      "route_path": "/production/cost-captures",
+      "view_key": "production.cost_captures.list"
+    },
+    {
+      "key": "production.cost_rates.list",
+      "kind": "navigate",
+      "label": "Production Cost Rates",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_cost_rate.list"
+      ],
+      "route_path": "/production/cost-rates",
+      "view_key": "production.cost_rates.list"
+    },
+    {
       "key": "production.issues.detail",
       "kind": "navigate",
       "label": "Production Issue",
@@ -3664,6 +3709,17 @@
       "view_key": "production.orders.form"
     },
     {
+      "key": "production.output_allocations.list",
+      "kind": "navigate",
+      "label": "Production Output Allocations",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_output_allocation.list"
+      ],
+      "route_path": "/production/output-allocations",
+      "view_key": "production.output_allocations.list"
+    },
+    {
       "key": "production.outputs.detail",
       "kind": "navigate",
       "label": "Production Output",
@@ -3722,6 +3778,61 @@
       ],
       "route_path": "/production/outputs/new",
       "view_key": "production.outputs.form"
+    },
+    {
+      "key": "production.routing_steps.list",
+      "kind": "navigate",
+      "label": "Production Routing Steps",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_routing_step.list"
+      ],
+      "route_path": "/production/routing-steps",
+      "view_key": "production.routing_steps.list"
+    },
+    {
+      "key": "production.routings.detail",
+      "kind": "navigate",
+      "label": "Production Routing Detail",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_routing.read"
+      ],
+      "route_path": "/production/routings/detail",
+      "view_key": "production.routings.detail"
+    },
+    {
+      "key": "production.routings.form",
+      "kind": "navigate",
+      "label": "Production Routing Form",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_routing.update"
+      ],
+      "route_path": "/production/routings/form",
+      "view_key": "production.routings.form"
+    },
+    {
+      "key": "production.routings.list",
+      "kind": "navigate",
+      "label": "Production Routings",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_routing.list"
+      ],
+      "route_path": "/production/routings",
+      "view_key": "production.routings.list"
+    },
+    {
+      "key": "production.variance_cases.list",
+      "kind": "navigate",
+      "label": "Production Variance Cases",
+      "render_mode": "generic",
+      "required_permissions": [
+        "production_variance_case.list"
+      ],
+      "route_path": "/production/variance-cases",
+      "view_key": "production.variance_cases.list"
     },
     {
       "key": "production.work_centers.detail",
@@ -5302,6 +5413,19 @@
       ]
     },
     {
+      "action_key": "production.routings.list",
+      "key": "production.routings",
+      "label": "Production Routings",
+      "label_i18n": {
+        "en": "Production Routings",
+        "id": "Routing Produksi"
+      },
+      "order": 65,
+      "required_permissions": [
+        "production_routing.list"
+      ]
+    },
+    {
       "action_key": "recall.cases.list",
       "key": "recall.cases",
       "label": "Recall Cases",
@@ -5315,6 +5439,19 @@
       ]
     },
     {
+      "action_key": "production.cost_rates.list",
+      "key": "production.cost_rates",
+      "label": "Production Cost Rates",
+      "label_i18n": {
+        "en": "Production Cost Rates",
+        "id": "Tarif Biaya Produksi"
+      },
+      "order": 66,
+      "required_permissions": [
+        "production_cost_rate.list"
+      ]
+    },
+    {
       "action_key": "recall.actions.list",
       "key": "recall.actions",
       "label": "Recall Actions",
@@ -5325,6 +5462,45 @@
       "order": 66,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "production.cost_captures.list",
+      "key": "production.cost_captures",
+      "label": "Production Cost Captures",
+      "label_i18n": {
+        "en": "Production Cost Captures",
+        "id": "Capture Biaya Produksi"
+      },
+      "order": 67,
+      "required_permissions": [
+        "production_cost_capture.list"
+      ]
+    },
+    {
+      "action_key": "production.output_allocations.list",
+      "key": "production.output_allocations",
+      "label": "Production Output Allocations",
+      "label_i18n": {
+        "en": "Production Output Allocations",
+        "id": "Alokasi Output Produksi"
+      },
+      "order": 68,
+      "required_permissions": [
+        "production_output_allocation.list"
+      ]
+    },
+    {
+      "action_key": "production.variance_cases.list",
+      "key": "production.variance_cases",
+      "label": "Production Variance Cases",
+      "label_i18n": {
+        "en": "Production Variance Cases",
+        "id": "Kasus Variance Produksi"
+      },
+      "order": 69,
+      "required_permissions": [
+        "production_variance_case.list"
       ]
     },
     {
@@ -5841,7 +6017,8 @@
       },
       "order": 119,
       "required_permissions": [
-        "finance.read"
+        "finance.read",
+        "bank_statement.read"
       ]
     },
     {
@@ -5946,6 +6123,32 @@
       "order": 124,
       "required_permissions": [
         "prepaid_schedule.list"
+      ]
+    },
+    {
+      "action_key": "finance.production_cost_summary",
+      "key": "finance.production_cost_summary",
+      "label": "Production Cost Summary",
+      "label_i18n": {
+        "en": "Production Cost Summary",
+        "id": "Ringkasan Biaya Produksi"
+      },
+      "order": 145,
+      "required_permissions": [
+        "finance.read"
+      ]
+    },
+    {
+      "action_key": "finance.production_variance",
+      "key": "finance.production_variance",
+      "label": "Production Variance",
+      "label_i18n": {
+        "en": "Production Variance",
+        "id": "Variance Produksi"
+      },
+      "order": 146,
+      "required_permissions": [
+        "finance.read"
       ]
     }
   ],
@@ -27969,6 +28172,125 @@
       }
     },
     {
+      "columns": [
+        {
+          "key": "production_order_id",
+          "label": "Order",
+          "path": "values.production_order_id"
+        },
+        {
+          "key": "capture_type",
+          "label": "Type",
+          "path": "values.capture_type"
+        },
+        {
+          "key": "quantity",
+          "label": "Qty",
+          "path": "values.quantity"
+        },
+        {
+          "key": "actual_cost",
+          "label": "Cost",
+          "path": "values.actual_cost"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "approved",
+            "posted",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "production.cost_captures.list",
+      "kind": "list",
+      "model_key": "production_cost_capture",
+      "required_permissions": [
+        "production_cost_capture.list"
+      ],
+      "title": "Production Cost Captures",
+      "title_i18n": {
+        "en": "Production Cost Captures",
+        "id": "Production Cost Captures"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "work_center_code",
+          "label": "Work Center",
+          "path": "values.work_center_code"
+        },
+        {
+          "key": "rate_type",
+          "label": "Rate Type",
+          "path": "values.rate_type"
+        },
+        {
+          "key": "standard_rate",
+          "label": "Rate",
+          "path": "values.standard_rate"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "production.cost_rates.list",
+      "kind": "list",
+      "model_key": "production_cost_rate",
+      "required_permissions": [
+        "production_cost_rate.list"
+      ],
+      "title": "Production Cost Rates",
+      "title_i18n": {
+        "en": "Production Cost Rates",
+        "id": "Production Cost Rates"
+      }
+    },
+    {
       "allowed_actions": [
         "submit",
         "approve",
@@ -28637,6 +28959,66 @@
       }
     },
     {
+      "columns": [
+        {
+          "key": "source_production_output_id",
+          "label": "Output",
+          "path": "values.source_production_output_id"
+        },
+        {
+          "key": "output_item_code",
+          "label": "Output Item",
+          "path": "values.output_item_code"
+        },
+        {
+          "key": "output_quantity",
+          "label": "Qty",
+          "path": "values.output_quantity"
+        },
+        {
+          "key": "allocated_total_cost",
+          "label": "Allocated Cost",
+          "path": "values.allocated_total_cost"
+        },
+        {
+          "key": "allocated_unit_cost",
+          "label": "Unit Cost",
+          "path": "values.allocated_unit_cost"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "posted"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "production.output_allocations.list",
+      "kind": "list",
+      "model_key": "production_output_allocation",
+      "required_permissions": [
+        "production_output_allocation.list"
+      ],
+      "title": "Production Output Allocations",
+      "title_i18n": {
+        "en": "Production Output Allocations",
+        "id": "Production Output Allocations"
+      }
+    },
+    {
       "allowed_actions": [
         "submit",
         "approve",
@@ -28949,6 +29331,323 @@
       "title_i18n": {
         "en": "Production Outputs",
         "id": "Production Outputs"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "routing_id",
+          "label": "Routing",
+          "path": "values.routing_id"
+        },
+        {
+          "key": "sequence",
+          "label": "Sequence",
+          "path": "values.sequence"
+        },
+        {
+          "key": "work_center_code",
+          "label": "Work Center",
+          "path": "values.work_center_code"
+        },
+        {
+          "key": "cost_driver",
+          "label": "Driver",
+          "path": "values.cost_driver"
+        },
+        {
+          "key": "standard_rate",
+          "label": "Std Rate",
+          "path": "values.standard_rate"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "production.routing_steps.list",
+      "kind": "list",
+      "model_key": "production_routing_step",
+      "required_permissions": [
+        "production_routing_step.list"
+      ],
+      "title": "Production Routing Steps",
+      "title_i18n": {
+        "en": "Production Routing Steps",
+        "id": "Production Routing Steps"
+      }
+    },
+    {
+      "key": "production.routings.detail",
+      "kind": "detail",
+      "model_key": "production_routing",
+      "required_permissions": [
+        "production_routing.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "produced_item_code",
+              "label": "Produced Item",
+              "path": "values.produced_item_code",
+              "type": "string"
+            },
+            {
+              "key": "default_output_quantity",
+              "label": "Default Output Qty",
+              "path": "values.default_output_quantity",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Production Routing Detail",
+      "title_i18n": {
+        "en": "Production Routing Detail",
+        "id": "Production Routing Detail"
+      }
+    },
+    {
+      "key": "production.routings.form",
+      "kind": "form",
+      "model_key": "production_routing",
+      "required_permissions": [
+        "production_routing.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "produced_item_code",
+              "label": "Produced Item",
+              "path": "values.produced_item_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_output_quantity",
+              "label": "Default Output Qty",
+              "path": "values.default_output_quantity",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Production Routing Form",
+          "title_i18n": {
+            "en": "Production Routing Form",
+            "id": "Production Routing Form"
+          }
+        }
+      ],
+      "title": "Production Routing Form",
+      "title_i18n": {
+        "en": "Production Routing Form",
+        "id": "Production Routing Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "produced_item_code",
+          "label": "Produced Item",
+          "path": "values.produced_item_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "production.routings.list",
+      "kind": "list",
+      "model_key": "production_routing",
+      "required_permissions": [
+        "production_routing.list"
+      ],
+      "title": "Production Routings",
+      "title_i18n": {
+        "en": "Production Routings",
+        "id": "Production Routings"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "order_number",
+          "label": "Order",
+          "path": "values.order_number"
+        },
+        {
+          "key": "finished_item_code",
+          "label": "Finished Item",
+          "path": "values.finished_item_code"
+        },
+        {
+          "key": "variance_type",
+          "label": "Type",
+          "path": "values.variance_type"
+        },
+        {
+          "key": "amount",
+          "label": "Amount",
+          "path": "values.amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "open",
+            "investigating",
+            "corrected",
+            "closed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "production.variance_cases.list",
+      "kind": "list",
+      "model_key": "production_variance_case",
+      "required_permissions": [
+        "production_variance_case.list"
+      ],
+      "title": "Production Variance Cases",
+      "title_i18n": {
+        "en": "Production Variance Cases",
+        "id": "Production Variance Cases"
       }
     },
     {

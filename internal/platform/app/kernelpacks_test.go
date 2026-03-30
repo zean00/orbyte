@@ -17,8 +17,8 @@ func (p testModulePack) Manifests() []module.Manifest {
 
 func TestBuiltInModulePacksExposeExpectedKernelPacks(t *testing.T) {
 	packs := builtInModulePacks()
-	if len(packs) != 29 {
-		t.Fatalf("expected 29 built-in module packs, got %d", len(packs))
+	if len(packs) != 30 {
+		t.Fatalf("expected 30 built-in module packs, got %d", len(packs))
 	}
 
 	expectedKeys := []string{
@@ -45,6 +45,7 @@ func TestBuiltInModulePacksExposeExpectedKernelPacks(t *testing.T) {
 		"supplier_returns_core",
 		"planning_core",
 		"production_core",
+		"production_costing_core",
 		"pos_core",
 		"traceability_core",
 		"recall_core",
@@ -90,6 +91,7 @@ func TestBuiltInModuleManifestsPreservePackOrder(t *testing.T) {
 		"supplier_returns_core",
 		"planning_core",
 		"production_core",
+		"production_costing_core",
 		"pos_core",
 		"traceability_core",
 		"recall_core",

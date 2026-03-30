@@ -8,6 +8,8 @@ func FinanceReportsBundle() string {
       const text = function(en, id) { return ctx.locale === 'id' ? id : en; };
       const path = window.location.pathname || '';
       const reportKey = path.includes('period-close') ? 'period-close'
+        : path.includes('production-cost-summary') ? 'production-cost-summary'
+        : path.includes('production-variance') ? 'production-variance'
         : path.includes('inventory-valuation-as-of') ? 'inventory-valuation-as-of'
         : path.includes('inventory-valuation') ? 'inventory-valuation'
         : path.includes('inventory-gl-reconciliation') ? 'inventory-gl-reconciliation'
@@ -33,6 +35,8 @@ func FinanceReportsBundle() string {
         : path.includes('ap-reconciliation') ? 'ap-reconciliation'
         : 'journal-ledger';
       const title = reportKey === 'period-close' ? text('Period Close', 'Tutup Periode')
+        : reportKey === 'production-cost-summary' ? text('Production Cost Summary', 'Ringkasan Biaya Produksi')
+        : reportKey === 'production-variance' ? text('Production Variance', 'Variance Produksi')
         : reportKey === 'inventory-valuation-as-of' ? text('Inventory Valuation As Of', 'Penilaian Inventori Per Tanggal')
         : reportKey === 'inventory-valuation' ? text('Inventory Valuation', 'Penilaian Inventori')
         : reportKey === 'inventory-gl-reconciliation' ? text('Inventory GL Reconciliation', 'Rekonsiliasi GL Inventori')
@@ -214,6 +218,11 @@ func FinanceReportsBundle() string {
         if (reportKey === 'inventory-valuation' || reportKey === 'inventory-valuation-as-of') {
           return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Warehouse', 'Gudang') + '</th><th>' + text('Item', 'Item') + '</th><th>' + text('Account', 'Akun') + '</th><th>' + text('On Hand', 'On Hand') + '</th><th>' + text('Avg Cost', 'Biaya Rata-Rata') + '</th><th>' + text('Value', 'Nilai') + '</th></tr></thead><tbody>' + (payload.rows || []).map(function(row) {
             return '<tr><td>' + escapeHTML(row.warehouse_code) + '</td><td>' + escapeHTML((row.item_code || '') + ' ' + (row.item_name || '')) + '</td><td>' + escapeHTML(row.account_code) + '</td><td>' + money(row.quantity_on_hand) + '</td><td>' + money(row.average_unit_cost) + '</td><td>' + money(row.inventory_value) + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        }
+        if (reportKey === 'production-cost-summary' || reportKey === 'production-variance') {
+          return '<div class="finance-report__table-wrap"><table class="finance-report__table"><thead><tr><th>' + text('Order', 'Order') + '</th><th>' + text('Status', 'Status') + '</th><th>' + text('Finished Item', 'Item Jadi') + '</th><th>' + text('Planned Qty', 'Qty Rencana') + '</th><th>' + text('Actual Qty', 'Qty Aktual') + '</th><th>' + text('Standard Total', 'Total Standar') + '</th><th>' + text('Actual Total', 'Total Aktual') + '</th><th>' + text('Material Var', 'Var Material') + '</th><th>' + text('Labor Var', 'Var Tenaga Kerja') + '</th><th>' + text('OH Var', 'Var Overhead') + '</th><th>' + text('Yield Var', 'Var Yield') + '</th><th>' + text('Total Var', 'Total Var') + '</th></tr></thead><tbody>' + (payload.rows || []).map(function(row) {
+            return '<tr><td>' + escapeHTML(row.order_number || row.production_order_id || '') + '</td><td>' + escapeHTML(row.status || '') + '</td><td>' + escapeHTML((row.finished_item_code || '') + ' ' + (row.finished_item_name || '')) + '</td><td>' + money(row.planned_quantity) + '</td><td>' + money(row.actual_output_quantity) + '</td><td>' + money(row.standard_total_cost) + '</td><td>' + money(row.actual_total_cost) + '</td><td>' + money(row.material_variance_amount) + '</td><td>' + money(row.labor_variance_amount) + '</td><td>' + money(row.overhead_variance_amount) + '</td><td>' + money(row.yield_variance_amount) + '</td><td>' + money(row.total_variance_amount) + '</td></tr>';
           }).join('') + '</tbody></table></div>';
         }
         if (reportKey === 'inventory-gl-reconciliation') {

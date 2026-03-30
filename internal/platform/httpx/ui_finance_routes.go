@@ -11,7 +11,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, financeAssetSvc *application.FinanceAssetCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService, treasurySvc *application.TreasuryCoreService) {
+func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, financeAssetSvc *application.FinanceAssetCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService, treasurySvc *application.TreasuryCoreService, productionCostingSvc *application.ProductionCostingCoreService) {
 	if financeSvc == nil {
 		return
 	}
@@ -540,6 +540,36 @@ func registerUIFinanceRoutes(mux *http.ServeMux, ident *identity.Service, financ
 				return
 			}
 			respondJSON(w, http.StatusOK, preview)
+		})
+	}
+	if productionCostingSvc != nil {
+		mux.HandleFunc("GET /ui/data/finance/production-cost-summary", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("production cost summary is not allowed"))
+				return
+			}
+			respondJSON(w, http.StatusOK, productionCostingSvc.ProductionCostSummary(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+			))
+		})
+		mux.HandleFunc("GET /ui/data/finance/production-variance", func(w http.ResponseWriter, r *http.Request) {
+			p, ok := requireInteractivePrincipal(w, r)
+			if !ok {
+				return
+			}
+			if !principalAllowsAll(ident, p, []string{"finance.read"}) {
+				respondError(w, shared.Forbidden("production variance is not allowed"))
+				return
+			}
+			respondJSON(w, http.StatusOK, productionCostingSvc.ProductionVarianceReport(
+				organizationIDForPrincipal(p),
+				p.currentLocationID,
+			))
 		})
 	}
 	if inventoryFinanceSvc != nil {
