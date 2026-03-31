@@ -27463,6 +27463,16 @@
               "type": "string"
             },
             {
+              "key": "cashier_employee_id",
+              "label": "Cashier Employee",
+              "label_i18n": {
+                "en": "Cashier Employee",
+                "id": "Karyawan Kasir"
+              },
+              "path": "values.cashier_employee_id",
+              "type": "string"
+            },
+            {
               "key": "opened_at",
               "label": "Opened At",
               "label_i18n": {
@@ -27616,6 +27626,17 @@
               "widget": "text"
             },
             {
+              "key": "cashier_employee_id",
+              "label": "Cashier Employee",
+              "label_i18n": {
+                "en": "Cashier Employee",
+                "id": "Karyawan Kasir"
+              },
+              "path": "values.cashier_employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
               "key": "opening_cash_amount",
               "label": "Opening Cash",
               "label_i18n": {
@@ -27716,6 +27737,15 @@
             "id": "Kasir"
           },
           "path": "values.cashier_user_id"
+        },
+        {
+          "key": "cashier_employee_id",
+          "label": "Employee",
+          "label_i18n": {
+            "en": "Employee",
+            "id": "Karyawan"
+          },
+          "path": "values.cashier_employee_id"
         },
         {
           "key": "opened_at",
@@ -31631,6 +31661,11 @@
           "key": "production_order_id",
           "label": "Order",
           "path": "values.production_order_id"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "values.employee_id"
         },
         {
           "key": "capture_type",
