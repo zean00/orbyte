@@ -1238,6 +1238,531 @@
       "view_key": "documents.requests.list"
     },
     {
+      "key": "employee_spend.cash_advances.detail",
+      "kind": "navigate",
+      "label": "Cash Advance Detail",
+      "label_i18n": {
+        "en": "Cash Advance Detail",
+        "id": "Cash Advance Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/employee-spend/cash-advances/detail",
+      "view_key": "employee_spend.cash_advances.detail"
+    },
+    {
+      "key": "employee_spend.cash_advances.form",
+      "kind": "navigate",
+      "label": "Cash Advance Detail Form",
+      "label_i18n": {
+        "en": "Cash Advance Detail Form",
+        "id": "Cash Advance Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/employee-spend/cash-advances/form",
+      "view_key": "employee_spend.cash_advances.form"
+    },
+    {
+      "key": "employee_spend.cash_advances.list",
+      "kind": "navigate",
+      "label": "Cash Advances",
+      "label_i18n": {
+        "en": "Cash Advances",
+        "id": "Cash Advances"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/employee-spend/cash-advances",
+      "view_key": "employee_spend.cash_advances.list"
+    },
+    {
+      "key": "employee_spend.cash_advances.new",
+      "kind": "navigate",
+      "label": "New Cash Advance",
+      "label_i18n": {
+        "en": "New Cash Advance",
+        "id": "New Cash Advance"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/employee-spend/cash-advances/new",
+      "view_key": "employee_spend.cash_advances.form"
+    },
+    {
+      "key": "employee_spend.categories.detail",
+      "kind": "navigate",
+      "label": "Expense Category Detail",
+      "label_i18n": {
+        "en": "Expense Category Detail",
+        "id": "Expense Category Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_category.read"
+      ],
+      "route_path": "/employee-spend/categories/detail",
+      "view_key": "employee_spend.categories.detail"
+    },
+    {
+      "key": "employee_spend.categories.form",
+      "kind": "navigate",
+      "label": "Expense Category Form",
+      "label_i18n": {
+        "en": "Expense Category Form",
+        "id": "Expense Category Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_category.update"
+      ],
+      "route_path": "/employee-spend/categories/form",
+      "view_key": "employee_spend.categories.form"
+    },
+    {
+      "key": "employee_spend.categories.list",
+      "kind": "navigate",
+      "label": "Expense Categories",
+      "label_i18n": {
+        "en": "Expense Categories",
+        "id": "Expense Categories"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_category.list"
+      ],
+      "route_path": "/employee-spend/categories",
+      "view_key": "employee_spend.categories.list"
+    },
+    {
+      "key": "employee_spend.expense_claims.detail",
+      "kind": "navigate",
+      "label": "Expense Claim Detail",
+      "label_i18n": {
+        "en": "Expense Claim Detail",
+        "id": "Expense Claim Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/employee-spend/expense-claims/detail",
+      "view_key": "employee_spend.expense_claims.detail"
+    },
+    {
+      "key": "employee_spend.expense_claims.form",
+      "kind": "navigate",
+      "label": "Expense Claim Detail Form",
+      "label_i18n": {
+        "en": "Expense Claim Detail Form",
+        "id": "Expense Claim Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/employee-spend/expense-claims/form",
+      "view_key": "employee_spend.expense_claims.form"
+    },
+    {
+      "key": "employee_spend.expense_claims.list",
+      "kind": "navigate",
+      "label": "Expense Claims",
+      "label_i18n": {
+        "en": "Expense Claims",
+        "id": "Expense Claims"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/employee-spend/expense-claims",
+      "view_key": "employee_spend.expense_claims.list"
+    },
+    {
+      "key": "employee_spend.expense_claims.new",
+      "kind": "navigate",
+      "label": "New Expense Claim",
+      "label_i18n": {
+        "en": "New Expense Claim",
+        "id": "New Expense Claim"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/employee-spend/expense-claims/new",
+      "view_key": "employee_spend.expense_claims.form"
+    },
+    {
+      "key": "employee_spend.liquidations.detail",
+      "kind": "navigate",
+      "label": "Advance Liquidation Detail",
+      "label_i18n": {
+        "en": "Advance Liquidation Detail",
+        "id": "Advance Liquidation Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/employee-spend/liquidations/detail",
+      "view_key": "employee_spend.liquidations.detail"
+    },
+    {
+      "key": "employee_spend.liquidations.form",
+      "kind": "navigate",
+      "label": "Advance Liquidation Detail Form",
+      "label_i18n": {
+        "en": "Advance Liquidation Detail Form",
+        "id": "Advance Liquidation Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/employee-spend/liquidations/form",
+      "view_key": "employee_spend.liquidations.form"
+    },
+    {
+      "key": "employee_spend.liquidations.list",
+      "kind": "navigate",
+      "label": "Advance Liquidations",
+      "label_i18n": {
+        "en": "Advance Liquidations",
+        "id": "Advance Liquidations"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/employee-spend/liquidations",
+      "view_key": "employee_spend.liquidations.list"
+    },
+    {
+      "key": "employee_spend.liquidations.new",
+      "kind": "navigate",
+      "label": "New Advance Liquidation",
+      "label_i18n": {
+        "en": "New Advance Liquidation",
+        "id": "New Advance Liquidation"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/employee-spend/liquidations/new",
+      "view_key": "employee_spend.liquidations.form"
+    },
+    {
+      "key": "employee_spend.policies.detail",
+      "kind": "navigate",
+      "label": "Expense Policy Detail",
+      "label_i18n": {
+        "en": "Expense Policy Detail",
+        "id": "Expense Policy Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_policy.read"
+      ],
+      "route_path": "/employee-spend/policies/detail",
+      "view_key": "employee_spend.policies.detail"
+    },
+    {
+      "key": "employee_spend.policies.form",
+      "kind": "navigate",
+      "label": "Expense Policy Form",
+      "label_i18n": {
+        "en": "Expense Policy Form",
+        "id": "Expense Policy Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_policy.update"
+      ],
+      "route_path": "/employee-spend/policies/form",
+      "view_key": "employee_spend.policies.form"
+    },
+    {
+      "key": "employee_spend.policies.list",
+      "kind": "navigate",
+      "label": "Expense Policies",
+      "label_i18n": {
+        "en": "Expense Policies",
+        "id": "Expense Policies"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_policy.list"
+      ],
+      "route_path": "/employee-spend/policies",
+      "view_key": "employee_spend.policies.list"
+    },
+    {
+      "key": "employee_spend.profiles.detail",
+      "kind": "navigate",
+      "label": "Spend Profile Detail",
+      "label_i18n": {
+        "en": "Spend Profile Detail",
+        "id": "Spend Profile Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_spend_profile.read"
+      ],
+      "route_path": "/employee-spend/profiles/detail",
+      "view_key": "employee_spend.profiles.detail"
+    },
+    {
+      "key": "employee_spend.profiles.form",
+      "kind": "navigate",
+      "label": "Spend Profile Form",
+      "label_i18n": {
+        "en": "Spend Profile Form",
+        "id": "Spend Profile Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_spend_profile.update"
+      ],
+      "route_path": "/employee-spend/profiles/form",
+      "view_key": "employee_spend.profiles.form"
+    },
+    {
+      "key": "employee_spend.profiles.list",
+      "kind": "navigate",
+      "label": "Spend Profiles",
+      "label_i18n": {
+        "en": "Spend Profiles",
+        "id": "Spend Profiles"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_spend_profile.list"
+      ],
+      "route_path": "/employee-spend/profiles",
+      "view_key": "employee_spend.profiles.list"
+    },
+    {
+      "key": "employee_spend.rate_rules.detail",
+      "kind": "navigate",
+      "label": "Rate Rule Detail",
+      "label_i18n": {
+        "en": "Rate Rule Detail",
+        "id": "Rate Rule Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_rate_rule.read"
+      ],
+      "route_path": "/employee-spend/rate_rules/detail",
+      "view_key": "employee_spend.rate_rules.detail"
+    },
+    {
+      "key": "employee_spend.rate_rules.form",
+      "kind": "navigate",
+      "label": "Rate Rule Form",
+      "label_i18n": {
+        "en": "Rate Rule Form",
+        "id": "Rate Rule Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_rate_rule.update"
+      ],
+      "route_path": "/employee-spend/rate_rules/form",
+      "view_key": "employee_spend.rate_rules.form"
+    },
+    {
+      "key": "employee_spend.rate_rules.list",
+      "kind": "navigate",
+      "label": "Rate Rules",
+      "label_i18n": {
+        "en": "Rate Rules",
+        "id": "Rate Rules"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "expense_rate_rule.list"
+      ],
+      "route_path": "/employee-spend/rate_rules",
+      "view_key": "employee_spend.rate_rules.list"
+    },
+    {
+      "key": "employee_spend.reimbursements.detail",
+      "kind": "navigate",
+      "label": "Reimbursement Payment Detail",
+      "label_i18n": {
+        "en": "Reimbursement Payment Detail",
+        "id": "Reimbursement Payment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/employee-spend/reimbursements/detail",
+      "view_key": "employee_spend.reimbursements.detail"
+    },
+    {
+      "key": "employee_spend.reimbursements.form",
+      "kind": "navigate",
+      "label": "Reimbursement Payment Detail Form",
+      "label_i18n": {
+        "en": "Reimbursement Payment Detail Form",
+        "id": "Reimbursement Payment Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/employee-spend/reimbursements/form",
+      "view_key": "employee_spend.reimbursements.form"
+    },
+    {
+      "key": "employee_spend.reimbursements.list",
+      "kind": "navigate",
+      "label": "Reimbursement Payments",
+      "label_i18n": {
+        "en": "Reimbursement Payments",
+        "id": "Reimbursement Payments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/employee-spend/reimbursements",
+      "view_key": "employee_spend.reimbursements.list"
+    },
+    {
+      "key": "employee_spend.reimbursements.new",
+      "kind": "navigate",
+      "label": "New Reimbursement Payment",
+      "label_i18n": {
+        "en": "New Reimbursement Payment",
+        "id": "New Reimbursement Payment"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/employee-spend/reimbursements/new",
+      "view_key": "employee_spend.reimbursements.form"
+    },
+    {
+      "key": "employee_spend.travel_policies.detail",
+      "kind": "navigate",
+      "label": "Travel Policy Detail",
+      "label_i18n": {
+        "en": "Travel Policy Detail",
+        "id": "Travel Policy Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "travel_policy.read"
+      ],
+      "route_path": "/employee-spend/travel_policies/detail",
+      "view_key": "employee_spend.travel_policies.detail"
+    },
+    {
+      "key": "employee_spend.travel_policies.form",
+      "kind": "navigate",
+      "label": "Travel Policy Form",
+      "label_i18n": {
+        "en": "Travel Policy Form",
+        "id": "Travel Policy Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "travel_policy.update"
+      ],
+      "route_path": "/employee-spend/travel_policies/form",
+      "view_key": "employee_spend.travel_policies.form"
+    },
+    {
+      "key": "employee_spend.travel_policies.list",
+      "kind": "navigate",
+      "label": "Travel Policies",
+      "label_i18n": {
+        "en": "Travel Policies",
+        "id": "Travel Policies"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "travel_policy.list"
+      ],
+      "route_path": "/employee-spend/travel_policies",
+      "view_key": "employee_spend.travel_policies.list"
+    },
+    {
+      "key": "employee_spend.travel_requests.detail",
+      "kind": "navigate",
+      "label": "Travel Request Detail",
+      "label_i18n": {
+        "en": "Travel Request Detail",
+        "id": "Travel Request Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/employee-spend/travel-requests/detail",
+      "view_key": "employee_spend.travel_requests.detail"
+    },
+    {
+      "key": "employee_spend.travel_requests.form",
+      "kind": "navigate",
+      "label": "Travel Request Detail Form",
+      "label_i18n": {
+        "en": "Travel Request Detail Form",
+        "id": "Travel Request Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/employee-spend/travel-requests/form",
+      "view_key": "employee_spend.travel_requests.form"
+    },
+    {
+      "key": "employee_spend.travel_requests.list",
+      "kind": "navigate",
+      "label": "Travel Requests",
+      "label_i18n": {
+        "en": "Travel Requests",
+        "id": "Travel Requests"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/employee-spend/travel-requests",
+      "view_key": "employee_spend.travel_requests.list"
+    },
+    {
+      "key": "employee_spend.travel_requests.new",
+      "kind": "navigate",
+      "label": "New Travel Request",
+      "label_i18n": {
+        "en": "New Travel Request",
+        "id": "New Travel Request"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/employee-spend/travel-requests/new",
+      "view_key": "employee_spend.travel_requests.form"
+    },
+    {
       "key": "finance.accounts.detail",
       "kind": "navigate",
       "label": "Finance Account Detail",
@@ -5298,6 +5823,45 @@
       ]
     },
     {
+      "action_key": "employee_spend.categories.list",
+      "key": "employee_spend.categories",
+      "label": "Expense Categories",
+      "label_i18n": {
+        "en": "Expense Categories",
+        "id": "Kategori Biaya"
+      },
+      "order": 10,
+      "required_permissions": [
+        "expense_category.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.policies.list",
+      "key": "employee_spend.policies",
+      "label": "Expense Policies",
+      "label_i18n": {
+        "en": "Expense Policies",
+        "id": "Kebijakan Biaya"
+      },
+      "order": 11,
+      "required_permissions": [
+        "expense_policy.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.travel_policies.list",
+      "key": "employee_spend.travel_policies",
+      "label": "Travel Policies",
+      "label_i18n": {
+        "en": "Travel Policies",
+        "id": "Kebijakan Perjalanan"
+      },
+      "order": 12,
+      "required_permissions": [
+        "travel_policy.list"
+      ]
+    },
+    {
       "action_key": "organization.units.list",
       "key": "organization.units",
       "label": "Organization Units",
@@ -5308,6 +5872,19 @@
       "order": 12,
       "required_permissions": [
         "organization_structure.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.rate_rules.list",
+      "key": "employee_spend.rate_rules",
+      "label": "Rate Rules",
+      "label_i18n": {
+        "en": "Rate Rules",
+        "id": "Aturan Tarif"
+      },
+      "order": 13,
+      "required_permissions": [
+        "expense_rate_rule.list"
       ]
     },
     {
@@ -5324,6 +5901,19 @@
       ]
     },
     {
+      "action_key": "employee_spend.profiles.list",
+      "key": "employee_spend.profiles",
+      "label": "Spend Profiles",
+      "label_i18n": {
+        "en": "Spend Profiles",
+        "id": "Profil Pengeluaran"
+      },
+      "order": 14,
+      "required_permissions": [
+        "employee_spend_profile.list"
+      ]
+    },
+    {
       "action_key": "organization.cost_centers.list",
       "key": "organization.cost_centers",
       "label": "Cost Centers",
@@ -5334,6 +5924,58 @@
       "order": 14,
       "required_permissions": [
         "organization_structure.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.travel_requests.list",
+      "key": "employee_spend.travel_requests",
+      "label": "Travel Requests",
+      "label_i18n": {
+        "en": "Travel Requests",
+        "id": "Permintaan Perjalanan"
+      },
+      "order": 15,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.cash_advances.list",
+      "key": "employee_spend.cash_advances",
+      "label": "Cash Advances",
+      "label_i18n": {
+        "en": "Cash Advances",
+        "id": "Uang Muka"
+      },
+      "order": 16,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.expense_claims.list",
+      "key": "employee_spend.expense_claims",
+      "label": "Expense Claims",
+      "label_i18n": {
+        "en": "Expense Claims",
+        "id": "Klaim Biaya"
+      },
+      "order": 17,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.liquidations.list",
+      "key": "employee_spend.liquidations",
+      "label": "Advance Liquidations",
+      "label_i18n": {
+        "en": "Advance Liquidations",
+        "id": "Likuidasi Uang Muka"
+      },
+      "order": 18,
+      "required_permissions": [
+        "document.list"
       ]
     },
     {
@@ -5360,6 +6002,19 @@
       "order": 19,
       "required_permissions": [
         "item.list"
+      ]
+    },
+    {
+      "action_key": "employee_spend.reimbursements.list",
+      "key": "employee_spend.reimbursements",
+      "label": "Reimbursement Payments",
+      "label_i18n": {
+        "en": "Reimbursement Payments",
+        "id": "Pembayaran Reimbursement"
+      },
+      "order": 19,
+      "required_permissions": [
+        "document.list"
       ]
     },
     {
@@ -16767,6 +17422,2676 @@
       "title_i18n": {
         "en": "Requests",
         "id": "Permintaan"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "cash_advance",
+      "key": "employee_spend.cash_advances.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string"
+            },
+            {
+              "key": "request_date",
+              "label": "Request Date",
+              "path": "body.payload.request_date",
+              "type": "string"
+            },
+            {
+              "key": "requested_amount",
+              "label": "Requested Amount",
+              "path": "body.payload.requested_amount",
+              "type": "number"
+            },
+            {
+              "key": "approved_amount",
+              "label": "Approved Amount",
+              "path": "body.payload.approved_amount",
+              "type": "number"
+            },
+            {
+              "key": "outstanding_amount",
+              "label": "Outstanding Amount",
+              "path": "body.payload.outstanding_amount",
+              "type": "number"
+            },
+            {
+              "key": "advance_lines",
+              "label": "Advance Lines",
+              "path": "body.payload.advance_lines",
+              "type": "object"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Cash Advance Detail",
+      "title_i18n": {
+        "en": "Cash Advance Detail",
+        "id": "Cash Advance Detail"
+      }
+    },
+    {
+      "document_type": "cash_advance",
+      "key": "employee_spend.cash_advances.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "request_date",
+              "label": "Request Date",
+              "path": "body.payload.request_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "requested_amount",
+              "label": "Requested Amount",
+              "path": "body.payload.requested_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "approved_amount",
+              "label": "Approved Amount",
+              "path": "body.payload.approved_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "outstanding_amount",
+              "label": "Outstanding Amount",
+              "path": "body.payload.outstanding_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "advance_lines",
+              "label": "Advance Lines",
+              "path": "body.payload.advance_lines",
+              "type": "object",
+              "widget": "json"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Cash Advance Form",
+      "title_i18n": {
+        "en": "Cash Advance Form",
+        "id": "Cash Advance Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Number",
+          "path": "header.number"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "path": "body.payload.party_id"
+        },
+        {
+          "key": "request_date",
+          "label": "Request Date",
+          "path": "body.payload.request_date"
+        },
+        {
+          "key": "approved_amount",
+          "label": "Approved Amount",
+          "path": "body.payload.approved_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "cash_advance",
+      "empty_state": "No Cash Advances exist yet.",
+      "empty_state_i18n": {
+        "en": "No Cash Advances exist yet.",
+        "id": "Belum ada Cash Advances."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "issued",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.cash_advances.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Cash Advances",
+      "title_i18n": {
+        "en": "Cash Advances",
+        "id": "Cash Advances"
+      }
+    },
+    {
+      "key": "employee_spend.categories.detail",
+      "kind": "detail",
+      "model_key": "expense_category",
+      "required_permissions": [
+        "expense_category.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "category_group",
+              "label": "Group",
+              "path": "values.category_group",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "requires_receipt",
+              "label": "Requires Receipt",
+              "path": "values.requires_receipt",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "expense_account_code",
+              "label": "Expense Account",
+              "path": "values.expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payable_account_code",
+              "label": "Payable Account",
+              "path": "values.payable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_code",
+              "label": "Tax Code",
+              "path": "values.tax_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Expense Categories Detail",
+      "title_i18n": {
+        "en": "Expense Categories Detail",
+        "id": "Expense Categories Detail"
+      }
+    },
+    {
+      "key": "employee_spend.categories.form",
+      "kind": "form",
+      "model_key": "expense_category",
+      "required_permissions": [
+        "expense_category.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "category_group",
+              "label": "Group",
+              "path": "values.category_group",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "requires_receipt",
+              "label": "Requires Receipt",
+              "path": "values.requires_receipt",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "expense_account_code",
+              "label": "Expense Account",
+              "path": "values.expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payable_account_code",
+              "label": "Payable Account",
+              "path": "values.payable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_code",
+              "label": "Tax Code",
+              "path": "values.tax_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Expense Categories Form",
+          "title_i18n": {
+            "en": "Expense Categories Form",
+            "id": "Expense Categories Form"
+          }
+        }
+      ],
+      "title": "Expense Categories Form",
+      "title_i18n": {
+        "en": "Expense Categories Form",
+        "id": "Expense Categories Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.categories.list",
+      "kind": "list",
+      "model_key": "expense_category",
+      "required_permissions": [
+        "expense_category.list"
+      ],
+      "title": "Expense Categories",
+      "title_i18n": {
+        "en": "Expense Categories",
+        "id": "Expense Categories"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "expense_claim",
+      "key": "employee_spend.expense_claims.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string"
+            },
+            {
+              "key": "claim_date",
+              "label": "Claim Date",
+              "path": "body.payload.claim_date",
+              "type": "string"
+            },
+            {
+              "key": "claim_lines",
+              "label": "Claim Lines",
+              "path": "body.payload.claim_lines",
+              "type": "object"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total Amount",
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "approved_amount",
+              "label": "Approved Amount",
+              "path": "body.payload.approved_amount",
+              "type": "number"
+            },
+            {
+              "key": "reimbursable_amount",
+              "label": "Reimbursable Amount",
+              "path": "body.payload.reimbursable_amount",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Expense Claim Detail",
+      "title_i18n": {
+        "en": "Expense Claim Detail",
+        "id": "Expense Claim Detail"
+      }
+    },
+    {
+      "document_type": "expense_claim",
+      "key": "employee_spend.expense_claims.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "claim_date",
+              "label": "Claim Date",
+              "path": "body.payload.claim_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "claim_lines",
+              "label": "Claim Lines",
+              "path": "body.payload.claim_lines",
+              "type": "object",
+              "widget": "json"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total Amount",
+              "path": "body.payload.total_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "approved_amount",
+              "label": "Approved Amount",
+              "path": "body.payload.approved_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reimbursable_amount",
+              "label": "Reimbursable Amount",
+              "path": "body.payload.reimbursable_amount",
+              "type": "number",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Expense Claim Form",
+      "title_i18n": {
+        "en": "Expense Claim Form",
+        "id": "Expense Claim Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Number",
+          "path": "header.number"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "path": "body.payload.party_id"
+        },
+        {
+          "key": "claim_date",
+          "label": "Claim Date",
+          "path": "body.payload.claim_date"
+        },
+        {
+          "key": "reimbursable_amount",
+          "label": "Reimbursable",
+          "path": "body.payload.reimbursable_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "expense_claim",
+      "empty_state": "No Expense Claims exist yet.",
+      "empty_state_i18n": {
+        "en": "No Expense Claims exist yet.",
+        "id": "Belum ada Expense Claims."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.expense_claims.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Expense Claims",
+      "title_i18n": {
+        "en": "Expense Claims",
+        "id": "Expense Claims"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "advance_liquidation",
+      "key": "employee_spend.liquidations.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string"
+            },
+            {
+              "key": "cash_advance_id",
+              "label": "Cash Advance",
+              "path": "body.payload.cash_advance_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "expense_claim_id",
+              "label": "Expense Claim",
+              "path": "body.payload.expense_claim_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "liquidation_date",
+              "label": "Liquidation Date",
+              "path": "body.payload.liquidation_date",
+              "type": "string"
+            },
+            {
+              "key": "advance_amount",
+              "label": "Advance Amount",
+              "path": "body.payload.advance_amount",
+              "type": "number"
+            },
+            {
+              "key": "claim_total_amount",
+              "label": "Claim Total",
+              "path": "body.payload.claim_total_amount",
+              "type": "number"
+            },
+            {
+              "key": "net_settlement_amount",
+              "label": "Net Settlement",
+              "path": "body.payload.net_settlement_amount",
+              "type": "number"
+            },
+            {
+              "key": "settlement_direction",
+              "label": "Settlement Direction",
+              "path": "body.payload.settlement_direction",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Advance Liquidation Detail",
+      "title_i18n": {
+        "en": "Advance Liquidation Detail",
+        "id": "Advance Liquidation Detail"
+      }
+    },
+    {
+      "document_type": "advance_liquidation",
+      "key": "employee_spend.liquidations.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cash_advance_id",
+              "label": "Cash Advance",
+              "path": "body.payload.cash_advance_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_claim_id",
+              "label": "Expense Claim",
+              "path": "body.payload.expense_claim_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "liquidation_date",
+              "label": "Liquidation Date",
+              "path": "body.payload.liquidation_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "advance_amount",
+              "label": "Advance Amount",
+              "path": "body.payload.advance_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "claim_total_amount",
+              "label": "Claim Total",
+              "path": "body.payload.claim_total_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "net_settlement_amount",
+              "label": "Net Settlement",
+              "path": "body.payload.net_settlement_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "settlement_direction",
+              "label": "Settlement Direction",
+              "path": "body.payload.settlement_direction",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Advance Liquidation Form",
+      "title_i18n": {
+        "en": "Advance Liquidation Form",
+        "id": "Advance Liquidation Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Number",
+          "path": "header.number"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "path": "body.payload.party_id"
+        },
+        {
+          "key": "liquidation_date",
+          "label": "Liquidation Date",
+          "path": "body.payload.liquidation_date"
+        },
+        {
+          "key": "net_settlement_amount",
+          "label": "Net Settlement",
+          "path": "body.payload.net_settlement_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "advance_liquidation",
+      "empty_state": "No Advance Liquidations exist yet.",
+      "empty_state_i18n": {
+        "en": "No Advance Liquidations exist yet.",
+        "id": "Belum ada Advance Liquidations."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.liquidations.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Advance Liquidations",
+      "title_i18n": {
+        "en": "Advance Liquidations",
+        "id": "Advance Liquidations"
+      }
+    },
+    {
+      "key": "employee_spend.policies.detail",
+      "kind": "detail",
+      "model_key": "expense_policy",
+      "required_permissions": [
+        "expense_policy.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_currency_code",
+              "label": "Default Currency",
+              "path": "values.default_currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_payment_method_code",
+              "label": "Default Payment Method",
+              "path": "values.default_payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_payable_account_code",
+              "label": "Default Payable Account",
+              "path": "values.default_payable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_expense_account_code",
+              "label": "Default Expense Account",
+              "path": "values.default_expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_treasury_account_id",
+              "label": "Default Treasury Account",
+              "path": "values.default_treasury_account_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Expense Policies Detail",
+      "title_i18n": {
+        "en": "Expense Policies Detail",
+        "id": "Expense Policies Detail"
+      }
+    },
+    {
+      "key": "employee_spend.policies.form",
+      "kind": "form",
+      "model_key": "expense_policy",
+      "required_permissions": [
+        "expense_policy.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_currency_code",
+              "label": "Default Currency",
+              "path": "values.default_currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_payment_method_code",
+              "label": "Default Payment Method",
+              "path": "values.default_payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_payable_account_code",
+              "label": "Default Payable Account",
+              "path": "values.default_payable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_expense_account_code",
+              "label": "Default Expense Account",
+              "path": "values.default_expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_treasury_account_id",
+              "label": "Default Treasury Account",
+              "path": "values.default_treasury_account_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Expense Policies Form",
+          "title_i18n": {
+            "en": "Expense Policies Form",
+            "id": "Expense Policies Form"
+          }
+        }
+      ],
+      "title": "Expense Policies Form",
+      "title_i18n": {
+        "en": "Expense Policies Form",
+        "id": "Expense Policies Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.policies.list",
+      "kind": "list",
+      "model_key": "expense_policy",
+      "required_permissions": [
+        "expense_policy.list"
+      ],
+      "title": "Expense Policies",
+      "title_i18n": {
+        "en": "Expense Policies",
+        "id": "Expense Policies"
+      }
+    },
+    {
+      "key": "employee_spend.profiles.detail",
+      "kind": "detail",
+      "model_key": "employee_spend_profile",
+      "required_permissions": [
+        "employee_spend_profile.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_policy_id",
+              "label": "Expense Policy",
+              "path": "values.expense_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "travel_policy_id",
+              "label": "Travel Policy",
+              "path": "values.travel_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_currency_code",
+              "label": "Default Currency",
+              "path": "values.default_currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_payment_method_code",
+              "label": "Default Payment Method",
+              "path": "values.default_payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payable_account_code",
+              "label": "Payable Account",
+              "path": "values.payable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_account_code",
+              "label": "Expense Account",
+              "path": "values.expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.treasury_account_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Spend Profiles Detail",
+      "title_i18n": {
+        "en": "Spend Profiles Detail",
+        "id": "Spend Profiles Detail"
+      }
+    },
+    {
+      "key": "employee_spend.profiles.form",
+      "kind": "form",
+      "model_key": "employee_spend_profile",
+      "required_permissions": [
+        "employee_spend_profile.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_policy_id",
+              "label": "Expense Policy",
+              "path": "values.expense_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "travel_policy_id",
+              "label": "Travel Policy",
+              "path": "values.travel_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_currency_code",
+              "label": "Default Currency",
+              "path": "values.default_currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_payment_method_code",
+              "label": "Default Payment Method",
+              "path": "values.default_payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payable_account_code",
+              "label": "Payable Account",
+              "path": "values.payable_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_account_code",
+              "label": "Expense Account",
+              "path": "values.expense_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.treasury_account_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Spend Profiles Form",
+          "title_i18n": {
+            "en": "Spend Profiles Form",
+            "id": "Spend Profiles Form"
+          }
+        }
+      ],
+      "title": "Spend Profiles Form",
+      "title_i18n": {
+        "en": "Spend Profiles Form",
+        "id": "Spend Profiles Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "values.employee_id"
+        },
+        {
+          "key": "expense_policy_id",
+          "label": "Expense Policy",
+          "path": "values.expense_policy_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.profiles.list",
+      "kind": "list",
+      "model_key": "employee_spend_profile",
+      "required_permissions": [
+        "employee_spend_profile.list"
+      ],
+      "title": "Spend Profiles",
+      "title_i18n": {
+        "en": "Spend Profiles",
+        "id": "Spend Profiles"
+      }
+    },
+    {
+      "key": "employee_spend.rate_rules.detail",
+      "kind": "detail",
+      "model_key": "expense_rate_rule",
+      "required_permissions": [
+        "expense_rate_rule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "policy_id",
+              "label": "Policy",
+              "path": "values.policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_category_code",
+              "label": "Category",
+              "path": "values.expense_category_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "rate_key",
+              "label": "Rate Key",
+              "path": "values.rate_key",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "rate_amount",
+              "label": "Rate Amount",
+              "path": "values.rate_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Rate Rules Detail",
+      "title_i18n": {
+        "en": "Rate Rules Detail",
+        "id": "Rate Rules Detail"
+      }
+    },
+    {
+      "key": "employee_spend.rate_rules.form",
+      "kind": "form",
+      "model_key": "expense_rate_rule",
+      "required_permissions": [
+        "expense_rate_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "policy_id",
+              "label": "Policy",
+              "path": "values.policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "expense_category_code",
+              "label": "Category",
+              "path": "values.expense_category_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "rate_key",
+              "label": "Rate Key",
+              "path": "values.rate_key",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "rate_amount",
+              "label": "Rate Amount",
+              "path": "values.rate_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Rate Rules Form",
+          "title_i18n": {
+            "en": "Rate Rules Form",
+            "id": "Rate Rules Form"
+          }
+        }
+      ],
+      "title": "Rate Rules Form",
+      "title_i18n": {
+        "en": "Rate Rules Form",
+        "id": "Rate Rules Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "expense_category_code",
+          "label": "Category",
+          "path": "values.expense_category_code"
+        },
+        {
+          "key": "rate_key",
+          "label": "Rate",
+          "path": "values.rate_key"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.rate_rules.list",
+      "kind": "list",
+      "model_key": "expense_rate_rule",
+      "required_permissions": [
+        "expense_rate_rule.list"
+      ],
+      "title": "Rate Rules",
+      "title_i18n": {
+        "en": "Rate Rules",
+        "id": "Rate Rules"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "reimbursement_payment",
+      "key": "employee_spend.reimbursements.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string"
+            },
+            {
+              "key": "cash_advance_id",
+              "label": "Cash Advance",
+              "path": "body.payload.cash_advance_id",
+              "type": "string"
+            },
+            {
+              "key": "source_liquidation_id",
+              "label": "Source Liquidation",
+              "path": "body.payload.source_liquidation_id",
+              "type": "string"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "body.payload.payment_method_code",
+              "type": "string"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "body.payload.treasury_account_id",
+              "type": "string"
+            },
+            {
+              "key": "amount_paid",
+              "label": "Amount Paid",
+              "path": "body.payload.amount_paid",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Reimbursement Payment Detail",
+      "title_i18n": {
+        "en": "Reimbursement Payment Detail",
+        "id": "Reimbursement Payment Detail"
+      }
+    },
+    {
+      "document_type": "reimbursement_payment",
+      "key": "employee_spend.reimbursements.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "travel_request_id",
+              "label": "Travel Request",
+              "path": "body.payload.travel_request_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cash_advance_id",
+              "label": "Cash Advance",
+              "path": "body.payload.cash_advance_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_liquidation_id",
+              "label": "Source Liquidation",
+              "path": "body.payload.source_liquidation_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "body.payload.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "body.payload.treasury_account_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "amount_paid",
+              "label": "Amount Paid",
+              "path": "body.payload.amount_paid",
+              "type": "number",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Reimbursement Payment Form",
+      "title_i18n": {
+        "en": "Reimbursement Payment Form",
+        "id": "Reimbursement Payment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Number",
+          "path": "header.number"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "path": "body.payload.party_id"
+        },
+        {
+          "key": "payment_date",
+          "label": "Payment Date",
+          "path": "body.payload.payment_date"
+        },
+        {
+          "key": "amount_paid",
+          "label": "Amount Paid",
+          "path": "body.payload.amount_paid"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "reimbursement_payment",
+      "empty_state": "No Reimbursement Payments exist yet.",
+      "empty_state_i18n": {
+        "en": "No Reimbursement Payments exist yet.",
+        "id": "Belum ada Reimbursement Payments."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "paid",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.reimbursements.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Reimbursement Payments",
+      "title_i18n": {
+        "en": "Reimbursement Payments",
+        "id": "Reimbursement Payments"
+      }
+    },
+    {
+      "key": "employee_spend.travel_policies.detail",
+      "kind": "detail",
+      "model_key": "travel_policy",
+      "required_permissions": [
+        "travel_policy.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_expense_policy_id",
+              "label": "Default Expense Policy",
+              "path": "values.default_expense_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Travel Policies Detail",
+      "title_i18n": {
+        "en": "Travel Policies Detail",
+        "id": "Travel Policies Detail"
+      }
+    },
+    {
+      "key": "employee_spend.travel_policies.form",
+      "kind": "form",
+      "model_key": "travel_policy",
+      "required_permissions": [
+        "travel_policy.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_expense_policy_id",
+              "label": "Default Expense Policy",
+              "path": "values.default_expense_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Travel Policies Form",
+          "title_i18n": {
+            "en": "Travel Policies Form",
+            "id": "Travel Policies Form"
+          }
+        }
+      ],
+      "title": "Travel Policies Form",
+      "title_i18n": {
+        "en": "Travel Policies Form",
+        "id": "Travel Policies Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.travel_policies.list",
+      "kind": "list",
+      "model_key": "travel_policy",
+      "required_permissions": [
+        "travel_policy.list"
+      ],
+      "title": "Travel Policies",
+      "title_i18n": {
+        "en": "Travel Policies",
+        "id": "Travel Policies"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "travel_request",
+      "key": "employee_spend.travel_requests.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string"
+            },
+            {
+              "key": "request_date",
+              "label": "Request Date",
+              "path": "body.payload.request_date",
+              "type": "string"
+            },
+            {
+              "key": "travel_start_date",
+              "label": "Travel Start Date",
+              "path": "body.payload.travel_start_date",
+              "type": "string"
+            },
+            {
+              "key": "travel_end_date",
+              "label": "Travel End Date",
+              "path": "body.payload.travel_end_date",
+              "type": "string"
+            },
+            {
+              "key": "destination",
+              "label": "Destination",
+              "path": "body.payload.destination",
+              "type": "string"
+            },
+            {
+              "key": "purpose",
+              "label": "Purpose",
+              "path": "body.payload.purpose",
+              "type": "string"
+            },
+            {
+              "key": "estimated_lines",
+              "label": "Estimated Lines",
+              "path": "body.payload.estimated_lines",
+              "type": "object"
+            },
+            {
+              "key": "total_amount",
+              "label": "Estimated Total",
+              "path": "body.payload.total_amount",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Travel Request Detail",
+      "title_i18n": {
+        "en": "Travel Request Detail",
+        "id": "Travel Request Detail"
+      }
+    },
+    {
+      "document_type": "travel_request",
+      "key": "employee_spend.travel_requests.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "path": "body.payload.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "path": "body.payload.organization_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "path": "body.payload.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "path": "body.payload.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "body.payload.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "body.payload.notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "request_date",
+              "label": "Request Date",
+              "path": "body.payload.request_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "travel_start_date",
+              "label": "Travel Start Date",
+              "path": "body.payload.travel_start_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "travel_end_date",
+              "label": "Travel End Date",
+              "path": "body.payload.travel_end_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "destination",
+              "label": "Destination",
+              "path": "body.payload.destination",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "purpose",
+              "label": "Purpose",
+              "path": "body.payload.purpose",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "estimated_lines",
+              "label": "Estimated Lines",
+              "path": "body.payload.estimated_lines",
+              "type": "object",
+              "widget": "json"
+            },
+            {
+              "key": "total_amount",
+              "label": "Estimated Total",
+              "path": "body.payload.total_amount",
+              "type": "number",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Travel Request Form",
+      "title_i18n": {
+        "en": "Travel Request Form",
+        "id": "Travel Request Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Number",
+          "path": "header.number"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "path": "body.payload.party_id"
+        },
+        {
+          "key": "request_date",
+          "label": "Request Date",
+          "path": "body.payload.request_date"
+        },
+        {
+          "key": "total_amount",
+          "label": "Estimated Total",
+          "path": "body.payload.total_amount"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "travel_request",
+      "empty_state": "No Travel Requests exist yet.",
+      "empty_state_i18n": {
+        "en": "No Travel Requests exist yet.",
+        "id": "Belum ada Travel Requests."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "employee_spend.travel_requests.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Travel Requests",
+      "title_i18n": {
+        "en": "Travel Requests",
+        "id": "Travel Requests"
       }
     },
     {
