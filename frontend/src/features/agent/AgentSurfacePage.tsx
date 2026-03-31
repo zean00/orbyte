@@ -231,6 +231,19 @@ export default function AgentSurfacePage() {
       ),
     [mcpTools],
   );
+  const analyticalTools = useMemo(
+    () =>
+      mcpTools.filter((item) => {
+        const actionClass = String(item.contract?.actionClass || "");
+        const tags = item.contract?.governanceTags || [];
+        return (
+          actionClass === "analyze" &&
+          (item.name.startsWith("business.analytics.") ||
+            tags.includes("analytics"))
+        );
+      }),
+    [mcpTools],
+  );
   const governedTools = useMemo(
     () =>
       mcpTools.filter((item) =>
@@ -494,7 +507,41 @@ export default function AgentSurfacePage() {
                         Business Comprehension
                       </div>
                       <div className="mt-2 space-y-2">
-                        {investigationTools.slice(0, 6).map((item) => (
+                        {investigationTools
+                          .filter((item) => !analyticalTools.includes(item))
+                          .slice(0, 6)
+                          .map((item) => (
+                          <div
+                            key={item.name}
+                            className="rounded-lg border border-line bg-shell px-3 py-2"
+                          >
+                            <div className="text-sm font-semibold text-body">
+                              {item.title || item.name}
+                            </div>
+                            <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">
+                              {[
+                                item.sourceType,
+                                item.contract?.actionClass,
+                                item.contract?.riskClass,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                            {item.contract?.businessDomains?.length ? (
+                              <div className="mt-1 text-xs text-muted">
+                                {item.contract.businessDomains.join(", ")}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-line bg-surface p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                        Cross-Domain Analytics
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {analyticalTools.slice(0, 6).map((item) => (
                           <div
                             key={item.name}
                             className="rounded-lg border border-line bg-shell px-3 py-2"

@@ -207,11 +207,154 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 			mustBuiltInToolRegistration((*Server).treasuryReconciliationAdvisorReview, builtInTool{name: "treasury.reconciliation.advisor.review", title: "Review Treasury and Reconciliation", description: "Analyze treasury and reconciliation coverage, exceptions, and follow-up investigation tools.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"treasury", "finance"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
 			mustBuiltInToolRegistration((*Server).inventoryHealthAdvisorReview, builtInTool{name: "inventory.health.advisor.review", title: "Review Inventory Health", description: "Analyze inventory, warehouse, and production-oriented business coverage and health signals.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"inventory", "operations"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
 			mustBuiltInToolRegistration((*Server).partyMasterAdvisorReview, builtInTool{name: "party.master.advisor.review", title: "Review Party Master", description: "Analyze customer, vendor, contact, and address master coverage and data quality follow-up paths.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"party", "masterdata"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsOverview, builtInTool{
+				name:        "business.analytics.overview",
+				title:       "Get Cross-Domain Analytics Overview",
+				description: "Return a scoped cross-domain analytical summary with KPI cards, anomalies, exceptions, and drilldowns.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"operating_unit_id": map[string]any{"type": "string"},
+						"domain":            map[string]any{"type": "string"},
+					},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsAnomalySearch, builtInTool{
+				name:        "business.analytics.anomaly.search",
+				title:       "Search Analytical Anomalies",
+				description: "Identify cross-domain anomaly signals such as backlog spikes, rejection pressure, audit gaps, or master-data issues.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"operating_unit_id": map[string]any{"type": "string"},
+						"domain":            map[string]any{"type": "string"},
+						"page":              map[string]any{"type": "integer"},
+						"page_size":         map[string]any{"type": "integer"},
+					},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsExceptionCluster, builtInTool{
+				name:        "business.analytics.exception.cluster",
+				title:       "Cluster Business Exceptions",
+				description: "Group open business exceptions by area, status, severity, and aging for cross-domain investigation.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"status":   map[string]any{"type": "string"},
+						"group_by": map[string]any{"type": "string"},
+					},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsDrilldown, builtInTool{
+				name:        "business.analytics.drilldown",
+				title:       "Resolve Analytical Drilldown",
+				description: "Resolve a stable analytical drilldown handle into the next MCP tool and arguments.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"handle": map[string]any{"type": "string"},
+					},
+					"required": []string{"handle"},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsDomainSummary, builtInTool{
+				name:        "business.analytics.domain.summary",
+				title:       "Get Domain Analytics Summary",
+				description: "Return a scoped analytical summary for one business domain with KPI cards and investigation drilldowns.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"domain":            map[string]any{"type": "string"},
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"operating_unit_id": map[string]any{"type": "string"},
+					},
+					"required": []string{"domain"},
+				},
+			}),
 		)
 	}
 	if s != nil && s.analytics != nil {
 		registry = append(registry,
 			mustBuiltInToolRegistration((*Server).businessAnalyticsKPISummary, builtInTool{name: "business.analytics.kpi.summary", title: "Get Business KPI Summary", description: "Return current and recent analytics KPIs for business investigation.", permission: "analytics.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"business-comprehension"}, BusinessDomains: []string{"cross-domain", "analytics"}}}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsTrend, builtInTool{
+				name:        "business.analytics.trend",
+				title:       "Get Business Analytics Trend",
+				description: "Return scoped time-series analytics with grouped trend points and drilldowns.",
+				permission:  "analytics.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"date_from": map[string]any{"type": "string"},
+						"date_to":   map[string]any{"type": "string"},
+						"bucket":    map[string]any{"type": "string"},
+						"limit":     map[string]any{"type": "integer"},
+					},
+				},
+			}),
 		)
 	}
 	return registry

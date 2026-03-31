@@ -862,6 +862,13 @@ func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
 	if health.Contract.ActionClass != "analyze" || health.Contract.RiskClass != "low" {
 		t.Fatalf("expected analyze metadata, got %+v", health.Contract)
 	}
+	overview := byName["business.analytics.overview"]
+	if overview.SourceType != "built_in" || overview.Contract.ActionClass != "analyze" || overview.Contract.RiskClass != "low" {
+		t.Fatalf("expected analytical overview metadata, got %+v", overview)
+	}
+	if !contains(overview.Contract.GovernanceTags, "analytics") {
+		t.Fatalf("expected analytics governance tag, got %+v", overview.Contract)
+	}
 
 	synthetic := byName["pricing.business.document.draft.create"]
 	if synthetic.SourceType != "synthetic" || synthetic.ModuleKey != "pricing" {
@@ -921,13 +928,23 @@ func TestBusinessComprehensionTools(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("record audit event failed: %v", err)
 	}
+	transition, err := server.workflows.Execute("generic_request_flow", "draft", "submit")
+	if err != nil {
+		t.Fatalf("prepare workflow transition failed: %v", err)
+	}
+	if err := server.workflows.CreateSideEffects(transition, "document", record.Header.ID, time.Now().UTC()); err != nil {
+		t.Fatalf("create workflow side effects failed: %v", err)
+	}
+	if _, err := server.analytics.CaptureSnapshot(); err != nil {
+		t.Fatalf("capture analytics snapshot failed: %v", err)
+	}
 	actor := ActorContext{
 		ActorID:         "user_admin",
 		EffectiveUserID: "user_admin",
 		LocationID:      "loc_hq",
 		PermissionChecker: func(permissionKey string) bool {
 			switch permissionKey {
-			case "module.read", "document.list", "document.read", "analytics.read":
+			case "module.read", "document.list", "document.read", "analytics.read", "configuration.read":
 				return true
 			default:
 				return false
@@ -990,6 +1007,229 @@ func TestBusinessComprehensionTools(t *testing.T) {
 	advisor := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	if len(advisor["relevant_modules"].([]businessModuleInfo)) == 0 {
 		t.Fatalf("expected relevant modules in advisor review, got %+v", advisor)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      5,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.overview", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.overview failed: %+v", resp.Error)
+	}
+	overview := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(overview["summary"].([]map[string]any)) == 0 {
+		t.Fatalf("expected analytical summary cards, got %+v", overview)
+	}
+	if len(overview["drilldowns"].([]map[string]any)) == 0 {
+		t.Fatalf("expected drilldowns in analytical overview, got %+v", overview)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      6,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.trend", "arguments": map[string]any{"bucket": "day"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.trend failed: %+v", resp.Error)
+	}
+	trend := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(trend["series"].([]map[string]any)) == 0 {
+		t.Fatalf("expected analytical trend series, got %+v", trend)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      7,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.anomaly.search", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.anomaly.search failed: %+v", resp.Error)
+	}
+	anomalies := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(anomalies["items"].([]map[string]any)) == 0 {
+		t.Fatalf("expected analytical anomalies, got %+v", anomalies)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      8,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.exception.cluster", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.exception.cluster failed: %+v", resp.Error)
+	}
+	clustered := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(clustered["items"].([]map[string]any)) == 0 {
+		t.Fatalf("expected clustered exceptions, got %+v", clustered)
+	}
+
+	firstDrilldown := overview["drilldowns"].([]map[string]any)[0]
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      9,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.drilldown", "arguments": map[string]any{"handle": firstDrilldown["handle"]}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.drilldown failed: %+v", resp.Error)
+	}
+	drilldown := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if strings.TrimSpace(anyString(drilldown["target_tool"])) == "" {
+		t.Fatalf("expected resolved drilldown target, got %+v", drilldown)
+	}
+}
+
+func TestBusinessAnalyticsTrendUsesLatestSnapshotPerBucket(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	first, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{"name": "Promo 1"})
+	if err != nil {
+		t.Fatalf("create first document failed: %v", err)
+	}
+	first.Header.Status = "submitted"
+	if err := server.documents.Save(first); err != nil {
+		t.Fatalf("save first submitted document failed: %v", err)
+	}
+	if _, err := server.analytics.CaptureSnapshot(); err != nil {
+		t.Fatalf("capture first snapshot failed: %v", err)
+	}
+	second, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{"name": "Promo 2"})
+	if err != nil {
+		t.Fatalf("create second document failed: %v", err)
+	}
+	second.Header.Status = "submitted"
+	if err := server.documents.Save(second); err != nil {
+		t.Fatalf("save second submitted document failed: %v", err)
+	}
+	if _, err := server.analytics.CaptureSnapshot(); err != nil {
+		t.Fatalf("capture second snapshot failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "analytics.read"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.trend", "arguments": map[string]any{"bucket": "day"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.trend failed: %+v", resp.Error)
+	}
+	series := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["series"].([]map[string]any)
+	if len(series) != 1 {
+		t.Fatalf("expected one trend bucket, got %+v", series)
+	}
+	if got := anyInt(series[0]["submitted_documents"]); got != 2 {
+		t.Fatalf("expected latest snapshot submitted_documents=2, got %+v", series[0])
+	}
+	if got := anyInt(series[0]["approved_documents"]); got != 0 {
+		t.Fatalf("expected latest snapshot approved_documents=0, got %+v", series[0])
+	}
+}
+
+func TestBusinessAnalyticsExceptionClusterHonorsStatusFilterAndMixedStatusDrilldown(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	recordSubmitted, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{"name": "Submitted Promo"})
+	if err != nil {
+		t.Fatalf("create submitted document failed: %v", err)
+	}
+	recordRejected, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{"name": "Rejected Promo"})
+	if err != nil {
+		t.Fatalf("create rejected document failed: %v", err)
+	}
+	recordSubmitted.Header.Status = "submitted"
+	recordRejected.Header.Status = "rejected"
+	if err := server.documents.Save(recordSubmitted); err != nil {
+		t.Fatalf("save submitted document failed: %v", err)
+	}
+	if err := server.documents.Save(recordRejected); err != nil {
+		t.Fatalf("save rejected document failed: %v", err)
+	}
+	transition, err := server.workflows.Execute("generic_request_flow", "draft", "submit")
+	if err != nil {
+		t.Fatalf("prepare workflow transition failed: %v", err)
+	}
+	if err := server.workflows.CreateSideEffects(transition, "document", recordSubmitted.Header.ID, time.Now().UTC()); err != nil {
+		t.Fatalf("create workflow side effects failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.list", "configuration.read":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.exception.cluster", "arguments": map[string]any{"status": "pending", "group_by": "kind"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.exception.cluster with status filter failed: %+v", resp.Error)
+	}
+	clusters := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]map[string]any)
+	if len(clusters) != 1 || anyString(clusters[0]["group_key"]) != "workflow_approval" {
+		t.Fatalf("expected only pending approval cluster, got %+v", clusters)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.analytics.exception.cluster", "arguments": map[string]any{"group_by": "kind"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.analytics.exception.cluster failed: %+v", resp.Error)
+	}
+	clusters = resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]map[string]any)
+	var documentCluster map[string]any
+	for _, item := range clusters {
+		if anyString(item["group_key"]) == "document_status" {
+			documentCluster = item
+			break
+		}
+	}
+	if len(documentCluster) == 0 {
+		t.Fatalf("expected document_status cluster, got %+v", clusters)
+	}
+	statuses := documentCluster["statuses"].([]string)
+	if !(contains(statuses, "submitted") && contains(statuses, "rejected")) {
+		t.Fatalf("expected mixed statuses in cluster, got %+v", documentCluster)
+	}
+	drilldown := documentCluster["drilldown"].(map[string]any)
+	targetArgs := drilldown["target_arguments"].(map[string]any)
+	statusSlice := stringSliceArg(targetArgs, "statuses")
+	if !(contains(statusSlice, "submitted") && contains(statusSlice, "rejected")) {
+		t.Fatalf("expected drilldown to preserve all statuses, got %+v", drilldown)
 	}
 }
 
