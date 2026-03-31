@@ -92,6 +92,8 @@ curl -X POST http://localhost:8080/documents/<document-id>/actions \
 
 Orbyte also exposes MCP endpoints for machine-oriented clients.
 
+For the normative target-state role of MCP as Orbyte's canonical business interface for external agents, see [MCP Target Architecture](./mcp-target-architecture.md).
+
 MCP is useful for:
 
 - external AI agents
@@ -105,6 +107,14 @@ The MCP surface can expose:
 - resources
 - apps
 - streaming updates
+
+The target direction is for MCP to cover:
+
+- business discovery
+- operational read access
+- analytical business comprehension
+- governed draft-first action
+- control-plane and governance metadata
 
 Examples of capability areas already represented include:
 
@@ -167,6 +177,7 @@ Examples of capability areas already represented include:
 - rely on versioned generated contracts for external integrations
 - use idempotency for non-trivial writes
 - keep business meaning at the contract level, not in ad hoc client conventions
+- align machine integrations with the MCP target architecture rather than screen-level conventions
 
 ## Versioned Contracts
 

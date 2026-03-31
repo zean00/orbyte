@@ -359,6 +359,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../mcp-target-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../features/" class="md-nav__link">
         
   
@@ -808,10 +835,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#implemented-example" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        Implemented Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference-patterns-not-yet-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Patterns (Not Yet Implemented)
       
     </span>
   </a>
@@ -1037,10 +1075,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_21" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
         
           
-          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
             
   
   
@@ -1058,8 +1096,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_21">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1388,10 +1426,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#implemented-example" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        Implemented Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference-patterns-not-yet-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Patterns (Not Yet Implemented)
       
     </span>
   </a>
@@ -1444,6 +1493,7 @@
 
 <h1 id="reference-implementations">Reference Implementations<a class="headerlink" href="#reference-implementations" title="Permanent link">&para;</a></h1>
 <p>This guide describes how Orbyte can be packaged into reference solutions for common enterprise application categories.</p>
+<p><strong>Note:</strong> The sections below describe reference patterns and design guidance. The only currently implemented business module is <code>clinic_registration</code> (see Vertical Industry Platform section). All other patterns are guides for building new modules, not pre-built bundles.</p>
 <h2 id="why-reference-implementations-matter">Why Reference Implementations Matter<a class="headerlink" href="#why-reference-implementations-matter" title="Permanent link">&para;</a></h2>
 <p>A platform becomes easier to adopt when users can see how its generic kernel maps to recognizable product shapes.</p>
 <p>Reference implementations help with:</p>
@@ -1524,9 +1574,12 @@
 <li>operator guidance</li>
 </ul>
 <h2 id="reference-pattern-vertical-industry-platform">Reference Pattern: Vertical Industry Platform<a class="headerlink" href="#reference-pattern-vertical-industry-platform" title="Permanent link">&para;</a></h2>
-<h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
+<h3 id="implemented-example">Implemented Example<a class="headerlink" href="#implemented-example" title="Permanent link">&para;</a></h3>
 <ul>
-<li>clinic</li>
+<li><strong>clinic</strong> - Full <code>clinic_registration</code> module with patient profiles, practitioner profiles, payer profiles, clinic registration documents, clinic encounter documents, and related workflows</li>
+</ul>
+<h3 id="reference-patterns-not-yet-implemented">Reference Patterns (Not Yet Implemented)<a class="headerlink" href="#reference-patterns-not-yet-implemented" title="Permanent link">&para;</a></h3>
+<ul>
 <li>field service</li>
 <li>logistics</li>
 <li>education operations</li>

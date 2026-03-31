@@ -359,6 +359,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../mcp-target-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../features/" class="md-nav__link">
         
   
@@ -1053,10 +1080,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_21" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
         
           
-          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
             
   
   
@@ -1074,8 +1101,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_21">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1548,6 +1575,7 @@
 </code></pre></div>
 <h2 id="mcp-surface">MCP Surface<a class="headerlink" href="#mcp-surface" title="Permanent link">&para;</a></h2>
 <p>Orbyte also exposes MCP endpoints for machine-oriented clients.</p>
+<p>For the normative target-state role of MCP as Orbyte's canonical business interface for external agents, see <a href="../mcp-target-architecture/">MCP Target Architecture</a>.</p>
 <p>MCP is useful for:</p>
 <ul>
 <li>external AI agents</li>
@@ -1561,6 +1589,14 @@
 <li>resources</li>
 <li>apps</li>
 <li>streaming updates</li>
+</ul>
+<p>The target direction is for MCP to cover:</p>
+<ul>
+<li>business discovery</li>
+<li>operational read access</li>
+<li>analytical business comprehension</li>
+<li>governed draft-first action</li>
+<li>control-plane and governance metadata</li>
 </ul>
 <p>Examples of capability areas already represented include:</p>
 <ul>
@@ -1613,6 +1649,7 @@
 <li>rely on versioned generated contracts for external integrations</li>
 <li>use idempotency for non-trivial writes</li>
 <li>keep business meaning at the contract level, not in ad hoc client conventions</li>
+<li>align machine integrations with the MCP target architecture rather than screen-level conventions</li>
 </ul>
 <h2 id="versioned-contracts">Versioned Contracts<a class="headerlink" href="#versioned-contracts" title="Permanent link">&para;</a></h2>
 <p>External contracts should be treated as versioned assets.</p>

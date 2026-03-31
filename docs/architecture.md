@@ -12,6 +12,8 @@ At a high level, Orbyte is a modular Go application with:
 - generic HTTP and MCP runtime surfaces
 - optional external infrastructure such as PostgreSQL, Typesense, NATS, SMTP, and object storage
 
+For the target-state engineering role of MCP and its relationship to ACP and the agent workspace, see [MCP Target Architecture](./mcp-target-architecture.md).
+
 ## Reference Diagram
 
 ![Architecture Overview](./assets/architecture-overview.svg)
@@ -151,6 +153,8 @@ These surfaces are intended for:
 - service principals
 - external AI agents
 
+MCP should be treated as the canonical machine-facing business contract for external agents, while ACP remains the runtime/session bridge to external providers. The detailed target-state model is defined in [MCP Target Architecture](./mcp-target-architecture.md).
+
 ## Extension Model
 
 The platform is extended by module manifests. There are two main sources of manifests at startup:
@@ -174,6 +178,8 @@ A module can contribute:
 - MCP tools and resources
 
 This allows the kernel to stay stable while business capabilities evolve independently.
+
+The target direction is for modules to be broadly discoverable and operable through MCP in business terms, using a mix of generic platform tools, synthetic module wrappers, and specialized hand-authored tools. See [MCP Target Architecture](./mcp-target-architecture.md).
 
 ## Runtime Configuration and Identity Helpers
 

@@ -359,6 +359,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../mcp-target-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../features/" class="md-nav__link">
         
   
@@ -1036,10 +1063,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_21" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
         
           
-          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
             
   
   
@@ -1057,8 +1084,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_21">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1495,7 +1522,7 @@
 <li>integration submission schemas</li>
 <li>MCP tool and resource contracts</li>
 </ul>
-<p>See <a href="../api-and-contracts/">API and Contracts</a> and <a href="../contracts/">External Contract Governance</a>.</p>
+<p>See <a href="../api-and-contracts/">API and Contracts</a>, <a href="../mcp-target-architecture/">MCP Target Architecture</a>, and <a href="../contracts/">External Contract Governance</a>.</p>
 <h2 id="mcp-and-ai-agents">MCP and AI Agents<a class="headerlink" href="#mcp-and-ai-agents" title="Permanent link">&para;</a></h2>
 <p>For external AI platforms, the most relevant surface is MCP.</p>
 <p>Orbyte can expose:</p>
@@ -1507,10 +1534,18 @@
 <li>integration and configuration controls</li>
 </ul>
 <p>This lets an external agent use Orbyte as an enterprise system of action and context without embedding the agent directly into the kernel.</p>
+<p>The target engineering model is:</p>
+<ul>
+<li>ACP as the runtime bridge to external providers and sessions</li>
+<li>MCP as the canonical business contract for machine discovery, analysis, and governed action</li>
+<li>agent workspace as the human-facing orchestration surface</li>
+</ul>
+<p>See <a href="../mcp-target-architecture/">MCP Target Architecture</a> for the normative target-state model.</p>
 <h2 id="recommended-ai-integration-pattern">Recommended AI Integration Pattern<a class="headerlink" href="#recommended-ai-integration-pattern" title="Permanent link">&para;</a></h2>
 <p>For most teams:</p>
 <ol>
 <li>keep the agent runtime outside Orbyte</li>
+<li>treat MCP as the primary business interface for agentic tools</li>
 <li>authenticate through service principals or delegated machine access</li>
 <li>expose only approved HTTP and MCP capabilities</li>
 <li>enforce permission checks and policy hooks</li>

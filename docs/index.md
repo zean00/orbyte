@@ -9,6 +9,10 @@
 Orbyte is designed to be <strong>agent-ready</strong>, not <strong>agent-dependent</strong>. External AI systems should connect through HTTP, MCP, service principals, policy, and audit controls.
 </div>
 
+<div class="orbyte-note">
+For the target-state engineering model of MCP as Orbyte's canonical business interface for external agents, see <a href="./mcp-target-architecture/">MCP Target Architecture</a>.
+</div>
+
 ## Why Orbyte
 
 <div class="grid cards" markdown>
@@ -37,6 +41,7 @@ Orbyte is designed to be <strong>agent-ready</strong>, not <strong>agent-depende
 - [Concepts](./concepts.md)
 - [Use Cases](./use-cases.md)
 - [Architecture](./architecture.md)
+- [MCP Target Architecture](./mcp-target-architecture.md)
 
 ## Core Product Areas
 
@@ -45,6 +50,7 @@ Orbyte is designed to be <strong>agent-ready</strong>, not <strong>agent-depende
 - [Configuration](./configuration.md)
 - [Security and Governance](./security-and-governance.md)
 - [Integration](./integration.md)
+- [MCP Target Architecture](./mcp-target-architecture.md)
 - [Product Packaging](./product-packaging.md)
 
 ## Build On The Platform

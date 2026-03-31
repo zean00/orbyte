@@ -595,20 +595,41 @@ function MCPAdminPage({
 }) {
   const runtime = ((payload?.runtime || {}) as Record<string, unknown>) || {};
   const [tools, setTools] = useState(
-    asItems({
-      items: payload?.tools as Array<Record<string, unknown>> | undefined,
-    }),
+    decorateMcpTools(
+      asItems({
+        items: payload?.tools as Array<Record<string, unknown>> | undefined,
+      }),
+    ),
   );
   const [busyKey, setBusyKey] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     setTools(
-      asItems({
-        items: payload?.tools as Array<Record<string, unknown>> | undefined,
-      }),
+      decorateMcpTools(
+        asItems({
+          items: payload?.tools as Array<Record<string, unknown>> | undefined,
+        }),
+      ),
     );
   }, [payload]);
+
+  const groupedCounts = useMemo(() => {
+    const actionClasses = new Set<string>();
+    const advisorTools = new Set<string>();
+    for (const tool of tools) {
+      const actionClass = String(tool.action_class || "");
+      if (actionClass) actionClasses.add(actionClass);
+      const governance = String(tool.governance_tags || "");
+      if (governance.includes("advisor-pack")) {
+        advisorTools.add(String(tool.key || ""));
+      }
+    }
+    return {
+      actionClasses: actionClasses.size,
+      advisorTools: advisorTools.size,
+    };
+  }, [tools]);
 
   async function toggleTool(row: Record<string, unknown>) {
     const key = String(row.key || "");
@@ -626,11 +647,13 @@ function MCPAdminPage({
       );
       const nextRuntime = (response.runtime || {}) as Record<string, unknown>;
       setTools(
-        asItems({
-          items: nextRuntime.tools as
-            | Array<Record<string, unknown>>
-            | undefined,
-        }),
+        decorateMcpTools(
+          asItems({
+            items: nextRuntime.tools as
+              | Array<Record<string, unknown>>
+              | undefined,
+          }),
+        ),
       );
       setMessage(`Tool ${enabled ? "disabled" : "enabled"}.`);
     } catch (error) {
@@ -660,6 +683,14 @@ function MCPAdminPage({
         />
         <SummaryCard label="Port" value={String(runtime.port || "-")} />
         <SummaryCard label="Tools" value={String(tools.length)} />
+        <SummaryCard
+          label="Action Classes"
+          value={String(groupedCounts.actionClasses)}
+        />
+        <SummaryCard
+          label="Advisor Tools"
+          value={String(groupedCounts.advisorTools)}
+        />
       </div>
       <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
         <div className="mb-3 text-sm font-semibold text-body">Endpoints</div>
@@ -679,7 +710,11 @@ function MCPAdminPage({
         <DataGrid
           columns={[
             { key: "key", label: "Tool" },
+            { key: "source_type", label: "Source" },
             { key: "module_key", label: "Module" },
+            { key: "action_class", label: "Action" },
+            { key: "risk_class", label: "Risk" },
+            { key: "business_domains", label: "Domains" },
             { key: "endpoint_scope", label: "Scope" },
             { key: "enabled", label: "Enabled" },
             { key: "operation", label: "Operation" },
@@ -727,6 +762,27 @@ function MCPAdminPage({
       </section>
     </div>
   );
+}
+
+function decorateMcpTools(
+  items: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  return items.map((item) => ({
+    ...item,
+    action_class:
+      String(item.action_class || resolvePath(item, "contract.actionClass") || "") ||
+      "",
+    risk_class:
+      String(item.risk_class || resolvePath(item, "contract.riskClass") || "") ||
+      "",
+    source_type: String(item.source_type || "") || "",
+    business_domains: displayValue(
+      item.business_domains || resolvePath(item, "contract.businessDomains"),
+    ),
+    governance_tags: displayValue(
+      item.governance_tags || resolvePath(item, "contract.governanceTags"),
+    ),
+  }));
 }
 
 function ACPAdminPage({

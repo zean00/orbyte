@@ -427,14 +427,21 @@ type MCPDefinition struct {
 }
 
 type MCPContractMetadata struct {
-	Version         string   `json:"version,omitempty"`
-	Stability       string   `json:"stability,omitempty"`
-	SideEffectClass string   `json:"side_effect_class,omitempty"`
-	Idempotency     string   `json:"idempotency,omitempty"`
-	AuditAction     string   `json:"audit_action,omitempty"`
-	RequiredScopes  []string `json:"required_scopes,omitempty"`
-	Deprecated      bool     `json:"deprecated,omitempty"`
-	DeprecationNote string   `json:"deprecation_note,omitempty"`
+	Version              string   `json:"version,omitempty"`
+	Stability            string   `json:"stability,omitempty"`
+	SideEffectClass      string   `json:"side_effect_class,omitempty"`
+	Idempotency          string   `json:"idempotency,omitempty"`
+	AuditAction          string   `json:"audit_action,omitempty"`
+	ActionClass          string   `json:"action_class,omitempty"`
+	RiskClass            string   `json:"risk_class,omitempty"`
+	DraftOnly            bool     `json:"draft_only,omitempty"`
+	RequiresConfirmation bool     `json:"requires_confirmation,omitempty"`
+	RequiresApproval     bool     `json:"requires_approval,omitempty"`
+	GovernanceTags       []string `json:"governance_tags,omitempty"`
+	BusinessDomains      []string `json:"business_domains,omitempty"`
+	RequiredScopes       []string `json:"required_scopes,omitempty"`
+	Deprecated           bool     `json:"deprecated,omitempty"`
+	DeprecationNote      string   `json:"deprecation_note,omitempty"`
 }
 
 type TemplateDefinition struct {

@@ -48,6 +48,23 @@ type ACPSession = {
   trace?: ACPEvent[];
 };
 
+type MCPTool = {
+  name: string;
+  title?: string;
+  description?: string;
+  moduleKey?: string;
+  sourceType?: string;
+  contract?: {
+    actionClass?: string;
+    riskClass?: string;
+    draftOnly?: boolean;
+    requiresConfirmation?: boolean;
+    requiresApproval?: boolean;
+    governanceTags?: string[];
+    businessDomains?: string[];
+  };
+};
+
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
   const {
@@ -65,6 +82,7 @@ export default function AgentSurfacePage() {
   const [prompt, setPrompt] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
   const streamRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -147,6 +165,24 @@ export default function AgentSurfacePage() {
   }, [providerKey, selectedSessionID]);
 
   useEffect(() => {
+    let mounted = true;
+    async function loadMcpTools() {
+      try {
+        const payload = await callMcp<{ tools?: MCPTool[] }>("tools/list");
+        if (!mounted) return;
+        setMcpTools(sortMcpTools(payload.tools || []));
+      } catch {
+        if (!mounted) return;
+        setMcpTools([]);
+      }
+    }
+    void loadMcpTools();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selectedSessionID) {
       setSession(null);
       if (streamRef.current) {
@@ -185,6 +221,24 @@ export default function AgentSurfacePage() {
       providers[0] ||
       null,
     [providerKey, providers],
+  );
+  const investigationTools = useMemo(
+    () =>
+      mcpTools.filter(
+        (item) =>
+          item.contract?.actionClass === "analyze" ||
+          item.contract?.actionClass === "read",
+      ),
+    [mcpTools],
+  );
+  const governedTools = useMemo(
+    () =>
+      mcpTools.filter((item) =>
+        ["draft", "submit", "controlled_mutation"].includes(
+          String(item.contract?.actionClass || ""),
+        ),
+      ),
+    [mcpTools],
   );
 
   async function createSession() {
@@ -426,6 +480,82 @@ export default function AgentSurfacePage() {
 
               <div className="space-y-4">
                 <aside className="rounded-2xl border border-line bg-shell p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-body">
+                      MCP Capabilities
+                    </div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-muted">
+                      {mcpTools.length} tools
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    <div className="rounded-xl border border-line bg-surface p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                        Business Comprehension
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {investigationTools.slice(0, 6).map((item) => (
+                          <div
+                            key={item.name}
+                            className="rounded-lg border border-line bg-shell px-3 py-2"
+                          >
+                            <div className="text-sm font-semibold text-body">
+                              {item.title || item.name}
+                            </div>
+                            <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">
+                              {[
+                                item.sourceType,
+                                item.contract?.actionClass,
+                                item.contract?.riskClass,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                            {item.contract?.businessDomains?.length ? (
+                              <div className="mt-1 text-xs text-muted">
+                                {item.contract.businessDomains.join(", ")}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-line bg-surface p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                        Governed Actions
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {governedTools.slice(0, 6).map((item) => (
+                          <div
+                            key={item.name}
+                            className="rounded-lg border border-line bg-shell px-3 py-2"
+                          >
+                            <div className="text-sm font-semibold text-body">
+                              {item.title || item.name}
+                            </div>
+                            <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">
+                              {[
+                                item.contract?.actionClass,
+                                item.contract?.riskClass,
+                                item.contract?.draftOnly ? "draft-only" : "",
+                                item.contract?.requiresConfirmation
+                                  ? "confirm"
+                                  : "",
+                                item.contract?.requiresApproval
+                                  ? "approval"
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                <aside className="rounded-2xl border border-line bg-shell p-4">
                   <div className="text-sm font-semibold text-body">
                     Approvals
                   </div>
@@ -544,6 +674,40 @@ async function mutateJson<T>(url: string, init: RequestInit): Promise<T> {
     throw new Error(await response.text());
   }
   return (await response.json()) as T;
+}
+
+async function callMcp<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+  const response = await fetch("/mcp", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": readCookie("orbyte_csrf"),
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  const payload = (await response.json()) as {
+    error?: { message?: string };
+    result?: T;
+  };
+  if (payload.error) {
+    throw new Error(payload.error.message || "MCP request failed.");
+  }
+  return payload.result as T;
+}
+
+function sortMcpTools(items: MCPTool[]): MCPTool[] {
+  return [...items].sort((left, right) =>
+    String(left.title || left.name).localeCompare(String(right.title || right.name)),
+  );
 }
 
 function readCookie(name: string): string {

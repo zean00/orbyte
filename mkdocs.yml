@@ -30,6 +30,7 @@ nav:
   - Concepts: concepts.md
   - Use Cases: use-cases.md
   - Architecture: architecture.md
+  - MCP Target Architecture: mcp-target-architecture.md
   - Features: features.md
   - Components: components.md
   - Configuration: configuration.md

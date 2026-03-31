@@ -39,6 +39,8 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 				Name:        def.Key,
 				Title:       def.Title,
 				Description: def.Description,
+				ModuleKey:   detail.Manifest.Key,
+				SourceType:  "module",
 				Scope:       scope,
 				InputSchema: cloneMap(def.InputSchema),
 				Contract: contractDescriptorFromModule(

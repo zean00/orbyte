@@ -68,6 +68,8 @@ func (s *Server) listSyntheticTools(actor ActorContext) []ToolDescriptor {
 			Name:        def.Name,
 			Title:       def.Title,
 			Description: def.Description,
+			ModuleKey:   def.ModuleKey,
+			SourceType:  "synthetic",
 			Scope:       scopeForModule(def.ModuleKey),
 			InputSchema: cloneMap(def.InputSchema),
 			Contract: ContractDescriptor{
@@ -76,6 +78,13 @@ func (s *Server) listSyntheticTools(actor ActorContext) []ToolDescriptor {
 				SideEffectClass:     defaultToolSideEffectClass(def.Name, ""),
 				Idempotency:         defaultToolIdempotency(def.Name, ""),
 				AuditAction:         "mcp.tool." + strings.TrimSpace(def.Name),
+				ActionClass:         defaultToolActionClass(def.Name, ""),
+				RiskClass:           defaultToolRiskClass(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				DraftOnly:           defaultToolActionClass(def.Name, "") == "draft",
+				RequiresConfirmation: defaultToolRequiresConfirmation(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				RequiresApproval:    defaultToolRequiresApproval(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				GovernanceTags:      defaultToolGovernanceTags(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				BusinessDomains:     defaultToolBusinessDomains(def.Name),
 				RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
 			},
 		})

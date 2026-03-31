@@ -1,6 +1,9 @@
 package mcp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type builtInTool struct {
 	name        string
@@ -29,13 +32,15 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 		if !scopeMatches(actor.EndpointScope, builtInToolScope(def.name)) {
 			continue
 		}
-		if !allowsAll(actor.PermissionChecker, []string{def.permission}) {
+		if !s.builtInToolAllowed(actor, def) {
 			continue
 		}
 		items = append(items, ToolDescriptor{
 			Name:        def.name,
 			Title:       def.title,
 			Description: def.description,
+			ModuleKey:   "platform.core",
+			SourceType:  "built_in",
 			Scope:       builtInToolScope(def.name),
 			InputSchema: cloneMap(def.inputSchema),
 			Contract:    builtInToolContract(def.name, def.permission, def.contract),
@@ -56,10 +61,29 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 	if !s.ToolEnabled(name) {
 		return nil, true, fmt.Errorf("tool is disabled")
 	}
-	if !allowsAll(actor.PermissionChecker, []string{reg.definition.permission}) {
+	if !s.builtInToolAllowed(actor, reg.definition) {
 		return nil, true, fmt.Errorf("tool is not allowed")
 	}
 	return reg.handler(s, actor, arguments)
+}
+
+func (s *Server) builtInToolAllowed(actor ActorContext, def builtInTool) bool {
+	switch strings.TrimSpace(def.name) {
+	case "business.timeline.get":
+		if allowsAll(actor.PermissionChecker, []string{"document.read"}) {
+			return true
+		}
+		if s != nil && s.models != nil {
+			for _, item := range s.models.Definitions() {
+				if allowsAll(actor.PermissionChecker, []string{item.ReadPermissionKey}) {
+					return true
+				}
+			}
+		}
+		return false
+	default:
+		return allowsAll(actor.PermissionChecker, []string{def.permission})
+	}
 }
 
 func (s *Server) mustBuiltInToolRegistrations() []builtInToolRegistration {

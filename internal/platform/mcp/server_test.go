@@ -544,6 +544,132 @@ func TestBusinessModelReadIsSanitized(t *testing.T) {
 	}
 }
 
+func TestBusinessTimelineGetReturnsModelAuditEvents(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.models.Register(model.Definition{
+		Key:                 "discount_policy",
+		DisplayName:         "Discount Policy",
+		OwnerModuleKey:      "pricing",
+		ListPermissionKey:   "pricing.policy.list",
+		ReadPermissionKey:   "pricing.policy.read",
+		CreatePermissionKey: "pricing.policy.create",
+		UpdatePermissionKey: "pricing.policy.update",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string", Label: "Name"},
+		},
+	}); err != nil {
+		t.Fatalf("register model failed: %v", err)
+	}
+	record, err := server.models.Create("discount_policy", "user_admin", map[string]any{
+		"name": "VIP Discount",
+	})
+	if err != nil {
+		t.Fatalf("create model record failed: %v", err)
+	}
+	if err := server.audit.Record(audit.Event{
+		ID:         "audit-model-1",
+		Action:     "model.updated",
+		TargetType: "model:discount_policy",
+		TargetID:   record.ID,
+		ActorID:    "user_admin",
+		OccurredAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("record model audit event failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "pricing.policy.read":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.timeline.get",
+			"arguments": map[string]any{
+				"resource_kind": "model",
+				"model_key":     "discount_policy",
+				"record_id":     record.ID,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.timeline.get failed: %+v", resp.Error)
+	}
+	timeline := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(timeline["audit_events"].([]audit.Event)) != 1 {
+		t.Fatalf("expected model audit event in timeline, got %+v", timeline)
+	}
+}
+
+func TestToolsListHidesBusinessTimelineGetWithoutReadableResources(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "module.read"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	names := make([]string, 0, len(tools))
+	for _, item := range tools {
+		names = append(names, item.Name)
+	}
+	if contains(names, "business.timeline.get") {
+		t.Fatalf("did not expect business.timeline.get for module.read-only actor: %+v", names)
+	}
+}
+
+func TestToolsListIncludesBusinessTimelineGetForModelReaders(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.models.Register(model.Definition{
+		Key:                 "discount_policy",
+		DisplayName:         "Discount Policy",
+		OwnerModuleKey:      "pricing",
+		ListPermissionKey:   "pricing.policy.list",
+		ReadPermissionKey:   "pricing.policy.read",
+		CreatePermissionKey: "pricing.policy.create",
+		UpdatePermissionKey: "pricing.policy.update",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string", Label: "Name"},
+		},
+	}); err != nil {
+		t.Fatalf("register model failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "pricing.policy.read"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	names := make([]string, 0, len(tools))
+	for _, item := range tools {
+		names = append(names, item.Name)
+	}
+	if !contains(names, "business.timeline.get") {
+		t.Fatalf("expected business.timeline.get for model reader, got %+v", names)
+	}
+}
+
 func TestBusinessRecordSearchDoesNotLeakDocumentsWithoutDocumentList(t *testing.T) {
 	server := newTestServer(t)
 	if err := server.documents.Register(document.Definition{
@@ -672,6 +798,198 @@ func TestBusinessDocumentDraftUpdateValidatesMergedPayload(t *testing.T) {
 	record := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["record"].(document.Record)
 	if got := record.Body.Payload["description"]; got != "After update" {
 		t.Fatalf("expected description patch applied, got %+v", record.Body.Payload)
+	}
+}
+
+func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                "pricing",
+		Name:               "Pricing",
+		DomainFamily:       "commercial",
+		Category:           "pricing",
+		OwnedDocumentTypes: []string{"promotion_plan"},
+		Documents: []document.Definition{{
+			Type:          "promotion_plan",
+			DisplayName:   "Promotion Plan",
+			SchemaVersion: "v1",
+		}},
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{{
+				Key:                 "pricing.promotion.special.review",
+				Title:               "Special Promotion Review",
+				Description:         "Review promotion conditions.",
+				Operation:           "analytics.snapshot.get",
+				RequiredPermissions: []string{"module.read"},
+			}},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register pricing manifest failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.list", "document.read", "document.create", "document.update_draft", "analytics.read":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	byName := map[string]ToolDescriptor{}
+	for _, item := range tools {
+		byName[item.Name] = item
+	}
+
+	health := byName["business.health.summary"]
+	if health.SourceType != "built_in" || health.ModuleKey != "platform.core" {
+		t.Fatalf("expected built-in source metadata, got %+v", health)
+	}
+	if health.Contract.ActionClass != "analyze" || health.Contract.RiskClass != "low" {
+		t.Fatalf("expected analyze metadata, got %+v", health.Contract)
+	}
+
+	synthetic := byName["pricing.business.document.draft.create"]
+	if synthetic.SourceType != "synthetic" || synthetic.ModuleKey != "pricing" {
+		t.Fatalf("expected synthetic source metadata, got %+v", synthetic)
+	}
+	if synthetic.Contract.ActionClass != "draft" || !synthetic.Contract.RequiresConfirmation || !synthetic.Contract.DraftOnly {
+		t.Fatalf("expected draft governance metadata, got %+v", synthetic.Contract)
+	}
+
+	moduleTool := byName["pricing.promotion.special.review"]
+	if moduleTool.SourceType != "module" || moduleTool.ModuleKey != "pricing" {
+		t.Fatalf("expected module source metadata, got %+v", moduleTool)
+	}
+	if moduleTool.Contract.ActionClass == "" || moduleTool.Contract.RiskClass == "" {
+		t.Fatalf("expected populated contract metadata, got %+v", moduleTool.Contract)
+	}
+}
+
+func TestBusinessComprehensionTools(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "promotion_plan",
+		DisplayName:   "Promotion Plan",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register promotion_plan failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                  "pricing",
+		Name:                 "Pricing",
+		Description:          "Pricing and promotions",
+		DomainFamily:         "commercial",
+		Category:             "pricing",
+		BusinessCapabilities: []string{"promotion planning", "discount strategy"},
+		OwnedDocumentTypes:   []string{"promotion_plan"},
+		Documents: []document.Definition{{
+			Type:          "promotion_plan",
+			DisplayName:   "Promotion Plan",
+			SchemaVersion: "v1",
+		}},
+	}, "system"); err != nil {
+		t.Fatalf("register pricing manifest failed: %v", err)
+	}
+	record, err := server.documents.Create("promotion_plan", "org_default", "loc_hq", "user_admin", map[string]any{"name": "Ramadan Promo"})
+	if err != nil {
+		t.Fatalf("create promotion draft failed: %v", err)
+	}
+	if err := server.audit.Record(audit.Event{
+		ID:             "audit-1",
+		Action:         "document.created",
+		TargetType:     "document",
+		TargetID:       record.Header.ID,
+		ActorID:        "user_admin",
+		OrganizationID: "org_default",
+		LocationID:     "loc_hq",
+		OccurredAt:     time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("record audit event failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.list", "document.read", "analytics.read":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.topology.map", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.topology.map failed: %+v", resp.Error)
+	}
+	topology := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(topology["nodes"].([]map[string]any)) == 0 {
+		t.Fatalf("expected topology nodes, got %+v", topology)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.timeline.get", "arguments": map[string]any{"resource_kind": "document", "document_id": record.Header.ID}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.timeline.get failed: %+v", resp.Error)
+	}
+	timeline := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(timeline["audit_events"].([]audit.Event)) != 1 {
+		t.Fatalf("expected audit event in timeline, got %+v", timeline)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "business.health.summary", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.health.summary failed: %+v", resp.Error)
+	}
+	health := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	documentsSection := health["documents"].(map[string]any)
+	if documentsSection["count"].(int) < 1 {
+		t.Fatalf("expected document count in health summary, got %+v", health)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "tools/call",
+		Params:  mustJSON(t, map[string]any{"name": "pricing.promotion.advisor.review", "arguments": map[string]any{}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("pricing.promotion.advisor.review failed: %+v", resp.Error)
+	}
+	advisor := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if len(advisor["relevant_modules"].([]businessModuleInfo)) == 0 {
+		t.Fatalf("expected relevant modules in advisor review, got %+v", advisor)
 	}
 }
 

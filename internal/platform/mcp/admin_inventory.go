@@ -7,17 +7,25 @@ import (
 )
 
 type ToolInventoryItem struct {
-	Key                 string             `json:"key"`
-	Title               string             `json:"title"`
-	Description         string             `json:"description,omitempty"`
-	ModuleKey           string             `json:"module_key,omitempty"`
-	BuiltIn             bool               `json:"built_in,omitempty"`
-	Generated           bool               `json:"generated,omitempty"`
-	EndpointScope       string             `json:"endpoint_scope,omitempty"`
-	RequiredPermissions []string           `json:"required_permissions,omitempty"`
-	Operation           string             `json:"operation,omitempty"`
-	Enabled             bool               `json:"enabled"`
-	Contract            ContractDescriptor `json:"contract,omitempty"`
+	Key                  string             `json:"key"`
+	Title                string             `json:"title"`
+	Description          string             `json:"description,omitempty"`
+	ModuleKey            string             `json:"module_key,omitempty"`
+	SourceType           string             `json:"source_type,omitempty"`
+	BuiltIn              bool               `json:"built_in,omitempty"`
+	Generated            bool               `json:"generated,omitempty"`
+	EndpointScope        string             `json:"endpoint_scope,omitempty"`
+	RequiredPermissions  []string           `json:"required_permissions,omitempty"`
+	Operation            string             `json:"operation,omitempty"`
+	Enabled              bool               `json:"enabled"`
+	ActionClass          string             `json:"action_class,omitempty"`
+	RiskClass            string             `json:"risk_class,omitempty"`
+	DraftOnly            bool               `json:"draft_only,omitempty"`
+	RequiresConfirmation bool               `json:"requires_confirmation,omitempty"`
+	RequiresApproval     bool               `json:"requires_approval,omitempty"`
+	GovernanceTags       []string           `json:"governance_tags,omitempty"`
+	BusinessDomains      []string           `json:"business_domains,omitempty"`
+	Contract             ContractDescriptor `json:"contract,omitempty"`
 }
 
 type ResourceInventoryItem struct {
@@ -69,57 +77,79 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 	items := make([]ToolInventoryItem, 0)
 	for _, reg := range s.mustBuiltInToolRegistrations() {
 		def := reg.definition
+		contract := builtInToolContract(def.name, def.permission, def.contract)
 		items = append(items, ToolInventoryItem{
-			Key:                 def.name,
-			Title:               def.title,
-			Description:         def.description,
-			ModuleKey:           "platform.core",
-			BuiltIn:             true,
-			EndpointScope:       builtInToolScope(def.name),
-			RequiredPermissions: []string{def.permission},
-			Enabled:             s.ToolEnabled(def.name),
-			Contract:            builtInToolContract(def.name, def.permission, def.contract),
+			Key:                  def.name,
+			Title:                def.title,
+			Description:          def.description,
+			ModuleKey:            "platform.core",
+			SourceType:           "built_in",
+			BuiltIn:              true,
+			EndpointScope:        builtInToolScope(def.name),
+			RequiredPermissions:  []string{def.permission},
+			Enabled:              s.ToolEnabled(def.name),
+			ActionClass:          contract.ActionClass,
+			RiskClass:            contract.RiskClass,
+			DraftOnly:            contract.DraftOnly,
+			RequiresConfirmation: contract.RequiresConfirmation,
+			RequiresApproval:     contract.RequiresApproval,
+			GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
+			BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+			Contract:             contract,
 		})
 	}
 	for _, def := range s.syntheticToolDefinitions(ActorContext{}) {
-		items = append(items, ToolInventoryItem{
-			Key:                 def.Name,
-			Title:               def.Title,
-			Description:         def.Description,
-			ModuleKey:           def.ModuleKey,
-			Generated:           true,
-			EndpointScope:       scopeForModule(def.ModuleKey),
+		contract := builtInToolContract(def.Name, firstString(def.RequiredPermissions), ContractDescriptor{
 			RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
-			Enabled:             s.ToolEnabled(def.Name),
-			Contract: ContractDescriptor{
-				Version:             ContractVersion,
-				Stability:           "stable",
-				SideEffectClass:     defaultToolSideEffectClass(def.Name, ""),
-				Idempotency:         defaultToolIdempotency(def.Name, ""),
-				AuditAction:         "mcp.tool." + strings.TrimSpace(def.Name),
-				RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
-			},
+		})
+		items = append(items, ToolInventoryItem{
+			Key:                  def.Name,
+			Title:                def.Title,
+			Description:          def.Description,
+			ModuleKey:            def.ModuleKey,
+			SourceType:           "synthetic",
+			Generated:            true,
+			EndpointScope:        scopeForModule(def.ModuleKey),
+			RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
+			Enabled:              s.ToolEnabled(def.Name),
+			ActionClass:          contract.ActionClass,
+			RiskClass:            contract.RiskClass,
+			DraftOnly:            contract.DraftOnly,
+			RequiresConfirmation: contract.RequiresConfirmation,
+			RequiresApproval:     contract.RequiresApproval,
+			GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
+			BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+			Contract:             contract,
 		})
 	}
 	if s != nil && s.modules != nil {
 		for _, detail := range s.modules.List() {
 			for _, def := range detail.Manifest.MCP.Tools {
+				contract := contractDescriptorFromModule(
+					def.Contract,
+					def.RequiredPermissions,
+					defaultToolSideEffectClass(def.Key, def.Operation),
+					defaultToolIdempotency(def.Key, def.Operation),
+					"mcp.tool."+strings.TrimSpace(def.Key),
+				)
 				items = append(items, ToolInventoryItem{
-					Key:                 def.Key,
-					Title:               def.Title,
-					Description:         def.Description,
-					ModuleKey:           detail.Manifest.Key,
-					EndpointScope:       scopeForModule(detail.Manifest.Key),
-					RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
-					Operation:           def.Operation,
-					Enabled:             s.ToolEnabled(def.Key),
-					Contract: contractDescriptorFromModule(
-						def.Contract,
-						def.RequiredPermissions,
-						defaultToolSideEffectClass(def.Key, def.Operation),
-						defaultToolIdempotency(def.Key, def.Operation),
-						"mcp.tool."+strings.TrimSpace(def.Key),
-					),
+					Key:                  def.Key,
+					Title:                def.Title,
+					Description:          def.Description,
+					ModuleKey:            detail.Manifest.Key,
+					SourceType:           "module",
+					EndpointScope:        scopeForModule(detail.Manifest.Key),
+					RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
+					Operation:            def.Operation,
+					Enabled:              s.ToolEnabled(def.Key),
+					ActionClass:          contract.ActionClass,
+					RiskClass:            contract.RiskClass,
+					DraftOnly:            contract.DraftOnly,
+					RequiresConfirmation: contract.RequiresConfirmation,
+					RequiresApproval:     contract.RequiresApproval,
+					GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
+					BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+					Contract:             contract,
 				})
 			}
 		}

@@ -359,6 +359,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../mcp-target-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../features/" class="md-nav__link">
         
   
@@ -1112,10 +1139,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_21" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
         
           
-          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
             
   
   
@@ -1133,8 +1160,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_21">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1595,7 +1622,7 @@
 <h1 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">&para;</a></h1>
 <p>This glossary defines the main terms used across the Orbyte documentation.</p>
 <h2 id="acp">ACP<a class="headerlink" href="#acp" title="Permanent link">&para;</a></h2>
-<p>Agent connectivity layer for shell-native agent session integration. In Orbyte this is optional and should be treated as an external-facing integration capability, not the core product identity.</p>
+<p>Agent Connectivity Protocol runtime bridge. In Orbyte, ACP is the provider and session layer used to connect external agent runtimes to the platform. It handles provider configuration, session lifecycle, prompt transport, approvals, and streamed interaction. ACP is not the business capability model.</p>
 <h2 id="actor">Actor<a class="headerlink" href="#actor" title="Permanent link">&para;</a></h2>
 <p>The effective identity performing an operation. An actor can be a user, service principal, or delegated machine context.</p>
 <h2 id="adapter">Adapter<a class="headerlink" href="#adapter" title="Permanent link">&para;</a></h2>
@@ -1627,7 +1654,7 @@
 <h2 id="manifest">Manifest<a class="headerlink" href="#manifest" title="Permanent link">&para;</a></h2>
 <p>The structured module definition that declares what a module contributes to the platform.</p>
 <h2 id="mcp">MCP<a class="headerlink" href="#mcp" title="Permanent link">&para;</a></h2>
-<p>Model Context Protocol. In Orbyte this is used to expose governed tools and resources to external machine clients such as agents and copilots.</p>
+<p>Model Context Protocol. In Orbyte, MCP is the canonical machine-facing business contract used to expose governed business discovery, analysis, and action capability to external agents and copilots. It should express business semantics, not frontend mechanics.</p>
 <h2 id="model">Model<a class="headerlink" href="#model" title="Permanent link">&para;</a></h2>
 <p>A metadata-driven record type used for master data or generic structured entities.</p>
 <h2 id="module">Module<a class="headerlink" href="#module" title="Permanent link">&para;</a></h2>

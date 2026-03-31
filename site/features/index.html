@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://example.com/orbyte/features/">
       
       
-        <link rel="prev" href="../architecture/">
+        <link rel="prev" href="../mcp-target-architecture/">
       
       
         <link rel="next" href="../components/">
@@ -340,6 +340,33 @@
     
   
     Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-target-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
   
 
     
@@ -964,10 +991,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_21" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
         
           
-          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
             
   
   
@@ -985,8 +1012,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_21">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1321,7 +1348,6 @@
 <li>service principals for system access</li>
 <li>delegated execution and acting-context support</li>
 <li>authentication policy configuration</li>
-<li>optional Google sign-in</li>
 </ul>
 <h3 id="data-and-transactions">Data and Transactions<a class="headerlink" href="#data-and-transactions" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1335,13 +1361,11 @@
 <ul>
 <li>workflow definitions, drafts, versions, and publish flow</li>
 <li>runtime workflow tasks and approvals</li>
-<li>reporting-line hierarchy support</li>
 <li>Rego-backed or code-backed policy hooks</li>
 </ul>
 <h3 id="integration">Integration<a class="headerlink" href="#integration" title="Permanent link">&para;</a></h3>
 <ul>
 <li>external systems and endpoints</li>
-<li>adapter registry</li>
 <li>contracts and mappings</li>
 <li>submission tracking</li>
 <li>retries, dead letters, and replay flow</li>
@@ -1371,14 +1395,16 @@
 <h2 id="ai-integration-readiness-features">AI Integration Readiness Features<a class="headerlink" href="#ai-integration-readiness-features" title="Permanent link">&para;</a></h2>
 <p>These are especially important if Orbyte is used as a backend for external AI agents:</p>
 <ul>
-<li>stable generic business APIs</li>
-<li>MCP server and tool catalog</li>
-<li>permission-aware tool exposure</li>
-<li>audit trail for machine-invoked actions</li>
-<li>service-principal access model</li>
+<li>MCP server and tool catalog with domain-specific operations</li>
+<li>permission-aware tool exposure filtered by actor permissions</li>
+<li>audit trail for machine-invocated actions</li>
+<li>service-principal access model for non-human authentication</li>
 <li>config and policy control plane</li>
-<li>structured search interfaces including keyword, vector, and hybrid query modes</li>
+<li>structured search interfaces including keyword, vector, and hybrid query modes (via direct API)</li>
+<li>document and model CRUD via MCP tools and HTTP APIs</li>
+<li>document workflow transitions (submit, approve, reject) via HTTP APIs</li>
 </ul>
+<p>Note: AI agents interact with Orbyte through governed MCP tools and HTTP APIs. The platform does not include a built-in autonomous agent. All machine access is authenticated, authorized, and audited.</p>
 <h2 id="product-strengths">Product Strengths<a class="headerlink" href="#product-strengths" title="Permanent link">&para;</a></h2>
 <p>The strongest current platform qualities are:</p>
 <ul>

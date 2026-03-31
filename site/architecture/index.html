@@ -16,7 +16,7 @@
         <link rel="prev" href="../use-cases/">
       
       
-        <link rel="next" href="../features/">
+        <link rel="next" href="../mcp-target-architecture/">
       
       
         
@@ -633,6 +633,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../mcp-target-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../features/" class="md-nav__link">
         
   
@@ -1053,10 +1080,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_21" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
         
           
-          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
             
   
   
@@ -1074,8 +1101,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_21">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1485,6 +1512,7 @@
 <li>generic HTTP and MCP runtime surfaces</li>
 <li>optional external infrastructure such as PostgreSQL, Typesense, NATS, SMTP, and object storage</li>
 </ul>
+<p>For the target-state engineering role of MCP and its relationship to ACP and the agent workspace, see <a href="../mcp-target-architecture/">MCP Target Architecture</a>.</p>
 <h2 id="reference-diagram">Reference Diagram<a class="headerlink" href="#reference-diagram" title="Permanent link">&para;</a></h2>
 <p><img alt="Architecture Overview" src="../assets/architecture-overview.svg" /></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>                    +-----------------------------+
@@ -1611,6 +1639,7 @@
 <li>service principals</li>
 <li>external AI agents</li>
 </ul>
+<p>MCP should be treated as the canonical machine-facing business contract for external agents, while ACP remains the runtime/session bridge to external providers. The detailed target-state model is defined in <a href="../mcp-target-architecture/">MCP Target Architecture</a>.</p>
 <h2 id="extension-model">Extension Model<a class="headerlink" href="#extension-model" title="Permanent link">&para;</a></h2>
 <p>The platform is extended by module manifests. There are two main sources of manifests at startup:</p>
 <ul>
@@ -1633,6 +1662,7 @@
 <li>MCP tools and resources</li>
 </ul>
 <p>This allows the kernel to stay stable while business capabilities evolve independently.</p>
+<p>The target direction is for modules to be broadly discoverable and operable through MCP in business terms, using a mix of generic platform tools, synthetic module wrappers, and specialized hand-authored tools. See <a href="../mcp-target-architecture/">MCP Target Architecture</a>.</p>
 <h2 id="runtime-configuration-and-identity-helpers">Runtime Configuration and Identity Helpers<a class="headerlink" href="#runtime-configuration-and-identity-helpers" title="Permanent link">&para;</a></h2>
 <p>Process-level runtime settings are centralized through typed runtime configuration instead of being read ad hoc throughout the codebase. Runtime-generated identifiers are also standardized through a shared ID service.</p>
 <p>This gives the platform:</p>

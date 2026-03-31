@@ -28,21 +28,30 @@ type JSONRPCError struct {
 }
 
 type ContractDescriptor struct {
-	Version             string   `json:"version,omitempty"`
-	Stability           string   `json:"stability,omitempty"`
-	SideEffectClass     string   `json:"sideEffectClass,omitempty"`
-	Idempotency         string   `json:"idempotency,omitempty"`
-	AuditAction         string   `json:"auditAction,omitempty"`
-	RequiredScopes      []string `json:"requiredScopes,omitempty"`
-	RequiredPermissions []string `json:"requiredPermissions,omitempty"`
-	Deprecated          bool     `json:"deprecated,omitempty"`
-	DeprecationNote     string   `json:"deprecationNote,omitempty"`
+	Version              string   `json:"version,omitempty"`
+	Stability            string   `json:"stability,omitempty"`
+	SideEffectClass      string   `json:"sideEffectClass,omitempty"`
+	Idempotency          string   `json:"idempotency,omitempty"`
+	AuditAction          string   `json:"auditAction,omitempty"`
+	ActionClass          string   `json:"actionClass,omitempty"`
+	RiskClass            string   `json:"riskClass,omitempty"`
+	DraftOnly            bool     `json:"draftOnly,omitempty"`
+	RequiresConfirmation bool     `json:"requiresConfirmation,omitempty"`
+	RequiresApproval     bool     `json:"requiresApproval,omitempty"`
+	GovernanceTags       []string `json:"governanceTags,omitempty"`
+	BusinessDomains      []string `json:"businessDomains,omitempty"`
+	RequiredScopes       []string `json:"requiredScopes,omitempty"`
+	RequiredPermissions  []string `json:"requiredPermissions,omitempty"`
+	Deprecated           bool     `json:"deprecated,omitempty"`
+	DeprecationNote      string   `json:"deprecationNote,omitempty"`
 }
 
 type ToolDescriptor struct {
 	Name        string             `json:"name"`
 	Title       string             `json:"title,omitempty"`
 	Description string             `json:"description,omitempty"`
+	ModuleKey   string             `json:"moduleKey,omitempty"`
+	SourceType  string             `json:"sourceType,omitempty"`
 	Scope       string             `json:"scope,omitempty"`
 	InputSchema map[string]any     `json:"inputSchema,omitempty"`
 	Contract    ContractDescriptor `json:"contract,omitempty"`

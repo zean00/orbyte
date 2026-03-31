@@ -1,0 +1,2312 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Product documentation for the Orbyte enterprise application kernel and platform.">
+      
+      
+      
+        <link rel="canonical" href="https://example.com/orbyte/mcp-target-architecture/">
+      
+      
+        <link rel="prev" href="../architecture/">
+      
+      
+        <link rel="next" href="../features/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>MCP Target Architecture - Orbyte Platform</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mcp-target-architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Orbyte Platform" class="md-header__button md-logo" aria-label="Orbyte Platform" data-md-component="logo">
+      
+  <img src="../assets/orbyte-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Orbyte Platform
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              MCP Target Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Orbyte Platform" class="md-nav__button md-logo" aria-label="Orbyte Platform" data-md-component="logo">
+      
+  <img src="../assets/orbyte-mark.svg" alt="logo">
+
+    </a>
+    Orbyte Platform
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../use-cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use Cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Target Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose-and-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose and Positioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architectural-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architectural Principles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architectural Principles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#business-semantic-not-ui-shaped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Business-Semantic, Not UI-Shaped
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#same-governance-for-human-and-machine-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Same Governance For Human And Machine Operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-runtime-internal-business-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External Runtime, Internal Business Contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#draft-first-and-explicitly-governed-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Draft-First And Explicitly Governed Action
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comprehensive-business-legibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comprehensive Business Legibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-capability-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Capability Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target Capability Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-discovery-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Discovery Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-operational-read-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Operational Read Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-analytical-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Analytical Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-governed-action-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Governed Action Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-control-plane-and-governance-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Control-Plane And Governance Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-comprehension-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Business Comprehension Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#action-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-surface-taxonomy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Surface Taxonomy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP Surface Taxonomy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generic-built-in-business-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic Built-In Business Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synthetic-module-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synthetic Module Wrappers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#specialized-hand-authored-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specialized Hand-Authored Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resources-and-apps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resources And Apps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acp-mcp-and-agent-surface-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ACP, MCP, And Agent Surface Roles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ACP, MCP, And Agent Surface Roles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#acp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ACP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Workspace
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advisor-pack-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advisor Pack Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-and-safety-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance And Safety Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Roadmap
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-foundation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Foundation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-business-comprehension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Business Comprehension
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-safe-action-governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Safe Action Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-advisor-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Advisor Packs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-enterprise-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Enterprise Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engineering-implications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engineering Implications
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../components/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-and-governance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security and Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../product-packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product Packaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../module-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorial-first-module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Module Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference-implementations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference Implementations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Walkthroughs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-and-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API and Contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sample-payloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Payloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_22" >
+        
+          
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer References
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer References
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modulegen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contract Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose-and-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose and Positioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architectural-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architectural Principles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architectural Principles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#business-semantic-not-ui-shaped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Business-Semantic, Not UI-Shaped
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#same-governance-for-human-and-machine-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Same Governance For Human And Machine Operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-runtime-internal-business-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External Runtime, Internal Business Contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#draft-first-and-explicitly-governed-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Draft-First And Explicitly Governed Action
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comprehensive-business-legibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comprehensive Business Legibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-capability-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Capability Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target Capability Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-discovery-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Discovery Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-operational-read-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Operational Read Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-analytical-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Analytical Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-governed-action-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Governed Action Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-control-plane-and-governance-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Control-Plane And Governance Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-comprehension-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Business Comprehension Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#action-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-surface-taxonomy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Surface Taxonomy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP Surface Taxonomy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generic-built-in-business-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic Built-In Business Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synthetic-module-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synthetic Module Wrappers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#specialized-hand-authored-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specialized Hand-Authored Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resources-and-apps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resources And Apps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acp-mcp-and-agent-surface-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ACP, MCP, And Agent Surface Roles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ACP, MCP, And Agent Surface Roles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#acp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ACP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Workspace
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advisor-pack-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advisor Pack Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#governance-and-safety-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Governance And Safety Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Roadmap
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-foundation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Foundation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-business-comprehension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Business Comprehension
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-safe-action-governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Safe Action Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-advisor-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Advisor Packs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-enterprise-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Enterprise Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engineering-implications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engineering Implications
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="mcp-target-architecture">MCP Target Architecture<a class="headerlink" href="#mcp-target-architecture" title="Permanent link">&para;</a></h1>
+<p>This guide defines the target architecture for MCP in Orbyte.</p>
+<p>It is the canonical engineering specification for how Orbyte should expose business context and governed actions to external agentic AI tools.</p>
+<h2 id="purpose-and-positioning">Purpose and Positioning<a class="headerlink" href="#purpose-and-positioning" title="Permanent link">&para;</a></h2>
+<p>Orbyte is intended to support two modes at the same time:</p>
+<ul>
+<li>traditional business-as-usual operation as a governed system of record</li>
+<li>AI-native business operation where external agents can analyze, investigate, recommend, and safely assist through governed machine interfaces</li>
+</ul>
+<p>In Orbyte:</p>
+<ul>
+<li>ACP is the runtime bridge to external agent providers and session runtimes</li>
+<li>MCP is the canonical business contract used by those agents</li>
+<li>the agent workspace is the human-facing orchestration surface for ACP-backed sessions and MCP-backed analysis/actions</li>
+</ul>
+<p>Orbyte should remain agent-ready, not agent-dependent.</p>
+<p>This means:</p>
+<ul>
+<li>Orbyte does not introduce a separate proprietary agent framework beyond ACP, MCP, and the human-facing agent workspace</li>
+<li>business logic, workflow, permissions, audit, and policy remain inside the core platform and business modules</li>
+<li>external agentic tools connect plug-and-play through ACP and MCP</li>
+</ul>
+<h2 id="architectural-principles">Architectural Principles<a class="headerlink" href="#architectural-principles" title="Permanent link">&para;</a></h2>
+<h3 id="business-semantic-not-ui-shaped">Business-Semantic, Not UI-Shaped<a class="headerlink" href="#business-semantic-not-ui-shaped" title="Permanent link">&para;</a></h3>
+<p>MCP should expose business meaning, not frontend mechanics.</p>
+<p>Tools should be organized around:</p>
+<ul>
+<li>discovery</li>
+<li>investigation</li>
+<li>explanation</li>
+<li>recommendation support</li>
+<li>governed business action</li>
+</ul>
+<p>MCP should not devolve into:</p>
+<ul>
+<li>one tool per screen</li>
+<li>one tool per route</li>
+<li>one tool per generic CRUD endpoint with no business context</li>
+</ul>
+<h3 id="same-governance-for-human-and-machine-operators">Same Governance For Human And Machine Operators<a class="headerlink" href="#same-governance-for-human-and-machine-operators" title="Permanent link">&para;</a></h3>
+<p>Agents must use the same governed business core as human operators.</p>
+<p>An MCP action must not bypass:</p>
+<ul>
+<li>permission checks</li>
+<li>policy hooks</li>
+<li>workflow transitions</li>
+<li>approval requirements</li>
+<li>period-close controls</li>
+<li>audit and event recording</li>
+</ul>
+<h3 id="external-runtime-internal-business-contract">External Runtime, Internal Business Contract<a class="headerlink" href="#external-runtime-internal-business-contract" title="Permanent link">&para;</a></h3>
+<p>ACP and MCP have different roles:</p>
+<ul>
+<li>ACP manages provider connectivity, sessions, prompts, approvals, and streamed runtime interaction</li>
+<li>MCP exposes the business contract that external agents use to understand and act on Orbyte</li>
+</ul>
+<p>ACP should not become a second business API.
+MCP should not become a second agent runtime.</p>
+<h3 id="draft-first-and-explicitly-governed-action">Draft-First And Explicitly Governed Action<a class="headerlink" href="#draft-first-and-explicitly-governed-action" title="Permanent link">&para;</a></h3>
+<p>The default machine-write behavior should be:</p>
+<ul>
+<li>inspect</li>
+<li>analyze</li>
+<li>recommend</li>
+<li>create or update draft</li>
+<li>submit only where explicitly allowed</li>
+</ul>
+<p>Side-effectful actions should require explicit confirmation and clear runtime metadata.</p>
+<h3 id="comprehensive-business-legibility">Comprehensive Business Legibility<a class="headerlink" href="#comprehensive-business-legibility" title="Permanent link">&para;</a></h3>
+<p>To support useful enterprise agents, MCP must make the business legible across:</p>
+<ul>
+<li>modules and capabilities</li>
+<li>master data</li>
+<li>transactions</li>
+<li>relationships</li>
+<li>workflow state</li>
+<li>configuration</li>
+<li>reporting and KPIs</li>
+<li>exceptions, reconciliation, and variances</li>
+<li>audit and operational history</li>
+</ul>
+<h2 id="target-capability-model">Target Capability Model<a class="headerlink" href="#target-capability-model" title="Permanent link">&para;</a></h2>
+<p>MCP should expose five capability layers.</p>
+<h3 id="1-discovery-layer">1. Discovery Layer<a class="headerlink" href="#1-discovery-layer" title="Permanent link">&para;</a></h3>
+<p>This layer lets an agent discover what exists in the platform.</p>
+<p>It should expose:</p>
+<ul>
+<li>modules</li>
+<li>module descriptions</li>
+<li>business capabilities</li>
+<li>owned documents</li>
+<li>owned models</li>
+<li>references and datasets</li>
+<li>dependencies and reverse dependents</li>
+<li>available actions</li>
+<li>governance metadata</li>
+</ul>
+<p>This is the foundation for business exploration and advisor-style reasoning.</p>
+<h3 id="2-operational-read-layer">2. Operational Read Layer<a class="headerlink" href="#2-operational-read-layer" title="Permanent link">&para;</a></h3>
+<p>This layer lets an agent inspect the current state of the business.</p>
+<p>It should expose:</p>
+<ul>
+<li>configuration state</li>
+<li>master data</li>
+<li>transactional records</li>
+<li>workflow status</li>
+<li>document and model relationships</li>
+<li>attachments, notes, activities, and timeline where relevant</li>
+<li>current exceptions, pending approvals, and operational backlog</li>
+</ul>
+<p>The output should be business-oriented and scoped, not only raw storage payloads.</p>
+<h3 id="3-analytical-layer">3. Analytical Layer<a class="headerlink" href="#3-analytical-layer" title="Permanent link">&para;</a></h3>
+<p>This layer lets an agent understand the business, not just read records.</p>
+<p>It should expose:</p>
+<ul>
+<li>KPIs and datasets</li>
+<li>trend and period comparison views</li>
+<li>aging and backlog views</li>
+<li>reconciliation and settlement views</li>
+<li>inventory and fulfillment health</li>
+<li>production variance and costing views</li>
+<li>treasury and cash visibility</li>
+<li>master-data quality and completeness checks</li>
+<li>anomaly and exception summaries</li>
+</ul>
+<p>This is the layer that enables investigation and recommendations.</p>
+<h3 id="4-governed-action-layer">4. Governed Action Layer<a class="headerlink" href="#4-governed-action-layer" title="Permanent link">&para;</a></h3>
+<p>This layer lets an agent assist safely.</p>
+<p>It should expose:</p>
+<ul>
+<li>draft creation</li>
+<li>draft update</li>
+<li>guided submit actions where allowed</li>
+<li>safe operational helpers</li>
+<li>explicit corrective-draft paths for exceptions</li>
+</ul>
+<p>This layer must be metadata-rich and governance-aware.</p>
+<h3 id="5-control-plane-and-governance-layer">5. Control-Plane And Governance Layer<a class="headerlink" href="#5-control-plane-and-governance-layer" title="Permanent link">&para;</a></h3>
+<p>This layer lets operators and the agent workspace understand MCP itself.</p>
+<p>It should expose:</p>
+<ul>
+<li>runtime catalog and inventories</li>
+<li>tool enable/disable state</li>
+<li>action class and risk metadata</li>
+<li>permission requirements</li>
+<li>scope requirements</li>
+<li>audit class</li>
+<li>approval and confirmation requirements</li>
+</ul>
+<h2 id="business-comprehension-requirements">Business Comprehension Requirements<a class="headerlink" href="#business-comprehension-requirements" title="Permanent link">&para;</a></h2>
+<p>For Orbyte to function as an AI-native enterprise platform, MCP must let agents see the business comprehensively.</p>
+<p>That means the platform should be understandable through MCP in terms of:</p>
+<ul>
+<li>business topology</li>
+<li>what modules exist</li>
+<li>what they do</li>
+<li>what they own</li>
+<li>how they depend on each other</li>
+<li>business state</li>
+<li>current configuration</li>
+<li>master data</li>
+<li>transactions</li>
+<li>workflow state</li>
+<li>responsibilities and ownership</li>
+<li>business history</li>
+<li>recent changes</li>
+<li>timeline and activity context</li>
+<li>audit and approval trail</li>
+<li>corrections, reversals, and resolution history</li>
+<li>business relationships</li>
+<li>order to invoice to payment</li>
+<li>item to stock to procurement to production</li>
+<li>treasury to settlement to reconciliation</li>
+<li>asset to depreciation to lifecycle event</li>
+<li>party to customer/vendor profile to transactions</li>
+<li>business intervention paths</li>
+<li>what can be drafted</li>
+<li>what can be submitted</li>
+<li>what requires approval</li>
+<li>what is blocked by policy or accounting controls</li>
+</ul>
+<h2 id="action-model">Action Model<a class="headerlink" href="#action-model" title="Permanent link">&para;</a></h2>
+<p>MCP actions should be explicitly classified.</p>
+<p>Recommended action classes:</p>
+<ul>
+<li><code>read</code></li>
+<li><code>analyze</code></li>
+<li><code>recommend</code></li>
+<li><code>draft</code></li>
+<li><code>submit</code></li>
+<li><code>controlled_mutation</code></li>
+</ul>
+<p>Expected default behavior:</p>
+<ul>
+<li><code>read</code> and <code>analyze</code> are non-mutating</li>
+<li><code>recommend</code> returns reasoning, gaps, or proposed changes</li>
+<li><code>draft</code> creates or updates draft-state artifacts only</li>
+<li><code>submit</code> is only exposed where the user and workflow rules permit it</li>
+<li><code>controlled_mutation</code> is reserved for explicitly approved machine actions and should remain rare</li>
+</ul>
+<p>Each side-effectful tool should expose governance metadata such as:</p>
+<ul>
+<li>side-effect class</li>
+<li>requires confirmation</li>
+<li>draft-only</li>
+<li>approval required</li>
+<li>audit action</li>
+<li>required permissions</li>
+<li>required scopes</li>
+</ul>
+<h2 id="mcp-surface-taxonomy">MCP Surface Taxonomy<a class="headerlink" href="#mcp-surface-taxonomy" title="Permanent link">&para;</a></h2>
+<p>MCP should support three tool categories plus resources and apps.</p>
+<h3 id="generic-built-in-business-tools">Generic Built-In Business Tools<a class="headerlink" href="#generic-built-in-business-tools" title="Permanent link">&para;</a></h3>
+<p>These provide platform-wide discovery, search, read, relationship traversal, analytical summaries, and governed draft actions.</p>
+<p>These should be the default path for:</p>
+<ul>
+<li>business discovery</li>
+<li>cross-domain investigation</li>
+<li>generic draft creation and draft updates</li>
+</ul>
+<h3 id="synthetic-module-wrappers">Synthetic Module Wrappers<a class="headerlink" href="#synthetic-module-wrappers" title="Permanent link">&para;</a></h3>
+<p>These are generated from enabled module manifests and pre-bind the generic tools to a module context.</p>
+<p>They improve discoverability without introducing bespoke logic for every module.</p>
+<p>They should exist for:</p>
+<ul>
+<li>module info</li>
+<li>module record search</li>
+<li>module document search</li>
+<li>module draft create/update where applicable</li>
+</ul>
+<h3 id="specialized-hand-authored-tools">Specialized Hand-Authored Tools<a class="headerlink" href="#specialized-hand-authored-tools" title="Permanent link">&para;</a></h3>
+<p>These should exist only where the business behavior is not well expressed by generic discovery/read/draft patterns.</p>
+<p>Examples:</p>
+<ul>
+<li>domain-specific calculation helpers</li>
+<li>guided reconciliation flows</li>
+<li>packaged business operations with richer semantics</li>
+</ul>
+<h3 id="resources-and-apps">Resources And Apps<a class="headerlink" href="#resources-and-apps" title="Permanent link">&para;</a></h3>
+<p>Resources and apps should continue to serve:</p>
+<ul>
+<li>read-only published context</li>
+<li>control-plane views</li>
+<li>UI-linked machine experiences where appropriate</li>
+</ul>
+<h2 id="acp-mcp-and-agent-surface-roles">ACP, MCP, And Agent Surface Roles<a class="headerlink" href="#acp-mcp-and-agent-surface-roles" title="Permanent link">&para;</a></h2>
+<h3 id="acp">ACP<a class="headerlink" href="#acp" title="Permanent link">&para;</a></h3>
+<p>ACP is responsible for:</p>
+<ul>
+<li>provider configuration</li>
+<li>session creation and runtime lifecycle</li>
+<li>prompt transport</li>
+<li>approvals and streamed interaction</li>
+</ul>
+<p>ACP should not be the place where business capabilities are modeled.</p>
+<h3 id="mcp">MCP<a class="headerlink" href="#mcp" title="Permanent link">&para;</a></h3>
+<p>MCP is responsible for:</p>
+<ul>
+<li>business discovery</li>
+<li>business investigation</li>
+<li>analytical visibility</li>
+<li>governed action contracts</li>
+</ul>
+<p>MCP is the stable machine-facing business interface.</p>
+<h3 id="agent-workspace">Agent Workspace<a class="headerlink" href="#agent-workspace" title="Permanent link">&para;</a></h3>
+<p>The agent workspace is responsible for:</p>
+<ul>
+<li>human review of agent interaction</li>
+<li>session orchestration</li>
+<li>approval UX</li>
+<li>context attachment</li>
+<li>presentation of MCP-backed analysis and action proposals</li>
+</ul>
+<p>It should orchestrate MCP-backed work, not replace MCP.</p>
+<h2 id="advisor-pack-model">Advisor Pack Model<a class="headerlink" href="#advisor-pack-model" title="Permanent link">&para;</a></h2>
+<p>Advisor packs are curated business capability bundles built on top of MCP.</p>
+<p>They are not separate agent runtimes and should not introduce a second orchestration framework.</p>
+<p>Each advisor pack should define:</p>
+<ul>
+<li>what business problems it addresses</li>
+<li>what generic MCP tools it depends on</li>
+<li>what specialized analytical tools it adds, if any</li>
+<li>what governed draft actions it can invoke</li>
+<li>what success criteria apply</li>
+</ul>
+<p>Recommended initial advisor packs:</p>
+<ul>
+<li>pricing and promotion advisor</li>
+<li>tax structure advisor</li>
+<li>treasury and reconciliation advisor</li>
+<li>inventory health advisor</li>
+<li>customer and vendor master advisor</li>
+</ul>
+<p>Over time, these packs can expand into:</p>
+<ul>
+<li>production cost and margin advisor</li>
+<li>workforce and approval advisor</li>
+<li>retail operations advisor</li>
+<li>asset lifecycle advisor</li>
+</ul>
+<h2 id="governance-and-safety-model">Governance And Safety Model<a class="headerlink" href="#governance-and-safety-model" title="Permanent link">&para;</a></h2>
+<p>MCP must preserve enterprise governance.</p>
+<p>Required properties:</p>
+<ul>
+<li>user-scoped authorization by default</li>
+<li>optional service-principal and delegated contexts where explicitly supported</li>
+<li>permission parity with UI and HTTP surfaces</li>
+<li>explicit scope handling across deployment, organization, location, and operating unit contexts</li>
+<li>auditable action classes and side-effect classes</li>
+<li>confirmation for side-effectful calls</li>
+<li>approval-aware behavior for draft, submit, and controlled mutation paths</li>
+</ul>
+<p>The audit model should make it clear:</p>
+<ul>
+<li>who initiated the request</li>
+<li>whether the action was agent-mediated</li>
+<li>what MCP tool was invoked</li>
+<li>what confirmation or approval path was used</li>
+</ul>
+<h2 id="target-roadmap">Target Roadmap<a class="headerlink" href="#target-roadmap" title="Permanent link">&para;</a></h2>
+<h3 id="phase-1-foundation">Phase 1: Foundation<a class="headerlink" href="#phase-1-foundation" title="Permanent link">&para;</a></h3>
+<p>Strengthen MCP as the platform-wide business discovery and read layer.</p>
+<p>Deliver:</p>
+<ul>
+<li>richer module and capability catalog</li>
+<li>clearer tool metadata</li>
+<li>consistent distinction between generic, synthetic, and specialized MCP tools</li>
+<li>platform-wide discovery of documents, models, references, datasets, and actions</li>
+</ul>
+<h3 id="phase-2-business-comprehension">Phase 2: Business Comprehension<a class="headerlink" href="#phase-2-business-comprehension" title="Permanent link">&para;</a></h3>
+<p>Add cross-domain analytical capability so agents can investigate the business.</p>
+<p>Deliver:</p>
+<ul>
+<li>KPI and dataset-oriented MCP tools</li>
+<li>relationship traversal and timeline helpers</li>
+<li>exception, backlog, aging, reconciliation, and variance views</li>
+<li>master-data completeness and configuration quality checks</li>
+</ul>
+<h3 id="phase-3-safe-action-governance">Phase 3: Safe Action Governance<a class="headerlink" href="#phase-3-safe-action-governance" title="Permanent link">&para;</a></h3>
+<p>Formalize the governed action layer.</p>
+<p>Deliver:</p>
+<ul>
+<li>action classes and side-effect classes</li>
+<li>draft-first write behavior</li>
+<li>tool-level confirmation and approval metadata</li>
+<li>runtime enforcement aligned with workflow, finance, and policy controls</li>
+</ul>
+<h3 id="phase-4-advisor-packs">Phase 4: Advisor Packs<a class="headerlink" href="#phase-4-advisor-packs" title="Permanent link">&para;</a></h3>
+<p>Package high-value enterprise reasoning capabilities on top of the generic MCP layer.</p>
+<p>Deliver initial packs for:</p>
+<ul>
+<li>pricing and promotion</li>
+<li>tax structure</li>
+<li>treasury and reconciliation</li>
+<li>inventory health</li>
+<li>customer and vendor master quality</li>
+</ul>
+<h3 id="phase-5-enterprise-operations">Phase 5: Enterprise Operations<a class="headerlink" href="#phase-5-enterprise-operations" title="Permanent link">&para;</a></h3>
+<p>Deepen cross-domain operational intelligence and machine-governed assistance.</p>
+<p>Deliver:</p>
+<ul>
+<li>richer trend and anomaly analysis</li>
+<li>better playbook support in the agent workspace</li>
+<li>stronger action governance and audit views</li>
+<li>operational observability for MCP usage and business impact</li>
+</ul>
+<h2 id="engineering-implications">Engineering Implications<a class="headerlink" href="#engineering-implications" title="Permanent link">&para;</a></h2>
+<p>This target architecture implies that Orbyte should continue to invest in:</p>
+<ul>
+<li>richer module metadata</li>
+<li>generic business-semantic MCP tools</li>
+<li>analytical and relationship-oriented tools, not only search/list/get</li>
+<li>governance metadata in MCP contracts</li>
+<li>ACP and agent workspace features that surface MCP risk and approval semantics clearly</li>
+</ul>
+<p>It also implies that new business modules should be designed to be:</p>
+<ul>
+<li>discoverable</li>
+<li>readable in business terms</li>
+<li>analytically visible</li>
+<li>safely draftable</li>
+</ul>
+<h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../architecture/">Architecture</a></li>
+<li><a href="../integration/">Integration</a></li>
+<li><a href="../api-and-contracts/">API and Contracts</a></li>
+<li><a href="../security-and-governance/">Security and Governance</a></li>
+<li><a href="../glossary/">Glossary</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.expand", "navigation.top", "content.code.copy", "content.tabs.link", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
