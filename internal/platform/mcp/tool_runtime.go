@@ -145,14 +145,14 @@ func (s *Server) readResource(actor ActorContext, uri string) ([]ResourceContent
 	}
 }
 
-func (s *Server) callTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
+func (s *Server) callTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any, catalogContext ToolCatalogOptions) (map[string]any, error) {
 	ctx, span := s.startToolSpan(ctx, actor, name)
 	if span != nil {
 		defer span.End()
 	}
 
 	start := time.Now()
-	result, err := s.executeTool(ctx, actor, name, arguments)
+	result, err := s.executeTool(ctx, actor, name, arguments, catalogContext)
 	duration := time.Since(start)
 
 	status := "success"
@@ -184,9 +184,24 @@ func (s *Server) startToolSpan(ctx context.Context, actor ActorContext, name str
 	)
 }
 
-func (s *Server) executeTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
+func (s *Server) executeTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any, catalogContext ToolCatalogOptions) (map[string]any, error) {
 	if s == nil || s.modules == nil {
 		return nil, fmt.Errorf("mcp tools are unavailable")
+	}
+	if strings.TrimSpace(catalogContext.CatalogMode) != "" {
+		scopeOptions := catalogContext
+		scopeOptions.MaxTools = 0
+		available, _ := s.filterToolCatalogScope(s.listTools(actor), scopeOptions)
+		visible := false
+		for _, item := range available {
+			if strings.TrimSpace(item.Name) == strings.TrimSpace(name) {
+				visible = true
+				break
+			}
+		}
+		if !visible {
+			return nil, fmt.Errorf("tool is out of scope for the active catalog context")
+		}
 	}
 	if s.toolDefined(strings.TrimSpace(name)) && !s.ToolEnabled(strings.TrimSpace(name)) {
 		return nil, fmt.Errorf("tool is disabled")

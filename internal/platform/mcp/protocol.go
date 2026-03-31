@@ -47,17 +47,20 @@ type ContractDescriptor struct {
 }
 
 type ToolDescriptor struct {
-	Name                string             `json:"name"`
-	Title               string             `json:"title,omitempty"`
-	Description         string             `json:"description,omitempty"`
-	ModuleKey           string             `json:"moduleKey,omitempty"`
-	SourceType          string             `json:"sourceType,omitempty"`
-	Scope               string             `json:"scope,omitempty"`
-	PolicyState         string             `json:"policyState,omitempty"`
-	PolicyReason        string             `json:"policyReason,omitempty"`
-	EffectiveVisibility string             `json:"effectiveVisibility,omitempty"`
-	InputSchema         map[string]any     `json:"inputSchema,omitempty"`
-	Contract            ContractDescriptor `json:"contract,omitempty"`
+	Name                 string             `json:"name"`
+	Title                string             `json:"title,omitempty"`
+	Description          string             `json:"description,omitempty"`
+	ModuleKey            string             `json:"moduleKey,omitempty"`
+	SourceType           string             `json:"sourceType,omitempty"`
+	CapabilityKeys       []string           `json:"capabilityKeys,omitempty"`
+	CapabilityCategories []string           `json:"capabilityCategories,omitempty"`
+	CompactEligible      bool               `json:"compactEligible,omitempty"`
+	Scope                string             `json:"scope,omitempty"`
+	PolicyState          string             `json:"policyState,omitempty"`
+	PolicyReason         string             `json:"policyReason,omitempty"`
+	EffectiveVisibility  string             `json:"effectiveVisibility,omitempty"`
+	InputSchema          map[string]any     `json:"inputSchema,omitempty"`
+	Contract             ContractDescriptor `json:"contract,omitempty"`
 }
 
 type ResourceDescriptor struct {
@@ -112,7 +115,7 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 			},
 		}}
 	case "tools/list":
-		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"tools": s.listTools(actor)}}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: s.toolsListResult(actor, parseToolCatalogOptions(req.Params))}
 	case "resources/list":
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"resources": s.listResources(actor)}}
 	case "resources/read":
@@ -127,11 +130,12 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"contents": contents}}
 	case "tools/call":
 		var params struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments"`
+			Name           string             `json:"name"`
+			Arguments      map[string]any     `json:"arguments"`
+			CatalogContext ToolCatalogOptions `json:"catalog_context"`
 		}
 		_ = json.Unmarshal(req.Params, &params)
-		result, err := s.callTool(ctx, actor, params.Name, params.Arguments)
+		result, err := s.callTool(ctx, actor, params.Name, params.Arguments, params.CatalogContext)
 		if err != nil {
 			return errorResponse(req.ID, http.StatusBadRequest, err)
 		}

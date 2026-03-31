@@ -20,14 +20,6 @@ type governanceEvaluation struct {
 	EffectiveVisibility string
 }
 
-func (s *Server) decorateToolDescriptorWithGovernance(descriptor ToolDescriptor, arguments map[string]any) ToolDescriptor {
-	evaluation := s.evaluateToolGovernance(descriptor, arguments)
-	descriptor.PolicyState = evaluation.PolicyState
-	descriptor.PolicyReason = evaluation.PolicyReason
-	descriptor.EffectiveVisibility = evaluation.EffectiveVisibility
-	return descriptor
-}
-
 func (s *Server) evaluateToolGovernance(descriptor ToolDescriptor, arguments map[string]any) governanceEvaluation {
 	evaluation := defaultGovernanceEvaluation(descriptor)
 	cfg := s.mcpRuntimeConfig()

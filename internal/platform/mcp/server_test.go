@@ -894,6 +894,163 @@ func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
 	}
 }
 
+func TestToolsListCompactCatalogFiltersByCapability(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.list", "document.read", "document.create", "document.update_draft":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"catalog_mode":          "compact",
+			"capabilities":          []string{"cross_domain_analytics"},
+			"include_summary":       true,
+			"include_hidden_counts": true,
+			"max_tools":             8,
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("compact tools/list failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	tools := payload["tools"].([]ToolDescriptor)
+	if len(tools) == 0 || len(tools) > 8 {
+		t.Fatalf("expected compact tools within max_tools, got %d", len(tools))
+	}
+	for _, item := range tools {
+		if !containsString(item.CapabilityKeys, "cross_domain_analytics") {
+			t.Fatalf("expected compact tool to match requested capability, got %+v", item)
+		}
+	}
+	if containsToolNamed(tools, "module.enable") {
+		t.Fatalf("did not expect platform admin tool in analytics compact catalog, got %+v", tools)
+	}
+	catalog := payload["catalog"].(map[string]any)
+	if anyString(catalog["mode"]) != "compact" {
+		t.Fatalf("expected compact mode metadata, got %+v", catalog)
+	}
+}
+
+func TestToolsCallCatalogContextBlocksOutOfScopeTool(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "module.manage":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "module.enable",
+			"arguments": map[string]any{
+				"module_key":    "analytics",
+				"confirm_apply": true,
+			},
+			"catalog_context": map[string]any{
+				"catalog_mode": "compact",
+				"capabilities": []string{"cross_domain_analytics"},
+				"max_tools":    8,
+			},
+		}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "out of scope") {
+		t.Fatalf("expected out-of-scope catalog block, got %+v", resp.Error)
+	}
+}
+
+func TestToolsListCompactCatalogAllowsExplicitDomainFilterWithoutCapabilities(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "module.read"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"catalog_mode":    "compact",
+			"domains":         []string{"pricing"},
+			"include_summary": true,
+			"max_tools":       16,
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("compact domain-filtered tools/list failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	tools := payload["tools"].([]ToolDescriptor)
+	if !containsToolNamed(tools, "pricing.promotion.advisor.review") {
+		t.Fatalf("expected pricing advisor tool in pricing compact catalog, got %+v", tools)
+	}
+	catalog := payload["catalog"].(map[string]any)
+	if capabilities, ok := catalog["capabilities"].([]string); ok && len(capabilities) != 0 {
+		t.Fatalf("expected no implicit capabilities for explicit domain filter, got %+v", capabilities)
+	}
+}
+
+func TestToolsCallCatalogContextIgnoresMaxToolsTruncation(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "analytics.read":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.analytics.trend",
+			"arguments": map[string]any{
+				"limit": 1,
+			},
+			"catalog_context": map[string]any{
+				"catalog_mode": "compact",
+				"capabilities": []string{"cross_domain_analytics"},
+				"max_tools":    1,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("expected in-scope tool call to ignore max_tools truncation, got %+v", resp.Error)
+	}
+}
+
 func TestMCPGovernanceBlocksSubmitAndMutationByDefault(t *testing.T) {
 	server := newTestServer(t)
 	server.config = config.NewService()
@@ -4218,6 +4375,15 @@ func mustJSON(t *testing.T, value any) json.RawMessage {
 func contains(items []string, expected string) bool {
 	for _, item := range items {
 		if item == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func containsToolNamed(items []ToolDescriptor, expected string) bool {
+	for _, item := range items {
+		if item.Name == expected {
 			return true
 		}
 	}

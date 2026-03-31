@@ -206,6 +206,8 @@ func buildAdminMCPPayload(r *http.Request, cfg *config.Service, auditSvc *audit.
 		},
 		"policy_summary":      policySummary,
 		"governance_activity": activity,
+		"capabilities":        capabilityInventoryPayload(server),
+		"compact_preview":     compactToolCatalogPreviewPayload(server),
 		"tools":               toolInventoryPayload(server),
 		"resources":           resourceInventoryPayload(server),
 		"apps":                appInventoryPayload(server),
@@ -349,6 +351,50 @@ func toolInventoryPayload(server *mcp.Server) []any {
 		output = append(output, item)
 	}
 	return output
+}
+
+func capabilityInventoryPayload(server *mcp.Server) []any {
+	if server == nil {
+		return []any{}
+	}
+	tools := make([]mcp.ToolDescriptor, 0, len(server.ToolInventory()))
+	for _, item := range server.ToolInventory() {
+		tools = append(tools, mcp.ToolDescriptor{
+			Name:                 item.Key,
+			Title:                item.Title,
+			Description:          item.Description,
+			ModuleKey:            item.ModuleKey,
+			SourceType:           item.SourceType,
+			CapabilityKeys:       append([]string(nil), item.CapabilityKeys...),
+			CapabilityCategories: append([]string(nil), item.CapabilityCategories...),
+			CompactEligible:      item.CompactEligible,
+			Contract:             item.Contract,
+		})
+	}
+	output := make([]any, 0)
+	for _, item := range server.CapabilityInventory(tools) {
+		output = append(output, item)
+	}
+	return output
+}
+
+func compactToolCatalogPreviewPayload(server *mcp.Server) map[string]any {
+	if server == nil {
+		return map[string]any{}
+	}
+	tools, catalog, groups, suggested := server.FilterToolCatalogForPreview(mcp.ToolCatalogOptions{
+		CatalogMode:         "compact",
+		Capabilities:        []string{"discovery", "business_overview", "cross_domain_analytics", "relationships_timeline", "governed_drafts"},
+		IncludeSummary:      true,
+		IncludeHiddenCounts: true,
+		MaxTools:            32,
+	})
+	return map[string]any{
+		"catalog":              catalog,
+		"groups":               groups,
+		"suggested_expansions": suggested,
+		"tools":                tools,
+	}
 }
 
 func resourceInventoryPayload(server *mcp.Server) []any {

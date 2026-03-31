@@ -595,7 +595,17 @@ function MCPAdminPage({
 }) {
   const runtime = ((payload?.runtime || {}) as Record<string, unknown>) || {};
   const entry = (payload?.entry || {}) as Record<string, unknown>;
+  const compactPreview =
+    ((payload?.compact_preview || {}) as Record<string, unknown>) || {};
   const [runtimeState, setRuntimeState] = useState(runtime);
+  const [capabilityRows, setCapabilityRows] = useState(
+    asItems({
+      items: payload?.capabilities as Array<Record<string, unknown>> | undefined,
+    }),
+  );
+  const [compactPreviewState, setCompactPreviewState] = useState(compactPreview);
+  const compactCatalogState =
+    ((compactPreviewState.catalog || {}) as Record<string, unknown>) || {};
   const [policySummaryState, setPolicySummaryState] = useState(
     ((payload?.policy_summary || {}) as Record<string, unknown>) || {},
   );
@@ -631,6 +641,14 @@ function MCPAdminPage({
 
   useEffect(() => {
     setRuntimeState(runtime);
+    setCapabilityRows(
+      asItems({
+        items: payload?.capabilities as
+          | Array<Record<string, unknown>>
+          | undefined,
+      }),
+    );
+    setCompactPreviewState(compactPreview);
     setTools(
       decorateMcpTools(
         asItems({
@@ -648,7 +666,7 @@ function MCPAdminPage({
           | undefined,
       }),
     );
-  }, [payload, runtime]);
+  }, [compactPreview, payload, runtime]);
 
   useEffect(() => {
     setGovernanceEnabled(Boolean(resolvePath(entry, "value.governance_enabled")));
@@ -707,6 +725,16 @@ function MCPAdminPage({
       );
       const nextRuntime = (response.runtime || {}) as Record<string, unknown>;
       setRuntimeState(nextRuntime);
+      setCapabilityRows(
+        asItems({
+          items: nextRuntime.capabilities as
+            | Array<Record<string, unknown>>
+            | undefined,
+        }),
+      );
+      setCompactPreviewState(
+        ((nextRuntime.compact_preview || {}) as Record<string, unknown>) || {},
+      );
       setTools(
         decorateMcpTools(
           asItems({
@@ -771,6 +799,16 @@ function MCPAdminPage({
       );
       const nextRuntime = await fetchJson<Record<string, unknown>>("/admin/api/mcp");
       setRuntimeState(nextRuntime);
+      setCapabilityRows(
+        asItems({
+          items: nextRuntime.capabilities as
+            | Array<Record<string, unknown>>
+            | undefined,
+        }),
+      );
+      setCompactPreviewState(
+        ((nextRuntime.compact_preview || {}) as Record<string, unknown>) || {},
+      );
       setTools(
         decorateMcpTools(
           asItems({
@@ -829,6 +867,14 @@ function MCPAdminPage({
         <SummaryCard
           label="Advisor Tools"
           value={String(groupedCounts.advisorTools)}
+        />
+        <SummaryCard
+          label="Compact Default"
+          value={String(compactCatalogState.returned_tools || 0)}
+        />
+        <SummaryCard
+          label="Hidden by Default"
+          value={String(compactCatalogState.hidden_tools || 0)}
         />
         <SummaryCard
           label="Draft Enabled"
@@ -952,10 +998,61 @@ function MCPAdminPage({
         />
       </section>
       <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <div className="mb-3 text-sm font-semibold text-body">Capabilities</div>
+        <DataGrid
+          columns={[
+            { key: "key", label: "Capability" },
+            { key: "category", label: "Category" },
+            { key: "default_for_agent", label: "Agent Default" },
+            { key: "estimated_tool_count", label: "Tools" },
+            { key: "description", label: "Description" },
+          ]}
+          rows={capabilityRows}
+        />
+      </section>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <div className="mb-3 text-sm font-semibold text-body">
+          Agent Default Compact Preview
+        </div>
+        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <SummaryCard
+            label="Mode"
+            value={String(compactCatalogState.mode || "compact")}
+          />
+          <SummaryCard
+            label="Returned"
+            value={String(compactCatalogState.returned_tools || 0)}
+          />
+          <SummaryCard
+            label="Hidden"
+            value={String(compactCatalogState.hidden_tools || 0)}
+          />
+          <SummaryCard
+            label="Max Tools"
+            value={String(compactCatalogState.max_tools || 0)}
+          />
+        </div>
+        <DataGrid
+          columns={[
+            { key: "name", label: "Tool" },
+            { key: "sourceType", label: "Source" },
+            { key: "moduleKey", label: "Module" },
+            { key: "capabilityKeys", label: "Capabilities" },
+            { key: "contract.actionClass", label: "Action" },
+          ]}
+          rows={asItems({
+            items: compactPreviewState.tools as
+              | Array<Record<string, unknown>>
+              | undefined,
+          })}
+        />
+      </section>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
         <div className="mb-3 text-sm font-semibold text-body">Tools</div>
         <DataGrid
           columns={[
             { key: "key", label: "Tool" },
+            { key: "capability_keys", label: "Capabilities" },
             { key: "source_type", label: "Source" },
             { key: "module_key", label: "Module" },
             { key: "action_class", label: "Action" },
@@ -1042,6 +1139,12 @@ function decorateMcpTools(
       String(item.risk_class || resolvePath(item, "contract.riskClass") || "") ||
       "",
     source_type: String(item.source_type || "") || "",
+    capability_keys: displayValue(
+      item.capability_keys || resolvePath(item, "capabilityKeys"),
+    ),
+    capability_categories: displayValue(
+      item.capability_categories || resolvePath(item, "capabilityCategories"),
+    ),
     business_domains: displayValue(
       item.business_domains || resolvePath(item, "contract.businessDomains"),
     ),

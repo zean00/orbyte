@@ -184,13 +184,18 @@ func recordMCPTrail(auditSvc *audit.Service, server *mcp.Server, req mcp.JSONRPC
 	switch req.Method {
 	case "tools/call":
 		var params struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments"`
+			Name           string                 `json:"name"`
+			Arguments      map[string]any         `json:"arguments"`
+			CatalogContext mcp.ToolCatalogOptions `json:"catalog_context"`
 		}
 		_ = json.Unmarshal(req.Params, &params)
 		targetType = "mcp_tool"
 		targetID = strings.TrimSpace(params.Name)
 		metadata["tool_name"] = targetID
+		if strings.TrimSpace(params.CatalogContext.CatalogMode) != "" {
+			metadata["catalog_mode"] = params.CatalogContext.CatalogMode
+			metadata["catalog_capabilities"] = append([]string(nil), params.CatalogContext.Capabilities...)
+		}
 		if server != nil {
 			if descriptor, ok := server.ToolDescriptorForArguments(targetID, actor, params.Arguments); ok {
 				metadata["contract_version"] = descriptor.Contract.Version

@@ -12,6 +12,9 @@ type ToolInventoryItem struct {
 	Description          string             `json:"description,omitempty"`
 	ModuleKey            string             `json:"module_key,omitempty"`
 	SourceType           string             `json:"source_type,omitempty"`
+	CapabilityKeys       []string           `json:"capability_keys,omitempty"`
+	CapabilityCategories []string           `json:"capability_categories,omitempty"`
+	CompactEligible      bool               `json:"compact_eligible,omitempty"`
 	BuiltIn              bool               `json:"built_in,omitempty"`
 	Generated            bool               `json:"generated,omitempty"`
 	EndpointScope        string             `json:"endpoint_scope,omitempty"`
@@ -126,6 +129,9 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 			Description:          def.description,
 			ModuleKey:            "platform.core",
 			SourceType:           "built_in",
+			CapabilityKeys:       append([]string(nil), descriptor.CapabilityKeys...),
+			CapabilityCategories: append([]string(nil), descriptor.CapabilityCategories...),
+			CompactEligible:      descriptor.CompactEligible,
 			BuiltIn:              true,
 			EndpointScope:        builtInToolScope(def.name),
 			RequiredPermissions:  []string{def.permission},
@@ -162,6 +168,9 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 			Description:          def.Description,
 			ModuleKey:            def.ModuleKey,
 			SourceType:           "synthetic",
+			CapabilityKeys:       append([]string(nil), descriptor.CapabilityKeys...),
+			CapabilityCategories: append([]string(nil), descriptor.CapabilityCategories...),
+			CompactEligible:      descriptor.CompactEligible,
 			Generated:            true,
 			EndpointScope:        scopeForModule(def.ModuleKey),
 			RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
@@ -204,6 +213,9 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 					Description:          def.Description,
 					ModuleKey:            detail.Manifest.Key,
 					SourceType:           "module",
+					CapabilityKeys:       append([]string(nil), descriptor.CapabilityKeys...),
+					CapabilityCategories: append([]string(nil), descriptor.CapabilityCategories...),
+					CompactEligible:      descriptor.CompactEligible,
 					EndpointScope:        scopeForModule(detail.Manifest.Key),
 					RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
 					Operation:            def.Operation,

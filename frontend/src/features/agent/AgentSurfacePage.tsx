@@ -55,6 +55,9 @@ type MCPTool = {
   description?: string;
   moduleKey?: string;
   sourceType?: string;
+  capabilityKeys?: string[];
+  capabilityCategories?: string[];
+  compactEligible?: boolean;
   policyState?: string;
   policyReason?: string;
   effectiveVisibility?: string;
@@ -68,6 +71,39 @@ type MCPTool = {
     businessDomains?: string[];
   };
 };
+
+type MCPCapability = {
+  key: string;
+  title: string;
+  description?: string;
+  category?: string;
+  default_for_agent?: boolean;
+};
+
+type MCPToolCatalog = {
+  mode?: string;
+  capabilities?: string[];
+  returned_tools?: number;
+  hidden_tools?: number;
+  total_matching_tools?: number;
+  max_tools?: number;
+};
+
+const DEFAULT_AGENT_CAPABILITIES = [
+  "discovery",
+  "business_overview",
+  "cross_domain_analytics",
+  "relationships_timeline",
+  "governed_drafts",
+];
+
+const OPTIONAL_AGENT_CAPABILITIES: MCPCapability[] = [
+  { key: "pricing_promotion", title: "Pricing" },
+  { key: "tax_structure", title: "Tax" },
+  { key: "treasury_reconciliation", title: "Treasury" },
+  { key: "inventory_health", title: "Inventory" },
+  { key: "party_master", title: "Party Master" },
+];
 
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
@@ -87,6 +123,15 @@ export default function AgentSurfacePage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
+  const [activeCapabilities, setActiveCapabilities] = useState<string[]>(
+    DEFAULT_AGENT_CAPABILITIES,
+  );
+  const [catalogSummary, setCatalogSummary] = useState<MCPToolCatalog | null>(
+    null,
+  );
+  const [suggestedExpansions, setSuggestedExpansions] = useState<
+    MCPCapability[]
+  >([]);
   const streamRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -172,19 +217,33 @@ export default function AgentSurfacePage() {
     let mounted = true;
     async function loadMcpTools() {
       try {
-        const payload = await callMcp<{ tools?: MCPTool[] }>("tools/list");
+        const payload = await callMcp<{
+          tools?: MCPTool[];
+          catalog?: MCPToolCatalog;
+          suggested_expansions?: MCPCapability[];
+        }>("tools/list", {
+          catalog_mode: "compact",
+          capabilities: activeCapabilities,
+          include_summary: true,
+          include_hidden_counts: true,
+          max_tools: 32,
+        });
         if (!mounted) return;
         setMcpTools(sortMcpTools(payload.tools || []));
+        setCatalogSummary(payload.catalog || null);
+        setSuggestedExpansions(payload.suggested_expansions || []);
       } catch {
         if (!mounted) return;
         setMcpTools([]);
+        setCatalogSummary(null);
+        setSuggestedExpansions([]);
       }
     }
     void loadMcpTools();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeCapabilities]);
 
   useEffect(() => {
     if (!selectedSessionID) {
@@ -257,6 +316,14 @@ export default function AgentSurfacePage() {
       ),
     [mcpTools],
   );
+
+  function toggleCapability(key: string) {
+    setActiveCapabilities((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key],
+    );
+  }
 
   async function createSession() {
     if (!selectedProvider) return;
@@ -502,8 +569,49 @@ export default function AgentSurfacePage() {
                       MCP Capabilities
                     </div>
                     <div className="text-xs uppercase tracking-[0.16em] text-muted">
-                      {mcpTools.length} tools
+                      {catalogSummary?.returned_tools || mcpTools.length} tools
                     </div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-line bg-surface p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                      Compact Catalog
+                    </div>
+                    <div className="mt-2 text-xs text-muted">
+                      {[
+                        `${catalogSummary?.returned_tools || mcpTools.length} visible`,
+                        typeof catalogSummary?.hidden_tools === "number"
+                          ? `${catalogSummary.hidden_tools} hidden`
+                          : "",
+                        catalogSummary?.mode || "compact",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {OPTIONAL_AGENT_CAPABILITIES.map((item) => {
+                        const active = activeCapabilities.includes(item.key);
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => toggleCapability(item.key)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                              active
+                                ? "border-accent bg-accent-soft/60 text-accent"
+                                : "border-line bg-shell text-muted hover:border-accent/40 hover:text-body"
+                            }`}
+                          >
+                            {item.title}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {suggestedExpansions.length > 0 ? (
+                      <div className="mt-3 text-xs text-muted">
+                        Suggested:{" "}
+                        {suggestedExpansions.map((item) => item.title).join(", ")}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-3 grid gap-3">
                     <div className="rounded-xl border border-line bg-surface p-3">
