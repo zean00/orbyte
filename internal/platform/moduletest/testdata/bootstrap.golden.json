@@ -28172,6 +28172,26 @@
               "type": "string"
             },
             {
+              "key": "roster_slot_id",
+              "label": "Roster Slot",
+              "label_i18n": {
+                "en": "Roster Slot",
+                "id": "Slot Roster"
+              },
+              "path": "values.roster_slot_id",
+              "type": "string"
+            },
+            {
+              "key": "attendance_day_id",
+              "label": "Attendance Day",
+              "label_i18n": {
+                "en": "Attendance Day",
+                "id": "Hari Kehadiran"
+              },
+              "path": "values.attendance_day_id",
+              "type": "string"
+            },
+            {
               "key": "opened_at",
               "label": "Opened At",
               "label_i18n": {
@@ -28336,6 +28356,28 @@
               "widget": "select"
             },
             {
+              "key": "roster_slot_id",
+              "label": "Roster Slot",
+              "label_i18n": {
+                "en": "Roster Slot",
+                "id": "Slot Roster"
+              },
+              "path": "values.roster_slot_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "attendance_day_id",
+              "label": "Attendance Day",
+              "label_i18n": {
+                "en": "Attendance Day",
+                "id": "Hari Kehadiran"
+              },
+              "path": "values.attendance_day_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
               "key": "opening_cash_amount",
               "label": "Opening Cash",
               "label_i18n": {
@@ -28445,6 +28487,15 @@
             "id": "Karyawan"
           },
           "path": "values.cashier_employee_id"
+        },
+        {
+          "key": "roster_slot_id",
+          "label": "Roster Slot",
+          "label_i18n": {
+            "en": "Roster Slot",
+            "id": "Slot Roster"
+          },
+          "path": "values.roster_slot_id"
         },
         {
           "key": "opened_at",
@@ -32365,6 +32416,11 @@
           "key": "employee_id",
           "label": "Employee",
           "path": "values.employee_id"
+        },
+        {
+          "key": "roster_slot_id",
+          "label": "Roster Slot",
+          "path": "values.roster_slot_id"
         },
         {
           "key": "capture_type",

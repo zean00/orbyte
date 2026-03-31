@@ -23,6 +23,7 @@ type POSCoreService struct {
 	fulfillment *FulfillmentCoreService
 	returns     *ReturnsCoreService
 	retail      *RetailFinanceCoreService
+	attendance  *WorkforceAttendanceCoreService
 }
 
 func NewPOSCoreService(documents *document.Service, models *model.Service, searchSvc *search.Service, actions *DocumentActions, commercialSvc *CommercialCoreService, inventorySvc *InventoryCoreService, fulfillmentSvc *FulfillmentCoreService, returnsSvc *ReturnsCoreService) *POSCoreService {
@@ -40,6 +41,10 @@ func NewPOSCoreService(documents *document.Service, models *model.Service, searc
 
 func (s *POSCoreService) SetRetailFinance(retail *RetailFinanceCoreService) {
 	s.retail = retail
+}
+
+func (s *POSCoreService) AttachWorkforceAttendance(attendance *WorkforceAttendanceCoreService) {
+	s.attendance = attendance
 }
 
 type POSCatalogItem struct {
@@ -262,6 +267,14 @@ func (s *POSCoreService) OpenShift(organizationID, locationID, storeCode, regist
 	if _, ok := s.findOpenShift(registerCode, cashierUserID); ok {
 		return model.Record{}, shared.Conflict("an open shift already exists for this register and cashier")
 	}
+	var cashierEmployeeID string
+	if s.attendance != nil && s.attendance.workforce != nil {
+		if employee, ok, err := s.attendance.workforce.ResolveEmployeeByUser(cashierUserID); err != nil {
+			return model.Record{}, err
+		} else if ok {
+			cashierEmployeeID = employee.ID
+		}
+	}
 	record, err := s.models.Create("pos_shift", actorID, map[string]any{
 		"organization_id":      organizationID,
 		"location_id":          locationID,
@@ -269,6 +282,9 @@ func (s *POSCoreService) OpenShift(organizationID, locationID, storeCode, regist
 		"store_code":           storeCode,
 		"register_code":        registerCode,
 		"cashier_user_id":      cashierUserID,
+		"cashier_employee_id":  cashierEmployeeID,
+		"roster_slot_id":       "",
+		"attendance_day_id":    "",
 		"opened_at":            time.Now().UTC().Format(time.RFC3339),
 		"opening_cash_amount":  roundMoney(openingCash),
 		"expected_cash_amount": roundMoney(openingCash),
@@ -279,6 +295,38 @@ func (s *POSCoreService) OpenShift(organizationID, locationID, storeCode, regist
 	})
 	if err != nil {
 		return model.Record{}, err
+	}
+	if s.attendance != nil && cashierEmployeeID != "" {
+		scope := AttendanceScope{OrganizationID: organizationID, LocationID: locationID, StoreCode: storeCode, RegisterCode: registerCode}
+		event, day, previousDay, attendanceErr := s.attendance.recordAttendanceEventWithState(AttendanceEventInput{
+			EmployeeID: cashierEmployeeID,
+			EventType:  "clock_in",
+			OccurredAt: time.Now().UTC(),
+			Source:     "pos_shift",
+			Notes:      notes,
+			Scope:      scope,
+		}, actorID)
+		if attendanceErr != nil {
+			if rollbackErr := s.deleteModelRecord("pos_shift", record.ID); rollbackErr != nil {
+				return model.Record{}, fmt.Errorf("record attendance event: %w (rollback failed: %v)", attendanceErr, rollbackErr)
+			}
+			return model.Record{}, attendanceErr
+		}
+		values := cloneMap(record.Values)
+		values["roster_slot_id"] = textValue(event.Values["roster_slot_id"])
+		values["attendance_day_id"] = day.ID
+		linked, updateErr := s.models.Update("pos_shift", record.ID, actorID, values, record.Version)
+		if updateErr != nil {
+			rollbackErr := s.attendance.rollbackAttendanceEventState(event.ID, previousDay, day)
+			if deleteErr := s.deleteModelRecord("pos_shift", record.ID); rollbackErr == nil {
+				rollbackErr = deleteErr
+			}
+			if rollbackErr != nil {
+				return model.Record{}, fmt.Errorf("link shift attendance context: %w (rollback failed: %v)", updateErr, rollbackErr)
+			}
+			return model.Record{}, updateErr
+		}
+		record = linked
 	}
 	return record, nil
 }
@@ -302,8 +350,44 @@ func (s *POSCoreService) CloseShift(organizationID, locationID, shiftID, actorID
 	values["over_short_amount"] = roundMoney(actualCash - expectedCash)
 	values["status"] = "closed"
 	values["notes"] = strings.TrimSpace(notes)
+	var attendanceEvent model.Record
+	var attendanceDay model.Record
+	var previousAttendanceDay model.Record
+	if s.attendance != nil {
+		employeeID := textValue(values["cashier_employee_id"])
+		if employeeID != "" {
+			scope := AttendanceScope{OrganizationID: organizationID, LocationID: locationID, StoreCode: textValue(values["store_code"]), RegisterCode: textValue(values["register_code"])}
+			event, day, previousDay, err := s.attendance.recordAttendanceEventWithState(AttendanceEventInput{
+				EmployeeID:      employeeID,
+				EventType:       "clock_out",
+				OccurredAt:      time.Now().UTC(),
+				Source:          "pos_shift",
+				Notes:           notes,
+				RosterSlotID:    textValue(values["roster_slot_id"]),
+				AttendanceDayID: textValue(values["attendance_day_id"]),
+				Scope:           scope,
+			}, actorID)
+			if err != nil {
+				return model.Record{}, err
+			}
+			attendanceEvent = event
+			attendanceDay = day
+			previousAttendanceDay = previousDay
+			if textValue(values["roster_slot_id"]) == "" {
+				values["roster_slot_id"] = textValue(event.Values["roster_slot_id"])
+			}
+			if day.ID != "" {
+				values["attendance_day_id"] = day.ID
+			}
+		}
+	}
 	record, err := s.models.Update("pos_shift", shift.ID, actorID, values, shift.Version)
 	if err != nil {
+		if s.attendance != nil && attendanceEvent.ID != "" {
+			if rollbackErr := s.attendance.rollbackAttendanceEventState(attendanceEvent.ID, previousAttendanceDay, attendanceDay); rollbackErr != nil {
+				return model.Record{}, fmt.Errorf("close shift: %w (attendance rollback failed: %v)", err, rollbackErr)
+			}
+		}
 		return model.Record{}, err
 	}
 	if s.retail != nil {
@@ -312,6 +396,14 @@ func (s *POSCoreService) CloseShift(organizationID, locationID, shiftID, actorID
 		}
 	}
 	return record, nil
+}
+
+func (s *POSCoreService) deleteModelRecord(modelKey, id string) error {
+	repo := s.models.Repository()
+	if repo == nil {
+		return nil
+	}
+	return repo.DeleteRecord(modelKey, strings.TrimSpace(id))
 }
 
 func (s *POSCoreService) HoldSale(input POSHoldSaleInput, actorID string) (model.Record, error) {

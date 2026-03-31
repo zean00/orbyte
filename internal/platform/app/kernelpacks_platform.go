@@ -26,6 +26,10 @@ func employeeWorkforceKernelPackManifests() []module.Manifest {
 	return []module.Manifest{employeeWorkforceKernelPackManifest()}
 }
 
+func workforceAttendanceKernelPackManifests() []module.Manifest {
+	return []module.Manifest{workforceAttendanceKernelPackManifest()}
+}
+
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
 	acpDefinition, _ := config.NewService().Definition("platform.acp")

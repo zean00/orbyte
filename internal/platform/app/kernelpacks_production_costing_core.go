@@ -89,6 +89,8 @@ func productionCostingCoreKernelPackManifest() module.Manifest {
 				{Key: "production_order_id", Label: "Production Order", Type: "string", Required: true},
 				{Key: "work_center_code", Label: "Work Center", Type: "string"},
 				{Key: "employee_id", Label: "Employee", Type: "string"},
+				{Key: "roster_slot_id", Label: "Roster Slot", Type: "string"},
+				{Key: "attendance_day_id", Label: "Attendance Day", Type: "string"},
 				{Key: "capture_type", Label: "Capture Type", Type: "string", Required: true},
 				{Key: "source", Label: "Source", Type: "string", DefaultValue: "manual_entry"},
 				{Key: "capture_date", Label: "Capture Date", Type: "string"},
@@ -233,6 +235,7 @@ func productionCostingCoreKernelPackManifest() module.Manifest {
 				commercialModelListView("production.cost_captures.list", "Production Cost Captures", "production_cost_capture", []module.ColumnDefinition{
 					{Key: "production_order_id", Label: "Order", Path: "values.production_order_id"},
 					{Key: "employee_id", Label: "Employee", Path: "values.employee_id"},
+					{Key: "roster_slot_id", Label: "Roster Slot", Path: "values.roster_slot_id"},
 					{Key: "capture_type", Label: "Type", Path: "values.capture_type"},
 					{Key: "quantity", Label: "Qty", Path: "values.quantity"},
 					{Key: "actual_cost", Label: "Cost", Path: "values.actual_cost"},
