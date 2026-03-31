@@ -37,6 +37,66 @@
       "route_path": "/analytics/cockpit"
     },
     {
+      "key": "approval.policies.detail",
+      "kind": "navigate",
+      "label": "Approval Policy Detail",
+      "label_i18n": {
+        "en": "Approval Policy Detail",
+        "id": "Approval Policy Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "approval_policy.read"
+      ],
+      "route_path": "/approval/policies/detail",
+      "view_key": "approval.policies.detail"
+    },
+    {
+      "key": "approval.policies.form",
+      "kind": "navigate",
+      "label": "Approval Policy Form",
+      "label_i18n": {
+        "en": "Approval Policy Form",
+        "id": "Approval Policy Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "approval_policy.update"
+      ],
+      "route_path": "/approval/policies/form",
+      "view_key": "approval.policies.form"
+    },
+    {
+      "key": "approval.policies.list",
+      "kind": "navigate",
+      "label": "Approval Policies",
+      "label_i18n": {
+        "en": "Approval Policies",
+        "id": "Approval Policies"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "approval_policy.list"
+      ],
+      "route_path": "/approval/policies",
+      "view_key": "approval.policies.list"
+    },
+    {
+      "key": "approval.policies.new",
+      "kind": "navigate",
+      "label": "New Approval Policies",
+      "label_i18n": {
+        "en": "New Approval Policies",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "approval_policy.update"
+      ],
+      "route_path": "/approval/policies/new",
+      "view_key": "approval.policies.form"
+    },
+    {
       "key": "commercial.accounts.detail",
       "kind": "navigate",
       "label": "Account Detail",
@@ -5277,6 +5337,19 @@
       ]
     },
     {
+      "action_key": "approval.policies.list",
+      "key": "approval.policies",
+      "label": "Approval Policies",
+      "label_i18n": {
+        "en": "Approval Policies",
+        "id": "Kebijakan Persetujuan"
+      },
+      "order": 19,
+      "required_permissions": [
+        "approval_policy.list"
+      ]
+    },
+    {
       "action_key": "commercial.catalog.list",
       "key": "commercial.catalog",
       "label": "Catalog",
@@ -6946,6 +7019,632 @@
   ],
   "surface": "backoffice",
   "views": [
+    {
+      "key": "approval.policies.detail",
+      "kind": "detail",
+      "model_key": "approval_policy",
+      "required_permissions": [
+        "approval_policy.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "document_type",
+              "label": "Document Type",
+              "label_i18n": {
+                "en": "Document Type",
+                "id": "Tipe Dokumen"
+              },
+              "path": "values.document_type",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "workflow_key",
+              "label": "Workflow Key",
+              "label_i18n": {
+                "en": "Workflow Key",
+                "id": "Kunci Workflow"
+              },
+              "path": "values.workflow_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "action",
+              "label": "Action",
+              "label_i18n": {
+                "en": "Action",
+                "id": "Aksi"
+              },
+              "path": "values.action",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "label_i18n": {
+                "en": "Cost Center",
+                "id": "Pusat Biaya"
+              },
+              "path": "values.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "minimum_amount_minor",
+              "label": "Minimum Amount Minor",
+              "label_i18n": {
+                "en": "Minimum Amount Minor",
+                "id": "Jumlah Minimum Minor"
+              },
+              "path": "values.minimum_amount_minor",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "maximum_amount_minor",
+              "label": "Maximum Amount Minor",
+              "label_i18n": {
+                "en": "Maximum Amount Minor",
+                "id": "Jumlah Maksimum Minor"
+              },
+              "path": "values.maximum_amount_minor",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "routing_mode",
+              "label": "Routing Mode",
+              "label_i18n": {
+                "en": "Routing Mode",
+                "id": "Mode Routing"
+              },
+              "path": "values.routing_mode",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignment_strategy",
+              "label": "Assignment Strategy",
+              "label_i18n": {
+                "en": "Assignment Strategy",
+                "id": "Strategi Penugasan"
+              },
+              "path": "values.assignment_strategy",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignment_mode",
+              "label": "Assignment Mode",
+              "label_i18n": {
+                "en": "Assignment Mode",
+                "id": "Mode Penugasan"
+              },
+              "path": "values.assignment_mode",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignee_role_key",
+              "label": "Assignee Role",
+              "label_i18n": {
+                "en": "Assignee Role",
+                "id": "Peran Penerima Tugas"
+              },
+              "path": "values.assignee_role_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "fallback_role_key",
+              "label": "Fallback Role",
+              "label_i18n": {
+                "en": "Fallback Role",
+                "id": "Peran Cadangan"
+              },
+              "path": "values.fallback_role_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "approver_group_id",
+              "label": "Approver Group",
+              "label_i18n": {
+                "en": "Approver Group",
+                "id": "Grup Approver"
+              },
+              "path": "values.approver_group_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "explicit_user_id",
+              "label": "Explicit User",
+              "label_i18n": {
+                "en": "Explicit User",
+                "id": "Pengguna Eksplisit"
+              },
+              "path": "values.explicit_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "candidate_role_keys",
+              "label": "Candidate Role Keys",
+              "label_i18n": {
+                "en": "Candidate Role Keys",
+                "id": "Kunci Peran Kandidat"
+              },
+              "path": "values.candidate_role_keys",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "path": "values.priority",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Approval Policy Detail",
+      "title_i18n": {
+        "en": "Approval Policy Detail",
+        "id": "Approval Policy Detail"
+      }
+    },
+    {
+      "key": "approval.policies.form",
+      "kind": "form",
+      "model_key": "approval_policy",
+      "required_permissions": [
+        "approval_policy.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "document_type",
+              "label": "Document Type",
+              "label_i18n": {
+                "en": "Document Type",
+                "id": "Tipe Dokumen"
+              },
+              "path": "values.document_type",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "workflow_key",
+              "label": "Workflow Key",
+              "label_i18n": {
+                "en": "Workflow Key",
+                "id": "Kunci Workflow"
+              },
+              "path": "values.workflow_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "action",
+              "label": "Action",
+              "label_i18n": {
+                "en": "Action",
+                "id": "Aksi"
+              },
+              "path": "values.action",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "label_i18n": {
+                "en": "Cost Center",
+                "id": "Pusat Biaya"
+              },
+              "path": "values.cost_center_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "minimum_amount_minor",
+              "label": "Minimum Amount Minor",
+              "label_i18n": {
+                "en": "Minimum Amount Minor",
+                "id": "Jumlah Minimum Minor"
+              },
+              "path": "values.minimum_amount_minor",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "maximum_amount_minor",
+              "label": "Maximum Amount Minor",
+              "label_i18n": {
+                "en": "Maximum Amount Minor",
+                "id": "Jumlah Maksimum Minor"
+              },
+              "path": "values.maximum_amount_minor",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "routing_mode",
+              "label": "Routing Mode",
+              "label_i18n": {
+                "en": "Routing Mode",
+                "id": "Mode Routing"
+              },
+              "path": "values.routing_mode",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignment_strategy",
+              "label": "Assignment Strategy",
+              "label_i18n": {
+                "en": "Assignment Strategy",
+                "id": "Strategi Penugasan"
+              },
+              "path": "values.assignment_strategy",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignment_mode",
+              "label": "Assignment Mode",
+              "label_i18n": {
+                "en": "Assignment Mode",
+                "id": "Mode Penugasan"
+              },
+              "path": "values.assignment_mode",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignee_role_key",
+              "label": "Assignee Role",
+              "label_i18n": {
+                "en": "Assignee Role",
+                "id": "Peran Penerima Tugas"
+              },
+              "path": "values.assignee_role_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "fallback_role_key",
+              "label": "Fallback Role",
+              "label_i18n": {
+                "en": "Fallback Role",
+                "id": "Peran Cadangan"
+              },
+              "path": "values.fallback_role_key",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "approver_group_id",
+              "label": "Approver Group",
+              "label_i18n": {
+                "en": "Approver Group",
+                "id": "Grup Approver"
+              },
+              "path": "values.approver_group_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "explicit_user_id",
+              "label": "Explicit User",
+              "label_i18n": {
+                "en": "Explicit User",
+                "id": "Pengguna Eksplisit"
+              },
+              "path": "values.explicit_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "candidate_role_keys",
+              "label": "Candidate Role Keys",
+              "label_i18n": {
+                "en": "Candidate Role Keys",
+                "id": "Kunci Peran Kandidat"
+              },
+              "path": "values.candidate_role_keys",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Prioritas"
+              },
+              "path": "values.priority",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Approval Policy Form",
+          "title_i18n": {
+            "en": "Approval Policy Form",
+            "id": "Approval Policy Form"
+          }
+        }
+      ],
+      "title": "Approval Policy Form",
+      "title_i18n": {
+        "en": "Approval Policy Form",
+        "id": "Approval Policy Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "document_type",
+          "label": "Document Type",
+          "label_i18n": {
+            "en": "Document Type",
+            "id": "Tipe Dokumen"
+          },
+          "path": "values.document_type"
+        },
+        {
+          "key": "action",
+          "label": "Action",
+          "label_i18n": {
+            "en": "Action",
+            "id": "Aksi"
+          },
+          "path": "values.action"
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "label_i18n": {
+            "en": "Priority",
+            "id": "Prioritas"
+          },
+          "path": "values.priority"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "approval.policies.list",
+      "kind": "list",
+      "model_key": "approval_policy",
+      "required_permissions": [
+        "approval_policy.list"
+      ],
+      "title": "Approval Policies",
+      "title_i18n": {
+        "en": "Approval Policies",
+        "id": "Approval Policies"
+      }
+    },
     {
       "key": "commercial.accounts.detail",
       "kind": "detail",

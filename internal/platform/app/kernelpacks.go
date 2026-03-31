@@ -30,6 +30,7 @@ func builtInModulePacks() []modulePack {
 		staticModulePack{manifests: platformCoreKernelPackManifests},
 		staticModulePack{manifests: identityKernelPackManifests},
 		staticModulePack{manifests: documentsKernelPackManifests},
+		staticModulePack{manifests: workflowApprovalPolicyKernelPackManifests},
 		staticModulePack{manifests: commercialCoreKernelPackManifests},
 		staticModulePack{manifests: discountCoreKernelPackManifests},
 		staticModulePack{manifests: promotionCoreKernelPackManifests},

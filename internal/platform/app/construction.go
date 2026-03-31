@@ -82,6 +82,7 @@ type serviceGraph struct {
 	uiPreferences      *httpx.UIPreferencesService
 	runtimeHealth      *runtimehealth.Tracker
 	docActions         *application.DocumentActions
+	approvalPolicies   *application.ApprovalPolicyService
 	modelActions       *application.ModelActions
 	commercialCore     *application.CommercialCoreService
 	procurementCore    *application.ProcurementCoreService
@@ -256,7 +257,9 @@ func installPersistence(graph *serviceGraph, postgres *store.Postgres) {
 }
 
 func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
+	graph.approvalPolicies = application.NewApprovalPolicyService(graph.models)
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
+	graph.docActions.AttachApprovalPolicies(graph.approvalPolicies)
 	graph.docActions.AttachActivities(graph.activities)
 	graph.docActions.AttachNotifications(graph.notifications)
 	graph.commercialCore = application.NewCommercialCoreService(graph.documents, graph.config, graph.models, graph.search)
