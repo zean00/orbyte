@@ -25,6 +25,7 @@ func builtInModulePacks() []modulePack {
 	return []modulePack{
 		staticModulePack{manifests: referenceMasterdataKernelPackManifests},
 		staticModulePack{manifests: masterdataKernelPackManifests},
+		staticModulePack{manifests: organizationStructureKernelPackManifests},
 		staticModulePack{manifests: platformCoreKernelPackManifests},
 		staticModulePack{manifests: identityKernelPackManifests},
 		staticModulePack{manifests: documentsKernelPackManifests},

@@ -2861,12 +2861,192 @@
       "view_key": "inventory.warehouses.list"
     },
     {
+      "key": "masterdata.addresses.detail",
+      "kind": "navigate",
+      "label": "Address Detail",
+      "label_i18n": {
+        "en": "Address Detail",
+        "id": "Address Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.read"
+      ],
+      "route_path": "/masterdata/addresses/detail",
+      "view_key": "masterdata.addresses.detail"
+    },
+    {
+      "key": "masterdata.addresses.form",
+      "kind": "navigate",
+      "label": "Address Form",
+      "label_i18n": {
+        "en": "Address Form",
+        "id": "Address Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.update"
+      ],
+      "route_path": "/masterdata/addresses/form",
+      "view_key": "masterdata.addresses.form"
+    },
+    {
+      "key": "masterdata.addresses.list",
+      "kind": "navigate",
+      "label": "Addresses",
+      "label_i18n": {
+        "en": "Addresses",
+        "id": "Addresses"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.read"
+      ],
+      "route_path": "/masterdata/addresses",
+      "view_key": "masterdata.addresses.list"
+    },
+    {
+      "key": "masterdata.addresses.new",
+      "kind": "navigate",
+      "label": "New Addresses",
+      "label_i18n": {
+        "en": "New Addresses",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.update"
+      ],
+      "route_path": "/masterdata/addresses/new",
+      "view_key": "masterdata.addresses.form"
+    },
+    {
+      "key": "masterdata.contacts.detail",
+      "kind": "navigate",
+      "label": "Contact Detail",
+      "label_i18n": {
+        "en": "Contact Detail",
+        "id": "Contact Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.read"
+      ],
+      "route_path": "/masterdata/contacts/detail",
+      "view_key": "masterdata.contacts.detail"
+    },
+    {
+      "key": "masterdata.contacts.form",
+      "kind": "navigate",
+      "label": "Contact Form",
+      "label_i18n": {
+        "en": "Contact Form",
+        "id": "Contact Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.update"
+      ],
+      "route_path": "/masterdata/contacts/form",
+      "view_key": "masterdata.contacts.form"
+    },
+    {
+      "key": "masterdata.contacts.list",
+      "kind": "navigate",
+      "label": "Contacts",
+      "label_i18n": {
+        "en": "Contacts",
+        "id": "Contacts"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.read"
+      ],
+      "route_path": "/masterdata/contacts",
+      "view_key": "masterdata.contacts.list"
+    },
+    {
+      "key": "masterdata.contacts.new",
+      "kind": "navigate",
+      "label": "New Contacts",
+      "label_i18n": {
+        "en": "New Contacts",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.update"
+      ],
+      "route_path": "/masterdata/contacts/new",
+      "view_key": "masterdata.contacts.form"
+    },
+    {
+      "key": "masterdata.customers.detail",
+      "kind": "navigate",
+      "label": "Customer Detail",
+      "label_i18n": {
+        "en": "Customer Detail",
+        "id": "Customer Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "customer.read"
+      ],
+      "route_path": "/masterdata/customers/detail",
+      "view_key": "masterdata.customers.detail"
+    },
+    {
+      "key": "masterdata.customers.form",
+      "kind": "navigate",
+      "label": "Customer Form",
+      "label_i18n": {
+        "en": "Customer Form",
+        "id": "Customer Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "customer.update"
+      ],
+      "route_path": "/masterdata/customers/form",
+      "view_key": "masterdata.customers.form"
+    },
+    {
+      "key": "masterdata.customers.list",
+      "kind": "navigate",
+      "label": "Customers",
+      "label_i18n": {
+        "en": "Customers",
+        "id": "Customers"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "customer.list"
+      ],
+      "route_path": "/masterdata/customers",
+      "view_key": "masterdata.customers.list"
+    },
+    {
+      "key": "masterdata.customers.new",
+      "kind": "navigate",
+      "label": "New Customers",
+      "label_i18n": {
+        "en": "New Customers",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "customer.update"
+      ],
+      "route_path": "/masterdata/customers/new",
+      "view_key": "masterdata.customers.form"
+    },
+    {
       "key": "masterdata.parties.detail",
       "kind": "navigate",
       "label": "Party Detail",
       "label_i18n": {
         "en": "Party Detail",
-        "id": "Detail Pihak"
+        "id": "Party Detail"
       },
       "render_mode": "generic",
       "required_permissions": [
@@ -2881,7 +3061,7 @@
       "label": "Party Form",
       "label_i18n": {
         "en": "Party Form",
-        "id": "Form Pihak"
+        "id": "Party Form"
       },
       "render_mode": "generic",
       "required_permissions": [
@@ -2896,7 +3076,7 @@
       "label": "Parties",
       "label_i18n": {
         "en": "Parties",
-        "id": "Pihak"
+        "id": "Parties"
       },
       "render_mode": "generic",
       "required_permissions": [
@@ -2904,6 +3084,21 @@
       ],
       "route_path": "/masterdata/parties",
       "view_key": "masterdata.parties.list"
+    },
+    {
+      "key": "masterdata.parties.new",
+      "kind": "navigate",
+      "label": "New Parties",
+      "label_i18n": {
+        "en": "New Parties",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "party.update"
+      ],
+      "route_path": "/masterdata/parties/new",
+      "view_key": "masterdata.parties.form"
     },
     {
       "key": "monitoring.overview",
@@ -2919,6 +3114,186 @@
       ],
       "route_path": "/monitoring",
       "view_key": "monitoring.overview"
+    },
+    {
+      "key": "organization.cost_centers.detail",
+      "kind": "navigate",
+      "label": "Cost Center Detail",
+      "label_i18n": {
+        "en": "Cost Center Detail",
+        "id": "Cost Center Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.read"
+      ],
+      "route_path": "/organization/cost_centers/detail",
+      "view_key": "organization.cost_centers.detail"
+    },
+    {
+      "key": "organization.cost_centers.form",
+      "kind": "navigate",
+      "label": "Cost Center Form",
+      "label_i18n": {
+        "en": "Cost Center Form",
+        "id": "Cost Center Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "route_path": "/organization/cost_centers/form",
+      "view_key": "organization.cost_centers.form"
+    },
+    {
+      "key": "organization.cost_centers.list",
+      "kind": "navigate",
+      "label": "Cost Centers",
+      "label_i18n": {
+        "en": "Cost Centers",
+        "id": "Cost Centers"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.list"
+      ],
+      "route_path": "/organization/cost_centers",
+      "view_key": "organization.cost_centers.list"
+    },
+    {
+      "key": "organization.cost_centers.new",
+      "kind": "navigate",
+      "label": "New Cost Centers",
+      "label_i18n": {
+        "en": "New Cost Centers",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "route_path": "/organization/cost_centers/new",
+      "view_key": "organization.cost_centers.form"
+    },
+    {
+      "key": "organization.departments.detail",
+      "kind": "navigate",
+      "label": "Department Detail",
+      "label_i18n": {
+        "en": "Department Detail",
+        "id": "Department Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.read"
+      ],
+      "route_path": "/organization/departments/detail",
+      "view_key": "organization.departments.detail"
+    },
+    {
+      "key": "organization.departments.form",
+      "kind": "navigate",
+      "label": "Department Form",
+      "label_i18n": {
+        "en": "Department Form",
+        "id": "Department Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "route_path": "/organization/departments/form",
+      "view_key": "organization.departments.form"
+    },
+    {
+      "key": "organization.departments.list",
+      "kind": "navigate",
+      "label": "Departments",
+      "label_i18n": {
+        "en": "Departments",
+        "id": "Departments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.list"
+      ],
+      "route_path": "/organization/departments",
+      "view_key": "organization.departments.list"
+    },
+    {
+      "key": "organization.departments.new",
+      "kind": "navigate",
+      "label": "New Departments",
+      "label_i18n": {
+        "en": "New Departments",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "route_path": "/organization/departments/new",
+      "view_key": "organization.departments.form"
+    },
+    {
+      "key": "organization.units.detail",
+      "kind": "navigate",
+      "label": "Organization Unit Detail",
+      "label_i18n": {
+        "en": "Organization Unit Detail",
+        "id": "Organization Unit Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.read"
+      ],
+      "route_path": "/organization/units/detail",
+      "view_key": "organization.units.detail"
+    },
+    {
+      "key": "organization.units.form",
+      "kind": "navigate",
+      "label": "Organization Unit Form",
+      "label_i18n": {
+        "en": "Organization Unit Form",
+        "id": "Organization Unit Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "route_path": "/organization/units/form",
+      "view_key": "organization.units.form"
+    },
+    {
+      "key": "organization.units.list",
+      "kind": "navigate",
+      "label": "Organization Units",
+      "label_i18n": {
+        "en": "Organization Units",
+        "id": "Organization Units"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.list"
+      ],
+      "route_path": "/organization/units",
+      "view_key": "organization.units.list"
+    },
+    {
+      "key": "organization.units.new",
+      "kind": "navigate",
+      "label": "New Organization Units",
+      "label_i18n": {
+        "en": "New Organization Units",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "route_path": "/organization/units/new",
+      "view_key": "organization.units.form"
     },
     {
       "key": "planning.proposals.dashboard",
@@ -4501,6 +4876,7 @@
     "backoffice",
     "worklist",
     "self_service",
+    "agent",
     "pos"
   ],
   "capabilities": {
@@ -4517,6 +4893,7 @@
   },
   "default_path": "/sdk/items",
   "fallback_paths": {
+    "agent": "/agent/workspace",
     "backoffice": "/sdk/items",
     "pos": "/pos/terminal",
     "self_service": "/self-service/requests",
@@ -4809,6 +5186,45 @@
       ]
     },
     {
+      "action_key": "masterdata.customers.list",
+      "key": "masterdata.customers",
+      "label": "Customers",
+      "label_i18n": {
+        "en": "Customers",
+        "id": "Pelanggan"
+      },
+      "order": 6,
+      "required_permissions": [
+        "customer.list"
+      ]
+    },
+    {
+      "action_key": "masterdata.contacts.list",
+      "key": "masterdata.contacts",
+      "label": "Contacts",
+      "label_i18n": {
+        "en": "Contacts",
+        "id": "Kontak"
+      },
+      "order": 7,
+      "required_permissions": [
+        "party.read"
+      ]
+    },
+    {
+      "action_key": "masterdata.addresses.list",
+      "key": "masterdata.addresses",
+      "label": "Addresses",
+      "label_i18n": {
+        "en": "Addresses",
+        "id": "Alamat"
+      },
+      "order": 8,
+      "required_permissions": [
+        "party.read"
+      ]
+    },
+    {
       "action_key": "documents.requests.list",
       "key": "documents.requests",
       "label": "Requests",
@@ -4819,6 +5235,45 @@
       "order": 10,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "organization.units.list",
+      "key": "organization.units",
+      "label": "Organization Units",
+      "label_i18n": {
+        "en": "Organization Units",
+        "id": "Unit Organisasi"
+      },
+      "order": 12,
+      "required_permissions": [
+        "organization_structure.list"
+      ]
+    },
+    {
+      "action_key": "organization.departments.list",
+      "key": "organization.departments",
+      "label": "Departments",
+      "label_i18n": {
+        "en": "Departments",
+        "id": "Departemen"
+      },
+      "order": 13,
+      "required_permissions": [
+        "organization_structure.list"
+      ]
+    },
+    {
+      "action_key": "organization.cost_centers.list",
+      "key": "organization.cost_centers",
+      "label": "Cost Centers",
+      "label_i18n": {
+        "en": "Cost Centers",
+        "id": "Pusat Biaya"
+      },
+      "order": 14,
+      "required_permissions": [
+        "organization_structure.list"
       ]
     },
     {
@@ -23389,6 +23844,1146 @@
       }
     },
     {
+      "key": "masterdata.addresses.detail",
+      "kind": "detail",
+      "model_key": "party_address",
+      "required_permissions": [
+        "party.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "type": "string"
+            },
+            {
+              "key": "address_type",
+              "label": "Address Type",
+              "label_i18n": {
+                "en": "Address Type",
+                "id": "Tipe Alamat"
+              },
+              "path": "values.address_type",
+              "type": "string"
+            },
+            {
+              "key": "line1",
+              "label": "Address Line 1",
+              "label_i18n": {
+                "en": "Address Line 1",
+                "id": "Alamat Baris 1"
+              },
+              "path": "values.line1",
+              "type": "string"
+            },
+            {
+              "key": "line2",
+              "label": "Address Line 2",
+              "label_i18n": {
+                "en": "Address Line 2",
+                "id": "Alamat Baris 2"
+              },
+              "path": "values.line2",
+              "type": "string"
+            },
+            {
+              "key": "city",
+              "label": "City",
+              "label_i18n": {
+                "en": "City",
+                "id": "Kota"
+              },
+              "path": "values.city",
+              "type": "string"
+            },
+            {
+              "key": "region",
+              "label": "Region",
+              "label_i18n": {
+                "en": "Region",
+                "id": "Wilayah"
+              },
+              "path": "values.region",
+              "type": "string"
+            },
+            {
+              "key": "postal_code",
+              "label": "Postal Code",
+              "label_i18n": {
+                "en": "Postal Code",
+                "id": "Kode Pos"
+              },
+              "path": "values.postal_code",
+              "type": "string"
+            },
+            {
+              "key": "country_code",
+              "label": "Country",
+              "label_i18n": {
+                "en": "Country",
+                "id": "Negara"
+              },
+              "path": "values.country_code",
+              "type": "string"
+            },
+            {
+              "key": "is_primary",
+              "label": "Primary",
+              "label_i18n": {
+                "en": "Primary",
+                "id": "Utama"
+              },
+              "path": "values.is_primary",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Address Detail",
+      "title_i18n": {
+        "en": "Address Detail",
+        "id": "Address Detail"
+      }
+    },
+    {
+      "key": "masterdata.addresses.form",
+      "kind": "form",
+      "model_key": "party_address",
+      "required_permissions": [
+        "party.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "address_type",
+              "label": "Address Type",
+              "label_i18n": {
+                "en": "Address Type",
+                "id": "Tipe Alamat"
+              },
+              "options": [
+                "billing",
+                "shipping",
+                "remit_to",
+                "business"
+              ],
+              "path": "values.address_type",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "line1",
+              "label": "Address Line 1",
+              "label_i18n": {
+                "en": "Address Line 1",
+                "id": "Alamat Baris 1"
+              },
+              "path": "values.line1",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "line2",
+              "label": "Address Line 2",
+              "label_i18n": {
+                "en": "Address Line 2",
+                "id": "Alamat Baris 2"
+              },
+              "path": "values.line2",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "city",
+              "label": "City",
+              "label_i18n": {
+                "en": "City",
+                "id": "Kota"
+              },
+              "path": "values.city",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "region",
+              "label": "Region",
+              "label_i18n": {
+                "en": "Region",
+                "id": "Wilayah"
+              },
+              "path": "values.region",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "postal_code",
+              "label": "Postal Code",
+              "label_i18n": {
+                "en": "Postal Code",
+                "id": "Kode Pos"
+              },
+              "path": "values.postal_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "country_code",
+              "label": "Country",
+              "label_i18n": {
+                "en": "Country",
+                "id": "Negara"
+              },
+              "path": "values.country_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "is_primary",
+              "label": "Primary",
+              "label_i18n": {
+                "en": "Primary",
+                "id": "Utama"
+              },
+              "path": "values.is_primary",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Address Form",
+          "title_i18n": {
+            "en": "Address Form",
+            "id": "Address Form"
+          }
+        }
+      ],
+      "title": "Address Form",
+      "title_i18n": {
+        "en": "Address Form",
+        "id": "Address Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "party_id",
+          "label": "Party",
+          "label_i18n": {
+            "en": "Party",
+            "id": "Pihak"
+          },
+          "path": "values.party_id"
+        },
+        {
+          "key": "address_type",
+          "label": "Address Type",
+          "label_i18n": {
+            "en": "Address Type",
+            "id": "Tipe Alamat"
+          },
+          "path": "values.address_type"
+        },
+        {
+          "key": "line1",
+          "label": "Address",
+          "label_i18n": {
+            "en": "Address",
+            "id": "Alamat"
+          },
+          "path": "values.line1"
+        },
+        {
+          "key": "city",
+          "label": "City",
+          "label_i18n": {
+            "en": "City",
+            "id": "Kota"
+          },
+          "path": "values.city"
+        },
+        {
+          "key": "country_code",
+          "label": "Country",
+          "label_i18n": {
+            "en": "Country",
+            "id": "Negara"
+          },
+          "path": "values.country_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "masterdata.addresses.list",
+      "kind": "list",
+      "model_key": "party_address",
+      "required_permissions": [
+        "party.list"
+      ],
+      "title": "Addresses",
+      "title_i18n": {
+        "en": "Addresses",
+        "id": "Addresses"
+      }
+    },
+    {
+      "key": "masterdata.contacts.detail",
+      "kind": "detail",
+      "model_key": "party_contact",
+      "required_permissions": [
+        "party.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "type": "string"
+            },
+            {
+              "key": "contact_kind",
+              "label": "Contact Kind",
+              "label_i18n": {
+                "en": "Contact Kind",
+                "id": "Jenis Kontak"
+              },
+              "path": "values.contact_kind",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Jabatan"
+              },
+              "path": "values.title",
+              "type": "string"
+            },
+            {
+              "key": "role",
+              "label": "Role",
+              "label_i18n": {
+                "en": "Role",
+                "id": "Peran"
+              },
+              "path": "values.role",
+              "type": "string"
+            },
+            {
+              "key": "email",
+              "label": "Email",
+              "label_i18n": {
+                "en": "Email",
+                "id": "Email"
+              },
+              "path": "values.email",
+              "type": "string"
+            },
+            {
+              "key": "phone",
+              "label": "Phone",
+              "label_i18n": {
+                "en": "Phone",
+                "id": "Telepon"
+              },
+              "path": "values.phone",
+              "type": "string"
+            },
+            {
+              "key": "mobile_phone",
+              "label": "Mobile Phone",
+              "label_i18n": {
+                "en": "Mobile Phone",
+                "id": "Telepon Seluler"
+              },
+              "path": "values.mobile_phone",
+              "type": "string"
+            },
+            {
+              "key": "is_primary",
+              "label": "Primary",
+              "label_i18n": {
+                "en": "Primary",
+                "id": "Utama"
+              },
+              "path": "values.is_primary",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Contact Detail",
+      "title_i18n": {
+        "en": "Contact Detail",
+        "id": "Contact Detail"
+      }
+    },
+    {
+      "key": "masterdata.contacts.form",
+      "kind": "form",
+      "model_key": "party_contact",
+      "required_permissions": [
+        "party.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "contact_kind",
+              "label": "Contact Kind",
+              "label_i18n": {
+                "en": "Contact Kind",
+                "id": "Jenis Kontak"
+              },
+              "options": [
+                "person",
+                "organization"
+              ],
+              "path": "values.contact_kind",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Jabatan"
+              },
+              "path": "values.title",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "role",
+              "label": "Role",
+              "label_i18n": {
+                "en": "Role",
+                "id": "Peran"
+              },
+              "path": "values.role",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "email",
+              "label": "Email",
+              "label_i18n": {
+                "en": "Email",
+                "id": "Email"
+              },
+              "path": "values.email",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "phone",
+              "label": "Phone",
+              "label_i18n": {
+                "en": "Phone",
+                "id": "Telepon"
+              },
+              "path": "values.phone",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "mobile_phone",
+              "label": "Mobile Phone",
+              "label_i18n": {
+                "en": "Mobile Phone",
+                "id": "Telepon Seluler"
+              },
+              "path": "values.mobile_phone",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "is_primary",
+              "label": "Primary",
+              "label_i18n": {
+                "en": "Primary",
+                "id": "Utama"
+              },
+              "path": "values.is_primary",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Contact Form",
+          "title_i18n": {
+            "en": "Contact Form",
+            "id": "Contact Form"
+          }
+        }
+      ],
+      "title": "Contact Form",
+      "title_i18n": {
+        "en": "Contact Form",
+        "id": "Contact Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "label_i18n": {
+            "en": "Party",
+            "id": "Pihak"
+          },
+          "path": "values.party_id"
+        },
+        {
+          "key": "role",
+          "label": "Role",
+          "label_i18n": {
+            "en": "Role",
+            "id": "Peran"
+          },
+          "path": "values.role"
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "label_i18n": {
+            "en": "Email",
+            "id": "Email"
+          },
+          "path": "values.email"
+        },
+        {
+          "key": "phone",
+          "label": "Phone",
+          "label_i18n": {
+            "en": "Phone",
+            "id": "Telepon"
+          },
+          "path": "values.phone"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "masterdata.contacts.list",
+      "kind": "list",
+      "model_key": "party_contact",
+      "required_permissions": [
+        "party.list"
+      ],
+      "title": "Contacts",
+      "title_i18n": {
+        "en": "Contacts",
+        "id": "Contacts"
+      }
+    },
+    {
+      "key": "masterdata.customers.detail",
+      "kind": "detail",
+      "model_key": "customer_profile",
+      "required_permissions": [
+        "customer.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "customer_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Nama Pelanggan"
+              },
+              "path": "values.customer_name",
+              "type": "string"
+            },
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "type": "string"
+            },
+            {
+              "key": "customer_type",
+              "label": "Customer Type",
+              "label_i18n": {
+                "en": "Customer Type",
+                "id": "Tipe Pelanggan"
+              },
+              "path": "values.customer_type",
+              "type": "string"
+            },
+            {
+              "key": "customer_segment",
+              "label": "Customer Segment",
+              "label_i18n": {
+                "en": "Customer Segment",
+                "id": "Segmen Pelanggan"
+              },
+              "path": "values.customer_segment",
+              "type": "string"
+            },
+            {
+              "key": "member_status",
+              "label": "Member Status",
+              "label_i18n": {
+                "en": "Member Status",
+                "id": "Status Member"
+              },
+              "path": "values.member_status",
+              "type": "string"
+            },
+            {
+              "key": "member_tier",
+              "label": "Member Tier",
+              "label_i18n": {
+                "en": "Member Tier",
+                "id": "Tier Member"
+              },
+              "path": "values.member_tier",
+              "type": "string"
+            },
+            {
+              "key": "member_valid_from",
+              "label": "Member Valid From",
+              "label_i18n": {
+                "en": "Member Valid From",
+                "id": "Member Berlaku Dari"
+              },
+              "path": "values.member_valid_from",
+              "type": "string"
+            },
+            {
+              "key": "member_valid_to",
+              "label": "Member Valid To",
+              "label_i18n": {
+                "en": "Member Valid To",
+                "id": "Member Berlaku Sampai"
+              },
+              "path": "values.member_valid_to",
+              "type": "string"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile",
+              "label_i18n": {
+                "en": "Tax Profile",
+                "id": "Profil Pajak"
+              },
+              "path": "values.tax_profile_code",
+              "type": "string"
+            },
+            {
+              "key": "default_price_list_code",
+              "label": "Default Price List",
+              "label_i18n": {
+                "en": "Default Price List",
+                "id": "Daftar Harga Default"
+              },
+              "path": "values.default_price_list_code",
+              "type": "string"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "values.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "credit_limit_amount",
+              "label": "Credit Limit",
+              "label_i18n": {
+                "en": "Credit Limit",
+                "id": "Batas Kredit"
+              },
+              "path": "values.credit_limit_amount",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Customer Detail",
+      "title_i18n": {
+        "en": "Customer Detail",
+        "id": "Customer Detail"
+      }
+    },
+    {
+      "key": "masterdata.customers.form",
+      "kind": "form",
+      "model_key": "customer_profile",
+      "required_permissions": [
+        "customer.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "customer_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Nama Pelanggan"
+              },
+              "path": "values.customer_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "customer_type",
+              "label": "Customer Type",
+              "label_i18n": {
+                "en": "Customer Type",
+                "id": "Tipe Pelanggan"
+              },
+              "options": [
+                "retail",
+                "member",
+                "vip",
+                "corporate"
+              ],
+              "path": "values.customer_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "customer_segment",
+              "label": "Customer Segment",
+              "label_i18n": {
+                "en": "Customer Segment",
+                "id": "Segmen Pelanggan"
+              },
+              "path": "values.customer_segment",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "member_status",
+              "label": "Member Status",
+              "label_i18n": {
+                "en": "Member Status",
+                "id": "Status Member"
+              },
+              "options": [
+                "inactive",
+                "active",
+                "expired"
+              ],
+              "path": "values.member_status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "member_tier",
+              "label": "Member Tier",
+              "label_i18n": {
+                "en": "Member Tier",
+                "id": "Tier Member"
+              },
+              "path": "values.member_tier",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "member_valid_from",
+              "label": "Member Valid From",
+              "label_i18n": {
+                "en": "Member Valid From",
+                "id": "Member Berlaku Dari"
+              },
+              "path": "values.member_valid_from",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "member_valid_to",
+              "label": "Member Valid To",
+              "label_i18n": {
+                "en": "Member Valid To",
+                "id": "Member Berlaku Sampai"
+              },
+              "path": "values.member_valid_to",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_profile_code",
+              "label": "Tax Profile",
+              "label_i18n": {
+                "en": "Tax Profile",
+                "id": "Profil Pajak"
+              },
+              "path": "values.tax_profile_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_price_list_code",
+              "label": "Default Price List",
+              "label_i18n": {
+                "en": "Default Price List",
+                "id": "Daftar Harga Default"
+              },
+              "path": "values.default_price_list_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_term_days",
+              "label": "Payment Term Days",
+              "label_i18n": {
+                "en": "Payment Term Days",
+                "id": "Hari Termin Pembayaran"
+              },
+              "path": "values.payment_term_days",
+              "type": "number"
+            },
+            {
+              "key": "credit_limit_amount",
+              "label": "Credit Limit",
+              "label_i18n": {
+                "en": "Credit Limit",
+                "id": "Batas Kredit"
+              },
+              "path": "values.credit_limit_amount",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Customer Form",
+          "title_i18n": {
+            "en": "Customer Form",
+            "id": "Customer Form"
+          }
+        }
+      ],
+      "title": "Customer Form",
+      "title_i18n": {
+        "en": "Customer Form",
+        "id": "Customer Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "customer_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "values.customer_name"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "label_i18n": {
+            "en": "Party",
+            "id": "Pihak"
+          },
+          "path": "values.party_id"
+        },
+        {
+          "key": "customer_type",
+          "label": "Customer Type",
+          "label_i18n": {
+            "en": "Customer Type",
+            "id": "Tipe Pelanggan"
+          },
+          "path": "values.customer_type"
+        },
+        {
+          "key": "customer_segment",
+          "label": "Segment",
+          "label_i18n": {
+            "en": "Segment",
+            "id": "Segmen"
+          },
+          "path": "values.customer_segment"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "masterdata.customers.list",
+      "kind": "list",
+      "model_key": "customer_profile",
+      "required_permissions": [
+        "customer.list"
+      ],
+      "title": "Customers",
+      "title_i18n": {
+        "en": "Customers",
+        "id": "Customers"
+      }
+    },
+    {
       "key": "masterdata.parties.detail",
       "kind": "detail",
       "model_key": "party",
@@ -23419,6 +25014,48 @@
           "title_i18n": {
             "en": "Contacts",
             "id": "Kontak"
+          }
+        },
+        {
+          "empty_state": "No related addresses",
+          "empty_state_i18n": {
+            "en": "No related addresses",
+            "id": "Belum ada alamat terkait"
+          },
+          "key": "addresses",
+          "source": "addresses",
+          "title": "Addresses",
+          "title_i18n": {
+            "en": "Addresses",
+            "id": "Alamat"
+          }
+        },
+        {
+          "empty_state": "No related customer profiles",
+          "empty_state_i18n": {
+            "en": "No related customer profiles",
+            "id": "Belum ada profil pelanggan terkait"
+          },
+          "key": "customer_profiles",
+          "source": "customer_profiles",
+          "title": "Customer Profiles",
+          "title_i18n": {
+            "en": "Customer Profiles",
+            "id": "Profil Pelanggan"
+          }
+        },
+        {
+          "empty_state": "No related vendor profiles",
+          "empty_state_i18n": {
+            "en": "No related vendor profiles",
+            "id": "Belum ada profil vendor terkait"
+          },
+          "key": "vendor_profiles",
+          "source": "vendor_profiles",
+          "title": "Vendor Profiles",
+          "title_i18n": {
+            "en": "Vendor Profiles",
+            "id": "Profil Vendor"
           }
         }
       ],
@@ -23452,6 +25089,26 @@
                   "type": "string"
                 },
                 {
+                  "key": "legal_name",
+                  "label": "Legal Name",
+                  "label_i18n": {
+                    "en": "Legal Name",
+                    "id": "Nama Legal"
+                  },
+                  "path": "values.legal_name",
+                  "type": "string"
+                },
+                {
+                  "key": "party_kind",
+                  "label": "Party Kind",
+                  "label_i18n": {
+                    "en": "Party Kind",
+                    "id": "Jenis Pihak"
+                  },
+                  "path": "values.party_kind",
+                  "type": "string"
+                },
+                {
                   "key": "email",
                   "label": "Email",
                   "label_i18n": {
@@ -23459,6 +25116,26 @@
                     "id": "Email"
                   },
                   "path": "values.email",
+                  "type": "string"
+                },
+                {
+                  "key": "phone",
+                  "label": "Phone",
+                  "label_i18n": {
+                    "en": "Phone",
+                    "id": "Telepon"
+                  },
+                  "path": "values.phone",
+                  "type": "string"
+                },
+                {
+                  "key": "tax_identifier",
+                  "label": "Tax Identifier",
+                  "label_i18n": {
+                    "en": "Tax Identifier",
+                    "id": "Nomor Pajak"
+                  },
+                  "path": "values.tax_identifier",
                   "type": "string"
                 },
                 {
@@ -23470,86 +25147,6 @@
                   },
                   "path": "values.currency_code",
                   "type": "string"
-                },
-                {
-                  "key": "customer_type",
-                  "label": "Customer Type",
-                  "label_i18n": {
-                    "en": "Customer Type",
-                    "id": "Tipe Pelanggan"
-                  },
-                  "path": "values.customer_type",
-                  "type": "string"
-                },
-                {
-                  "key": "member_status",
-                  "label": "Member Status",
-                  "label_i18n": {
-                    "en": "Member Status",
-                    "id": "Status Member"
-                  },
-                  "path": "values.member_status",
-                  "type": "string"
-                },
-                {
-                  "key": "member_tier",
-                  "label": "Member Tier",
-                  "label_i18n": {
-                    "en": "Member Tier",
-                    "id": "Tier Member"
-                  },
-                  "path": "values.member_tier",
-                  "type": "string"
-                },
-                {
-                  "key": "member_valid_from",
-                  "label": "Member Valid From",
-                  "label_i18n": {
-                    "en": "Member Valid From",
-                    "id": "Member Berlaku Dari"
-                  },
-                  "path": "values.member_valid_from",
-                  "type": "string"
-                },
-                {
-                  "key": "member_valid_to",
-                  "label": "Member Valid To",
-                  "label_i18n": {
-                    "en": "Member Valid To",
-                    "id": "Member Berlaku Sampai"
-                  },
-                  "path": "values.member_valid_to",
-                  "type": "string"
-                },
-                {
-                  "key": "tax_profile_code",
-                  "label": "Tax Profile",
-                  "label_i18n": {
-                    "en": "Tax Profile",
-                    "id": "Profil Pajak"
-                  },
-                  "path": "values.tax_profile_code",
-                  "type": "string"
-                },
-                {
-                  "key": "default_price_list_code",
-                  "label": "Default Price List",
-                  "label_i18n": {
-                    "en": "Default Price List",
-                    "id": "Daftar Harga Default"
-                  },
-                  "path": "values.default_price_list_code",
-                  "type": "string"
-                },
-                {
-                  "key": "payment_term_days",
-                  "label": "Payment Term Days",
-                  "label_i18n": {
-                    "en": "Payment Term Days",
-                    "id": "Hari Termin Pembayaran"
-                  },
-                  "path": "values.payment_term_days",
-                  "type": "number"
                 },
                 {
                   "key": "status",
@@ -23601,6 +25198,20 @@
             "en": "Contacts",
             "id": "Kontak"
           }
+        },
+        {
+          "empty_state": "No related addresses",
+          "empty_state_i18n": {
+            "en": "No related addresses",
+            "id": "Belum ada alamat terkait"
+          },
+          "key": "addresses",
+          "source": "addresses",
+          "title": "Addresses",
+          "title_i18n": {
+            "en": "Addresses",
+            "id": "Alamat"
+          }
         }
       ],
       "required_permissions": [
@@ -23617,13 +25228,36 @@
                 "id": "Nama"
               },
               "path": "values.name",
-              "placeholder": "Party name",
-              "placeholder_i18n": {
-                "en": "Party name",
-                "id": "Nama pihak"
-              },
+              "required": true,
               "type": "string",
               "widget": "text"
+            },
+            {
+              "key": "legal_name",
+              "label": "Legal Name",
+              "label_i18n": {
+                "en": "Legal Name",
+                "id": "Nama Legal"
+              },
+              "path": "values.legal_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_kind",
+              "label": "Party Kind",
+              "label_i18n": {
+                "en": "Party Kind",
+                "id": "Jenis Pihak"
+              },
+              "options": [
+                "organization",
+                "person"
+              ],
+              "path": "values.party_kind",
+              "required": true,
+              "type": "string",
+              "widget": "select"
             },
             {
               "key": "email",
@@ -23633,11 +25267,28 @@
                 "id": "Email"
               },
               "path": "values.email",
-              "placeholder": "Email address",
-              "placeholder_i18n": {
-                "en": "Email address",
-                "id": "Alamat email"
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "phone",
+              "label": "Phone",
+              "label_i18n": {
+                "en": "Phone",
+                "id": "Telepon"
               },
+              "path": "values.phone",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "tax_identifier",
+              "label": "Tax Identifier",
+              "label_i18n": {
+                "en": "Tax Identifier",
+                "id": "Nomor Pajak"
+              },
+              "path": "values.tax_identifier",
               "type": "string",
               "widget": "text"
             },
@@ -23649,133 +25300,70 @@
                 "id": "Mata Uang"
               },
               "path": "values.currency_code",
-              "placeholder": "Default currency",
-              "placeholder_i18n": {
-                "en": "Default currency",
-                "id": "Mata uang default"
-              },
               "type": "string",
               "widget": "text"
             },
             {
               "key": "customer_type",
-              "label": "Customer Type",
+              "label": "Legacy Customer Type",
               "label_i18n": {
-                "en": "Customer Type",
-                "id": "Tipe Pelanggan"
+                "en": "Legacy Customer Type",
+                "id": "Tipe Pelanggan Legacy"
               },
-              "options": [
-                "retail",
-                "member",
-                "vip",
-                "corporate"
-              ],
               "path": "values.customer_type",
               "type": "string",
-              "widget": "select"
+              "widget": "text"
             },
             {
               "key": "member_status",
-              "label": "Member Status",
+              "label": "Legacy Member Status",
               "label_i18n": {
-                "en": "Member Status",
-                "id": "Status Member"
+                "en": "Legacy Member Status",
+                "id": "Status Member Legacy"
               },
-              "options": [
-                "inactive",
-                "active",
-                "expired"
-              ],
               "path": "values.member_status",
               "type": "string",
-              "widget": "select"
+              "widget": "text"
             },
             {
               "key": "member_tier",
-              "label": "Member Tier",
+              "label": "Legacy Member Tier",
               "label_i18n": {
-                "en": "Member Tier",
-                "id": "Tier Member"
+                "en": "Legacy Member Tier",
+                "id": "Tier Member Legacy"
               },
               "path": "values.member_tier",
-              "placeholder": "Member tier",
-              "placeholder_i18n": {
-                "en": "Member tier",
-                "id": "Tier member"
-              },
-              "type": "string",
-              "widget": "text"
-            },
-            {
-              "key": "member_valid_from",
-              "label": "Member Valid From",
-              "label_i18n": {
-                "en": "Member Valid From",
-                "id": "Member Berlaku Dari"
-              },
-              "path": "values.member_valid_from",
-              "placeholder": "YYYY-MM-DD",
-              "placeholder_i18n": {
-                "en": "YYYY-MM-DD",
-                "id": "YYYY-MM-DD"
-              },
-              "type": "string",
-              "widget": "text"
-            },
-            {
-              "key": "member_valid_to",
-              "label": "Member Valid To",
-              "label_i18n": {
-                "en": "Member Valid To",
-                "id": "Member Berlaku Sampai"
-              },
-              "path": "values.member_valid_to",
-              "placeholder": "YYYY-MM-DD",
-              "placeholder_i18n": {
-                "en": "YYYY-MM-DD",
-                "id": "YYYY-MM-DD"
-              },
               "type": "string",
               "widget": "text"
             },
             {
               "key": "tax_profile_code",
-              "label": "Tax Profile Code",
+              "label": "Legacy Tax Profile",
               "label_i18n": {
-                "en": "Tax Profile Code",
-                "id": "Kode Profil Pajak"
+                "en": "Legacy Tax Profile",
+                "id": "Profil Pajak Legacy"
               },
               "path": "values.tax_profile_code",
-              "placeholder": "Commercial tax profile",
-              "placeholder_i18n": {
-                "en": "Commercial tax profile",
-                "id": "Profil pajak komersial"
-              },
               "type": "string",
               "widget": "select"
             },
             {
               "key": "default_price_list_code",
-              "label": "Default Price List",
+              "label": "Legacy Default Price List",
               "label_i18n": {
-                "en": "Default Price List",
-                "id": "Daftar Harga Default"
+                "en": "Legacy Default Price List",
+                "id": "Daftar Harga Default Legacy"
               },
               "path": "values.default_price_list_code",
-              "placeholder": "Commercial price list",
-              "placeholder_i18n": {
-                "en": "Commercial price list",
-                "id": "Daftar harga komersial"
-              },
               "type": "string",
               "widget": "select"
             },
             {
               "key": "payment_term_days",
-              "label": "Payment Term Days",
+              "label": "Legacy Payment Term Days",
               "label_i18n": {
-                "en": "Payment Term Days",
-                "id": "Hari Termin Pembayaran"
+                "en": "Legacy Payment Term Days",
+                "id": "Hari Termin Pembayaran Legacy"
               },
               "path": "values.payment_term_days",
               "type": "number"
@@ -23823,6 +25411,24 @@
           "path": "values.name"
         },
         {
+          "key": "legal_name",
+          "label": "Legal Name",
+          "label_i18n": {
+            "en": "Legal Name",
+            "id": "Nama Legal"
+          },
+          "path": "values.legal_name"
+        },
+        {
+          "key": "party_kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "path": "values.party_kind"
+        },
+        {
           "key": "email",
           "label": "Email",
           "label_i18n": {
@@ -23832,49 +25438,13 @@
           "path": "values.email"
         },
         {
-          "key": "customer_type",
-          "label": "Customer Type",
+          "key": "phone",
+          "label": "Phone",
           "label_i18n": {
-            "en": "Customer Type",
-            "id": "Tipe Pelanggan"
+            "en": "Phone",
+            "id": "Telepon"
           },
-          "path": "values.customer_type"
-        },
-        {
-          "key": "member_status",
-          "label": "Member Status",
-          "label_i18n": {
-            "en": "Member Status",
-            "id": "Status Member"
-          },
-          "path": "values.member_status"
-        },
-        {
-          "key": "member_tier",
-          "label": "Member Tier",
-          "label_i18n": {
-            "en": "Member Tier",
-            "id": "Tier Member"
-          },
-          "path": "values.member_tier"
-        },
-        {
-          "key": "tax_profile_code",
-          "label": "Tax Profile",
-          "label_i18n": {
-            "en": "Tax Profile",
-            "id": "Profil Pajak"
-          },
-          "path": "values.tax_profile_code"
-        },
-        {
-          "key": "default_price_list_code",
-          "label": "Price List",
-          "label_i18n": {
-            "en": "Price List",
-            "id": "Daftar Harga"
-          },
-          "path": "values.default_price_list_code"
+          "path": "values.phone"
         },
         {
           "key": "status",
@@ -23904,6 +25474,19 @@
             "active",
             "inactive",
             "blocked"
+          ],
+          "type": "enum"
+        },
+        {
+          "key": "party_kind",
+          "label": "Kind",
+          "label_i18n": {
+            "en": "Kind",
+            "id": "Jenis"
+          },
+          "options": [
+            "organization",
+            "person"
           ],
           "type": "enum"
         }
@@ -23969,6 +25552,954 @@
       "title_i18n": {
         "en": "Monitoring Overview",
         "id": "Ikhtisar Pemantauan"
+      }
+    },
+    {
+      "key": "organization.cost_centers.detail",
+      "kind": "detail",
+      "model_key": "cost_center",
+      "required_permissions": [
+        "organization_structure.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string"
+            },
+            {
+              "key": "parent_cost_center_id",
+              "label": "Parent Cost Center",
+              "label_i18n": {
+                "en": "Parent Cost Center",
+                "id": "Pusat Biaya Induk"
+              },
+              "path": "values.parent_cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Cost Center Detail",
+      "title_i18n": {
+        "en": "Cost Center Detail",
+        "id": "Cost Center Detail"
+      }
+    },
+    {
+      "key": "organization.cost_centers.form",
+      "kind": "form",
+      "model_key": "cost_center",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "parent_cost_center_id",
+              "label": "Parent Cost Center",
+              "label_i18n": {
+                "en": "Parent Cost Center",
+                "id": "Pusat Biaya Induk"
+              },
+              "path": "values.parent_cost_center_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Cost Center Form",
+          "title_i18n": {
+            "en": "Cost Center Form",
+            "id": "Cost Center Form"
+          }
+        }
+      ],
+      "title": "Cost Center Form",
+      "title_i18n": {
+        "en": "Cost Center Form",
+        "id": "Cost Center Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "department_id",
+          "label": "Department",
+          "label_i18n": {
+            "en": "Department",
+            "id": "Departemen"
+          },
+          "path": "values.department_id"
+        },
+        {
+          "key": "organization_unit_id",
+          "label": "Unit",
+          "label_i18n": {
+            "en": "Unit",
+            "id": "Unit"
+          },
+          "path": "values.organization_unit_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "organization.cost_centers.list",
+      "kind": "list",
+      "model_key": "cost_center",
+      "required_permissions": [
+        "organization_structure.list"
+      ],
+      "title": "Cost Centers",
+      "title_i18n": {
+        "en": "Cost Centers",
+        "id": "Cost Centers"
+      }
+    },
+    {
+      "key": "organization.departments.detail",
+      "kind": "detail",
+      "model_key": "department",
+      "required_permissions": [
+        "organization_structure.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "parent_department_id",
+              "label": "Parent Department",
+              "label_i18n": {
+                "en": "Parent Department",
+                "id": "Departemen Induk"
+              },
+              "path": "values.parent_department_id",
+              "type": "string"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "manager_party_id",
+              "label": "Manager Party",
+              "label_i18n": {
+                "en": "Manager Party",
+                "id": "Pihak Manajer"
+              },
+              "path": "values.manager_party_id",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Department Detail",
+      "title_i18n": {
+        "en": "Department Detail",
+        "id": "Department Detail"
+      }
+    },
+    {
+      "key": "organization.departments.form",
+      "kind": "form",
+      "model_key": "department",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "parent_department_id",
+              "label": "Parent Department",
+              "label_i18n": {
+                "en": "Parent Department",
+                "id": "Departemen Induk"
+              },
+              "path": "values.parent_department_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "manager_party_id",
+              "label": "Manager Party",
+              "label_i18n": {
+                "en": "Manager Party",
+                "id": "Pihak Manajer"
+              },
+              "path": "values.manager_party_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Department Form",
+          "title_i18n": {
+            "en": "Department Form",
+            "id": "Department Form"
+          }
+        }
+      ],
+      "title": "Department Form",
+      "title_i18n": {
+        "en": "Department Form",
+        "id": "Department Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "organization_unit_id",
+          "label": "Unit",
+          "label_i18n": {
+            "en": "Unit",
+            "id": "Unit"
+          },
+          "path": "values.organization_unit_id"
+        },
+        {
+          "key": "manager_party_id",
+          "label": "Manager",
+          "label_i18n": {
+            "en": "Manager",
+            "id": "Manajer"
+          },
+          "path": "values.manager_party_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "organization.departments.list",
+      "kind": "list",
+      "model_key": "department",
+      "required_permissions": [
+        "organization_structure.list"
+      ],
+      "title": "Departments",
+      "title_i18n": {
+        "en": "Departments",
+        "id": "Departments"
+      }
+    },
+    {
+      "key": "organization.units.detail",
+      "kind": "detail",
+      "model_key": "organization_unit",
+      "required_permissions": [
+        "organization_structure.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "parent_unit_id",
+              "label": "Parent Unit",
+              "label_i18n": {
+                "en": "Parent Unit",
+                "id": "Unit Induk"
+              },
+              "path": "values.parent_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "type": "string"
+            },
+            {
+              "key": "unit_type",
+              "label": "Unit Type",
+              "label_i18n": {
+                "en": "Unit Type",
+                "id": "Tipe Unit"
+              },
+              "path": "values.unit_type",
+              "type": "string"
+            },
+            {
+              "key": "manager_party_id",
+              "label": "Manager Party",
+              "label_i18n": {
+                "en": "Manager Party",
+                "id": "Pihak Manajer"
+              },
+              "path": "values.manager_party_id",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Organization Unit Detail",
+      "title_i18n": {
+        "en": "Organization Unit Detail",
+        "id": "Organization Unit Detail"
+      }
+    },
+    {
+      "key": "organization.units.form",
+      "kind": "form",
+      "model_key": "organization_unit",
+      "required_permissions": [
+        "organization_structure.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "parent_unit_id",
+              "label": "Parent Unit",
+              "label_i18n": {
+                "en": "Parent Unit",
+                "id": "Unit Induk"
+              },
+              "path": "values.parent_unit_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Kode"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Nama"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "unit_type",
+              "label": "Unit Type",
+              "label_i18n": {
+                "en": "Unit Type",
+                "id": "Tipe Unit"
+              },
+              "path": "values.unit_type",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "manager_party_id",
+              "label": "Manager Party",
+              "label_i18n": {
+                "en": "Manager Party",
+                "id": "Pihak Manajer"
+              },
+              "path": "values.manager_party_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Organization Unit Form",
+          "title_i18n": {
+            "en": "Organization Unit Form",
+            "id": "Organization Unit Form"
+          }
+        }
+      ],
+      "title": "Organization Unit Form",
+      "title_i18n": {
+        "en": "Organization Unit Form",
+        "id": "Organization Unit Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "organization_id",
+          "label": "Organization",
+          "label_i18n": {
+            "en": "Organization",
+            "id": "Organisasi"
+          },
+          "path": "values.organization_id"
+        },
+        {
+          "key": "location_id",
+          "label": "Location",
+          "label_i18n": {
+            "en": "Location",
+            "id": "Lokasi"
+          },
+          "path": "values.location_id"
+        },
+        {
+          "key": "unit_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.unit_type"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "organization.units.list",
+      "kind": "list",
+      "model_key": "organization_unit",
+      "required_permissions": [
+        "organization_structure.list"
+      ],
+      "title": "Organization Units",
+      "title_i18n": {
+        "en": "Organization Units",
+        "id": "Organization Units"
       }
     },
     {

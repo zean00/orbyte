@@ -18,6 +18,10 @@ func masterdataKernelPackManifests() []module.Manifest {
 	return []module.Manifest{masterdataKernelPackManifest()}
 }
 
+func organizationStructureKernelPackManifests() []module.Manifest {
+	return []module.Manifest{organizationStructureKernelPackManifest()}
+}
+
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
 	acpDefinition, _ := config.NewService().Definition("platform.acp")

@@ -2221,6 +2221,123 @@ func mustRegisterCommercialDocumentTypes(t *testing.T, docs *document.Service) {
 	}
 }
 
+func TestApplyPartyCommercialDefaultsPrefersCustomerProfile(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(document.NewService(), config.NewService(), models, nil)
+
+	party, err := models.Create("party", "user_admin", map[string]any{
+		"name":                    "PT Example",
+		"display_name":            "Example Root",
+		"tax_profile_code":        "PARTY-TAX",
+		"default_price_list_code": "PARTY-PL",
+		"payment_term_days":       14,
+		"status":                  "active",
+	})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	if _, err := models.Create("customer_profile", "user_admin", map[string]any{
+		"party_id":                party.ID,
+		"customer_name":           "Example Customer",
+		"tax_profile_code":        "CUST-TAX",
+		"default_price_list_code": "CUST-PL",
+		"payment_term_days":       30,
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create customer profile: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"party_id": party.ID,
+		"lines": []map[string]any{{
+			"item_code": "IGNORED",
+			"quantity":  1.0,
+		}},
+	})
+
+	if got := textValue(normalized["tax_profile_code"]); got != "CUST-TAX" {
+		t.Fatalf("expected customer tax profile, got %q", got)
+	}
+	if got := textValue(normalized["price_list_code"]); got != "CUST-PL" {
+		t.Fatalf("expected customer price list, got %q", got)
+	}
+	if got := numberValue(normalized["payment_term_days"]); got != 30 {
+		t.Fatalf("expected customer payment terms 30, got %v", got)
+	}
+}
+
+func TestApplyPartyCommercialDefaultsPrefersActiveCustomerProfile(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+	service := NewCommercialCoreService(document.NewService(), config.NewService(), models, search.NewService())
+
+	party, err := models.Create("party", "user_admin", map[string]any{
+		"name":                    "Dual Profile Customer",
+		"tax_profile_code":        "LEGACY-TAX",
+		"default_price_list_code": "LEGACY-PRICE",
+		"payment_term_days":       7,
+		"customer_type":           "legacy",
+		"member_status":           "inactive",
+		"member_tier":             "bronze",
+		"status":                  "active",
+	})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	if _, err := models.Create("customer_profile", "user_admin", map[string]any{
+		"party_id":                 party.ID,
+		"customer_name":            "AAA Inactive",
+		"tax_profile_code":         "INACTIVE-TAX",
+		"default_price_list_code":  "INACTIVE-PRICE",
+		"payment_term_days":        14,
+		"customer_type":            "inactive-type",
+		"member_status":            "inactive",
+		"member_tier":              "silver",
+		"status":                   "inactive",
+	}); err != nil {
+		t.Fatalf("create inactive customer profile: %v", err)
+	}
+	if _, err := models.Create("customer_profile", "user_admin", map[string]any{
+		"party_id":                 party.ID,
+		"customer_name":            "ZZZ Active",
+		"tax_profile_code":         "ACTIVE-TAX",
+		"default_price_list_code":  "ACTIVE-PRICE",
+		"payment_term_days":        45,
+		"customer_type":            "active-type",
+		"member_status":            "active",
+		"member_tier":              "gold",
+		"status":                   "active",
+	}); err != nil {
+		t.Fatalf("create active customer profile: %v", err)
+	}
+
+	normalized := service.NormalizePayload("sales_order", map[string]any{
+		"party_id": party.ID,
+		"lines":    []map[string]any{{"description": "Service", "quantity": 1.0, "unit_price": 100.0}},
+	})
+
+	if got := textValue(normalized["tax_profile_code"]); got != "ACTIVE-TAX" {
+		t.Fatalf("expected active tax profile, got %q", got)
+	}
+	if got := textValue(normalized["price_list_code"]); got != "ACTIVE-PRICE" {
+		t.Fatalf("expected active price list, got %q", got)
+	}
+	if got := numberValue(normalized["payment_term_days"]); got != 45 {
+		t.Fatalf("expected active payment terms, got %v", got)
+	}
+	fields := service.partyDiscountFields(party.ID)
+	if got := textValue(fields["customer_type"]); got != "active-type" {
+		t.Fatalf("expected active customer type, got %q", got)
+	}
+	if got := textValue(fields["member_status"]); got != "active" {
+		t.Fatalf("expected active member status, got %q", got)
+	}
+	if got := textValue(fields["member_tier"]); got != "gold" {
+		t.Fatalf("expected active member tier, got %q", got)
+	}
+}
+
 func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	for _, def := range []model.Definition{
@@ -2233,6 +2350,24 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 				{Key: "display_name", Type: "string"},
 				{Key: "email", Type: "string"},
 				{Key: "currency_code", Type: "string"},
+				{Key: "customer_type", Type: "string"},
+				{Key: "member_status", Type: "string"},
+				{Key: "member_tier", Type: "string"},
+				{Key: "member_valid_from", Type: "string"},
+				{Key: "member_valid_to", Type: "string"},
+				{Key: "tax_profile_code", Type: "string"},
+				{Key: "default_price_list_code", Type: "string"},
+				{Key: "payment_term_days", Type: "number"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "customer_profile",
+			DisplayName: "Customer Profile",
+			DefaultSort: "customer_name",
+			Fields: []model.FieldDefinition{
+				{Key: "party_id", Type: "string", Required: true},
+				{Key: "customer_name", Type: "string"},
 				{Key: "customer_type", Type: "string"},
 				{Key: "member_status", Type: "string"},
 				{Key: "member_tier", Type: "string"},

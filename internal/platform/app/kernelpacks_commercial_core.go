@@ -1551,6 +1551,8 @@ func ledgerFormSections() []module.SectionDefinition {
 
 func modelPermissionPrefix(modelKey string) string {
 	switch modelKey {
+	case "customer_profile":
+		return "customer"
 	case "commercial_product":
 		return "product"
 	case "commercial_variant_dimension":
@@ -1577,6 +1579,10 @@ func modelPermissionPrefix(modelKey string) string {
 		return "payment_method"
 	case "vendor_profile":
 		return "vendor"
+	case "party_contact", "party_address":
+		return "party"
+	case "organization_unit", "department", "cost_center":
+		return "organization_structure"
 	default:
 		return modelKey
 	}

@@ -2199,12 +2199,72 @@ func (s *CommercialCoreService) partyDiscountFields(partyID string) map[string]s
 		return values
 	}
 	values["party_id"] = partyID
-	values["customer_type"] = textValue(record.Values["customer_type"])
-	values["member_status"] = textValue(record.Values["member_status"])
-	values["member_tier"] = textValue(record.Values["member_tier"])
-	values["member_valid_from"] = textValue(record.Values["member_valid_from"])
-	values["member_valid_to"] = textValue(record.Values["member_valid_to"])
+	values["customer_type"] = firstNonEmptyString(s.lookupCustomerProfileValue(partyID, "customer_type"), textValue(record.Values["customer_type"]))
+	values["member_status"] = firstNonEmptyString(s.lookupCustomerProfileValue(partyID, "member_status"), textValue(record.Values["member_status"]))
+	values["member_tier"] = firstNonEmptyString(s.lookupCustomerProfileValue(partyID, "member_tier"), textValue(record.Values["member_tier"]))
+	values["member_valid_from"] = firstNonEmptyString(s.lookupCustomerProfileValue(partyID, "member_valid_from"), textValue(record.Values["member_valid_from"]))
+	values["member_valid_to"] = firstNonEmptyString(s.lookupCustomerProfileValue(partyID, "member_valid_to"), textValue(record.Values["member_valid_to"]))
 	return values
+}
+
+func (s *CommercialCoreService) lookupCustomerProfileValue(partyID, key string) string {
+	record, ok := s.customerProfileByParty(partyID)
+	if !ok {
+		return ""
+	}
+	if current := textValue(record.Values[key]); current != "" {
+		return current
+	}
+	if key == "customer_name" {
+		return firstNonEmptyString(
+			s.lookupModelValueByID("party", partyID, "display_name"),
+			s.lookupModelValueByID("party", partyID, "name"),
+		)
+	}
+	return ""
+}
+
+func (s *CommercialCoreService) lookupCustomerProfileNumber(partyID, key string) float64 {
+	record, ok := s.customerProfileByParty(partyID)
+	if !ok {
+		return 0
+	}
+	return roundMoney(numberValue(record.Values[key]))
+}
+
+func (s *CommercialCoreService) customerProfileByParty(partyID string) (model.Record, bool) {
+	if s.models == nil || strings.TrimSpace(partyID) == "" {
+		return model.Record{}, false
+	}
+	items, _, err := s.models.List("customer_profile", model.Query{
+		Filters:  map[string]string{"party_id": strings.TrimSpace(partyID)},
+		Page:     1,
+		PageSize: 100,
+	})
+	if err != nil || len(items) == 0 {
+		return model.Record{}, false
+	}
+	var (
+		active      model.Record
+		activeFound bool
+		fallback    = items[0]
+	)
+	for _, item := range items {
+		if item.UpdatedAt.After(fallback.UpdatedAt) {
+			fallback = item
+		}
+		if textValue(item.Values["status"]) != "active" {
+			continue
+		}
+		if !activeFound || item.UpdatedAt.After(active.UpdatedAt) {
+			active = item
+			activeFound = true
+		}
+	}
+	if activeFound {
+		return active, true
+	}
+	return fallback, true
 }
 
 func (s *CommercialCoreService) listActiveDiscountRules() []discountRuleRecord {
@@ -2917,13 +2977,22 @@ func (s *CommercialCoreService) applyPartyCommercialDefaults(payload map[string]
 		next["currency_code"] = s.lookupModelValueByID("party", partyID, "currency_code")
 	}
 	if textValue(next["tax_profile_code"]) == "" {
-		next["tax_profile_code"] = s.lookupModelValueByID("party", partyID, "tax_profile_code")
+		next["tax_profile_code"] = firstNonEmptyString(
+			s.lookupCustomerProfileValue(partyID, "tax_profile_code"),
+			s.lookupModelValueByID("party", partyID, "tax_profile_code"),
+		)
 	}
 	if textValue(next["price_list_code"]) == "" {
-		next["price_list_code"] = s.lookupModelValueByID("party", partyID, "default_price_list_code")
+		next["price_list_code"] = firstNonEmptyString(
+			s.lookupCustomerProfileValue(partyID, "default_price_list_code"),
+			s.lookupModelValueByID("party", partyID, "default_price_list_code"),
+		)
 	}
 	if numberValue(next["payment_term_days"]) == 0 {
-		if days := s.lookupModelNumberByID("party", partyID, "payment_term_days"); days > 0 {
+		if days := firstPositiveNumber(
+			s.lookupCustomerProfileNumber(partyID, "payment_term_days"),
+			s.lookupModelNumberByID("party", partyID, "payment_term_days"),
+		); days > 0 {
 			next["payment_term_days"] = days
 		}
 	}
