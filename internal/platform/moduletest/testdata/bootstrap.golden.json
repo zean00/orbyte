@@ -3881,6 +3881,561 @@
       "view_key": "organization.units.form"
     },
     {
+      "key": "payroll.adjustments.detail",
+      "kind": "navigate",
+      "label": "Payroll Adjustment Detail",
+      "label_i18n": {
+        "en": "Payroll Adjustment Detail",
+        "id": "Payroll Adjustment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/payroll/adjustments/detail",
+      "view_key": "payroll.adjustments.detail"
+    },
+    {
+      "key": "payroll.adjustments.form",
+      "kind": "navigate",
+      "label": "Payroll Adjustment Detail Form",
+      "label_i18n": {
+        "en": "Payroll Adjustment Detail Form",
+        "id": "Payroll Adjustment Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/payroll/adjustments/form",
+      "view_key": "payroll.adjustments.form"
+    },
+    {
+      "key": "payroll.adjustments.list",
+      "kind": "navigate",
+      "label": "Payroll Adjustments",
+      "label_i18n": {
+        "en": "Payroll Adjustments",
+        "id": "Payroll Adjustments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/payroll/adjustments",
+      "view_key": "payroll.adjustments.list"
+    },
+    {
+      "key": "payroll.adjustments.new",
+      "kind": "navigate",
+      "label": "New Payroll Adjustment",
+      "label_i18n": {
+        "en": "New Payroll Adjustment",
+        "id": "New Payroll Adjustment"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/payroll/adjustments/new",
+      "view_key": "payroll.adjustments.form"
+    },
+    {
+      "key": "payroll.components.detail",
+      "kind": "navigate",
+      "label": "Pay Component Detail",
+      "label_i18n": {
+        "en": "Pay Component Detail",
+        "id": "Pay Component Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pay_component.read"
+      ],
+      "route_path": "/payroll/components/detail",
+      "view_key": "payroll.components.detail"
+    },
+    {
+      "key": "payroll.components.form",
+      "kind": "navigate",
+      "label": "Pay Component Form",
+      "label_i18n": {
+        "en": "Pay Component Form",
+        "id": "Pay Component Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pay_component.update"
+      ],
+      "route_path": "/payroll/components/form",
+      "view_key": "payroll.components.form"
+    },
+    {
+      "key": "payroll.components.list",
+      "kind": "navigate",
+      "label": "Pay Components",
+      "label_i18n": {
+        "en": "Pay Components",
+        "id": "Pay Components"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "pay_component.list"
+      ],
+      "route_path": "/payroll/components",
+      "view_key": "payroll.components.list"
+    },
+    {
+      "key": "payroll.contribution_rules.detail",
+      "kind": "navigate",
+      "label": "Contribution Rule Detail",
+      "label_i18n": {
+        "en": "Contribution Rule Detail",
+        "id": "Contribution Rule Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_contribution_rule.read"
+      ],
+      "route_path": "/payroll/contribution_rules/detail",
+      "view_key": "payroll.contribution_rules.detail"
+    },
+    {
+      "key": "payroll.contribution_rules.form",
+      "kind": "navigate",
+      "label": "Contribution Rule Form",
+      "label_i18n": {
+        "en": "Contribution Rule Form",
+        "id": "Contribution Rule Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_contribution_rule.update"
+      ],
+      "route_path": "/payroll/contribution_rules/form",
+      "view_key": "payroll.contribution_rules.form"
+    },
+    {
+      "key": "payroll.contribution_rules.list",
+      "kind": "navigate",
+      "label": "Contribution Rules",
+      "label_i18n": {
+        "en": "Contribution Rules",
+        "id": "Contribution Rules"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_contribution_rule.list"
+      ],
+      "route_path": "/payroll/contribution_rules",
+      "view_key": "payroll.contribution_rules.list"
+    },
+    {
+      "key": "payroll.payment_batches.detail",
+      "kind": "navigate",
+      "label": "Payroll Payment Batch Detail",
+      "label_i18n": {
+        "en": "Payroll Payment Batch Detail",
+        "id": "Payroll Payment Batch Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/payroll/payment-batches/detail",
+      "view_key": "payroll.payment_batches.detail"
+    },
+    {
+      "key": "payroll.payment_batches.form",
+      "kind": "navigate",
+      "label": "Payroll Payment Batch Detail Form",
+      "label_i18n": {
+        "en": "Payroll Payment Batch Detail Form",
+        "id": "Payroll Payment Batch Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/payroll/payment-batches/form",
+      "view_key": "payroll.payment_batches.form"
+    },
+    {
+      "key": "payroll.payment_batches.list",
+      "kind": "navigate",
+      "label": "Payroll Payment Batches",
+      "label_i18n": {
+        "en": "Payroll Payment Batches",
+        "id": "Payroll Payment Batches"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/payroll/payment-batches",
+      "view_key": "payroll.payment_batches.list"
+    },
+    {
+      "key": "payroll.payment_batches.new",
+      "kind": "navigate",
+      "label": "New Payroll Payment Batch",
+      "label_i18n": {
+        "en": "New Payroll Payment Batch",
+        "id": "New Payroll Payment Batch"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/payroll/payment-batches/new",
+      "view_key": "payroll.payment_batches.form"
+    },
+    {
+      "key": "payroll.payments.detail",
+      "kind": "navigate",
+      "label": "Payroll Payment Detail",
+      "label_i18n": {
+        "en": "Payroll Payment Detail",
+        "id": "Payroll Payment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/payroll/payments/detail",
+      "view_key": "payroll.payments.detail"
+    },
+    {
+      "key": "payroll.payments.form",
+      "kind": "navigate",
+      "label": "Payroll Payment Detail Form",
+      "label_i18n": {
+        "en": "Payroll Payment Detail Form",
+        "id": "Payroll Payment Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/payroll/payments/form",
+      "view_key": "payroll.payments.form"
+    },
+    {
+      "key": "payroll.payments.list",
+      "kind": "navigate",
+      "label": "Payroll Payments",
+      "label_i18n": {
+        "en": "Payroll Payments",
+        "id": "Payroll Payments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/payroll/payments",
+      "view_key": "payroll.payments.list"
+    },
+    {
+      "key": "payroll.payments.new",
+      "kind": "navigate",
+      "label": "New Payroll Payment",
+      "label_i18n": {
+        "en": "New Payroll Payment",
+        "id": "New Payroll Payment"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/payroll/payments/new",
+      "view_key": "payroll.payments.form"
+    },
+    {
+      "key": "payroll.periods.detail",
+      "kind": "navigate",
+      "label": "Payroll Period Detail",
+      "label_i18n": {
+        "en": "Payroll Period Detail",
+        "id": "Payroll Period Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_period.read"
+      ],
+      "route_path": "/payroll/periods/detail",
+      "view_key": "payroll.periods.detail"
+    },
+    {
+      "key": "payroll.periods.form",
+      "kind": "navigate",
+      "label": "Payroll Period Form",
+      "label_i18n": {
+        "en": "Payroll Period Form",
+        "id": "Payroll Period Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_period.update"
+      ],
+      "route_path": "/payroll/periods/form",
+      "view_key": "payroll.periods.form"
+    },
+    {
+      "key": "payroll.periods.list",
+      "kind": "navigate",
+      "label": "Payroll Periods",
+      "label_i18n": {
+        "en": "Payroll Periods",
+        "id": "Payroll Periods"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_period.list"
+      ],
+      "route_path": "/payroll/periods",
+      "view_key": "payroll.periods.list"
+    },
+    {
+      "key": "payroll.profiles.detail",
+      "kind": "navigate",
+      "label": "Payroll Profile Detail",
+      "label_i18n": {
+        "en": "Payroll Profile Detail",
+        "id": "Payroll Profile Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_payroll_profile.read"
+      ],
+      "route_path": "/payroll/profiles/detail",
+      "view_key": "payroll.profiles.detail"
+    },
+    {
+      "key": "payroll.profiles.form",
+      "kind": "navigate",
+      "label": "Payroll Profile Form",
+      "label_i18n": {
+        "en": "Payroll Profile Form",
+        "id": "Payroll Profile Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_payroll_profile.update"
+      ],
+      "route_path": "/payroll/profiles/form",
+      "view_key": "payroll.profiles.form"
+    },
+    {
+      "key": "payroll.profiles.list",
+      "kind": "navigate",
+      "label": "Payroll Profiles",
+      "label_i18n": {
+        "en": "Payroll Profiles",
+        "id": "Payroll Profiles"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_payroll_profile.list"
+      ],
+      "route_path": "/payroll/profiles",
+      "view_key": "payroll.profiles.list"
+    },
+    {
+      "key": "payroll.runs.detail",
+      "kind": "navigate",
+      "label": "Payroll Run Detail",
+      "label_i18n": {
+        "en": "Payroll Run Detail",
+        "id": "Payroll Run Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/payroll/runs/detail",
+      "view_key": "payroll.runs.detail"
+    },
+    {
+      "key": "payroll.runs.form",
+      "kind": "navigate",
+      "label": "Payroll Run Detail Form",
+      "label_i18n": {
+        "en": "Payroll Run Detail Form",
+        "id": "Payroll Run Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/payroll/runs/form",
+      "view_key": "payroll.runs.form"
+    },
+    {
+      "key": "payroll.runs.list",
+      "kind": "navigate",
+      "label": "Payroll Runs",
+      "label_i18n": {
+        "en": "Payroll Runs",
+        "id": "Payroll Runs"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/payroll/runs",
+      "view_key": "payroll.runs.list"
+    },
+    {
+      "key": "payroll.runs.new",
+      "kind": "navigate",
+      "label": "New Payroll Run",
+      "label_i18n": {
+        "en": "New Payroll Run",
+        "id": "New Payroll Run"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/payroll/runs/new",
+      "view_key": "payroll.runs.form"
+    },
+    {
+      "key": "payroll.structure_lines.detail",
+      "kind": "navigate",
+      "label": "Structure Line Detail",
+      "label_i18n": {
+        "en": "Structure Line Detail",
+        "id": "Structure Line Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "salary_structure_line.read"
+      ],
+      "route_path": "/payroll/structure_lines/detail",
+      "view_key": "payroll.structure_lines.detail"
+    },
+    {
+      "key": "payroll.structure_lines.form",
+      "kind": "navigate",
+      "label": "Structure Line Form",
+      "label_i18n": {
+        "en": "Structure Line Form",
+        "id": "Structure Line Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "salary_structure_line.update"
+      ],
+      "route_path": "/payroll/structure_lines/form",
+      "view_key": "payroll.structure_lines.form"
+    },
+    {
+      "key": "payroll.structure_lines.list",
+      "kind": "navigate",
+      "label": "Structure Lines",
+      "label_i18n": {
+        "en": "Structure Lines",
+        "id": "Structure Lines"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "salary_structure_line.list"
+      ],
+      "route_path": "/payroll/structure_lines",
+      "view_key": "payroll.structure_lines.list"
+    },
+    {
+      "key": "payroll.structures.detail",
+      "kind": "navigate",
+      "label": "Salary Structure Detail",
+      "label_i18n": {
+        "en": "Salary Structure Detail",
+        "id": "Salary Structure Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "salary_structure.read"
+      ],
+      "route_path": "/payroll/structures/detail",
+      "view_key": "payroll.structures.detail"
+    },
+    {
+      "key": "payroll.structures.form",
+      "kind": "navigate",
+      "label": "Salary Structure Form",
+      "label_i18n": {
+        "en": "Salary Structure Form",
+        "id": "Salary Structure Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "salary_structure.update"
+      ],
+      "route_path": "/payroll/structures/form",
+      "view_key": "payroll.structures.form"
+    },
+    {
+      "key": "payroll.structures.list",
+      "kind": "navigate",
+      "label": "Salary Structures",
+      "label_i18n": {
+        "en": "Salary Structures",
+        "id": "Salary Structures"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "salary_structure.list"
+      ],
+      "route_path": "/payroll/structures",
+      "view_key": "payroll.structures.list"
+    },
+    {
+      "key": "payroll.tax_rules.detail",
+      "kind": "navigate",
+      "label": "Tax Rule Detail",
+      "label_i18n": {
+        "en": "Tax Rule Detail",
+        "id": "Tax Rule Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_tax_rule.read"
+      ],
+      "route_path": "/payroll/tax_rules/detail",
+      "view_key": "payroll.tax_rules.detail"
+    },
+    {
+      "key": "payroll.tax_rules.form",
+      "kind": "navigate",
+      "label": "Tax Rule Form",
+      "label_i18n": {
+        "en": "Tax Rule Form",
+        "id": "Tax Rule Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_tax_rule.update"
+      ],
+      "route_path": "/payroll/tax_rules/form",
+      "view_key": "payroll.tax_rules.form"
+    },
+    {
+      "key": "payroll.tax_rules.list",
+      "kind": "navigate",
+      "label": "Tax Rules",
+      "label_i18n": {
+        "en": "Tax Rules",
+        "id": "Tax Rules"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_tax_rule.list"
+      ],
+      "route_path": "/payroll/tax_rules",
+      "view_key": "payroll.tax_rules.list"
+    },
+    {
       "key": "planning.proposals.dashboard",
       "kind": "navigate",
       "label": "Planning Proposals",
@@ -6226,6 +6781,19 @@
       ]
     },
     {
+      "action_key": "payroll.components.list",
+      "key": "payroll.components",
+      "label": "Pay Components",
+      "label_i18n": {
+        "en": "Pay Components",
+        "id": "Komponen Gaji"
+      },
+      "order": 30,
+      "required_permissions": [
+        "pay_component.list"
+      ]
+    },
+    {
       "action_key": "promotion.codes.list",
       "key": "promotion.codes",
       "label": "Promotion Codes",
@@ -6265,6 +6833,19 @@
       ]
     },
     {
+      "action_key": "payroll.structures.list",
+      "key": "payroll.structures",
+      "label": "Salary Structures",
+      "label_i18n": {
+        "en": "Salary Structures",
+        "id": "Struktur Gaji"
+      },
+      "order": 31,
+      "required_permissions": [
+        "salary_structure.list"
+      ]
+    },
+    {
       "action_key": "promotion.redemptions.list",
       "key": "promotion.redemptions",
       "label": "Promotion Redemptions",
@@ -6291,6 +6872,19 @@
       ]
     },
     {
+      "action_key": "payroll.structure_lines.list",
+      "key": "payroll.structure_lines",
+      "label": "Structure Lines",
+      "label_i18n": {
+        "en": "Structure Lines",
+        "id": "Baris Struktur"
+      },
+      "order": 32,
+      "required_permissions": [
+        "salary_structure_line.list"
+      ]
+    },
+    {
       "action_key": "commercial.receivables.dashboard",
       "key": "commercial.receivables",
       "label": "Receivables",
@@ -6301,6 +6895,19 @@
       "order": 33,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "payroll.profiles.list",
+      "key": "payroll.profiles",
+      "label": "Payroll Profiles",
+      "label_i18n": {
+        "en": "Payroll Profiles",
+        "id": "Profil Payroll"
+      },
+      "order": 33,
+      "required_permissions": [
+        "employee_payroll_profile.list"
       ]
     },
     {
@@ -6317,6 +6924,19 @@
       ]
     },
     {
+      "action_key": "payroll.periods.list",
+      "key": "payroll.periods",
+      "label": "Payroll Periods",
+      "label_i18n": {
+        "en": "Payroll Periods",
+        "id": "Periode Payroll"
+      },
+      "order": 34,
+      "required_permissions": [
+        "payroll_period.list"
+      ]
+    },
+    {
       "action_key": "commercial.refunds.list",
       "key": "commercial.refunds",
       "label": "Refunds",
@@ -6330,6 +6950,19 @@
       ]
     },
     {
+      "action_key": "payroll.tax_rules.list",
+      "key": "payroll.tax_rules",
+      "label": "Tax Rules",
+      "label_i18n": {
+        "en": "Tax Rules",
+        "id": "Aturan Pajak"
+      },
+      "order": 35,
+      "required_permissions": [
+        "payroll_tax_rule.list"
+      ]
+    },
+    {
       "action_key": "commercial.ledger.list",
       "key": "commercial.ledger",
       "label": "Ledger",
@@ -6340,6 +6973,19 @@
       "order": 36,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "payroll.contribution_rules.list",
+      "key": "payroll.contribution_rules",
+      "label": "Contribution Rules",
+      "label_i18n": {
+        "en": "Contribution Rules",
+        "id": "Aturan Kontribusi"
+      },
+      "order": 36,
+      "required_permissions": [
+        "payroll_contribution_rule.list"
       ]
     },
     {
@@ -6369,6 +7015,32 @@
       ]
     },
     {
+      "action_key": "payroll.runs.list",
+      "key": "payroll.runs",
+      "label": "Payroll Runs",
+      "label_i18n": {
+        "en": "Payroll Runs",
+        "id": "Payroll Run"
+      },
+      "order": 37,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "payroll.adjustments.list",
+      "key": "payroll.adjustments",
+      "label": "Payroll Adjustments",
+      "label_i18n": {
+        "en": "Payroll Adjustments",
+        "id": "Penyesuaian Payroll"
+      },
+      "order": 38,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
       "action_key": "returns.returns.list",
       "key": "returns.sales_returns",
       "label": "Returns",
@@ -6382,6 +7054,19 @@
       ]
     },
     {
+      "action_key": "payroll.payment_batches.list",
+      "key": "payroll.payment_batches",
+      "label": "Payroll Payment Batches",
+      "label_i18n": {
+        "en": "Payroll Payment Batches",
+        "id": "Batch Pembayaran Payroll"
+      },
+      "order": 39,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
       "action_key": "returns.receipts.list",
       "key": "returns.return_receipts",
       "label": "Return Receipts",
@@ -6390,6 +7075,19 @@
         "id": "Penerimaan Retur"
       },
       "order": 39,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "payroll.payments.list",
+      "key": "payroll.payments",
+      "label": "Payroll Payments",
+      "label_i18n": {
+        "en": "Payroll Payments",
+        "id": "Pembayaran Payroll"
+      },
+      "order": 40,
       "required_permissions": [
         "document.list"
       ]
@@ -30524,6 +31222,2229 @@
       "title_i18n": {
         "en": "Organization Units",
         "id": "Organization Units"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_adjustment",
+      "key": "payroll.adjustments.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "type": "string"
+            },
+            {
+              "key": "adjustment_date",
+              "label": "Adjustment Date",
+              "path": "body.payload.adjustment_date",
+              "type": "string"
+            },
+            {
+              "key": "amount",
+              "label": "Amount",
+              "path": "body.payload.amount",
+              "type": "number"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "path": "body.payload.reason",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payroll Adjustment Detail",
+      "title_i18n": {
+        "en": "Payroll Adjustment Detail",
+        "id": "Payroll Adjustment Detail"
+      }
+    },
+    {
+      "document_type": "payroll_adjustment",
+      "key": "payroll.adjustments.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "adjustment_date",
+              "label": "Adjustment Date",
+              "path": "body.payload.adjustment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "amount",
+              "label": "Amount",
+              "path": "body.payload.amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "path": "body.payload.reason",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Payroll Adjustment Form",
+      "title_i18n": {
+        "en": "Payroll Adjustment Form",
+        "id": "Payroll Adjustment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Adjustment",
+          "path": "header.number"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "adjustment_date",
+          "label": "Date",
+          "path": "body.payload.adjustment_date"
+        },
+        {
+          "key": "amount",
+          "label": "Amount",
+          "path": "body.payload.amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_adjustment",
+      "empty_state": "No Payroll Adjustments exist yet.",
+      "empty_state_i18n": {
+        "en": "No Payroll Adjustments exist yet.",
+        "id": "Belum ada Payroll Adjustments."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.adjustments.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Payroll Adjustments",
+      "title_i18n": {
+        "en": "Payroll Adjustments",
+        "id": "Payroll Adjustments"
+      }
+    },
+    {
+      "key": "payroll.components.detail",
+      "kind": "detail",
+      "model_key": "pay_component",
+      "required_permissions": [
+        "pay_component.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "component_class",
+              "label": "Class",
+              "path": "values.component_class",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_account_code",
+              "label": "Default Account",
+              "path": "values.default_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Pay Components Detail",
+      "title_i18n": {
+        "en": "Pay Components Detail",
+        "id": "Pay Components Detail"
+      }
+    },
+    {
+      "key": "payroll.components.form",
+      "kind": "form",
+      "model_key": "pay_component",
+      "required_permissions": [
+        "pay_component.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "component_class",
+              "label": "Class",
+              "path": "values.component_class",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_account_code",
+              "label": "Default Account",
+              "path": "values.default_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Pay Components Form",
+          "title_i18n": {
+            "en": "Pay Components Form",
+            "id": "Pay Components Form"
+          }
+        }
+      ],
+      "title": "Pay Components Form",
+      "title_i18n": {
+        "en": "Pay Components Form",
+        "id": "Pay Components Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "component_class",
+          "label": "Class",
+          "path": "values.component_class"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.components.list",
+      "kind": "list",
+      "model_key": "pay_component",
+      "required_permissions": [
+        "pay_component.list"
+      ],
+      "title": "Pay Components",
+      "title_i18n": {
+        "en": "Pay Components",
+        "id": "Pay Components"
+      }
+    },
+    {
+      "key": "payroll.contribution_rules.detail",
+      "kind": "detail",
+      "model_key": "payroll_contribution_rule",
+      "required_permissions": [
+        "payroll_contribution_rule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employee_rate_percent",
+              "label": "Employee Rate",
+              "path": "values.employee_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employee_fixed_amount",
+              "label": "Employee Fixed Amount",
+              "path": "values.employee_fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employer_rate_percent",
+              "label": "Employer Rate",
+              "path": "values.employer_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employer_fixed_amount",
+              "label": "Employer Fixed Amount",
+              "path": "values.employer_fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "threshold_amount",
+              "label": "Threshold",
+              "path": "values.threshold_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Contribution Rules Detail",
+      "title_i18n": {
+        "en": "Contribution Rules Detail",
+        "id": "Contribution Rules Detail"
+      }
+    },
+    {
+      "key": "payroll.contribution_rules.form",
+      "kind": "form",
+      "model_key": "payroll_contribution_rule",
+      "required_permissions": [
+        "payroll_contribution_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employee_rate_percent",
+              "label": "Employee Rate",
+              "path": "values.employee_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employee_fixed_amount",
+              "label": "Employee Fixed Amount",
+              "path": "values.employee_fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employer_rate_percent",
+              "label": "Employer Rate",
+              "path": "values.employer_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employer_fixed_amount",
+              "label": "Employer Fixed Amount",
+              "path": "values.employer_fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "threshold_amount",
+              "label": "Threshold",
+              "path": "values.threshold_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Contribution Rules Form",
+          "title_i18n": {
+            "en": "Contribution Rules Form",
+            "id": "Contribution Rules Form"
+          }
+        }
+      ],
+      "title": "Contribution Rules Form",
+      "title_i18n": {
+        "en": "Contribution Rules Form",
+        "id": "Contribution Rules Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "employee_rate_percent",
+          "label": "Employee Rate",
+          "path": "values.employee_rate_percent"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.contribution_rules.list",
+      "kind": "list",
+      "model_key": "payroll_contribution_rule",
+      "required_permissions": [
+        "payroll_contribution_rule.list"
+      ],
+      "title": "Contribution Rules",
+      "title_i18n": {
+        "en": "Contribution Rules",
+        "id": "Contribution Rules"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_payment_batch",
+      "key": "payroll.payment_batches.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_run_id",
+              "label": "Payroll Run",
+              "path": "body.payload.payroll_run_id",
+              "type": "string"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string"
+            },
+            {
+              "key": "employee_count",
+              "label": "Employee Count",
+              "path": "body.payload.employee_count",
+              "type": "number"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total Amount",
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "ledger_posting_id",
+              "label": "Ledger Posting",
+              "path": "body.payload.ledger_posting_id",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payroll Payment Batch Detail",
+      "title_i18n": {
+        "en": "Payroll Payment Batch Detail",
+        "id": "Payroll Payment Batch Detail"
+      }
+    },
+    {
+      "document_type": "payroll_payment_batch",
+      "key": "payroll.payment_batches.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_run_id",
+              "label": "Payroll Run",
+              "path": "body.payload.payroll_run_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employee_count",
+              "label": "Employee Count",
+              "path": "body.payload.employee_count",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total Amount",
+              "path": "body.payload.total_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "ledger_posting_id",
+              "label": "Ledger Posting",
+              "path": "body.payload.ledger_posting_id",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Payroll Payment Batch Form",
+      "title_i18n": {
+        "en": "Payroll Payment Batch Form",
+        "id": "Payroll Payment Batch Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Batch",
+          "path": "header.number"
+        },
+        {
+          "key": "payroll_run_id",
+          "label": "Run",
+          "path": "body.payload.payroll_run_id"
+        },
+        {
+          "key": "payment_date",
+          "label": "Payment Date",
+          "path": "body.payload.payment_date"
+        },
+        {
+          "key": "employee_count",
+          "label": "Employees",
+          "path": "body.payload.employee_count"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_payment_batch",
+      "empty_state": "No Payroll Payment Batches exist yet.",
+      "empty_state_i18n": {
+        "en": "No Payroll Payment Batches exist yet.",
+        "id": "Belum ada Payroll Payment Batches."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "paid",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.payment_batches.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Payroll Payment Batches",
+      "title_i18n": {
+        "en": "Payroll Payment Batches",
+        "id": "Payroll Payment Batches"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_payment",
+      "key": "payroll.payments.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_run_id",
+              "label": "Payroll Run",
+              "path": "body.payload.payroll_run_id",
+              "type": "string"
+            },
+            {
+              "key": "payroll_payment_batch_id",
+              "label": "Payment Batch",
+              "path": "body.payload.payroll_payment_batch_id",
+              "type": "string"
+            },
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "type": "string"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string"
+            },
+            {
+              "key": "net_pay",
+              "label": "Net Pay",
+              "path": "body.payload.net_pay",
+              "type": "number"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "body.payload.treasury_account_id",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payroll Payment Detail",
+      "title_i18n": {
+        "en": "Payroll Payment Detail",
+        "id": "Payroll Payment Detail"
+      }
+    },
+    {
+      "document_type": "payroll_payment",
+      "key": "payroll.payments.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_run_id",
+              "label": "Payroll Run",
+              "path": "body.payload.payroll_run_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payroll_payment_batch_id",
+              "label": "Payment Batch",
+              "path": "body.payload.payroll_payment_batch_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "body.payload.employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "net_pay",
+              "label": "Net Pay",
+              "path": "body.payload.net_pay",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "body.payload.treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Payroll Payment Form",
+      "title_i18n": {
+        "en": "Payroll Payment Form",
+        "id": "Payroll Payment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Payment",
+          "path": "header.number"
+        },
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "body.payload.employee_id"
+        },
+        {
+          "key": "payment_date",
+          "label": "Payment Date",
+          "path": "body.payload.payment_date"
+        },
+        {
+          "key": "net_pay",
+          "label": "Net Pay",
+          "path": "body.payload.net_pay"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_payment",
+      "empty_state": "No Payroll Payments exist yet.",
+      "empty_state_i18n": {
+        "en": "No Payroll Payments exist yet.",
+        "id": "Belum ada Payroll Payments."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "paid",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.payments.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Payroll Payments",
+      "title_i18n": {
+        "en": "Payroll Payments",
+        "id": "Payroll Payments"
+      }
+    },
+    {
+      "key": "payroll.periods.detail",
+      "kind": "detail",
+      "model_key": "payroll_period",
+      "required_permissions": [
+        "payroll_period.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "start_date",
+              "label": "Start Date",
+              "path": "values.start_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_date",
+              "label": "End Date",
+              "path": "values.end_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "pay_date",
+              "label": "Pay Date",
+              "path": "values.pay_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payroll Periods Detail",
+      "title_i18n": {
+        "en": "Payroll Periods Detail",
+        "id": "Payroll Periods Detail"
+      }
+    },
+    {
+      "key": "payroll.periods.form",
+      "kind": "form",
+      "model_key": "payroll_period",
+      "required_permissions": [
+        "payroll_period.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "start_date",
+              "label": "Start Date",
+              "path": "values.start_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "end_date",
+              "label": "End Date",
+              "path": "values.end_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "pay_date",
+              "label": "Pay Date",
+              "path": "values.pay_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Payroll Periods Form",
+          "title_i18n": {
+            "en": "Payroll Periods Form",
+            "id": "Payroll Periods Form"
+          }
+        }
+      ],
+      "title": "Payroll Periods Form",
+      "title_i18n": {
+        "en": "Payroll Periods Form",
+        "id": "Payroll Periods Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "start_date",
+          "label": "Start",
+          "path": "values.start_date"
+        },
+        {
+          "key": "end_date",
+          "label": "End",
+          "path": "values.end_date"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.periods.list",
+      "kind": "list",
+      "model_key": "payroll_period",
+      "required_permissions": [
+        "payroll_period.list"
+      ],
+      "title": "Payroll Periods",
+      "title_i18n": {
+        "en": "Payroll Periods",
+        "id": "Payroll Periods"
+      }
+    },
+    {
+      "key": "payroll.profiles.detail",
+      "kind": "detail",
+      "model_key": "employee_payroll_profile",
+      "required_permissions": [
+        "employee_payroll_profile.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "salary_structure_id",
+              "label": "Salary Structure",
+              "path": "values.salary_structure_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "values.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "tax_rule_id",
+              "label": "Tax Rule",
+              "path": "values.tax_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "contribution_rule_id",
+              "label": "Contribution Rule",
+              "path": "values.contribution_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "leave_deduction_daily_rate",
+              "label": "Leave Deduction Daily Rate",
+              "path": "values.leave_deduction_daily_rate",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reimbursement_in_payroll",
+              "label": "Reimbursement In Payroll",
+              "path": "values.reimbursement_in_payroll",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payroll Profiles Detail",
+      "title_i18n": {
+        "en": "Payroll Profiles Detail",
+        "id": "Payroll Profiles Detail"
+      }
+    },
+    {
+      "key": "payroll.profiles.form",
+      "kind": "form",
+      "model_key": "employee_payroll_profile",
+      "required_permissions": [
+        "employee_payroll_profile.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "salary_structure_id",
+              "label": "Salary Structure",
+              "path": "values.salary_structure_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "values.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "tax_rule_id",
+              "label": "Tax Rule",
+              "path": "values.tax_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "contribution_rule_id",
+              "label": "Contribution Rule",
+              "path": "values.contribution_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "leave_deduction_daily_rate",
+              "label": "Leave Deduction Daily Rate",
+              "path": "values.leave_deduction_daily_rate",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reimbursement_in_payroll",
+              "label": "Reimbursement In Payroll",
+              "path": "values.reimbursement_in_payroll",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Payroll Profiles Form",
+          "title_i18n": {
+            "en": "Payroll Profiles Form",
+            "id": "Payroll Profiles Form"
+          }
+        }
+      ],
+      "title": "Payroll Profiles Form",
+      "title_i18n": {
+        "en": "Payroll Profiles Form",
+        "id": "Payroll Profiles Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "values.employee_id"
+        },
+        {
+          "key": "salary_structure_id",
+          "label": "Structure",
+          "path": "values.salary_structure_id"
+        },
+        {
+          "key": "payment_method_code",
+          "label": "Method",
+          "path": "values.payment_method_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.profiles.list",
+      "kind": "list",
+      "model_key": "employee_payroll_profile",
+      "required_permissions": [
+        "employee_payroll_profile.list"
+      ],
+      "title": "Payroll Profiles",
+      "title_i18n": {
+        "en": "Payroll Profiles",
+        "id": "Payroll Profiles"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_run",
+      "key": "payroll.runs.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_period_id",
+              "label": "Payroll Period",
+              "path": "body.payload.payroll_period_id",
+              "type": "string"
+            },
+            {
+              "key": "period_start_date",
+              "label": "Start Date",
+              "path": "body.payload.period_start_date",
+              "type": "string"
+            },
+            {
+              "key": "period_end_date",
+              "label": "End Date",
+              "path": "body.payload.period_end_date",
+              "type": "string"
+            },
+            {
+              "key": "pay_date",
+              "label": "Pay Date",
+              "path": "body.payload.pay_date",
+              "type": "string"
+            },
+            {
+              "key": "employee_ids",
+              "label": "Employees",
+              "path": "body.payload.employee_ids",
+              "type": "object"
+            },
+            {
+              "key": "net_pay_total",
+              "label": "Net Pay Total",
+              "path": "body.payload.net_pay_total",
+              "type": "number"
+            },
+            {
+              "key": "payroll_lines",
+              "label": "Payroll Lines",
+              "path": "body.payload.payroll_lines",
+              "type": "object",
+              "widget": "json"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Payroll Run Detail",
+      "title_i18n": {
+        "en": "Payroll Run Detail",
+        "id": "Payroll Run Detail"
+      }
+    },
+    {
+      "document_type": "payroll_run",
+      "key": "payroll.runs.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_period_id",
+              "label": "Payroll Period",
+              "path": "body.payload.payroll_period_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "period_start_date",
+              "label": "Start Date",
+              "path": "body.payload.period_start_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "period_end_date",
+              "label": "End Date",
+              "path": "body.payload.period_end_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "pay_date",
+              "label": "Pay Date",
+              "path": "body.payload.pay_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employee_ids",
+              "label": "Employees",
+              "path": "body.payload.employee_ids",
+              "type": "object",
+              "widget": "taglist"
+            },
+            {
+              "key": "net_pay_total",
+              "label": "Net Pay Total",
+              "path": "body.payload.net_pay_total",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "payroll_lines",
+              "label": "Payroll Lines",
+              "path": "body.payload.payroll_lines",
+              "type": "object",
+              "widget": "json"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Payroll Run Form",
+      "title_i18n": {
+        "en": "Payroll Run Form",
+        "id": "Payroll Run Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Run",
+          "path": "header.number"
+        },
+        {
+          "key": "payroll_period_id",
+          "label": "Period",
+          "path": "body.payload.payroll_period_id"
+        },
+        {
+          "key": "pay_date",
+          "label": "Pay Date",
+          "path": "body.payload.pay_date"
+        },
+        {
+          "key": "employee_count",
+          "label": "Employees",
+          "path": "body.payload.employee_count"
+        },
+        {
+          "key": "net_pay_total",
+          "label": "Net Pay",
+          "path": "body.payload.net_pay_total"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_run",
+      "empty_state": "No Payroll Runs exist yet.",
+      "empty_state_i18n": {
+        "en": "No Payroll Runs exist yet.",
+        "id": "Belum ada Payroll Runs."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "processed",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.runs.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Payroll Runs",
+      "title_i18n": {
+        "en": "Payroll Runs",
+        "id": "Payroll Runs"
+      }
+    },
+    {
+      "key": "payroll.structure_lines.detail",
+      "kind": "detail",
+      "model_key": "salary_structure_line",
+      "required_permissions": [
+        "salary_structure_line.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "salary_structure_id",
+              "label": "Salary Structure",
+              "path": "values.salary_structure_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "component_code",
+              "label": "Component",
+              "path": "values.component_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "sequence",
+              "label": "Sequence",
+              "path": "values.sequence",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "formula_key",
+              "label": "Formula",
+              "path": "values.formula_key",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "fixed_amount",
+              "label": "Fixed Amount",
+              "path": "values.fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Structure Lines Detail",
+      "title_i18n": {
+        "en": "Structure Lines Detail",
+        "id": "Structure Lines Detail"
+      }
+    },
+    {
+      "key": "payroll.structure_lines.form",
+      "kind": "form",
+      "model_key": "salary_structure_line",
+      "required_permissions": [
+        "salary_structure_line.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "salary_structure_id",
+              "label": "Salary Structure",
+              "path": "values.salary_structure_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "component_code",
+              "label": "Component",
+              "path": "values.component_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "sequence",
+              "label": "Sequence",
+              "path": "values.sequence",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "formula_key",
+              "label": "Formula",
+              "path": "values.formula_key",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "fixed_amount",
+              "label": "Fixed Amount",
+              "path": "values.fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Structure Lines Form",
+          "title_i18n": {
+            "en": "Structure Lines Form",
+            "id": "Structure Lines Form"
+          }
+        }
+      ],
+      "title": "Structure Lines Form",
+      "title_i18n": {
+        "en": "Structure Lines Form",
+        "id": "Structure Lines Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "salary_structure_id",
+          "label": "Structure",
+          "path": "values.salary_structure_id"
+        },
+        {
+          "key": "component_code",
+          "label": "Component",
+          "path": "values.component_code"
+        },
+        {
+          "key": "formula_key",
+          "label": "Formula",
+          "path": "values.formula_key"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.structure_lines.list",
+      "kind": "list",
+      "model_key": "salary_structure_line",
+      "required_permissions": [
+        "salary_structure_line.list"
+      ],
+      "title": "Structure Lines",
+      "title_i18n": {
+        "en": "Structure Lines",
+        "id": "Structure Lines"
+      }
+    },
+    {
+      "key": "payroll.structures.detail",
+      "kind": "detail",
+      "model_key": "salary_structure",
+      "required_permissions": [
+        "salary_structure.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Salary Structures Detail",
+      "title_i18n": {
+        "en": "Salary Structures Detail",
+        "id": "Salary Structures Detail"
+      }
+    },
+    {
+      "key": "payroll.structures.form",
+      "kind": "form",
+      "model_key": "salary_structure",
+      "required_permissions": [
+        "salary_structure.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Salary Structures Form",
+          "title_i18n": {
+            "en": "Salary Structures Form",
+            "id": "Salary Structures Form"
+          }
+        }
+      ],
+      "title": "Salary Structures Form",
+      "title_i18n": {
+        "en": "Salary Structures Form",
+        "id": "Salary Structures Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "currency_code",
+          "label": "Currency",
+          "path": "values.currency_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.structures.list",
+      "kind": "list",
+      "model_key": "salary_structure",
+      "required_permissions": [
+        "salary_structure.list"
+      ],
+      "title": "Salary Structures",
+      "title_i18n": {
+        "en": "Salary Structures",
+        "id": "Salary Structures"
+      }
+    },
+    {
+      "key": "payroll.tax_rules.detail",
+      "kind": "detail",
+      "model_key": "payroll_tax_rule",
+      "required_permissions": [
+        "payroll_tax_rule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employee_rate_percent",
+              "label": "Employee Rate",
+              "path": "values.employee_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employer_rate_percent",
+              "label": "Employer Rate",
+              "path": "values.employer_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "fixed_amount",
+              "label": "Fixed Amount",
+              "path": "values.fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "threshold_amount",
+              "label": "Threshold",
+              "path": "values.threshold_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Tax Rules Detail",
+      "title_i18n": {
+        "en": "Tax Rules Detail",
+        "id": "Tax Rules Detail"
+      }
+    },
+    {
+      "key": "payroll.tax_rules.form",
+      "kind": "form",
+      "model_key": "payroll_tax_rule",
+      "required_permissions": [
+        "payroll_tax_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employee_rate_percent",
+              "label": "Employee Rate",
+              "path": "values.employee_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "employer_rate_percent",
+              "label": "Employer Rate",
+              "path": "values.employer_rate_percent",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "fixed_amount",
+              "label": "Fixed Amount",
+              "path": "values.fixed_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "threshold_amount",
+              "label": "Threshold",
+              "path": "values.threshold_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Tax Rules Form",
+          "title_i18n": {
+            "en": "Tax Rules Form",
+            "id": "Tax Rules Form"
+          }
+        }
+      ],
+      "title": "Tax Rules Form",
+      "title_i18n": {
+        "en": "Tax Rules Form",
+        "id": "Tax Rules Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "employee_rate_percent",
+          "label": "Employee Rate",
+          "path": "values.employee_rate_percent"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive",
+            "open",
+            "locked",
+            "processed"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "payroll.tax_rules.list",
+      "kind": "list",
+      "model_key": "payroll_tax_rule",
+      "required_permissions": [
+        "payroll_tax_rule.list"
+      ],
+      "title": "Tax Rules",
+      "title_i18n": {
+        "en": "Tax Rules",
+        "id": "Tax Rules"
       }
     },
     {

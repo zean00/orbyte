@@ -61,7 +61,7 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, deliverySvc *application.DeliveryCoreService, returnsSvc *application.ReturnsCoreService, supplierReturnsSvc *application.SupplierReturnsCoreService, productionSvc *application.ProductionCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, deliverySvc *application.DeliveryCoreService, returnsSvc *application.ReturnsCoreService, supplierReturnsSvc *application.SupplierReturnsCoreService, productionSvc *application.ProductionCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, payrollSvc *application.EmployeePayrollCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	_ = traceabilitySvc
 	if commercialSvc != nil {
 		mux.HandleFunc("POST /commercial/products/", func(w http.ResponseWriter, r *http.Request) {
@@ -697,6 +697,8 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			req.Payload = productionSvc.NormalizePayload(req.Type, req.Payload)
 		} else if recallSvc != nil && isRecallManagedType(req.Type) {
 			req.Payload = recallSvc.NormalizePayload(req.Type, req.Payload)
+		} else if payrollSvc != nil && isPayrollManagedType(req.Type) {
+			req.Payload = payrollSvc.NormalizePayload(req.Type, req.Payload)
 		}
 		p, ok := requireAuthorization(w, r, ident, "document.create", req.LocationID, "")
 		if !ok {
@@ -907,7 +909,7 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			respondError(w, shared.Forbidden("manual journal draft updates are not allowed"))
 			return
 		}
-		if commercialDocumentUpdateLocked(current.Header.Type, current.Header.Status) || procurementDocumentUpdateLocked(current.Header.Type, current.Header.Status) || inventoryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || deliveryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || returnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || supplierReturnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || productionDocumentUpdateLocked(current.Header.Type, current.Header.Status) || recallDocumentUpdateLocked(current.Header.Type, current.Header.Status) {
+		if commercialDocumentUpdateLocked(current.Header.Type, current.Header.Status) || procurementDocumentUpdateLocked(current.Header.Type, current.Header.Status) || inventoryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || deliveryDocumentUpdateLocked(current.Header.Type, current.Header.Status) || returnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || supplierReturnsDocumentUpdateLocked(current.Header.Type, current.Header.Status) || productionDocumentUpdateLocked(current.Header.Type, current.Header.Status) || recallDocumentUpdateLocked(current.Header.Type, current.Header.Status) || payrollDocumentUpdateLocked(current.Header.Type, current.Header.Status) {
 			respondError(w, shared.Conflict("business documents can only be edited while draft or rejected"))
 			return
 		}
@@ -934,6 +936,8 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			req.Payload = productionSvc.NormalizePayload(current.Header.Type, req.Payload)
 		} else if recallSvc != nil && isRecallManagedType(current.Header.Type) {
 			req.Payload = recallSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if payrollSvc != nil && isPayrollManagedType(current.Header.Type) {
+			req.Payload = payrollSvc.NormalizePayload(current.Header.Type, req.Payload)
 		}
 		if err := validateDocumentWrite(fieldSecurity, ident, p, current, req.Payload, "", "api"); err != nil {
 			respondError(w, err)
@@ -1584,6 +1588,15 @@ func isRecallManagedType(documentType string) bool {
 	}
 }
 
+func isPayrollManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "payroll_run", "payroll_adjustment", "payroll_payment_batch", "payroll_payment":
+		return true
+	default:
+		return false
+	}
+}
+
 func recallDocumentUpdateLocked(documentType, status string) bool {
 	normalizedType := strings.ToLower(strings.TrimSpace(documentType))
 	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
@@ -1593,6 +1606,16 @@ func recallDocumentUpdateLocked(documentType, status string) bool {
 	switch normalizedType {
 	case "recall_case", "recall_action":
 		return normalizedStatus != "draft" && normalizedStatus != "rejected"
+	default:
+		return false
+	}
+}
+
+func payrollDocumentUpdateLocked(documentType, status string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "payroll_run", "payroll_adjustment", "payroll_payment_batch", "payroll_payment":
+		normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+		return normalizedStatus != "" && normalizedStatus != "draft" && normalizedStatus != "rejected"
 	default:
 		return false
 	}

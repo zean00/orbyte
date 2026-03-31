@@ -34,6 +34,10 @@ func employeeSpendCoreKernelPackManifests() []module.Manifest {
 	return []module.Manifest{employeeSpendCoreKernelPackManifest()}
 }
 
+func employeePayrollCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{employeePayrollCoreKernelPackManifest()}
+}
+
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
 	acpDefinition, _ := config.NewService().Definition("platform.acp")

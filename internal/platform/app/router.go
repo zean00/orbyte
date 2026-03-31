@@ -36,6 +36,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 		Production:      graph.productionCore,
 		Traceability:    graph.traceabilityCore,
 		Recall:          graph.recallCore,
+		Payroll:         graph.employeePayroll,
 		Policy:          graph.policy,
 		Search:          graph.search,
 		FieldSecurity:   graph.fieldSecurity,

@@ -43,6 +43,7 @@ func builtInModulePacks() []modulePack {
 		staticModulePack{manifests: retailFinanceCoreKernelPackManifests},
 		staticModulePack{manifests: treasuryCoreKernelPackManifests},
 		staticModulePack{manifests: employeeSpendCoreKernelPackManifests},
+		staticModulePack{manifests: employeePayrollCoreKernelPackManifests},
 		staticModulePack{manifests: procurementCoreKernelPackManifests},
 		staticModulePack{manifests: inventoryCoreKernelPackManifests},
 		staticModulePack{manifests: fulfillmentCoreKernelPackManifests},
