@@ -16,7 +16,7 @@ import (
 )
 
 func registerAdminCoreRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, acpSvc *acp.Service, mcpServer *mcp.Server) {
-	registerAdminOverviewRoutes(mux, cfg, org, ident, modules, workflowSvc, policySvc, acpSvc, mcpServer)
+	registerAdminOverviewRoutes(mux, cfg, org, ident, modules, workflowSvc, auditSvc, policySvc, acpSvc, mcpServer)
 	registerAdminHierarchyRoutes(mux, ident)
 	registerAdminWorkflowRoutes(mux, ident, workflowSvc, auditSvc, policySvc, obsSvc)
 }

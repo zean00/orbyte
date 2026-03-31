@@ -25,6 +25,9 @@ type ToolInventoryItem struct {
 	RequiresApproval     bool               `json:"requires_approval,omitempty"`
 	GovernanceTags       []string           `json:"governance_tags,omitempty"`
 	BusinessDomains      []string           `json:"business_domains,omitempty"`
+	PolicyState          string             `json:"policy_state,omitempty"`
+	PolicyReason         string             `json:"policy_reason,omitempty"`
+	EffectiveVisibility  string             `json:"effective_visibility,omitempty"`
 	Contract             ContractDescriptor `json:"contract,omitempty"`
 }
 
@@ -53,12 +56,42 @@ type AppInventoryItem struct {
 }
 
 type runtimeConfig struct {
-	Enabled    bool
-	ToolStates map[string]bool
+	Enabled                    bool
+	ToolStates                 map[string]bool
+	GovernanceEnabled          bool
+	DefaultActionMode          string
+	BlockedActionClasses       []string
+	BlockedToolKeys            []string
+	BlockedDocumentTypes       []string
+	AllowedSubmitDocumentTypes []string
+	DomainOverrides            map[string]domainGovernanceOverride
+}
+
+type RuntimeConfigSnapshot struct {
+	Enabled                    bool
+	GovernanceEnabled          bool
+	DefaultActionMode          string
+	BlockedActionClasses       []string
+	BlockedToolKeys            []string
+	BlockedDocumentTypes       []string
+	AllowedSubmitDocumentTypes []string
 }
 
 func (s *Server) MCPEnabled() bool {
 	return s.mcpRuntimeConfig().Enabled
+}
+
+func (s *Server) MCPRuntimeConfig() RuntimeConfigSnapshot {
+	cfg := s.mcpRuntimeConfig()
+	return RuntimeConfigSnapshot{
+		Enabled:                    cfg.Enabled,
+		GovernanceEnabled:          cfg.GovernanceEnabled,
+		DefaultActionMode:          cfg.DefaultActionMode,
+		BlockedActionClasses:       append([]string(nil), cfg.BlockedActionClasses...),
+		BlockedToolKeys:            append([]string(nil), cfg.BlockedToolKeys...),
+		BlockedDocumentTypes:       append([]string(nil), cfg.BlockedDocumentTypes...),
+		AllowedSubmitDocumentTypes: append([]string(nil), cfg.AllowedSubmitDocumentTypes...),
+	}
 }
 
 func (s *Server) ToolEnabled(key string) bool {
@@ -78,6 +111,15 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 	for _, reg := range s.mustBuiltInToolRegistrations() {
 		def := reg.definition
 		contract := builtInToolContract(def.name, def.permission, def.contract)
+		descriptor := s.decorateToolDescriptorWithGovernance(ToolDescriptor{
+			Name:        def.name,
+			Title:       def.title,
+			Description: def.description,
+			ModuleKey:   "platform.core",
+			SourceType:  "built_in",
+			Scope:       builtInToolScope(def.name),
+			Contract:    contract,
+		}, nil)
 		items = append(items, ToolInventoryItem{
 			Key:                  def.name,
 			Title:                def.title,
@@ -95,6 +137,9 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 			RequiresApproval:     contract.RequiresApproval,
 			GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
 			BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+			PolicyState:          descriptor.PolicyState,
+			PolicyReason:         descriptor.PolicyReason,
+			EffectiveVisibility:  descriptor.EffectiveVisibility,
 			Contract:             contract,
 		})
 	}
@@ -102,6 +147,15 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 		contract := builtInToolContract(def.Name, firstString(def.RequiredPermissions), ContractDescriptor{
 			RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
 		})
+		descriptor := s.decorateToolDescriptorWithGovernance(ToolDescriptor{
+			Name:        def.Name,
+			Title:       def.Title,
+			Description: def.Description,
+			ModuleKey:   def.ModuleKey,
+			SourceType:  "synthetic",
+			Scope:       scopeForModule(def.ModuleKey),
+			Contract:    contract,
+		}, nil)
 		items = append(items, ToolInventoryItem{
 			Key:                  def.Name,
 			Title:                def.Title,
@@ -119,6 +173,9 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 			RequiresApproval:     contract.RequiresApproval,
 			GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
 			BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+			PolicyState:          descriptor.PolicyState,
+			PolicyReason:         descriptor.PolicyReason,
+			EffectiveVisibility:  descriptor.EffectiveVisibility,
 			Contract:             contract,
 		})
 	}
@@ -132,6 +189,15 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 					defaultToolIdempotency(def.Key, def.Operation),
 					"mcp.tool."+strings.TrimSpace(def.Key),
 				)
+				descriptor := s.decorateToolDescriptorWithGovernance(ToolDescriptor{
+					Name:        def.Key,
+					Title:       def.Title,
+					Description: def.Description,
+					ModuleKey:   detail.Manifest.Key,
+					SourceType:  "module",
+					Scope:       scopeForModule(detail.Manifest.Key),
+					Contract:    contract,
+				}, nil)
 				items = append(items, ToolInventoryItem{
 					Key:                  def.Key,
 					Title:                def.Title,
@@ -149,6 +215,9 @@ func (s *Server) ToolInventory() []ToolInventoryItem {
 					RequiresApproval:     contract.RequiresApproval,
 					GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
 					BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+					PolicyState:          descriptor.PolicyState,
+					PolicyReason:         descriptor.PolicyReason,
+					EffectiveVisibility:  descriptor.EffectiveVisibility,
 					Contract:             contract,
 				})
 			}
@@ -243,7 +312,17 @@ func (s *Server) toolDefined(name string) bool {
 }
 
 func (s *Server) mcpRuntimeConfig() runtimeConfig {
-	cfg := runtimeConfig{Enabled: true, ToolStates: map[string]bool{}}
+	cfg := runtimeConfig{
+		Enabled:                    true,
+		ToolStates:                 map[string]bool{},
+		GovernanceEnabled:          false,
+		DefaultActionMode:          "draft_only",
+		BlockedActionClasses:       []string{},
+		BlockedToolKeys:            []string{},
+		BlockedDocumentTypes:       []string{},
+		AllowedSubmitDocumentTypes: []string{},
+		DomainOverrides:            map[string]domainGovernanceOverride{},
+	}
 	if s == nil || s.config == nil {
 		return cfg
 	}
@@ -255,13 +334,18 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	if ok {
 		cfg.Enabled = rawEnabled
 	}
+	if rawEnabled, ok := value.Value["governance_enabled"].(bool); ok {
+		cfg.GovernanceEnabled = rawEnabled
+	}
+	if rawMode, ok := value.Value["default_action_mode"].(string); ok && strings.TrimSpace(rawMode) != "" {
+		cfg.DefaultActionMode = strings.TrimSpace(rawMode)
+	}
 	switch raw := value.Value["tool_states_json"].(type) {
 	case string:
 		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" {
-			return cfg
+		if trimmed != "" {
+			_ = json.Unmarshal([]byte(trimmed), &cfg.ToolStates)
 		}
-		_ = json.Unmarshal([]byte(trimmed), &cfg.ToolStates)
 	case map[string]any:
 		for key, item := range raw {
 			flag, ok := item.(bool)
@@ -271,5 +355,10 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 			cfg.ToolStates[strings.TrimSpace(key)] = flag
 		}
 	}
+	cfg.BlockedActionClasses = parseStringList(value.Value["blocked_action_classes_json"])
+	cfg.BlockedToolKeys = parseStringList(value.Value["blocked_tool_keys_json"])
+	cfg.BlockedDocumentTypes = parseStringList(value.Value["blocked_document_types_json"])
+	cfg.AllowedSubmitDocumentTypes = parseStringList(value.Value["allowed_submit_document_types_json"])
+	cfg.DomainOverrides = parseDomainOverrides(value.Value["domain_policy_overrides_json"])
 	return cfg
 }

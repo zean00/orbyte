@@ -81,10 +81,10 @@ func defaultToolSideEffectClass(name, operation string) string {
 func defaultToolActionClass(name, operation string) string {
 	key := strings.ToLower(strings.TrimSpace(name + " " + operation))
 	switch {
-	case strings.Contains(key, ".draft."), strings.Contains(key, ".draft_create"), strings.Contains(key, ".draft_update"):
-		return "draft"
 	case strings.Contains(key, ".submit"), strings.Contains(key, ".publish"), strings.Contains(key, ".approve"):
 		return "submit"
+	case strings.Contains(key, ".draft."), strings.Contains(key, ".draft_create"), strings.Contains(key, ".draft_update"):
+		return "draft"
 	case strings.Contains(key, ".create"), strings.Contains(key, ".update"), strings.Contains(key, ".save"), strings.Contains(key, ".delete"), strings.Contains(key, ".enable"), strings.Contains(key, ".disable"), strings.Contains(key, ".replay"), strings.Contains(key, ".restore"), strings.Contains(key, ".apply"), strings.Contains(key, ".commit"):
 		return "controlled_mutation"
 	case strings.Contains(key, ".summary"), strings.Contains(key, ".map"), strings.Contains(key, ".timeline"), strings.Contains(key, ".analytics"), strings.Contains(key, ".health"), strings.Contains(key, ".relationships"), strings.Contains(key, ".review"), strings.Contains(key, ".advisor"), strings.Contains(key, ".search"), strings.Contains(key, ".query"):
@@ -287,6 +287,14 @@ func (s *Server) toolDescriptorByName(actor ActorContext, name string) (ToolDesc
 
 func (s *Server) ToolDescriptor(name string, actor ActorContext) (ToolDescriptor, bool) {
 	return s.toolDescriptorByName(actor, name)
+}
+
+func (s *Server) ToolDescriptorForArguments(name string, actor ActorContext, arguments map[string]any) (ToolDescriptor, bool) {
+	descriptor, ok := s.toolDescriptorByName(actor, name)
+	if !ok {
+		return ToolDescriptor{}, false
+	}
+	return s.decorateToolDescriptorWithGovernance(descriptor, arguments), true
 }
 
 func (s *Server) resourceDescriptorByURI(actor ActorContext, uri string) (ResourceDescriptor, bool) {

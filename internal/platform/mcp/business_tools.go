@@ -64,7 +64,7 @@ func (s *Server) listSyntheticTools(actor ActorContext) []ToolDescriptor {
 		if !s.ToolEnabled(def.Name) || !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
 			continue
 		}
-		items = append(items, ToolDescriptor{
+		items = append(items, s.decorateToolDescriptorWithGovernance(ToolDescriptor{
 			Name:        def.Name,
 			Title:       def.Title,
 			Description: def.Description,
@@ -73,21 +73,21 @@ func (s *Server) listSyntheticTools(actor ActorContext) []ToolDescriptor {
 			Scope:       scopeForModule(def.ModuleKey),
 			InputSchema: cloneMap(def.InputSchema),
 			Contract: ContractDescriptor{
-				Version:             ContractVersion,
-				Stability:           "stable",
-				SideEffectClass:     defaultToolSideEffectClass(def.Name, ""),
-				Idempotency:         defaultToolIdempotency(def.Name, ""),
-				AuditAction:         "mcp.tool." + strings.TrimSpace(def.Name),
-				ActionClass:         defaultToolActionClass(def.Name, ""),
-				RiskClass:           defaultToolRiskClass(defaultToolActionClass(def.Name, ""), def.Name, ""),
-				DraftOnly:           defaultToolActionClass(def.Name, "") == "draft",
+				Version:              ContractVersion,
+				Stability:            "stable",
+				SideEffectClass:      defaultToolSideEffectClass(def.Name, ""),
+				Idempotency:          defaultToolIdempotency(def.Name, ""),
+				AuditAction:          "mcp.tool." + strings.TrimSpace(def.Name),
+				ActionClass:          defaultToolActionClass(def.Name, ""),
+				RiskClass:            defaultToolRiskClass(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				DraftOnly:            defaultToolActionClass(def.Name, "") == "draft",
 				RequiresConfirmation: defaultToolRequiresConfirmation(defaultToolActionClass(def.Name, ""), def.Name, ""),
-				RequiresApproval:    defaultToolRequiresApproval(defaultToolActionClass(def.Name, ""), def.Name, ""),
-				GovernanceTags:      defaultToolGovernanceTags(defaultToolActionClass(def.Name, ""), def.Name, ""),
-				BusinessDomains:     defaultToolBusinessDomains(def.Name),
-				RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
+				RequiresApproval:     defaultToolRequiresApproval(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				GovernanceTags:       defaultToolGovernanceTags(defaultToolActionClass(def.Name, ""), def.Name, ""),
+				BusinessDomains:      defaultToolBusinessDomains(def.Name),
+				RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
 			},
-		})
+		}, nil))
 	}
 	return items
 }

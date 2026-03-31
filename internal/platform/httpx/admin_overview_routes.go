@@ -5,9 +5,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
+	"time"
 
 	"orbyte/internal/platform/acp"
+	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/mcp"
@@ -18,7 +21,7 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, policySvc *policy.Service, acpSvc *acp.Service, mcpServer *mcp.Server) {
+func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, acpSvc *acp.Service, mcpServer *mcp.Server) {
 	mux.HandleFunc("GET /admin/api/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read")
 		if !ok {
@@ -96,7 +99,7 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, buildAdminMCPPayload(r, cfg, mcpServer))
+		respondJSON(w, http.StatusOK, buildAdminMCPPayload(r, cfg, auditSvc, mcpServer))
 	})
 
 	mux.HandleFunc("PUT /admin/api/mcp/tools/", func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +149,7 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 			"tool_key": toolKey,
 			"enabled":  req.Enabled,
 			"entry":    entry,
-			"runtime":  buildAdminMCPPayload(r, cfg, mcpServer),
+			"runtime":  buildAdminMCPPayload(r, cfg, auditSvc, mcpServer),
 		})
 	})
 
@@ -173,7 +176,7 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 
 }
 
-func buildAdminMCPPayload(r *http.Request, cfg *config.Service, server *mcp.Server) map[string]any {
+func buildAdminMCPPayload(r *http.Request, cfg *config.Service, auditSvc *audit.Service, server *mcp.Server) map[string]any {
 	address := ":8080"
 	if value, ok := cfg.Resolve("platform.http", "", ""); ok {
 		if current, ok := value.Value["address"].(string); ok && strings.TrimSpace(current) != "" {
@@ -181,7 +184,12 @@ func buildAdminMCPPayload(r *http.Request, cfg *config.Service, server *mcp.Serv
 		}
 	}
 	baseURL := requestBaseURL(r)
+	definition, _ := cfg.Definition("platform.mcp")
+	entry, _ := cfg.Resolve("platform.mcp", "", "")
+	policySummary, activity := buildAdminMCPGovernancePayload(server, auditSvc)
 	return map[string]any{
+		"definition": definition,
+		"entry":      entry,
 		"runtime": map[string]any{
 			"enabled":          server != nil && server.MCPEnabled(),
 			"http_address":     address,
@@ -196,10 +204,85 @@ func buildAdminMCPPayload(r *http.Request, cfg *config.Service, server *mcp.Serv
 				{"key": "analytics_stream", "label": "Analytics Stream", "path": "/mcp/analytics/events/analytics/snapshot", "url": baseURL + "/mcp/analytics/events/analytics/snapshot"},
 			},
 		},
-		"tools":     toolInventoryPayload(server),
-		"resources": resourceInventoryPayload(server),
-		"apps":      appInventoryPayload(server),
+		"policy_summary":      policySummary,
+		"governance_activity": activity,
+		"tools":               toolInventoryPayload(server),
+		"resources":           resourceInventoryPayload(server),
+		"apps":                appInventoryPayload(server),
 	}
+}
+
+func buildAdminMCPGovernancePayload(server *mcp.Server, auditSvc *audit.Service) (map[string]any, []map[string]any) {
+	summary := map[string]any{
+		"governance_enabled":                  true,
+		"default_action_mode":                 "draft_only",
+		"blocked_action_classes_count":        0,
+		"blocked_tool_keys_count":             0,
+		"blocked_document_types_count":        0,
+		"allowed_submit_document_types_count": 0,
+		"draft_enabled_tools":                 0,
+		"submit_allowlisted_tools":            0,
+		"blocked_attempts":                    0,
+	}
+	if server == nil {
+		return summary, []map[string]any{}
+	}
+	cfg := server.MCPRuntimeConfig()
+	summary["governance_enabled"] = cfg.GovernanceEnabled
+	summary["default_action_mode"] = cfg.DefaultActionMode
+	summary["blocked_action_classes_count"] = len(cfg.BlockedActionClasses)
+	summary["blocked_tool_keys_count"] = len(cfg.BlockedToolKeys)
+	summary["blocked_document_types_count"] = len(cfg.BlockedDocumentTypes)
+	summary["allowed_submit_document_types_count"] = len(cfg.AllowedSubmitDocumentTypes)
+	for _, item := range server.ToolInventory() {
+		if item.Enabled && item.ActionClass == "draft" && item.PolicyState != "blocked" {
+			summary["draft_enabled_tools"] = summary["draft_enabled_tools"].(int) + 1
+		}
+		if item.Enabled && item.ActionClass == "submit" && item.PolicyState != "blocked" {
+			summary["submit_allowlisted_tools"] = summary["submit_allowlisted_tools"].(int) + 1
+		}
+	}
+	if auditSvc == nil {
+		return summary, []map[string]any{}
+	}
+	rows := make([]map[string]any, 0)
+	for _, item := range auditSvc.List() {
+		if strings.TrimSpace(item.TargetType) != "mcp_tool" {
+			continue
+		}
+		policyState := adminStringValue(item.Metadata["policy_state"])
+		if policyState == "" && adminStringValue(item.Metadata["jsonrpc_method"]) != "tools/call" {
+			continue
+		}
+		if policyState == "blocked" {
+			summary["blocked_attempts"] = summary["blocked_attempts"].(int) + 1
+		}
+		rows = append(rows, map[string]any{
+			"occurred_at":    item.OccurredAt,
+			"actor_id":       item.ActorID,
+			"tool_name":      item.TargetID,
+			"status":         adminStringValue(item.Metadata["status"]),
+			"policy_state":   policyState,
+			"policy_reason":  adminStringValue(item.Metadata["policy_reason"]),
+			"action_class":   adminStringValue(item.Metadata["action_class"]),
+			"risk_class":     adminStringValue(item.Metadata["risk_class"]),
+			"effective_user": adminStringValue(item.Metadata["effective_user_id"]),
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		left, _ := rows[i]["occurred_at"].(time.Time)
+		right, _ := rows[j]["occurred_at"].(time.Time)
+		return left.After(right)
+	})
+	if len(rows) > 20 {
+		rows = rows[:20]
+	}
+	return summary, rows
+}
+
+func adminStringValue(value any) string {
+	text, _ := value.(string)
+	return strings.TrimSpace(text)
 }
 
 func requestBaseURL(r *http.Request) string {

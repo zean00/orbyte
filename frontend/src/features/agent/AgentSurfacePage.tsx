@@ -25,6 +25,7 @@ type ACPApproval = {
   status: string;
   title: string;
   description?: string;
+  payload?: Record<string, unknown>;
 };
 
 type ACPEvent = {
@@ -54,6 +55,9 @@ type MCPTool = {
   description?: string;
   moduleKey?: string;
   sourceType?: string;
+  policyState?: string;
+  policyReason?: string;
+  effectiveVisibility?: string;
   contract?: {
     actionClass?: string;
     riskClass?: string;
@@ -523,10 +527,16 @@ export default function AgentSurfacePage() {
                                 item.sourceType,
                                 item.contract?.actionClass,
                                 item.contract?.riskClass,
+                                item.policyState,
                               ]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </div>
+                            {item.policyReason ? (
+                              <div className="mt-1 text-xs text-muted">
+                                {item.policyReason}
+                              </div>
+                            ) : null}
                             {item.contract?.businessDomains?.length ? (
                               <div className="mt-1 text-xs text-muted">
                                 {item.contract.businessDomains.join(", ")}
@@ -554,10 +564,16 @@ export default function AgentSurfacePage() {
                                 item.sourceType,
                                 item.contract?.actionClass,
                                 item.contract?.riskClass,
+                                item.policyState,
                               ]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </div>
+                            {item.policyReason ? (
+                              <div className="mt-1 text-xs text-muted">
+                                {item.policyReason}
+                              </div>
+                            ) : null}
                             {item.contract?.businessDomains?.length ? (
                               <div className="mt-1 text-xs text-muted">
                                 {item.contract.businessDomains.join(", ")}
@@ -584,6 +600,7 @@ export default function AgentSurfacePage() {
                               {[
                                 item.contract?.actionClass,
                                 item.contract?.riskClass,
+                                item.policyState,
                                 item.contract?.draftOnly ? "draft-only" : "",
                                 item.contract?.requiresConfirmation
                                   ? "confirm"
@@ -595,6 +612,11 @@ export default function AgentSurfacePage() {
                                 .filter(Boolean)
                                 .join(" · ")}
                             </div>
+                            {item.policyReason ? (
+                              <div className="mt-1 text-xs text-muted">
+                                {item.policyReason}
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -618,6 +640,22 @@ export default function AgentSurfacePage() {
                         {item.description ? (
                           <p className="mt-1 text-xs text-muted">
                             {item.description}
+                          </p>
+                        ) : null}
+                        {item.payload ? (
+                          <div className="mt-2 text-[11px] uppercase tracking-[0.14em] text-muted">
+                            {[
+                              String(item.payload.action_class || ""),
+                              String(item.payload.risk_class || ""),
+                              String(item.payload.policy_state || ""),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        ) : null}
+                        {item.payload?.policy_reason ? (
+                          <p className="mt-1 text-xs text-muted">
+                            {String(item.payload.policy_reason)}
                           </p>
                         ) : null}
                         <div className="mt-3 flex gap-2">

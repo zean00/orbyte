@@ -35,7 +35,7 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 			if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
 				continue
 			}
-			items = append(items, ToolDescriptor{
+			items = append(items, s.decorateToolDescriptorWithGovernance(ToolDescriptor{
 				Name:        def.Key,
 				Title:       def.Title,
 				Description: def.Description,
@@ -50,7 +50,7 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 					defaultToolIdempotency(def.Key, def.Operation),
 					"mcp.tool."+strings.TrimSpace(def.Key),
 				),
-			})
+			}, nil))
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
@@ -190,6 +190,12 @@ func (s *Server) executeTool(ctx context.Context, actor ActorContext, name strin
 	}
 	if s.toolDefined(strings.TrimSpace(name)) && !s.ToolEnabled(strings.TrimSpace(name)) {
 		return nil, fmt.Errorf("tool is disabled")
+	}
+	if descriptor, ok := s.ToolDescriptor(strings.TrimSpace(name), actor); ok {
+		evaluation := s.evaluateToolGovernance(descriptor, arguments)
+		if !evaluation.Allowed {
+			return nil, fmt.Errorf("tool is blocked by policy: %s", firstNonEmpty(evaluation.PolicyReason, "blocked"))
+		}
 	}
 	if result, ok, err := s.callBuiltInTool(actor, strings.TrimSpace(name), arguments); ok {
 		return result, err

@@ -594,6 +594,18 @@ function MCPAdminPage({
   payload: Record<string, unknown> | null;
 }) {
   const runtime = ((payload?.runtime || {}) as Record<string, unknown>) || {};
+  const entry = (payload?.entry || {}) as Record<string, unknown>;
+  const [runtimeState, setRuntimeState] = useState(runtime);
+  const [policySummaryState, setPolicySummaryState] = useState(
+    ((payload?.policy_summary || {}) as Record<string, unknown>) || {},
+  );
+  const [governanceActivityState, setGovernanceActivityState] = useState(
+    asItems({
+      items: payload?.governance_activity as
+        | Array<Record<string, unknown>>
+        | undefined,
+    }),
+  );
   const [tools, setTools] = useState(
     decorateMcpTools(
       asItems({
@@ -603,8 +615,22 @@ function MCPAdminPage({
   );
   const [busyKey, setBusyKey] = useState("");
   const [message, setMessage] = useState("");
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [governanceEnabled, setGovernanceEnabled] = useState(
+    Boolean(resolvePath(entry, "value.governance_enabled")),
+  );
+  const [defaultActionMode, setDefaultActionMode] = useState(
+    String(resolvePath(entry, "value.default_action_mode") || "draft_only"),
+  );
+  const [blockedActionClasses, setBlockedActionClasses] = useState("[]");
+  const [blockedToolKeys, setBlockedToolKeys] = useState("[]");
+  const [blockedDocumentTypes, setBlockedDocumentTypes] = useState("[]");
+  const [allowedSubmitDocumentTypes, setAllowedSubmitDocumentTypes] =
+    useState("[]");
+  const [domainPolicyOverrides, setDomainPolicyOverrides] = useState("{}");
 
   useEffect(() => {
+    setRuntimeState(runtime);
     setTools(
       decorateMcpTools(
         asItems({
@@ -612,7 +638,41 @@ function MCPAdminPage({
         }),
       ),
     );
-  }, [payload]);
+    setPolicySummaryState(
+      ((payload?.policy_summary || {}) as Record<string, unknown>) || {},
+    );
+    setGovernanceActivityState(
+      asItems({
+        items: payload?.governance_activity as
+          | Array<Record<string, unknown>>
+          | undefined,
+      }),
+    );
+  }, [payload, runtime]);
+
+  useEffect(() => {
+    setGovernanceEnabled(Boolean(resolvePath(entry, "value.governance_enabled")));
+    setDefaultActionMode(
+      String(resolvePath(entry, "value.default_action_mode") || "draft_only"),
+    );
+    setBlockedActionClasses(
+      String(resolvePath(entry, "value.blocked_action_classes_json") || "[]"),
+    );
+    setBlockedToolKeys(
+      String(resolvePath(entry, "value.blocked_tool_keys_json") || "[]"),
+    );
+    setBlockedDocumentTypes(
+      String(resolvePath(entry, "value.blocked_document_types_json") || "[]"),
+    );
+    setAllowedSubmitDocumentTypes(
+      String(
+        resolvePath(entry, "value.allowed_submit_document_types_json") || "[]",
+      ),
+    );
+    setDomainPolicyOverrides(
+      String(resolvePath(entry, "value.domain_policy_overrides_json") || "{}"),
+    );
+  }, [entry]);
 
   const groupedCounts = useMemo(() => {
     const actionClasses = new Set<string>();
@@ -646,6 +706,7 @@ function MCPAdminPage({
         },
       );
       const nextRuntime = (response.runtime || {}) as Record<string, unknown>;
+      setRuntimeState(nextRuntime);
       setTools(
         decorateMcpTools(
           asItems({
@@ -656,12 +717,86 @@ function MCPAdminPage({
         ),
       );
       setMessage(`Tool ${enabled ? "disabled" : "enabled"}.`);
+      setPolicySummaryState(
+        ((nextRuntime.policy_summary || {}) as Record<string, unknown>) || {},
+      );
+      setGovernanceActivityState(
+        asItems({
+          items: nextRuntime.governance_activity as
+            | Array<Record<string, unknown>>
+            | undefined,
+        }),
+      );
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to update tool state.",
       );
     } finally {
       setBusyKey("");
+    }
+  }
+
+  async function saveGovernance() {
+    setPolicyBusy(true);
+    setMessage("");
+    try {
+      JSON.parse(blockedActionClasses);
+      JSON.parse(blockedToolKeys);
+      JSON.parse(blockedDocumentTypes);
+      JSON.parse(allowedSubmitDocumentTypes);
+      JSON.parse(domainPolicyOverrides);
+      await mutateJson<Record<string, unknown>>(
+        "/admin/api/config/entries/platform.mcp/value",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            scope: normalizeEditorScope(entry.source_scope),
+            scope_id: normalizeEditorScopeID(
+              entry.source_scope,
+              entry.source_scope_id,
+            ),
+            value: {
+              enabled: Boolean(runtimeState.enabled),
+              tool_states_json: buildMcpToolStatesJSON(tools),
+              governance_enabled: governanceEnabled,
+              default_action_mode: defaultActionMode,
+              blocked_action_classes_json: blockedActionClasses,
+              blocked_tool_keys_json: blockedToolKeys,
+              blocked_document_types_json: blockedDocumentTypes,
+              allowed_submit_document_types_json: allowedSubmitDocumentTypes,
+              domain_policy_overrides_json: domainPolicyOverrides,
+            },
+          }),
+        },
+      );
+      const nextRuntime = await fetchJson<Record<string, unknown>>("/admin/api/mcp");
+      setRuntimeState(nextRuntime);
+      setTools(
+        decorateMcpTools(
+          asItems({
+            items: nextRuntime.tools as Array<Record<string, unknown>> | undefined,
+          }),
+        ),
+      );
+      setPolicySummaryState(
+        ((nextRuntime.policy_summary || {}) as Record<string, unknown>) || {},
+      );
+      setGovernanceActivityState(
+        asItems({
+          items: nextRuntime.governance_activity as
+            | Array<Record<string, unknown>>
+            | undefined,
+        }),
+      );
+      setMessage("MCP governance policy updated.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to update MCP governance policy.",
+      );
+    } finally {
+      setPolicyBusy(false);
     }
   }
 
@@ -675,23 +810,134 @@ function MCPAdminPage({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <SummaryCard
           label="MCP Enabled"
-          value={Boolean(runtime.enabled) ? "Yes" : "No"}
+          value={Boolean(runtimeState.enabled) ? "Yes" : "No"}
         />
         <SummaryCard
           label="Bind Address"
-          value={String(runtime.http_address || ":8080")}
+          value={String(runtimeState.http_address || ":8080")}
         />
-        <SummaryCard label="Port" value={String(runtime.port || "-")} />
+        <SummaryCard label="Port" value={String(runtimeState.port || "-")} />
         <SummaryCard label="Tools" value={String(tools.length)} />
         <SummaryCard
           label="Action Classes"
           value={String(groupedCounts.actionClasses)}
         />
         <SummaryCard
+          label="Governance"
+          value={Boolean(policySummaryState.governance_enabled) ? "On" : "Off"}
+        />
+        <SummaryCard
           label="Advisor Tools"
           value={String(groupedCounts.advisorTools)}
         />
+        <SummaryCard
+          label="Draft Enabled"
+          value={String(policySummaryState.draft_enabled_tools || 0)}
+        />
+        <SummaryCard
+          label="Submit Allowed"
+          value={String(policySummaryState.submit_allowlisted_tools || 0)}
+        />
+        <SummaryCard
+          label="Blocked Attempts"
+          value={String(policySummaryState.blocked_attempts || 0)}
+        />
       </div>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <div className="mb-3 text-sm font-semibold text-body">
+          Governance Policy
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <label className="space-y-2 text-sm text-body">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Governance Enabled
+            </span>
+            <input
+              type="checkbox"
+              checked={governanceEnabled}
+              onChange={(event) => setGovernanceEnabled(event.target.checked)}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-body">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Default Action Mode
+            </span>
+            <select
+              className="admin-input"
+              value={defaultActionMode}
+              onChange={(event) => setDefaultActionMode(event.target.value)}
+            >
+              <option value="draft_only">Draft Only</option>
+              <option value="governed">Governed</option>
+            </select>
+          </label>
+          <label className="space-y-2 text-sm text-body">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Blocked Action Classes JSON
+            </span>
+            <textarea
+              className="admin-input min-h-24"
+              value={blockedActionClasses}
+              onChange={(event) => setBlockedActionClasses(event.target.value)}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-body">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Blocked Tool Keys JSON
+            </span>
+            <textarea
+              className="admin-input min-h-24"
+              value={blockedToolKeys}
+              onChange={(event) => setBlockedToolKeys(event.target.value)}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-body">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Blocked Document Types JSON
+            </span>
+            <textarea
+              className="admin-input min-h-24"
+              value={blockedDocumentTypes}
+              onChange={(event) => setBlockedDocumentTypes(event.target.value)}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-body">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Allowed Submit Document Types JSON
+            </span>
+            <textarea
+              className="admin-input min-h-24"
+              value={allowedSubmitDocumentTypes}
+              onChange={(event) =>
+                setAllowedSubmitDocumentTypes(event.target.value)
+              }
+            />
+          </label>
+          <label className="space-y-2 text-sm text-body lg:col-span-2">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted">
+              Domain Policy Overrides JSON
+            </span>
+            <textarea
+              className="admin-input min-h-32"
+              value={domainPolicyOverrides}
+              onChange={(event) => setDomainPolicyOverrides(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            className="admin-button"
+            disabled={policyBusy}
+            onClick={() => void saveGovernance()}
+          >
+            Save Governance
+          </button>
+          <div className="text-xs text-muted">
+            Draft-only mode blocks submit and controlled mutation unless allowlisted.
+          </div>
+        </div>
+      </section>
       <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
         <div className="mb-3 text-sm font-semibold text-body">Endpoints</div>
         <DataGrid
@@ -714,7 +960,9 @@ function MCPAdminPage({
             { key: "module_key", label: "Module" },
             { key: "action_class", label: "Action" },
             { key: "risk_class", label: "Risk" },
+            { key: "policy_state", label: "Policy" },
             { key: "business_domains", label: "Domains" },
+            { key: "policy_reason", label: "Reason" },
             { key: "endpoint_scope", label: "Scope" },
             { key: "enabled", label: "Enabled" },
             { key: "operation", label: "Operation" },
@@ -760,6 +1008,24 @@ function MCPAdminPage({
           })}
         />
       </section>
+      <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">
+        <div className="mb-3 text-sm font-semibold text-body">
+          Governance Activity
+        </div>
+        <DataGrid
+          columns={[
+            { key: "occurred_at", label: "Occurred" },
+            { key: "tool_name", label: "Tool" },
+            { key: "action_class", label: "Action" },
+            { key: "risk_class", label: "Risk" },
+            { key: "policy_state", label: "Policy" },
+            { key: "status", label: "Status" },
+            { key: "policy_reason", label: "Reason" },
+            { key: "actor_id", label: "Actor" },
+          ]}
+          rows={governanceActivityState}
+        />
+      </section>
     </div>
   );
 }
@@ -779,10 +1045,26 @@ function decorateMcpTools(
     business_domains: displayValue(
       item.business_domains || resolvePath(item, "contract.businessDomains"),
     ),
+    policy_state:
+      String(item.policy_state || resolvePath(item, "policyState") || "") || "",
+    policy_reason:
+      String(item.policy_reason || resolvePath(item, "policyReason") || "") || "",
     governance_tags: displayValue(
       item.governance_tags || resolvePath(item, "contract.governanceTags"),
     ),
   }));
+}
+
+function buildMcpToolStatesJSON(
+  items: Array<Record<string, unknown>>,
+): string {
+  const states: Record<string, boolean> = {};
+  for (const item of items) {
+    const key = String(item.key || item.name || "").trim();
+    if (!key) continue;
+    states[key] = Boolean(item.enabled);
+  }
+  return JSON.stringify(states);
 }
 
 function ACPAdminPage({

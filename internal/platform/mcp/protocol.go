@@ -47,14 +47,17 @@ type ContractDescriptor struct {
 }
 
 type ToolDescriptor struct {
-	Name        string             `json:"name"`
-	Title       string             `json:"title,omitempty"`
-	Description string             `json:"description,omitempty"`
-	ModuleKey   string             `json:"moduleKey,omitempty"`
-	SourceType  string             `json:"sourceType,omitempty"`
-	Scope       string             `json:"scope,omitempty"`
-	InputSchema map[string]any     `json:"inputSchema,omitempty"`
-	Contract    ContractDescriptor `json:"contract,omitempty"`
+	Name                string             `json:"name"`
+	Title               string             `json:"title,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	ModuleKey           string             `json:"moduleKey,omitempty"`
+	SourceType          string             `json:"sourceType,omitempty"`
+	Scope               string             `json:"scope,omitempty"`
+	PolicyState         string             `json:"policyState,omitempty"`
+	PolicyReason        string             `json:"policyReason,omitempty"`
+	EffectiveVisibility string             `json:"effectiveVisibility,omitempty"`
+	InputSchema         map[string]any     `json:"inputSchema,omitempty"`
+	Contract            ContractDescriptor `json:"contract,omitempty"`
 }
 
 type ResourceDescriptor struct {

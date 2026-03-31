@@ -184,14 +184,15 @@ func recordMCPTrail(auditSvc *audit.Service, server *mcp.Server, req mcp.JSONRPC
 	switch req.Method {
 	case "tools/call":
 		var params struct {
-			Name string `json:"name"`
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments"`
 		}
 		_ = json.Unmarshal(req.Params, &params)
 		targetType = "mcp_tool"
 		targetID = strings.TrimSpace(params.Name)
 		metadata["tool_name"] = targetID
 		if server != nil {
-			if descriptor, ok := server.ToolDescriptor(targetID, actor); ok {
+			if descriptor, ok := server.ToolDescriptorForArguments(targetID, actor, params.Arguments); ok {
 				metadata["contract_version"] = descriptor.Contract.Version
 				metadata["side_effect_class"] = descriptor.Contract.SideEffectClass
 				metadata["idempotency"] = descriptor.Contract.Idempotency
@@ -199,6 +200,10 @@ func recordMCPTrail(auditSvc *audit.Service, server *mcp.Server, req mcp.JSONRPC
 				metadata["required_permissions"] = descriptor.Contract.RequiredPermissions
 				metadata["audit_action"] = descriptor.Contract.AuditAction
 				metadata["stability"] = descriptor.Contract.Stability
+				metadata["action_class"] = descriptor.Contract.ActionClass
+				metadata["risk_class"] = descriptor.Contract.RiskClass
+				metadata["policy_state"] = descriptor.PolicyState
+				metadata["policy_reason"] = descriptor.PolicyReason
 			}
 		}
 	case "resources/read":

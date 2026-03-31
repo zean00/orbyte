@@ -35,7 +35,7 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 		if !s.builtInToolAllowed(actor, def) {
 			continue
 		}
-		items = append(items, ToolDescriptor{
+		items = append(items, s.decorateToolDescriptorWithGovernance(ToolDescriptor{
 			Name:        def.name,
 			Title:       def.title,
 			Description: def.description,
@@ -44,7 +44,7 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 			Scope:       builtInToolScope(def.name),
 			InputSchema: cloneMap(def.inputSchema),
 			Contract:    builtInToolContract(def.name, def.permission, def.contract),
-		})
+		}, nil))
 	}
 	return items
 }

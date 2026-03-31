@@ -803,6 +803,7 @@ func TestBusinessDocumentDraftUpdateValidatesMergedPayload(t *testing.T) {
 
 func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
 	server := newTestServer(t)
+	server.config = config.NewService()
 	if err := server.documents.Register(document.Definition{
 		Type:          "promotion_plan",
 		DisplayName:   "Promotion Plan",
@@ -866,6 +867,9 @@ func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
 	if overview.SourceType != "built_in" || overview.Contract.ActionClass != "analyze" || overview.Contract.RiskClass != "low" {
 		t.Fatalf("expected analytical overview metadata, got %+v", overview)
 	}
+	if overview.PolicyState != "allowed" {
+		t.Fatalf("expected allowed policy state, got %+v", overview)
+	}
 	if !contains(overview.Contract.GovernanceTags, "analytics") {
 		t.Fatalf("expected analytics governance tag, got %+v", overview.Contract)
 	}
@@ -877,6 +881,9 @@ func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
 	if synthetic.Contract.ActionClass != "draft" || !synthetic.Contract.RequiresConfirmation || !synthetic.Contract.DraftOnly {
 		t.Fatalf("expected draft governance metadata, got %+v", synthetic.Contract)
 	}
+	if synthetic.PolicyState != "confirmation_required" {
+		t.Fatalf("expected confirmation-required policy state, got %+v", synthetic)
+	}
 
 	moduleTool := byName["pricing.promotion.special.review"]
 	if moduleTool.SourceType != "module" || moduleTool.ModuleKey != "pricing" {
@@ -884,6 +891,120 @@ func TestToolsListIncludesGovernanceMetadataAndSourceTypes(t *testing.T) {
 	}
 	if moduleTool.Contract.ActionClass == "" || moduleTool.Contract.RiskClass == "" {
 		t.Fatalf("expected populated contract metadata, got %+v", moduleTool.Contract)
+	}
+}
+
+func TestMCPGovernanceBlocksSubmitAndMutationByDefault(t *testing.T) {
+	server := newTestServer(t)
+	server.config = config.NewService()
+
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "configuration.read", "configuration.manage", "module.manage":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	draft, err := server.workflows.CreateDraft("generic_request_flow", "user_admin")
+	if err != nil {
+		t.Fatalf("create workflow draft failed: %v", err)
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	byName := map[string]ToolDescriptor{}
+	for _, item := range tools {
+		byName[item.Name] = item
+	}
+	if byName["workflow.draft.publish"].PolicyState != "blocked" {
+		t.Fatalf("expected blocked publish policy state, got %+v", byName["workflow.draft.publish"])
+	}
+	if byName["module.enable"].PolicyState != "blocked" {
+		t.Fatalf("expected blocked module.enable policy state, got %+v", byName["module.enable"])
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "workflow.draft.publish",
+			"arguments": map[string]any{
+				"workflow_key":    "generic_request_flow",
+				"version":         draft.Version,
+				"confirm_publish": true,
+			},
+		}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "blocked by policy") {
+		t.Fatalf("expected publish policy block, got %+v", resp.Error)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "module.enable",
+			"arguments": map[string]any{
+				"module_key":    "analytics",
+				"confirm_apply": true,
+			},
+		}),
+	}, actor)
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "blocked by policy") {
+		t.Fatalf("expected module.enable policy block, got %+v", resp.Error)
+	}
+}
+
+func TestMCPGovernanceAllowsSubmitDocumentTypesInDraftOnlyMode(t *testing.T) {
+	server := newTestServer(t)
+	server.config = config.NewService()
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 true,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": `["promotion_plan"]`,
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+
+	allowed := server.evaluateToolGovernance(ToolDescriptor{
+		Name: "business.promotion.submit",
+		Contract: ContractDescriptor{
+			ActionClass: "submit",
+		},
+	}, map[string]any{"document_type": "promotion_plan"})
+	if !allowed.Allowed || allowed.PolicyState == "blocked" {
+		t.Fatalf("expected allowlisted submit document type to be allowed, got %+v", allowed)
+	}
+
+	blocked := server.evaluateToolGovernance(ToolDescriptor{
+		Name: "business.promotion.submit",
+		Contract: ContractDescriptor{
+			ActionClass: "submit",
+		},
+	}, map[string]any{"document_type": "tax_structure"})
+	if blocked.Allowed || blocked.PolicyState != "blocked" {
+		t.Fatalf("expected non-allowlisted submit document type to be blocked, got %+v", blocked)
 	}
 }
 
@@ -1542,6 +1663,23 @@ func TestServerTemplateDraftFlowAndPreview(t *testing.T) {
 
 func TestServerWorkflowDraftLifecycleAndPublishConfirmation(t *testing.T) {
 	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
 	actor := ActorContext{
 		ActorID:         "user_admin",
 		EffectiveUserID: "user_admin",
@@ -2061,6 +2199,23 @@ func TestServerControlPlaneToolsAndResources(t *testing.T) {
 
 func TestServerExpandedControlPlaneCoverage(t *testing.T) {
 	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
 	actor := ActorContext{
 		ActorID:         "user_admin",
 		EffectiveUserID: "user_admin",
@@ -2809,6 +2964,23 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 
 func TestServerExtendedPlatformAndExecutionCoverage(t *testing.T) {
 	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	server.jobs.Start(ctx)
