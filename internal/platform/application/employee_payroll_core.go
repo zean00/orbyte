@@ -541,7 +541,7 @@ func (s *EmployeePayrollCoreService) leaveDeductsFromPayroll(leaveID string) boo
 	if s == nil || s.models == nil || leaveID == "" {
 		return false
 	}
-	return NewLeavePolicyCoreService(s.models, nil, nil).LeaveDeductsFromPayroll(leaveID)
+	return NewLeavePolicyCoreService(s.models, nil, nil, nil).LeaveDeductsFromPayroll(leaveID)
 }
 
 func (s *EmployeePayrollCoreService) collectPayrollReimbursements(employeeID, startDate, endDate string) float64 {

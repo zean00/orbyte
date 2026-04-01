@@ -15,10 +15,11 @@ type LeavePolicyCoreService struct {
 	models     *model.Service
 	workforce  *EmployeeWorkforceCoreService
 	attendance *WorkforceAttendanceCoreService
+	approvals  *ApprovalPolicyService
 }
 
-func NewLeavePolicyCoreService(models *model.Service, workforce *EmployeeWorkforceCoreService, attendance *WorkforceAttendanceCoreService) *LeavePolicyCoreService {
-	return &LeavePolicyCoreService{models: models, workforce: workforce, attendance: attendance}
+func NewLeavePolicyCoreService(models *model.Service, workforce *EmployeeWorkforceCoreService, attendance *WorkforceAttendanceCoreService, approvals *ApprovalPolicyService) *LeavePolicyCoreService {
+	return &LeavePolicyCoreService{models: models, workforce: workforce, attendance: attendance, approvals: approvals}
 }
 
 func (s *LeavePolicyCoreService) ExecuteAccrualRun(runID, actorID string) (model.Record, error) {

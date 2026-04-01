@@ -11,7 +11,7 @@ func TestLeavePolicyExecuteAccrualAndApproveLifecycle(t *testing.T) {
 	registerLeavePolicyTestModels(t, models)
 	workforce := NewEmployeeWorkforceCoreService(models)
 	attendance := NewWorkforceAttendanceCoreService(models, workforce)
-	service := NewLeavePolicyCoreService(models, workforce, attendance)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
 
 	employee, policy, _ := seedLeavePolicyTestData(t, models, false)
 	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
@@ -96,7 +96,7 @@ func TestLeavePolicyCancelReleasesReservation(t *testing.T) {
 	registerLeavePolicyTestModels(t, models)
 	workforce := NewEmployeeWorkforceCoreService(models)
 	attendance := NewWorkforceAttendanceCoreService(models, workforce)
-	service := NewLeavePolicyCoreService(models, workforce, attendance)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
 
 	_, policy, _ := seedLeavePolicyTestData(t, models, false)
 	run, _ := models.Create("leave_accrual_run", "user_admin", map[string]any{
@@ -143,7 +143,7 @@ func TestLeavePolicyPaidLeaveDoesNotDeductFromPayroll(t *testing.T) {
 	registerLeavePolicyTestModels(t, models)
 	workforce := NewEmployeeWorkforceCoreService(models)
 	attendance := NewWorkforceAttendanceCoreService(models, workforce)
-	service := NewLeavePolicyCoreService(models, workforce, attendance)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
 
 	_, policy, absenceCode := seedLeavePolicyTestData(t, models, true)
 	record, err := models.Create("leave_request", "user_admin", map[string]any{
@@ -168,7 +168,7 @@ func TestLeavePolicySelfServiceRequiresCurrentAssignment(t *testing.T) {
 	registerLeavePolicyTestModels(t, models)
 	workforce := NewEmployeeWorkforceCoreService(models)
 	attendance := NewWorkforceAttendanceCoreService(models, workforce)
-	service := NewLeavePolicyCoreService(models, workforce, attendance)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
 
 	employee, policy, _ := seedLeavePolicyTestData(t, models, false)
 	assignments, _, err := models.List("employee_assignment", model.Query{
@@ -199,7 +199,7 @@ func TestLeavePolicyNonBalancePolicyDoesNotCreateBalanceAccount(t *testing.T) {
 	registerLeavePolicyTestModels(t, models)
 	workforce := NewEmployeeWorkforceCoreService(models)
 	attendance := NewWorkforceAttendanceCoreService(models, workforce)
-	service := NewLeavePolicyCoreService(models, workforce, attendance)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
 
 	employee, _, absenceCode := seedLeavePolicyTestData(t, models, false)
 	policy, err := models.Create("leave_policy", "user_admin", map[string]any{
