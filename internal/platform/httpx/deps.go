@@ -171,6 +171,7 @@ type UIDeps struct {
 	Production        *application.ProductionCoreService
 	ProductionCosting *application.ProductionCostingCoreService
 	POS               *application.POSCoreService
+	LeavePolicies     *application.LeavePolicyCoreService
 	SupplierReturns   *application.SupplierReturnsCoreService
 	Traceability      *application.TraceabilityCoreService
 	Recall            *application.RecallCoreService
@@ -338,6 +339,6 @@ func RegisterNotificationSurface(deps NotificationDeps) RouteRegistrar {
 
 func RegisterUISurface(deps UIDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.POS, deps.Traceability, deps.Recall, deps.Finance, deps.Reconciliation, deps.PeriodEnd, deps.ManualJournals, deps.Collections, deps.FinanceAssets, deps.InventoryFinance, deps.RetailFinance, deps.Treasury, deps.ProductionCosting, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
+		registerUIRoutes(mux, deps.Identity, deps.Modules, deps.Models, deps.Activities, deps.Reporting, deps.Documents, deps.Workflows, deps.Search, deps.Analytics, deps.Monitoring, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Planning, deps.Production, deps.POS, deps.LeavePolicies, deps.Traceability, deps.Recall, deps.Finance, deps.Reconciliation, deps.PeriodEnd, deps.ManualJournals, deps.Collections, deps.FinanceAssets, deps.InventoryFinance, deps.RetailFinance, deps.Treasury, deps.ProductionCosting, deps.Policy, deps.FieldSecurity, deps.UIPreferences, deps.ACP)
 	}
 }

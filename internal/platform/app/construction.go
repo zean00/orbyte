@@ -84,6 +84,7 @@ type serviceGraph struct {
 	docActions          *application.DocumentActions
 	approvalPolicies    *application.ApprovalPolicyService
 	workforceAttendance *application.WorkforceAttendanceCoreService
+	leavePolicies       *application.LeavePolicyCoreService
 	employeeSpend       *application.EmployeeSpendCoreService
 	employeePayroll     *application.EmployeePayrollCoreService
 	payrollRemittance   *application.PayrollRemittanceCoreService
@@ -263,6 +264,7 @@ func installPersistence(graph *serviceGraph, postgres *store.Postgres) {
 func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.approvalPolicies = application.NewApprovalPolicyService(graph.models)
 	graph.workforceAttendance = application.NewWorkforceAttendanceCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models))
+	graph.leavePolicies = application.NewLeavePolicyCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models), graph.workforceAttendance)
 	graph.employeeSpend = application.NewEmployeeSpendCoreService(graph.documents, graph.models)
 	graph.employeePayroll = application.NewEmployeePayrollCoreService(graph.documents, graph.models, graph.workforceAttendance, graph.employeeSpend)
 	graph.payrollRemittance = application.NewPayrollRemittanceCoreService(graph.documents, graph.models)

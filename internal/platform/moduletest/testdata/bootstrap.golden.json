@@ -3446,6 +3446,321 @@
       "view_key": "inventory.warehouses.list"
     },
     {
+      "key": "leave.accrual_runs.detail",
+      "kind": "navigate",
+      "label": "Leave Accrual Runs Detail",
+      "label_i18n": {
+        "en": "Leave Accrual Runs Detail",
+        "id": "Leave Accrual Runs Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_accrual_run.read"
+      ],
+      "route_path": "/leave/accrual_runs/detail",
+      "view_key": "leave.accrual_runs.detail"
+    },
+    {
+      "key": "leave.accrual_runs.form",
+      "kind": "navigate",
+      "label": "Leave Accrual Runs Form",
+      "label_i18n": {
+        "en": "Leave Accrual Runs Form",
+        "id": "Leave Accrual Runs Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_accrual_run.update"
+      ],
+      "route_path": "/leave/accrual_runs/form",
+      "view_key": "leave.accrual_runs.form"
+    },
+    {
+      "key": "leave.accrual_runs.list",
+      "kind": "navigate",
+      "label": "Leave Accrual Runs",
+      "label_i18n": {
+        "en": "Leave Accrual Runs",
+        "id": "Leave Accrual Runs"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_accrual_run.list"
+      ],
+      "route_path": "/leave/accrual_runs",
+      "view_key": "leave.accrual_runs.list"
+    },
+    {
+      "key": "leave.balance_accounts.detail",
+      "kind": "navigate",
+      "label": "Leave Balance Accounts Detail",
+      "label_i18n": {
+        "en": "Leave Balance Accounts Detail",
+        "id": "Leave Balance Accounts Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_account.read"
+      ],
+      "route_path": "/leave/balance_accounts/detail",
+      "view_key": "leave.balance_accounts.detail"
+    },
+    {
+      "key": "leave.balance_accounts.form",
+      "kind": "navigate",
+      "label": "Leave Balance Accounts Form",
+      "label_i18n": {
+        "en": "Leave Balance Accounts Form",
+        "id": "Leave Balance Accounts Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_account.update"
+      ],
+      "route_path": "/leave/balance_accounts/form",
+      "view_key": "leave.balance_accounts.form"
+    },
+    {
+      "key": "leave.balance_accounts.list",
+      "kind": "navigate",
+      "label": "Leave Balance Accounts",
+      "label_i18n": {
+        "en": "Leave Balance Accounts",
+        "id": "Leave Balance Accounts"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_account.list"
+      ],
+      "route_path": "/leave/balance_accounts",
+      "view_key": "leave.balance_accounts.list"
+    },
+    {
+      "key": "leave.balance_adjustments.detail",
+      "kind": "navigate",
+      "label": "Leave Balance Adjustments Detail",
+      "label_i18n": {
+        "en": "Leave Balance Adjustments Detail",
+        "id": "Leave Balance Adjustments Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_adjustment.read"
+      ],
+      "route_path": "/leave/balance_adjustments/detail",
+      "view_key": "leave.balance_adjustments.detail"
+    },
+    {
+      "key": "leave.balance_adjustments.form",
+      "kind": "navigate",
+      "label": "Leave Balance Adjustments Form",
+      "label_i18n": {
+        "en": "Leave Balance Adjustments Form",
+        "id": "Leave Balance Adjustments Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_adjustment.update"
+      ],
+      "route_path": "/leave/balance_adjustments/form",
+      "view_key": "leave.balance_adjustments.form"
+    },
+    {
+      "key": "leave.balance_adjustments.list",
+      "kind": "navigate",
+      "label": "Leave Balance Adjustments",
+      "label_i18n": {
+        "en": "Leave Balance Adjustments",
+        "id": "Leave Balance Adjustments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_adjustment.list"
+      ],
+      "route_path": "/leave/balance_adjustments",
+      "view_key": "leave.balance_adjustments.list"
+    },
+    {
+      "key": "leave.balance_entries.detail",
+      "kind": "navigate",
+      "label": "Leave Balance Entries Detail",
+      "label_i18n": {
+        "en": "Leave Balance Entries Detail",
+        "id": "Leave Balance Entries Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_entry.read"
+      ],
+      "route_path": "/leave/balance_entries/detail",
+      "view_key": "leave.balance_entries.detail"
+    },
+    {
+      "key": "leave.balance_entries.form",
+      "kind": "navigate",
+      "label": "Leave Balance Entries Form",
+      "label_i18n": {
+        "en": "Leave Balance Entries Form",
+        "id": "Leave Balance Entries Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_entry.update"
+      ],
+      "route_path": "/leave/balance_entries/form",
+      "view_key": "leave.balance_entries.form"
+    },
+    {
+      "key": "leave.balance_entries.list",
+      "kind": "navigate",
+      "label": "Leave Balance Entries",
+      "label_i18n": {
+        "en": "Leave Balance Entries",
+        "id": "Leave Balance Entries"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_balance_entry.list"
+      ],
+      "route_path": "/leave/balance_entries",
+      "view_key": "leave.balance_entries.list"
+    },
+    {
+      "key": "leave.entitlement_rules.detail",
+      "kind": "navigate",
+      "label": "Entitlement Rules Detail",
+      "label_i18n": {
+        "en": "Entitlement Rules Detail",
+        "id": "Entitlement Rules Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_entitlement_rule.read"
+      ],
+      "route_path": "/leave/entitlement_rules/detail",
+      "view_key": "leave.entitlement_rules.detail"
+    },
+    {
+      "key": "leave.entitlement_rules.form",
+      "kind": "navigate",
+      "label": "Entitlement Rules Form",
+      "label_i18n": {
+        "en": "Entitlement Rules Form",
+        "id": "Entitlement Rules Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_entitlement_rule.update"
+      ],
+      "route_path": "/leave/entitlement_rules/form",
+      "view_key": "leave.entitlement_rules.form"
+    },
+    {
+      "key": "leave.entitlement_rules.list",
+      "kind": "navigate",
+      "label": "Entitlement Rules",
+      "label_i18n": {
+        "en": "Entitlement Rules",
+        "id": "Entitlement Rules"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_entitlement_rule.list"
+      ],
+      "route_path": "/leave/entitlement_rules",
+      "view_key": "leave.entitlement_rules.list"
+    },
+    {
+      "key": "leave.policies.detail",
+      "kind": "navigate",
+      "label": "Leave Policies Detail",
+      "label_i18n": {
+        "en": "Leave Policies Detail",
+        "id": "Leave Policies Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_policy.read"
+      ],
+      "route_path": "/leave/policies/detail",
+      "view_key": "leave.policies.detail"
+    },
+    {
+      "key": "leave.policies.form",
+      "kind": "navigate",
+      "label": "Leave Policies Form",
+      "label_i18n": {
+        "en": "Leave Policies Form",
+        "id": "Leave Policies Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_policy.update"
+      ],
+      "route_path": "/leave/policies/form",
+      "view_key": "leave.policies.form"
+    },
+    {
+      "key": "leave.policies.list",
+      "kind": "navigate",
+      "label": "Leave Policies",
+      "label_i18n": {
+        "en": "Leave Policies",
+        "id": "Leave Policies"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "leave_policy.list"
+      ],
+      "route_path": "/leave/policies",
+      "view_key": "leave.policies.list"
+    },
+    {
+      "key": "leave.profiles.detail",
+      "kind": "navigate",
+      "label": "Leave Profiles Detail",
+      "label_i18n": {
+        "en": "Leave Profiles Detail",
+        "id": "Leave Profiles Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_leave_profile.read"
+      ],
+      "route_path": "/leave/profiles/detail",
+      "view_key": "leave.profiles.detail"
+    },
+    {
+      "key": "leave.profiles.form",
+      "kind": "navigate",
+      "label": "Leave Profiles Form",
+      "label_i18n": {
+        "en": "Leave Profiles Form",
+        "id": "Leave Profiles Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_leave_profile.update"
+      ],
+      "route_path": "/leave/profiles/form",
+      "view_key": "leave.profiles.form"
+    },
+    {
+      "key": "leave.profiles.list",
+      "kind": "navigate",
+      "label": "Leave Profiles",
+      "label_i18n": {
+        "en": "Leave Profiles",
+        "id": "Leave Profiles"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee_leave_profile.list"
+      ],
+      "route_path": "/leave/profiles",
+      "view_key": "leave.profiles.list"
+    },
+    {
       "key": "masterdata.addresses.detail",
       "kind": "navigate",
       "label": "Address Detail",
@@ -7526,6 +7841,19 @@
       ]
     },
     {
+      "action_key": "leave.policies.list",
+      "key": "leave.policies",
+      "label": "Leave Policies",
+      "label_i18n": {
+        "en": "Leave Policies",
+        "id": "Kebijakan Cuti"
+      },
+      "order": 41,
+      "required_permissions": [
+        "leave_policy.list"
+      ]
+    },
+    {
       "action_key": "remittance.authorities.list",
       "key": "remittance.authorities",
       "label": "Remittance Authorities",
@@ -7536,6 +7864,19 @@
       "order": 41,
       "required_permissions": [
         "remittance_authority.list"
+      ]
+    },
+    {
+      "action_key": "leave.entitlement_rules.list",
+      "key": "leave.entitlement_rules",
+      "label": "Entitlement Rules",
+      "label_i18n": {
+        "en": "Entitlement Rules",
+        "id": "Aturan Hak Cuti"
+      },
+      "order": 42,
+      "required_permissions": [
+        "leave_entitlement_rule.list"
       ]
     },
     {
@@ -7565,6 +7906,19 @@
       ]
     },
     {
+      "action_key": "leave.profiles.list",
+      "key": "leave.profiles",
+      "label": "Leave Profiles",
+      "label_i18n": {
+        "en": "Leave Profiles",
+        "id": "Profil Cuti"
+      },
+      "order": 43,
+      "required_permissions": [
+        "employee_leave_profile.list"
+      ]
+    },
+    {
       "action_key": "procurement.orders.list",
       "key": "procurement.orders",
       "label": "Purchase Orders",
@@ -7588,6 +7942,19 @@
       "order": 43,
       "required_permissions": [
         "remittance_schedule_rule.list"
+      ]
+    },
+    {
+      "action_key": "leave.balance_accounts.list",
+      "key": "leave.balance_accounts",
+      "label": "Leave Balance Accounts",
+      "label_i18n": {
+        "en": "Leave Balance Accounts",
+        "id": "Akun Saldo Cuti"
+      },
+      "order": 44,
+      "required_permissions": [
+        "leave_balance_account.list"
       ]
     },
     {
@@ -7617,6 +7984,19 @@
       ]
     },
     {
+      "action_key": "leave.balance_entries.list",
+      "key": "leave.balance_entries",
+      "label": "Leave Balance Entries",
+      "label_i18n": {
+        "en": "Leave Balance Entries",
+        "id": "Entri Saldo Cuti"
+      },
+      "order": 45,
+      "required_permissions": [
+        "leave_balance_entry.list"
+      ]
+    },
+    {
       "action_key": "procurement.bills.list",
       "key": "procurement.bills",
       "label": "Vendor Bills",
@@ -7643,6 +8023,19 @@
       ]
     },
     {
+      "action_key": "leave.accrual_runs.list",
+      "key": "leave.accrual_runs",
+      "label": "Leave Accrual Runs",
+      "label_i18n": {
+        "en": "Leave Accrual Runs",
+        "id": "Proses Akrual Cuti"
+      },
+      "order": 46,
+      "required_permissions": [
+        "leave_accrual_run.list"
+      ]
+    },
+    {
       "action_key": "procurement.payments.list",
       "key": "procurement.payments",
       "label": "Payments Out",
@@ -7666,6 +8059,19 @@
       "order": 46,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "leave.balance_adjustments.list",
+      "key": "leave.balance_adjustments",
+      "label": "Leave Balance Adjustments",
+      "label_i18n": {
+        "en": "Leave Balance Adjustments",
+        "id": "Penyesuaian Saldo Cuti"
+      },
+      "order": 47,
+      "required_permissions": [
+        "leave_balance_adjustment.list"
       ]
     },
     {
@@ -8880,6 +9286,146 @@
       "title_i18n": {
         "en": "Submit Self-Service Request",
         "id": "Ajukan Permintaan Self-Service"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "key": "leave.self_service.balances.list",
+      "method": "GET",
+      "required_permissions": [
+        "leave.self_service.read"
+      ],
+      "response_contract_key": "leave.self_service.balance.list",
+      "route_path": "/ui/self-service/leave/balances",
+      "title": "List Leave Balances",
+      "title_i18n": {
+        "en": "List Leave Balances",
+        "id": "Daftar Saldo Cuti"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "idempotent": true,
+      "key": "leave.self_service.requests.cancel",
+      "method": "POST",
+      "model_key": "leave_request",
+      "request_contract_key": "leave.self_service.request.cancel",
+      "required_permissions": [
+        "leave.self_service.write"
+      ],
+      "response_contract_key": "leave.self_service.request.detail",
+      "route_path": "/ui/self-service/leave/requests/{requestID}/cancel",
+      "title": "Cancel My Leave Request",
+      "title_i18n": {
+        "en": "Cancel My Leave Request",
+        "id": "Batalkan Permintaan Cuti Saya"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "idempotent": true,
+      "key": "leave.self_service.requests.create",
+      "method": "POST",
+      "model_key": "leave_request",
+      "request_contract_key": "leave.self_service.request.create",
+      "required_permissions": [
+        "leave.self_service.write"
+      ],
+      "response_contract_key": "leave.self_service.request.detail",
+      "route_path": "/ui/self-service/leave/requests",
+      "title": "Create My Leave Request",
+      "title_i18n": {
+        "en": "Create My Leave Request",
+        "id": "Buat Permintaan Cuti Saya"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "key": "leave.self_service.requests.get",
+      "method": "GET",
+      "model_key": "leave_request",
+      "required_permissions": [
+        "leave.self_service.read"
+      ],
+      "response_contract_key": "leave.self_service.request.detail",
+      "route_path": "/ui/self-service/leave/requests/{requestID}",
+      "title": "Get My Leave Request",
+      "title_i18n": {
+        "en": "Get My Leave Request",
+        "id": "Lihat Permintaan Cuti Saya"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "key": "leave.self_service.requests.list",
+      "method": "GET",
+      "model_key": "leave_request",
+      "required_permissions": [
+        "leave.self_service.read"
+      ],
+      "response_contract_key": "leave.self_service.request.list",
+      "route_path": "/ui/self-service/leave/requests",
+      "title": "List My Leave Requests",
+      "title_i18n": {
+        "en": "List My Leave Requests",
+        "id": "Daftar Permintaan Cuti Saya"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "idempotent": true,
+      "key": "leave.self_service.requests.submit",
+      "method": "POST",
+      "model_key": "leave_request",
+      "request_contract_key": "leave.self_service.request.submit",
+      "required_permissions": [
+        "leave.self_service.write"
+      ],
+      "response_contract_key": "leave.self_service.request.detail",
+      "route_path": "/ui/self-service/leave/requests/{requestID}/submit",
+      "title": "Submit My Leave Request",
+      "title_i18n": {
+        "en": "Submit My Leave Request",
+        "id": "Ajukan Permintaan Cuti Saya"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "idempotent": true,
+      "key": "leave.self_service.requests.update",
+      "method": "PUT",
+      "model_key": "leave_request",
+      "request_contract_key": "leave.self_service.request.update",
+      "required_permissions": [
+        "leave.self_service.write"
+      ],
+      "response_contract_key": "leave.self_service.request.detail",
+      "route_path": "/ui/self-service/leave/requests/{requestID}",
+      "title": "Update My Leave Request",
+      "title_i18n": {
+        "en": "Update My Leave Request",
+        "id": "Perbarui Permintaan Cuti Saya"
       }
     }
   ],
@@ -29087,6 +29633,1596 @@
       "title_i18n": {
         "en": "Warehouses",
         "id": "Warehouses"
+      }
+    },
+    {
+      "key": "leave.accrual_runs.detail",
+      "kind": "detail",
+      "model_key": "leave_accrual_run",
+      "required_permissions": [
+        "leave_accrual_run.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string"
+            },
+            {
+              "key": "run_mode",
+              "label": "Run Mode",
+              "options": [
+                "annual_grant",
+                "monthly_accrual"
+              ],
+              "path": "values.run_mode",
+              "type": "string"
+            },
+            {
+              "key": "effective_date",
+              "label": "Effective Date",
+              "path": "values.effective_date",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "run_status",
+              "label": "Run Status",
+              "options": [
+                "draft",
+                "processed"
+              ],
+              "path": "values.run_status",
+              "type": "string"
+            },
+            {
+              "key": "processed_at",
+              "label": "Processed At",
+              "path": "values.processed_at",
+              "type": "string"
+            },
+            {
+              "key": "processed_by",
+              "label": "Processed By",
+              "path": "values.processed_by",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Leave Accrual Run Detail",
+      "title_i18n": {
+        "en": "Leave Accrual Run Detail",
+        "id": "Leave Accrual Run Detail"
+      }
+    },
+    {
+      "key": "leave.accrual_runs.form",
+      "kind": "form",
+      "model_key": "leave_accrual_run",
+      "required_permissions": [
+        "leave_accrual_run.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "run_mode",
+              "label": "Run Mode",
+              "options": [
+                "annual_grant",
+                "monthly_accrual"
+              ],
+              "path": "values.run_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "effective_date",
+              "label": "Effective Date",
+              "path": "values.effective_date",
+              "required": true,
+              "type": "string",
+              "widget": "date"
+            },
+            {
+              "key": "run_status",
+              "label": "Run Status",
+              "options": [
+                "draft",
+                "processed"
+              ],
+              "path": "values.run_status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "processed_at",
+              "label": "Processed At",
+              "path": "values.processed_at",
+              "type": "string",
+              "widget": "datetime"
+            },
+            {
+              "key": "processed_by",
+              "label": "Processed By",
+              "path": "values.processed_by",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Leave Accrual Run Form",
+          "title_i18n": {
+            "en": "Leave Accrual Run Form",
+            "id": "Leave Accrual Run Form"
+          }
+        }
+      ],
+      "title": "Leave Accrual Run Form",
+      "title_i18n": {
+        "en": "Leave Accrual Run Form",
+        "id": "Leave Accrual Run Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "run_mode",
+          "label": "Mode",
+          "path": "values.run_mode"
+        },
+        {
+          "key": "run_status",
+          "label": "Run Status",
+          "path": "values.run_status"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "processed",
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.accrual_runs.list",
+      "kind": "list",
+      "model_key": "leave_accrual_run",
+      "required_permissions": [
+        "leave_accrual_run.list"
+      ],
+      "title": "Leave Accrual Runs",
+      "title_i18n": {
+        "en": "Leave Accrual Runs",
+        "id": "Leave Accrual Runs"
+      }
+    },
+    {
+      "key": "leave.balance_accounts.detail",
+      "kind": "detail",
+      "model_key": "leave_balance_account",
+      "required_permissions": [
+        "leave_balance_account.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string"
+            },
+            {
+              "key": "current_balance_days",
+              "label": "Current Balance Days",
+              "path": "values.current_balance_days",
+              "type": "number"
+            },
+            {
+              "key": "reserved_days",
+              "label": "Reserved Days",
+              "path": "values.reserved_days",
+              "type": "number"
+            },
+            {
+              "key": "available_days",
+              "label": "Available Days",
+              "path": "values.available_days",
+              "type": "number"
+            },
+            {
+              "key": "last_accrual_date",
+              "label": "Last Accrual Date",
+              "path": "values.last_accrual_date",
+              "type": "string"
+            },
+            {
+              "key": "carry_forward_expiry_date",
+              "label": "Carry Forward Expiry Date",
+              "path": "values.carry_forward_expiry_date",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Leave Balance Account Detail",
+      "title_i18n": {
+        "en": "Leave Balance Account Detail",
+        "id": "Leave Balance Account Detail"
+      }
+    },
+    {
+      "key": "leave.balance_accounts.form",
+      "kind": "form",
+      "model_key": "leave_balance_account",
+      "required_permissions": [
+        "leave_balance_account.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "current_balance_days",
+              "label": "Current Balance Days",
+              "path": "values.current_balance_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reserved_days",
+              "label": "Reserved Days",
+              "path": "values.reserved_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "available_days",
+              "label": "Available Days",
+              "path": "values.available_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "last_accrual_date",
+              "label": "Last Accrual Date",
+              "path": "values.last_accrual_date",
+              "type": "string",
+              "widget": "date"
+            },
+            {
+              "key": "carry_forward_expiry_date",
+              "label": "Carry Forward Expiry Date",
+              "path": "values.carry_forward_expiry_date",
+              "type": "string",
+              "widget": "date"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Leave Balance Account Form",
+          "title_i18n": {
+            "en": "Leave Balance Account Form",
+            "id": "Leave Balance Account Form"
+          }
+        }
+      ],
+      "title": "Leave Balance Account Form",
+      "title_i18n": {
+        "en": "Leave Balance Account Form",
+        "id": "Leave Balance Account Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "values.employee_id"
+        },
+        {
+          "key": "leave_policy_id",
+          "label": "Policy",
+          "path": "values.leave_policy_id"
+        },
+        {
+          "key": "available_days",
+          "label": "Available",
+          "path": "values.available_days"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.balance_accounts.list",
+      "kind": "list",
+      "model_key": "leave_balance_account",
+      "required_permissions": [
+        "leave_balance_account.list"
+      ],
+      "title": "Leave Balance Accounts",
+      "title_i18n": {
+        "en": "Leave Balance Accounts",
+        "id": "Leave Balance Accounts"
+      }
+    },
+    {
+      "key": "leave.balance_adjustments.detail",
+      "kind": "detail",
+      "model_key": "leave_balance_adjustment",
+      "required_permissions": [
+        "leave_balance_adjustment.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "balance_account_id",
+              "label": "Balance Account",
+              "path": "values.balance_account_id",
+              "type": "string"
+            },
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string"
+            },
+            {
+              "key": "days",
+              "label": "Days",
+              "path": "values.days",
+              "type": "number"
+            },
+            {
+              "key": "reason_code",
+              "label": "Reason Code",
+              "path": "values.reason_code",
+              "type": "string"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "values.notes",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Leave Balance Adjustment Detail",
+      "title_i18n": {
+        "en": "Leave Balance Adjustment Detail",
+        "id": "Leave Balance Adjustment Detail"
+      }
+    },
+    {
+      "key": "leave.balance_adjustments.form",
+      "kind": "form",
+      "model_key": "leave_balance_adjustment",
+      "required_permissions": [
+        "leave_balance_adjustment.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "balance_account_id",
+              "label": "Balance Account",
+              "path": "values.balance_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "days",
+              "label": "Days",
+              "path": "values.days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reason_code",
+              "label": "Reason Code",
+              "path": "values.reason_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Leave Balance Adjustment Form",
+          "title_i18n": {
+            "en": "Leave Balance Adjustment Form",
+            "id": "Leave Balance Adjustment Form"
+          }
+        }
+      ],
+      "title": "Leave Balance Adjustment Form",
+      "title_i18n": {
+        "en": "Leave Balance Adjustment Form",
+        "id": "Leave Balance Adjustment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "balance_account_id",
+          "label": "Balance Account",
+          "path": "values.balance_account_id"
+        },
+        {
+          "key": "days",
+          "label": "Days",
+          "path": "values.days"
+        },
+        {
+          "key": "reason_code",
+          "label": "Reason",
+          "path": "values.reason_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.balance_adjustments.list",
+      "kind": "list",
+      "model_key": "leave_balance_adjustment",
+      "required_permissions": [
+        "leave_balance_adjustment.list"
+      ],
+      "title": "Leave Balance Adjustments",
+      "title_i18n": {
+        "en": "Leave Balance Adjustments",
+        "id": "Leave Balance Adjustments"
+      }
+    },
+    {
+      "key": "leave.balance_entries.detail",
+      "kind": "detail",
+      "model_key": "leave_balance_entry",
+      "required_permissions": [
+        "leave_balance_entry.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "balance_account_id",
+              "label": "Balance Account",
+              "path": "values.balance_account_id",
+              "type": "string"
+            },
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string"
+            },
+            {
+              "key": "leave_request_id",
+              "label": "Leave Request",
+              "path": "values.leave_request_id",
+              "type": "string"
+            },
+            {
+              "key": "entry_type",
+              "label": "Entry Type",
+              "options": [
+                "opening",
+                "annual_grant",
+                "monthly_accrual",
+                "carry_forward",
+                "expiry",
+                "reservation",
+                "release",
+                "consumption",
+                "adjustment"
+              ],
+              "path": "values.entry_type",
+              "type": "string"
+            },
+            {
+              "key": "days",
+              "label": "Days",
+              "path": "values.days",
+              "type": "number"
+            },
+            {
+              "key": "effective_date",
+              "label": "Effective Date",
+              "path": "values.effective_date",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Leave Balance Entry Detail",
+      "title_i18n": {
+        "en": "Leave Balance Entry Detail",
+        "id": "Leave Balance Entry Detail"
+      }
+    },
+    {
+      "key": "leave.balance_entries.form",
+      "kind": "form",
+      "model_key": "leave_balance_entry",
+      "required_permissions": [
+        "leave_balance_entry.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "balance_account_id",
+              "label": "Balance Account",
+              "path": "values.balance_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "leave_request_id",
+              "label": "Leave Request",
+              "path": "values.leave_request_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "entry_type",
+              "label": "Entry Type",
+              "options": [
+                "opening",
+                "annual_grant",
+                "monthly_accrual",
+                "carry_forward",
+                "expiry",
+                "reservation",
+                "release",
+                "consumption",
+                "adjustment"
+              ],
+              "path": "values.entry_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "days",
+              "label": "Days",
+              "path": "values.days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "effective_date",
+              "label": "Effective Date",
+              "path": "values.effective_date",
+              "type": "string",
+              "widget": "date"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Leave Balance Entry Form",
+          "title_i18n": {
+            "en": "Leave Balance Entry Form",
+            "id": "Leave Balance Entry Form"
+          }
+        }
+      ],
+      "title": "Leave Balance Entry Form",
+      "title_i18n": {
+        "en": "Leave Balance Entry Form",
+        "id": "Leave Balance Entry Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "balance_account_id",
+          "label": "Balance Account",
+          "path": "values.balance_account_id"
+        },
+        {
+          "key": "entry_type",
+          "label": "Type",
+          "path": "values.entry_type"
+        },
+        {
+          "key": "days",
+          "label": "Days",
+          "path": "values.days"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.balance_entries.list",
+      "kind": "list",
+      "model_key": "leave_balance_entry",
+      "required_permissions": [
+        "leave_balance_entry.list"
+      ],
+      "title": "Leave Balance Entries",
+      "title_i18n": {
+        "en": "Leave Balance Entries",
+        "id": "Leave Balance Entries"
+      }
+    },
+    {
+      "key": "leave.entitlement_rules.detail",
+      "kind": "detail",
+      "model_key": "leave_entitlement_rule",
+      "required_permissions": [
+        "leave_entitlement_rule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "grant_mode",
+              "label": "Grant Mode",
+              "options": [
+                "annual_grant",
+                "monthly_accrual"
+              ],
+              "path": "values.grant_mode",
+              "type": "string"
+            },
+            {
+              "key": "annual_entitlement_days",
+              "label": "Annual Entitlement Days",
+              "path": "values.annual_entitlement_days",
+              "type": "number"
+            },
+            {
+              "key": "monthly_accrual_days",
+              "label": "Monthly Accrual Days",
+              "path": "values.monthly_accrual_days",
+              "type": "number"
+            },
+            {
+              "key": "carry_forward_cap_days",
+              "label": "Carry Forward Cap Days",
+              "path": "values.carry_forward_cap_days",
+              "type": "number"
+            },
+            {
+              "key": "carry_forward_expiry_rule",
+              "label": "Carry Forward Expiry Rule",
+              "path": "values.carry_forward_expiry_rule",
+              "type": "string"
+            },
+            {
+              "key": "prorate_on_join",
+              "label": "Prorate On Join",
+              "path": "values.prorate_on_join",
+              "type": "bool"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Entitlement Rule Detail",
+      "title_i18n": {
+        "en": "Entitlement Rule Detail",
+        "id": "Entitlement Rule Detail"
+      }
+    },
+    {
+      "key": "leave.entitlement_rules.form",
+      "kind": "form",
+      "model_key": "leave_entitlement_rule",
+      "required_permissions": [
+        "leave_entitlement_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "grant_mode",
+              "label": "Grant Mode",
+              "options": [
+                "annual_grant",
+                "monthly_accrual"
+              ],
+              "path": "values.grant_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "annual_entitlement_days",
+              "label": "Annual Entitlement Days",
+              "path": "values.annual_entitlement_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "monthly_accrual_days",
+              "label": "Monthly Accrual Days",
+              "path": "values.monthly_accrual_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "carry_forward_cap_days",
+              "label": "Carry Forward Cap Days",
+              "path": "values.carry_forward_cap_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "carry_forward_expiry_rule",
+              "label": "Carry Forward Expiry Rule",
+              "path": "values.carry_forward_expiry_rule",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "prorate_on_join",
+              "label": "Prorate On Join",
+              "path": "values.prorate_on_join",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Entitlement Rule Form",
+          "title_i18n": {
+            "en": "Entitlement Rule Form",
+            "id": "Entitlement Rule Form"
+          }
+        }
+      ],
+      "title": "Entitlement Rule Form",
+      "title_i18n": {
+        "en": "Entitlement Rule Form",
+        "id": "Entitlement Rule Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "leave_policy_id",
+          "label": "Policy",
+          "path": "values.leave_policy_id"
+        },
+        {
+          "key": "grant_mode",
+          "label": "Mode",
+          "path": "values.grant_mode"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.entitlement_rules.list",
+      "kind": "list",
+      "model_key": "leave_entitlement_rule",
+      "required_permissions": [
+        "leave_entitlement_rule.list"
+      ],
+      "title": "Entitlement Rules",
+      "title_i18n": {
+        "en": "Entitlement Rules",
+        "id": "Entitlement Rules"
+      }
+    },
+    {
+      "key": "leave.policies.detail",
+      "kind": "detail",
+      "model_key": "leave_policy",
+      "required_permissions": [
+        "leave_policy.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "absence_code_id",
+              "label": "Absence Code",
+              "path": "values.absence_code_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "paid_leave",
+              "label": "Paid Leave",
+              "path": "values.paid_leave",
+              "type": "bool"
+            },
+            {
+              "key": "requires_balance",
+              "label": "Requires Balance",
+              "path": "values.requires_balance",
+              "type": "bool"
+            },
+            {
+              "key": "allows_half_day",
+              "label": "Allows Half Day",
+              "path": "values.allows_half_day",
+              "type": "bool"
+            },
+            {
+              "key": "notice_days",
+              "label": "Notice Days",
+              "path": "values.notice_days",
+              "type": "number"
+            },
+            {
+              "key": "approval_policy_id",
+              "label": "Approval Policy",
+              "path": "values.approval_policy_id",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Leave Policy Detail",
+      "title_i18n": {
+        "en": "Leave Policy Detail",
+        "id": "Leave Policy Detail"
+      }
+    },
+    {
+      "key": "leave.policies.form",
+      "kind": "form",
+      "model_key": "leave_policy",
+      "required_permissions": [
+        "leave_policy.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "absence_code_id",
+              "label": "Absence Code",
+              "path": "values.absence_code_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "paid_leave",
+              "label": "Paid Leave",
+              "path": "values.paid_leave",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "requires_balance",
+              "label": "Requires Balance",
+              "path": "values.requires_balance",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "allows_half_day",
+              "label": "Allows Half Day",
+              "path": "values.allows_half_day",
+              "type": "bool",
+              "widget": "checkbox"
+            },
+            {
+              "key": "notice_days",
+              "label": "Notice Days",
+              "path": "values.notice_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "approval_policy_id",
+              "label": "Approval Policy",
+              "path": "values.approval_policy_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Leave Policy Form",
+          "title_i18n": {
+            "en": "Leave Policy Form",
+            "id": "Leave Policy Form"
+          }
+        }
+      ],
+      "title": "Leave Policy Form",
+      "title_i18n": {
+        "en": "Leave Policy Form",
+        "id": "Leave Policy Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.policies.list",
+      "kind": "list",
+      "model_key": "leave_policy",
+      "required_permissions": [
+        "leave_policy.list"
+      ],
+      "title": "Leave Policies",
+      "title_i18n": {
+        "en": "Leave Policies",
+        "id": "Leave Policies"
+      }
+    },
+    {
+      "key": "leave.profiles.detail",
+      "kind": "detail",
+      "model_key": "employee_leave_profile",
+      "required_permissions": [
+        "employee_leave_profile.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "effective_from",
+              "label": "Effective From",
+              "path": "values.effective_from",
+              "type": "string"
+            },
+            {
+              "key": "effective_to",
+              "label": "Effective To",
+              "path": "values.effective_to",
+              "type": "string"
+            },
+            {
+              "key": "opening_balance_days",
+              "label": "Opening Balance Days",
+              "path": "values.opening_balance_days",
+              "type": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Leave Profile Detail",
+      "title_i18n": {
+        "en": "Leave Profile Detail",
+        "id": "Leave Profile Detail"
+      }
+    },
+    {
+      "key": "leave.profiles.form",
+      "kind": "form",
+      "model_key": "employee_leave_profile",
+      "required_permissions": [
+        "employee_leave_profile.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "leave_policy_id",
+              "label": "Leave Policy",
+              "path": "values.leave_policy_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "effective_from",
+              "label": "Effective From",
+              "path": "values.effective_from",
+              "type": "string",
+              "widget": "date"
+            },
+            {
+              "key": "effective_to",
+              "label": "Effective To",
+              "path": "values.effective_to",
+              "type": "string",
+              "widget": "date"
+            },
+            {
+              "key": "opening_balance_days",
+              "label": "Opening Balance Days",
+              "path": "values.opening_balance_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Leave Profile Form",
+          "title_i18n": {
+            "en": "Leave Profile Form",
+            "id": "Leave Profile Form"
+          }
+        }
+      ],
+      "title": "Leave Profile Form",
+      "title_i18n": {
+        "en": "Leave Profile Form",
+        "id": "Leave Profile Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "path": "values.employee_id"
+        },
+        {
+          "key": "leave_policy_id",
+          "label": "Policy",
+          "path": "values.leave_policy_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "leave.profiles.list",
+      "kind": "list",
+      "model_key": "employee_leave_profile",
+      "required_permissions": [
+        "employee_leave_profile.list"
+      ],
+      "title": "Leave Profiles",
+      "title_i18n": {
+        "en": "Leave Profiles",
+        "id": "Leave Profiles"
       }
     },
     {

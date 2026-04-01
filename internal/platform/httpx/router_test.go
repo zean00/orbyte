@@ -68,6 +68,7 @@ type testHarness struct {
 	audit      *audit.Service
 	cfg        *config.Service
 	modules    *module.Service
+	models     *model.Service
 	policy     *policy.Service
 	search     *search.Service
 	docs       *document.Service
@@ -98,6 +99,9 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 	if analyticsSvc != nil {
 		analyticsSvc.SetCaptureHook(analyticsStream.Publish)
 	}
+	workforceSvc := application.NewEmployeeWorkforceCoreService(models)
+	attendanceSvc := application.NewWorkforceAttendanceCoreService(models, workforceSvc)
+	leavePolicySvc := application.NewLeavePolicyCoreService(models, workforceSvc, attendanceSvc)
 	modelDeps := ModelDeps{
 		Identity:      ident,
 		Models:        models,
@@ -134,6 +138,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 		FieldSecurity: fieldSecurity,
 		UIPreferences: uiPreferences,
 		ACP:           acpSvc,
+		LeavePolicies: leavePolicySvc,
 		Notifications: notificationSvc,
 	}
 	return BuildRouter(RouterConfig{
@@ -486,6 +491,7 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		audit:      auditSvc,
 		cfg:        cfg,
 		modules:    modules,
+		models:     models,
 		policy:     policySvc,
 		search:     searchSvc,
 		docs:       docs,

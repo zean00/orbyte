@@ -1,18 +1,21 @@
 package httpx
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"orbyte/internal/platform/acp"
+	"orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
+	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/shared"
 )
 
-func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, policySvc *policy.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
+func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, docs *document.Service, leavePolicySvc *application.LeavePolicyCoreService, policySvc *policy.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
 	mux.HandleFunc("GET /ui/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {
@@ -47,6 +50,8 @@ func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, module
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": visibleSelfServiceAPIs(ident, modules, p)})
 	})
+
+	registerUILeaveSelfServiceRoutes(mux, ident, leavePolicySvc)
 
 	mux.HandleFunc("GET /ui/actions/render", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
@@ -159,4 +164,204 @@ func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, module
 		}
 		respondError(w, shared.NotFound("module bundle not found"))
 	})
+}
+
+func registerUILeaveSelfServiceRoutes(mux *http.ServeMux, ident *identity.Service, leavePolicySvc *application.LeavePolicyCoreService) {
+	mux.HandleFunc("GET /ui/self-service/leave/balances", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.read"}) {
+			respondError(w, shared.Forbidden("leave self-service read is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		items, err := leavePolicySvc.BalanceSummaryForUser(principalEffectiveUserID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("GET /ui/self-service/leave/requests", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.read"}) {
+			respondError(w, shared.Forbidden("leave self-service read is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		items, err := leavePolicySvc.RequestSummariesForUser(principalEffectiveUserID(p), map[string]string{
+			"approval_status": strings.TrimSpace(r.URL.Query().Get("approval_status")),
+			"status":          strings.TrimSpace(r.URL.Query().Get("status")),
+		})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("POST /ui/self-service/leave/requests", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.write"}) {
+			respondError(w, shared.Forbidden("leave self-service write is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("request body is invalid"))
+			return
+		}
+		record, err := leavePolicySvc.CreateSelfServiceLeaveRequest(principalEffectiveUserID(p), req, principalEffectiveUserID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		payload, err := leavePolicySvc.RequestSummaryForUser(principalEffectiveUserID(p), record.ID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+	})
+
+	mux.HandleFunc("GET /ui/self-service/leave/requests/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.read"}) {
+			respondError(w, shared.Forbidden("leave self-service read is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		requestID, action := selfServiceLeaveRequestPath(r.URL.Path)
+		if requestID == "" || action != "" {
+			respondError(w, shared.NotFound("leave request not found"))
+			return
+		}
+		payload, err := leavePolicySvc.RequestSummaryForUser(principalEffectiveUserID(p), requestID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+	})
+
+	mux.HandleFunc("PUT /ui/self-service/leave/requests/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.write"}) {
+			respondError(w, shared.Forbidden("leave self-service write is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		requestID, action := selfServiceLeaveRequestPath(r.URL.Path)
+		if requestID == "" || action != "" {
+			respondError(w, shared.NotFound("leave request not found"))
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("request body is invalid"))
+			return
+		}
+		record, err := leavePolicySvc.UpdateSelfServiceLeaveRequest(principalEffectiveUserID(p), requestID, req, principalEffectiveUserID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		payload, err := leavePolicySvc.RequestSummaryForUser(principalEffectiveUserID(p), record.ID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+	})
+
+	mux.HandleFunc("POST /ui/self-service/leave/requests/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.write"}) {
+			respondError(w, shared.Forbidden("leave self-service write is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		requestID, action := selfServiceLeaveRequestPath(r.URL.Path)
+		if requestID == "" {
+			respondError(w, shared.NotFound("leave request not found"))
+			return
+		}
+		var (
+			record model.Record
+			err    error
+		)
+		switch action {
+		case "submit":
+			record, err = leavePolicySvc.SubmitSelfServiceLeaveRequest(principalEffectiveUserID(p), requestID, principalEffectiveUserID(p))
+		case "cancel":
+			record, err = leavePolicySvc.CancelSelfServiceLeaveRequest(principalEffectiveUserID(p), requestID, principalEffectiveUserID(p))
+		default:
+			respondError(w, shared.NotFound("leave request action not found"))
+			return
+		}
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		payload, err := leavePolicySvc.RequestSummaryForUser(principalEffectiveUserID(p), record.ID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+	})
+}
+
+func selfServiceLeaveRequestPath(path string) (string, string) {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(path, "/ui/self-service/leave/requests/"))
+	if trimmed == "" {
+		return "", ""
+	}
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) == 0 {
+		return "", ""
+	}
+	requestID := strings.TrimSpace(parts[0])
+	action := ""
+	if len(parts) > 1 {
+		action = strings.TrimSpace(parts[1])
+	}
+	return requestID, action
 }

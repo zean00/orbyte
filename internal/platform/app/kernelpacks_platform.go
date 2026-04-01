@@ -42,6 +42,10 @@ func payrollRemittanceCoreKernelPackManifests() []module.Manifest {
 	return []module.Manifest{payrollRemittanceCoreKernelPackManifest()}
 }
 
+func leavePolicyCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{leavePolicyCoreKernelPackManifest()}
+}
+
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
 	acpDefinition, _ := config.NewService().Definition("platform.acp")

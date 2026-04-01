@@ -541,19 +541,7 @@ func (s *EmployeePayrollCoreService) leaveDeductsFromPayroll(leaveID string) boo
 	if s == nil || s.models == nil || leaveID == "" {
 		return false
 	}
-	leave, err := s.models.Get("leave_request", leaveID)
-	if err != nil || !strings.EqualFold(textValue(leave.Values["status"]), "active") || !strings.EqualFold(textValue(leave.Values["approval_status"]), "approved") {
-		return false
-	}
-	absenceCodeID := textValue(leave.Values["absence_code_id"])
-	if absenceCodeID == "" {
-		return false
-	}
-	absenceCode, err := s.models.Get("absence_code", absenceCodeID)
-	if err != nil || !strings.EqualFold(textValue(absenceCode.Values["status"]), "active") {
-		return false
-	}
-	return payrollBoolValue(absenceCode.Values["deduct_from_payroll"])
+	return NewLeavePolicyCoreService(s.models, nil, nil).LeaveDeductsFromPayroll(leaveID)
 }
 
 func (s *EmployeePayrollCoreService) collectPayrollReimbursements(employeeID, startDate, endDate string) float64 {
