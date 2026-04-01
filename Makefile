@@ -3,13 +3,16 @@ APP_JWT_SECRET ?= dev-secret
 APP_BOOTSTRAP_ADMIN_PASSWORD ?= admin123!
 DATABASE_URL ?= postgres://orbyte:orbyte@127.0.0.1:5432/orbyte?sslmode=disable
 
-.PHONY: test lint coverage contracts frontend-build ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
+.PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 
 test:
 	./scripts/test.sh
 
 frontend-build:
 	cd frontend && npm install && npm run build
+
+frontend-verify:
+	cd frontend && npm ci && npm run check:generated && npm run typecheck && npm run build
 
 ui-build:
 	npm run build:ui

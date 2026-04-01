@@ -120,7 +120,9 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 				"properties": map[string]any{"index_key": map[string]any{"type": "string", "enum": offlineProjectionKeys}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "query": map[string]any{"type": "object"}},
 			}, map[string]any{"index_key": firstOrEmpty(offlineProjectionKeys)}), nil, map[string]any{"200": jsonResponse("Projection package", "#/components/schemas/ProjectionPackageResponse")}),
 			"/offline/sync":      opPath("post", "Offline", "public-headless", "Sync offline mutations", "Accepts draft-safe offline create and update mutations in batch.", requestBodyRef("#/components/schemas/OfflineSyncRequest"), nil, map[string]any{"200": jsonResponse("Sync results", "#/components/schemas/OfflineSyncResponse")}),
-			"/ui/bootstrap":      opPath("get", "UI Contracts", "public-headless", "Get UI bootstrap", "Returns the surface-aware workspace menus, actions, views, locale, default route path, and self-service API catalog for the current principal.", nil, nil, map[string]any{"200": jsonResponse("UI bootstrap", "#/components/schemas/UIBootstrapResponse")}),
+			"/ui/bootstrap": opPath("get", "UI Contracts", "public-headless", "Get UI bootstrap", "Returns the surface-aware workspace menus, actions, views, locale, default route path, and self-service API catalog for the current principal.", nil, []map[string]any{
+				queryStringParam("surface", "Optional workspace surface key."),
+			}, map[string]any{"200": jsonResponse("UI bootstrap", "#/components/schemas/UIBootstrapResponse")}),
 			"/ui/routes/resolve": opPath("get", "UI Contracts", "public-headless", "Resolve UI route", "Resolves a hash-route path into an action, view, or custom entry.", nil, []map[string]any{queryEnumParam("path", "User route path.", userPaths)}, map[string]any{"200": jsonResponse("Route resolution", "#/components/schemas/UIRouteResolution")}),
 			"/ui/views/{viewKey}": map[string]any{
 				"get": operation("UI Contracts", "public-headless", "Get UI view", "Returns one registered user-surface view definition.", nil, []map[string]any{pathEnumParam("viewKey", "Registered user view key.", userViewKeys)}, map[string]any{"200": jsonResponse("View definition", "#/components/schemas/UIViewDefinition")}),
@@ -158,6 +160,7 @@ func buildOpenAPIDocument(cfg *config.Service, modules *module.Service, models *
 					"properties": map[string]any{
 						"password_enabled":    map[string]any{"type": "boolean"},
 						"google_enabled":      map[string]any{"type": "boolean"},
+						"totp_enabled":        map[string]any{"type": "boolean"},
 						"login_title":         map[string]any{"type": "string"},
 						"login_subtitle":      map[string]any{"type": "string"},
 						"google_button_label": map[string]any{"type": "string"},
@@ -920,6 +923,16 @@ func queryEnumParam(name, description string, values []string) map[string]any {
 		"required":    true,
 		"description": description,
 		"schema":      map[string]any{"type": "string", "enum": values},
+	}
+}
+
+func queryStringParam(name, description string) map[string]any {
+	return map[string]any{
+		"name":        name,
+		"in":          "query",
+		"required":    false,
+		"description": description,
+		"schema":      map[string]any{"type": "string"},
 	}
 }
 

@@ -1586,3 +1586,66 @@ func seedLeavePolicyTestData(t *testing.T, models *model.Service, paidLeave bool
 	}
 	return employee, policy, absenceCode
 }
+
+func TestPrepareLeaveRequestValuesDoesNotMaskApplicableContextErrors(t *testing.T) {
+	models := model.NewService()
+	for _, def := range []model.Definition{
+		{Key: "leave_policy", DisplayName: "Leave Policy", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "paid_leave", Type: "bool"}, {Key: "requires_balance", Type: "bool"}, {Key: "allows_half_day", Type: "bool"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "absence_code", DisplayName: "Absence Code", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "status", Type: "string"}}},
+	} {
+		if err := models.Register(def); err != nil {
+			t.Fatalf("register model %s: %v", def.Key, err)
+		}
+	}
+	service := NewLeavePolicyCoreService(models, nil, nil, nil)
+
+	absenceCode, err := models.Create("absence_code", "user_admin", map[string]any{
+		"code":   "OLD",
+		"name":   "Old Absence",
+		"status": "active",
+	})
+	if err != nil {
+		t.Fatalf("create absence code: %v", err)
+	}
+	policy, err := models.Create("leave_policy", "user_admin", map[string]any{
+		"code":             "LP-OLD",
+		"name":             "Old Policy",
+		"absence_code_id":  absenceCode.ID,
+		"paid_leave":       false,
+		"requires_balance": false,
+		"allows_half_day":  true,
+		"organization_id":  "org_default",
+		"location_id":      "loc_hq",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create leave policy: %v", err)
+	}
+
+	employee := model.Record{ID: "employee_1"}
+	assignment := model.Record{Values: map[string]any{"organization_id": "org_default", "location_id": "loc_hq"}}
+	current := model.Record{
+		ID: "leave_current",
+		Values: map[string]any{
+			"employee_id":               employee.ID,
+			"leave_policy_id":           policy.ID,
+			"employee_leave_profile_id": "profile_existing",
+			"absence_code_id":           absenceCode.ID,
+			"organization_id":           "org_default",
+			"location_id":               "loc_hq",
+			"status":                    "active",
+		},
+	}
+
+	_, _, _, _, _, err = service.prepareLeaveRequestValues(employee, assignment, current, map[string]any{
+		"start_date": "2100-01-05",
+		"end_date":   "2100-01-05",
+	}, "leave_user")
+	if err == nil {
+		t.Fatal("expected applicable context load error")
+	}
+	if got := err.Error(); got == "validation_error: no active leave profile matches this request" {
+		t.Fatalf("expected underlying lookup failure, got fallback validation error: %v", err)
+	}
+}
+

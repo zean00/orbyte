@@ -1675,15 +1675,16 @@ func buildGoogleOAuthCookie(name, value string, expiresAt time.Time) *http.Cooki
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
+		Secure:   runtimeconfig.Current().CookieSecure(),
 		Expires:  expiresAt,
 		MaxAge:   int(time.Until(expiresAt).Seconds()),
 	}
 }
 
 func clearGoogleOAuthCookies(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: googleOAuthStateCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: googleOAuthNextCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
+	secure := runtimeconfig.Current().CookieSecure()
+	http.SetCookie(w, &http.Cookie{Name: googleOAuthStateCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure, Expires: time.Unix(0, 0), MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: googleOAuthNextCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure, Expires: time.Unix(0, 0), MaxAge: -1})
 }
 
 func cookieValue(r *http.Request, name string) string {

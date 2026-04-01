@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check:generated": "node ./scripts/check-generated-client.mjs",
     "clean:embed": "rm -rf ../internal/platform/httpx/assets/assets && rm -f ../internal/platform/httpx/assets/index.html ../internal/platform/httpx/assets/admin.html ../internal/platform/httpx/assets/registerSW.js ../internal/platform/httpx/assets/manifest.webmanifest ../internal/platform/httpx/assets/sw.js ../internal/platform/httpx/assets/workbox-*.js",
     "dev": "vite",
     "build": "npm run clean:embed && tsc -b && vite build",

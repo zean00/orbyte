@@ -11,14 +11,12 @@ interface User {
 
 interface AuthState {
   user: User | null
-  token: string | null
   isAuthenticated: boolean
   isLoading: boolean
   hasCheckedAuth: boolean
   checkAuth: () => Promise<void>
-  setUser: (user: User | null) => void
-  setToken: (token: string | null) => void
-  login: (user: User, token: string) => void
+  setAuthenticatedUser: (user: User | null) => void
+  clearAuth: () => void
   logout: () => void
 }
 
@@ -33,7 +31,6 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      token: null,
       isAuthenticated: false,
       isLoading: false,
       hasCheckedAuth: false,
@@ -56,7 +53,6 @@ export const useAuthStore = create<AuthState>()(
             } else {
               set({
                 user: null,
-                token: null,
                 isAuthenticated: false,
                 isLoading: false,
                 hasCheckedAuth: true,
@@ -65,7 +61,6 @@ export const useAuthStore = create<AuthState>()(
           } else {
             set({
               user: null,
-              token: null,
               isAuthenticated: false,
               isLoading: false,
               hasCheckedAuth: true,
@@ -74,7 +69,6 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           set({
             user: null,
-            token: null,
             isAuthenticated: false,
             isLoading: false,
             hasCheckedAuth: true,
@@ -82,25 +76,18 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      setUser: (user) =>
+      setAuthenticatedUser: (user) =>
         set({
           user,
           isAuthenticated: !!user,
+          isLoading: false,
           hasCheckedAuth: true,
         }),
 
-      setToken: (token) =>
+      clearAuth: () =>
         set({
-          token,
-          isAuthenticated: !!token,
-          hasCheckedAuth: true,
-        }),
-
-      login: (user, token) =>
-        set({
-          user,
-          token,
-          isAuthenticated: true,
+          user: null,
+          isAuthenticated: false,
           isLoading: false,
           hasCheckedAuth: true,
         }),
@@ -118,7 +105,6 @@ export const useAuthStore = create<AuthState>()(
         }
         set({
           user: null,
-          token: null,
           isAuthenticated: false,
           isLoading: false,
           hasCheckedAuth: true,
@@ -129,7 +115,6 @@ export const useAuthStore = create<AuthState>()(
       name: 'orbyte-auth',
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
     }

@@ -1083,19 +1083,22 @@ func isSensitiveConfigField(prefix, key string, svc *Service, descriptor Adapter
 			return field.Sensitive
 		}
 	}
-	parts := strings.Split(prefix, ".")
-	if len(parts) < 3 || svc == nil {
+	if svc == nil {
 		return false
 	}
+	var lookupKey string
 	var system ExternalSystem
-	if parts[1] == "system" {
-		item, ok := svc.repo.GetSystem(parts[2])
+	switch {
+	case strings.HasPrefix(prefix, "integration.system."):
+		lookupKey = strings.TrimPrefix(prefix, "integration.system.")
+		item, ok := svc.repo.GetSystem(lookupKey)
 		if !ok {
 			return false
 		}
 		system = item
-	} else {
-		endpoint, ok := svc.repo.GetEndpoint(parts[2])
+	case strings.HasPrefix(prefix, "integration.endpoint."):
+		lookupKey = strings.TrimPrefix(prefix, "integration.endpoint.")
+		endpoint, ok := svc.repo.GetEndpoint(lookupKey)
 		if !ok {
 			return false
 		}
@@ -1104,6 +1107,8 @@ func isSensitiveConfigField(prefix, key string, svc *Service, descriptor Adapter
 			return false
 		}
 		system = item
+	default:
+		return false
 	}
 	adapter, ok := svc.adapters[system.Adapter]
 	if !ok {

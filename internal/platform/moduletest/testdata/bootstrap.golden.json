@@ -97,6 +97,21 @@
       "view_key": "approval.policies.form"
     },
     {
+      "custom_entry_key": "attendance.leave_approvals",
+      "key": "attendance.leave_approvals",
+      "kind": "navigate",
+      "label": "Leave Approvals",
+      "label_i18n": {
+        "en": "Leave Approvals",
+        "id": "Persetujuan Cuti"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "attendance.leave_inbox.read"
+      ],
+      "route_path": "/attendance/leave-approvals"
+    },
+    {
       "key": "commercial.accounts.detail",
       "kind": "navigate",
       "label": "Account Detail",
@@ -3669,6 +3684,21 @@
       ],
       "route_path": "/leave/entitlement_rules",
       "view_key": "leave.entitlement_rules.list"
+    },
+    {
+      "custom_entry_key": "leave.my_requests",
+      "key": "leave.my_requests",
+      "kind": "navigate",
+      "label": "My Leave",
+      "label_i18n": {
+        "en": "My Leave",
+        "id": "Cuti Saya"
+      },
+      "render_mode": "custom",
+      "required_permissions": [
+        "leave.self_service.read"
+      ],
+      "route_path": "/leave/my-requests"
     },
     {
       "key": "leave.policies.detail",
@@ -7399,6 +7429,19 @@
       ]
     },
     {
+      "action_key": "attendance.leave_approvals",
+      "key": "attendance.leave_approvals",
+      "label": "Leave Approvals",
+      "label_i18n": {
+        "en": "Leave Approvals",
+        "id": "Persetujuan Cuti"
+      },
+      "order": 26,
+      "required_permissions": [
+        "attendance.leave_inbox.read"
+      ]
+    },
+    {
       "action_key": "commercial.tax_codes.list",
       "key": "commercial.tax_codes",
       "label": "Tax Codes",
@@ -7812,6 +7855,19 @@
       "order": 39,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "leave.my_requests",
+      "key": "leave.my_requests",
+      "label": "My Leave",
+      "label_i18n": {
+        "en": "My Leave",
+        "id": "Cuti Saya"
+      },
+      "order": 40,
+      "required_permissions": [
+        "leave.self_service.read"
       ]
     },
     {
@@ -9304,6 +9360,27 @@
       "title_i18n": {
         "en": "List Leave Balances",
         "id": "Daftar Saldo Cuti"
+      }
+    },
+    {
+      "audience_kinds": [
+        "employee"
+      ],
+      "handler_kind": "custom",
+      "idempotent": true,
+      "key": "leave.self_service.requests.amend",
+      "method": "POST",
+      "model_key": "leave_request",
+      "request_contract_key": "leave.self_service.request.update",
+      "required_permissions": [
+        "leave.self_service.write"
+      ],
+      "response_contract_key": "leave.self_service.request.detail",
+      "route_path": "/ui/self-service/leave/requests/{requestID}/amend",
+      "title": "Amend My Leave Request",
+      "title_i18n": {
+        "en": "Amend My Leave Request",
+        "id": "Ubah Permintaan Cuti Saya"
       }
     },
     {
@@ -29931,6 +30008,12 @@
               "type": "number"
             },
             {
+              "key": "carry_forward_balance_days",
+              "label": "Carry Forward Balance Days",
+              "path": "values.carry_forward_balance_days",
+              "type": "number"
+            },
+            {
               "key": "last_accrual_date",
               "label": "Last Accrual Date",
               "path": "values.last_accrual_date",
@@ -30009,6 +30092,13 @@
               "key": "available_days",
               "label": "Available Days",
               "path": "values.available_days",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "carry_forward_balance_days",
+              "label": "Carry Forward Balance Days",
+              "path": "values.carry_forward_balance_days",
               "type": "number",
               "widget": "text"
             },
@@ -30359,7 +30449,8 @@
                 "reservation",
                 "release",
                 "consumption",
-                "adjustment"
+                "adjustment",
+                "reversal"
               ],
               "path": "values.entry_type",
               "type": "string"
@@ -30369,6 +30460,18 @@
               "label": "Days",
               "path": "values.days",
               "type": "number"
+            },
+            {
+              "key": "carry_forward_days_delta",
+              "label": "Carry Forward Days Delta",
+              "path": "values.carry_forward_days_delta",
+              "type": "number"
+            },
+            {
+              "key": "reversal_of_entry_id",
+              "label": "Reversal Of Entry",
+              "path": "values.reversal_of_entry_id",
+              "type": "string"
             },
             {
               "key": "effective_date",
@@ -30451,7 +30554,8 @@
                 "reservation",
                 "release",
                 "consumption",
-                "adjustment"
+                "adjustment",
+                "reversal"
               ],
               "path": "values.entry_type",
               "type": "string",
@@ -30462,6 +30566,20 @@
               "label": "Days",
               "path": "values.days",
               "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "carry_forward_days_delta",
+              "label": "Carry Forward Days Delta",
+              "path": "values.carry_forward_days_delta",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reversal_of_entry_id",
+              "label": "Reversal Of Entry",
+              "path": "values.reversal_of_entry_id",
+              "type": "string",
               "widget": "text"
             },
             {
@@ -30601,6 +30719,12 @@
             {
               "key": "carry_forward_expiry_rule",
               "label": "Carry Forward Expiry Rule",
+              "options": [
+                "",
+                "year_end",
+                "q1_end",
+                "month_end"
+              ],
               "path": "values.carry_forward_expiry_rule",
               "type": "string"
             },
@@ -30688,9 +30812,15 @@
             {
               "key": "carry_forward_expiry_rule",
               "label": "Carry Forward Expiry Rule",
+              "options": [
+                "",
+                "year_end",
+                "q1_end",
+                "month_end"
+              ],
               "path": "values.carry_forward_expiry_rule",
               "type": "string",
-              "widget": "text"
+              "widget": "select"
             },
             {
               "key": "prorate_on_join",

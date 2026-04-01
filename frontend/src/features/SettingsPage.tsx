@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [qrURI, setQrURI] = useState('')
   const [loginEnabled, setLoginEnabled] = useState(false)
   const [approvalEnabled, setApprovalEnabled] = useState(false)
+  const clearAuth = useAuthStore((state) => state.clearAuth)
 
   async function load() {
     setLoading(true)
@@ -122,13 +123,7 @@ export default function SettingsPage() {
     setQrURI('')
     setVerifyCode('')
     if (payload.logged_out) {
-      useAuthStore.setState({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        hasCheckedAuth: true,
-      })
+      clearAuth()
       navigate('/login', { replace: true })
       return
     }

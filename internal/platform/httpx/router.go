@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"orbyte/internal/platform/logging"
@@ -21,6 +22,7 @@ import (
 const (
 	analyticsMCPStreamPath       = "/mcp/events/analytics/snapshot"
 	analyticsScopedMCPStreamPath = "/mcp/analytics/events/analytics/snapshot"
+	maxAPIRequestBodyBytes int64 = 4 << 20
 )
 
 func BuildRouter(config RouterConfig) http.Handler {
@@ -42,6 +44,7 @@ func BuildRouter(config RouterConfig) http.Handler {
 	var handler http.Handler = mux
 	handler = withCSRFProtection(handler, config.CrossCutting.Config)
 	handler = withAuthentication(handler, config.CrossCutting.Config, config.CrossCutting.Identity)
+	handler = withRequestBodyLimit(handler)
 	handler = withObservability(handler, config.CrossCutting.Logger, config.CrossCutting.Observability)
 	if config.CrossCutting.OTel != nil {
 		handler = withOTelHTTP(handler, config.CrossCutting.OTel)
@@ -130,6 +133,12 @@ func respondError(w http.ResponseWriter, err error) {
 			status = http.StatusNotFound
 		}
 	}
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		status = http.StatusRequestEntityTooLarge
+		kind = "request_too_large"
+		message = "request body exceeds the maximum allowed size"
+	}
 
 	respondJSON(w, status, map[string]any{
 		"error": map[string]any{
@@ -137,6 +146,33 @@ func respondError(w http.ResponseWriter, err error) {
 			"message": message,
 		},
 	})
+}
+
+func withRequestBodyLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldLimitRequestBody(r) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxAPIRequestBodyBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func shouldLimitRequestBody(r *http.Request) bool {
+	if r.Body == nil {
+		return false
+	}
+	if r.Method == http.MethodPost && r.URL != nil && strings.TrimSpace(r.URL.Path) == "/offline/sync" {
+		return false
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	if r.ContentLength == 0 {
+		return false
+	}
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	return contentType == "" || strings.Contains(strings.ToLower(contentType), "application/json")
 }
 
 func withObservability(next http.Handler, logger *logging.Service, obs *observability.Service) http.Handler {

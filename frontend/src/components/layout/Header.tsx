@@ -27,6 +27,7 @@ export function Header() {
     shellKind,
     availableSurfaces,
     currentSurface,
+    currentRoute,
     locale,
     supportedLocales,
     adminAccess,
@@ -38,6 +39,7 @@ export function Header() {
     setAdminBootstrap,
     setLocale,
     setRoutes,
+    toggleMobileNav,
     actions,
     routes,
   } = useShellStore();
@@ -67,6 +69,17 @@ export function Header() {
     }
     return [...unique.values()];
   }, [actions, locale, routes, shellKind]);
+
+  const currentRouteLabel = useMemo(() => {
+    if (currentRoute) {
+      const match = routes.find((route) => route.path === currentRoute);
+      if (match) return match.label;
+    }
+    if (shellKind === "workspace") {
+      return surfaceLabels[currentSurface] || "Workspace";
+    }
+    return "Admin Console";
+  }, [currentRoute, currentSurface, routes, shellKind]);
 
   const handleSurfaceChange = async (surface: string) => {
     const bootstrap = await fetchWorkspaceBootstrap(surface);
@@ -134,29 +147,46 @@ export function Header() {
   };
 
   return (
-    <header className="h-12 bg-surface border-b border-line flex items-center px-3 gap-2 overflow-hidden">
-      {shellKind === "workspace" && availableSurfaces.length > 0 && (
-        <div className="flex items-center gap-0.5 shrink-0">
-          {availableSurfaces.map((surface) => (
-            <button
-              key={surface}
-              onClick={() => void handleSurfaceChange(surface)}
-              className={`px-1.5 py-0.5 text-xs rounded transition-colors whitespace-nowrap ${
-                currentSurface === surface
-                  ? "bg-accent text-white"
-                  : "text-muted hover:text-body hover:bg-shell"
-              }`}
-            >
-              {surfaceLabels[surface] || surface}
-            </button>
-          ))}
-        </div>
-      )}
+    <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
+      <div className="flex min-h-16 items-center gap-3 px-4 py-3 sm:px-6">
+        <button
+          type="button"
+          onClick={toggleMobileNav}
+          className="inline-flex rounded-xl border border-line p-2 text-muted transition-colors hover:bg-shell hover:text-body md:hidden"
+          aria-label="Open navigation"
+        >
+          <MenuIcon className="h-5 w-5" />
+        </button>
 
-      <div className="ml-auto flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {shellKind === "admin" ? "Admin Console" : "Orbyte Workspace"}
+          </div>
+          <div className="truncate text-lg font-semibold text-body">{currentRouteLabel}</div>
+        </div>
+
+        {shellKind === "workspace" && availableSurfaces.length > 0 && (
+          <div className="hidden items-center rounded-2xl border border-line bg-shell/80 p-1 md:flex">
+            {availableSurfaces.map((surface) => (
+              <button
+                key={surface}
+                onClick={() => void handleSurfaceChange(surface)}
+                className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                  currentSurface === surface
+                    ? "bg-accent text-white"
+                    : "text-muted hover:text-body"
+                }`}
+              >
+                {surfaceLabels[surface] || surface}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="hidden items-center gap-2 xl:flex">
         <form
           onSubmit={handleCommandSubmit}
-          className="flex items-center gap-1"
+          className="flex items-center gap-2"
         >
           <input
             id="shell-command"
@@ -168,7 +198,7 @@ export function Header() {
                 ? "Search admin sections or jump to a route"
                 : "Search pages or jump to a route"
             }
-            className="w-40 rounded border border-line bg-surface px-2 py-1 text-xs text-body md:w-64"
+            className="w-72 rounded-2xl border border-line bg-surface px-3 py-2 text-sm text-body"
             name="shell_command"
           />
           <datalist id="shell-route-options">
@@ -180,18 +210,34 @@ export function Header() {
           </datalist>
           <button
             type="submit"
-            className="rounded border border-line px-2 py-1 text-xs text-body"
+            className="rounded-2xl border border-line px-3 py-2 text-sm text-body transition-colors hover:bg-shell"
           >
             Go
           </button>
         </form>
+        </div>
 
+        <div className="flex items-center gap-2">
+        {shellKind === "workspace" && availableSurfaces.length > 0 && (
+          <select
+            value={currentSurface}
+            onChange={(e) => void handleSurfaceChange(e.target.value)}
+            className="min-w-0 rounded-2xl border border-line bg-surface px-3 py-2 text-xs text-body md:hidden"
+            name="surface"
+          >
+            {availableSurfaces.map((surface) => (
+              <option key={surface} value={surface}>
+                {surfaceLabels[surface] || surface}
+              </option>
+            ))}
+          </select>
+        )}
         {supportedLocales.length > 1 && (
           <select
             id="locale"
             value={locale}
             onChange={(e) => void handleLocaleChange(e.target.value)}
-            className="px-1 py-0.5 text-xs bg-surface border border-line rounded text-body"
+            className="rounded-2xl border border-line bg-surface px-3 py-2 text-xs text-body"
             name="locale"
           >
             {supportedLocales.map((loc) => (
@@ -205,7 +251,7 @@ export function Header() {
         {shellKind === "workspace" && (
           <button
             onClick={() => navigate("/settings")}
-            className="p-1 text-muted hover:text-body transition-colors rounded hover:bg-shell"
+            className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-body"
             title="Settings"
           >
             <SettingsIcon className="w-4 h-4" />
@@ -215,7 +261,7 @@ export function Header() {
         {shellKind === "workspace" && (
           <button
             onClick={() => navigate("/notifications")}
-            className="p-1 text-muted hover:text-body transition-colors rounded hover:bg-shell"
+            className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-body"
             title="Notifications"
           >
             <BellIcon className="w-4 h-4" />
@@ -224,7 +270,7 @@ export function Header() {
 
         <button
           onClick={toggleDarkMode}
-          className="p-1 text-muted hover:text-body transition-colors rounded hover:bg-shell"
+          className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-body"
           title={darkMode ? "Light mode" : "Dark mode"}
         >
           {darkMode ? (
@@ -235,8 +281,8 @@ export function Header() {
         </button>
 
         {user && (
-          <div className="flex items-center gap-1 pl-1.5 border-l border-line">
-            <span className="text-xs font-medium text-body">{user.name}</span>
+          <div className="hidden items-center gap-2 border-l border-line pl-3 lg:flex">
+            <span className="max-w-32 truncate text-sm font-medium text-body">{user.name}</span>
             <button
               onClick={() => {
                 void (async () => {
@@ -248,7 +294,7 @@ export function Header() {
                   navigate("/login", { replace: true });
                 })();
               }}
-              className="p-1 text-muted hover:text-warn transition-colors"
+              className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-warn"
               title="Log out"
             >
               <LogoutIcon className="w-4 h-4" />
@@ -262,7 +308,7 @@ export function Header() {
             onClick={() => {
               window.location.href = `/admin${adminPath === "/" ? "" : adminPath}`;
             }}
-            className="px-1.5 py-0.5 text-xs bg-accent text-white rounded hover:bg-accent-dark transition-colors"
+            className="rounded-2xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-dark"
           >
             Admin
           </button>
@@ -274,14 +320,47 @@ export function Header() {
             onClick={() => {
               window.location.href = `/ui${uiPath === "/" ? "" : uiPath}`;
             }}
-            className="px-1.5 py-0.5 text-xs bg-accent text-white rounded hover:bg-accent-dark transition-colors"
+            className="rounded-2xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-dark"
           >
             Workspace
           </button>
         )}
+        {user && (
+          <button
+            onClick={() => {
+              void (async () => {
+                await logout();
+                if (shellKind === "admin") {
+                  window.location.href = "/ui/login";
+                  return;
+                }
+                navigate("/login", { replace: true });
+              })();
+            }}
+            className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-warn lg:hidden"
+            title="Log out"
+          >
+            <LogoutIcon className="h-4 w-4" />
+          </button>
+        )}
+        </div>
       </div>
     </header>
   );
+}
+
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  )
 }
 
 function SunIcon({ className }: { className?: string }) {

@@ -21,6 +21,7 @@ interface AuthContext {
 
 interface ShellState {
   sidebarOpen: boolean
+  mobileNavOpen: boolean
   shellKind: ShellKind
   currentRoute: string
   routes: ShellRoute[]
@@ -41,6 +42,9 @@ interface ShellState {
   workspaceBootstrap: WorkspaceBootstrapResponse | null
   adminBootstrap: AdminBootstrapResponse | null
   toggleSidebar: () => void
+  setSidebarOpen: (open: boolean) => void
+  toggleMobileNav: () => void
+  closeMobileNav: () => void
   setCurrentRoute: (route: string) => void
   setWorkspaceBootstrap: (data: WorkspaceBootstrapResponse) => void
   setAdminBootstrap: (data: AdminBootstrapResponse) => void
@@ -52,6 +56,7 @@ export const useShellStore = create<ShellState>()(
   persist(
     (set) => ({
       sidebarOpen: true,
+      mobileNavOpen: false,
       shellKind: 'workspace',
       currentRoute: '',
       routes: [],
@@ -73,6 +78,9 @@ export const useShellStore = create<ShellState>()(
       adminBootstrap: null,
 
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      toggleMobileNav: () => set((state) => ({ mobileNavOpen: !state.mobileNavOpen })),
+      closeMobileNav: () => set({ mobileNavOpen: false }),
       setCurrentRoute: (route) => set({ currentRoute: route }),
       setWorkspaceBootstrap: (data) =>
         set({

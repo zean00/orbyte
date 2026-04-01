@@ -2,6 +2,7 @@ package application
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -566,7 +567,14 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 	}
 	policy, profile, absenceCode, account, err := s.resolveApplicableLeaveContext(employee, assignment, values, actorID)
 	if err != nil {
-		return nil, model.Record{}, model.Record{}, model.Record{}, model.Record{}, err
+		var platformErr shared.Error
+		if !errors.As(err, &platformErr) || platformErr.Kind != shared.KindValidation {
+			return nil, model.Record{}, model.Record{}, model.Record{}, model.Record{}, err
+		}
+		policy, profile, absenceCode, account, err = s.resolveExistingLeaveContext(current, assignment, values)
+		if err != nil {
+			return nil, model.Record{}, model.Record{}, model.Record{}, model.Record{}, err
+		}
 	}
 	startDate := strings.TrimSpace(textValue(values["start_date"]))
 	endDate := strings.TrimSpace(textValue(values["end_date"]))
@@ -617,6 +625,47 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 		values["status"] = "active"
 	}
 	return values, policy, profile, absenceCode, account, nil
+}
+
+func (s *LeavePolicyCoreService) resolveExistingLeaveContext(current, assignment model.Record, values map[string]any) (model.Record, model.Record, model.Record, model.Record, error) {
+	if current.ID == "" {
+		return model.Record{}, model.Record{}, model.Record{}, model.Record{}, shared.Validation("no active leave profile matches this request")
+	}
+	policyID := strings.TrimSpace(textValue(values["leave_policy_id"]))
+	if policyID == "" {
+		policyID = strings.TrimSpace(textValue(current.Values["leave_policy_id"]))
+	}
+	if policyID == "" {
+		return model.Record{}, model.Record{}, model.Record{}, model.Record{}, shared.Validation("no active leave profile matches this request")
+	}
+	policy, err := s.models.Get("leave_policy", policyID)
+	if err != nil || !strings.EqualFold(textValue(policy.Values["status"]), "active") {
+		return model.Record{}, model.Record{}, model.Record{}, model.Record{}, shared.Validation("no active leave profile matches this request")
+	}
+	if boolValue(policy.Values["requires_balance"]) {
+		return model.Record{}, model.Record{}, model.Record{}, model.Record{}, shared.Validation("no active leave profile matches this request")
+	}
+	absenceCodeID := strings.TrimSpace(textValue(values["absence_code_id"]))
+	if absenceCodeID == "" {
+		absenceCodeID = strings.TrimSpace(textValue(current.Values["absence_code_id"]))
+	}
+	if absenceCodeID != "" && absenceCodeID != strings.TrimSpace(textValue(policy.Values["absence_code_id"])) {
+		return model.Record{}, model.Record{}, model.Record{}, model.Record{}, shared.Validation("no active leave profile matches this request")
+	}
+	absenceCode, err := s.models.Get("absence_code", textValue(policy.Values["absence_code_id"]))
+	if err != nil {
+		return model.Record{}, model.Record{}, model.Record{}, model.Record{}, err
+	}
+	profile := model.Record{
+		ID: strings.TrimSpace(textValue(current.Values["employee_leave_profile_id"])),
+		Values: map[string]any{
+			"employee_id":     textValue(current.Values["employee_id"]),
+			"leave_policy_id": policy.ID,
+			"organization_id": leaveFirstNonEmpty(textValue(current.Values["organization_id"]), textValue(assignment.Values["organization_id"])),
+			"location_id":     leaveFirstNonEmpty(textValue(current.Values["location_id"]), textValue(assignment.Values["location_id"])),
+		},
+	}
+	return policy, profile, absenceCode, model.Record{}, nil
 }
 
 func (s *LeavePolicyCoreService) amendLeaveRequest(record model.Record, payload map[string]any, actorID string) (model.Record, error) {

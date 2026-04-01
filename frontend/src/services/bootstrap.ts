@@ -1,3 +1,10 @@
+import {
+  getAdminBootstrap,
+  getAuthOptions,
+  getUIBootstrap,
+} from '@/services/generated/client'
+import type { AuthOptions } from '@/services/generated/types'
+
 export type ShellKind = 'workspace' | 'admin'
 
 export interface LocalizedText {
@@ -235,6 +242,16 @@ function createHttpError(message: string, status: number): HttpError {
   return Object.assign(new Error(message), { status })
 }
 
+async function unwrapGeneratedResponse<T>(
+  request: Promise<{ data?: T; error?: unknown; response: Response }>
+): Promise<T> {
+  const { data, response } = await request
+  if (!response.ok || data === undefined) {
+    throw createHttpError(`Request failed: ${response.status}`, response.status)
+  }
+  return data
+}
+
 export function normalizeShellPath(path: string, shellKind: ShellKind): string {
   const trimmed = String(path || '').trim()
   if (!trimmed) return '/'
@@ -311,18 +328,13 @@ export function pickText<T extends object>(
 }
 
 export async function fetchWorkspaceBootstrap(surface?: string): Promise<WorkspaceBootstrapResponse> {
-  const query = surface ? `?surface=${encodeURIComponent(surface)}` : ''
-  const response = await fetch(`/ui/bootstrap${query}`, { credentials: 'include' })
-  if (!response.ok) {
-    throw createHttpError(`Bootstrap error: ${response.status}`, response.status)
-  }
-  return response.json()
+  return unwrapGeneratedResponse<WorkspaceBootstrapResponse>(getUIBootstrap(surface))
 }
 
 export async function fetchAdminBootstrap(): Promise<AdminBootstrapResponse> {
-  const response = await fetch('/admin/api/bootstrap', { credentials: 'include' })
-  if (!response.ok) {
-    throw createHttpError(`Admin bootstrap error: ${response.status}`, response.status)
-  }
-  return response.json()
+  return unwrapGeneratedResponse<AdminBootstrapResponse>(getAdminBootstrap())
+}
+
+export async function fetchAuthOptions(): Promise<AuthOptions> {
+  return unwrapGeneratedResponse<AuthOptions>(getAuthOptions())
 }
