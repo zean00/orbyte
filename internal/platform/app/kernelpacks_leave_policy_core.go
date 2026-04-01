@@ -1,6 +1,7 @@
 package app
 
 import (
+	"orbyte/internal/platform/httpx"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/search"
@@ -178,7 +179,7 @@ func leavePolicyCoreKernelPackManifest() module.Manifest {
 						"leave_balance_entry.create", "leave_balance_entry.list", "leave_balance_entry.read", "leave_balance_entry.update",
 						"leave_accrual_run.create", "leave_accrual_run.list", "leave_accrual_run.read", "leave_accrual_run.update",
 						"leave_balance_adjustment.create", "leave_balance_adjustment.list", "leave_balance_adjustment.read", "leave_balance_adjustment.update",
-						"attendance.read", "attendance.update", "attendance.cancel",
+						"attendance.read", "attendance.update", "attendance.leave_inbox.read", "attendance.cancel",
 					},
 				},
 				{
@@ -203,6 +204,7 @@ func leavePolicyCoreKernelPackManifest() module.Manifest {
 		},
 		Frontend: module.FrontendDefinition{
 			Menus: []module.MenuDefinition{
+				{Key: "leave.my_requests", Label: "My Leave", LabelI18n: localize("My Leave", "Cuti Saya"), ActionKey: "leave.my_requests", Order: 40, RequiredPermissions: []string{"leave.self_service.read"}},
 				{Key: "leave.policies", Label: "Leave Policies", LabelI18n: localize("Leave Policies", "Kebijakan Cuti"), ActionKey: "leave.policies.list", Order: 41, RequiredPermissions: []string{"leave_policy.list"}},
 				{Key: "leave.entitlement_rules", Label: "Entitlement Rules", LabelI18n: localize("Entitlement Rules", "Aturan Hak Cuti"), ActionKey: "leave.entitlement_rules.list", Order: 42, RequiredPermissions: []string{"leave_entitlement_rule.list"}},
 				{Key: "leave.profiles", Label: "Leave Profiles", LabelI18n: localize("Leave Profiles", "Profil Cuti"), ActionKey: "leave.profiles.list", Order: 43, RequiredPermissions: []string{"employee_leave_profile.list"}},
@@ -213,7 +215,22 @@ func leavePolicyCoreKernelPackManifest() module.Manifest {
 			},
 			Actions: leavePolicyActions(),
 			Views:   leavePolicyViews(),
+			CustomEntries: []module.CustomEntryDefinition{
+				{
+					Key:                 "leave.my_requests",
+					Title:               "My Leave",
+					TitleI18n:           localize("My Leave", "Cuti Saya"),
+					RoutePath:           "/leave/my-requests",
+					BundleKey:           "leave-self-service-workspace",
+					ComponentExport:     "render",
+					RequiredPermissions: []string{"leave.self_service.read"},
+				},
+			},
 		},
+		Bundles: []module.BundleDefinition{{
+			Key:    "leave-self-service-workspace",
+			Script: httpx.LeaveWorkspaceBundle(),
+		}},
 	}
 }
 
@@ -296,6 +313,16 @@ func leavePolicyActions() []module.ActionDefinition {
 	actions = append(actions, leavePolicyModelActions("balance_entries", "Leave Balance Entries", "leave_balance_entry")...)
 	actions = append(actions, leavePolicyModelActions("accrual_runs", "Leave Accrual Runs", "leave_accrual_run")...)
 	actions = append(actions, leavePolicyModelActions("balance_adjustments", "Leave Balance Adjustments", "leave_balance_adjustment")...)
+	actions = append(actions, module.ActionDefinition{
+		Key:                 "leave.my_requests",
+		Label:               "My Leave",
+		LabelI18n:           localize("My Leave", "Cuti Saya"),
+		Kind:                "navigate",
+		RoutePath:           "/leave/my-requests",
+		CustomEntryKey:      "leave.my_requests",
+		RenderMode:          module.RenderModeCustom,
+		RequiredPermissions: []string{"leave.self_service.read"},
+	})
 	return actions
 }
 

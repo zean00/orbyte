@@ -189,6 +189,26 @@ func TestLeavePolicySubmitUsesLinkedApprovalPolicyWithQuorum(t *testing.T) {
 	if got := textValue(record.Values["approval_status"]); got != "approved" {
 		t.Fatalf("expected approved after quorum, got %s", got)
 	}
+	approvedInbox, err := service.InboxRequestSummariesForActor("approver_a", map[string]string{"bucket": "approved"})
+	if err != nil {
+		t.Fatalf("list approved inbox for approver_a: %v", err)
+	}
+	if len(approvedInbox) != 1 || textValue(approvedInbox[0]["id"]) != record.ID {
+		t.Fatalf("expected approver_a to see approved request in inbox, got %+v", approvedInbox)
+	}
+	if _, err := service.RequestSummaryForInboxActor(record.ID, "approver_a"); err != nil {
+		t.Fatalf("expected approver_a to read approved inbox detail: %v", err)
+	}
+	otherInbox, err := service.InboxRequestSummariesForActor("approver_c", map[string]string{"bucket": "approved"})
+	if err != nil {
+		t.Fatalf("list approved inbox for approver_c: %v", err)
+	}
+	if len(otherInbox) != 0 {
+		t.Fatalf("expected unrelated approver to see no approved inbox items, got %+v", otherInbox)
+	}
+	if _, err := service.RequestSummaryForInboxActor(record.ID, "approver_c"); err == nil {
+		t.Fatal("expected unrelated approver to be denied approved inbox detail")
+	}
 }
 
 func TestLeavePolicySubmitFallsBackToSharedApprovalPolicyMatcher(t *testing.T) {

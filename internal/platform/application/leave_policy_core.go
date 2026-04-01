@@ -161,6 +161,21 @@ func (s *LeavePolicyCoreService) ListBalancesForUser(userID string) ([]model.Rec
 	return items, nil
 }
 
+func (s *LeavePolicyCoreService) BalanceEntriesForUser(userID, accountID string) ([]map[string]any, error) {
+	employee, _, err := s.resolveEmployeeForUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := s.models.Get("leave_balance_account", strings.TrimSpace(accountID))
+	if err != nil {
+		return nil, err
+	}
+	if textValue(account.Values["employee_id"]) != employee.ID {
+		return nil, shared.Forbidden("leave balance account is not allowed")
+	}
+	return s.balanceEntrySummaries(account.ID)
+}
+
 func (s *LeavePolicyCoreService) ListRequestsForUser(userID string, filters map[string]string) ([]model.Record, error) {
 	employee, _, err := s.resolveEmployeeForUser(userID)
 	if err != nil {
@@ -1278,9 +1293,7 @@ func clearLeaveApprovalState(values map[string]any) {
 	values["approval_stage_total"] = 0
 	values["approval_routing_mode"] = ""
 	values["required_approver_count"] = 0
-	values["approver_user_id"] = ""
 	values["approval_candidate_user_ids_json"] = "[]"
-	values["approval_recorded_user_ids_json"] = "[]"
 	values["approval_requires_different_actor"] = false
 }
 
@@ -1495,6 +1508,54 @@ func (s *LeavePolicyCoreService) PendingRequestSummariesForApprover(actorID stri
 	return out, nil
 }
 
+func (s *LeavePolicyCoreService) InboxRequestSummariesForActor(actorID string, filters map[string]string) ([]map[string]any, error) {
+	if s == nil || s.models == nil {
+		return nil, shared.Validation("leave policy service is not available")
+	}
+	bucket := strings.ToLower(strings.TrimSpace(filters["bucket"]))
+	if bucket == "" {
+		bucket = "actionable"
+	}
+	statusFilter := strings.ToLower(strings.TrimSpace(filters["status"]))
+	employeeFilter := strings.TrimSpace(filters["employee_id"])
+	items, _, err := s.models.List("leave_request", model.Query{
+		Filters:  map[string]string{"status": "active"},
+		SortKey:  "start_date",
+		Desc:     false,
+		Page:     1,
+		PageSize: model.MaxPageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if employeeFilter != "" && textValue(item.Values["employee_id"]) != employeeFilter {
+			continue
+		}
+		if statusFilter != "" && strings.ToLower(textValue(item.Values["approval_status"])) != statusFilter {
+			continue
+		}
+		if !leaveRequestVisibleToActor(item, actorID) {
+			continue
+		}
+		summary := s.leaveRequestSummaryForActor(item, actorID)
+		switch bucket {
+		case "approved":
+			if strings.ToLower(textValue(item.Values["approval_status"])) != "approved" {
+				continue
+			}
+		case "all":
+		default:
+			if bucket == "actionable" && !boolValue(summary["is_actionable"]) {
+				continue
+			}
+		}
+		out = append(out, summary)
+	}
+	return out, nil
+}
+
 func (s *LeavePolicyCoreService) RequestSummaryForApprover(requestID, actorID string) (map[string]any, error) {
 	record, err := s.models.Get("leave_request", strings.TrimSpace(requestID))
 	if err != nil {
@@ -1509,8 +1570,28 @@ func (s *LeavePolicyCoreService) RequestSummaryForApprover(requestID, actorID st
 	return s.leaveRequestSummary(record), nil
 }
 
+func (s *LeavePolicyCoreService) RequestSummaryForInboxActor(requestID, actorID string) (map[string]any, error) {
+	record, err := s.models.Get("leave_request", strings.TrimSpace(requestID))
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(textValue(record.Values["status"]), "active") {
+		return nil, shared.NotFound("leave request was not found")
+	}
+	if !leaveRequestVisibleToActor(record, actorID) {
+		return nil, shared.Forbidden("leave request is not allowed")
+	}
+	return s.leaveRequestSummaryForActor(record, actorID), nil
+}
+
 func (s *LeavePolicyCoreService) leaveRequestSummary(record model.Record) map[string]any {
-	return map[string]any{
+	return s.leaveRequestSummaryForActor(record, "")
+}
+
+func (s *LeavePolicyCoreService) leaveRequestSummaryForActor(record model.Record, actorID string) map[string]any {
+	state := parseLeaveApprovalState(record.Values)
+	allowedActions := leaveAllowedActionsForActor(record, state, actorID)
+	summary := map[string]any{
 		"id":                          record.ID,
 		"employee_id":                 textValue(record.Values["employee_id"]),
 		"organization_id":             textValue(record.Values["organization_id"]),
@@ -1542,7 +1623,148 @@ func (s *LeavePolicyCoreService) leaveRequestSummary(record model.Record) map[st
 		"self_service_actor_user_id":  textValue(record.Values["self_service_actor_user_id"]),
 		"notes":                       textValue(record.Values["notes"]),
 		"status":                      textValue(record.Values["status"]),
+		"status_label":                leaveApprovalStatusLabel(textValue(record.Values["approval_status"])),
+		"recorded_approver_count":     len(state.RecordedUserIDs),
+		"stage_progress_label":        leaveStageProgressLabel(state),
+		"allowed_actions":             allowedActions,
+		"is_actionable":               leaveContainsString(allowedActions, "approve") || leaveContainsString(allowedActions, "reject"),
+		"can_cancel":                  leaveContainsString(allowedActions, "cancel"),
 	}
+	if employee, err := s.models.Get("employee_profile", textValue(record.Values["employee_id"])); err == nil {
+		summary["employee_code"] = textValue(employee.Values["employee_code"])
+	}
+	if policyID := textValue(record.Values["leave_policy_id"]); policyID != "" {
+		if policy, err := s.models.Get("leave_policy", policyID); err == nil {
+			summary["leave_policy_code"] = textValue(policy.Values["code"])
+			summary["leave_policy_name"] = textValue(policy.Values["name"])
+		}
+	}
+	if absenceCodeID := textValue(record.Values["absence_code_id"]); absenceCodeID != "" {
+		if absenceCode, err := s.models.Get("absence_code", absenceCodeID); err == nil {
+			summary["absence_code_code"] = textValue(absenceCode.Values["code"])
+			summary["absence_code_name"] = textValue(absenceCode.Values["name"])
+		}
+	}
+	if accountID := textValue(record.Values["balance_account_id"]); accountID != "" {
+		if account, err := s.models.Get("leave_balance_account", accountID); err == nil {
+			summary["balance_snapshot"] = map[string]any{
+				"current_balance_days":       numberValue(account.Values["current_balance_days"]),
+				"reserved_days":              numberValue(account.Values["reserved_days"]),
+				"available_days":             numberValue(account.Values["available_days"]),
+				"carry_forward_balance_days": numberValue(account.Values["carry_forward_balance_days"]),
+				"carry_forward_expiry_date":  textValue(account.Values["carry_forward_expiry_date"]),
+			}
+		}
+	}
+	return summary
+}
+
+func (s *LeavePolicyCoreService) balanceEntrySummaries(accountID string) ([]map[string]any, error) {
+	entries, _, err := s.models.List("leave_balance_entry", model.Query{
+		Filters:  map[string]string{"balance_account_id": strings.TrimSpace(accountID)},
+		SortKey:  "effective_date",
+		Desc:     true,
+		Page:     1,
+		PageSize: model.MaxPageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		if !strings.EqualFold(textValue(entry.Values["status"]), "active") {
+			continue
+		}
+		out = append(out, map[string]any{
+			"id":                       entry.ID,
+			"entry_type":               textValue(entry.Values["entry_type"]),
+			"days":                     numberValue(entry.Values["days"]),
+			"carry_forward_days_delta": numberValue(entry.Values["carry_forward_days_delta"]),
+			"reversal_of_entry_id":     textValue(entry.Values["reversal_of_entry_id"]),
+			"effective_date":           textValue(entry.Values["effective_date"]),
+			"leave_request_id":         textValue(entry.Values["leave_request_id"]),
+			"status":                   textValue(entry.Values["status"]),
+		})
+	}
+	return out, nil
+}
+
+func leaveAllowedActionsForActor(record model.Record, state leaveApprovalState, actorID string) []string {
+	approvalStatus := strings.ToLower(textValue(record.Values["approval_status"]))
+	actorID = strings.TrimSpace(actorID)
+	actions := make([]string, 0, 3)
+	if actorID != "" && strings.TrimSpace(textValue(record.Values["self_service_actor_user_id"])) == actorID {
+		switch approvalStatus {
+		case "draft":
+			actions = append(actions, "edit", "submit", "cancel")
+		case "submitted":
+			actions = append(actions, "cancel")
+		}
+	}
+	if actorID != "" {
+		if approvalStatus == "submitted" {
+			allowed := false
+			if state.StageKey == "" {
+				allowed = true
+			} else if state.RequiresDifferentActor && actorID == strings.TrimSpace(textValue(record.Values["self_service_actor_user_id"])) {
+				allowed = false
+			} else if leaveContainsString(state.RecordedUserIDs, actorID) {
+				allowed = false
+			} else if state.AssigneeUserID != "" && state.AssigneeUserID == actorID {
+				allowed = true
+			} else if leaveContainsString(state.CandidateUserIDs, actorID) {
+				allowed = true
+			}
+			if allowed {
+				actions = append(actions, "approve", "reject")
+			}
+		}
+		if approvalStatus == "approved" {
+			actions = append(actions, "cancel")
+		}
+	}
+	return uniqueStrings(actions)
+}
+
+func leaveRequestVisibleToActor(record model.Record, actorID string) bool {
+	actorID = strings.TrimSpace(actorID)
+	if actorID == "" {
+		return false
+	}
+	if actorID == strings.TrimSpace(textValue(record.Values["approver_user_id"])) {
+		return true
+	}
+	if leaveContainsString(parseStringList(record.Values["approval_candidate_user_ids_json"]), actorID) {
+		return true
+	}
+	if leaveContainsString(parseStringList(record.Values["approval_recorded_user_ids_json"]), actorID) {
+		return true
+	}
+	return false
+}
+
+func leaveApprovalStatusLabel(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "draft":
+		return "Draft"
+	case "submitted":
+		return "Pending approval"
+	case "approved":
+		return "Approved"
+	case "rejected":
+		return "Rejected"
+	case "cancelled":
+		return "Cancelled"
+	default:
+		return strings.TrimSpace(status)
+	}
+}
+
+func leaveStageProgressLabel(state leaveApprovalState) string {
+	if state.StageKey == "" || state.StageTotal <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("Stage %d of %d", state.StageSequence, state.StageTotal)
 }
 
 func (s *LeavePolicyCoreService) DebugDescribeRequest(requestID string) (string, error) {

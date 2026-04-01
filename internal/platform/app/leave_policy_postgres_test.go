@@ -145,6 +145,20 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit self-service leave request: %v", err)
 	}
+	inboxItems, err := graph.leavePolicies.InboxRequestSummariesForActor("user_admin", map[string]string{"bucket": "actionable"})
+	if err != nil {
+		t.Fatalf("load approval inbox summaries: %v", err)
+	}
+	if len(inboxItems) == 0 {
+		t.Fatalf("expected actionable leave approval inbox items after submit")
+	}
+	inboxDetail, err := graph.leavePolicies.RequestSummaryForInboxActor(request.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("load approval inbox detail: %v", err)
+	}
+	if actionable, _ := inboxDetail["is_actionable"].(bool); !actionable {
+		t.Fatalf("expected approval inbox detail to be actionable after submit, got %+v", inboxDetail)
+	}
 	if got := textValue(request.Values["approval_policy_id"]); got != approvalPolicy.ID {
 		t.Fatalf("expected approval policy %s after submit, got %s", approvalPolicy.ID, got)
 	}
@@ -162,6 +176,16 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 	if got := numberValue(account.Values["available_days"]); got != 11.5 {
 		t.Fatalf("expected available_days 11.5 after approval with opening balance expired, got %v", got)
+	}
+	userBalances, err := graph.leavePolicies.BalanceSummaryForUser(userID)
+	if err != nil {
+		t.Fatalf("list employee leave balances: %v", err)
+	}
+	if len(userBalances) == 0 {
+		t.Fatalf("expected employee leave balances after approval")
+	}
+	if got := numberValue(userBalances[0]["available_days"]); got != 11.5 {
+		t.Fatalf("expected balance summary available_days 11.5 after approval, got %v", got)
 	}
 
 	if _, err := graph.models.Create("employee_compensation_profile", "user_admin", map[string]any{
@@ -234,6 +258,27 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 	if got := numberValue(account.Values["available_days"]); got != 12 {
 		t.Fatalf("expected available_days 12 after approved cancellation reversal, got %v", got)
+	}
+	balanceEntries, err := graph.leavePolicies.BalanceEntriesForUser(userID, textValue(request.Values["balance_account_id"]))
+	if err != nil {
+		t.Fatalf("list balance entries after approved cancellation: %v", err)
+	}
+	foundReversal := false
+	for _, entry := range balanceEntries {
+		if textValue(entry["entry_type"]) == "reversal" {
+			foundReversal = true
+			break
+		}
+	}
+	if !foundReversal {
+		t.Fatalf("expected reversal leave balance entry after approved cancellation, got %+v", balanceEntries)
+	}
+	cancelledDetail, err := graph.leavePolicies.RequestSummaryForInboxActor(request.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("load approval inbox detail after cancellation: %v", err)
+	}
+	if got := textValue(cancelledDetail["approval_status"]); got != "cancelled" {
+		t.Fatalf("expected cancelled inbox detail after manager cancellation, got %s", got)
 	}
 	payrollPayload = graph.employeePayroll.NormalizePayload("payroll_run", map[string]any{
 		"payroll_period_id": period.ID,

@@ -68,10 +68,13 @@ func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
 	var hasApprove bool
 	var hasReject bool
 	var hasCancel bool
+	var hasInboxRead bool
 	var hasApproverRole bool
 	var hasManagerCancel bool
 	for _, permission := range manifest.Security.Permissions {
 		switch permission.Key {
+		case "attendance.leave_inbox.read":
+			hasInboxRead = true
 		case "attendance.approve":
 			hasApprove = true
 		case "attendance.reject":
@@ -92,7 +95,7 @@ func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
 			}
 		}
 	}
-	if !hasApprove || !hasReject || !hasCancel || !hasApproverRole || !hasManagerCancel {
-		t.Fatalf("expected attendance approval/cancel permissions and roles, got approve=%v reject=%v cancel=%v approverRole=%v managerCancel=%v", hasApprove, hasReject, hasCancel, hasApproverRole, hasManagerCancel)
+	if !hasApprove || !hasReject || !hasCancel || !hasInboxRead || !hasApproverRole || !hasManagerCancel {
+		t.Fatalf("expected attendance approval/cancel permissions and roles, got inboxRead=%v approve=%v reject=%v cancel=%v approverRole=%v managerCancel=%v", hasInboxRead, hasApprove, hasReject, hasCancel, hasApproverRole, hasManagerCancel)
 	}
 }

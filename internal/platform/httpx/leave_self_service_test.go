@@ -12,7 +12,7 @@ import (
 
 func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 	h := newTestHarness(t)
-	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.approve", "attendance.reject", "attendance.cancel"} {
+	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.leave_inbox.read", "attendance.approve", "attendance.reject", "attendance.cancel"} {
 		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "leave_policy_core", Action: "use", Resource: "leave_self_service"}); err != nil {
 			t.Fatalf("upsert permission %s: %v", permissionKey, err)
 		}
@@ -131,11 +131,22 @@ func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 	if balances.Code != http.StatusOK {
 		t.Fatalf("expected list leave balances to succeed, got %d body=%s", balances.Code, balances.Body.String())
 	}
+	var balancePayload map[string]any
+	_ = json.Unmarshal(balances.Body.Bytes(), &balancePayload)
+	items, _ := balancePayload["items"].([]any)
+	if len(items) == 0 {
+		t.Fatalf("expected at least one leave balance account, got %+v", balancePayload)
+	}
+	accountID, _ := items[0].(map[string]any)["id"].(string)
+	entries := h.request(http.MethodGet, "/ui/self-service/leave/balances/"+accountID+"/entries", nil, true)
+	if entries.Code != http.StatusOK {
+		t.Fatalf("expected leave balance entry history to succeed, got %d body=%s", entries.Code, entries.Body.String())
+	}
 }
 
 func TestUIAttendanceLeaveApprovalRoutesRequireAssignment(t *testing.T) {
 	h := newTestHarness(t)
-	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.approve", "attendance.reject", "attendance.cancel"} {
+	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.leave_inbox.read", "attendance.approve", "attendance.reject", "attendance.cancel"} {
 		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "leave_policy_core", Action: "use", Resource: "leave_self_service"}); err != nil {
 			t.Fatalf("upsert permission %s: %v", permissionKey, err)
 		}
@@ -195,9 +206,27 @@ func TestUIAttendanceLeaveApprovalRoutesRequireAssignment(t *testing.T) {
 	if pending.Code != http.StatusOK {
 		t.Fatalf("pending leave approvals failed: %d body=%s", pending.Code, pending.Body.String())
 	}
+	inbox := h.request(http.MethodGet, "/ui/attendance/leave-requests/inbox?bucket=actionable", nil, true)
+	if inbox.Code != http.StatusOK {
+		t.Fatalf("leave approval inbox failed: %d body=%s", inbox.Code, inbox.Body.String())
+	}
+	var inboxPayload map[string]any
+	_ = json.Unmarshal(inbox.Body.Bytes(), &inboxPayload)
+	inboxItems, _ := inboxPayload["items"].([]any)
+	if len(inboxItems) == 0 {
+		t.Fatalf("expected actionable leave approval inbox items, got %+v", inboxPayload)
+	}
+	detail := h.request(http.MethodGet, "/ui/attendance/leave-requests/"+requestID, nil, true)
+	if detail.Code != http.StatusOK {
+		t.Fatalf("leave approval detail failed: %d body=%s", detail.Code, detail.Body.String())
+	}
 	approve := h.request(http.MethodPost, "/ui/attendance/leave-requests/"+requestID+"/approve", nil, true)
 	if approve.Code != http.StatusOK {
 		t.Fatalf("approve leave request failed: %d body=%s", approve.Code, approve.Body.String())
+	}
+	detail = h.request(http.MethodGet, "/ui/attendance/leave-requests/"+requestID, nil, true)
+	if detail.Code != http.StatusOK {
+		t.Fatalf("leave approval detail after approval failed: %d body=%s", detail.Code, detail.Body.String())
 	}
 	cancel := h.request(http.MethodPost, "/ui/attendance/leave-requests/"+requestID+"/cancel", nil, true)
 	if cancel.Code != http.StatusOK {

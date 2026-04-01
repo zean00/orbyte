@@ -1,6 +1,7 @@
 package app
 
 import (
+	"orbyte/internal/platform/httpx"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/search"
@@ -235,16 +236,17 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "attendance.list", Action: "list", Resource: "attendance", DisplayName: "List Attendance Records", DisplayNameI18n: localize("List Attendance Records", "Daftar Data Kehadiran")},
 				{Key: "attendance.read", Action: "read", Resource: "attendance", DisplayName: "Read Attendance Records", DisplayNameI18n: localize("Read Attendance Records", "Lihat Data Kehadiran")},
 				{Key: "attendance.update", Action: "update", Resource: "attendance", DisplayName: "Update Attendance Records", DisplayNameI18n: localize("Update Attendance Records", "Perbarui Data Kehadiran")},
+				{Key: "attendance.leave_inbox.read", Action: "read", Resource: "attendance_leave_inbox", DisplayName: "Read Leave Approval Inbox", DisplayNameI18n: localize("Read Leave Approval Inbox", "Lihat Inbox Persetujuan Cuti")},
 				{Key: "attendance.approve", Action: "approve", Resource: "attendance", DisplayName: "Approve Attendance Records", DisplayNameI18n: localize("Approve Attendance Records", "Setujui Data Kehadiran")},
 				{Key: "attendance.reject", Action: "reject", Resource: "attendance", DisplayName: "Reject Attendance Records", DisplayNameI18n: localize("Reject Attendance Records", "Tolak Data Kehadiran")},
 				{Key: "attendance.cancel", Action: "cancel", Resource: "attendance", DisplayName: "Cancel Attendance Records", DisplayNameI18n: localize("Cancel Attendance Records", "Batalkan Data Kehadiran")},
 			},
 			RoleTemplates: []module.RoleTemplateDefinition{
 				{
-					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "attendance.cancel", "employee.read", "organization_structure.read"},
+					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "attendance.leave_inbox.read", "attendance.cancel", "employee.read", "organization_structure.read"},
 				},
 				{
-					Key: "attendance_approver", Name: "Attendance Approver", NameI18n: localize("Attendance Approver", "Penyetuju Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.list", "attendance.read", "attendance.approve", "attendance.reject", "employee.read"},
+					Key: "attendance_approver", Name: "Attendance Approver", NameI18n: localize("Attendance Approver", "Penyetuju Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.list", "attendance.read", "attendance.leave_inbox.read", "attendance.approve", "attendance.reject", "employee.read"},
 				},
 			},
 		},
@@ -256,35 +258,21 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "attendance.roster_slots", Label: "Roster Slots", LabelI18n: localize("Roster Slots", "Slot Roster"), ActionKey: "attendance.roster_slots.list", Order: 23, RequiredPermissions: []string{"attendance.list"}},
 				{Key: "attendance.events", Label: "Attendance Events", LabelI18n: localize("Attendance Events", "Event Kehadiran"), ActionKey: "attendance.events.list", Order: 24, RequiredPermissions: []string{"attendance.list"}},
 				{Key: "attendance.days", Label: "Attendance Days", LabelI18n: localize("Attendance Days", "Hari Kehadiran"), ActionKey: "attendance.days.list", Order: 25, RequiredPermissions: []string{"attendance.list"}},
+				{Key: "attendance.leave_approvals", Label: "Leave Approvals", LabelI18n: localize("Leave Approvals", "Persetujuan Cuti"), ActionKey: "attendance.leave_approvals", Order: 26, RequiredPermissions: []string{"attendance.leave_inbox.read"}},
 				{Key: "attendance.leave_requests", Label: "Leave Requests", LabelI18n: localize("Leave Requests", "Permintaan Cuti"), ActionKey: "attendance.leave_requests.list", Order: 26, RequiredPermissions: []string{"attendance.list"}},
 				{Key: "attendance.overtime_requests", Label: "Overtime Requests", LabelI18n: localize("Overtime Requests", "Permintaan Lembur"), ActionKey: "attendance.overtime_requests.list", Order: 27, RequiredPermissions: []string{"attendance.list"}},
 				{Key: "attendance.adjustments", Label: "Attendance Adjustments", LabelI18n: localize("Attendance Adjustments", "Penyesuaian Kehadiran"), ActionKey: "attendance.adjustments.list", Order: 28, RequiredPermissions: []string{"attendance.list"}},
 			},
-			Actions: append(
-				append(
-					append(
-						append(
-							attendanceActions("calendars", "Work Calendars", "Work Calendar Detail", "Work Calendar Form"),
-							attendanceActions("shift_templates", "Shift Templates", "Shift Template Detail", "Shift Template Form")...,
-						),
-						attendanceActions("rosters", "Rosters", "Roster Detail", "Roster Form")...,
-					),
-					attendanceActions("roster_slots", "Roster Slots", "Roster Slot Detail", "Roster Slot Form")...,
-				),
-				append(
-					append(
-						append(
-							attendanceActions("events", "Attendance Events", "Attendance Event Detail", "Attendance Event Form"),
-							attendanceActions("days", "Attendance Days", "Attendance Day Detail", "Attendance Day Form")...,
-						),
-						attendanceActions("leave_requests", "Leave Requests", "Leave Request Detail", "Leave Request Form")...,
-					),
-					append(
-						attendanceActions("overtime_requests", "Overtime Requests", "Overtime Request Detail", "Overtime Request Form"),
-						attendanceActions("adjustments", "Attendance Adjustments", "Attendance Adjustment Detail", "Attendance Adjustment Form")...,
-					)...,
-				)...,
-			),
+			Actions: attendanceFrontendActions(),
+			CustomEntries: []module.CustomEntryDefinition{{
+				Key:                 "attendance.leave_approvals",
+				Title:               "Leave Approvals",
+				TitleI18n:           localize("Leave Approvals", "Persetujuan Cuti"),
+				RoutePath:           "/attendance/leave-approvals",
+				BundleKey:           "attendance-leave-workspace",
+				ComponentExport:     "render",
+				RequiredPermissions: []string{"attendance.leave_inbox.read"},
+			}},
 			Views: []module.ViewDefinition{
 				commercialModelListView("attendance.calendars.list", "Work Calendars", "work_calendar", []module.ColumnDefinition{{Key: "code", Label: "Code", Path: "values.code"}, {Key: "name", Label: "Name", Path: "values.name"}, {Key: "status", Label: "Status", Path: "values.status"}}, []string{"active", "inactive"}),
 				commercialModelDetailView("attendance.calendars.detail", "Work Calendar Detail", "work_calendar", attendanceCalendarFields(false)),
@@ -328,6 +316,10 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{ModelKey: "attendance_adjustment", Title: "Attendance Adjustment", TitleI18n: localize("Attendance Adjustment", "Penyesuaian Kehadiran"), CreatePermissionKey: "attendance.create", UpdatePermissionKey: "attendance.update", RequiredPermissions: []string{"attendance.read"}},
 			},
 		},
+		Bundles: []module.BundleDefinition{{
+			Key:    "attendance-leave-workspace",
+			Script: httpx.LeaveWorkspaceBundle(),
+		}},
 	}
 }
 
@@ -411,6 +403,29 @@ func uniqueAttendanceStrings(values []string) []string {
 		result = append(result, value)
 	}
 	return result
+}
+
+func attendanceFrontendActions() []module.ActionDefinition {
+	actions := append([]module.ActionDefinition{}, attendanceActions("calendars", "Work Calendars", "Work Calendar Detail", "Work Calendar Form")...)
+	actions = append(actions, attendanceActions("shift_templates", "Shift Templates", "Shift Template Detail", "Shift Template Form")...)
+	actions = append(actions, attendanceActions("rosters", "Rosters", "Roster Detail", "Roster Form")...)
+	actions = append(actions, attendanceActions("roster_slots", "Roster Slots", "Roster Slot Detail", "Roster Slot Form")...)
+	actions = append(actions, attendanceActions("events", "Attendance Events", "Attendance Event Detail", "Attendance Event Form")...)
+	actions = append(actions, attendanceActions("days", "Attendance Days", "Attendance Day Detail", "Attendance Day Form")...)
+	actions = append(actions, attendanceActions("leave_requests", "Leave Requests", "Leave Request Detail", "Leave Request Form")...)
+	actions = append(actions, attendanceActions("overtime_requests", "Overtime Requests", "Overtime Request Detail", "Overtime Request Form")...)
+	actions = append(actions, attendanceActions("adjustments", "Attendance Adjustments", "Attendance Adjustment Detail", "Attendance Adjustment Form")...)
+	actions = append(actions, module.ActionDefinition{
+		Key:                 "attendance.leave_approvals",
+		Label:               "Leave Approvals",
+		LabelI18n:           localize("Leave Approvals", "Persetujuan Cuti"),
+		Kind:                "navigate",
+		RoutePath:           "/attendance/leave-approvals",
+		CustomEntryKey:      "attendance.leave_approvals",
+		RenderMode:          module.RenderModeCustom,
+		RequiredPermissions: []string{"attendance.leave_inbox.read"},
+	})
+	return actions
 }
 
 func attendanceActions(prefix, listLabel, detailLabel, formLabel string) []module.ActionDefinition {

@@ -213,6 +213,32 @@ func registerUILeaveSelfServiceRoutes(mux *http.ServeMux, ident *identity.Servic
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("GET /ui/self-service/leave/balances/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"leave.self_service.read"}) {
+			respondError(w, shared.Forbidden("leave self-service read is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave self-service is not available"))
+			return
+		}
+		accountID, action := selfServiceLeaveBalancePath(r.URL.Path)
+		if accountID == "" || action != "entries" {
+			respondError(w, shared.NotFound("leave balance account not found"))
+			return
+		}
+		items, err := leavePolicySvc.BalanceEntriesForUser(principalEffectiveUserID(p), accountID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
 	mux.HandleFunc("POST /ui/self-service/leave/requests", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {
@@ -350,6 +376,18 @@ func registerUILeaveSelfServiceRoutes(mux *http.ServeMux, ident *identity.Servic
 	})
 }
 
+func selfServiceLeaveBalancePath(path string) (string, string) {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(path, "/ui/self-service/leave/balances/"))
+	if trimmed == "" {
+		return "", ""
+	}
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+}
+
 func selfServiceLeaveRequestPath(path string) (string, string) {
 	trimmed := strings.TrimSpace(strings.TrimPrefix(path, "/ui/self-service/leave/requests/"))
 	if trimmed == "" {
@@ -387,6 +425,57 @@ func registerUIAttendanceLeaveApprovalRoutes(mux *http.ServeMux, ident *identity
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("GET /ui/attendance/leave-requests/inbox", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"attendance.leave_inbox.read"}) {
+			respondError(w, shared.Forbidden("attendance leave inbox is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave approval is not available"))
+			return
+		}
+		items, err := leavePolicySvc.InboxRequestSummariesForActor(principalEffectiveUserID(p), map[string]string{
+			"bucket":      strings.TrimSpace(r.URL.Query().Get("bucket")),
+			"status":      strings.TrimSpace(r.URL.Query().Get("status")),
+			"employee_id": strings.TrimSpace(r.URL.Query().Get("employee_id")),
+		})
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("GET /ui/attendance/leave-requests/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"attendance.leave_inbox.read"}) {
+			respondError(w, shared.Forbidden("attendance leave inbox is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave approval is not available"))
+			return
+		}
+		requestID, action := attendanceLeaveApprovalPath(r.URL.Path)
+		if requestID == "" || action != "" {
+			respondError(w, shared.NotFound("leave request not found"))
+			return
+		}
+		payload, err := leavePolicySvc.RequestSummaryForInboxActor(requestID, principalEffectiveUserID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"record": payload})
 	})
 
 	mux.HandleFunc("POST /ui/attendance/leave-requests/", func(w http.ResponseWriter, r *http.Request) {
@@ -480,8 +569,13 @@ func attendanceLeaveApprovalPath(path string) (string, string) {
 		return "", ""
 	}
 	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
-	if len(parts) != 2 {
+	if len(parts) == 0 {
 		return "", ""
 	}
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	requestID := strings.TrimSpace(parts[0])
+	action := ""
+	if len(parts) > 1 {
+		action = strings.TrimSpace(parts[1])
+	}
+	return requestID, action
 }
