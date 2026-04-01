@@ -48,7 +48,7 @@ func TestWorkforceAttendanceAndOperationalModelsExposeAttendanceReferences(t *te
 			t.Fatalf("expected leave_request to include %s", field)
 		}
 	}
-	for _, field := range []string{"amendment_count", "last_amended_at", "last_amended_by", "last_amendment_reason"} {
+	for _, field := range []string{"amendment_count", "last_amended_at", "last_amended_by", "last_amendment_reason", "requested_hours", "count_basis", "counted_dates_json", "counted_work_calendar_id", "counted_roster_slot_ids_json"} {
 		if !modelHasField(attendance, "leave_request", field) {
 			t.Fatalf("expected leave_request to include %s", field)
 		}

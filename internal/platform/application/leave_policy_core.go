@@ -46,6 +46,18 @@ type leaveApprovalState struct {
 	RequiresDifferentActor bool
 }
 
+type leaveCountResolution struct {
+	RequestUnit      string
+	RequestedDays    float64
+	RequestedHours   float64
+	HalfDaySession   string
+	Basis            string
+	CountedDates     []string
+	WorkCalendarID   string
+	RosterSlotIDs    []string
+	CountExplanation string
+}
+
 func (s *LeavePolicyCoreService) ExecuteAccrualRun(runID, actorID string) (model.Record, error) {
 	if s == nil || s.models == nil || strings.TrimSpace(runID) == "" {
 		return model.Record{}, nil
@@ -561,10 +573,6 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 	if startDate == "" || endDate == "" {
 		return nil, model.Record{}, model.Record{}, model.Record{}, model.Record{}, shared.Validation("start_date and end_date are required")
 	}
-	requestUnit, requestedDays, halfDaySession, err := deriveRequestedDays(policy, values)
-	if err != nil {
-		return nil, model.Record{}, model.Record{}, model.Record{}, model.Record{}, err
-	}
 	values["employee_id"] = employee.ID
 	values["organization_id"] = leaveFirstNonEmpty(
 		textValue(values["organization_id"]),
@@ -579,12 +587,21 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 	values["organization_unit_id"] = leaveFirstNonEmpty(textValue(values["organization_unit_id"]), textValue(assignment.Values["organization_unit_id"]))
 	values["department_id"] = leaveFirstNonEmpty(textValue(values["department_id"]), textValue(assignment.Values["department_id"]))
 	values["cost_center_id"] = leaveFirstNonEmpty(textValue(values["cost_center_id"]), textValue(assignment.Values["cost_center_id"]))
+	count, err := s.resolveRequestedLeaveCount(policy, values)
+	if err != nil {
+		return nil, model.Record{}, model.Record{}, model.Record{}, model.Record{}, err
+	}
 	values["absence_code_id"] = absenceCode.ID
 	values["leave_policy_id"] = policy.ID
 	values["employee_leave_profile_id"] = profile.ID
-	values["request_unit"] = requestUnit
-	values["requested_days"] = requestedDays
-	values["half_day_session"] = halfDaySession
+	values["request_unit"] = count.RequestUnit
+	values["requested_days"] = count.RequestedDays
+	values["requested_hours"] = count.RequestedHours
+	values["half_day_session"] = count.HalfDaySession
+	values["count_basis"] = count.Basis
+	values["counted_dates_json"] = marshalStringList(count.CountedDates)
+	values["counted_work_calendar_id"] = count.WorkCalendarID
+	values["counted_roster_slot_ids_json"] = marshalStringList(count.RosterSlotIDs)
 	values["balance_account_id"] = account.ID
 	values["request_source"] = "self_service"
 	values["self_service_actor_user_id"] = textValue(values["self_service_actor_user_id"])
@@ -1339,37 +1356,350 @@ func leaveProfileEffectiveAt(profile model.Record, at time.Time) bool {
 	return strings.EqualFold(textValue(profile.Values["status"]), "active")
 }
 
-func deriveRequestedDays(policy model.Record, values map[string]any) (string, float64, string, error) {
+func (s *LeavePolicyCoreService) resolveRequestedLeaveCount(policy model.Record, values map[string]any) (leaveCountResolution, error) {
 	start := parseDateOnly(values["start_date"])
 	end := parseDateOnly(values["end_date"])
 	if start.IsZero() || end.IsZero() || end.Before(start) {
-		return "", 0, "", shared.Validation("leave request date range is invalid")
+		return leaveCountResolution{}, shared.Validation("leave request date range is invalid")
 	}
 	requestUnit := strings.ToLower(strings.TrimSpace(textValue(values["request_unit"])))
 	if requestUnit == "" {
 		requestUnit = "day"
 	}
-	switch requestUnit {
-	case "half_day":
+	if requestUnit == "half_day" {
 		if !boolValue(policy.Values["allows_half_day"]) {
-			return "", 0, "", shared.Validation("leave policy does not allow half day requests")
+			return leaveCountResolution{}, shared.Validation("leave policy does not allow half day requests")
 		}
 		if start.Format("2006-01-02") != end.Format("2006-01-02") {
-			return "", 0, "", shared.Validation("half day leave must be requested for a single day")
+			return leaveCountResolution{}, shared.Validation("half day leave must be requested for a single day")
 		}
+	}
+	resolution, ok, err := s.resolveRosterLeaveCount(values, start, end, requestUnit)
+	if err != nil {
+		return leaveCountResolution{}, err
+	}
+	if !ok {
+		resolution, ok, err = s.resolveCalendarLeaveCount(values, start, end, requestUnit)
+		if err != nil {
+			return leaveCountResolution{}, err
+		}
+	}
+	if !ok {
+		resolution, err = resolveLegacyLeaveCount(policy, values, start, end, requestUnit)
+		if err != nil {
+			return leaveCountResolution{}, err
+		}
+	}
+	if resolution.RequestedDays <= 0 {
+		return leaveCountResolution{}, shared.Validation("requested_days must be greater than zero")
+	}
+	return resolution, nil
+}
+
+func resolveLegacyLeaveCount(policy model.Record, values map[string]any, start, end time.Time, requestUnit string) (leaveCountResolution, error) {
+	switch requestUnit {
+	case "half_day":
 		session := strings.ToLower(strings.TrimSpace(textValue(values["half_day_session"])))
 		if session != "morning" && session != "afternoon" {
-			return "", 0, "", shared.Validation("half_day_session must be morning or afternoon")
+			return leaveCountResolution{}, shared.Validation("half_day_session must be morning or afternoon")
 		}
-		return requestUnit, 0.5, session, nil
+		date := start.Format("2006-01-02")
+		return leaveCountResolution{
+			RequestUnit:      requestUnit,
+			RequestedDays:    0.5,
+			RequestedHours:   0,
+			HalfDaySession:   session,
+			Basis:            "legacy",
+			CountedDates:     []string{date},
+			CountExplanation: "0.5 day from date range fallback",
+		}, nil
 	default:
 		days := 1.0 + end.Sub(start).Hours()/24
 		days = roundAttendanceHours(days)
-		if days <= 0 {
-			return "", 0, "", shared.Validation("requested_days must be greater than zero")
+		countedDates := make([]string, 0)
+		for day := start; !day.After(end); day = day.Add(24 * time.Hour) {
+			countedDates = append(countedDates, day.Format("2006-01-02"))
 		}
-		return "day", days, "", nil
+		return leaveCountResolution{
+			RequestUnit:      "day",
+			RequestedDays:    days,
+			RequestedHours:   0,
+			HalfDaySession:   "",
+			Basis:            "legacy",
+			CountedDates:     countedDates,
+			CountExplanation: fmt.Sprintf("%.1f days from date range fallback", days),
+		}, nil
 	}
+}
+
+func (s *LeavePolicyCoreService) resolveRosterLeaveCount(values map[string]any, start, end time.Time, requestUnit string) (leaveCountResolution, bool, error) {
+	if s == nil || s.models == nil {
+		return leaveCountResolution{}, false, nil
+	}
+	employeeID := strings.TrimSpace(textValue(values["employee_id"]))
+	if employeeID == "" {
+		return leaveCountResolution{}, false, nil
+	}
+	slots, err := s.listAllRecords("workforce_roster_slot", model.Query{
+		Filters:  map[string]string{"employee_id": employeeID},
+		SortKey:  "shift_date",
+		PageSize: model.MaxPageSize,
+	})
+	if err != nil {
+		return leaveCountResolution{}, false, err
+	}
+	type rosterDay struct {
+		date  string
+		hours float64
+		slots []string
+	}
+	perDate := map[string]rosterDay{}
+	locationID := strings.TrimSpace(textValue(values["location_id"]))
+	organizationID := strings.TrimSpace(textValue(values["organization_id"]))
+	for _, slot := range slots {
+		if !strings.EqualFold(textValue(slot.Values["status"]), "active") {
+			continue
+		}
+		shiftDate := parseDateOnly(slot.Values["shift_date"])
+		if shiftDate.IsZero() || shiftDate.Before(start) || shiftDate.After(end) {
+			continue
+		}
+		if organizationID != "" && textValue(slot.Values["organization_id"]) != "" && textValue(slot.Values["organization_id"]) != organizationID {
+			continue
+		}
+		if locationID != "" && textValue(slot.Values["location_id"]) != "" && textValue(slot.Values["location_id"]) != locationID {
+			continue
+		}
+		if s.attendance != nil && !s.attendance.rosterPublished(slot) {
+			continue
+		}
+		dateKey := shiftDate.Format("2006-01-02")
+		item := perDate[dateKey]
+		item.date = dateKey
+		item.hours += leaveRosterSlotHours(slot)
+		item.slots = append(item.slots, slot.ID)
+		perDate[dateKey] = item
+	}
+	if len(perDate) == 0 {
+		return leaveCountResolution{}, false, nil
+	}
+	countedDates := make([]string, 0, len(perDate))
+	rosterSlotIDs := make([]string, 0)
+	requestedHours := 0.0
+	for dateKey, item := range perDate {
+		countedDates = append(countedDates, dateKey)
+		requestedHours += item.hours
+		rosterSlotIDs = append(rosterSlotIDs, item.slots...)
+	}
+	sort.Strings(countedDates)
+	sort.Strings(rosterSlotIDs)
+	if requestUnit == "half_day" {
+		if len(countedDates) != 1 {
+			return leaveCountResolution{}, false, shared.Validation("half day leave must fall on exactly one working date")
+		}
+		session := strings.ToLower(strings.TrimSpace(textValue(values["half_day_session"])))
+		if session != "morning" && session != "afternoon" {
+			return leaveCountResolution{}, false, shared.Validation("half_day_session must be morning or afternoon")
+		}
+		requestedHours = roundAttendanceHours(requestedHours / 2)
+		return leaveCountResolution{
+			RequestUnit:      "half_day",
+			RequestedDays:    0.5,
+			RequestedHours:   requestedHours,
+			HalfDaySession:   session,
+			Basis:            "roster",
+			CountedDates:     countedDates,
+			RosterSlotIDs:    rosterSlotIDs,
+			CountExplanation: "0.5 day from published roster",
+		}, true, nil
+	}
+	requestedDays := roundAttendanceHours(float64(len(countedDates)))
+	return leaveCountResolution{
+		RequestUnit:      "day",
+		RequestedDays:    requestedDays,
+		RequestedHours:   roundAttendanceHours(requestedHours),
+		HalfDaySession:   "",
+		Basis:            "roster",
+		CountedDates:     countedDates,
+		RosterSlotIDs:    rosterSlotIDs,
+		CountExplanation: fmt.Sprintf("%.1f working days from published roster", requestedDays),
+	}, true, nil
+}
+
+func (s *LeavePolicyCoreService) resolveCalendarLeaveCount(values map[string]any, start, end time.Time, requestUnit string) (leaveCountResolution, bool, error) {
+	calendar, ok, err := s.resolveWorkCalendar(values)
+	if err != nil || !ok {
+		return leaveCountResolution{}, false, err
+	}
+	workingDays := parseWorkCalendarWeekdays(calendar.Values["working_days_json"])
+	holidays := parseWorkCalendarDates(calendar.Values["holiday_dates_json"])
+	countedDates := make([]string, 0)
+	for day := start; !day.After(end); day = day.Add(24 * time.Hour) {
+		dateKey := day.Format("2006-01-02")
+		if holidays[dateKey] {
+			continue
+		}
+		if len(workingDays) > 0 && !workingDays[day.Weekday()] {
+			continue
+		}
+		countedDates = append(countedDates, dateKey)
+	}
+	if len(countedDates) == 0 {
+		return leaveCountResolution{}, true, shared.Validation("leave request does not include any working dates")
+	}
+	if requestUnit == "half_day" {
+		if len(countedDates) != 1 {
+			return leaveCountResolution{}, true, shared.Validation("half day leave must fall on exactly one working date")
+		}
+		session := strings.ToLower(strings.TrimSpace(textValue(values["half_day_session"])))
+		if session != "morning" && session != "afternoon" {
+			return leaveCountResolution{}, true, shared.Validation("half_day_session must be morning or afternoon")
+		}
+		return leaveCountResolution{
+			RequestUnit:      "half_day",
+			RequestedDays:    0.5,
+			RequestedHours:   0,
+			HalfDaySession:   session,
+			Basis:            "calendar",
+			CountedDates:     countedDates,
+			WorkCalendarID:   calendar.ID,
+			CountExplanation: "0.5 day from work calendar",
+		}, true, nil
+	}
+	requestedDays := roundAttendanceHours(float64(len(countedDates)))
+	return leaveCountResolution{
+		RequestUnit:      "day",
+		RequestedDays:    requestedDays,
+		RequestedHours:   0,
+		HalfDaySession:   "",
+		Basis:            "calendar",
+		CountedDates:     countedDates,
+		WorkCalendarID:   calendar.ID,
+		CountExplanation: fmt.Sprintf("%.1f working days from work calendar", requestedDays),
+	}, true, nil
+}
+
+func (s *LeavePolicyCoreService) resolveWorkCalendar(values map[string]any) (model.Record, bool, error) {
+	if s == nil || s.models == nil {
+		return model.Record{}, false, nil
+	}
+	items, err := s.listAllRecords("work_calendar", model.Query{
+		SortKey:  "updated_at",
+		Desc:     true,
+		PageSize: model.MaxPageSize,
+	})
+	if err != nil {
+		return model.Record{}, false, err
+	}
+	locationID := strings.TrimSpace(textValue(values["location_id"]))
+	organizationID := strings.TrimSpace(textValue(values["organization_id"]))
+	var orgOnly model.Record
+	for _, item := range items {
+		if !strings.EqualFold(textValue(item.Values["status"]), "active") {
+			continue
+		}
+		if organizationID != "" && textValue(item.Values["organization_id"]) != "" && textValue(item.Values["organization_id"]) != organizationID {
+			continue
+		}
+		if locationID != "" && textValue(item.Values["location_id"]) == locationID {
+			return item, true, nil
+		}
+		if orgOnly.ID == "" && textValue(item.Values["location_id"]) == "" {
+			orgOnly = item
+		}
+	}
+	if orgOnly.ID != "" {
+		return orgOnly, true, nil
+	}
+	return model.Record{}, false, nil
+}
+
+func (s *LeavePolicyCoreService) listAllRecords(modelKey string, query model.Query) ([]model.Record, error) {
+	if s == nil || s.models == nil {
+		return nil, nil
+	}
+	if query.PageSize <= 0 {
+		query.PageSize = model.MaxPageSize
+	}
+	page := 1
+	out := make([]model.Record, 0)
+	for {
+		query.Page = page
+		items, total, err := s.models.List(modelKey, query)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+		if len(items) == 0 || len(out) >= total || len(items) < query.PageSize {
+			break
+		}
+		page++
+	}
+	return out, nil
+}
+
+func leaveRosterSlotHours(slot model.Record) float64 {
+	start, end := rosterSlotWindow(slot)
+	if start.IsZero() || end.IsZero() || !end.After(start) {
+		return 0
+	}
+	hours := end.Sub(start).Hours() - float64(numberValue(slot.Values["break_minutes"]))/60
+	if hours < 0 {
+		return 0
+	}
+	return roundAttendanceHours(hours)
+}
+
+func parseWorkCalendarWeekdays(value any) map[time.Weekday]bool {
+	var raw []any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(textValue(value))), &raw); err != nil {
+		return nil
+	}
+	result := map[time.Weekday]bool{}
+	for _, item := range raw {
+		switch typed := item.(type) {
+		case string:
+			switch strings.ToLower(strings.TrimSpace(typed)) {
+			case "sun", "sunday":
+				result[time.Sunday] = true
+			case "mon", "monday":
+				result[time.Monday] = true
+			case "tue", "tues", "tuesday":
+				result[time.Tuesday] = true
+			case "wed", "wednesday":
+				result[time.Wednesday] = true
+			case "thu", "thur", "thurs", "thursday":
+				result[time.Thursday] = true
+			case "fri", "friday":
+				result[time.Friday] = true
+			case "sat", "saturday":
+				result[time.Saturday] = true
+			}
+		case float64:
+			weekday := int(typed)
+			if weekday == 7 {
+				weekday = 0
+			}
+			if weekday >= 0 && weekday <= 6 {
+				result[time.Weekday(weekday)] = true
+			}
+		}
+	}
+	return result
+}
+
+func parseWorkCalendarDates(value any) map[string]bool {
+	var raw []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(textValue(value))), &raw); err != nil {
+		return map[string]bool{}
+	}
+	result := map[string]bool{}
+	for _, item := range raw {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			result[trimmed] = true
+		}
+	}
+	return result
 }
 
 func (s *LeavePolicyCoreService) resolveLeaveApprovalPolicy(record model.Record) (ApprovalPolicyResolution, bool, error) {
@@ -1827,7 +2157,12 @@ func (s *LeavePolicyCoreService) leaveRequestSummaryForActor(record model.Record
 		"end_date":                    textValue(record.Values["end_date"]),
 		"request_unit":                textValue(record.Values["request_unit"]),
 		"requested_days":              numberValue(record.Values["requested_days"]),
+		"requested_hours":             numberValue(record.Values["requested_hours"]),
 		"half_day_session":            textValue(record.Values["half_day_session"]),
+		"count_basis":                 textValue(record.Values["count_basis"]),
+		"counted_dates":               parseStringList(record.Values["counted_dates_json"]),
+		"counted_work_calendar_id":    textValue(record.Values["counted_work_calendar_id"]),
+		"counted_roster_slot_ids":     parseStringList(record.Values["counted_roster_slot_ids_json"]),
 		"approval_status":             textValue(record.Values["approval_status"]),
 		"approved_days":               numberValue(record.Values["approved_days"]),
 		"approval_stage_key":          textValue(record.Values["approval_stage_key"]),
@@ -1858,6 +2193,7 @@ func (s *LeavePolicyCoreService) leaveRequestSummaryForActor(record model.Record
 		"payroll_cutoff_blocked":      cutoffBlocked,
 		"payroll_cutoff_reason":       cutoffReason,
 	}
+	summary["count_explanation"] = leaveCountExplanation(record)
 	if employee, err := s.models.Get("employee_profile", textValue(record.Values["employee_id"])); err == nil {
 		summary["employee_code"] = textValue(employee.Values["employee_code"])
 	}
@@ -1915,6 +2251,21 @@ func (s *LeavePolicyCoreService) balanceEntrySummaries(accountID string) ([]map[
 		})
 	}
 	return out, nil
+}
+
+func leaveCountExplanation(record model.Record) string {
+	basis := strings.ToLower(textValue(record.Values["count_basis"]))
+	days := numberValue(record.Values["requested_days"])
+	switch basis {
+	case "roster":
+		return fmt.Sprintf("%.1f working days from published roster", days)
+	case "calendar":
+		return fmt.Sprintf("%.1f working days from work calendar", days)
+	case "legacy":
+		return fmt.Sprintf("%.1f days from date range fallback", days)
+	default:
+		return fmt.Sprintf("%.1f requested days", days)
+	}
 }
 
 func (s *LeavePolicyCoreService) leaveAllowedActionsForActor(record model.Record, state leaveApprovalState, actorID string, cutoffBlocked bool) []string {

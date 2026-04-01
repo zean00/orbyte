@@ -1,6 +1,7 @@
 package application
 
 import (
+	"fmt"
 	"testing"
 
 	"orbyte/internal/platform/document"
@@ -1293,6 +1294,192 @@ func TestLeavePolicyAmendmentValidatesAgainstTargetPolicyAccount(t *testing.T) {
 	}
 }
 
+func TestLeavePolicyRequestedDaysUsePublishedRosterSlots(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
+
+	employee, policy, _ := seedLeavePolicyTestData(t, models, false)
+	roster, err := models.Create("workforce_roster", "user_admin", map[string]any{
+		"code":            "RST-LEAVE",
+		"name":            "Leave Roster",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-12",
+		"status":          "published",
+	})
+	if err != nil {
+		t.Fatalf("create roster: %v", err)
+	}
+	for _, shiftDate := range []string{"2099-02-10", "2099-02-12"} {
+		if _, err := models.Create("workforce_roster_slot", "user_admin", map[string]any{
+			"roster_id":          roster.ID,
+			"employee_id":        employee.ID,
+			"organization_id":    "org_default",
+			"location_id":        "loc_hq",
+			"shift_date":         shiftDate,
+			"planned_start_time": "08:00",
+			"planned_end_time":   "16:00",
+			"break_minutes":      60,
+			"status":             "active",
+		}); err != nil {
+			t.Fatalf("create roster slot: %v", err)
+		}
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-12",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	if got := numberValue(record.Values["requested_days"]); got != 2 {
+		t.Fatalf("expected 2 roster-counted days, got %v", got)
+	}
+	if got := numberValue(record.Values["requested_hours"]); got != 14 {
+		t.Fatalf("expected 14 roster-counted hours, got %v", got)
+	}
+	if got := textValue(record.Values["count_basis"]); got != "roster" {
+		t.Fatalf("expected roster count basis, got %s", got)
+	}
+	if got := parseStringList(record.Values["counted_dates_json"]); len(got) != 2 || got[0] != "2099-02-10" || got[1] != "2099-02-12" {
+		t.Fatalf("expected roster counted dates, got %+v", got)
+	}
+}
+
+func TestLeavePolicyRequestedDaysFallBackToWorkCalendar(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	if _, err := models.Create("work_calendar", "user_admin", map[string]any{
+		"code":               "CAL-HQ",
+		"name":               "HQ Calendar",
+		"organization_id":    "org_default",
+		"location_id":        "loc_hq",
+		"working_days_json":  `["monday","tuesday","wednesday","thursday","friday"]`,
+		"holiday_dates_json": `["2099-02-11"]`,
+		"status":             "active",
+	}); err != nil {
+		t.Fatalf("create work calendar: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-14",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	if got := numberValue(record.Values["requested_days"]); got != 3 {
+		t.Fatalf("expected 3 calendar-counted days, got %v", got)
+	}
+	if got := textValue(record.Values["count_basis"]); got != "calendar" {
+		t.Fatalf("expected calendar count basis, got %s", got)
+	}
+	if got := textValue(record.Values["counted_work_calendar_id"]); got == "" {
+		t.Fatal("expected counted_work_calendar_id")
+	}
+	if got := parseStringList(record.Values["counted_dates_json"]); len(got) != 3 {
+		t.Fatalf("expected 3 counted dates, got %+v", got)
+	}
+}
+
+func TestLeavePolicyRosterCountingPagesBeyondDefaultPageSize(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
+
+	employee, policy, _ := seedLeavePolicyTestData(t, models, false)
+	startDate := parseDateOnly("2099-01-01")
+	for i := 0; i < model.MaxPageSize+5; i++ {
+		shiftDate := startDate.AddDate(0, 0, i).Format("2006-01-02")
+		roster, err := models.Create("workforce_roster", "user_admin", map[string]any{
+			"code":            fmt.Sprintf("RST-PAGE-%03d", i),
+			"name":            "Paged Roster",
+			"organization_id": "org_default",
+			"location_id":     "loc_hq",
+			"start_date":      shiftDate,
+			"end_date":        shiftDate,
+			"status":          "published",
+		})
+		if err != nil {
+			t.Fatalf("create roster: %v", err)
+		}
+		if _, err := models.Create("workforce_roster_slot", "user_admin", map[string]any{
+			"roster_id":          roster.ID,
+			"employee_id":        employee.ID,
+			"organization_id":    "org_default",
+			"location_id":        "loc_hq",
+			"shift_date":         shiftDate,
+			"planned_start_time": "08:00",
+			"planned_end_time":   "16:00",
+			"status":             "active",
+		}); err != nil {
+			t.Fatalf("create roster slot: %v", err)
+		}
+	}
+	targetDate := startDate.AddDate(0, 0, model.MaxPageSize+2).Format("2006-01-02")
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      targetDate,
+		"end_date":        targetDate,
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	if got := textValue(record.Values["count_basis"]); got != "roster" {
+		t.Fatalf("expected roster count basis beyond first page, got %s", got)
+	}
+}
+
+func TestLeavePolicyCalendarLookupPagesBeyondDefaultPageSize(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	for i := 0; i < model.MaxPageSize+5; i++ {
+		locationID := fmt.Sprintf("loc_other_%03d", i)
+		if i == model.MaxPageSize+2 {
+			locationID = "loc_hq"
+		}
+		if _, err := models.Create("work_calendar", "user_admin", map[string]any{
+			"code":               fmt.Sprintf("CAL-%03d", i),
+			"name":               "Paged Calendar",
+			"organization_id":    "org_default",
+			"location_id":        locationID,
+			"working_days_json":  `["monday","tuesday","wednesday","thursday","friday"]`,
+			"holiday_dates_json": `["2099-02-11"]`,
+			"status":             "active",
+		}); err != nil {
+			t.Fatalf("create work calendar: %v", err)
+		}
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-14",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	if got := textValue(record.Values["count_basis"]); got != "calendar" {
+		t.Fatalf("expected calendar count basis beyond first page, got %s", got)
+	}
+}
+
 func registerLeavePolicyTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	registerWorkforceAttendanceTestModels(t, models)
@@ -1300,6 +1487,7 @@ func registerLeavePolicyTestModels(t *testing.T, models *model.Service) {
 	extras := []model.Definition{
 		{Key: "employee_assignment", DisplayName: "Employee Assignment", DefaultSort: "effective_from", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_policy", DisplayName: "Leave Policy", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "paid_leave", Type: "bool"}, {Key: "requires_balance", Type: "bool"}, {Key: "allows_half_day", Type: "bool"}, {Key: "notice_days", Type: "number"}, {Key: "approval_policy_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "work_calendar", DisplayName: "Work Calendar", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "working_days_json", Type: "string"}, {Key: "holiday_dates_json", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_entitlement_rule", DisplayName: "Leave Entitlement Rule", DefaultSort: "leave_policy_id", Fields: []model.FieldDefinition{{Key: "leave_policy_id", Type: "string"}, {Key: "grant_mode", Type: "string"}, {Key: "annual_entitlement_days", Type: "number"}, {Key: "monthly_accrual_days", Type: "number"}, {Key: "carry_forward_cap_days", Type: "number"}, {Key: "carry_forward_expiry_rule", Type: "string"}, {Key: "prorate_on_join", Type: "bool"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_leave_profile", DisplayName: "Employee Leave Profile", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "opening_balance_days", Type: "number"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_balance_account", DisplayName: "Leave Balance Account", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "current_balance_days", Type: "number"}, {Key: "reserved_days", Type: "number"}, {Key: "available_days", Type: "number"}, {Key: "carry_forward_balance_days", Type: "number"}, {Key: "last_accrual_date", Type: "string"}, {Key: "carry_forward_expiry_date", Type: "string"}, {Key: "status", Type: "string"}}},

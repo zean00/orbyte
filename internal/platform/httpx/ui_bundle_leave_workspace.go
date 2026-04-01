@@ -280,11 +280,15 @@ func LeaveWorkspaceBundle() string {
         + kv(text(ctx, 'Employee', 'Karyawan'), selected.employee_code || selected.employee_id || '-')
         + kv(text(ctx, 'Dates', 'Tanggal'), (selected.start_date || '') + ' → ' + (selected.end_date || ''))
         + kv(text(ctx, 'Requested Days', 'Hari Diminta'), selected.requested_days || 0)
+        + kv(text(ctx, 'Requested Hours', 'Jam Diminta'), selected.requested_hours || 0)
+        + kv(text(ctx, 'Count Basis', 'Basis Perhitungan'), selected.count_basis || '-')
         + kv(text(ctx, 'Stage', 'Tahap'), selected.stage_progress_label || '-')
         + kv(text(ctx, 'Approvals', 'Persetujuan'), (selected.recorded_approver_count || 0) + ' / ' + (selected.required_approver_count || 0))
         + kv(text(ctx, 'Amendments', 'Amandemen'), selected.amendment_count || 0)
         + kv(text(ctx, 'Notes', 'Catatan'), selected.notes || '-')
         + '</div>'
+        + (selected.count_explanation ? '<p class="leave-subtitle" style="margin-top:0.75rem;">' + escapeHTML(selected.count_explanation) + '</p>' : '')
+        + (selected.counted_dates && selected.counted_dates.length ? '<p class="leave-subtitle">' + escapeHTML((selected.counted_dates || []).join(', ')) + '</p>' : '')
         + (selected.balance_snapshot ? '<div class="leave-kv" style="margin-top:0.75rem;">'
             + kv(text(ctx, 'Available', 'Tersedia'), selected.balance_snapshot.available_days || 0)
             + kv(text(ctx, 'Reserved', 'Reservasi'), selected.balance_snapshot.reserved_days || 0)

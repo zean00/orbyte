@@ -122,6 +122,9 @@ func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 	if record["employee_id"] != employee.ID {
 		t.Fatalf("expected self-service leave request to bind employee %s, got %+v", employee.ID, record)
 	}
+	if record["count_basis"] == "" {
+		t.Fatalf("expected count basis metadata on self-service leave request, got %+v", record)
+	}
 
 	list := h.request(http.MethodGet, "/ui/self-service/leave/requests", nil, true)
 	if list.Code != http.StatusOK {
@@ -394,13 +397,61 @@ func TestUIManagerAmendRouteDoesNotRequireInboxVisibilityAfterMutation(t *testin
 	}
 }
 
+func TestUILeaveRequestUsesCalendarAwareCounting(t *testing.T) {
+	h := newTestHarness(t)
+	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.leave_inbox.read", "attendance.approve", "attendance.reject", "attendance.cancel", "attendance.amend"} {
+		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "leave_policy_core", Action: "use", Resource: "leave_self_service"}); err != nil {
+			t.Fatalf("upsert permission %s: %v", permissionKey, err)
+		}
+		if err := h.ident.GrantRolePermission(identity.RolePermission{RoleID: "role_admin", PermissionKey: permissionKey}); err != nil {
+			t.Fatalf("grant permission %s: %v", permissionKey, err)
+		}
+	}
+	registerLeaveSelfServiceTestModels(t, h.models)
+	employee, _ := h.models.Create("employee_profile", "user_admin", map[string]any{"party_id": "party_calendar", "user_id": "user_admin", "employee_code": "EMP-CAL", "employment_status": "active", "status": "active"})
+	if _, err := h.models.Create("employee_assignment", "user_admin", map[string]any{"employee_id": employee.ID, "organization_id": "org_default", "location_id": "loc_hq", "effective_from": "2000-01-01", "status": "active"}); err != nil {
+		t.Fatalf("create assignment: %v", err)
+	}
+	if _, err := h.models.Create("work_calendar", "user_admin", map[string]any{
+		"code":               "CAL-HQ",
+		"name":               "HQ Calendar",
+		"organization_id":    "org_default",
+		"location_id":        "loc_hq",
+		"working_days_json":  `["monday","tuesday","wednesday","thursday","friday"]`,
+		"holiday_dates_json": `["2099-02-11"]`,
+		"status":             "active",
+	}); err != nil {
+		t.Fatalf("create work calendar: %v", err)
+	}
+	absenceCode, _ := h.models.Create("absence_code", "user_admin", map[string]any{"code": "ANNUAL-CAL", "name": "Annual Leave", "category": "leave", "status": "active"})
+	policyRecord, _ := h.models.Create("leave_policy", "user_admin", map[string]any{"code": "LP-CAL", "name": "Calendar Policy", "absence_code_id": absenceCode.ID, "paid_leave": false, "requires_balance": false, "allows_half_day": true, "status": "active"})
+	if _, err := h.models.Create("employee_leave_profile", "user_admin", map[string]any{"employee_id": employee.ID, "leave_policy_id": policyRecord.ID, "effective_from": "2000-01-01", "status": "active"}); err != nil {
+		t.Fatalf("create leave profile: %v", err)
+	}
+	createBody, _ := json.Marshal(map[string]any{"leave_policy_id": policyRecord.ID, "start_date": "2099-02-10", "end_date": "2099-02-14"})
+	create := h.request(http.MethodPost, "/ui/self-service/leave/requests", createBody, true)
+	if create.Code != http.StatusOK {
+		t.Fatalf("create leave request failed: %d body=%s", create.Code, create.Body.String())
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(create.Body.Bytes(), &payload)
+	record := payload["record"].(map[string]any)
+	if record["requested_days"] != float64(3) {
+		t.Fatalf("expected 3 calendar-counted days, got %+v", record)
+	}
+	if record["count_basis"] != "calendar" {
+		t.Fatalf("expected calendar count basis, got %+v", record)
+	}
+}
+
 func registerLeaveSelfServiceTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	defs := []model.Definition{
 		{Key: "employee_profile", DisplayName: "Employee Profile", DefaultSort: "employee_code", Fields: []model.FieldDefinition{{Key: "party_id", Type: "string"}, {Key: "user_id", Type: "string"}, {Key: "employee_code", Type: "string"}, {Key: "employment_status", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "work_calendar", DisplayName: "Work Calendar", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "working_days_json", Type: "string"}, {Key: "holiday_dates_json", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_assignment", DisplayName: "Employee Assignment", DefaultSort: "effective_from", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "absence_code", DisplayName: "Absence Code", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "category", Type: "string"}, {Key: "deduct_from_payroll", Type: "bool"}, {Key: "status", Type: "string"}}},
-		{Key: "leave_request", DisplayName: "Leave Request", DefaultSort: "start_date", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "balance_account_id", Type: "string"}, {Key: "start_date", Type: "string"}, {Key: "end_date", Type: "string"}, {Key: "request_unit", Type: "string"}, {Key: "requested_days", Type: "number"}, {Key: "half_day_session", Type: "string"}, {Key: "request_source", Type: "string"}, {Key: "self_service_actor_user_id", Type: "string"}, {Key: "approval_status", Type: "string"}, {Key: "approved_days", Type: "number"}, {Key: "approval_policy_id", Type: "string"}, {Key: "approval_stage_key", Type: "string"}, {Key: "approval_stage_sequence", Type: "number"}, {Key: "approval_stage_total", Type: "number"}, {Key: "approval_routing_mode", Type: "string"}, {Key: "required_approver_count", Type: "number"}, {Key: "approver_user_id", Type: "string"}, {Key: "approval_candidate_user_ids_json", Type: "string"}, {Key: "approval_recorded_user_ids_json", Type: "string"}, {Key: "approval_requires_different_actor", Type: "bool"}, {Key: "reservation_entry_ids_json", Type: "string"}, {Key: "consumption_entry_ids_json", Type: "string"}, {Key: "amendment_count", Type: "number"}, {Key: "last_amended_at", Type: "string"}, {Key: "last_amended_by", Type: "string"}, {Key: "last_amendment_reason", Type: "string"}, {Key: "notes", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "leave_request", DisplayName: "Leave Request", DefaultSort: "start_date", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "balance_account_id", Type: "string"}, {Key: "start_date", Type: "string"}, {Key: "end_date", Type: "string"}, {Key: "request_unit", Type: "string"}, {Key: "requested_days", Type: "number"}, {Key: "requested_hours", Type: "number"}, {Key: "count_basis", Type: "string"}, {Key: "counted_dates_json", Type: "string"}, {Key: "counted_work_calendar_id", Type: "string"}, {Key: "counted_roster_slot_ids_json", Type: "string"}, {Key: "half_day_session", Type: "string"}, {Key: "request_source", Type: "string"}, {Key: "self_service_actor_user_id", Type: "string"}, {Key: "approval_status", Type: "string"}, {Key: "approved_days", Type: "number"}, {Key: "approval_policy_id", Type: "string"}, {Key: "approval_stage_key", Type: "string"}, {Key: "approval_stage_sequence", Type: "number"}, {Key: "approval_stage_total", Type: "number"}, {Key: "approval_routing_mode", Type: "string"}, {Key: "required_approver_count", Type: "number"}, {Key: "approver_user_id", Type: "string"}, {Key: "approval_candidate_user_ids_json", Type: "string"}, {Key: "approval_recorded_user_ids_json", Type: "string"}, {Key: "approval_requires_different_actor", Type: "bool"}, {Key: "reservation_entry_ids_json", Type: "string"}, {Key: "consumption_entry_ids_json", Type: "string"}, {Key: "amendment_count", Type: "number"}, {Key: "last_amended_at", Type: "string"}, {Key: "last_amended_by", Type: "string"}, {Key: "last_amendment_reason", Type: "string"}, {Key: "notes", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "attendance_day", DisplayName: "Attendance Day", DefaultSort: "attendance_date", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "attendance_date", Type: "string"}, {Key: "attendance_status", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "leave_request_id", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "attendance_adjustment", DisplayName: "Attendance Adjustment", DefaultSort: "attendance_date", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "attendance_date", Type: "string"}, {Key: "approval_status", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "overtime_request", DisplayName: "Overtime Request", DefaultSort: "attendance_date", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "attendance_date", Type: "string"}, {Key: "approval_status", Type: "string"}, {Key: "status", Type: "string"}}},

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -28,15 +29,22 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	userID := "leave_pg_user_" + suffix
 	baseYear := 2100 + time.Now().UTC().Nanosecond()%400
 	grantDate := fmt.Sprintf("%04d-01-01", baseYear)
-	requestDate := fmt.Sprintf("%04d-02-10", baseYear)
-	amendedDate := fmt.Sprintf("%04d-02-11", baseYear)
-	cutoffDate := fmt.Sprintf("%04d-02-12", baseYear)
-	periodStart := fmt.Sprintf("%04d-02-01", baseYear)
-	periodEnd := fmt.Sprintf("%04d-02-28", baseYear)
+	requestDay := firstWeekdayOfMonth(baseYear, time.February)
+	amendedDay := nextWeekday(requestDay.AddDate(0, 0, 1))
+	cutoffDay := nextWeekday(amendedDay.AddDate(0, 0, 1))
+	requestDate := requestDay.Format("2006-01-02")
+	amendedDate := amendedDay.Format("2006-01-02")
+	cutoffDate := cutoffDay.Format("2006-01-02")
+	periodStart := time.Date(baseYear, time.February, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	periodEnd := time.Date(baseYear, time.February+1, 0, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	q1ExpiryDate := fmt.Sprintf("%04d-03-31", baseYear)
 	expiryTriggerDate := fmt.Sprintf("%04d-04-15", baseYear)
-	monthlyEffectiveFrom := fmt.Sprintf("%04d-02-15", baseYear)
-	monthlyRunDate := fmt.Sprintf("%04d-02-28", baseYear)
+	monthlyEffectiveFrom := nextWeekday(time.Date(baseYear, time.February, 15, 0, 0, 0, 0, time.UTC)).Format("2006-01-02")
+	monthlyRunDate := time.Date(baseYear, time.February+1, 0, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	rosterStart := firstWeekdayOfMonth(baseYear, time.March)
+	rosterEnd := nextWeekday(rosterStart.AddDate(0, 0, 2))
+	rosterStartDate := rosterStart.Format("2006-01-02")
+	rosterEndDate := rosterEnd.Format("2006-01-02")
 
 	employee, err := graph.models.Create("employee_profile", "user_admin", map[string]any{
 		"party_id":          "party_leave_pg_" + suffix,
@@ -59,6 +67,17 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"status":               "active",
 	}); err != nil {
 		t.Fatalf("create employee assignment: %v", err)
+	}
+	if _, err := graph.models.Create("work_calendar", "user_admin", map[string]any{
+		"code":               "CAL-LEAVE-PG-" + suffix,
+		"name":               "Leave Work Calendar",
+		"organization_id":    "org_default",
+		"location_id":        "loc_hq",
+		"working_days_json":  `["monday","tuesday","wednesday","thursday","friday"]`,
+		"holiday_dates_json": fmt.Sprintf(`["%s"]`, cutoffDate),
+		"status":             "active",
+	}); err != nil {
+		t.Fatalf("create work calendar: %v", err)
 	}
 	absenceCode, err := graph.models.Create("absence_code", "user_admin", map[string]any{
 		"code":                "ANNUAL-PG-" + suffix,
@@ -152,6 +171,9 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create self-service leave request: %v", err)
 	}
+	if got := textValue(request.Values["count_basis"]); got != "calendar" {
+		t.Fatalf("expected calendar count basis on initial request, got %s", got)
+	}
 	request, err = graph.leavePolicies.SubmitSelfServiceLeaveRequest(userID, request.ID, userID)
 	if err != nil {
 		t.Fatalf("submit self-service leave request: %v", err)
@@ -244,6 +266,55 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 	if got := numberValue(userBalances[0]["available_days"]); got != 11 {
 		t.Fatalf("expected balance summary available_days 11 after approval, got %v", got)
+	}
+	roster, err := graph.models.Create("workforce_roster", "user_admin", map[string]any{
+		"code":            "RST-LEAVE-PG-" + suffix,
+		"name":            "Leave Roster",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"start_date":      rosterStartDate,
+		"end_date":        rosterEndDate,
+		"status":          "published",
+	})
+	if err != nil {
+		t.Fatalf("create workforce roster: %v", err)
+	}
+	for _, shiftDate := range []string{rosterStartDate, rosterEndDate} {
+		if _, err := graph.models.Create("workforce_roster_slot", "user_admin", map[string]any{
+			"roster_id":          roster.ID,
+			"employee_id":        employee.ID,
+			"organization_id":    "org_default",
+			"location_id":        "loc_hq",
+			"shift_date":         shiftDate,
+			"planned_start_time": "08:00",
+			"planned_end_time":   "16:00",
+			"break_minutes":      60.0,
+			"status":             "active",
+		}); err != nil {
+			t.Fatalf("create roster slot: %v", err)
+		}
+	}
+	rosterRequest, err := graph.leavePolicies.CreateSelfServiceLeaveRequest(userID, map[string]any{
+		"leave_policy_id": leavePolicy.ID,
+		"start_date":      rosterStartDate,
+		"end_date":        rosterEndDate,
+	}, userID)
+	if err != nil {
+		t.Fatalf("create roster-based leave request: %v", err)
+	}
+	if got := textValue(rosterRequest.Values["count_basis"]); got != "roster" {
+		t.Fatalf("expected roster count basis, got %s", got)
+	}
+	if got := numberValue(rosterRequest.Values["requested_days"]); got != 2 {
+		t.Fatalf("expected 2 roster-counted days, got %v", got)
+	}
+	if got := numberValue(rosterRequest.Values["requested_hours"]); got != 14 {
+		t.Fatalf("expected 14 roster-counted hours, got %v", got)
+	}
+	var countedDates []string
+	_ = json.Unmarshal([]byte(textValue(rosterRequest.Values["counted_dates_json"])), &countedDates)
+	if len(countedDates) != 2 || countedDates[0] != rosterStartDate || countedDates[1] != rosterEndDate {
+		t.Fatalf("expected counted roster dates [%s,%s], got %+v", rosterStartDate, rosterEndDate, countedDates)
 	}
 
 	if _, err := graph.models.Create("employee_compensation_profile", "user_admin", map[string]any{
@@ -510,4 +581,16 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "on_leave" {
 		t.Fatalf("expected persisted attendance day on_leave after approved amendment, got %+v", days)
 	}
+}
+
+func firstWeekdayOfMonth(year int, month time.Month) time.Time {
+	day := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+	return nextWeekday(day)
+}
+
+func nextWeekday(day time.Time) time.Time {
+	for day.Weekday() == time.Saturday || day.Weekday() == time.Sunday {
+		day = day.AddDate(0, 0, 1)
+	}
+	return day
 }
