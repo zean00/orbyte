@@ -38,6 +38,10 @@ func employeePayrollCoreKernelPackManifests() []module.Manifest {
 	return []module.Manifest{employeePayrollCoreKernelPackManifest()}
 }
 
+func payrollRemittanceCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{payrollRemittanceCoreKernelPackManifest()}
+}
+
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
 	acpDefinition, _ := config.NewService().Definition("platform.acp")

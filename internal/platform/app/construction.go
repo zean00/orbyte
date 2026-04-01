@@ -86,6 +86,7 @@ type serviceGraph struct {
 	workforceAttendance *application.WorkforceAttendanceCoreService
 	employeeSpend       *application.EmployeeSpendCoreService
 	employeePayroll     *application.EmployeePayrollCoreService
+	payrollRemittance   *application.PayrollRemittanceCoreService
 	modelActions        *application.ModelActions
 	commercialCore      *application.CommercialCoreService
 	procurementCore     *application.ProcurementCoreService
@@ -264,6 +265,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.workforceAttendance = application.NewWorkforceAttendanceCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models))
 	graph.employeeSpend = application.NewEmployeeSpendCoreService(graph.documents, graph.models)
 	graph.employeePayroll = application.NewEmployeePayrollCoreService(graph.documents, graph.models, graph.workforceAttendance, graph.employeeSpend)
+	graph.payrollRemittance = application.NewPayrollRemittanceCoreService(graph.documents, graph.models)
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
 	graph.docActions.AttachApprovalPolicies(graph.approvalPolicies)
 	graph.docActions.AttachActivities(graph.activities)

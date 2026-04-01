@@ -375,6 +375,8 @@ func (s *EmployeePayrollCoreService) buildPayrollLine(employeeID, periodStart, p
 		"currency_code":                firstNonEmptyString(textValue(profile.Values["currency_code"]), textValue(compProfile.Values["currency_code"]), "IDR"),
 		"payment_method_code":          firstNonEmptyString(textValue(profile.Values["payment_method_code"]), "BANK"),
 		"treasury_account_id":          textValue(profile.Values["treasury_account_id"]),
+		"tax_rule_id":                  textValue(profile.Values["tax_rule_id"]),
+		"contribution_rule_id":         textValue(profile.Values["contribution_rule_id"]),
 		"salary_structure_id":          salaryStructureID,
 		"worked_hours":                 roundMoney(workedHours),
 		"overtime_hours":               roundMoney(overtimeHours),

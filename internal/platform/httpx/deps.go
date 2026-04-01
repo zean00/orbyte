@@ -94,6 +94,7 @@ type DocumentDeps struct {
 	Traceability    *application.TraceabilityCoreService
 	Recall          *application.RecallCoreService
 	Payroll         *application.EmployeePayrollCoreService
+	Remittance      *application.PayrollRemittanceCoreService
 	Audit           *audit.Service
 	Policy          *policy.Service
 	Search          *search.Service
@@ -270,7 +271,7 @@ func RegisterModelSurface(deps ModelDeps) RouteRegistrar {
 
 func RegisterDocumentSurface(deps DocumentDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Delivery, deps.Returns, deps.SupplierReturns, deps.Production, deps.Traceability, deps.Recall, deps.Payroll, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
+		registerDocumentRoutes(mux, deps.Config, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Commercial, deps.Procurement, deps.Inventory, deps.Fulfillment, deps.Delivery, deps.Returns, deps.SupplierReturns, deps.Production, deps.Traceability, deps.Recall, deps.Payroll, deps.Remittance, deps.Audit, deps.Policy, deps.Search, deps.FieldSecurity, deps.Observability)
 		registerDocumentFlowRoutes(mux, deps.Identity, deps.Modules, deps.Documents, deps.Actions, deps.Search, deps.FieldSecurity, deps.Idempotency)
 	}
 }

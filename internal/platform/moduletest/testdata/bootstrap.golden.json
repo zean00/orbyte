@@ -5800,6 +5800,426 @@
       "view_key": "recall.cases.form"
     },
     {
+      "key": "remittance.adjustments.detail",
+      "kind": "navigate",
+      "label": "Remittance Adjustment Detail",
+      "label_i18n": {
+        "en": "Remittance Adjustment Detail",
+        "id": "Remittance Adjustment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/remittance/adjustments/detail",
+      "view_key": "remittance.adjustments.detail"
+    },
+    {
+      "key": "remittance.adjustments.form",
+      "kind": "navigate",
+      "label": "Remittance Adjustment Detail Form",
+      "label_i18n": {
+        "en": "Remittance Adjustment Detail Form",
+        "id": "Remittance Adjustment Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/remittance/adjustments/form",
+      "view_key": "remittance.adjustments.form"
+    },
+    {
+      "key": "remittance.adjustments.list",
+      "kind": "navigate",
+      "label": "Remittance Adjustments",
+      "label_i18n": {
+        "en": "Remittance Adjustments",
+        "id": "Remittance Adjustments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/remittance/adjustments",
+      "view_key": "remittance.adjustments.list"
+    },
+    {
+      "key": "remittance.adjustments.new",
+      "kind": "navigate",
+      "label": "New Remittance Adjustment",
+      "label_i18n": {
+        "en": "New Remittance Adjustment",
+        "id": "New Remittance Adjustment"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/remittance/adjustments/new",
+      "view_key": "remittance.adjustments.form"
+    },
+    {
+      "key": "remittance.authorities.detail",
+      "kind": "navigate",
+      "label": "Remittance Authority Detail",
+      "label_i18n": {
+        "en": "Remittance Authority Detail",
+        "id": "Remittance Authority Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_authority.read"
+      ],
+      "route_path": "/remittance/authorities/detail",
+      "view_key": "remittance.authorities.detail"
+    },
+    {
+      "key": "remittance.authorities.form",
+      "kind": "navigate",
+      "label": "Remittance Authority Form",
+      "label_i18n": {
+        "en": "Remittance Authority Form",
+        "id": "Remittance Authority Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_authority.update"
+      ],
+      "route_path": "/remittance/authorities/form",
+      "view_key": "remittance.authorities.form"
+    },
+    {
+      "key": "remittance.authorities.list",
+      "kind": "navigate",
+      "label": "Remittance Authorities",
+      "label_i18n": {
+        "en": "Remittance Authorities",
+        "id": "Remittance Authorities"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_authority.list"
+      ],
+      "route_path": "/remittance/authorities",
+      "view_key": "remittance.authorities.list"
+    },
+    {
+      "key": "remittance.batches.detail",
+      "kind": "navigate",
+      "label": "Remittance Batch Detail",
+      "label_i18n": {
+        "en": "Remittance Batch Detail",
+        "id": "Remittance Batch Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/remittance/batches/detail",
+      "view_key": "remittance.batches.detail"
+    },
+    {
+      "key": "remittance.batches.form",
+      "kind": "navigate",
+      "label": "Remittance Batch Detail Form",
+      "label_i18n": {
+        "en": "Remittance Batch Detail Form",
+        "id": "Remittance Batch Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/remittance/batches/form",
+      "view_key": "remittance.batches.form"
+    },
+    {
+      "key": "remittance.batches.list",
+      "kind": "navigate",
+      "label": "Remittance Batches",
+      "label_i18n": {
+        "en": "Remittance Batches",
+        "id": "Remittance Batches"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/remittance/batches",
+      "view_key": "remittance.batches.list"
+    },
+    {
+      "key": "remittance.batches.new",
+      "kind": "navigate",
+      "label": "New Remittance Batch",
+      "label_i18n": {
+        "en": "New Remittance Batch",
+        "id": "New Remittance Batch"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/remittance/batches/new",
+      "view_key": "remittance.batches.form"
+    },
+    {
+      "key": "remittance.liabilities.detail",
+      "kind": "navigate",
+      "label": "Remittance Liability Detail",
+      "label_i18n": {
+        "en": "Remittance Liability Detail",
+        "id": "Remittance Liability Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/remittance/liabilities/detail",
+      "view_key": "remittance.liabilities.detail"
+    },
+    {
+      "key": "remittance.liabilities.form",
+      "kind": "navigate",
+      "label": "Remittance Liability Detail Form",
+      "label_i18n": {
+        "en": "Remittance Liability Detail Form",
+        "id": "Remittance Liability Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/remittance/liabilities/form",
+      "view_key": "remittance.liabilities.form"
+    },
+    {
+      "key": "remittance.liabilities.list",
+      "kind": "navigate",
+      "label": "Remittance Liabilities",
+      "label_i18n": {
+        "en": "Remittance Liabilities",
+        "id": "Remittance Liabilities"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/remittance/liabilities",
+      "view_key": "remittance.liabilities.list"
+    },
+    {
+      "key": "remittance.liabilities.new",
+      "kind": "navigate",
+      "label": "New Remittance Liability",
+      "label_i18n": {
+        "en": "New Remittance Liability",
+        "id": "New Remittance Liability"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/remittance/liabilities/new",
+      "view_key": "remittance.liabilities.form"
+    },
+    {
+      "key": "remittance.obligation_types.detail",
+      "kind": "navigate",
+      "label": "Obligation Type Detail",
+      "label_i18n": {
+        "en": "Obligation Type Detail",
+        "id": "Obligation Type Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_obligation_type.read"
+      ],
+      "route_path": "/remittance/obligation_types/detail",
+      "view_key": "remittance.obligation_types.detail"
+    },
+    {
+      "key": "remittance.obligation_types.form",
+      "kind": "navigate",
+      "label": "Obligation Type Form",
+      "label_i18n": {
+        "en": "Obligation Type Form",
+        "id": "Obligation Type Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_obligation_type.update"
+      ],
+      "route_path": "/remittance/obligation_types/form",
+      "view_key": "remittance.obligation_types.form"
+    },
+    {
+      "key": "remittance.obligation_types.list",
+      "kind": "navigate",
+      "label": "Obligation Types",
+      "label_i18n": {
+        "en": "Obligation Types",
+        "id": "Obligation Types"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_obligation_type.list"
+      ],
+      "route_path": "/remittance/obligation_types",
+      "view_key": "remittance.obligation_types.list"
+    },
+    {
+      "key": "remittance.payments.detail",
+      "kind": "navigate",
+      "label": "Remittance Payment Detail",
+      "label_i18n": {
+        "en": "Remittance Payment Detail",
+        "id": "Remittance Payment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/remittance/payments/detail",
+      "view_key": "remittance.payments.detail"
+    },
+    {
+      "key": "remittance.payments.form",
+      "kind": "navigate",
+      "label": "Remittance Payment Detail Form",
+      "label_i18n": {
+        "en": "Remittance Payment Detail Form",
+        "id": "Remittance Payment Detail Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/remittance/payments/form",
+      "view_key": "remittance.payments.form"
+    },
+    {
+      "key": "remittance.payments.list",
+      "kind": "navigate",
+      "label": "Remittance Payments",
+      "label_i18n": {
+        "en": "Remittance Payments",
+        "id": "Remittance Payments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.list"
+      ],
+      "route_path": "/remittance/payments",
+      "view_key": "remittance.payments.list"
+    },
+    {
+      "key": "remittance.payments.new",
+      "kind": "navigate",
+      "label": "New Remittance Payment",
+      "label_i18n": {
+        "en": "New Remittance Payment",
+        "id": "New Remittance Payment"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.create"
+      ],
+      "route_path": "/remittance/payments/new",
+      "view_key": "remittance.payments.form"
+    },
+    {
+      "key": "remittance.profiles.detail",
+      "kind": "navigate",
+      "label": "Remittance Profile Detail",
+      "label_i18n": {
+        "en": "Remittance Profile Detail",
+        "id": "Remittance Profile Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_remittance_profile.read"
+      ],
+      "route_path": "/remittance/profiles/detail",
+      "view_key": "remittance.profiles.detail"
+    },
+    {
+      "key": "remittance.profiles.form",
+      "kind": "navigate",
+      "label": "Remittance Profile Form",
+      "label_i18n": {
+        "en": "Remittance Profile Form",
+        "id": "Remittance Profile Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_remittance_profile.update"
+      ],
+      "route_path": "/remittance/profiles/form",
+      "view_key": "remittance.profiles.form"
+    },
+    {
+      "key": "remittance.profiles.list",
+      "kind": "navigate",
+      "label": "Remittance Profiles",
+      "label_i18n": {
+        "en": "Remittance Profiles",
+        "id": "Remittance Profiles"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "payroll_remittance_profile.list"
+      ],
+      "route_path": "/remittance/profiles",
+      "view_key": "remittance.profiles.list"
+    },
+    {
+      "key": "remittance.schedule_rules.detail",
+      "kind": "navigate",
+      "label": "Schedule Rule Detail",
+      "label_i18n": {
+        "en": "Schedule Rule Detail",
+        "id": "Schedule Rule Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_schedule_rule.read"
+      ],
+      "route_path": "/remittance/schedule_rules/detail",
+      "view_key": "remittance.schedule_rules.detail"
+    },
+    {
+      "key": "remittance.schedule_rules.form",
+      "kind": "navigate",
+      "label": "Schedule Rule Form",
+      "label_i18n": {
+        "en": "Schedule Rule Form",
+        "id": "Schedule Rule Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_schedule_rule.update"
+      ],
+      "route_path": "/remittance/schedule_rules/form",
+      "view_key": "remittance.schedule_rules.form"
+    },
+    {
+      "key": "remittance.schedule_rules.list",
+      "kind": "navigate",
+      "label": "Schedule Rules",
+      "label_i18n": {
+        "en": "Schedule Rules",
+        "id": "Schedule Rules"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "remittance_schedule_rule.list"
+      ],
+      "route_path": "/remittance/schedule_rules",
+      "view_key": "remittance.schedule_rules.list"
+    },
+    {
       "key": "returns.receipts.detail",
       "kind": "navigate",
       "label": "Return Receipt",
@@ -7106,6 +7526,19 @@
       ]
     },
     {
+      "action_key": "remittance.authorities.list",
+      "key": "remittance.authorities",
+      "label": "Remittance Authorities",
+      "label_i18n": {
+        "en": "Remittance Authorities",
+        "id": "Otoritas Remittance"
+      },
+      "order": 41,
+      "required_permissions": [
+        "remittance_authority.list"
+      ]
+    },
+    {
       "action_key": "procurement.requests.list",
       "key": "procurement.requests",
       "label": "Purchase Requests",
@@ -7116,6 +7549,19 @@
       "order": 42,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "remittance.obligation_types.list",
+      "key": "remittance.obligation_types",
+      "label": "Obligation Types",
+      "label_i18n": {
+        "en": "Obligation Types",
+        "id": "Tipe Kewajiban"
+      },
+      "order": 42,
+      "required_permissions": [
+        "remittance_obligation_type.list"
       ]
     },
     {
@@ -7132,6 +7578,19 @@
       ]
     },
     {
+      "action_key": "remittance.schedule_rules.list",
+      "key": "remittance.schedule_rules",
+      "label": "Schedule Rules",
+      "label_i18n": {
+        "en": "Schedule Rules",
+        "id": "Aturan Jadwal"
+      },
+      "order": 43,
+      "required_permissions": [
+        "remittance_schedule_rule.list"
+      ]
+    },
+    {
       "action_key": "procurement.receipts.list",
       "key": "procurement.receipts",
       "label": "Receipts",
@@ -7145,12 +7604,38 @@
       ]
     },
     {
+      "action_key": "remittance.profiles.list",
+      "key": "remittance.profiles",
+      "label": "Remittance Profiles",
+      "label_i18n": {
+        "en": "Remittance Profiles",
+        "id": "Profil Remittance"
+      },
+      "order": 44,
+      "required_permissions": [
+        "payroll_remittance_profile.list"
+      ]
+    },
+    {
       "action_key": "procurement.bills.list",
       "key": "procurement.bills",
       "label": "Vendor Bills",
       "label_i18n": {
         "en": "Vendor Bills",
         "id": "Tagihan Vendor"
+      },
+      "order": 45,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "remittance.liabilities.list",
+      "key": "remittance.liabilities",
+      "label": "Remittance Liabilities",
+      "label_i18n": {
+        "en": "Remittance Liabilities",
+        "id": "Liabilitas Remittance"
       },
       "order": 45,
       "required_permissions": [
@@ -7171,6 +7656,19 @@
       ]
     },
     {
+      "action_key": "remittance.adjustments.list",
+      "key": "remittance.adjustments",
+      "label": "Remittance Adjustments",
+      "label_i18n": {
+        "en": "Remittance Adjustments",
+        "id": "Penyesuaian Remittance"
+      },
+      "order": 46,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
       "action_key": "procurement.credits.list",
       "key": "procurement.credits",
       "label": "Vendor Credits",
@@ -7184,12 +7682,38 @@
       ]
     },
     {
+      "action_key": "remittance.batches.list",
+      "key": "remittance.batches",
+      "label": "Remittance Batches",
+      "label_i18n": {
+        "en": "Remittance Batches",
+        "id": "Batch Remittance"
+      },
+      "order": 47,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
       "action_key": "procurement.payables.dashboard",
       "key": "procurement.payables",
       "label": "Payables",
       "label_i18n": {
         "en": "Payables",
         "id": "Utang"
+      },
+      "order": 48,
+      "required_permissions": [
+        "document.list"
+      ]
+    },
+    {
+      "action_key": "remittance.payments.list",
+      "key": "remittance.payments",
+      "label": "Remittance Payments",
+      "label_i18n": {
+        "en": "Remittance Payments",
+        "id": "Pembayaran Remittance"
       },
       "order": 48,
       "required_permissions": [
@@ -42259,6 +42783,1522 @@
       "title_i18n": {
         "en": "Recall Cases",
         "id": "Recall Cases"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_remittance_adjustment",
+      "key": "remittance.adjustments.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "liability_id",
+              "label": "Liability",
+              "path": "body.payload.liability_id",
+              "type": "string"
+            },
+            {
+              "key": "adjustment_date",
+              "label": "Adjustment Date",
+              "path": "body.payload.adjustment_date",
+              "type": "string"
+            },
+            {
+              "key": "amount",
+              "label": "Amount",
+              "path": "body.payload.amount",
+              "type": "number"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "path": "body.payload.reason",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Remittance Adjustment Detail",
+      "title_i18n": {
+        "en": "Remittance Adjustment Detail",
+        "id": "Remittance Adjustment Detail"
+      }
+    },
+    {
+      "document_type": "payroll_remittance_adjustment",
+      "key": "remittance.adjustments.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "liability_id",
+              "label": "Liability",
+              "path": "body.payload.liability_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "adjustment_date",
+              "label": "Adjustment Date",
+              "path": "body.payload.adjustment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "amount",
+              "label": "Amount",
+              "path": "body.payload.amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "reason",
+              "label": "Reason",
+              "path": "body.payload.reason",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Remittance Adjustment Form",
+      "title_i18n": {
+        "en": "Remittance Adjustment Form",
+        "id": "Remittance Adjustment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Adjustment",
+          "path": "header.number"
+        },
+        {
+          "key": "liability_id",
+          "label": "Liability",
+          "path": "body.payload.liability_id"
+        },
+        {
+          "key": "adjustment_date",
+          "label": "Date",
+          "path": "body.payload.adjustment_date"
+        },
+        {
+          "key": "amount",
+          "label": "Amount",
+          "path": "body.payload.amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_remittance_adjustment",
+      "empty_state": "No Remittance Adjustments exist yet.",
+      "empty_state_i18n": {
+        "en": "No Remittance Adjustments exist yet.",
+        "id": "Belum ada Remittance Adjustments."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.adjustments.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Remittance Adjustments",
+      "title_i18n": {
+        "en": "Remittance Adjustments",
+        "id": "Remittance Adjustments"
+      }
+    },
+    {
+      "key": "remittance.authorities.detail",
+      "kind": "detail",
+      "model_key": "remittance_authority",
+      "required_permissions": [
+        "remittance_authority.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.default_treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "values.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Remittance Authorities Detail",
+      "title_i18n": {
+        "en": "Remittance Authorities Detail",
+        "id": "Remittance Authorities Detail"
+      }
+    },
+    {
+      "key": "remittance.authorities.form",
+      "kind": "form",
+      "model_key": "remittance_authority",
+      "required_permissions": [
+        "remittance_authority.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "default_treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.default_treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "values.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Remittance Authorities Form",
+          "title_i18n": {
+            "en": "Remittance Authorities Form",
+            "id": "Remittance Authorities Form"
+          }
+        }
+      ],
+      "title": "Remittance Authorities Form",
+      "title_i18n": {
+        "en": "Remittance Authorities Form",
+        "id": "Remittance Authorities Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.authorities.list",
+      "kind": "list",
+      "model_key": "remittance_authority",
+      "required_permissions": [
+        "remittance_authority.list"
+      ],
+      "title": "Remittance Authorities",
+      "title_i18n": {
+        "en": "Remittance Authorities",
+        "id": "Remittance Authorities"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_remittance_batch",
+      "key": "remittance.batches.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "liability_ids",
+              "label": "Liabilities",
+              "path": "body.payload.liability_ids",
+              "type": "object"
+            },
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "body.payload.remittance_authority_id",
+              "type": "string"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total Amount",
+              "path": "body.payload.total_amount",
+              "type": "number"
+            },
+            {
+              "key": "posted_ledger_id",
+              "label": "Posted Ledger",
+              "path": "body.payload.posted_ledger_id",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Remittance Batch Detail",
+      "title_i18n": {
+        "en": "Remittance Batch Detail",
+        "id": "Remittance Batch Detail"
+      }
+    },
+    {
+      "document_type": "payroll_remittance_batch",
+      "key": "remittance.batches.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "liability_ids",
+              "label": "Liabilities",
+              "path": "body.payload.liability_ids",
+              "type": "object",
+              "widget": "taglist"
+            },
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "body.payload.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "total_amount",
+              "label": "Total Amount",
+              "path": "body.payload.total_amount",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "posted_ledger_id",
+              "label": "Posted Ledger",
+              "path": "body.payload.posted_ledger_id",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Remittance Batch Form",
+      "title_i18n": {
+        "en": "Remittance Batch Form",
+        "id": "Remittance Batch Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Batch",
+          "path": "header.number"
+        },
+        {
+          "key": "remittance_authority_id",
+          "label": "Authority",
+          "path": "body.payload.remittance_authority_id"
+        },
+        {
+          "key": "payment_date",
+          "label": "Payment Date",
+          "path": "body.payload.payment_date"
+        },
+        {
+          "key": "total_amount",
+          "label": "Total",
+          "path": "body.payload.total_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_remittance_batch",
+      "empty_state": "No Remittance Batches exist yet.",
+      "empty_state_i18n": {
+        "en": "No Remittance Batches exist yet.",
+        "id": "Belum ada Remittance Batches."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "approved",
+            "paid",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.batches.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Remittance Batches",
+      "title_i18n": {
+        "en": "Remittance Batches",
+        "id": "Remittance Batches"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_remittance_liability",
+      "key": "remittance.liabilities.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "source_payroll_run_id",
+              "label": "Payroll Run",
+              "path": "body.payload.source_payroll_run_id",
+              "type": "string"
+            },
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "body.payload.remittance_authority_id",
+              "type": "string"
+            },
+            {
+              "key": "remittance_obligation_type_id",
+              "label": "Obligation Type",
+              "path": "body.payload.remittance_obligation_type_id",
+              "type": "string"
+            },
+            {
+              "key": "due_date",
+              "label": "Due Date",
+              "path": "body.payload.due_date",
+              "type": "string"
+            },
+            {
+              "key": "outstanding_amount",
+              "label": "Outstanding Amount",
+              "path": "body.payload.outstanding_amount",
+              "type": "number"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Remittance Liability Detail",
+      "title_i18n": {
+        "en": "Remittance Liability Detail",
+        "id": "Remittance Liability Detail"
+      }
+    },
+    {
+      "document_type": "payroll_remittance_liability",
+      "key": "remittance.liabilities.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "source_payroll_run_id",
+              "label": "Payroll Run",
+              "path": "body.payload.source_payroll_run_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "body.payload.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "remittance_obligation_type_id",
+              "label": "Obligation Type",
+              "path": "body.payload.remittance_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "due_date",
+              "label": "Due Date",
+              "path": "body.payload.due_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "outstanding_amount",
+              "label": "Outstanding Amount",
+              "path": "body.payload.outstanding_amount",
+              "type": "number",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Remittance Liability Form",
+      "title_i18n": {
+        "en": "Remittance Liability Form",
+        "id": "Remittance Liability Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Liability",
+          "path": "header.number"
+        },
+        {
+          "key": "remittance_authority_id",
+          "label": "Authority",
+          "path": "body.payload.remittance_authority_id"
+        },
+        {
+          "key": "due_date",
+          "label": "Due Date",
+          "path": "body.payload.due_date"
+        },
+        {
+          "key": "outstanding_amount",
+          "label": "Outstanding",
+          "path": "body.payload.outstanding_amount"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_remittance_liability",
+      "empty_state": "No Remittance Liabilities exist yet.",
+      "empty_state_i18n": {
+        "en": "No Remittance Liabilities exist yet.",
+        "id": "Belum ada Remittance Liabilities."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "open",
+            "partially_paid",
+            "paid",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.liabilities.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Remittance Liabilities",
+      "title_i18n": {
+        "en": "Remittance Liabilities",
+        "id": "Remittance Liabilities"
+      }
+    },
+    {
+      "key": "remittance.obligation_types.detail",
+      "kind": "detail",
+      "model_key": "remittance_obligation_type",
+      "required_permissions": [
+        "remittance_obligation_type.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "values.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "obligation_class",
+              "label": "Class",
+              "path": "values.obligation_class",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "liability_account_code",
+              "label": "Liability Account",
+              "path": "values.liability_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Obligation Types Detail",
+      "title_i18n": {
+        "en": "Obligation Types Detail",
+        "id": "Obligation Types Detail"
+      }
+    },
+    {
+      "key": "remittance.obligation_types.form",
+      "kind": "form",
+      "model_key": "remittance_obligation_type",
+      "required_permissions": [
+        "remittance_obligation_type.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "values.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "code",
+              "label": "Code",
+              "path": "values.code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "path": "values.name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "obligation_class",
+              "label": "Class",
+              "path": "values.obligation_class",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "liability_account_code",
+              "label": "Liability Account",
+              "path": "values.liability_account_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Obligation Types Form",
+          "title_i18n": {
+            "en": "Obligation Types Form",
+            "id": "Obligation Types Form"
+          }
+        }
+      ],
+      "title": "Obligation Types Form",
+      "title_i18n": {
+        "en": "Obligation Types Form",
+        "id": "Obligation Types Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "path": "values.name"
+        },
+        {
+          "key": "obligation_class",
+          "label": "Class",
+          "path": "values.obligation_class"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.obligation_types.list",
+      "kind": "list",
+      "model_key": "remittance_obligation_type",
+      "required_permissions": [
+        "remittance_obligation_type.list"
+      ],
+      "title": "Obligation Types",
+      "title_i18n": {
+        "en": "Obligation Types",
+        "id": "Obligation Types"
+      }
+    },
+    {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "payroll_remittance_payment",
+      "key": "remittance.payments.detail",
+      "kind": "detail",
+      "print_channel": "print",
+      "print_purpose": "official",
+      "printable": true,
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_remittance_batch_id",
+              "label": "Batch",
+              "path": "body.payload.payroll_remittance_batch_id",
+              "type": "string"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string"
+            },
+            {
+              "key": "amount_paid",
+              "label": "Amount Paid",
+              "path": "body.payload.amount_paid",
+              "type": "number"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "body.payload.treasury_account_id",
+              "type": "string"
+            },
+            {
+              "key": "posted_ledger_id",
+              "label": "Posted Ledger",
+              "path": "body.payload.posted_ledger_id",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Remittance Payment Detail",
+      "title_i18n": {
+        "en": "Remittance Payment Detail",
+        "id": "Remittance Payment Detail"
+      }
+    },
+    {
+      "document_type": "payroll_remittance_payment",
+      "key": "remittance.payments.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "payroll_remittance_batch_id",
+              "label": "Batch",
+              "path": "body.payload.payroll_remittance_batch_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_date",
+              "label": "Payment Date",
+              "path": "body.payload.payment_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "amount_paid",
+              "label": "Amount Paid",
+              "path": "body.payload.amount_paid",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "treasury_account_id",
+              "label": "Treasury Account",
+              "path": "body.payload.treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "posted_ledger_id",
+              "label": "Posted Ledger",
+              "path": "body.payload.posted_ledger_id",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Edit",
+          "title_i18n": {
+            "en": "Edit",
+            "id": "Ubah"
+          }
+        }
+      ],
+      "title": "Remittance Payment Form",
+      "title_i18n": {
+        "en": "Remittance Payment Form",
+        "id": "Remittance Payment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "number",
+          "label": "Payment",
+          "path": "header.number"
+        },
+        {
+          "key": "payroll_remittance_batch_id",
+          "label": "Batch",
+          "path": "body.payload.payroll_remittance_batch_id"
+        },
+        {
+          "key": "payment_date",
+          "label": "Payment Date",
+          "path": "body.payload.payment_date"
+        },
+        {
+          "key": "amount_paid",
+          "label": "Amount Paid",
+          "path": "body.payload.amount_paid"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "header.status"
+        }
+      ],
+      "default_page_size": 10,
+      "document_type": "payroll_remittance_payment",
+      "empty_state": "No Remittance Payments exist yet.",
+      "empty_state_i18n": {
+        "en": "No Remittance Payments exist yet.",
+        "id": "Belum ada Remittance Payments."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "draft",
+            "submitted",
+            "paid",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.payments.list",
+      "kind": "list",
+      "projection_key": "document_summary",
+      "required_permissions": [
+        "document.list"
+      ],
+      "title": "Remittance Payments",
+      "title_i18n": {
+        "en": "Remittance Payments",
+        "id": "Remittance Payments"
+      }
+    },
+    {
+      "key": "remittance.profiles.detail",
+      "kind": "detail",
+      "model_key": "payroll_remittance_profile",
+      "required_permissions": [
+        "payroll_remittance_profile.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "values.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payroll_tax_rule_id",
+              "label": "Payroll Tax Rule",
+              "path": "values.payroll_tax_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payroll_contribution_rule_id",
+              "label": "Payroll Contribution Rule",
+              "path": "values.payroll_contribution_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "withholding_obligation_type_id",
+              "label": "Withholding Obligation",
+              "path": "values.withholding_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employee_contribution_obligation_type_id",
+              "label": "Employee Contribution Obligation",
+              "path": "values.employee_contribution_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employer_contribution_obligation_type_id",
+              "label": "Employer Contribution Obligation",
+              "path": "values.employer_contribution_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.default_treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "values.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Remittance Profiles Detail",
+      "title_i18n": {
+        "en": "Remittance Profiles Detail",
+        "id": "Remittance Profiles Detail"
+      }
+    },
+    {
+      "key": "remittance.profiles.form",
+      "kind": "form",
+      "model_key": "payroll_remittance_profile",
+      "required_permissions": [
+        "payroll_remittance_profile.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "values.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payroll_tax_rule_id",
+              "label": "Payroll Tax Rule",
+              "path": "values.payroll_tax_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payroll_contribution_rule_id",
+              "label": "Payroll Contribution Rule",
+              "path": "values.payroll_contribution_rule_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "withholding_obligation_type_id",
+              "label": "Withholding Obligation",
+              "path": "values.withholding_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employee_contribution_obligation_type_id",
+              "label": "Employee Contribution Obligation",
+              "path": "values.employee_contribution_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employer_contribution_obligation_type_id",
+              "label": "Employer Contribution Obligation",
+              "path": "values.employer_contribution_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "default_treasury_account_id",
+              "label": "Treasury Account",
+              "path": "values.default_treasury_account_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payment_method_code",
+              "label": "Payment Method",
+              "path": "values.payment_method_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Remittance Profiles Form",
+          "title_i18n": {
+            "en": "Remittance Profiles Form",
+            "id": "Remittance Profiles Form"
+          }
+        }
+      ],
+      "title": "Remittance Profiles Form",
+      "title_i18n": {
+        "en": "Remittance Profiles Form",
+        "id": "Remittance Profiles Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "remittance_authority_id",
+          "label": "Authority",
+          "path": "values.remittance_authority_id"
+        },
+        {
+          "key": "payroll_tax_rule_id",
+          "label": "Tax Rule",
+          "path": "values.payroll_tax_rule_id"
+        },
+        {
+          "key": "payroll_contribution_rule_id",
+          "label": "Contribution Rule",
+          "path": "values.payroll_contribution_rule_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.profiles.list",
+      "kind": "list",
+      "model_key": "payroll_remittance_profile",
+      "required_permissions": [
+        "payroll_remittance_profile.list"
+      ],
+      "title": "Remittance Profiles",
+      "title_i18n": {
+        "en": "Remittance Profiles",
+        "id": "Remittance Profiles"
+      }
+    },
+    {
+      "key": "remittance.schedule_rules.detail",
+      "kind": "detail",
+      "model_key": "remittance_schedule_rule",
+      "required_permissions": [
+        "remittance_schedule_rule.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "values.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "remittance_obligation_type_id",
+              "label": "Obligation",
+              "path": "values.remittance_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "due_days_after_period_end",
+              "label": "Days After Period End",
+              "path": "values.due_days_after_period_end",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "due_day_of_month",
+              "label": "Due Day Of Month",
+              "path": "values.due_day_of_month",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Schedule Rules Detail",
+      "title_i18n": {
+        "en": "Schedule Rules Detail",
+        "id": "Schedule Rules Detail"
+      }
+    },
+    {
+      "key": "remittance.schedule_rules.form",
+      "kind": "form",
+      "model_key": "remittance_schedule_rule",
+      "required_permissions": [
+        "remittance_schedule_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "remittance_authority_id",
+              "label": "Authority",
+              "path": "values.remittance_authority_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "remittance_obligation_type_id",
+              "label": "Obligation",
+              "path": "values.remittance_obligation_type_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "due_days_after_period_end",
+              "label": "Days After Period End",
+              "path": "values.due_days_after_period_end",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "due_day_of_month",
+              "label": "Due Day Of Month",
+              "path": "values.due_day_of_month",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Schedule Rules Form",
+          "title_i18n": {
+            "en": "Schedule Rules Form",
+            "id": "Schedule Rules Form"
+          }
+        }
+      ],
+      "title": "Schedule Rules Form",
+      "title_i18n": {
+        "en": "Schedule Rules Form",
+        "id": "Schedule Rules Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "remittance_authority_id",
+          "label": "Authority",
+          "path": "values.remittance_authority_id"
+        },
+        {
+          "key": "remittance_obligation_type_id",
+          "label": "Obligation",
+          "path": "values.remittance_obligation_type_id"
+        },
+        {
+          "key": "due_days_after_period_end",
+          "label": "Days After Period",
+          "path": "values.due_days_after_period_end"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "remittance.schedule_rules.list",
+      "kind": "list",
+      "model_key": "remittance_schedule_rule",
+      "required_permissions": [
+        "remittance_schedule_rule.list"
+      ],
+      "title": "Schedule Rules",
+      "title_i18n": {
+        "en": "Schedule Rules",
+        "id": "Schedule Rules"
       }
     },
     {
