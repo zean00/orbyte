@@ -52,6 +52,7 @@ func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, module
 	})
 
 	registerUILeaveSelfServiceRoutes(mux, ident, leavePolicySvc)
+	registerUIAttendanceLeaveApprovalRoutes(mux, ident, leavePolicySvc)
 
 	mux.HandleFunc("GET /ui/actions/render", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
@@ -364,4 +365,99 @@ func selfServiceLeaveRequestPath(path string) (string, string) {
 		action = strings.TrimSpace(parts[1])
 	}
 	return requestID, action
+}
+
+func registerUIAttendanceLeaveApprovalRoutes(mux *http.ServeMux, ident *identity.Service, leavePolicySvc *application.LeavePolicyCoreService) {
+	mux.HandleFunc("GET /ui/attendance/leave-requests/pending", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"attendance.read", "attendance.approve"}) {
+			respondError(w, shared.Forbidden("attendance leave approval is not allowed"))
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave approval is not available"))
+			return
+		}
+		items, err := leavePolicySvc.PendingRequestSummariesForApprover(principalEffectiveUserID(p))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("POST /ui/attendance/leave-requests/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if leavePolicySvc == nil {
+			respondError(w, shared.NotFound("leave approval is not available"))
+			return
+		}
+		requestID, action := attendanceLeaveApprovalPath(r.URL.Path)
+		if requestID == "" {
+			respondError(w, shared.NotFound("leave request not found"))
+			return
+		}
+		switch action {
+		case "approve":
+			if !principalAllowsAll(ident, p, []string{"attendance.approve"}) {
+				respondError(w, shared.Forbidden("attendance approve is not allowed"))
+				return
+			}
+			record, err := leavePolicySvc.ApproveLeaveRequest(requestID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			payload, err := leavePolicySvc.RequestSummaryForApprover(record.ID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+		case "reject":
+			if !principalAllowsAll(ident, p, []string{"attendance.reject"}) {
+				respondError(w, shared.Forbidden("attendance reject is not allowed"))
+				return
+			}
+			var req map[string]any
+			if r.Body != nil {
+				_ = json.NewDecoder(r.Body).Decode(&req)
+			}
+			note := ""
+			if raw, ok := req["note"].(string); ok {
+				note = strings.TrimSpace(raw)
+			}
+			record, err := leavePolicySvc.RejectLeaveRequest(requestID, principalEffectiveUserID(p), note)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			payload, err := leavePolicySvc.RequestSummaryForApprover(record.ID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+		default:
+			respondError(w, shared.NotFound("leave request action not found"))
+		}
+	})
+}
+
+func attendanceLeaveApprovalPath(path string) (string, string) {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(path, "/ui/attendance/leave-requests/"))
+	if trimmed == "" {
+		return "", ""
+	}
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 }

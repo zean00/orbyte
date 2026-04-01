@@ -152,6 +152,9 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "employee_id", Label: "Employee", LabelI18n: localize("Employee", "Karyawan"), Type: "string", Required: true},
 				{Key: "organization_id", Label: "Organization", LabelI18n: localize("Organization", "Organisasi"), Type: "string"},
 				{Key: "location_id", Label: "Location", LabelI18n: localize("Location", "Lokasi"), Type: "string"},
+				{Key: "organization_unit_id", Label: "Organization Unit", LabelI18n: localize("Organization Unit", "Unit Organisasi"), Type: "string"},
+				{Key: "department_id", Label: "Department", LabelI18n: localize("Department", "Departemen"), Type: "string"},
+				{Key: "cost_center_id", Label: "Cost Center", LabelI18n: localize("Cost Center", "Pusat Biaya"), Type: "string"},
 				{Key: "absence_code_id", Label: "Absence Code", LabelI18n: localize("Absence Code", "Kode Absensi"), Type: "string", Required: true},
 				{Key: "leave_policy_id", Label: "Leave Policy", LabelI18n: localize("Leave Policy", "Kebijakan Cuti"), Type: "string"},
 				{Key: "employee_leave_profile_id", Label: "Employee Leave Profile", LabelI18n: localize("Employee Leave Profile", "Profil Cuti Karyawan"), Type: "string"},
@@ -167,7 +170,15 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "approval_status", Label: "Approval Status", LabelI18n: localize("Approval Status", "Status Persetujuan"), Type: "string", DefaultValue: "draft"},
 				{Key: "approved_days", Label: "Approved Days", LabelI18n: localize("Approved Days", "Hari Disetujui"), Type: "number"},
 				{Key: "approval_policy_id", Label: "Approval Policy", LabelI18n: localize("Approval Policy", "Kebijakan Persetujuan"), Type: "string"},
+				{Key: "approval_stage_key", Label: "Approval Stage Key", LabelI18n: localize("Approval Stage Key", "Kunci Tahap Persetujuan"), Type: "string"},
+				{Key: "approval_stage_sequence", Label: "Approval Stage Sequence", LabelI18n: localize("Approval Stage Sequence", "Urutan Tahap Persetujuan"), Type: "number"},
+				{Key: "approval_stage_total", Label: "Approval Stage Total", LabelI18n: localize("Approval Stage Total", "Total Tahap Persetujuan"), Type: "number"},
+				{Key: "approval_routing_mode", Label: "Approval Routing Mode", LabelI18n: localize("Approval Routing Mode", "Mode Routing Persetujuan"), Type: "string"},
+				{Key: "required_approver_count", Label: "Required Approver Count", LabelI18n: localize("Required Approver Count", "Jumlah Penyetuju Wajib"), Type: "number"},
 				{Key: "approver_user_id", Label: "Approver User", LabelI18n: localize("Approver User", "Pengguna Penyetuju"), Type: "string"},
+				{Key: "approval_candidate_user_ids_json", Label: "Approval Candidate User IDs JSON", LabelI18n: localize("Approval Candidate User IDs JSON", "JSON ID Kandidat Penyetuju"), Type: "string"},
+				{Key: "approval_recorded_user_ids_json", Label: "Approval Recorded User IDs JSON", LabelI18n: localize("Approval Recorded User IDs JSON", "JSON ID Penyetuju Tercatat"), Type: "string"},
+				{Key: "approval_requires_different_actor", Label: "Approval Requires Different Actor", LabelI18n: localize("Approval Requires Different Actor", "Persetujuan Memerlukan Aktor Berbeda"), Type: "bool"},
 				{Key: "reservation_entry_ids_json", Label: "Reservation Entry IDs JSON", LabelI18n: localize("Reservation Entry IDs JSON", "JSON ID Entri Reservasi"), Type: "string"},
 				{Key: "consumption_entry_ids_json", Label: "Consumption Entry IDs JSON", LabelI18n: localize("Consumption Entry IDs JSON", "JSON ID Entri Konsumsi"), Type: "string"},
 				{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Type: "string"},
@@ -224,10 +235,17 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "attendance.list", Action: "list", Resource: "attendance", DisplayName: "List Attendance Records", DisplayNameI18n: localize("List Attendance Records", "Daftar Data Kehadiran")},
 				{Key: "attendance.read", Action: "read", Resource: "attendance", DisplayName: "Read Attendance Records", DisplayNameI18n: localize("Read Attendance Records", "Lihat Data Kehadiran")},
 				{Key: "attendance.update", Action: "update", Resource: "attendance", DisplayName: "Update Attendance Records", DisplayNameI18n: localize("Update Attendance Records", "Perbarui Data Kehadiran")},
+				{Key: "attendance.approve", Action: "approve", Resource: "attendance", DisplayName: "Approve Attendance Records", DisplayNameI18n: localize("Approve Attendance Records", "Setujui Data Kehadiran")},
+				{Key: "attendance.reject", Action: "reject", Resource: "attendance", DisplayName: "Reject Attendance Records", DisplayNameI18n: localize("Reject Attendance Records", "Tolak Data Kehadiran")},
 			},
-			RoleTemplates: []module.RoleTemplateDefinition{{
-				Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "employee.read", "organization_structure.read"},
-			}},
+			RoleTemplates: []module.RoleTemplateDefinition{
+				{
+					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "employee.read", "organization_structure.read"},
+				},
+				{
+					Key: "attendance_approver", Name: "Attendance Approver", NameI18n: localize("Attendance Approver", "Penyetuju Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.list", "attendance.read", "attendance.approve", "attendance.reject", "employee.read"},
+				},
+			},
 		},
 		Frontend: module.FrontendDefinition{
 			Menus: []module.MenuDefinition{

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/shared"
 )
@@ -20,6 +21,21 @@ type LeavePolicyCoreService struct {
 
 func NewLeavePolicyCoreService(models *model.Service, workforce *EmployeeWorkforceCoreService, attendance *WorkforceAttendanceCoreService, approvals *ApprovalPolicyService) *LeavePolicyCoreService {
 	return &LeavePolicyCoreService{models: models, workforce: workforce, attendance: attendance, approvals: approvals}
+}
+
+const leaveRequestWorkflowKey = "leave_request_flow"
+
+type leaveApprovalState struct {
+	PolicyID               string
+	StageKey               string
+	StageSequence          int
+	StageTotal             int
+	RoutingMode            string
+	RequiredApproverCount  int
+	AssigneeUserID         string
+	CandidateUserIDs       []string
+	RecordedUserIDs        []string
+	RequiresDifferentActor bool
 }
 
 func (s *LeavePolicyCoreService) ExecuteAccrualRun(runID, actorID string) (model.Record, error) {
@@ -235,6 +251,7 @@ func (s *LeavePolicyCoreService) CancelSelfServiceLeaveRequest(userID, requestID
 	values := cloneMap(record.Values)
 	values["approval_status"] = "cancelled"
 	values["reservation_entry_ids_json"] = "[]"
+	clearLeaveApprovalState(values)
 	updated, err := s.models.Update("leave_request", record.ID, actorID, values, record.Version)
 	if err != nil {
 		return model.Record{}, err
@@ -251,20 +268,37 @@ func (s *LeavePolicyCoreService) ApproveLeaveRequest(requestID, actorID string) 
 	if !strings.EqualFold(textValue(record.Values["approval_status"]), "submitted") {
 		return model.Record{}, shared.Validation("leave request is not submitted")
 	}
-	consumptionIDs, err := s.consumeReservedBalance(record, actorID)
+	state := parseLeaveApprovalState(record.Values)
+	if err := s.authorizeLeaveApprovalAction(record, state, actorID); err != nil {
+		return model.Record{}, err
+	}
+	if state.StageKey == "" || state.RequiredApproverCount <= 1 && state.StageTotal <= 1 {
+		return s.finalizeApprovedLeave(record, actorID)
+	}
+	recorded := append(state.RecordedUserIDs, actorID)
+	state.RecordedUserIDs = uniqueStrings(recorded)
+	if len(state.RecordedUserIDs) < state.RequiredApproverCount {
+		values := cloneMap(record.Values)
+		values["approval_recorded_user_ids_json"] = marshalStringList(state.RecordedUserIDs)
+		updated, err := s.models.Update("leave_request", record.ID, actorID, values, record.Version)
+		if err != nil {
+			return model.Record{}, err
+		}
+		return updated, nil
+	}
+	nextState, hasNext, err := s.nextLeaveApprovalState(record, state)
 	if err != nil {
 		return model.Record{}, err
 	}
+	if !hasNext {
+		return s.finalizeApprovedLeave(record, actorID)
+	}
 	values := cloneMap(record.Values)
-	values["approval_status"] = "approved"
-	values["approved_days"] = numberValue(record.Values["requested_days"])
-	values["consumption_entry_ids_json"] = marshalStringList(consumptionIDs)
-	values["reservation_entry_ids_json"] = "[]"
+	applyLeaveApprovalState(values, nextState)
 	updated, err := s.models.Update("leave_request", record.ID, actorID, values, record.Version)
 	if err != nil {
 		return model.Record{}, err
 	}
-	s.syncLeaveRange(updated)
 	return updated, nil
 }
 
@@ -276,12 +310,17 @@ func (s *LeavePolicyCoreService) RejectLeaveRequest(requestID, actorID, note str
 	if !strings.EqualFold(textValue(record.Values["approval_status"]), "submitted") {
 		return model.Record{}, shared.Validation("leave request is not submitted")
 	}
+	state := parseLeaveApprovalState(record.Values)
+	if err := s.authorizeLeaveApprovalAction(record, state, actorID); err != nil {
+		return model.Record{}, err
+	}
 	if err := s.releaseReservedBalance(record, actorID); err != nil {
 		return model.Record{}, err
 	}
 	values := cloneMap(record.Values)
 	values["approval_status"] = "rejected"
 	values["reservation_entry_ids_json"] = "[]"
+	clearLeaveApprovalState(values)
 	if strings.TrimSpace(note) != "" {
 		values["notes"] = strings.TrimSpace(strings.TrimSpace(textValue(values["notes"])) + "\n" + strings.TrimSpace(note))
 	}
@@ -360,6 +399,27 @@ func (s *LeavePolicyCoreService) submitLeaveRequest(record model.Record, actorID
 	values := cloneMap(record.Values)
 	values["approval_status"] = "submitted"
 	values["reservation_entry_ids_json"] = marshalStringList(reservationIDs)
+	resolution, ok, err := s.resolveLeaveApprovalPolicy(record)
+	if err != nil {
+		return model.Record{}, err
+	}
+	if ok && len(resolution.Stages) > 0 {
+		stage := resolution.Stages[0]
+		applyLeaveApprovalState(values, leaveApprovalState{
+			PolicyID:               resolution.Policy.ID,
+			StageKey:               stage.StageKey,
+			StageSequence:          stage.Sequence,
+			StageTotal:             len(resolution.Stages),
+			RoutingMode:            firstNonEmpty(stage.RoutingMode, stage.AssignmentStrategy),
+			RequiredApproverCount:  max(1, stage.RequiredApproverCount),
+			AssigneeUserID:         firstNonEmpty(stage.AssigneeUserID, stage.ExplicitUserID),
+			CandidateUserIDs:       append([]string(nil), stage.CandidateUserIDs...),
+			RecordedUserIDs:        nil,
+			RequiresDifferentActor: stage.RequiresDifferentActor,
+		})
+	} else {
+		clearLeaveApprovalState(values)
+	}
 	return s.models.Update("leave_request", record.ID, actorID, values, record.Version)
 }
 
@@ -370,7 +430,7 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 	}
 	for key, value := range cloneMap(payload) {
 		switch key {
-		case "employee_id", "organization_id", "location_id", "request_source", "self_service_actor_user_id", "approval_status", "reservation_entry_ids_json", "consumption_entry_ids_json":
+		case "employee_id", "organization_id", "location_id", "organization_unit_id", "department_id", "cost_center_id", "request_source", "self_service_actor_user_id", "approval_status", "reservation_entry_ids_json", "consumption_entry_ids_json":
 			continue
 		default:
 			values[key] = value
@@ -400,6 +460,9 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 		textValue(profile.Values["location_id"]),
 		textValue(assignment.Values["location_id"]),
 	)
+	values["organization_unit_id"] = leaveFirstNonEmpty(textValue(values["organization_unit_id"]), textValue(assignment.Values["organization_unit_id"]))
+	values["department_id"] = leaveFirstNonEmpty(textValue(values["department_id"]), textValue(assignment.Values["department_id"]))
+	values["cost_center_id"] = leaveFirstNonEmpty(textValue(values["cost_center_id"]), textValue(assignment.Values["cost_center_id"]))
 	values["absence_code_id"] = absenceCode.ID
 	values["leave_policy_id"] = policy.ID
 	values["employee_leave_profile_id"] = profile.ID
@@ -416,6 +479,7 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 	if values["consumption_entry_ids_json"] == nil {
 		values["consumption_entry_ids_json"] = "[]"
 	}
+	clearLeaveApprovalState(values)
 	if values["status"] == nil || textValue(values["status"]) == "" {
 		values["status"] = "active"
 	}
@@ -805,6 +869,217 @@ func deriveRequestedDays(policy model.Record, values map[string]any) (string, fl
 	}
 }
 
+func (s *LeavePolicyCoreService) resolveLeaveApprovalPolicy(record model.Record) (ApprovalPolicyResolution, bool, error) {
+	if s == nil || s.approvals == nil {
+		return ApprovalPolicyResolution{}, false, nil
+	}
+	policyID := strings.TrimSpace(textValue(record.Values["leave_policy_id"]))
+	if policyID == "" {
+		return ApprovalPolicyResolution{}, false, nil
+	}
+	leavePolicy, err := s.models.Get("leave_policy", policyID)
+	if err != nil {
+		return ApprovalPolicyResolution{}, false, err
+	}
+	explicitPolicyID := strings.TrimSpace(textValue(leavePolicy.Values["approval_policy_id"]))
+	if explicitPolicyID != "" {
+		policyRecord, err := s.models.Get("approval_policy", explicitPolicyID)
+		if err != nil {
+			return ApprovalPolicyResolution{}, false, err
+		}
+		if !strings.EqualFold(textValue(policyRecord.Values["status"]), "active") {
+			return ApprovalPolicyResolution{}, false, nil
+		}
+		stages, err := s.approvals.StagesForPolicy(policyRecord.ID)
+		if err != nil {
+			return ApprovalPolicyResolution{}, false, err
+		}
+		if len(stages) == 0 {
+			stage, err := s.leaveApprovalFallbackStage(policyRecord)
+			if err != nil {
+				return ApprovalPolicyResolution{}, false, err
+			}
+			stages = []ApprovalPolicyStageResolution{stage}
+		}
+		for i := range stages {
+			stages[i].PolicyID = policyRecord.ID
+			stages[i].TotalStages = len(stages)
+		}
+		return ApprovalPolicyResolution{Policy: policyRecord, Stages: stages}, true, nil
+	}
+	return s.approvals.ResolveDocumentPolicy(s.syntheticLeaveDocument(record), "submit", leaveRequestWorkflowKey)
+}
+
+func (s *LeavePolicyCoreService) syntheticLeaveDocument(record model.Record) document.Record {
+	payload := map[string]any{
+		"operating_unit_id": textValue(record.Values["organization_unit_id"]),
+		"department_id":     textValue(record.Values["department_id"]),
+		"cost_center_id":    textValue(record.Values["cost_center_id"]),
+	}
+	return document.Record{
+		Header: document.Header{
+			ID:             record.ID,
+			Type:           "leave_request",
+			Status:         textValue(record.Values["approval_status"]),
+			OrganizationID: textValue(record.Values["organization_id"]),
+			LocationID:     textValue(record.Values["location_id"]),
+			Metadata: map[string]any{
+				"workflow_key":       leaveRequestWorkflowKey,
+				"operating_unit_id":  payload["operating_unit_id"],
+				"department_id":      payload["department_id"],
+				"cost_center_id":     payload["cost_center_id"],
+			},
+		},
+		Body: document.Body{Payload: payload},
+	}
+}
+
+func (s *LeavePolicyCoreService) leaveApprovalFallbackStage(policy model.Record) (ApprovalPolicyStageResolution, error) {
+	stage := ApprovalPolicyStageResolution{
+		PolicyID:               policy.ID,
+		StageKey:               leaveFirstNonEmpty(strings.TrimSpace(textValue(policy.Values["default_stage_key"])), "approval"),
+		Sequence:               1,
+		TotalStages:            1,
+		RequiredApproverCount:  1,
+		RoutingMode:            strings.TrimSpace(textValue(policy.Values["routing_mode"])),
+		AssignmentStrategy:     strings.TrimSpace(textValue(policy.Values["assignment_strategy"])),
+		AssignmentMode:         strings.TrimSpace(textValue(policy.Values["assignment_mode"])),
+		AssigneeRoleKey:        strings.TrimSpace(textValue(policy.Values["assignee_role_key"])),
+		FallbackRoleKey:        strings.TrimSpace(textValue(policy.Values["fallback_role_key"])),
+		ApproverGroupID:        strings.TrimSpace(textValue(policy.Values["approver_group_id"])),
+		ExplicitUserID:         strings.TrimSpace(textValue(policy.Values["explicit_user_id"])),
+		CandidateRoleKeys:      leaveSplitCSV(textValue(policy.Values["candidate_role_keys"])),
+		DueAfterSeconds:        int(numberValue(policy.Values["due_after_seconds"])),
+		EscalateAfterSeconds:   int(numberValue(policy.Values["escalate_after_seconds"])),
+		RequiresDifferentActor: boolValue(policy.Values["requires_different_actor"]),
+	}
+	stage.AssigneeUserID, stage.CandidateUserIDs, _ = s.approvals.resolveStageUsers(stage)
+	return stage, nil
+}
+
+func parseLeaveApprovalState(values map[string]any) leaveApprovalState {
+	return leaveApprovalState{
+		PolicyID:               textValue(values["approval_policy_id"]),
+		StageKey:               textValue(values["approval_stage_key"]),
+		StageSequence:          int(numberValue(values["approval_stage_sequence"])),
+		StageTotal:             int(numberValue(values["approval_stage_total"])),
+		RoutingMode:            textValue(values["approval_routing_mode"]),
+		RequiredApproverCount:  max(1, int(numberValue(values["required_approver_count"]))),
+		AssigneeUserID:         textValue(values["approver_user_id"]),
+		CandidateUserIDs:       parseStringList(values["approval_candidate_user_ids_json"]),
+		RecordedUserIDs:        parseStringList(values["approval_recorded_user_ids_json"]),
+		RequiresDifferentActor: boolValue(values["approval_requires_different_actor"]),
+	}
+}
+
+func applyLeaveApprovalState(values map[string]any, state leaveApprovalState) {
+	values["approval_policy_id"] = state.PolicyID
+	values["approval_stage_key"] = state.StageKey
+	values["approval_stage_sequence"] = state.StageSequence
+	values["approval_stage_total"] = state.StageTotal
+	values["approval_routing_mode"] = state.RoutingMode
+	values["required_approver_count"] = max(1, state.RequiredApproverCount)
+	values["approver_user_id"] = state.AssigneeUserID
+	values["approval_candidate_user_ids_json"] = marshalStringList(state.CandidateUserIDs)
+	values["approval_recorded_user_ids_json"] = marshalStringList(state.RecordedUserIDs)
+	values["approval_requires_different_actor"] = state.RequiresDifferentActor
+}
+
+func clearLeaveApprovalState(values map[string]any) {
+	values["approval_policy_id"] = ""
+	values["approval_stage_key"] = ""
+	values["approval_stage_sequence"] = 0
+	values["approval_stage_total"] = 0
+	values["approval_routing_mode"] = ""
+	values["required_approver_count"] = 0
+	values["approver_user_id"] = ""
+	values["approval_candidate_user_ids_json"] = "[]"
+	values["approval_recorded_user_ids_json"] = "[]"
+	values["approval_requires_different_actor"] = false
+}
+
+func (s *LeavePolicyCoreService) authorizeLeaveApprovalAction(record model.Record, state leaveApprovalState, actorID string) error {
+	actorID = strings.TrimSpace(actorID)
+	if actorID == "" {
+		return shared.Forbidden("leave approval actor is required")
+	}
+	if state.RequiresDifferentActor && actorID == strings.TrimSpace(textValue(record.Values["self_service_actor_user_id"])) {
+		return shared.Forbidden("leave request requires a different approver")
+	}
+	if state.StageKey == "" {
+		return nil
+	}
+	if leaveContainsString(state.RecordedUserIDs, actorID) {
+		return shared.Forbidden("leave request approval was already recorded for this actor")
+	}
+	if state.AssigneeUserID == "" && len(state.CandidateUserIDs) == 0 {
+		return shared.Forbidden("leave request approval routing is unresolved")
+	}
+	if state.AssigneeUserID != "" && state.AssigneeUserID != actorID {
+		if !leaveContainsString(state.CandidateUserIDs, actorID) {
+			return shared.Forbidden("leave request approval is not assigned to this actor")
+		}
+	}
+	if state.AssigneeUserID == "" && len(state.CandidateUserIDs) > 0 && !leaveContainsString(state.CandidateUserIDs, actorID) {
+		return shared.Forbidden("leave request approval is not assigned to this actor")
+	}
+	return nil
+}
+
+func (s *LeavePolicyCoreService) nextLeaveApprovalState(record model.Record, current leaveApprovalState) (leaveApprovalState, bool, error) {
+	resolution, ok, err := s.resolveLeaveApprovalPolicy(record)
+	if err != nil || !ok {
+		return leaveApprovalState{}, false, err
+	}
+	for _, stage := range resolution.Stages {
+		if stage.Sequence != current.StageSequence+1 {
+			continue
+		}
+		return leaveApprovalState{
+			PolicyID:               resolution.Policy.ID,
+			StageKey:               stage.StageKey,
+			StageSequence:          stage.Sequence,
+			StageTotal:             len(resolution.Stages),
+			RoutingMode:            firstNonEmpty(stage.RoutingMode, stage.AssignmentStrategy),
+			RequiredApproverCount:  max(1, stage.RequiredApproverCount),
+			AssigneeUserID:         firstNonEmpty(stage.AssigneeUserID, stage.ExplicitUserID),
+			CandidateUserIDs:       append([]string(nil), stage.CandidateUserIDs...),
+			RecordedUserIDs:        nil,
+			RequiresDifferentActor: stage.RequiresDifferentActor,
+		}, true, nil
+	}
+	return leaveApprovalState{}, false, nil
+}
+
+func (s *LeavePolicyCoreService) finalizeApprovedLeave(record model.Record, actorID string) (model.Record, error) {
+	consumptionIDs, err := s.consumeReservedBalance(record, actorID)
+	if err != nil {
+		return model.Record{}, err
+	}
+	values := cloneMap(record.Values)
+	values["approval_status"] = "approved"
+	values["approved_days"] = numberValue(record.Values["requested_days"])
+	values["consumption_entry_ids_json"] = marshalStringList(consumptionIDs)
+	values["reservation_entry_ids_json"] = "[]"
+	clearLeaveApprovalState(values)
+	updated, err := s.models.Update("leave_request", record.ID, actorID, values, record.Version)
+	if err != nil {
+		return model.Record{}, err
+	}
+	s.syncLeaveRange(updated)
+	return updated, nil
+}
+
+func leaveContainsString(items []string, expected string) bool {
+	expected = strings.TrimSpace(expected)
+	for _, item := range items {
+		if strings.TrimSpace(item) == expected {
+			return true
+		}
+	}
+	return false
+}
+
 func parseStringList(value any) []string {
 	raw := strings.TrimSpace(textValue(value))
 	if raw == "" {
@@ -823,6 +1098,13 @@ func parseStringList(value any) []string {
 	return nil
 }
 
+func leaveSplitCSV(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return uniqueStrings(strings.Split(value, ","))
+}
+
 func marshalStringList(items []string) string {
 	filtered := make([]string, 0, len(items))
 	for _, item := range items {
@@ -831,7 +1113,7 @@ func marshalStringList(items []string) string {
 		}
 	}
 	sort.Strings(filtered)
-	data, _ := json.Marshal(filtered)
+	data, _ := json.Marshal(uniqueStrings(filtered))
 	return string(data)
 }
 
@@ -900,10 +1182,54 @@ func (s *LeavePolicyCoreService) RequestSummariesForUser(userID string, filters 
 	return out, nil
 }
 
+func (s *LeavePolicyCoreService) PendingRequestSummariesForApprover(actorID string) ([]map[string]any, error) {
+	if s == nil || s.models == nil {
+		return nil, shared.Validation("leave policy service is not available")
+	}
+	items, _, err := s.models.List("leave_request", model.Query{
+		Filters:  map[string]string{"approval_status": "submitted", "status": "active"},
+		SortKey:  "start_date",
+		Desc:     false,
+		Page:     1,
+		PageSize: model.MaxPageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		state := parseLeaveApprovalState(item.Values)
+		if state.StageKey != "" && s.authorizeLeaveApprovalAction(item, state, actorID) != nil {
+			continue
+		}
+		out = append(out, s.leaveRequestSummary(item))
+	}
+	return out, nil
+}
+
+func (s *LeavePolicyCoreService) RequestSummaryForApprover(requestID, actorID string) (map[string]any, error) {
+	record, err := s.models.Get("leave_request", strings.TrimSpace(requestID))
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(textValue(record.Values["status"]), "active") {
+		return nil, shared.NotFound("leave request was not found")
+	}
+	if err := s.authorizeLeaveApprovalAction(record, parseLeaveApprovalState(record.Values), actorID); err != nil {
+		return nil, err
+	}
+	return s.leaveRequestSummary(record), nil
+}
+
 func (s *LeavePolicyCoreService) leaveRequestSummary(record model.Record) map[string]any {
 	return map[string]any{
 		"id":                     record.ID,
 		"employee_id":            textValue(record.Values["employee_id"]),
+		"organization_id":        textValue(record.Values["organization_id"]),
+		"location_id":            textValue(record.Values["location_id"]),
+		"organization_unit_id":   textValue(record.Values["organization_unit_id"]),
+		"department_id":          textValue(record.Values["department_id"]),
+		"cost_center_id":         textValue(record.Values["cost_center_id"]),
 		"leave_policy_id":        textValue(record.Values["leave_policy_id"]),
 		"employee_leave_profile_id": textValue(record.Values["employee_leave_profile_id"]),
 		"absence_code_id":        textValue(record.Values["absence_code_id"]),
@@ -914,6 +1240,15 @@ func (s *LeavePolicyCoreService) leaveRequestSummary(record model.Record) map[st
 		"half_day_session":       textValue(record.Values["half_day_session"]),
 		"approval_status":        textValue(record.Values["approval_status"]),
 		"approved_days":          numberValue(record.Values["approved_days"]),
+		"approval_stage_key":     textValue(record.Values["approval_stage_key"]),
+		"approval_stage_sequence": int(numberValue(record.Values["approval_stage_sequence"])),
+		"approval_stage_total":   int(numberValue(record.Values["approval_stage_total"])),
+		"approval_routing_mode":  textValue(record.Values["approval_routing_mode"]),
+		"required_approver_count": int(numberValue(record.Values["required_approver_count"])),
+		"approval_policy_id":     textValue(record.Values["approval_policy_id"]),
+		"approver_user_id":       textValue(record.Values["approver_user_id"]),
+		"approval_candidate_user_ids": parseStringList(record.Values["approval_candidate_user_ids_json"]),
+		"approval_recorded_user_ids": parseStringList(record.Values["approval_recorded_user_ids_json"]),
 		"balance_account_id":     textValue(record.Values["balance_account_id"]),
 		"request_source":         textValue(record.Values["request_source"]),
 		"self_service_actor_user_id": textValue(record.Values["self_service_actor_user_id"]),

@@ -101,7 +101,8 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 	}
 	workforceSvc := application.NewEmployeeWorkforceCoreService(models)
 	attendanceSvc := application.NewWorkforceAttendanceCoreService(models, workforceSvc)
-	leavePolicySvc := application.NewLeavePolicyCoreService(models, workforceSvc, attendanceSvc, nil)
+	approvalPolicySvc := application.NewApprovalPolicyService(models)
+	leavePolicySvc := application.NewLeavePolicyCoreService(models, workforceSvc, attendanceSvc, approvalPolicySvc)
 	modelDeps := ModelDeps{
 		Identity:      ident,
 		Models:        models,

@@ -1,8 +1,10 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/store"
@@ -22,11 +24,13 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("seed platform kernel: %v", err)
 	}
+	suffix := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	userID := "leave_pg_user_" + suffix
 
 	employee, err := graph.models.Create("employee_profile", "user_admin", map[string]any{
-		"party_id":          "party_leave_pg",
-		"user_id":           "leave_pg_user",
-		"employee_code":     "EMP-LEAVE-PG",
+		"party_id":          "party_leave_pg_" + suffix,
+		"user_id":           userID,
+		"employee_code":     "EMP-LEAVE-PG-" + suffix,
 		"employment_status": "active",
 		"status":            "active",
 	})
@@ -46,7 +50,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("create employee assignment: %v", err)
 	}
 	absenceCode, err := graph.models.Create("absence_code", "user_admin", map[string]any{
-		"code":                "ANNUAL-PG",
+		"code":                "ANNUAL-PG-" + suffix,
 		"name":                "Annual Leave",
 		"category":            "leave",
 		"deduct_from_payroll": true,
@@ -56,7 +60,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("create absence code: %v", err)
 	}
 	leavePolicy, err := graph.models.Create("leave_policy", "user_admin", map[string]any{
-		"code":             "LP-PG",
+		"code":             "LP-PG-" + suffix,
 		"name":             "Annual Unpaid Leave",
 		"absence_code_id":  absenceCode.ID,
 		"paid_leave":       false,
@@ -68,6 +72,28 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("create leave policy: %v", err)
+	}
+	approvalPolicy, err := graph.models.Create("approval_policy", "user_admin", map[string]any{
+		"code":          "LEAVE-PG-" + suffix,
+		"name":          "Leave Approval Policy",
+		"document_type": "leave_request",
+		"workflow_key":  "leave_request_flow",
+		"action":        "submit",
+		"department_id": "dept_leave",
+		"status":        "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	if _, err := graph.models.Create("approval_policy_stage", "user_admin", map[string]any{
+		"policy_id":           approvalPolicy.ID,
+		"stage_key":           "manager",
+		"sequence":            1,
+		"assignment_strategy": "explicit_user",
+		"explicit_user_id":    "user_admin",
+		"status":              "active",
+	}); err != nil {
+		t.Fatalf("create approval policy stage: %v", err)
 	}
 	if _, err := graph.models.Create("leave_entitlement_rule", "user_admin", map[string]any{
 		"leave_policy_id":         leavePolicy.ID,
@@ -89,7 +115,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("create leave profile: %v", err)
 	}
 	run, err := graph.models.Create("leave_accrual_run", "user_admin", map[string]any{
-		"code":            "LAR-PG",
+		"code":            "LAR-PG-" + suffix,
 		"name":            "Annual Leave Grant",
 		"leave_policy_id": leavePolicy.ID,
 		"run_mode":        "annual_grant",
@@ -104,20 +130,26 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("execute accrual run: %v", err)
 	}
 
-	request, err := graph.leavePolicies.CreateSelfServiceLeaveRequest("leave_pg_user", map[string]any{
+	request, err := graph.leavePolicies.CreateSelfServiceLeaveRequest(userID, map[string]any{
 		"leave_policy_id": leavePolicy.ID,
 		"start_date":      "2099-02-10",
 		"end_date":        "2099-02-10",
 		"request_unit":    "half_day",
 		"half_day_session": "morning",
 		"notes":           "Medical appointment",
-	}, "leave_pg_user")
+	}, userID)
 	if err != nil {
 		t.Fatalf("create self-service leave request: %v", err)
 	}
-	request, err = graph.leavePolicies.SubmitSelfServiceLeaveRequest("leave_pg_user", request.ID, "leave_pg_user")
+	request, err = graph.leavePolicies.SubmitSelfServiceLeaveRequest(userID, request.ID, userID)
 	if err != nil {
 		t.Fatalf("submit self-service leave request: %v", err)
+	}
+	if got := textValue(request.Values["approval_policy_id"]); got != approvalPolicy.ID {
+		t.Fatalf("expected approval policy %s after submit, got %s", approvalPolicy.ID, got)
+	}
+	if got := textValue(request.Values["approver_user_id"]); got != "user_admin" {
+		t.Fatalf("expected approver user_admin after submit, got %s", got)
 	}
 	request, err = graph.leavePolicies.ApproveLeaveRequest(request.ID, "user_admin")
 	if err != nil {
@@ -143,33 +175,33 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 	if _, err := graph.models.Create("employee_payroll_profile", "user_admin", map[string]any{
 		"employee_id":                employee.ID,
-		"salary_structure_id":        "struct_leave_pg",
+		"salary_structure_id":        "struct_leave_pg_" + suffix,
 		"currency_code":              "IDR",
 		"payment_method_code":        "BANK",
-		"treasury_account_id":        "treasury_leave_pg",
+		"treasury_account_id":        "treasury_leave_pg_" + suffix,
 		"leave_deduction_daily_rate": 20.0,
 		"status":                     "active",
 	}); err != nil {
 		t.Fatalf("create employee payroll profile: %v", err)
 	}
 	for _, component := range []map[string]any{
-		{"code": "BASIC-L", "name": "Basic", "component_class": "earning", "status": "active"},
-		{"code": "LEAVE-L", "name": "Leave Deduction", "component_class": "deduction", "status": "active"},
+		{"code": "BASIC-L-" + suffix, "name": "Basic", "component_class": "earning", "status": "active"},
+		{"code": "LEAVE-L-" + suffix, "name": "Leave Deduction", "component_class": "deduction", "status": "active"},
 	} {
 		if _, err := graph.models.Create("pay_component", "user_admin", component); err != nil {
 			t.Fatalf("create pay component %s: %v", component["code"], err)
 		}
 	}
 	for _, line := range []map[string]any{
-		{"salary_structure_id": "struct_leave_pg", "component_code": "BASIC-L", "sequence": 1, "formula_key": "fixed_amount", "fixed_amount": 1000.0, "status": "active"},
-		{"salary_structure_id": "struct_leave_pg", "component_code": "LEAVE-L", "sequence": 2, "formula_key": "leave_deduction", "status": "active"},
+		{"salary_structure_id": "struct_leave_pg_" + suffix, "component_code": "BASIC-L-" + suffix, "sequence": 1, "formula_key": "fixed_amount", "fixed_amount": 1000.0, "status": "active"},
+		{"salary_structure_id": "struct_leave_pg_" + suffix, "component_code": "LEAVE-L-" + suffix, "sequence": 2, "formula_key": "leave_deduction", "status": "active"},
 	} {
 		if _, err := graph.models.Create("salary_structure_line", "user_admin", line); err != nil {
 			t.Fatalf("create salary structure line %s: %v", line["component_code"], err)
 		}
 	}
 	period, err := graph.models.Create("payroll_period", "user_admin", map[string]any{
-		"code":            "PR-LEAVE-PG",
+		"code":            "PR-LEAVE-PG-" + suffix,
 		"name":            "Payroll Leave Period",
 		"organization_id": "org_default",
 		"location_id":     "loc_hq",

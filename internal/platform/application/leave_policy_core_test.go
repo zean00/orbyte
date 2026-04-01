@@ -91,6 +91,316 @@ func TestLeavePolicyExecuteAccrualAndApproveLifecycle(t *testing.T) {
 	}
 }
 
+func TestLeavePolicySubmitUsesLinkedApprovalPolicyWithQuorum(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	approvals := NewApprovalPolicyService(models)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, approvals)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	approvalPolicy, err := models.Create("approval_policy", "user_admin", map[string]any{
+		"code":                "LEAVE-GROUP",
+		"name":                "Leave Group Policy",
+		"document_type":       "leave_request",
+		"assignment_strategy": "approver_group",
+		"approver_group_id":   "grp_leave",
+		"status":              "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	for _, userID := range []string{"approver_a", "approver_b"} {
+		if _, err := models.Create("approver_group_member", "user_admin", map[string]any{
+			"approver_group_id": "grp_leave",
+			"user_id":           userID,
+			"status":            "active",
+		}); err != nil {
+			t.Fatalf("create approver group member: %v", err)
+		}
+	}
+	if _, err := models.Create("approval_policy_stage", "user_admin", map[string]any{
+		"policy_id":                approvalPolicy.ID,
+		"stage_key":                "manager",
+		"sequence":                 1,
+		"assignment_strategy":      "approver_group",
+		"approver_group_id":        "grp_leave",
+		"required_approver_count":  2,
+		"status":                   "active",
+	}); err != nil {
+		t.Fatalf("create approval policy stage: %v", err)
+	}
+	policyValues := cloneMap(policy.Values)
+	policyValues["approval_policy_id"] = approvalPolicy.ID
+	policy, err = models.Update("leave_policy", policy.ID, "user_admin", policyValues, policy.Version)
+	if err != nil {
+		t.Fatalf("update leave policy: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-Q",
+		"name":            "Annual Grant Q",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-11",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	if got := textValue(record.Values["approval_policy_id"]); got != approvalPolicy.ID {
+		t.Fatalf("expected approval policy %s, got %s", approvalPolicy.ID, got)
+	}
+	if got := int(numberValue(record.Values["required_approver_count"])); got != 2 {
+		t.Fatalf("expected quorum 2, got %d", got)
+	}
+	if got := parseStringList(record.Values["approval_candidate_user_ids_json"]); len(got) != 2 {
+		t.Fatalf("expected 2 candidate approvers, got %+v", got)
+	}
+	record, err = service.ApproveLeaveRequest(record.ID, "approver_a")
+	if err != nil {
+		t.Fatalf("first approve: %v", err)
+	}
+	if got := textValue(record.Values["approval_status"]); got != "submitted" {
+		t.Fatalf("expected still submitted after first approval, got %s", got)
+	}
+	if got := parseStringList(record.Values["approval_recorded_user_ids_json"]); len(got) != 1 || got[0] != "approver_a" {
+		t.Fatalf("expected first approval recorded, got %+v", got)
+	}
+	record, err = service.ApproveLeaveRequest(record.ID, "approver_b")
+	if err != nil {
+		t.Fatalf("second approve: %v", err)
+	}
+	if got := textValue(record.Values["approval_status"]); got != "approved" {
+		t.Fatalf("expected approved after quorum, got %s", got)
+	}
+}
+
+func TestLeavePolicySubmitFallsBackToSharedApprovalPolicyMatcher(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	approvals := NewApprovalPolicyService(models)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, approvals)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	approvalPolicy, err := models.Create("approval_policy", "user_admin", map[string]any{
+		"code":          "LEAVE-DEPT",
+		"name":          "Leave Department Policy",
+		"document_type": "leave_request",
+		"workflow_key":  leaveRequestWorkflowKey,
+		"department_id": "dept_leave",
+		"action":        "submit",
+		"status":        "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	if _, err := models.Create("approval_policy_stage", "user_admin", map[string]any{
+		"policy_id":           approvalPolicy.ID,
+		"stage_key":           "dept",
+		"sequence":            1,
+		"assignment_strategy": "explicit_user",
+		"explicit_user_id":    "dept_manager",
+		"status":              "active",
+	}); err != nil {
+		t.Fatalf("create policy stage: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-M",
+		"name":            "Annual Grant M",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-10",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	if got := textValue(record.Values["approval_policy_id"]); got != approvalPolicy.ID {
+		t.Fatalf("expected matched approval policy %s, got %s", approvalPolicy.ID, got)
+	}
+	if got := textValue(record.Values["approver_user_id"]); got != "dept_manager" {
+		t.Fatalf("expected explicit approver dept_manager, got %s", got)
+	}
+}
+
+func TestLeavePolicyApprovalRejectsUnresolvedStageRouting(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	approvals := NewApprovalPolicyService(models)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, approvals)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	approvalPolicy, err := models.Create("approval_policy", "user_admin", map[string]any{
+		"code":                "LEAVE-UNRESOLVED",
+		"name":                "Leave Unresolved Policy",
+		"assignment_strategy": "requester_manager",
+		"status":              "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	policyValues := cloneMap(policy.Values)
+	policyValues["approval_policy_id"] = approvalPolicy.ID
+	policy, err = models.Update("leave_policy", policy.ID, "user_admin", policyValues, policy.Version)
+	if err != nil {
+		t.Fatalf("update leave policy: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-U",
+		"name":            "Annual Grant U",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-10",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	if _, err := service.ApproveLeaveRequest(record.ID, "random_approver"); err == nil {
+		t.Fatal("expected unresolved stage approval to be rejected")
+	}
+}
+
+func TestLeavePolicyApprovalRejectsDuplicateVotes(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	approvals := NewApprovalPolicyService(models)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, approvals)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	approvalPolicy, err := models.Create("approval_policy", "user_admin", map[string]any{
+		"code":                "LEAVE-DUP",
+		"name":                "Leave Duplicate Vote Policy",
+		"assignment_strategy": "approver_group",
+		"approver_group_id":   "grp_dup",
+		"status":              "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	for _, userID := range []string{"approver_a", "approver_b"} {
+		if _, err := models.Create("approver_group_member", "user_admin", map[string]any{
+			"approver_group_id": "grp_dup",
+			"user_id":           userID,
+			"status":            "active",
+		}); err != nil {
+			t.Fatalf("create approver group member: %v", err)
+		}
+	}
+	if _, err := models.Create("approval_policy_stage", "user_admin", map[string]any{
+		"policy_id":               approvalPolicy.ID,
+		"stage_key":               "manager",
+		"sequence":                1,
+		"assignment_strategy":     "approver_group",
+		"approver_group_id":       "grp_dup",
+		"required_approver_count": 2,
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create approval policy stage: %v", err)
+	}
+	policyValues := cloneMap(policy.Values)
+	policyValues["approval_policy_id"] = approvalPolicy.ID
+	policy, err = models.Update("leave_policy", policy.ID, "user_admin", policyValues, policy.Version)
+	if err != nil {
+		t.Fatalf("update leave policy: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-D",
+		"name":            "Annual Grant D",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-11",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	record, err = service.ApproveLeaveRequest(record.ID, "approver_a")
+	if err != nil {
+		t.Fatalf("first approve: %v", err)
+	}
+	if _, err := service.ApproveLeaveRequest(record.ID, "approver_a"); err == nil {
+		t.Fatal("expected duplicate approve vote to be rejected")
+	}
+	if _, err := service.RejectLeaveRequest(record.ID, "approver_a", "second vote"); err == nil {
+		t.Fatal("expected duplicate reject vote to be rejected")
+	}
+	pending, err := service.PendingRequestSummariesForApprover("approver_a")
+	if err != nil {
+		t.Fatalf("pending requests: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("expected no pending requests for duplicate voter, got %+v", pending)
+	}
+}
+
 func TestLeavePolicyCancelReleasesReservation(t *testing.T) {
 	models := model.NewService()
 	registerLeavePolicyTestModels(t, models)
@@ -255,9 +565,10 @@ func TestLeavePolicyNonBalancePolicyDoesNotCreateBalanceAccount(t *testing.T) {
 func registerLeavePolicyTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	registerWorkforceAttendanceTestModels(t, models)
+	registerApprovalPolicyTestModels(t, models)
 	extras := []model.Definition{
-		{Key: "employee_assignment", DisplayName: "Employee Assignment", DefaultSort: "effective_from", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "status", Type: "string"}}},
-		{Key: "leave_policy", DisplayName: "Leave Policy", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "paid_leave", Type: "bool"}, {Key: "requires_balance", Type: "bool"}, {Key: "allows_half_day", Type: "bool"}, {Key: "notice_days", Type: "number"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "employee_assignment", DisplayName: "Employee Assignment", DefaultSort: "effective_from", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "leave_policy", DisplayName: "Leave Policy", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "paid_leave", Type: "bool"}, {Key: "requires_balance", Type: "bool"}, {Key: "allows_half_day", Type: "bool"}, {Key: "notice_days", Type: "number"}, {Key: "approval_policy_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_entitlement_rule", DisplayName: "Leave Entitlement Rule", DefaultSort: "leave_policy_id", Fields: []model.FieldDefinition{{Key: "leave_policy_id", Type: "string"}, {Key: "grant_mode", Type: "string"}, {Key: "annual_entitlement_days", Type: "number"}, {Key: "monthly_accrual_days", Type: "number"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_leave_profile", DisplayName: "Employee Leave Profile", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "opening_balance_days", Type: "number"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_balance_account", DisplayName: "Leave Balance Account", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "current_balance_days", Type: "number"}, {Key: "reserved_days", Type: "number"}, {Key: "available_days", Type: "number"}, {Key: "last_accrual_date", Type: "string"}, {Key: "carry_forward_expiry_date", Type: "string"}, {Key: "status", Type: "string"}}},
@@ -288,11 +599,14 @@ func seedLeavePolicyTestData(t *testing.T, models *model.Service, paidLeave bool
 		t.Fatalf("create employee: %v", err)
 	}
 	if _, err := models.Create("employee_assignment", "user_admin", map[string]any{
-		"employee_id":    employee.ID,
-		"organization_id": "org_default",
-		"location_id":    "loc_hq",
-		"effective_from": "2000-01-01",
-		"status":         "active",
+		"employee_id":          employee.ID,
+		"organization_id":      "org_default",
+		"location_id":          "loc_hq",
+		"organization_unit_id": "ou_leave",
+		"department_id":        "dept_leave",
+		"cost_center_id":       "cc_leave",
+		"effective_from":       "2000-01-01",
+		"status":               "active",
 	}); err != nil {
 		t.Fatalf("create employee assignment: %v", err)
 	}

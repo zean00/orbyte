@@ -43,6 +43,11 @@ func TestWorkforceAttendanceAndOperationalModelsExposeAttendanceReferences(t *te
 	if !modelHasField(attendance, "leave_request", "approval_status") {
 		t.Fatal("expected leave_request to include approval_status")
 	}
+	for _, field := range []string{"approval_stage_key", "approval_candidate_user_ids_json", "approval_recorded_user_ids_json", "department_id"} {
+		if !modelHasField(attendance, "leave_request", field) {
+			t.Fatalf("expected leave_request to include %s", field)
+		}
+	}
 
 	pos := posCoreKernelPackManifest()
 	if !modelHasField(pos, "pos_shift", "roster_slot_id") {
@@ -55,5 +60,28 @@ func TestWorkforceAttendanceAndOperationalModelsExposeAttendanceReferences(t *te
 	productionCosting := productionCostingCoreKernelPackManifest()
 	if !modelHasField(productionCosting, "production_cost_capture", "attendance_day_id") {
 		t.Fatal("expected production_cost_capture to include attendance_day_id")
+	}
+}
+
+func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
+	manifest := workforceAttendanceKernelPackManifest()
+	var hasApprove bool
+	var hasReject bool
+	var hasApproverRole bool
+	for _, permission := range manifest.Security.Permissions {
+		switch permission.Key {
+		case "attendance.approve":
+			hasApprove = true
+		case "attendance.reject":
+			hasReject = true
+		}
+	}
+	for _, role := range manifest.Security.RoleTemplates {
+		if role.Key == "attendance_approver" {
+			hasApproverRole = true
+		}
+	}
+	if !hasApprove || !hasReject || !hasApproverRole {
+		t.Fatalf("expected attendance approval permissions and role, got approve=%v reject=%v role=%v", hasApprove, hasReject, hasApproverRole)
 	}
 }
