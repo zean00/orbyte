@@ -3,6 +3,7 @@ package application
 import (
 	"testing"
 
+	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
 )
 
@@ -920,6 +921,378 @@ func TestLeavePolicyCarryForwardExpiryDateIsInclusive(t *testing.T) {
 	}
 }
 
+func TestLeavePolicySelfServiceAmendSubmittedRequestInPlace(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	approvals := NewApprovalPolicyService(models)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, approvals)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	approvalPolicy, err := models.Create("approval_policy", "user_admin", map[string]any{
+		"code":          "LEAVE-AMEND-SVC",
+		"name":          "Leave Amendment Policy",
+		"document_type": "leave_request",
+		"workflow_key":  leaveRequestWorkflowKey,
+		"department_id": "dept_leave",
+		"action":        "submit",
+		"status":        "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	if _, err := models.Create("approval_policy_stage", "user_admin", map[string]any{
+		"policy_id":           approvalPolicy.ID,
+		"stage_key":           "dept",
+		"sequence":            1,
+		"assignment_strategy": "explicit_user",
+		"explicit_user_id":    "dept_manager",
+		"status":              "active",
+	}); err != nil {
+		t.Fatalf("create approval stage: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-AMEND-SUB",
+		"name":            "Annual Grant Amend Submitted",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-10",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	record, err = service.AmendSelfServiceLeaveRequest("leave_user", record.ID, map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-12",
+		"end_date":        "2099-02-13",
+		"reason":          "travel shift",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("amend submitted leave request: %v", err)
+	}
+	if got := record.ID; got == "" {
+		t.Fatal("expected amended request id")
+	}
+	if got := textValue(record.Values["approval_status"]); got != "submitted" {
+		t.Fatalf("expected submitted after amendment, got %s", got)
+	}
+	if got := textValue(record.Values["start_date"]); got != "2099-02-12" {
+		t.Fatalf("expected amended start_date, got %s", got)
+	}
+	if got := textValue(record.Values["last_amendment_reason"]); got != "travel shift" {
+		t.Fatalf("expected amendment reason recorded, got %s", got)
+	}
+	if got := int(numberValue(record.Values["amendment_count"])); got != 1 {
+		t.Fatalf("expected amendment_count 1, got %d", got)
+	}
+	account, err := models.Get("leave_balance_account", textValue(record.Values["balance_account_id"]))
+	if err != nil {
+		t.Fatalf("reload balance account: %v", err)
+	}
+	if got := numberValue(account.Values["reserved_days"]); got != numberValue(record.Values["requested_days"]) {
+		t.Fatalf("expected reserved_days to match requested_days after amendment, got reserved=%v requested=%v", got, numberValue(record.Values["requested_days"]))
+	}
+}
+
+func TestLeavePolicyManagerAmendApprovedRequestRequiresReapproval(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	approvals := NewApprovalPolicyService(models)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, approvals)
+
+	employee, policy, _ := seedLeavePolicyTestData(t, models, false)
+	approvalPolicy, err := models.Create("approval_policy", "user_admin", map[string]any{
+		"code":          "LEAVE-AMEND-MGR",
+		"name":          "Leave Manager Amendment Policy",
+		"document_type": "leave_request",
+		"workflow_key":  leaveRequestWorkflowKey,
+		"department_id": "dept_leave",
+		"action":        "submit",
+		"status":        "active",
+	})
+	if err != nil {
+		t.Fatalf("create approval policy: %v", err)
+	}
+	if _, err := models.Create("approval_policy_stage", "user_admin", map[string]any{
+		"policy_id":           approvalPolicy.ID,
+		"stage_key":           "dept",
+		"sequence":            1,
+		"assignment_strategy": "explicit_user",
+		"explicit_user_id":    "dept_manager",
+		"status":              "active",
+	}); err != nil {
+		t.Fatalf("create approval stage: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-AMEND-APR",
+		"name":            "Annual Grant Amend Approved",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-10",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	record, err = service.ApproveLeaveRequest(record.ID, "dept_manager")
+	if err != nil {
+		t.Fatalf("approve leave request: %v", err)
+	}
+	record, err = service.AmendManagedLeaveRequest(record.ID, map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-12",
+		"end_date":        "2099-02-12",
+		"reason":          "manager moved date",
+	}, "dept_manager")
+	if err != nil {
+		t.Fatalf("manager amend approved leave request: %v", err)
+	}
+	if got := textValue(record.Values["approval_status"]); got != "submitted" {
+		t.Fatalf("expected submitted after manager amendment, got %s", got)
+	}
+	if got := textValue(record.Values["start_date"]); got != "2099-02-12" {
+		t.Fatalf("expected amended start_date, got %s", got)
+	}
+	if got := numberValue(record.Values["approved_days"]); got != 0 {
+		t.Fatalf("expected approved_days reset after amendment, got %v", got)
+	}
+	days, _, err := models.List("attendance_day", model.Query{
+		Filters: map[string]string{"employee_id": employee.ID, "attendance_date": "2099-02-10"},
+		Page:    1, PageSize: 1,
+	})
+	if err != nil {
+		t.Fatalf("list attendance day: %v", err)
+	}
+	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "on_leave" {
+		t.Fatalf("expected old approved attendance to clear after amendment, got %+v", days[0].Values)
+	}
+	record, err = service.ApproveLeaveRequest(record.ID, "dept_manager")
+	if err != nil {
+		t.Fatalf("reapprove amended leave request: %v", err)
+	}
+	if got := textValue(record.Values["approval_status"]); got != "approved" {
+		t.Fatalf("expected approved after reapproval, got %s", got)
+	}
+}
+
+func TestLeavePolicyPayrollCutoffBlocksApprovedAmendAndCancel(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
+	docs := document.NewService()
+	registerLeavePolicyTestDocuments(t, docs)
+	service.SetDocuments(docs)
+
+	_, policy, _ := seedLeavePolicyTestData(t, models, false)
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-CUTOFF",
+		"name":            "Annual Grant Cutoff",
+		"leave_policy_id": policy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-10",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	record, err = service.ApproveLeaveRequest(record.ID, "manager_user")
+	if err != nil {
+		t.Fatalf("approve leave request: %v", err)
+	}
+	period, err := models.Create("payroll_period", "user_admin", map[string]any{
+		"code":            "PR-CUTOFF",
+		"name":            "Payroll Cutoff Period",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"start_date":      "2099-02-01",
+		"end_date":        "2099-02-28",
+		"status":          "processed",
+	})
+	if err != nil {
+		t.Fatalf("create payroll period: %v", err)
+	}
+	payrollRun, err := docs.Create("payroll_run", "org_default", "loc_hq", "user_admin", map[string]any{
+		"payroll_period_id": period.ID,
+		"pay_date":          "2099-02-28",
+	})
+	if err != nil {
+		t.Fatalf("create payroll run: %v", err)
+	}
+	payrollRun.Header.Status = "processed"
+	if err := docs.Save(payrollRun); err != nil {
+		t.Fatalf("save payroll run: %v", err)
+	}
+	if _, err := service.AmendManagedLeaveRequest(record.ID, map[string]any{
+		"leave_policy_id": policy.ID,
+		"start_date":      "2099-02-12",
+		"end_date":        "2099-02-12",
+		"reason":          "cutoff attempt",
+	}, "manager_user"); err == nil {
+		t.Fatal("expected payroll cutoff to block approved amendment")
+	}
+	if _, err := service.CancelApprovedLeaveRequest(record.ID, "manager_user", "cutoff attempt"); err == nil {
+		t.Fatal("expected payroll cutoff to block approved cancellation")
+	}
+}
+
+func TestLeavePolicyAmendmentValidatesAgainstTargetPolicyAccount(t *testing.T) {
+	models := model.NewService()
+	registerLeavePolicyTestModels(t, models)
+	workforce := NewEmployeeWorkforceCoreService(models)
+	attendance := NewWorkforceAttendanceCoreService(models, workforce)
+	service := NewLeavePolicyCoreService(models, workforce, attendance, nil)
+
+	employee, _, absenceCode := seedLeavePolicyTestData(t, models, false)
+	oldPolicy, err := models.Create("leave_policy", "user_admin", map[string]any{
+		"code":             "LP-OLD",
+		"name":             "Old Leave Policy",
+		"absence_code_id":  absenceCode.ID,
+		"paid_leave":       true,
+		"requires_balance": false,
+		"allows_half_day":  true,
+		"organization_id":  "org_default",
+		"location_id":      "loc_hq",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create old leave policy: %v", err)
+	}
+	if _, err := models.Create("employee_leave_profile", "user_admin", map[string]any{
+		"employee_id":     employee.ID,
+		"leave_policy_id": oldPolicy.ID,
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"effective_from":  "2000-01-01",
+		"status":          "active",
+	}); err != nil {
+		t.Fatalf("create old leave profile: %v", err)
+	}
+	newPolicy, err := models.Create("leave_policy", "user_admin", map[string]any{
+		"code":             "LP-NEW",
+		"name":             "New Leave Policy",
+		"absence_code_id":  absenceCode.ID,
+		"paid_leave":       false,
+		"requires_balance": true,
+		"allows_half_day":  true,
+		"organization_id":  "org_default",
+		"location_id":      "loc_hq",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create new leave policy: %v", err)
+	}
+	if _, err := models.Create("leave_entitlement_rule", "user_admin", map[string]any{
+		"leave_policy_id":         newPolicy.ID,
+		"grant_mode":              "annual_grant",
+		"annual_entitlement_days": 5.0,
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create new entitlement rule: %v", err)
+	}
+	if _, err := models.Create("employee_leave_profile", "user_admin", map[string]any{
+		"employee_id":     employee.ID,
+		"leave_policy_id": newPolicy.ID,
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"effective_from":  "2000-01-01",
+		"status":          "active",
+	}); err != nil {
+		t.Fatalf("create new leave profile: %v", err)
+	}
+	run, err := models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LRUN-TARGET",
+		"name":            "Annual Grant Target Policy",
+		"leave_policy_id": newPolicy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create accrual run: %v", err)
+	}
+	if _, err := service.ExecuteAccrualRun(run.ID, "user_admin"); err != nil {
+		t.Fatalf("execute accrual run: %v", err)
+	}
+	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{
+		"leave_policy_id": oldPolicy.ID,
+		"start_date":      "2099-02-10",
+		"end_date":        "2099-02-10",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("create leave request: %v", err)
+	}
+	record, err = service.SubmitSelfServiceLeaveRequest("leave_user", record.ID, "leave_user")
+	if err != nil {
+		t.Fatalf("submit leave request: %v", err)
+	}
+	record, err = service.AmendSelfServiceLeaveRequest("leave_user", record.ID, map[string]any{
+		"leave_policy_id": newPolicy.ID,
+		"start_date":      "2099-02-12",
+		"end_date":        "2099-02-13",
+		"reason":          "switch policy",
+	}, "leave_user")
+	if err != nil {
+		t.Fatalf("amend leave request to target policy: %v", err)
+	}
+	if got := textValue(record.Values["leave_policy_id"]); got != newPolicy.ID {
+		t.Fatalf("expected leave policy %s after amendment, got %s", newPolicy.ID, got)
+	}
+	if got := textValue(record.Values["balance_account_id"]); got == "" {
+		t.Fatal("expected target policy balance account after amendment")
+	}
+}
+
 func registerLeavePolicyTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	registerWorkforceAttendanceTestModels(t, models)
@@ -933,6 +1306,7 @@ func registerLeavePolicyTestModels(t *testing.T, models *model.Service) {
 		{Key: "leave_balance_entry", DisplayName: "Leave Balance Entry", DefaultSort: "effective_date", Fields: []model.FieldDefinition{{Key: "balance_account_id", Type: "string"}, {Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "leave_request_id", Type: "string"}, {Key: "accrual_run_id", Type: "string"}, {Key: "entry_type", Type: "string"}, {Key: "days", Type: "number"}, {Key: "carry_forward_days_delta", Type: "number"}, {Key: "reversal_of_entry_id", Type: "string"}, {Key: "effective_date", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_accrual_run", DisplayName: "Leave Accrual Run", DefaultSort: "effective_date", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "run_mode", Type: "string"}, {Key: "effective_date", Type: "string"}, {Key: "run_status", Type: "string"}, {Key: "processed_at", Type: "string"}, {Key: "processed_by", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_balance_adjustment", DisplayName: "Leave Balance Adjustment", DefaultSort: "updated_at", Fields: []model.FieldDefinition{{Key: "balance_account_id", Type: "string"}, {Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "days", Type: "number"}, {Key: "reason_code", Type: "string"}, {Key: "notes", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "payroll_period", DisplayName: "Payroll Period", DefaultSort: "start_date", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "start_date", Type: "string"}, {Key: "end_date", Type: "string"}, {Key: "status", Type: "string"}}},
 	}
 	for _, def := range extras {
 		if _, ok := models.Definition(def.Key); ok {
@@ -940,6 +1314,17 @@ func registerLeavePolicyTestModels(t *testing.T, models *model.Service) {
 		}
 		if err := models.Register(def); err != nil {
 			t.Fatalf("register model %s failed: %v", def.Key, err)
+		}
+	}
+}
+
+func registerLeavePolicyTestDocuments(t *testing.T, docs *document.Service) {
+	t.Helper()
+	for _, def := range []document.Definition{
+		{Type: "payroll_run", DisplayName: "Payroll Run", SchemaVersion: "v1", WorkflowKey: "payroll_run_flow", NumberingKey: "payroll_run_number"},
+	} {
+		if err := docs.Register(def); err != nil {
+			t.Fatalf("register document %s: %v", def.Type, err)
 		}
 	}
 }

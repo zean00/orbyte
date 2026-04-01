@@ -182,6 +182,10 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "approval_requires_different_actor", Label: "Approval Requires Different Actor", LabelI18n: localize("Approval Requires Different Actor", "Persetujuan Memerlukan Aktor Berbeda"), Type: "bool"},
 				{Key: "reservation_entry_ids_json", Label: "Reservation Entry IDs JSON", LabelI18n: localize("Reservation Entry IDs JSON", "JSON ID Entri Reservasi"), Type: "string"},
 				{Key: "consumption_entry_ids_json", Label: "Consumption Entry IDs JSON", LabelI18n: localize("Consumption Entry IDs JSON", "JSON ID Entri Konsumsi"), Type: "string"},
+				{Key: "amendment_count", Label: "Amendment Count", LabelI18n: localize("Amendment Count", "Jumlah Amandemen"), Type: "number"},
+				{Key: "last_amended_at", Label: "Last Amended At", LabelI18n: localize("Last Amended At", "Terakhir Diubah"), Type: "string"},
+				{Key: "last_amended_by", Label: "Last Amended By", LabelI18n: localize("Last Amended By", "Terakhir Diubah Oleh"), Type: "string"},
+				{Key: "last_amendment_reason", Label: "Last Amendment Reason", LabelI18n: localize("Last Amendment Reason", "Alasan Amandemen Terakhir"), Type: "string"},
 				{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Type: "string"},
 				{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "active"},
 			}),
@@ -239,11 +243,12 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "attendance.leave_inbox.read", Action: "read", Resource: "attendance_leave_inbox", DisplayName: "Read Leave Approval Inbox", DisplayNameI18n: localize("Read Leave Approval Inbox", "Lihat Inbox Persetujuan Cuti")},
 				{Key: "attendance.approve", Action: "approve", Resource: "attendance", DisplayName: "Approve Attendance Records", DisplayNameI18n: localize("Approve Attendance Records", "Setujui Data Kehadiran")},
 				{Key: "attendance.reject", Action: "reject", Resource: "attendance", DisplayName: "Reject Attendance Records", DisplayNameI18n: localize("Reject Attendance Records", "Tolak Data Kehadiran")},
+				{Key: "attendance.amend", Action: "amend", Resource: "attendance", DisplayName: "Amend Attendance Records", DisplayNameI18n: localize("Amend Attendance Records", "Ubah Data Kehadiran")},
 				{Key: "attendance.cancel", Action: "cancel", Resource: "attendance", DisplayName: "Cancel Attendance Records", DisplayNameI18n: localize("Cancel Attendance Records", "Batalkan Data Kehadiran")},
 			},
 			RoleTemplates: []module.RoleTemplateDefinition{
 				{
-					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "attendance.leave_inbox.read", "attendance.cancel", "employee.read", "organization_structure.read"},
+					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "attendance.leave_inbox.read", "attendance.amend", "attendance.cancel", "employee.read", "organization_structure.read"},
 				},
 				{
 					Key: "attendance_approver", Name: "Attendance Approver", NameI18n: localize("Attendance Approver", "Penyetuju Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.list", "attendance.read", "attendance.leave_inbox.read", "attendance.approve", "attendance.reject", "employee.read"},

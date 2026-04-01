@@ -13,6 +13,7 @@ import (
 )
 
 type LeavePolicyCoreService struct {
+	documents  *document.Service
 	models     *model.Service
 	workforce  *EmployeeWorkforceCoreService
 	attendance *WorkforceAttendanceCoreService
@@ -21,6 +22,13 @@ type LeavePolicyCoreService struct {
 
 func NewLeavePolicyCoreService(models *model.Service, workforce *EmployeeWorkforceCoreService, attendance *WorkforceAttendanceCoreService, approvals *ApprovalPolicyService) *LeavePolicyCoreService {
 	return &LeavePolicyCoreService{models: models, workforce: workforce, attendance: attendance, approvals: approvals}
+}
+
+func (s *LeavePolicyCoreService) SetDocuments(documents *document.Service) {
+	if s == nil {
+		return
+	}
+	s.documents = documents
 }
 
 const leaveRequestWorkflowKey = "leave_request_flow"
@@ -272,6 +280,19 @@ func (s *LeavePolicyCoreService) SubmitSelfServiceLeaveRequest(userID, requestID
 	return s.submitLeaveRequest(record, actorID)
 }
 
+func (s *LeavePolicyCoreService) AmendSelfServiceLeaveRequest(userID, requestID string, payload map[string]any, actorID string) (model.Record, error) {
+	record, err := s.GetRequestForUser(userID, requestID)
+	if err != nil {
+		return model.Record{}, err
+	}
+	switch strings.ToLower(textValue(record.Values["approval_status"])) {
+	case "draft", "submitted":
+	default:
+		return model.Record{}, shared.Validation("leave request cannot be amended")
+	}
+	return s.amendLeaveRequest(record, payload, actorID)
+}
+
 func (s *LeavePolicyCoreService) CancelSelfServiceLeaveRequest(userID, requestID, actorID string) (model.Record, error) {
 	record, err := s.GetRequestForUser(userID, requestID)
 	if err != nil {
@@ -307,6 +328,11 @@ func (s *LeavePolicyCoreService) CancelApprovedLeaveRequest(requestID, actorID, 
 	if !strings.EqualFold(textValue(record.Values["approval_status"]), "approved") {
 		return model.Record{}, shared.Validation("only approved leave requests can be cancelled")
 	}
+	if blocked, reason, err := s.payrollCutoffForRequest(record, nil); err != nil {
+		return model.Record{}, err
+	} else if blocked {
+		return model.Record{}, shared.Conflict(reason)
+	}
 	if err := s.reverseConsumedBalance(record, actorID); err != nil {
 		return model.Record{}, err
 	}
@@ -324,6 +350,22 @@ func (s *LeavePolicyCoreService) CancelApprovedLeaveRequest(requestID, actorID, 
 	}
 	s.syncLeaveRange(updated)
 	return updated, nil
+}
+
+func (s *LeavePolicyCoreService) AmendManagedLeaveRequest(requestID string, payload map[string]any, actorID string) (model.Record, error) {
+	record, err := s.models.Get("leave_request", strings.TrimSpace(requestID))
+	if err != nil {
+		return model.Record{}, err
+	}
+	if !strings.EqualFold(textValue(record.Values["status"]), "active") {
+		return model.Record{}, shared.NotFound("leave request was not found")
+	}
+	switch strings.ToLower(textValue(record.Values["approval_status"])) {
+	case "submitted", "approved":
+	default:
+		return model.Record{}, shared.Validation("leave request cannot be amended")
+	}
+	return s.amendLeaveRequest(record, payload, actorID)
 }
 
 func (s *LeavePolicyCoreService) ApproveLeaveRequest(requestID, actorID string) (model.Record, error) {
@@ -504,7 +546,7 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 	}
 	for key, value := range cloneMap(payload) {
 		switch key {
-		case "employee_id", "organization_id", "location_id", "organization_unit_id", "department_id", "cost_center_id", "request_source", "self_service_actor_user_id", "approval_status", "reservation_entry_ids_json", "consumption_entry_ids_json":
+		case "employee_id", "organization_id", "location_id", "organization_unit_id", "department_id", "cost_center_id", "request_source", "self_service_actor_user_id", "approval_status", "reservation_entry_ids_json", "consumption_entry_ids_json", "approved_days", "amendment_count", "last_amended_at", "last_amended_by", "last_amendment_reason", "reason":
 			continue
 		default:
 			values[key] = value
@@ -558,6 +600,80 @@ func (s *LeavePolicyCoreService) prepareLeaveRequestValues(employee, assignment,
 		values["status"] = "active"
 	}
 	return values, policy, profile, absenceCode, account, nil
+}
+
+func (s *LeavePolicyCoreService) amendLeaveRequest(record model.Record, payload map[string]any, actorID string) (model.Record, error) {
+	status := strings.ToLower(textValue(record.Values["approval_status"]))
+	employee, assignment, err := s.resolveEmployeeContextForRecord(record)
+	if err != nil {
+		return model.Record{}, err
+	}
+	values, policy, profile, _, _, err := s.prepareLeaveRequestValues(employee, assignment, record, payload, actorID)
+	if err != nil {
+		return model.Record{}, err
+	}
+	if err := validateLeaveRequestPolicy(policy, model.Record{ID: record.ID, Values: values}); err != nil {
+		return model.Record{}, err
+	}
+	amendReason := strings.TrimSpace(textValue(payload["reason"]))
+	switch status {
+	case "draft":
+		values["approval_status"] = "draft"
+		values["request_source"] = textValue(record.Values["request_source"])
+		values["self_service_actor_user_id"] = textValue(record.Values["self_service_actor_user_id"])
+		values["reservation_entry_ids_json"] = textValue(record.Values["reservation_entry_ids_json"])
+		values["consumption_entry_ids_json"] = textValue(record.Values["consumption_entry_ids_json"])
+		applyLeaveAmendmentMetadata(values, record, actorID, amendReason)
+		return s.models.Update("leave_request", record.ID, actorID, values, record.Version)
+	case "submitted":
+		if err := s.preflightAmendmentBalance(record, values, policy, profile, actorID); err != nil {
+			return model.Record{}, err
+		}
+		if err := s.releaseReservedBalance(record, actorID); err != nil {
+			return model.Record{}, err
+		}
+		values["approval_status"] = "submitted"
+		values["approved_days"] = 0.0
+		values["request_source"] = textValue(record.Values["request_source"])
+		values["self_service_actor_user_id"] = textValue(record.Values["self_service_actor_user_id"])
+		values["reservation_entry_ids_json"] = "[]"
+		values["consumption_entry_ids_json"] = textValue(record.Values["consumption_entry_ids_json"])
+		applyLeaveAmendmentMetadata(values, record, actorID, amendReason)
+		updated, err := s.models.Update("leave_request", record.ID, actorID, values, record.Version)
+		if err != nil {
+			return model.Record{}, err
+		}
+		return s.submitLeaveRequest(updated, actorID)
+	case "approved":
+		oldStartDate := textValue(record.Values["start_date"])
+		oldEndDate := textValue(record.Values["end_date"])
+		if blocked, reason, err := s.payrollCutoffForRequest(record, values); err != nil {
+			return model.Record{}, err
+		} else if blocked {
+			return model.Record{}, shared.Conflict(reason)
+		}
+		if err := s.preflightAmendmentBalance(record, values, policy, profile, actorID); err != nil {
+			return model.Record{}, err
+		}
+		if err := s.reverseConsumedBalance(record, actorID); err != nil {
+			return model.Record{}, err
+		}
+		values["approval_status"] = "submitted"
+		values["approved_days"] = 0.0
+		values["request_source"] = textValue(record.Values["request_source"])
+		values["self_service_actor_user_id"] = textValue(record.Values["self_service_actor_user_id"])
+		values["reservation_entry_ids_json"] = "[]"
+		values["consumption_entry_ids_json"] = "[]"
+		applyLeaveAmendmentMetadata(values, record, actorID, amendReason)
+		updated, err := s.models.Update("leave_request", record.ID, actorID, values, record.Version)
+		if err != nil {
+			return model.Record{}, err
+		}
+		s.syncLeaveRangeForDates(textValue(updated.Values["employee_id"]), oldStartDate, oldEndDate)
+		return s.submitLeaveRequest(updated, actorID)
+	default:
+		return model.Record{}, shared.Validation("leave request cannot be amended")
+	}
 }
 
 func (s *LeavePolicyCoreService) resolveApplicableLeaveContext(employee, assignment model.Record, values map[string]any, actorID string) (model.Record, model.Record, model.Record, model.Record, error) {
@@ -634,6 +750,24 @@ func (s *LeavePolicyCoreService) accountForRequest(record model.Record, actorID 
 		return model.Record{}, shared.Validation("leave balance account is not applicable for this leave policy")
 	}
 	return s.ensureBalanceAccount(profile, policy, actorID)
+}
+
+func (s *LeavePolicyCoreService) resolveEmployeeContextForRecord(record model.Record) (model.Record, model.Record, error) {
+	employee, err := s.models.Get("employee_profile", textValue(record.Values["employee_id"]))
+	if err != nil {
+		return model.Record{}, model.Record{}, err
+	}
+	if s == nil || s.workforce == nil {
+		return employee, model.Record{}, nil
+	}
+	assignment, ok, err := s.workforce.ResolveCurrentAssignment(employee.ID, time.Now().UTC())
+	if err != nil {
+		return model.Record{}, model.Record{}, err
+	}
+	if !ok {
+		return employee, model.Record{}, nil
+	}
+	return employee, assignment, nil
 }
 
 func (s *LeavePolicyCoreService) resolveLeavePolicyForProfile(profile model.Record) (model.Record, model.Record, bool) {
@@ -848,11 +982,6 @@ func (s *LeavePolicyCoreService) releaseReservedBalance(record model.Record, act
 		if !strings.EqualFold(textValue(entry.Values["status"]), "active") {
 			continue
 		}
-		values := cloneMap(entry.Values)
-		values["status"] = "inactive"
-		if _, err := s.models.Update("leave_balance_entry", entry.ID, actorID, values, entry.Version); err != nil {
-			return err
-		}
 		if _, err := s.createBalanceEntry(account.ID, model.Record{}, policy, actorID, map[string]any{
 			"entry_type":       "release",
 			"days":             numberValue(entry.Values["days"]),
@@ -967,6 +1096,72 @@ func (s *LeavePolicyCoreService) carryForwardBalanceAt(accountID string, at time
 	return roundAttendanceHours(carryForward), nil
 }
 
+func (s *LeavePolicyCoreService) preflightAmendmentBalance(record model.Record, proposedValues map[string]any, policy, profile model.Record, actorID string) error {
+	if !boolValue(policy.Values["requires_balance"]) {
+		return nil
+	}
+	account, err := s.ensureBalanceAccount(profile, policy, actorID)
+	if err != nil {
+		return err
+	}
+	startDate := parseDateOnly(proposedValues["start_date"])
+	if startDate.IsZero() {
+		startDate = parseDateOnly(record.Values["start_date"])
+	}
+	projected, err := s.projectAvailableDays(record, account, startDate)
+	if err != nil {
+		return err
+	}
+	requestedDays := numberValue(proposedValues["requested_days"])
+	if requestedDays <= 0 {
+		return shared.Validation("requested_days must be greater than zero")
+	}
+	if projected < requestedDays {
+		return shared.Validation("leave balance is insufficient")
+	}
+	_ = profile
+	return nil
+}
+
+func (s *LeavePolicyCoreService) projectAvailableDays(record, account model.Record, startDate time.Time) (float64, error) {
+	current := numberValue(account.Values["current_balance_days"])
+	reserved := numberValue(account.Values["reserved_days"])
+	carryForward := numberValue(account.Values["carry_forward_balance_days"])
+	if textValue(record.Values["balance_account_id"]) == account.ID {
+		for _, entryID := range parseStringList(record.Values["reservation_entry_ids_json"]) {
+			entry, err := s.models.Get("leave_balance_entry", entryID)
+			if err != nil || !strings.EqualFold(textValue(entry.Values["status"]), "active") {
+				continue
+			}
+			reserved -= numberValue(entry.Values["days"])
+		}
+		for _, entryID := range parseStringList(record.Values["consumption_entry_ids_json"]) {
+			entry, err := s.models.Get("leave_balance_entry", entryID)
+			if err != nil || !strings.EqualFold(textValue(entry.Values["status"]), "active") {
+				continue
+			}
+			current += numberValue(entry.Values["days"])
+			carryForward -= numberValue(entry.Values["carry_forward_days_delta"])
+		}
+	}
+	if reserved < 0 {
+		reserved = 0
+	}
+	if carryForward < 0 {
+		carryForward = 0
+	}
+	expiryDate := parseDateOnly(account.Values["carry_forward_expiry_date"])
+	if !expiryDate.IsZero() && startDate.After(expiryDate) {
+		current -= carryForward
+		carryForward = 0
+	}
+	available := roundAttendanceHours(current - reserved)
+	if available < 0 {
+		return 0, nil
+	}
+	return available, nil
+}
+
 func (s *LeavePolicyCoreService) applyAnnualCarryForward(account, profile, policy, rule model.Record, actorID string, effectiveDate time.Time, runID string) (model.Record, error) {
 	leftover := numberValue(account.Values["current_balance_days"])
 	if leftover <= 0 {
@@ -1073,8 +1268,15 @@ func (s *LeavePolicyCoreService) syncLeaveRange(record model.Record) {
 	if s == nil || s.attendance == nil {
 		return
 	}
-	start := parseDateOnly(record.Values["start_date"])
-	end := parseDateOnly(record.Values["end_date"])
+	s.syncLeaveRangeForDates(textValue(record.Values["employee_id"]), textValue(record.Values["start_date"]), textValue(record.Values["end_date"]))
+}
+
+func (s *LeavePolicyCoreService) syncLeaveRangeForDates(employeeID, startDate, endDate string) {
+	if s == nil || s.attendance == nil {
+		return
+	}
+	start := parseDateOnly(startDate)
+	end := parseDateOnly(endDate)
 	if start.IsZero() {
 		return
 	}
@@ -1082,7 +1284,7 @@ func (s *LeavePolicyCoreService) syncLeaveRange(record model.Record) {
 		end = start
 	}
 	for day := start; !day.After(end); day = day.Add(24 * time.Hour) {
-		_, _ = s.attendance.SyncAttendanceDay(textValue(record.Values["employee_id"]), day)
+		_, _ = s.attendance.SyncAttendanceDay(strings.TrimSpace(employeeID), day)
 	}
 }
 
@@ -1369,6 +1571,13 @@ func (s *LeavePolicyCoreService) finalizeApprovedLeave(record model.Record, acto
 	return updated, nil
 }
 
+func applyLeaveAmendmentMetadata(values map[string]any, record model.Record, actorID, reason string) {
+	values["amendment_count"] = int(numberValue(record.Values["amendment_count"])) + 1
+	values["last_amended_at"] = time.Now().UTC().Format(time.RFC3339)
+	values["last_amended_by"] = strings.TrimSpace(actorID)
+	values["last_amendment_reason"] = strings.TrimSpace(reason)
+}
+
 func leaveContainsString(items []string, expected string) bool {
 	expected = strings.TrimSpace(expected)
 	for _, item := range items {
@@ -1584,13 +1793,25 @@ func (s *LeavePolicyCoreService) RequestSummaryForInboxActor(requestID, actorID 
 	return s.leaveRequestSummaryForActor(record, actorID), nil
 }
 
+func (s *LeavePolicyCoreService) RequestSummary(requestID string) (map[string]any, error) {
+	record, err := s.models.Get("leave_request", strings.TrimSpace(requestID))
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(textValue(record.Values["status"]), "active") {
+		return nil, shared.NotFound("leave request was not found")
+	}
+	return s.leaveRequestSummary(record), nil
+}
+
 func (s *LeavePolicyCoreService) leaveRequestSummary(record model.Record) map[string]any {
 	return s.leaveRequestSummaryForActor(record, "")
 }
 
 func (s *LeavePolicyCoreService) leaveRequestSummaryForActor(record model.Record, actorID string) map[string]any {
 	state := parseLeaveApprovalState(record.Values)
-	allowedActions := leaveAllowedActionsForActor(record, state, actorID)
+	cutoffBlocked, cutoffReason, _ := s.payrollCutoffForRequest(record, nil)
+	allowedActions := s.leaveAllowedActionsForActor(record, state, actorID, cutoffBlocked)
 	summary := map[string]any{
 		"id":                          record.ID,
 		"employee_id":                 textValue(record.Values["employee_id"]),
@@ -1623,12 +1844,19 @@ func (s *LeavePolicyCoreService) leaveRequestSummaryForActor(record model.Record
 		"self_service_actor_user_id":  textValue(record.Values["self_service_actor_user_id"]),
 		"notes":                       textValue(record.Values["notes"]),
 		"status":                      textValue(record.Values["status"]),
+		"amendment_count":             int(numberValue(record.Values["amendment_count"])),
+		"last_amended_at":             textValue(record.Values["last_amended_at"]),
+		"last_amended_by":             textValue(record.Values["last_amended_by"]),
+		"last_amendment_reason":       textValue(record.Values["last_amendment_reason"]),
 		"status_label":                leaveApprovalStatusLabel(textValue(record.Values["approval_status"])),
 		"recorded_approver_count":     len(state.RecordedUserIDs),
 		"stage_progress_label":        leaveStageProgressLabel(state),
 		"allowed_actions":             allowedActions,
 		"is_actionable":               leaveContainsString(allowedActions, "approve") || leaveContainsString(allowedActions, "reject"),
 		"can_cancel":                  leaveContainsString(allowedActions, "cancel"),
+		"can_amend":                   leaveContainsString(allowedActions, "amend"),
+		"payroll_cutoff_blocked":      cutoffBlocked,
+		"payroll_cutoff_reason":       cutoffReason,
 	}
 	if employee, err := s.models.Get("employee_profile", textValue(record.Values["employee_id"])); err == nil {
 		summary["employee_code"] = textValue(employee.Values["employee_code"])
@@ -1689,7 +1917,7 @@ func (s *LeavePolicyCoreService) balanceEntrySummaries(accountID string) ([]map[
 	return out, nil
 }
 
-func leaveAllowedActionsForActor(record model.Record, state leaveApprovalState, actorID string) []string {
+func (s *LeavePolicyCoreService) leaveAllowedActionsForActor(record model.Record, state leaveApprovalState, actorID string, cutoffBlocked bool) []string {
 	approvalStatus := strings.ToLower(textValue(record.Values["approval_status"]))
 	actorID = strings.TrimSpace(actorID)
 	actions := make([]string, 0, 3)
@@ -1698,7 +1926,7 @@ func leaveAllowedActionsForActor(record model.Record, state leaveApprovalState, 
 		case "draft":
 			actions = append(actions, "edit", "submit", "cancel")
 		case "submitted":
-			actions = append(actions, "cancel")
+			actions = append(actions, "cancel", "amend")
 		}
 	}
 	if actorID != "" {
@@ -1716,11 +1944,11 @@ func leaveAllowedActionsForActor(record model.Record, state leaveApprovalState, 
 				allowed = true
 			}
 			if allowed {
-				actions = append(actions, "approve", "reject")
+				actions = append(actions, "approve", "reject", "amend")
 			}
 		}
-		if approvalStatus == "approved" {
-			actions = append(actions, "cancel")
+		if approvalStatus == "approved" && !cutoffBlocked && leaveRequestVisibleToActor(record, actorID) {
+			actions = append(actions, "cancel", "amend")
 		}
 	}
 	return uniqueStrings(actions)
@@ -1738,6 +1966,117 @@ func leaveRequestVisibleToActor(record model.Record, actorID string) bool {
 		return true
 	}
 	if leaveContainsString(parseStringList(record.Values["approval_recorded_user_ids_json"]), actorID) {
+		return true
+	}
+	return false
+}
+
+func (s *LeavePolicyCoreService) payrollCutoffForRequest(record model.Record, proposedValues map[string]any) (bool, string, error) {
+	if s == nil || s.models == nil || s.documents == nil {
+		return false, "", nil
+	}
+	ranges := leaveRequestDateRanges(record, proposedValues)
+	if len(ranges) == 0 {
+		return false, "", nil
+	}
+	organizationID := leaveFirstNonEmpty(textValue(record.Values["organization_id"]), textValue(proposedValues["organization_id"]))
+	locationID := leaveFirstNonEmpty(textValue(record.Values["location_id"]), textValue(proposedValues["location_id"]))
+	periods, _, err := s.models.List("payroll_period", model.Query{
+		SortKey:  "start_date",
+		Page:     1,
+		PageSize: model.MaxPageSize,
+	})
+	if err != nil {
+		return false, "", err
+	}
+	for _, period := range periods {
+		if !strings.EqualFold(textValue(period.Values["status"]), "active") && textValue(period.Values["status"]) != "" {
+			normalized := strings.ToLower(textValue(period.Values["status"]))
+			if normalized != "open" && normalized != "locked" && normalized != "processed" {
+				continue
+			}
+		}
+		if organizationID != "" && textValue(period.Values["organization_id"]) != organizationID {
+			continue
+		}
+		if locationID != "" && textValue(period.Values["location_id"]) != "" && locationID != "" && textValue(period.Values["location_id"]) != locationID {
+			continue
+		}
+		if !leavePeriodOverlapsRanges(period, ranges) {
+			continue
+		}
+		for _, doc := range s.documents.List() {
+			if doc.Header.Type != "payroll_run" || !strings.EqualFold(doc.Header.Status, "processed") {
+				continue
+			}
+			if textValue(doc.Body.Payload["payroll_period_id"]) != period.ID {
+				continue
+			}
+			if organizationID != "" && doc.Header.OrganizationID != organizationID {
+				continue
+			}
+			if locationID != "" && doc.Header.LocationID != "" && doc.Header.LocationID != locationID {
+				continue
+			}
+			return true, fmt.Sprintf("leave request is locked because payroll run %s is already processed for overlapping period %s", leaveFirstNonEmpty(doc.Header.Number, doc.Header.ID), leaveFirstNonEmpty(textValue(period.Values["code"]), period.ID)), nil
+		}
+	}
+	return false, "", nil
+}
+
+func leaveRequestDateRanges(record model.Record, proposedValues map[string]any) [][2]string {
+	ranges := make([][2]string, 0, 2)
+	appendRange := func(startDate, endDate string) {
+		startDate = strings.TrimSpace(startDate)
+		endDate = strings.TrimSpace(endDate)
+		if startDate == "" {
+			return
+		}
+		if endDate == "" {
+			endDate = startDate
+		}
+		ranges = append(ranges, [2]string{startDate, endDate})
+	}
+	appendRange(textValue(record.Values["start_date"]), textValue(record.Values["end_date"]))
+	if proposedValues != nil {
+		startDate := strings.TrimSpace(textValue(proposedValues["start_date"]))
+		endDate := strings.TrimSpace(textValue(proposedValues["end_date"]))
+		if startDate != "" {
+			candidate := [2]string{startDate, leaveFirstNonEmpty(endDate, startDate)}
+			duplicate := false
+			for _, existing := range ranges {
+				if existing == candidate {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				ranges = append(ranges, candidate)
+			}
+		}
+	}
+	return ranges
+}
+
+func leavePeriodOverlapsRanges(period model.Record, ranges [][2]string) bool {
+	periodStart := strings.TrimSpace(textValue(period.Values["start_date"]))
+	periodEnd := strings.TrimSpace(textValue(period.Values["end_date"]))
+	if periodStart == "" {
+		return false
+	}
+	if periodEnd == "" {
+		periodEnd = periodStart
+	}
+	for _, item := range ranges {
+		if item[0] == "" {
+			continue
+		}
+		if item[1] == "" {
+			item[1] = item[0]
+		}
+		if periodEnd < item[0] || item[1] < periodStart {
+			continue
+		}
 		return true
 	}
 	return false

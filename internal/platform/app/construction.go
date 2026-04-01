@@ -265,6 +265,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.approvalPolicies = application.NewApprovalPolicyService(graph.models)
 	graph.workforceAttendance = application.NewWorkforceAttendanceCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models))
 	graph.leavePolicies = application.NewLeavePolicyCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models), graph.workforceAttendance, graph.approvalPolicies)
+	graph.leavePolicies.SetDocuments(graph.documents)
 	graph.employeeSpend = application.NewEmployeeSpendCoreService(graph.documents, graph.models)
 	graph.employeePayroll = application.NewEmployeePayrollCoreService(graph.documents, graph.models, graph.workforceAttendance, graph.employeeSpend)
 	graph.payrollRemittance = application.NewPayrollRemittanceCoreService(graph.documents, graph.models)

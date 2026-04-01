@@ -22,12 +22,15 @@ func TestLeavePolicyCoreManifestIncludesSelfServiceAndBalanceModels(t *testing.T
 	}
 	foundBalances := false
 	foundSubmit := false
+	foundAmend := false
 	for _, item := range manifest.SelfService.APIs {
 		switch item.Key {
 		case "leave.self_service.balances.list":
 			foundBalances = true
 		case "leave.self_service.requests.submit":
 			foundSubmit = true
+		case "leave.self_service.requests.amend":
+			foundAmend = true
 		}
 	}
 	if !foundBalances {
@@ -35,6 +38,9 @@ func TestLeavePolicyCoreManifestIncludesSelfServiceAndBalanceModels(t *testing.T
 	}
 	if !foundSubmit {
 		t.Fatal("expected leave.self_service.requests.submit API")
+	}
+	if !foundAmend {
+		t.Fatal("expected leave.self_service.requests.amend API")
 	}
 }
 

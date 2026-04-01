@@ -359,6 +359,12 @@ func registerUILeaveSelfServiceRoutes(mux *http.ServeMux, ident *identity.Servic
 			record, err = leavePolicySvc.SubmitSelfServiceLeaveRequest(principalEffectiveUserID(p), requestID, principalEffectiveUserID(p))
 		case "cancel":
 			record, err = leavePolicySvc.CancelSelfServiceLeaveRequest(principalEffectiveUserID(p), requestID, principalEffectiveUserID(p))
+		case "amend":
+			var req map[string]any
+			if r.Body != nil {
+				_ = json.NewDecoder(r.Body).Decode(&req)
+			}
+			record, err = leavePolicySvc.AmendSelfServiceLeaveRequest(principalEffectiveUserID(p), requestID, req, principalEffectiveUserID(p))
 		default:
 			respondError(w, shared.NotFound("leave request action not found"))
 			return
@@ -552,6 +558,26 @@ func registerUIAttendanceLeaveApprovalRoutes(mux *http.ServeMux, ident *identity
 				return
 			}
 			payload, err := leavePolicySvc.RequestSummaryForApprover(record.ID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+		case "amend":
+			if !principalAllowsAll(ident, p, []string{"attendance.amend"}) {
+				respondError(w, shared.Forbidden("attendance amend is not allowed"))
+				return
+			}
+			var req map[string]any
+			if r.Body != nil {
+				_ = json.NewDecoder(r.Body).Decode(&req)
+			}
+			record, err := leavePolicySvc.AmendManagedLeaveRequest(requestID, req, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			payload, err := leavePolicySvc.RequestSummary(record.ID)
 			if err != nil {
 				respondError(w, err)
 				return

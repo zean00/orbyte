@@ -48,6 +48,11 @@ func TestWorkforceAttendanceAndOperationalModelsExposeAttendanceReferences(t *te
 			t.Fatalf("expected leave_request to include %s", field)
 		}
 	}
+	for _, field := range []string{"amendment_count", "last_amended_at", "last_amended_by", "last_amendment_reason"} {
+		if !modelHasField(attendance, "leave_request", field) {
+			t.Fatalf("expected leave_request to include %s", field)
+		}
+	}
 
 	pos := posCoreKernelPackManifest()
 	if !modelHasField(pos, "pos_shift", "roster_slot_id") {
@@ -68,9 +73,11 @@ func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
 	var hasApprove bool
 	var hasReject bool
 	var hasCancel bool
+	var hasAmend bool
 	var hasInboxRead bool
 	var hasApproverRole bool
 	var hasManagerCancel bool
+	var hasManagerAmend bool
 	for _, permission := range manifest.Security.Permissions {
 		switch permission.Key {
 		case "attendance.leave_inbox.read":
@@ -81,6 +88,8 @@ func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
 			hasReject = true
 		case "attendance.cancel":
 			hasCancel = true
+		case "attendance.amend":
+			hasAmend = true
 		}
 	}
 	for _, role := range manifest.Security.RoleTemplates {
@@ -92,10 +101,13 @@ func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
 				if permissionKey == "attendance.cancel" {
 					hasManagerCancel = true
 				}
+				if permissionKey == "attendance.amend" {
+					hasManagerAmend = true
+				}
 			}
 		}
 	}
-	if !hasApprove || !hasReject || !hasCancel || !hasInboxRead || !hasApproverRole || !hasManagerCancel {
-		t.Fatalf("expected attendance approval/cancel permissions and roles, got inboxRead=%v approve=%v reject=%v cancel=%v approverRole=%v managerCancel=%v", hasInboxRead, hasApprove, hasReject, hasCancel, hasApproverRole, hasManagerCancel)
+	if !hasApprove || !hasReject || !hasCancel || !hasAmend || !hasInboxRead || !hasApproverRole || !hasManagerCancel || !hasManagerAmend {
+		t.Fatalf("expected attendance approval/amend/cancel permissions and roles, got inboxRead=%v approve=%v reject=%v cancel=%v amend=%v approverRole=%v managerCancel=%v managerAmend=%v", hasInboxRead, hasApprove, hasReject, hasCancel, hasAmend, hasApproverRole, hasManagerCancel, hasManagerAmend)
 	}
 }

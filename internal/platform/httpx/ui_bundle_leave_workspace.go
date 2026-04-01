@@ -177,8 +177,8 @@ func LeaveWorkspaceBundle() string {
       await refresh();
     }
 
-    async function saveDraft(form) {
-      const payload = {
+    function requestPayloadFromForm(form) {
+      return {
         leave_policy_id: form.querySelector('[name="leave_policy_id"]').value,
         start_date: form.querySelector('[name="start_date"]').value,
         end_date: form.querySelector('[name="end_date"]').value,
@@ -186,6 +186,18 @@ func LeaveWorkspaceBundle() string {
         half_day_session: form.querySelector('[name="half_day_session"]').value,
         notes: form.querySelector('[name="notes"]').value
       };
+    }
+
+    async function saveDraft(form) {
+      const payload = requestPayloadFromForm(form);
+      const currentStatus = String((state.selectedRequest && state.selectedRequest.approval_status) || '').toLowerCase();
+      if (state.selectedRequestID && currentStatus === 'submitted') {
+        payload.reason = window.prompt('Amend reason') || '';
+        await postJSON('/ui/self-service/leave/requests/' + encodeURIComponent(state.selectedRequestID) + '/amend', payload);
+        state.selectedRequestID = state.selectedRequestID;
+        await refresh();
+        return;
+      }
       if (state.draftRequestID) {
         await postJSON('/ui/self-service/leave/requests/' + encodeURIComponent(state.draftRequestID), payload, 'PUT');
       } else {
@@ -194,6 +206,20 @@ func LeaveWorkspaceBundle() string {
         state.selectedRequestID = state.draftRequestID;
       }
       await refresh();
+    }
+
+    async function amendManagerRequest() {
+      if (!state.selectedRequestID || !state.selectedRequest) return;
+      const payload = {
+        leave_policy_id: window.prompt('Leave Policy ID', state.selectedRequest.leave_policy_id || '') || state.selectedRequest.leave_policy_id || '',
+        start_date: window.prompt('Start Date', state.selectedRequest.start_date || '') || state.selectedRequest.start_date || '',
+        end_date: window.prompt('End Date', state.selectedRequest.end_date || '') || state.selectedRequest.end_date || '',
+        request_unit: window.prompt('Request Unit', state.selectedRequest.request_unit || 'day') || state.selectedRequest.request_unit || 'day',
+        half_day_session: window.prompt('Half Day Session', state.selectedRequest.half_day_session || '') || state.selectedRequest.half_day_session || '',
+        notes: window.prompt('Notes', state.selectedRequest.notes || '') || state.selectedRequest.notes || '',
+        reason: window.prompt('Amend reason', state.selectedRequest.last_amendment_reason || '') || ''
+      };
+      await act('/ui/attendance/leave-requests/' + encodeURIComponent(state.selectedRequestID) + '/amend', payload);
     }
 
     async function act(url, body) {
@@ -256,6 +282,7 @@ func LeaveWorkspaceBundle() string {
         + kv(text(ctx, 'Requested Days', 'Hari Diminta'), selected.requested_days || 0)
         + kv(text(ctx, 'Stage', 'Tahap'), selected.stage_progress_label || '-')
         + kv(text(ctx, 'Approvals', 'Persetujuan'), (selected.recorded_approver_count || 0) + ' / ' + (selected.required_approver_count || 0))
+        + kv(text(ctx, 'Amendments', 'Amandemen'), selected.amendment_count || 0)
         + kv(text(ctx, 'Notes', 'Catatan'), selected.notes || '-')
         + '</div>'
         + (selected.balance_snapshot ? '<div class="leave-kv" style="margin-top:0.75rem;">'
@@ -264,6 +291,7 @@ func LeaveWorkspaceBundle() string {
             + kv(text(ctx, 'Carry Forward', 'Carry Forward'), selected.balance_snapshot.carry_forward_balance_days || 0)
             + kv(text(ctx, 'Expiry', 'Kedaluwarsa'), selected.balance_snapshot.carry_forward_expiry_date || '-')
             + '</div>' : '')
+        + (selected.payroll_cutoff_reason ? '<p class="leave-subtitle" style="margin-top:0.75rem;">' + escapeHTML(selected.payroll_cutoff_reason) + '</p>' : '')
         + '</section>' : '<section class="leave-panel"><p class="leave-empty">' + escapeHTML(text(ctx, 'No request selected.', 'Belum ada permintaan dipilih.')) + '</p></section>';
 
       const entriesHTML = state.selfService ? '<section class="leave-panel"><div class="leave-header"><div><h3 class="leave-title">' + escapeHTML(text(ctx, 'Balance Entries', 'Entri Saldo')) + '</h3></div></div><div class="leave-table-wrap"><table class="leave-table"><thead><tr><th>' + escapeHTML(text(ctx, 'Type', 'Tipe')) + '</th><th>' + escapeHTML(text(ctx, 'Days', 'Hari')) + '</th><th>' + escapeHTML(text(ctx, 'Carry Forward', 'Carry Forward')) + '</th><th>' + escapeHTML(text(ctx, 'Date', 'Tanggal')) + '</th></tr></thead><tbody>' + state.entries.map(function(item) {
@@ -299,6 +327,9 @@ func LeaveWorkspaceBundle() string {
           if (state.selfService) {
             const payload = await apiJSON('/ui/self-service/leave/requests/' + encodeURIComponent(state.selectedRequestID));
             state.selectedRequest = payload.record || null;
+            state.draftRequestID = state.selectedRequest && String(state.selectedRequest.approval_status || '').toLowerCase() === 'draft'
+              ? (state.selectedRequest.id || '')
+              : '';
           } else {
             const payload = await apiJSON('/ui/attendance/leave-requests/' + encodeURIComponent(state.selectedRequestID));
             state.selectedRequest = payload.record || null;
@@ -339,6 +370,7 @@ func LeaveWorkspaceBundle() string {
           if (action === 'approve') await act('/ui/attendance/leave-requests/' + encodeURIComponent(state.selectedRequestID) + '/approve');
           if (action === 'reject') await act('/ui/attendance/leave-requests/' + encodeURIComponent(state.selectedRequestID) + '/reject', { note: window.prompt('Reject note') || '' });
           if (action === 'cancel') await act('/ui/attendance/leave-requests/' + encodeURIComponent(state.selectedRequestID) + '/cancel', { note: window.prompt('Cancel note') || '' });
+          if (action === 'amend') await amendManagerRequest();
         };
       });
     }
