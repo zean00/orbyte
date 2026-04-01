@@ -67,21 +67,32 @@ func TestWorkforceAttendanceIncludesApprovalPermissions(t *testing.T) {
 	manifest := workforceAttendanceKernelPackManifest()
 	var hasApprove bool
 	var hasReject bool
+	var hasCancel bool
 	var hasApproverRole bool
+	var hasManagerCancel bool
 	for _, permission := range manifest.Security.Permissions {
 		switch permission.Key {
 		case "attendance.approve":
 			hasApprove = true
 		case "attendance.reject":
 			hasReject = true
+		case "attendance.cancel":
+			hasCancel = true
 		}
 	}
 	for _, role := range manifest.Security.RoleTemplates {
 		if role.Key == "attendance_approver" {
 			hasApproverRole = true
 		}
+		if role.Key == "attendance_manager" {
+			for _, permissionKey := range role.PermissionKeys {
+				if permissionKey == "attendance.cancel" {
+					hasManagerCancel = true
+				}
+			}
+		}
 	}
-	if !hasApprove || !hasReject || !hasApproverRole {
-		t.Fatalf("expected attendance approval permissions and role, got approve=%v reject=%v role=%v", hasApprove, hasReject, hasApproverRole)
+	if !hasApprove || !hasReject || !hasCancel || !hasApproverRole || !hasManagerCancel {
+		t.Fatalf("expected attendance approval/cancel permissions and roles, got approve=%v reject=%v cancel=%v approverRole=%v managerCancel=%v", hasApprove, hasReject, hasCancel, hasApproverRole, hasManagerCancel)
 	}
 }

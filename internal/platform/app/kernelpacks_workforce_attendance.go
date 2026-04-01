@@ -237,10 +237,11 @@ func workforceAttendanceKernelPackManifest() module.Manifest {
 				{Key: "attendance.update", Action: "update", Resource: "attendance", DisplayName: "Update Attendance Records", DisplayNameI18n: localize("Update Attendance Records", "Perbarui Data Kehadiran")},
 				{Key: "attendance.approve", Action: "approve", Resource: "attendance", DisplayName: "Approve Attendance Records", DisplayNameI18n: localize("Approve Attendance Records", "Setujui Data Kehadiran")},
 				{Key: "attendance.reject", Action: "reject", Resource: "attendance", DisplayName: "Reject Attendance Records", DisplayNameI18n: localize("Reject Attendance Records", "Tolak Data Kehadiran")},
+				{Key: "attendance.cancel", Action: "cancel", Resource: "attendance", DisplayName: "Cancel Attendance Records", DisplayNameI18n: localize("Cancel Attendance Records", "Batalkan Data Kehadiran")},
 			},
 			RoleTemplates: []module.RoleTemplateDefinition{
 				{
-					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "employee.read", "organization_structure.read"},
+					Key: "attendance_manager", Name: "Attendance Manager", NameI18n: localize("Attendance Manager", "Pengelola Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.create", "attendance.list", "attendance.read", "attendance.update", "attendance.cancel", "employee.read", "organization_structure.read"},
 				},
 				{
 					Key: "attendance_approver", Name: "Attendance Approver", NameI18n: localize("Attendance Approver", "Penyetuju Kehadiran"), AllowedScopes: []string{"deployment", "organization", "location"}, PermissionKeys: []string{"attendance.list", "attendance.read", "attendance.approve", "attendance.reject", "employee.read"},

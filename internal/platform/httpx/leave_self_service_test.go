@@ -12,7 +12,7 @@ import (
 
 func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 	h := newTestHarness(t)
-	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.approve", "attendance.reject"} {
+	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.approve", "attendance.reject", "attendance.cancel"} {
 		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "leave_policy_core", Action: "use", Resource: "leave_self_service"}); err != nil {
 			t.Fatalf("upsert permission %s: %v", permissionKey, err)
 		}
@@ -48,19 +48,19 @@ func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 		t.Fatalf("create employee: %v", err)
 	}
 	if _, err := h.models.Create("employee_assignment", "user_admin", map[string]any{
-		"employee_id":    employee.ID,
+		"employee_id":     employee.ID,
 		"organization_id": "org_default",
-		"location_id":    "loc_hq",
-		"effective_from": "2000-01-01",
-		"status":         "active",
+		"location_id":     "loc_hq",
+		"effective_from":  "2000-01-01",
+		"status":          "active",
 	}); err != nil {
 		t.Fatalf("create employee assignment: %v", err)
 	}
 	absenceCode, err := h.models.Create("absence_code", "user_admin", map[string]any{
-		"code":       "ANNUAL",
-		"name":       "Annual Leave",
-		"category":   "leave",
-		"status":     "active",
+		"code":     "ANNUAL",
+		"name":     "Annual Leave",
+		"category": "leave",
+		"status":   "active",
 	})
 	if err != nil {
 		t.Fatalf("create absence code: %v", err)
@@ -94,23 +94,23 @@ func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 		t.Fatalf("create leave profile: %v", err)
 	}
 	if _, err := h.models.Create("leave_accrual_run", "user_admin", map[string]any{
-		"code":           "ACC-SELF",
-		"name":           "Self Grant",
+		"code":            "ACC-SELF",
+		"name":            "Self Grant",
 		"leave_policy_id": policyRecord.ID,
-		"run_mode":       "annual_grant",
-		"effective_date": "2099-01-01",
-		"status":         "active",
-		"run_status":     "draft",
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+		"run_status":      "draft",
 	}); err != nil {
 		t.Fatalf("create accrual run: %v", err)
 	}
 
 	createBody, _ := json.Marshal(map[string]any{
-		"leave_policy_id": policyRecord.ID,
-		"start_date":      "2099-02-01",
-		"end_date":        "2099-02-01",
+		"leave_policy_id":  policyRecord.ID,
+		"start_date":       "2099-02-01",
+		"end_date":         "2099-02-01",
 		"half_day_session": "morning",
-		"request_unit":    "half_day",
+		"request_unit":     "half_day",
 	})
 	create := h.request(http.MethodPost, "/ui/self-service/leave/requests", createBody, true)
 	if create.Code != http.StatusOK {
@@ -135,7 +135,7 @@ func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 
 func TestUIAttendanceLeaveApprovalRoutesRequireAssignment(t *testing.T) {
 	h := newTestHarness(t)
-	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.approve", "attendance.reject"} {
+	for _, permissionKey := range []string{"leave.self_service.read", "leave.self_service.write", "attendance.read", "attendance.approve", "attendance.reject", "attendance.cancel"} {
 		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "leave_policy_core", Action: "use", Resource: "leave_self_service"}); err != nil {
 			t.Fatalf("upsert permission %s: %v", permissionKey, err)
 		}
@@ -155,12 +155,12 @@ func TestUIAttendanceLeaveApprovalRoutesRequireAssignment(t *testing.T) {
 		t.Fatalf("create employee: %v", err)
 	}
 	if _, err := h.models.Create("employee_assignment", "user_admin", map[string]any{
-		"employee_id":          employee.ID,
-		"organization_id":      "org_default",
-		"location_id":          "loc_hq",
-		"department_id":        "dept_leave",
-		"effective_from":       "2000-01-01",
-		"status":               "active",
+		"employee_id":     employee.ID,
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"department_id":   "dept_leave",
+		"effective_from":  "2000-01-01",
+		"status":          "active",
 	}); err != nil {
 		t.Fatalf("create employee assignment: %v", err)
 	}
@@ -199,6 +199,10 @@ func TestUIAttendanceLeaveApprovalRoutesRequireAssignment(t *testing.T) {
 	if approve.Code != http.StatusOK {
 		t.Fatalf("approve leave request failed: %d body=%s", approve.Code, approve.Body.String())
 	}
+	cancel := h.request(http.MethodPost, "/ui/attendance/leave-requests/"+requestID+"/cancel", nil, true)
+	if cancel.Code != http.StatusOK {
+		t.Fatalf("cancel approved leave request failed: %d body=%s", cancel.Code, cancel.Body.String())
+	}
 }
 
 func registerLeaveSelfServiceTestModels(t *testing.T, models *model.Service) {
@@ -215,10 +219,10 @@ func registerLeaveSelfServiceTestModels(t *testing.T, models *model.Service) {
 		{Key: "workforce_roster", DisplayName: "Roster", DefaultSort: "start_date", Fields: []model.FieldDefinition{{Key: "start_date", Type: "string"}, {Key: "end_date", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "attendance_event", DisplayName: "Attendance Event", DefaultSort: "occurred_at", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "attendance_date", Type: "string"}, {Key: "event_type", Type: "string"}, {Key: "occurred_at", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_policy", DisplayName: "Leave Policy", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "absence_code_id", Type: "string"}, {Key: "paid_leave", Type: "bool"}, {Key: "requires_balance", Type: "bool"}, {Key: "allows_half_day", Type: "bool"}, {Key: "notice_days", Type: "number"}, {Key: "approval_policy_id", Type: "string"}, {Key: "status", Type: "string"}}},
-		{Key: "leave_entitlement_rule", DisplayName: "Leave Entitlement Rule", DefaultSort: "leave_policy_id", Fields: []model.FieldDefinition{{Key: "leave_policy_id", Type: "string"}, {Key: "grant_mode", Type: "string"}, {Key: "annual_entitlement_days", Type: "number"}, {Key: "monthly_accrual_days", Type: "number"}, {Key: "status", Type: "string"}}},
+		{Key: "leave_entitlement_rule", DisplayName: "Leave Entitlement Rule", DefaultSort: "leave_policy_id", Fields: []model.FieldDefinition{{Key: "leave_policy_id", Type: "string"}, {Key: "grant_mode", Type: "string"}, {Key: "annual_entitlement_days", Type: "number"}, {Key: "monthly_accrual_days", Type: "number"}, {Key: "carry_forward_cap_days", Type: "number"}, {Key: "carry_forward_expiry_rule", Type: "string"}, {Key: "prorate_on_join", Type: "bool"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_leave_profile", DisplayName: "Employee Leave Profile", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "opening_balance_days", Type: "number"}, {Key: "status", Type: "string"}}},
-		{Key: "leave_balance_account", DisplayName: "Leave Balance Account", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "current_balance_days", Type: "number"}, {Key: "reserved_days", Type: "number"}, {Key: "available_days", Type: "number"}, {Key: "status", Type: "string"}}},
-		{Key: "leave_balance_entry", DisplayName: "Leave Balance Entry", DefaultSort: "effective_date", Fields: []model.FieldDefinition{{Key: "balance_account_id", Type: "string"}, {Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "leave_request_id", Type: "string"}, {Key: "accrual_run_id", Type: "string"}, {Key: "entry_type", Type: "string"}, {Key: "days", Type: "number"}, {Key: "effective_date", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "leave_balance_account", DisplayName: "Leave Balance Account", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "current_balance_days", Type: "number"}, {Key: "reserved_days", Type: "number"}, {Key: "available_days", Type: "number"}, {Key: "carry_forward_balance_days", Type: "number"}, {Key: "carry_forward_expiry_date", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "leave_balance_entry", DisplayName: "Leave Balance Entry", DefaultSort: "effective_date", Fields: []model.FieldDefinition{{Key: "balance_account_id", Type: "string"}, {Key: "employee_id", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "employee_leave_profile_id", Type: "string"}, {Key: "leave_request_id", Type: "string"}, {Key: "accrual_run_id", Type: "string"}, {Key: "entry_type", Type: "string"}, {Key: "days", Type: "number"}, {Key: "carry_forward_days_delta", Type: "number"}, {Key: "reversal_of_entry_id", Type: "string"}, {Key: "effective_date", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_accrual_run", DisplayName: "Leave Accrual Run", DefaultSort: "effective_date", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "leave_policy_id", Type: "string"}, {Key: "run_mode", Type: "string"}, {Key: "effective_date", Type: "string"}, {Key: "run_status", Type: "string"}, {Key: "processed_at", Type: "string"}, {Key: "processed_by", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "leave_balance_adjustment", DisplayName: "Leave Balance Adjustment", DefaultSort: "updated_at", Fields: []model.FieldDefinition{{Key: "balance_account_id", Type: "string"}, {Key: "days", Type: "number"}, {Key: "status", Type: "string"}}},
 		{Key: "approval_policy", DisplayName: "Approval Policy", DefaultSort: "priority", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "document_type", Type: "string"}, {Key: "workflow_key", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "action", Type: "string"}, {Key: "assignment_strategy", Type: "string"}, {Key: "approver_group_id", Type: "string"}, {Key: "explicit_user_id", Type: "string"}, {Key: "priority", Type: "number"}, {Key: "status", Type: "string"}}},

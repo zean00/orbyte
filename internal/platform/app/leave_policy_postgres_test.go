@@ -38,14 +38,14 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("create employee: %v", err)
 	}
 	if _, err := graph.models.Create("employee_assignment", "user_admin", map[string]any{
-		"employee_id":       employee.ID,
-		"organization_id":   "org_default",
-		"location_id":       "loc_hq",
+		"employee_id":          employee.ID,
+		"organization_id":      "org_default",
+		"location_id":          "loc_hq",
 		"organization_unit_id": "ou_leave",
-		"department_id":     "dept_leave",
-		"cost_center_id":    "cc_leave",
-		"effective_from":    "2000-01-01",
-		"status":            "active",
+		"department_id":        "dept_leave",
+		"cost_center_id":       "cc_leave",
+		"effective_from":       "2000-01-01",
+		"status":               "active",
 	}); err != nil {
 		t.Fatalf("create employee assignment: %v", err)
 	}
@@ -131,12 +131,12 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 
 	request, err := graph.leavePolicies.CreateSelfServiceLeaveRequest(userID, map[string]any{
-		"leave_policy_id": leavePolicy.ID,
-		"start_date":      "2099-02-10",
-		"end_date":        "2099-02-10",
-		"request_unit":    "half_day",
+		"leave_policy_id":  leavePolicy.ID,
+		"start_date":       "2099-02-10",
+		"end_date":         "2099-02-10",
+		"request_unit":     "half_day",
 		"half_day_session": "morning",
-		"notes":           "Medical appointment",
+		"notes":            "Medical appointment",
 	}, userID)
 	if err != nil {
 		t.Fatalf("create self-service leave request: %v", err)
@@ -160,8 +160,8 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get balance account: %v", err)
 	}
-	if got := numberValue(account.Values["available_days"]); got != 12.5 {
-		t.Fatalf("expected available_days 12.5 after approval, got %v", got)
+	if got := numberValue(account.Values["available_days"]); got != 11.5 {
+		t.Fatalf("expected available_days 11.5 after approval with opening balance expired, got %v", got)
 	}
 
 	if _, err := graph.models.Create("employee_compensation_profile", "user_admin", map[string]any{
@@ -225,6 +225,174 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("expected deductible_leave_days 1 from approved unpaid leave, got %v", got)
 	}
 
+	if _, err := graph.leavePolicies.CancelApprovedLeaveRequest(request.ID, "user_admin", "validation reversal"); err != nil {
+		t.Fatalf("cancel approved leave request: %v", err)
+	}
+	account, err = graph.models.Get("leave_balance_account", textValue(request.Values["balance_account_id"]))
+	if err != nil {
+		t.Fatalf("reload balance account after cancel: %v", err)
+	}
+	if got := numberValue(account.Values["available_days"]); got != 12 {
+		t.Fatalf("expected available_days 12 after approved cancellation reversal, got %v", got)
+	}
+	payrollPayload = graph.employeePayroll.NormalizePayload("payroll_run", map[string]any{
+		"payroll_period_id": period.ID,
+		"employee_ids":      []string{employee.ID},
+	})
+	lines, _ = payrollPayload["payroll_lines"].([]map[string]any)
+	if len(lines) != 1 {
+		t.Fatalf("expected payroll line after leave cancellation, got %d", len(lines))
+	}
+	if got := numberValue(lines[0]["deductible_leave_days"]); got != 0 {
+		t.Fatalf("expected deductible_leave_days 0 after approved cancellation, got %v", got)
+	}
+
+	cfPolicy, err := graph.models.Create("leave_policy", "user_admin", map[string]any{
+		"code":             "LP-CF-" + suffix,
+		"name":             "Carry Forward Leave",
+		"absence_code_id":  absenceCode.ID,
+		"paid_leave":       false,
+		"requires_balance": true,
+		"organization_id":  "org_default",
+		"location_id":      "loc_hq",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create carry forward leave policy: %v", err)
+	}
+	if _, err := graph.models.Create("leave_entitlement_rule", "user_admin", map[string]any{
+		"leave_policy_id":           cfPolicy.ID,
+		"grant_mode":                "annual_grant",
+		"annual_entitlement_days":   12.0,
+		"carry_forward_cap_days":    5.0,
+		"carry_forward_expiry_rule": "q1_end",
+		"status":                    "active",
+	}); err != nil {
+		t.Fatalf("create carry forward entitlement rule: %v", err)
+	}
+	if _, err := graph.models.Create("employee_leave_profile", "user_admin", map[string]any{
+		"employee_id":          employee.ID,
+		"leave_policy_id":      cfPolicy.ID,
+		"organization_id":      "org_default",
+		"location_id":          "loc_hq",
+		"effective_from":       "2000-01-01",
+		"opening_balance_days": 8.0,
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create carry forward leave profile: %v", err)
+	}
+	cfRun, err := graph.models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LAR-CF-" + suffix,
+		"name":            "Carry Forward Grant",
+		"leave_policy_id": cfPolicy.ID,
+		"run_mode":        "annual_grant",
+		"effective_date":  "2099-01-01",
+		"status":          "active",
+		"run_status":      "draft",
+	})
+	if err != nil {
+		t.Fatalf("create carry forward accrual run: %v", err)
+	}
+	if _, err := graph.leavePolicies.ExecuteAccrualRun(cfRun.ID, "user_admin"); err != nil {
+		t.Fatalf("execute carry forward accrual run: %v", err)
+	}
+	cfAccounts, _, err := graph.models.List("leave_balance_account", model.Query{
+		Filters:  map[string]string{"employee_id": employee.ID, "leave_policy_id": cfPolicy.ID},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil || len(cfAccounts) == 0 {
+		t.Fatalf("list carry forward leave balance accounts: %v", err)
+	}
+	if got := numberValue(cfAccounts[0].Values["carry_forward_balance_days"]); got != 5 {
+		t.Fatalf("expected carry forward balance 5, got %v", got)
+	}
+	if got := textValue(cfAccounts[0].Values["carry_forward_expiry_date"]); got != "2099-03-31" {
+		t.Fatalf("expected carry forward expiry date 2099-03-31, got %s", got)
+	}
+	expiryRun, err := graph.models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LAR-CF-EXP-" + suffix,
+		"name":            "Carry Forward Expiry Trigger",
+		"leave_policy_id": cfPolicy.ID,
+		"run_mode":        "monthly_accrual",
+		"effective_date":  "2099-04-15",
+		"status":          "active",
+		"run_status":      "draft",
+	})
+	if err != nil {
+		t.Fatalf("create carry forward expiry trigger run: %v", err)
+	}
+	if _, err := graph.leavePolicies.ExecuteAccrualRun(expiryRun.ID, "user_admin"); err != nil {
+		t.Fatalf("execute carry forward expiry trigger run: %v", err)
+	}
+	cfAccount, err := graph.models.Get("leave_balance_account", cfAccounts[0].ID)
+	if err != nil {
+		t.Fatalf("reload carry forward account: %v", err)
+	}
+	if got := numberValue(cfAccount.Values["carry_forward_balance_days"]); got != 0 {
+		t.Fatalf("expected carry forward balance to expire to 0, got %v", got)
+	}
+
+	monthlyPolicy, err := graph.models.Create("leave_policy", "user_admin", map[string]any{
+		"code":             "LP-MONTH-" + suffix,
+		"name":             "Monthly Accrual Leave",
+		"absence_code_id":  absenceCode.ID,
+		"paid_leave":       false,
+		"requires_balance": true,
+		"organization_id":  "org_default",
+		"location_id":      "loc_hq",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create monthly accrual leave policy: %v", err)
+	}
+	if _, err := graph.models.Create("leave_entitlement_rule", "user_admin", map[string]any{
+		"leave_policy_id":      monthlyPolicy.ID,
+		"grant_mode":           "monthly_accrual",
+		"monthly_accrual_days": 2.0,
+		"prorate_on_join":      true,
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create monthly accrual entitlement rule: %v", err)
+	}
+	if _, err := graph.models.Create("employee_leave_profile", "user_admin", map[string]any{
+		"employee_id":          employee.ID,
+		"leave_policy_id":      monthlyPolicy.ID,
+		"organization_id":      "org_default",
+		"location_id":          "loc_hq",
+		"effective_from":       "2099-02-15",
+		"opening_balance_days": 0.0,
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create monthly accrual leave profile: %v", err)
+	}
+	monthlyRun, err := graph.models.Create("leave_accrual_run", "user_admin", map[string]any{
+		"code":            "LAR-MONTH-" + suffix,
+		"name":            "Monthly Accrual Grant",
+		"leave_policy_id": monthlyPolicy.ID,
+		"run_mode":        "monthly_accrual",
+		"effective_date":  "2099-02-28",
+		"status":          "active",
+		"run_status":      "draft",
+	})
+	if err != nil {
+		t.Fatalf("create monthly accrual run: %v", err)
+	}
+	if _, err := graph.leavePolicies.ExecuteAccrualRun(monthlyRun.ID, "user_admin"); err != nil {
+		t.Fatalf("execute monthly accrual run: %v", err)
+	}
+	monthlyAccounts, _, err := graph.models.List("leave_balance_account", model.Query{
+		Filters:  map[string]string{"employee_id": employee.ID, "leave_policy_id": monthlyPolicy.ID},
+		Page:     1,
+		PageSize: 1,
+	})
+	if err != nil || len(monthlyAccounts) == 0 {
+		t.Fatalf("list monthly accrual accounts: %v", err)
+	}
+	if got := numberValue(monthlyAccounts[0].Values["available_days"]); got != 1 {
+		t.Fatalf("expected prorated monthly accrual available_days 1, got %v", got)
+	}
+
 	reloaded := constructServiceGraph(postgres, nil)
 	if err := seedPlatformKernel(reloaded.config, reloaded.identity, reloaded.modules, reloaded.models, reloaded.reporting, reloaded.templates, reloaded.reference, reloaded.search, reloaded.documents, reloaded.workflows, reloaded.policy, nil, "bootstrap-123!"); err != nil {
 		t.Fatalf("reseed platform kernel: %v", err)
@@ -233,20 +401,20 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload leave request: %v", err)
 	}
-	if got := textValue(reloadedRequest.Values["approval_status"]); got != "approved" {
-		t.Fatalf("expected reloaded leave request approved, got %s", got)
+	if got := textValue(reloadedRequest.Values["approval_status"]); got != "cancelled" {
+		t.Fatalf("expected reloaded leave request cancelled, got %s", got)
 	}
 	reloadedAccount, err := reloaded.models.Get("leave_balance_account", textValue(request.Values["balance_account_id"]))
 	if err != nil {
 		t.Fatalf("reload leave balance account: %v", err)
 	}
-	if got := numberValue(reloadedAccount.Values["available_days"]); got != 12.5 {
-		t.Fatalf("expected reloaded available_days 12.5, got %v", got)
+	if got := numberValue(reloadedAccount.Values["available_days"]); got != 12 {
+		t.Fatalf("expected reloaded available_days 12 after cancellation reversal, got %v", got)
 	}
 	days, _, err := reloaded.models.List("attendance_day", model.Query{
 		Filters: map[string]string{
-		"employee_id":     employee.ID,
-		"attendance_date": "2099-02-10",
+			"employee_id":     employee.ID,
+			"attendance_date": "2099-02-10",
 		},
 		Page:     1,
 		PageSize: 20,
@@ -254,7 +422,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload attendance days: %v", err)
 	}
-	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "on_leave" {
-		t.Fatalf("expected persisted attendance day on_leave, got %+v", days)
+	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "on_leave" {
+		t.Fatalf("expected persisted attendance day not on_leave after cancellation, got %+v", days)
 	}
 }

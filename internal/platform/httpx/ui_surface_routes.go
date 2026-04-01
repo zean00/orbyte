@@ -444,6 +444,30 @@ func registerUIAttendanceLeaveApprovalRoutes(mux *http.ServeMux, ident *identity
 				return
 			}
 			respondJSON(w, http.StatusOK, map[string]any{"record": payload})
+		case "cancel":
+			if !principalAllowsAll(ident, p, []string{"attendance.cancel"}) {
+				respondError(w, shared.Forbidden("attendance cancel is not allowed"))
+				return
+			}
+			var req map[string]any
+			if r.Body != nil {
+				_ = json.NewDecoder(r.Body).Decode(&req)
+			}
+			note := ""
+			if raw, ok := req["note"].(string); ok {
+				note = strings.TrimSpace(raw)
+			}
+			record, err := leavePolicySvc.CancelApprovedLeaveRequest(requestID, principalEffectiveUserID(p), note)
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			payload, err := leavePolicySvc.RequestSummaryForApprover(record.ID, principalEffectiveUserID(p))
+			if err != nil {
+				respondError(w, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, map[string]any{"record": payload})
 		default:
 			respondError(w, shared.NotFound("leave request action not found"))
 		}
