@@ -10,6 +10,7 @@ type Provider struct {
 	Args        []string          `json:"args,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	Cwd         string            `json:"cwd,omitempty"`
+	Transport   string            `json:"transport,omitempty"`
 }
 
 type ProviderInfo struct {

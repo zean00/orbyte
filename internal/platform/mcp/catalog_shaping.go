@@ -32,7 +32,15 @@ type toolCapabilityRuntimeDescriptor struct {
 	Matcher func(ToolDescriptor) bool
 }
 
+func normalizeToolDescriptorProtocolShape(descriptor ToolDescriptor) ToolDescriptor {
+	if descriptor.InputSchema == nil {
+		descriptor.InputSchema = map[string]any{"type": "object", "properties": map[string]any{}}
+	}
+	return descriptor
+}
+
 func (s *Server) decorateToolDescriptorWithGovernance(descriptor ToolDescriptor, arguments map[string]any) ToolDescriptor {
+	descriptor = normalizeToolDescriptorProtocolShape(descriptor)
 	descriptor = s.decorateToolDescriptorWithCapabilities(descriptor)
 	evaluation := s.evaluateToolGovernance(descriptor, arguments)
 	descriptor.PolicyState = evaluation.PolicyState

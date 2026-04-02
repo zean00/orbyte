@@ -114,6 +114,8 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 				},
 			},
 		}}
+	case "notifications/initialized", "initialized", "ping":
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{}}
 	case "tools/list":
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: s.toolsListResult(actor, parseToolCatalogOptions(req.Params))}
 	case "resources/list":

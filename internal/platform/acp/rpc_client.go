@@ -17,6 +17,13 @@ import (
 	"sync/atomic"
 )
 
+type rpcTransport string
+
+const (
+	rpcTransportFramed rpcTransport = "framed"
+	rpcTransportJSONL  rpcTransport = "jsonl"
+)
+
 type rpcResponse struct {
 	ID     int64             `json:"id,omitempty"`
 	Result json.RawMessage   `json:"result,omitempty"`
@@ -50,6 +57,7 @@ type acpClient struct {
 	closed           chan struct{}
 	readLoopComplete chan struct{}
 	writeMessageFn   func(message any) error
+	transport        rpcTransport
 }
 
 func startACPClient(ctx context.Context, provider Provider, onNotification func(method string, params json.RawMessage), onRequest func(id int64, method string, params json.RawMessage)) (*acpClient, error) {
@@ -92,6 +100,7 @@ func startACPClient(ctx context.Context, provider Provider, onNotification func(
 		onRequest:        onRequest,
 		closed:           make(chan struct{}),
 		readLoopComplete: make(chan struct{}),
+		transport:        detectRPCTransport(provider),
 	}
 	go client.readLoop()
 	go drainStderr(stderr)
@@ -207,6 +216,13 @@ func (c *acpClient) writeMessage(message any) error {
 	if err != nil {
 		return err
 	}
+	if c.transport == rpcTransportJSONL {
+		if _, err := c.stdin.Write(payload); err != nil {
+			return err
+		}
+		_, err = c.stdin.Write([]byte{'\n'})
+		return err
+	}
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(payload))
 	if _, err := io.WriteString(c.stdin, header); err != nil {
 		return err
@@ -268,6 +284,29 @@ func (c *acpClient) closePending() {
 }
 
 func readRPCPayload(reader *bufio.Reader) ([]byte, error) {
+	for {
+		peek, err := reader.Peek(1)
+		if err != nil {
+			return nil, err
+		}
+		switch peek[0] {
+		case ' ', '\t', '\r', '\n':
+			if _, err := reader.ReadByte(); err != nil {
+				return nil, err
+			}
+			continue
+		case '{', '[':
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				if errors.Is(err, io.EOF) && len(line) > 0 {
+					return bytes.TrimSpace(line), nil
+				}
+				return nil, err
+			}
+			return bytes.TrimSpace(line), nil
+		}
+		break
+	}
 	contentLength := 0
 	for {
 		line, err := reader.ReadString('\n')
@@ -301,4 +340,19 @@ func drainStderr(r io.Reader) {
 		return
 	}
 	_, _ = io.Copy(io.Discard, r)
+}
+
+func detectRPCTransport(provider Provider) rpcTransport {
+	switch strings.ToLower(strings.TrimSpace(provider.Transport)) {
+	case string(rpcTransportJSONL):
+		return rpcTransportJSONL
+	case "", "auto":
+	default:
+		return rpcTransportFramed
+	}
+	command := strings.ToLower(filepath.Base(strings.TrimSpace(provider.Command)))
+	if command == "opencode" && len(provider.Args) > 0 && strings.EqualFold(strings.TrimSpace(provider.Args[0]), "acp") {
+		return rpcTransportJSONL
+	}
+	return rpcTransportFramed
 }

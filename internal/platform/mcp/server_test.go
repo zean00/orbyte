@@ -58,6 +58,25 @@ func TestHandleInitializeAndUnknownMethod(t *testing.T) {
 	}
 }
 
+func TestServerToolsAlwaysExposeInputSchema(t *testing.T) {
+	server := newTestServer(t)
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, ActorContext{
+		PermissionChecker: func(string) bool { return true },
+	})
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	for _, tool := range tools {
+		if tool.InputSchema == nil {
+			t.Fatalf("expected inputSchema for %q", tool.Name)
+		}
+		if schemaType, _ := tool.InputSchema["type"].(string); strings.TrimSpace(schemaType) == "" {
+			t.Fatalf("expected schema type for %q, got %+v", tool.Name, tool.InputSchema)
+		}
+	}
+}
+
 func TestServerListsToolsAndResourcesByPermission(t *testing.T) {
 	server := newTestServer(t)
 	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, ActorContext{
@@ -4402,4 +4421,15 @@ func waitForMCPJobStatus(t *testing.T, svc *jobs.Service, jobID string, want str
 	}
 	job, _ := svc.Get(jobID)
 	t.Fatalf("expected job %s status %s, got %+v", jobID, want, job)
+}
+
+func TestInitializedNotificationIsAccepted(t *testing.T) {
+	server := NewServer(ServerDeps{})
+	resp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", Method: "notifications/initialized"}, ActorContext{})
+	if resp.Error != nil {
+		t.Fatalf("expected initialized notification to succeed, got %+v", resp.Error)
+	}
+	if result, ok := resp.Result.(map[string]any); !ok || len(result) != 0 {
+		t.Fatalf("expected empty initialized result, got %#v", resp.Result)
+	}
 }

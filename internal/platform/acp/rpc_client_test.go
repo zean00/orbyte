@@ -28,6 +28,15 @@ func TestReadRPCPayload(t *testing.T) {
 	if string(payload) != `{"jsonrpc":"2.0","id":1}` {
 		t.Fatalf("unexpected payload: %s", string(payload))
 	}
+
+	reader = bufio.NewReader(bytes.NewBufferString("{\"jsonrpc\":\"2.0\",\"id\":2}\n"))
+	payload, err = readRPCPayload(reader)
+	if err != nil {
+		t.Fatalf("readRPCPayload jsonl failed: %v", err)
+	}
+	if string(payload) != `{"jsonrpc":"2.0","id":2}` {
+		t.Fatalf("unexpected jsonl payload: %s", string(payload))
+	}
 }
 
 func TestReadRPCPayloadErrors(t *testing.T) {
@@ -223,5 +232,17 @@ func TestCallReturnsRemoteErrorAndConnectionClosed(t *testing.T) {
 	})
 	if err := client.call("initialize", nil, nil); err == nil {
 		t.Fatal("expected connection closed error")
+	}
+}
+
+func TestDetectRPCTransport(t *testing.T) {
+	if got := detectRPCTransport(Provider{Command: "/home/user/.opencode/bin/opencode", Args: []string{"acp"}}); got != rpcTransportJSONL {
+		t.Fatalf("expected opencode transport jsonl, got %q", got)
+	}
+	if got := detectRPCTransport(Provider{Command: "/bin/echo", Transport: "jsonl"}); got != rpcTransportJSONL {
+		t.Fatalf("expected explicit jsonl transport, got %q", got)
+	}
+	if got := detectRPCTransport(Provider{Command: "/bin/echo"}); got != rpcTransportFramed {
+		t.Fatalf("expected default framed transport, got %q", got)
 	}
 }

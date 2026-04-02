@@ -414,3 +414,20 @@ func TestClientWriteMessageUsesFraming(t *testing.T) {
 type nopWriteCloser struct{ io.Writer }
 
 func (nopWriteCloser) Close() error { return nil }
+
+func TestClientWriteMessageUsesJSONLTransport(t *testing.T) {
+	var buf bytes.Buffer
+	client := &acpClient{
+		stdin:     nopWriteCloser{Writer: &buf},
+		transport: rpcTransportJSONL,
+	}
+	if err := client.writeMessage(map[string]any{"jsonrpc": "2.0", "id": 1}); err != nil {
+		t.Fatalf("writeMessage failed: %v", err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("Content-Length:")) {
+		t.Fatalf("expected jsonl rpc payload, got %q", buf.String())
+	}
+	if !bytes.HasSuffix(buf.Bytes(), []byte("\n")) || !bytes.Contains(buf.Bytes(), []byte(`"jsonrpc":"2.0"`)) {
+		t.Fatalf("expected newline-delimited json payload, got %q", buf.String())
+	}
+}
