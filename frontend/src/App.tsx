@@ -30,6 +30,7 @@ function PageLoader() {
 
 function BootstrapLoader({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, hasCheckedAuth, isLoading, checkAuth } = useAuth();
+  const location = useLocation();
   const [ready, setReady] = useState(false);
   const setWorkspaceBootstrap = useShellStore(
     (state) => state.setWorkspaceBootstrap,
@@ -52,7 +53,23 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        const bootstrap = await fetchWorkspaceBootstrap();
+        let surface: string | undefined;
+        if (location.pathname.startsWith("/pos")) {
+          surface = "pos";
+        } else if (location.pathname.startsWith("/agent")) {
+          surface = "agent";
+        } else if (
+          location.pathname === "/worklist" ||
+          location.pathname.startsWith("/worklist/")
+        ) {
+          surface = "worklist";
+        } else if (
+          location.pathname === "/self-service" ||
+          location.pathname.startsWith("/self-service/")
+        ) {
+          surface = "self_service";
+        }
+        const bootstrap = await fetchWorkspaceBootstrap(surface);
         if (!mounted) return;
         setWorkspaceBootstrap(bootstrap);
         setRoutes(
@@ -83,6 +100,7 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
     hasCheckedAuth,
     isAuthenticated,
     isLoading,
+    location.pathname,
     setRoutes,
     setWorkspaceBootstrap,
   ]);

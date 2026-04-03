@@ -28,47 +28,47 @@ type uiRouteResolutionResponse struct {
 	Flow             *module.DocumentFlowDefinition `json:"flow,omitempty"`
 }
 
-func resolveUIRoute(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, path string) uiRouteResolutionResponse {
+func resolveUIRouteWithResolver(resolver *uiBootstrapResolver, surface module.UISurface, path string) uiRouteResolutionResponse {
 	response := uiRouteResolutionResponse{
 		Status:        "not_found",
 		RequestedPath: path,
 		Surface:       surface,
-		FallbackPath:  fallbackPathForSurface(ident, modules, p, surface),
+		FallbackPath:  resolver.fallbackPath(surface),
 		Message:       "route not found",
 	}
-	resolution, ok := modules.ResolveRouteForSurface(path, surface)
+	resolution, ok := resolver.resolveRoute(surface, path)
 	if !ok {
-		for _, candidate := range availableUISurfaces(ident, modules, p) {
+		for _, candidate := range resolver.availableSurfaces() {
 			candidateSurface := module.UISurface(candidate)
 			if candidateSurface == surface {
 				continue
 			}
-			if _, found := modules.ResolveRouteForSurface(path, candidateSurface); found {
+			if _, found := resolver.resolveRoute(candidateSurface, path); found {
 				response.Status = "surface_mismatch"
 				response.SuggestedSurface = candidateSurface
-				response.FallbackPath = fallbackPathForSurface(ident, modules, p, candidateSurface)
+				response.FallbackPath = resolver.fallbackPath(candidateSurface)
 				response.Message = "route belongs to a different surface"
 				return response
 			}
 		}
 		return response
 	}
-	if !principalAllowsAll(ident, p, resolution.Action.RequiredPermissions) {
+	if !resolver.allowsAll(resolution.Action.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "route is not allowed"
 		return response
 	}
-	if resolution.View != nil && !principalAllowsAll(ident, p, resolution.View.RequiredPermissions) {
+	if resolution.View != nil && !resolver.allowsAll(resolution.View.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "view is not allowed"
 		return response
 	}
-	if resolution.CustomEntry != nil && !principalAllowsAll(ident, p, resolution.CustomEntry.RequiredPermissions) {
+	if resolution.CustomEntry != nil && !resolver.allowsAll(resolution.CustomEntry.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "route is not allowed"
 		return response
 	}
-	if resolution.Flow != nil && !principalAllowsAll(ident, p, resolution.Flow.RequiredPermissions) {
+	if resolution.Flow != nil && !resolver.allowsAll(resolution.Flow.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "route is not allowed"
 		return response
@@ -86,10 +86,15 @@ func resolveUIRoute(ident *identity.Service, modules *module.Service, p principa
 	return response
 }
 
+func resolveUIRoute(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, path string) uiRouteResolutionResponse {
+	return resolveUIRouteWithResolver(newUIBootstrapResolver(ident, modules, p), surface, path)
+}
+
 func fallbackPathsForSurfaces(ident *identity.Service, modules *module.Service, p principal) map[string]string {
 	items := map[string]string{}
-	for _, surface := range availableUISurfaces(ident, modules, p) {
-		if path := fallbackPathForSurface(ident, modules, p, module.UISurface(surface)); path != "" {
+	resolver := newUIBootstrapResolver(ident, modules, p)
+	for _, surface := range resolver.availableSurfaces() {
+		if path := resolver.fallbackPath(module.UISurface(surface)); path != "" {
 			items[surface] = path
 		}
 	}
@@ -97,8 +102,7 @@ func fallbackPathsForSurfaces(ident *identity.Service, modules *module.Service, 
 }
 
 func fallbackPathForSurface(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) string {
-	menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, surface)
-	return defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
+	return newUIBootstrapResolver(ident, modules, p).fallbackPath(surface)
 }
 
 func visibleSelfServiceAPIs(ident *identity.Service, modules *module.Service, p principal) []module.SelfServiceAPIDefinition {
@@ -146,26 +150,7 @@ func uiSurfacePreference(surface module.UISurface) string {
 }
 
 func availableUISurfaces(ident *identity.Service, modules *module.Service, p principal) []string {
-	items := make([]string, 0, 4)
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceBackoffice); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceBackoffice))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceWorklist); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceWorklist))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceSelfService); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceSelfService))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAgent); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceAgent))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfacePOS); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfacePOS))
-	}
-	if len(items) == 0 {
-		items = append(items, string(module.UISurfaceBackoffice))
-	}
-	return items
+	return newUIBootstrapResolver(ident, modules, p).availableSurfaces()
 }
 
 func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, currentUserID string, r *http.Request) []uiWorklistTask {

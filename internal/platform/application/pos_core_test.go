@@ -1,6 +1,7 @@
 package application
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -758,6 +759,42 @@ func TestPOSSearchCatalogUsesWarehouseBatchInventory(t *testing.T) {
 	}
 }
 
+func TestPOSSearchCustomersScansBeyondFirstPage(t *testing.T) {
+	models := model.NewService()
+	mustRegisterPOSTestModels(t, models)
+
+	for i := 0; i < 105; i++ {
+		name := "Customer"
+		partyID := "party-generic"
+		if i == 104 {
+			name = "Target Customer"
+			partyID = "party-target"
+		}
+		if _, err := models.Create("customer_profile", "user_admin", map[string]any{
+			"party_id":      fmt.Sprintf("%s-%03d", partyID, i),
+			"customer_name": name,
+			"customer_type": "member",
+			"member_status": "active",
+			"member_tier":   "silver",
+			"status":        "active",
+		}); err != nil {
+			t.Fatalf("create customer profile %d: %v", i, err)
+		}
+	}
+
+	posSvc := NewPOSCoreService(document.NewService(), models, nil, nil, nil, nil, nil, nil)
+	results, err := posSvc.SearchCustomers("Target Customer")
+	if err != nil {
+		t.Fatalf("search customers: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 matching customer, got %d", len(results))
+	}
+	if got := results[0].CustomerName; got != "Target Customer" {
+		t.Fatalf("expected target customer, got %q", got)
+	}
+}
+
 func TestPOSCloseShiftRequiresOwningCashier(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -1216,6 +1253,21 @@ func mustRegisterPOSTestModels(t *testing.T, models *model.Service) {
 				{Key: "store_code", Type: "string"},
 				{Key: "discount_amount_total", Type: "number"},
 				{Key: "redeemed_at", Type: "string"},
+				{Key: "status", Type: "string"},
+			},
+		},
+		{
+			Key:         "customer_profile",
+			DisplayName: "Customer Profile",
+			DefaultSort: "customer_name",
+			Fields: []model.FieldDefinition{
+				{Key: "party_id", Type: "string", Required: true},
+				{Key: "party_name", Type: "string"},
+				{Key: "customer_name", Type: "string"},
+				{Key: "customer_type", Type: "string"},
+				{Key: "member_status", Type: "string"},
+				{Key: "member_tier", Type: "string"},
+				{Key: "member_valid_to", Type: "string"},
 				{Key: "status", Type: "string"},
 			},
 		},

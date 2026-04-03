@@ -11,6 +11,7 @@ import {
   persistLocale,
   pickText,
   toShellRoutes,
+  workspaceSurfaceTarget,
 } from "@/services/bootstrap";
 
 const surfaceLabels: Record<string, string> = {
@@ -96,8 +97,10 @@ export function Header() {
   }, [currentRoute, currentSurface, routes, shellKind]);
 
   const handleSurfaceChange = async (surface: string) => {
+    if (surface === currentSurface) return;
     setNavigationPending(true);
     const bootstrap = await fetchWorkspaceBootstrap(surface);
+    const target = workspaceSurfaceTarget(bootstrap, surface);
     setRoutes(
       toShellRoutes(
         bootstrap.menus,
@@ -107,7 +110,7 @@ export function Header() {
       ),
     );
     setWorkspaceBootstrap(bootstrap);
-    navigate(useShellStore.getState().defaultPath || "/", { replace: true });
+    navigate(target || "/", { replace: true });
   };
 
   const handleLocaleChange = async (newLocale: string) => {

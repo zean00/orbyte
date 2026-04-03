@@ -16,7 +16,14 @@ type RouteResolution = {
 export default function POSSurfacePage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { locale, setCurrentRoute, setWorkspaceBootstrap, setRoutes } = useShellStore()
+  const {
+    locale,
+    currentSurface,
+    workspaceBootstrap,
+    setCurrentRoute,
+    setWorkspaceBootstrap,
+    setRoutes,
+  } = useShellStore()
   const [route, setRoute] = useState<RouteResolution | null>(null)
   const [loading, setLoading] = useState(true)
   const pathname = location.pathname || '/pos/terminal'
@@ -39,7 +46,10 @@ export default function POSSurfacePage() {
     async function resolveRoute() {
       setLoading(true)
       try {
-        const bootstrap = await fetchWorkspaceBootstrap(surface)
+        const bootstrap =
+          currentSurface === surface && workspaceBootstrap?.surface === surface
+            ? workspaceBootstrap
+            : await fetchWorkspaceBootstrap(surface)
         if (!mounted) return
         setWorkspaceBootstrap(bootstrap)
         setRoutes(toShellRoutes(bootstrap.menus, bootstrap.actions, bootstrap.locale, 'workspace'))
@@ -66,7 +76,7 @@ export default function POSSurfacePage() {
     return () => {
       mounted = false
     }
-  }, [pathname, setRoutes, setWorkspaceBootstrap])
+  }, [currentSurface, pathname, setRoutes, setWorkspaceBootstrap, workspaceBootstrap])
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(201,94,54,0.16),_transparent_36%),linear-gradient(180deg,_var(--color-shell),_color-mix(in_srgb,var(--color-shell)_82%,#0b0b0d_18%))] text-body">

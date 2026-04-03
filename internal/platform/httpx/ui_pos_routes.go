@@ -59,6 +59,46 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("GET /ui/data/pos/customers/search", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"pos_sale.create", "party.list"}) {
+			respondError(w, shared.Forbidden("pos customer lookup is not allowed"))
+			return
+		}
+		items, err := posSvc.SearchCustomers(strings.TrimSpace(r.URL.Query().Get("q")))
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("GET /ui/data/pos/stored-value/lookup", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"pos_sale.create"}) {
+			respondError(w, shared.Forbidden("pos stored value lookup is not allowed"))
+			return
+		}
+		result, err := posSvc.LookupStoredValue(
+			organizationIDForPrincipal(p),
+			p.currentLocationID,
+			strings.TrimSpace(r.URL.Query().Get("kind")),
+			strings.TrimSpace(r.URL.Query().Get("reference")),
+			strings.TrimSpace(r.URL.Query().Get("party_id")),
+		)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"item": result})
+	})
+
 	mux.HandleFunc("POST /ui/data/pos/shifts/open", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {

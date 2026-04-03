@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { clearWorkspaceBootstrapCache } from '@/services/bootstrap'
 
 interface User {
   id: string
@@ -77,20 +78,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setAuthenticatedUser: (user) =>
-        set({
-          user,
-          isAuthenticated: !!user,
-          isLoading: false,
-          hasCheckedAuth: true,
-        }),
+        {
+          clearWorkspaceBootstrapCache()
+          set({
+            user,
+            isAuthenticated: !!user,
+            isLoading: false,
+            hasCheckedAuth: true,
+          })
+        },
 
       clearAuth: () =>
-        set({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          hasCheckedAuth: true,
-        }),
+        {
+          clearWorkspaceBootstrapCache()
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            hasCheckedAuth: true,
+          })
+        },
 
       logout: async () => {
         const response = await fetch('/auth/logout', {
@@ -103,6 +110,7 @@ export const useAuthStore = create<AuthState>()(
         if (!response.ok && response.status !== 401) {
           throw new Error(`Logout failed: ${response.status}`)
         }
+        clearWorkspaceBootstrapCache()
         set({
           user: null,
           isAuthenticated: false,

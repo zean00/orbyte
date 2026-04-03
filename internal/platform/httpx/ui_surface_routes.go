@@ -119,7 +119,7 @@ func registerUISurfaceRoutes(mux *http.ServeMux, ident *identity.Service, module
 			return
 		}
 		surface := requestedUISurface(r)
-		response := resolveUIRoute(ident, modules, p, surface, path)
+		response := resolveUIRouteWithResolver(newUIBootstrapResolver(ident, modules, p), surface, path)
 		respondJSON(w, http.StatusOK, response)
 	})
 

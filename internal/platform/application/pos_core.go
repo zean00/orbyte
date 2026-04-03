@@ -74,6 +74,26 @@ type POSBootstrap struct {
 	CurrentStore *model.Record  `json:"current_store,omitempty"`
 }
 
+type POSCustomerLookupItem struct {
+	PartyID       string `json:"party_id"`
+	CustomerName  string `json:"customer_name"`
+	CustomerType  string `json:"customer_type,omitempty"`
+	MemberStatus  string `json:"member_status,omitempty"`
+	MemberTier    string `json:"member_tier,omitempty"`
+	MemberValidTo string `json:"member_valid_to,omitempty"`
+}
+
+type POSStoredValueLookupResult struct {
+	Kind             string  `json:"kind"`
+	Code             string  `json:"code,omitempty"`
+	PartyID          string  `json:"party_id,omitempty"`
+	PartyName        string  `json:"party_name,omitempty"`
+	CurrencyCode     string  `json:"currency_code,omitempty"`
+	Status           string  `json:"status,omitempty"`
+	RemainingBalance float64 `json:"remaining_balance,omitempty"`
+	BalanceAmount    float64 `json:"balance_amount,omitempty"`
+}
+
 type POSCartLineInput struct {
 	ProductCode      string  `json:"product_code,omitempty"`
 	VariantSignature string  `json:"variant_signature,omitempty"`
@@ -252,6 +272,101 @@ func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, qu
 		return results[i].Name < results[j].Name
 	})
 	return results, nil
+}
+
+func (s *POSCoreService) SearchCustomers(query string) ([]POSCustomerLookupItem, error) {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	results := make([]POSCustomerLookupItem, 0, 20)
+	for page := 1; ; page++ {
+		items, total, err := s.models.List("customer_profile", model.Query{Page: page, PageSize: model.MaxPageSize})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
+			name := firstNonEmptyString(textValue(item.Values["customer_name"]), textValue(item.Values["party_name"]), textValue(item.Values["party_id"]))
+			partyID := textValue(item.Values["party_id"])
+			if needle != "" {
+				haystack := strings.ToLower(strings.Join([]string{
+					name,
+					partyID,
+					textValue(item.Values["customer_type"]),
+					textValue(item.Values["member_status"]),
+					textValue(item.Values["member_tier"]),
+				}, " "))
+				if !strings.Contains(haystack, needle) {
+					continue
+				}
+			}
+			results = append(results, POSCustomerLookupItem{
+				PartyID:       partyID,
+				CustomerName:  name,
+				CustomerType:  textValue(item.Values["customer_type"]),
+				MemberStatus:  textValue(item.Values["member_status"]),
+				MemberTier:    textValue(item.Values["member_tier"]),
+				MemberValidTo: textValue(item.Values["member_valid_to"]),
+			})
+		}
+		if page*model.MaxPageSize >= total || len(items) == 0 {
+			break
+		}
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].CustomerName == results[j].CustomerName {
+			return results[i].PartyID < results[j].PartyID
+		}
+		return strings.ToLower(results[i].CustomerName) < strings.ToLower(results[j].CustomerName)
+	})
+	if len(results) > 20 {
+		results = results[:20]
+	}
+	return results, nil
+}
+
+func (s *POSCoreService) LookupStoredValue(organizationID, locationID, kind, reference, partyID string) (POSStoredValueLookupResult, error) {
+	if s.retail == nil {
+		return POSStoredValueLookupResult{}, shared.Validation("stored value lookup is unavailable")
+	}
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "gift_card":
+		if strings.TrimSpace(reference) == "" {
+			return POSStoredValueLookupResult{}, shared.Validation("gift card code is required")
+		}
+		record, err := s.retail.LookupGiftCard(organizationID, locationID, reference)
+		if err != nil {
+			return POSStoredValueLookupResult{}, err
+		}
+		return POSStoredValueLookupResult{
+			Kind:             "gift_card",
+			Code:             textValue(record.Values["code"]),
+			PartyID:          textValue(record.Values["party_id"]),
+			PartyName:        textValue(record.Values["party_name"]),
+			CurrencyCode:     textValue(record.Values["currency_code"]),
+			Status:           textValue(record.Values["status"]),
+			RemainingBalance: numberValue(record.Values["remaining_balance"]),
+		}, nil
+	case "store_credit":
+		lookupPartyID := strings.TrimSpace(partyID)
+		if lookupPartyID == "" {
+			lookupPartyID = strings.TrimSpace(reference)
+		}
+		if lookupPartyID == "" {
+			return POSStoredValueLookupResult{}, shared.Validation("customer is required for store credit")
+		}
+		record, err := s.retail.LookupStoreCredit(organizationID, locationID, lookupPartyID)
+		if err != nil {
+			return POSStoredValueLookupResult{}, err
+		}
+		return POSStoredValueLookupResult{
+			Kind:          "store_credit",
+			PartyID:       textValue(record.Values["party_id"]),
+			PartyName:     textValue(record.Values["party_name"]),
+			CurrencyCode:  textValue(record.Values["currency_code"]),
+			Status:        textValue(record.Values["status"]),
+			BalanceAmount: numberValue(record.Values["balance_amount"]),
+		}, nil
+	default:
+		return POSStoredValueLookupResult{}, shared.Validation("unsupported stored value kind")
+	}
 }
 
 func (s *POSCoreService) OpenShift(organizationID, locationID, storeCode, registerCode, cashierUserID, actorID string, openingCash float64, notes string) (model.Record, error) {

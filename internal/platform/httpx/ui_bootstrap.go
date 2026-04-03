@@ -10,10 +10,11 @@ import (
 )
 
 func buildWorkspaceBootstrapPayload(r *http.Request, ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, uiPrefs *UIPreferencesService, acpSvc *acp.Service) map[string]any {
-	menus, actions, views, _, flows := visibleUIContracts(ident, modules, p, surface)
-	adminMenus, adminActions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceAdmin)
+	resolver := newUIBootstrapResolver(ident, modules, p)
+	menus, actions, views, _, flows := resolver.visibleContracts(surface)
+	adminMenus, adminActions, _, _, _ := resolver.visibleContracts(module.UISurfaceAdmin)
 	defaultPath := defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
-	fallbackPaths := fallbackPathsForSurfaces(ident, modules, p)
+	fallbackPaths := resolver.fallbackPaths()
 	adminPath := "/admin"
 	if len(adminMenus) > 0 {
 		for _, action := range adminActions {
@@ -24,16 +25,16 @@ func buildWorkspaceBootstrapPayload(r *http.Request, ident *identity.Service, mo
 		}
 	}
 	return map[string]any{
-		"shell_kind":         "workspace",
-		"surface":            surface,
+		"shell_kind": "workspace",
+		"surface":    surface,
 		"shell": map[string]any{
 			"nav_mode":         "collapsible",
 			"command_mode":     "route_jump",
 			"agent_surface":    "panel",
 			"supports_nav_pin": true,
 		},
-		"page_floorplans": []string{"worklist", "object", "dashboard", "editor"},
-		"available_surfaces": availableUISurfaces(ident, modules, p),
+		"page_floorplans":    []string{"worklist", "object", "dashboard", "editor"},
+		"available_surfaces": resolver.availableSurfaces(),
 		"menus":              menus,
 		"actions":            actions,
 		"views":              views,
