@@ -16,6 +16,8 @@ func TestServiceEnvironmentAndModeHelpers(t *testing.T) {
 	t.Setenv("APP_ENV", " DEV ")
 	t.Setenv("APP_AUTH_DEV_MODE", "yes")
 	t.Setenv("APP_AUTH_DEV_BYPASS", "true")
+	t.Setenv("APP_ACP_ENABLED", "true")
+	t.Setenv("APP_ACP_PROVIDERS_JSON", ` [{"key":"opencode"}] `)
 	t.Setenv("APP_JWT_SECRET", " secret ")
 	t.Setenv("APP_JWT_ISSUER", " issuer ")
 	t.Setenv("APP_BOOTSTRAP_ADMIN_PASSWORD", " adminpw ")
@@ -33,6 +35,12 @@ func TestServiceEnvironmentAndModeHelpers(t *testing.T) {
 	}
 	if !svc.IsDevelopmentLike() || !svc.AuthDevMode() || !svc.AuthDevBypass() || !svc.DocsEnabled() {
 		t.Fatal("expected development-like/auth-dev/docs-enabled state")
+	}
+	if enabled, ok := svc.ACPBootstrapEnabled(); !enabled || !ok {
+		t.Fatalf("expected ACP bootstrap enabled to be configured, got enabled=%v ok=%v", enabled, ok)
+	}
+	if got := svc.ACPBootstrapProvidersJSON(); got != `[{"key":"opencode"}]` {
+		t.Fatalf("unexpected ACP providers json: %q", got)
 	}
 	if svc.CookieSecure() {
 		t.Fatal("expected non-secure cookies in development-like mode")
@@ -60,6 +68,7 @@ func TestServiceDefaultsAndFallbackParsers(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("APP_AUTH_DEV_MODE", "false")
 	t.Setenv("APP_AUTH_DEV_BYPASS", "0")
+	t.Setenv("APP_ACP_ENABLED", "")
 	t.Setenv("APP_JWT_ISSUER", "")
 	t.Setenv("APP_ADDRESS", "")
 	t.Setenv("APP_HTTP_READ_TIMEOUT_SECONDS", "2m")
@@ -73,6 +82,9 @@ func TestServiceDefaultsAndFallbackParsers(t *testing.T) {
 
 	if svc.IsDevelopmentLike() || svc.DocsEnabled() {
 		t.Fatal("expected production mode to disable development/docs defaults")
+	}
+	if enabled, ok := svc.ACPBootstrapEnabled(); enabled || ok {
+		t.Fatalf("expected ACP bootstrap env to be absent, got enabled=%v ok=%v", enabled, ok)
 	}
 	if !svc.CookieSecure() {
 		t.Fatal("expected secure cookies outside development-like mode")

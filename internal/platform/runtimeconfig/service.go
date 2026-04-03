@@ -77,6 +77,18 @@ func (s *Service) BootstrapAdminPassword() string {
 	return strings.TrimSpace(os.Getenv("APP_BOOTSTRAP_ADMIN_PASSWORD"))
 }
 
+func (s *Service) ACPBootstrapEnabled() (bool, bool) {
+	raw := strings.TrimSpace(os.Getenv("APP_ACP_ENABLED"))
+	if raw == "" {
+		return false, false
+	}
+	return s.bool("APP_ACP_ENABLED"), true
+}
+
+func (s *Service) ACPBootstrapProvidersJSON() string {
+	return strings.TrimSpace(os.Getenv("APP_ACP_PROVIDERS_JSON"))
+}
+
 func (s *Service) DatabaseURL() string {
 	return strings.TrimSpace(os.Getenv("DATABASE_URL"))
 }

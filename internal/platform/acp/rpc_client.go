@@ -58,6 +58,18 @@ type acpClient struct {
 	readLoopComplete chan struct{}
 	writeMessageFn   func(message any) error
 	transport        rpcTransport
+	mcpServers       []map[string]any
+}
+
+type newSessionResult struct {
+	SessionID string `json:"sessionId"`
+	Models    struct {
+		CurrentModelID  string `json:"currentModelId"`
+		AvailableModels []struct {
+			ModelID string `json:"modelId"`
+			Name    string `json:"name"`
+		} `json:"availableModels"`
+	} `json:"models"`
 }
 
 func startACPClient(ctx context.Context, provider Provider, onNotification func(method string, params json.RawMessage), onRequest func(id int64, method string, params json.RawMessage)) (*acpClient, error) {
@@ -101,6 +113,7 @@ func startACPClient(ctx context.Context, provider Provider, onNotification func(
 		closed:           make(chan struct{}),
 		readLoopComplete: make(chan struct{}),
 		transport:        detectRPCTransport(provider),
+		mcpServers:       discoverMCPServers(provider),
 	}
 	go client.readLoop()
 	go drainStderr(stderr)
@@ -144,10 +157,8 @@ func (c *acpClient) initialize() (map[string]any, error) {
 	return result, nil
 }
 
-func (c *acpClient) newSession(cwd string) (string, error) {
-	var result struct {
-		SessionID string `json:"sessionId"`
-	}
+func (c *acpClient) newSession(cwd string) (newSessionResult, error) {
+	var result newSessionResult
 	if cwd == "" {
 		if wd, err := os.Getwd(); err == nil {
 			cwd = wd
@@ -158,17 +169,189 @@ func (c *acpClient) newSession(cwd string) (string, error) {
 			cwd = abs
 		}
 	}
-	if err := c.call("session/new", map[string]any{"cwd": cwd, "mcpServers": []any{}}, &result); err != nil {
-		return "", err
+	if err := c.call("session/new", map[string]any{"cwd": cwd, "mcpServers": c.mcpServers}, &result); err != nil {
+		return newSessionResult{}, err
 	}
 	if strings.TrimSpace(result.SessionID) == "" {
-		return "", errors.New("acp agent returned empty session id")
+		return newSessionResult{}, errors.New("acp agent returned empty session id")
 	}
-	return result.SessionID, nil
+	return result, nil
+}
+
+func discoverMCPServers(provider Provider) []map[string]any {
+	configPath := opencodeConfigPath(provider)
+	if strings.TrimSpace(configPath) == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	var payload struct {
+		MCP map[string]json.RawMessage `json:"mcp"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	servers := make([]map[string]any, 0, len(payload.MCP))
+	for key, rawServer := range payload.MCP {
+		normalized, ok := normalizeMCPServer(key, rawServer)
+		if ok {
+			servers = append(servers, normalized)
+		}
+	}
+	return servers
+}
+
+func normalizeMCPServer(name string, raw json.RawMessage) (map[string]any, bool) {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return nil, false
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, false
+	}
+	if enabled, ok := payload["enabled"].(bool); ok && !enabled {
+		return nil, false
+	}
+	serverType := strings.ToLower(strings.TrimSpace(stringValue(payload["type"])))
+	url := strings.TrimSpace(stringValue(payload["url"]))
+	switch serverType {
+	case "remote", "http":
+		if url == "" {
+			return nil, false
+		}
+		server := map[string]any{
+			"name":    trimmedName,
+			"type":    "http",
+			"url":     url,
+			"headers": normalizeHeaderList(payload["headers"]),
+		}
+		if enabled, ok := payload["enabled"].(bool); ok {
+			server["enabled"] = enabled
+		}
+		return server, true
+	case "sse":
+		if url == "" {
+			return nil, false
+		}
+		server := map[string]any{
+			"name":    trimmedName,
+			"type":    "sse",
+			"url":     url,
+			"headers": normalizeHeaderList(payload["headers"]),
+		}
+		if enabled, ok := payload["enabled"].(bool); ok {
+			server["enabled"] = enabled
+		}
+		return server, true
+	case "local", "stdio", "command":
+		command := strings.TrimSpace(stringValue(payload["command"]))
+		if command == "" {
+			return nil, false
+		}
+		server := map[string]any{
+			"name":    trimmedName,
+			"command": command,
+			"args":    normalizeStringList(payload["args"]),
+			"env":     normalizeEnvList(payload["env"]),
+		}
+		if enabled, ok := payload["enabled"].(bool); ok {
+			server["enabled"] = enabled
+		}
+		return server, true
+	default:
+		return nil, false
+	}
+}
+
+func normalizeHeaderList(value any) []map[string]string {
+	headers, ok := value.(map[string]any)
+	if !ok || len(headers) == 0 {
+		return []map[string]string{}
+	}
+	out := make([]map[string]string, 0, len(headers))
+	for key, rawValue := range headers {
+		name := strings.TrimSpace(key)
+		headerValue := strings.TrimSpace(stringValue(rawValue))
+		if name == "" || headerValue == "" {
+			continue
+		}
+		out = append(out, map[string]string{
+			"name":  name,
+			"value": headerValue,
+		})
+	}
+	return out
+}
+
+func normalizeStringList(value any) []string {
+	items, ok := value.([]any)
+	if !ok || len(items) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if trimmed := strings.TrimSpace(stringValue(item)); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func normalizeEnvList(value any) []map[string]string {
+	env, ok := value.(map[string]any)
+	if !ok || len(env) == 0 {
+		return []map[string]string{}
+	}
+	out := make([]map[string]string, 0, len(env))
+	for key, rawValue := range env {
+		name := strings.TrimSpace(key)
+		envValue := strings.TrimSpace(stringValue(rawValue))
+		if name == "" || envValue == "" {
+			continue
+		}
+		out = append(out, map[string]string{
+			"name":  name,
+			"value": envValue,
+		})
+	}
+	return out
+}
+
+func opencodeConfigPath(provider Provider) string {
+	if xdg := firstNonEmptyString(
+		strings.TrimSpace(provider.Env["XDG_CONFIG_HOME"]),
+		strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")),
+	); xdg != "" {
+		return filepath.Join(xdg, "opencode", "opencode.json")
+	}
+	if home := firstNonEmptyString(
+		strings.TrimSpace(provider.Env["HOME"]),
+		strings.TrimSpace(os.Getenv("HOME")),
+	); home != "" {
+		return filepath.Join(home, ".config", "opencode", "opencode.json")
+	}
+	return ""
 }
 
 func (c *acpClient) prompt(sessionID string, content []map[string]any) error {
 	return c.call("session/prompt", map[string]any{"sessionId": sessionID, "prompt": content}, nil)
+}
+
+func (c *acpClient) setSessionModel(sessionID, modelID string) (string, error) {
+	var result map[string]any
+	if err := c.call("session/set_model", map[string]any{
+		"sessionId": sessionID,
+		"modelId":   modelID,
+	}, &result); err != nil {
+		return "", err
+	}
+	return firstNonEmptyString(
+		stringValue(nestedMap(nestedMap(result, "_meta"), "opencode")["modelId"]),
+		modelID,
+	), nil
 }
 
 func (c *acpClient) respond(id int64, result any, errResp *rpcResponseError) error {

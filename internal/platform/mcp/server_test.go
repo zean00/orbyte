@@ -1381,6 +1381,194 @@ func TestBusinessComprehensionTools(t *testing.T) {
 	}
 }
 
+func TestBusinessRecordSearchDocumentFiltersSkipModelValidation(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "expense_claim",
+		DisplayName:   "Expense Claim",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register expense_claim failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:                "employee_spend_core",
+		Name:               "Employee Spend Core",
+		OwnedDocumentTypes: []string{"expense_claim"},
+		Documents: []document.Definition{{
+			Type:          "expense_claim",
+			DisplayName:   "Expense Claim",
+			SchemaVersion: "v1",
+		}},
+	}, "system"); err != nil {
+		t.Fatalf("register employee_spend_core failed: %v", err)
+	}
+	record, err := server.documents.Create("expense_claim", "org_default", "loc_hq", "user_admin", map[string]any{
+		"employee_code": "EMP-SPEND-001",
+		"title":         "Travel Claim",
+		"amount":        170,
+	})
+	if err != nil {
+		t.Fatalf("create expense claim failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "document.list" || permissionKey == "module.read"
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "employee_spend_core.business.records.search",
+			"arguments": map[string]any{
+				"resource_kind": "document",
+				"filters": map[string]any{
+					"employee_code": "EMP-SPEND-001",
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.records.search failed: %+v", resp.Error)
+	}
+	result := resp.Result.(map[string]any)
+	content := result["content"].([]ContentBlock)
+	if len(content) == 0 || !strings.Contains(content[0].Text, record.Header.ID) || !strings.Contains(content[0].Text, "expense_claim") {
+		t.Fatalf("expected search text summary with matching record, got %+v", content)
+	}
+	items := result["structuredContent"].(map[string]any)["items"].([]businessRecordSummary)
+	if len(items) != 1 || items[0].RecordID != record.Header.ID {
+		t.Fatalf("expected matching document summary, got %+v", items)
+	}
+}
+
+func TestBusinessDocumentGetIncludesReadableSummaryText(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "expense_claim",
+		DisplayName:   "Expense Claim",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register expense_claim failed: %v", err)
+	}
+	record, err := server.documents.Create("expense_claim", "org_default", "loc_hq", "user_admin", map[string]any{
+		"employee_code":          "EMP-SPEND-001",
+		"title":                  "Travel Claim",
+		"claim_total_amount":     170,
+		"net_settlement_amount":  140,
+		"settlement_direction":   "company_owes_employee",
+		"reimbursement_status":   "paid",
+	})
+	if err != nil {
+		t.Fatalf("create expense claim failed: %v", err)
+	}
+	record.Header.Status = "approved"
+	if err := server.documents.Save(record); err != nil {
+		t.Fatalf("save expense claim failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "document.read"
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.document.get",
+			"arguments": map[string]any{
+				"document_id":          record.Header.ID,
+				"include_full_payload": false,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.document.get failed: %+v", resp.Error)
+	}
+	content := resp.Result.(map[string]any)["content"].([]ContentBlock)
+	if len(content) == 0 {
+		t.Fatal("expected text content")
+	}
+	text := content[0].Text
+	for _, fragment := range []string{
+		record.Header.ID,
+		"Type: expense_claim",
+		"Title: Travel Claim",
+		"Status: approved",
+		"Business summary: expense claim total is 170 and status is approved.",
+		`"employee_code":"EMP-SPEND-001"`,
+		`"claim_total_amount":170`,
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("expected %q in %q", fragment, text)
+		}
+	}
+}
+
+func TestBusinessDocumentGetIncludesSettlementInterpretation(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.documents.Register(document.Definition{
+		Type:          "advance_liquidation",
+		DisplayName:   "Advance Liquidation",
+		SchemaVersion: "v1",
+	}); err != nil {
+		t.Fatalf("register advance_liquidation failed: %v", err)
+	}
+	record, err := server.documents.Create("advance_liquidation", "org_default", "loc_hq", "user_admin", map[string]any{
+		"claim_total_amount":     170.0,
+		"advance_amount":         30.0,
+		"advance_applied_amount": 30.0,
+		"net_settlement_amount":  140.0,
+		"settlement_direction":   "company_owes_employee",
+	})
+	if err != nil {
+		t.Fatalf("create liquidation failed: %v", err)
+	}
+	record.Header.Status = "approved"
+	if err := server.documents.Save(record); err != nil {
+		t.Fatalf("save liquidation failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "document.read"
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.document.get",
+			"arguments": map[string]any{
+				"document_id": record.Header.ID,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.document.get failed: %+v", resp.Error)
+	}
+	text := resp.Result.(map[string]any)["content"].([]ContentBlock)[0].Text
+	for _, fragment := range []string{
+		"Settlement summary: claim total 170, advance amount 30, advance applied 30, net settlement 140.",
+		"Interpretation: the company owes the employee 140.",
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("expected %q in %q", fragment, text)
+		}
+	}
+}
+
 func TestBusinessAnalyticsTrendUsesLatestSnapshotPerBucket(t *testing.T) {
 	server := newTestServer(t)
 	if err := server.documents.Register(document.Definition{

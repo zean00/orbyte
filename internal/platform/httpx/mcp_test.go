@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -134,6 +135,19 @@ func TestMCPScopedAnalyticsRouteFiltersSurface(t *testing.T) {
 	rr = h.request("POST", "/mcp/analytics", reqBody, true)
 	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "not available on this endpoint") {
 		t.Fatalf("expected scoped endpoint rejection, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDevLoopbackMCPAllowed(t *testing.T) {
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.RemoteAddr = net.JoinHostPort("127.0.0.1", "12345")
+	if !devLoopbackMCPAllowed(req) {
+		t.Fatal("expected loopback request to be allowed in dev mode")
+	}
+	req.RemoteAddr = net.JoinHostPort("192.168.1.10", "12345")
+	if devLoopbackMCPAllowed(req) {
+		t.Fatal("expected non-loopback request to be rejected")
 	}
 }
 

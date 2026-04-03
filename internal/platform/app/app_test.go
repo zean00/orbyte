@@ -22,6 +22,7 @@ import (
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -116,6 +117,26 @@ func TestNewAppSeedsRandomDevelopmentJWTSecretWithExplicitDevMode(t *testing.T) 
 	}
 	if first == second {
 		t.Fatal("expected random per-process development jwt secret")
+	}
+}
+
+func TestApplyRuntimeACPBootstrap(t *testing.T) {
+	cfg := config.NewService()
+	t.Setenv("APP_ACP_ENABLED", "true")
+	t.Setenv("APP_ACP_PROVIDERS_JSON", `[{"key":"opencode","name":"OpenCode ACP","command":"opencode","args":["acp"]}]`)
+
+	if err := applyRuntimeACPBootstrap(cfg, runtimeconfig.NewService()); err != nil {
+		t.Fatalf("apply runtime ACP bootstrap failed: %v", err)
+	}
+	effective, ok := cfg.Resolve("platform.acp", "", "")
+	if !ok {
+		t.Fatal("expected platform.acp to resolve")
+	}
+	if enabled, _ := effective.Value["enabled"].(bool); !enabled {
+		t.Fatalf("expected platform.acp enabled after bootstrap, got %+v", effective.Value)
+	}
+	if got, _ := effective.Value["providers_json"].(string); got == "" {
+		t.Fatalf("expected providers_json to be populated, got %+v", effective.Value)
 	}
 }
 

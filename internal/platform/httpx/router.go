@@ -288,3 +288,7 @@ func (w *statusWriter) Flush() {
 	}
 	flusher.Flush()
 }
+
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}

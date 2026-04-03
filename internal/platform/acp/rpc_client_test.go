@@ -178,15 +178,42 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 			if !filepath.IsAbs(params["cwd"].(string)) {
 				t.Fatalf("expected absolute cwd, got %#v", params)
 			}
-			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"sessionId":"remote-1"}`)}
+			got, _ := params["mcpServers"].([]any)
+			if len(got) != 1 {
+				t.Fatalf("expected discovered mcp servers, got %#v", params["mcpServers"])
+			}
+			server, _ := got[0].(map[string]any)
+			if server["name"] != "orbyte" || server["type"] != "http" || server["url"] != "http://127.0.0.1:18110/mcp" {
+				t.Fatalf("unexpected normalized mcp server %#v", got[0])
+			}
+			headers, _ := server["headers"].([]any)
+			if len(headers) != 1 {
+				t.Fatalf("expected one normalized header, got %#v", server["headers"])
+			}
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"sessionId":"remote-1","models":{"currentModelId":"opencode/big-pickle","availableModels":[{"modelId":"opencode/big-pickle","name":"Big Pickle"},{"modelId":"opencode/gpt-5-nano","name":"GPT-5 Nano"}]}}`)}
 		case "session/prompt":
 			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/set_model":
+			params := message["params"].(map[string]any)
+			if params["sessionId"] != "remote-1" || params["modelId"] != "opencode/minimax-m2.5-free" {
+				t.Fatalf("unexpected set_model params: %#v", params)
+			}
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"_meta":{"opencode":{"modelId":"opencode/minimax-m2.5-free"}}}`)}
 		default:
 			t.Fatalf("unexpected method: %s", method)
 		}
 		close(ch)
 		return nil
 	})
+	client.mcpServers = []map[string]any{{
+		"name": "orbyte",
+		"type": "http",
+		"url":  "http://127.0.0.1:18110/mcp",
+		"headers": []map[string]string{{
+			"name":  "Authorization",
+			"value": "Bearer test",
+		}},
+	}}
 
 	result, err := client.initialize()
 	if err != nil {
@@ -195,15 +222,65 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 	if result["protocolVersion"] != float64(1) {
 		t.Fatalf("unexpected initialize result: %#v", result)
 	}
-	sessionID, err := client.newSession(".")
+	sessionInfo, err := client.newSession(".")
 	if err != nil {
 		t.Fatalf("newSession failed: %v", err)
 	}
-	if sessionID != "remote-1" {
-		t.Fatalf("unexpected session id: %q", sessionID)
+	if sessionInfo.SessionID != "remote-1" {
+		t.Fatalf("unexpected session id: %q", sessionInfo.SessionID)
+	}
+	if sessionInfo.Models.CurrentModelID != "opencode/big-pickle" {
+		t.Fatalf("unexpected current model: %#v", sessionInfo.Models)
+	}
+	if len(sessionInfo.Models.AvailableModels) != 2 {
+		t.Fatalf("unexpected available models: %#v", sessionInfo.Models.AvailableModels)
+	}
+	modelID, err := client.setSessionModel("remote-1", "opencode/minimax-m2.5-free")
+	if err != nil {
+		t.Fatalf("setSessionModel failed: %v", err)
+	}
+	if modelID != "opencode/minimax-m2.5-free" {
+		t.Fatalf("unexpected selected model: %q", modelID)
 	}
 	if err := client.prompt("remote-1", []map[string]any{{"type": "text", "text": "hello"}}); err != nil {
 		t.Fatalf("prompt failed: %v", err)
+	}
+}
+
+func TestDiscoverMCPServersFromProviderEnv(t *testing.T) {
+	temp := t.TempDir()
+	configDir := filepath.Join(temp, ".config", "opencode")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	configPath := filepath.Join(configDir, "opencode.json")
+	if err := os.WriteFile(configPath, []byte(`{"mcp":{"orbyte":{"type":"remote","url":"http://127.0.0.1:18110/mcp","headers":{"Authorization":"Bearer test"}},"other":{"type":"local","command":"tool","args":["serve"],"env":{"MODE":"dev"}},"disabled":{"enabled":false,"type":"remote","url":"http://127.0.0.1:18110/mcp"}}}`), 0o644); err != nil {
+		t.Fatalf("write config failed: %v", err)
+	}
+	got := discoverMCPServers(Provider{Env: map[string]string{"HOME": temp}})
+	if len(got) != 2 {
+		t.Fatalf("expected 2 mcp servers, got %#v", got)
+	}
+	if got[0]["name"] != "orbyte" && got[1]["name"] != "orbyte" {
+		t.Fatalf("expected remote mcp server to be normalized, got %#v", got)
+	}
+}
+
+func TestDiscoverMCPServersFallsBackToProcessHome(t *testing.T) {
+	temp := t.TempDir()
+	t.Setenv("HOME", temp)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	configDir := filepath.Join(temp, ".config", "opencode")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	configPath := filepath.Join(configDir, "opencode.json")
+	if err := os.WriteFile(configPath, []byte(`{"mcp":{"orbyte":{"type":"remote","url":"http://127.0.0.1:18110/mcp"}}}`), 0o644); err != nil {
+		t.Fatalf("write config failed: %v", err)
+	}
+	got := discoverMCPServers(Provider{})
+	if len(got) != 1 || got[0]["name"] != "orbyte" {
+		t.Fatalf("expected process-home mcp server, got %#v", got)
 	}
 }
 

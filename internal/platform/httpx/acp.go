@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -34,6 +35,27 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"enabled": service.Enabled(), "items": service.Providers()})
+	})
+
+	mux.HandleFunc("GET /agent/api/providers/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use"); !ok {
+			return
+		}
+		if service == nil {
+			respondError(w, shared.NotFound("acp service is not configured"))
+			return
+		}
+		providerKey, tail := agentProviderPath(r.URL.Path)
+		if providerKey == "" || tail != "/models" {
+			respondError(w, shared.NotFound("acp provider route not found"))
+			return
+		}
+		items, err := service.ProviderModels(providerKey)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
 	mux.HandleFunc("GET /agent/api/sessions", func(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +99,7 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			OccurredAt: time.Now().UTC(),
 			Metadata: map[string]any{
 				"provider_key":     item.ProviderKey,
+				"requested_model":  item.RequestedModel,
 				"shell":            item.Shell,
 				"route_path":       item.RoutePath,
 				"contract_version": "2026-03-23",
@@ -109,6 +132,27 @@ func registerACPRoutes(mux *http.ServeMux, ident *identity.Service, auditSvc *au
 			return
 		}
 		respondError(w, shared.NotFound("acp session route not found"))
+	})
+
+	mux.HandleFunc("DELETE /agent/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireAuthorization(w, r, ident, "agent.workspace.use", "", "agent.workspace.use")
+		if !ok {
+			return
+		}
+		sessionID, tail := agentSessionPath(r.URL.Path)
+		if sessionID == "" || tail != "" {
+			respondError(w, shared.NotFound("acp session not found"))
+			return
+		}
+		if service == nil {
+			respondError(w, shared.NotFound("acp service is not configured"))
+			return
+		}
+		if err := service.DeleteSession(sessionID, p.userID); err != nil {
+			respondError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("POST /agent/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
@@ -203,9 +247,15 @@ func registerACPStream(w http.ResponseWriter, r *http.Request, userID string, se
 		respondError(w, shared.Conflict("streaming is not supported"))
 		return
 	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
+	prepareEventStream(w)
+	if err := clearEventStreamWriteDeadline(w); err != nil {
+		respondError(w, shared.Conflict("streaming is not supported"))
+		return
+	}
+	if _, err := fmt.Fprintf(w, ": connected\nretry: 3000\n\n"); err != nil {
+		return
+	}
+	flusher.Flush()
 	events, unsubscribe := service.Subscribe(sessionID)
 	defer unsubscribe()
 	for _, event := range item.Trace {
@@ -246,6 +296,21 @@ func writeACPEvent(w http.ResponseWriter, event acp.Event) error {
 	return err
 }
 
+func prepareEventStream(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate, no-transform")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+}
+
+func clearEventStreamWriteDeadline(w http.ResponseWriter) error {
+	controller := http.NewResponseController(w)
+	if err := controller.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+	return nil
+}
+
 func agentSessionPath(path string) (string, string) {
 	trimmed := strings.TrimPrefix(path, "/agent/api/sessions/")
 	parts := strings.Split(trimmed, "/")
@@ -257,4 +322,17 @@ func agentSessionPath(path string) (string, string) {
 		return sessionID, ""
 	}
 	return sessionID, "/" + strings.Join(parts[1:], "/")
+}
+
+func agentProviderPath(path string) (string, string) {
+	trimmed := strings.TrimPrefix(path, "/agent/api/providers/")
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
+		return "", ""
+	}
+	providerKey := parts[0]
+	if len(parts) == 1 {
+		return providerKey, ""
+	}
+	return providerKey, "/" + strings.Join(parts[1:], "/")
 }

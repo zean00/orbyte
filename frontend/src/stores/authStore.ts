@@ -100,7 +100,7 @@ export const useAuthStore = create<AuthState>()(
             'X-CSRF-Token': getCookie('orbyte_csrf'),
           },
         })
-        if (!response.ok) {
+        if (!response.ok && response.status !== 401) {
           throw new Error(`Logout failed: ${response.status}`)
         }
         set({

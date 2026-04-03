@@ -45,8 +45,21 @@ export function Header() {
   } = useShellStore();
   const { setLocale: setPreferredLocale } = usePreferencesStore();
   const { darkMode, toggleDarkMode } = useDarkMode();
-  const { user, logout } = useAuth();
+  const { user, logout, clearAuth } = useAuth();
   const [command, setCommand] = useState("");
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      clearAuth();
+    }
+    if (shellKind === "admin") {
+      window.location.href = "/ui/login";
+      return;
+    }
+    navigate("/login", { replace: true });
+  };
 
   const commandOptions = useMemo(() => {
     const unique = new Map<string, { label: string; path: string }>();
@@ -285,14 +298,7 @@ export function Header() {
             <span className="max-w-32 truncate text-sm font-medium text-body">{user.name}</span>
             <button
               onClick={() => {
-                void (async () => {
-                  await logout();
-                  if (shellKind === "admin") {
-                    window.location.href = "/ui/login";
-                    return;
-                  }
-                  navigate("/login", { replace: true });
-                })();
+                void handleLogout();
               }}
               className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-warn"
               title="Log out"
@@ -328,14 +334,7 @@ export function Header() {
         {user && (
           <button
             onClick={() => {
-              void (async () => {
-                await logout();
-                if (shellKind === "admin") {
-                  window.location.href = "/ui/login";
-                  return;
-                }
-                navigate("/login", { replace: true });
-              })();
+              void handleLogout();
             }}
             className="rounded-xl p-2 text-muted transition-colors hover:bg-shell hover:text-warn lg:hidden"
             title="Log out"

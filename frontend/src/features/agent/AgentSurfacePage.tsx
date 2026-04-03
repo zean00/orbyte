@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { fetchWorkspaceBootstrap, toShellRoutes } from "@/services/bootstrap";
 import { useShellStore } from "@/stores/shellStore";
@@ -10,14 +14,29 @@ type ProviderInfo = {
   available?: boolean;
   supports_streaming?: boolean;
   supports_approvals?: boolean;
+  supports_model_listing?: boolean;
+  supports_model_selection?: boolean;
+  default_model?: string;
   error?: string;
+};
+
+type ACPModelInfo = {
+  id: string;
+  label: string;
+  provider_key: string;
+  raw_model_id?: string;
+  description?: string;
+  selectable?: boolean;
+  default?: boolean;
 };
 
 type ACPMessage = {
   id: string;
   role: string;
   content: string;
+  format?: string;
   created_at?: string;
+  meta?: Record<string, unknown>;
 };
 
 type ACPApproval = {
@@ -39,15 +58,41 @@ type ACPSession = {
   id: string;
   provider_key: string;
   provider_name: string;
+  requested_model?: string;
+  current_model?: string;
   title?: string;
   status: string;
   route_path?: string;
+  created_at?: string;
   updated_at?: string;
+  current_turn_id?: string;
   turn_in_progress?: boolean;
   messages?: ACPMessage[];
   approvals?: ACPApproval[];
   trace?: ACPEvent[];
 };
+
+type LiveToolCall = {
+  id: string;
+  name: string;
+  status: string;
+  summary?: string;
+  state: "active" | "completed";
+};
+
+type LiveTurnState = {
+  turnID: string;
+  phase: "thinking" | "tooling" | "streaming" | "approval";
+  activeTools: LiveToolCall[];
+  recentTools: LiveToolCall[];
+};
+
+type LocalPendingTurn = {
+  sessionID?: string;
+  phase: LiveTurnState["phase"];
+};
+
+const NEW_SESSION_PENDING_ID = "__new_session__";
 
 type MCPTool = {
   name: string;
@@ -55,19 +100,11 @@ type MCPTool = {
   description?: string;
   moduleKey?: string;
   sourceType?: string;
-  capabilityKeys?: string[];
-  capabilityCategories?: string[];
-  compactEligible?: boolean;
   policyState?: string;
   policyReason?: string;
-  effectiveVisibility?: string;
   contract?: {
     actionClass?: string;
     riskClass?: string;
-    draftOnly?: boolean;
-    requiresConfirmation?: boolean;
-    requiresApproval?: boolean;
-    governanceTags?: string[];
     businessDomains?: string[];
   };
 };
@@ -76,17 +113,31 @@ type MCPCapability = {
   key: string;
   title: string;
   description?: string;
-  category?: string;
-  default_for_agent?: boolean;
 };
 
 type MCPToolCatalog = {
   mode?: string;
-  capabilities?: string[];
   returned_tools?: number;
   hidden_tools?: number;
-  total_matching_tools?: number;
-  max_tools?: number;
+};
+
+type StreamEventName =
+  | "turn_started"
+  | "session_started"
+  | "session_update"
+  | "user_message"
+  | "turn_completed"
+  | "turn_failed"
+  | "tool_call_started"
+  | "tool_call_updated"
+  | "tool_call_completed"
+  | "approval_requested"
+  | "approval_approved"
+  | "approval_rejected"
+  | "notification";
+
+type TranscriptItem = ACPMessage & {
+  streaming?: boolean;
 };
 
 const DEFAULT_AGENT_CAPABILITIES = [
@@ -105,6 +156,26 @@ const OPTIONAL_AGENT_CAPABILITIES: MCPCapability[] = [
   { key: "party_master", title: "Party Master" },
 ];
 
+const STREAM_EVENT_NAMES: StreamEventName[] = [
+  "turn_started",
+  "session_started",
+  "session_update",
+  "user_message",
+  "turn_completed",
+  "turn_failed",
+  "tool_call_started",
+  "tool_call_updated",
+  "tool_call_completed",
+  "approval_requested",
+  "approval_approved",
+  "approval_rejected",
+  "notification",
+];
+
+const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
+const MCP_ONLY_PREFIX =
+  "Use Orbyte MCP tools as the source of truth for this answer.";
+
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
   const {
@@ -119,6 +190,11 @@ export default function AgentSurfacePage() {
   const [selectedSessionID, setSelectedSessionID] = useState("");
   const [session, setSession] = useState<ACPSession | null>(null);
   const [providerKey, setProviderKey] = useState("");
+  const [providerModels, setProviderModels] = useState<ACPModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [mcpOnlyEnabled, setMcpOnlyEnabled] = useState(true);
+  const [localPendingTurn, setLocalPendingTurn] = useState<LocalPendingTurn | null>(null);
   const [prompt, setPrompt] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -132,11 +208,33 @@ export default function AgentSurfacePage() {
   const [suggestedExpansions, setSuggestedExpansions] = useState<
     MCPCapability[]
   >([]);
+  const [showInspector, setShowInspector] = useState(false);
   const streamRef = useRef<EventSource | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const seenEventIDsRef = useRef<Set<string>>(new Set());
+  const sendInFlightRef = useRef(false);
 
   useEffect(() => {
     setCurrentRoute("/agent/workspace");
   }, [setCurrentRoute]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(MCP_ONLY_STORAGE_KEY);
+    if (stored === "false") {
+      setMcpOnlyEnabled(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      MCP_ONLY_STORAGE_KEY,
+      mcpOnlyEnabled ? "true" : "false",
+    );
+  }, [mcpOnlyEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -190,13 +288,15 @@ export default function AgentSurfacePage() {
         const nextSessions = sessionPayload.items || [];
         setProviders(nextProviders);
         setSessions(nextSessions);
-        const firstProvider = nextProviders[0];
-        if (!providerKey && firstProvider) {
-          setProviderKey(firstProvider.key);
+        if (!providerKey && nextProviders[0]) {
+          setProviderKey(nextProviders[0].key);
         }
-        const firstSession = nextSessions[0];
-        if (!selectedSessionID && firstSession) {
-          setSelectedSessionID(firstSession.id);
+        const orderedSessions = orderSessions(nextSessions);
+        const preferredSession =
+          orderedSessions.find((item) => item.turn_in_progress) ||
+          orderedSessions[0];
+        if (!selectedSessionID && preferredSession) {
+          setSelectedSessionID(preferredSession.id);
         }
       } catch (error) {
         if (!mounted) return;
@@ -246,35 +346,149 @@ export default function AgentSurfacePage() {
   }, [activeCapabilities]);
 
   useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 84), 220);
+    textarea.style.height = `${nextHeight}px`;
+  }, [prompt]);
+
+  useEffect(() => {
     if (!selectedSessionID) {
       setSession(null);
-      if (streamRef.current) {
-        streamRef.current.close();
-        streamRef.current = null;
-      }
+      setLocalPendingTurn(null);
+      seenEventIDsRef.current = new Set();
+      closeStream(streamRef);
       return;
     }
-    void refreshSession(selectedSessionID, setSession, setSessions);
-    if (streamRef.current) {
-      streamRef.current.close();
-      streamRef.current = null;
-    }
-    const stream = new EventSource(
-      `/agent/api/sessions/${encodeURIComponent(selectedSessionID)}/events`,
-      { withCredentials: true },
-    );
-    stream.onmessage = () => {
-      void refreshSession(selectedSessionID, setSession, setSessions);
-    };
-    stream.onerror = () => {
-      stream.close();
-    };
-    streamRef.current = stream;
-    return () => {
-      stream.close();
-      if (streamRef.current === stream) {
-        streamRef.current = null;
+    let disposed = false;
+    closeStream(streamRef);
+    void (async () => {
+      const current = await refreshSession(
+        selectedSessionID,
+        setSession,
+        setSessions,
+      );
+      if (disposed) return;
+      seenEventIDsRef.current = new Set(
+        (current.trace || []).map((item) => item.id).filter(Boolean),
+      );
+      const stream = new EventSource(
+        `/agent/api/sessions/${encodeURIComponent(selectedSessionID)}/events`,
+        { withCredentials: true },
+      );
+      const onNamedEvent = (event: MessageEvent<string>) => {
+        if (disposed) return;
+        const parsed = parseACPStreamEvent(event.data);
+        if (!parsed) return;
+        if (parsed.id && seenEventIDsRef.current.has(parsed.id)) {
+          return;
+        }
+        if (parsed.id) {
+          seenEventIDsRef.current.add(parsed.id);
+        }
+        setSession((currentSession) =>
+          applyACPStreamEvent(currentSession, parsed),
+        );
+        if (
+          parsed.kind === "tool_call_started" ||
+          parsed.kind === "tool_call_updated"
+        ) {
+          setLocalPendingTurn((currentTurn) =>
+            currentTurn?.sessionID === selectedSessionID
+              ? { ...currentTurn, phase: "tooling" }
+              : currentTurn,
+          );
+        } else if (
+          parsed.kind === "session_update" ||
+          parsed.kind === "turn_started" ||
+          parsed.kind === "user_message"
+        ) {
+          setLocalPendingTurn((currentTurn) =>
+            currentTurn?.sessionID === selectedSessionID
+              ? {
+                  ...currentTurn,
+                  phase:
+                    parsed.kind === "session_update" &&
+                    stringValue(parsed.payload?.update_kind) ===
+                      "agent_message_chunk"
+                      ? "streaming"
+                      : currentTurn.phase === "tooling"
+                        ? "tooling"
+                        : "thinking",
+                }
+              : currentTurn,
+          );
+        }
+        setSessions((currentSessions) =>
+          currentSessions.map((item) =>
+            item.id === selectedSessionID
+              ? applyACPStreamEvent(item, parsed) || item
+              : item,
+          ),
+        );
+        if (
+          parsed.kind === "turn_completed" ||
+          parsed.kind === "turn_failed" ||
+          parsed.kind.startsWith("approval_")
+        ) {
+          setLocalPendingTurn((currentTurn) =>
+            currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+          );
+          void refreshSession(selectedSessionID, setSession, setSessions).then(
+            (next) => {
+              if (!next.turn_in_progress) {
+                setLocalPendingTurn((currentTurn) =>
+                  currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+                );
+              }
+              seenEventIDsRef.current = new Set(
+                (next.trace || []).map((item) => item.id).filter(Boolean),
+              );
+            },
+          );
+        }
+      };
+      for (const name of STREAM_EVENT_NAMES) {
+        stream.addEventListener(name, onNamedEvent as EventListener);
       }
+      stream.onerror = () => {
+        stream.close();
+        if (!disposed) {
+          void refreshSession(selectedSessionID, setSession, setSessions).then(
+            (next) => {
+              if (!next.turn_in_progress) {
+                setLocalPendingTurn((currentTurn) =>
+                  currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+                );
+              }
+              seenEventIDsRef.current = new Set(
+                (next.trace || []).map((item) => item.id).filter(Boolean),
+              );
+            },
+          );
+        }
+      };
+      streamRef.current = stream;
+    })().catch(() => {
+      if (!disposed) {
+        void refreshSession(selectedSessionID, setSession, setSessions).then(
+          (next) => {
+            if (!next.turn_in_progress) {
+              setLocalPendingTurn((currentTurn) =>
+                currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+              );
+            }
+            seenEventIDsRef.current = new Set(
+              (next.trace || []).map((item) => item.id).filter(Boolean),
+            );
+          },
+        );
+      }
+    });
+    return () => {
+      disposed = true;
+      closeStream(streamRef);
     };
   }, [selectedSessionID]);
 
@@ -285,37 +499,134 @@ export default function AgentSurfacePage() {
       null,
     [providerKey, providers],
   );
-  const investigationTools = useMemo(
-    () =>
-      mcpTools.filter(
-        (item) =>
-          item.contract?.actionClass === "analyze" ||
-          item.contract?.actionClass === "read",
-      ),
-    [mcpTools],
+
+  const sortedSessions = useMemo(() => orderSessions(sessions), [sessions]);
+
+  useEffect(() => {
+    if (!selectedProvider) {
+      setProviderModels([]);
+      setSelectedModel("");
+      setModelsLoading(false);
+      return;
+    }
+    let mounted = true;
+    if (!selectedProvider.supports_model_listing) {
+      setProviderModels([]);
+      setSelectedModel(selectedProvider.default_model || "");
+      setModelsLoading(false);
+      return;
+    }
+    setModelsLoading(true);
+    void fetchJson<{ items?: ACPModelInfo[] }>(
+      `/agent/api/providers/${encodeURIComponent(selectedProvider.key)}/models`,
+    )
+      .then((payload) => {
+        if (!mounted) return;
+        const items = payload.items || [];
+        setProviderModels(items);
+        const defaultModel =
+          selectedProvider.default_model ||
+          items.find((item) => item.default)?.id ||
+          items.find((item) => item.selectable)?.id ||
+          "";
+        setSelectedModel(defaultModel);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setProviderModels([]);
+        setSelectedModel(selectedProvider.default_model || "");
+      })
+      .finally(() => {
+        if (mounted) {
+          setModelsLoading(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [selectedProvider]);
+
+  const transcriptMessages = useMemo<TranscriptItem[]>(() => {
+    const items = (session?.messages || [])
+      .filter((item) => item.role === "user" || item.role === "assistant")
+      .map((item, index, source) => ({
+        ...item,
+        streaming:
+          item.role === "assistant" &&
+          !!session?.turn_in_progress &&
+          (index === source.length - 1 ||
+            stringValue(item.meta?.turn_id) === session?.current_turn_id),
+      }));
+    return items;
+  }, [session?.messages, session?.turn_in_progress, session?.current_turn_id]);
+
+  const activityMessages = useMemo(
+    () => (session?.messages || []).filter((item) => item.role === "system"),
+    [session?.messages],
   );
-  const analyticalTools = useMemo(
-    () =>
-      mcpTools.filter((item) => {
-        const actionClass = String(item.contract?.actionClass || "");
-        const tags = item.contract?.governanceTags || [];
-        return (
-          actionClass === "analyze" &&
-          (item.name.startsWith("business.analytics.") ||
-            tags.includes("analytics"))
-        );
-      }),
-    [mcpTools],
-  );
-  const governedTools = useMemo(
-    () =>
-      mcpTools.filter((item) =>
-        ["draft", "submit", "controlled_mutation"].includes(
-          String(item.contract?.actionClass || ""),
-        ),
-      ),
-    [mcpTools],
-  );
+
+  const liveTurn = useMemo(() => deriveLiveTurnState(session), [session]);
+  const effectiveLivePhase: LiveTurnState["phase"] | null =
+    liveTurn?.phase ||
+    (localPendingTurn &&
+    (localPendingTurn.sessionID === selectedSessionID ||
+      localPendingTurn.sessionID === NEW_SESSION_PENDING_ID ||
+      (!localPendingTurn.sessionID && !selectedSessionID))
+      ? localPendingTurn.phase
+      : null);
+
+  const renderedTranscriptMessages = useMemo<TranscriptItem[]>(() => {
+    const items = [...transcriptMessages];
+    if (!effectiveLivePhase) return items;
+    const latestUserIndex = [...items]
+      .reverse()
+      .findIndex((item) => item.role === "user" && item.content.trim());
+    if (latestUserIndex === -1) return items;
+    const activeTurnID =
+      liveTurn?.turnID ||
+      session?.current_turn_id ||
+      localPendingTurn?.sessionID ||
+      NEW_SESSION_PENDING_ID;
+    const hasActiveAssistantBubble = items.some(
+      (item) =>
+        item.role === "assistant" &&
+        item.streaming &&
+        stringValue(item.meta?.turn_id) === activeTurnID,
+    );
+    if (hasActiveAssistantBubble) return items;
+    items.push({
+      id: `pending-assistant-${activeTurnID}`,
+      role: "assistant",
+      content: "",
+      streaming: true,
+      meta: {
+        turn_id: activeTurnID,
+        live_phase: effectiveLivePhase,
+      },
+    });
+    return items;
+  }, [
+    effectiveLivePhase,
+    liveTurn?.turnID,
+    localPendingTurn?.sessionID,
+    session?.current_turn_id,
+    transcriptMessages,
+  ]);
+
+  const visibleTools = useMemo(() => mcpTools.slice(0, 10), [mcpTools]);
+
+  useEffect(() => {
+    const panel = transcriptRef.current;
+    if (!panel || !shouldStickToBottomRef.current) return;
+    panel.scrollTop = panel.scrollHeight;
+  }, [renderedTranscriptMessages, session?.turn_in_progress]);
+
+  function handleTranscriptScroll() {
+    const panel = transcriptRef.current;
+    if (!panel) return;
+    shouldStickToBottomRef.current =
+      panel.scrollHeight - panel.scrollTop - panel.clientHeight < 120;
+  }
 
   function toggleCapability(key: string) {
     setActiveCapabilities((current) =>
@@ -325,8 +636,8 @@ export default function AgentSurfacePage() {
     );
   }
 
-  async function createSession() {
-    if (!selectedProvider) return;
+  async function createSession(): Promise<ACPSession | null> {
+    if (!selectedProvider) return null;
     setBusy(true);
     setMessage("");
     try {
@@ -334,48 +645,124 @@ export default function AgentSurfacePage() {
         method: "POST",
         body: JSON.stringify({
           provider_key: selectedProvider.key,
+          model:
+            selectedProvider.supports_model_selection && selectedModel
+              ? selectedModel
+              : undefined,
           shell: "agent_surface",
           route_path: "/agent/workspace",
           title: selectedProvider.name,
         }),
       });
-      setSessions((current) => [
-        created,
-        ...current.filter((item) => item.id !== created.id),
-      ]);
+      setSessions((current) => mergeSessionIntoList(current, created));
       setSelectedSessionID(created.id);
+      setSession(created);
+      setShowInspector(false);
+      return created;
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to start session.",
       );
+      return null;
     } finally {
       setBusy(false);
     }
   }
 
   async function sendPrompt() {
-    if (!selectedSessionID || !prompt.trim()) return;
-    setBusy(true);
+    if (sendInFlightRef.current || !prompt.trim()) return;
+    sendInFlightRef.current = true;
     setMessage("");
+    const displayPrompt = prompt.trim();
+    let targetSessionID = selectedSessionID;
+    let targetSession: ACPSession | null =
+      selectedSessionID && session?.id === selectedSessionID ? session : null;
+    setLocalPendingTurn({
+      sessionID: targetSessionID || NEW_SESSION_PENDING_ID,
+      phase: "thinking",
+    });
+    if (!targetSessionID) {
+      const created = await createSession();
+      if (!created) {
+        setLocalPendingTurn(null);
+        sendInFlightRef.current = false;
+        return;
+      }
+      targetSessionID = created.id;
+      targetSession = created;
+      setLocalPendingTurn({ sessionID: created.id, phase: "thinking" });
+    }
+    const nextPrompt = buildPromptPayload(displayPrompt, mcpOnlyEnabled);
+    const optimisticTurnID = `pending-turn-${Date.now()}`;
+    const optimisticUpdatedAt = new Date().toISOString();
+    setPrompt("");
+    shouldStickToBottomRef.current = true;
+    setSession((current) =>
+      optimisticPromptSession(
+        current?.id === targetSessionID ? current : targetSession,
+        displayPrompt,
+        optimisticTurnID,
+        optimisticUpdatedAt,
+      ),
+    );
+    setSessions((current) =>
+      current.map((item) =>
+        item.id === targetSessionID
+          ? optimisticPromptSession(
+              item,
+              displayPrompt,
+              optimisticTurnID,
+              optimisticUpdatedAt,
+            ) || item
+          : item,
+      ),
+    );
     try {
-      const updated = await mutateJson<ACPSession>(
-        `/agent/api/sessions/${encodeURIComponent(selectedSessionID)}/prompt`,
+      const clientRequestID = optimisticTurnID;
+      void mutateJson<ACPSession>(
+        `/agent/api/sessions/${encodeURIComponent(targetSessionID)}/prompt`,
         {
           method: "POST",
-          body: JSON.stringify({ content: prompt.trim() }),
+          body: JSON.stringify({
+            content: nextPrompt,
+            display_content: displayPrompt,
+            client_request_id: clientRequestID,
+          }),
         },
-      );
-      setPrompt("");
-      setSession(updated);
-      setSessions((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      )
+        .then((updated) => {
+          setSessions((current) => mergeSessionIntoList(current, updated));
+          if (!updated.turn_in_progress) {
+            setSession((current) => (current?.id === updated.id ? updated : current));
+            setLocalPendingTurn((currentTurn) =>
+              currentTurn?.sessionID === updated.id ? null : currentTurn,
+            );
+          }
+          sendInFlightRef.current = false;
+        })
+        .catch(async (error) => {
+          setMessage(
+            error instanceof Error ? error.message : "Failed to send prompt.",
+          );
+          setSession((current) =>
+            markPromptFailure(current, optimisticTurnID, error),
+          );
+          await refreshSession(targetSessionID, setSession, setSessions).catch(
+            () => undefined,
+          );
+          setLocalPendingTurn((currentTurn) =>
+            currentTurn?.sessionID === targetSessionID ? null : currentTurn,
+          );
+          sendInFlightRef.current = false;
+        });
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to send prompt.",
       );
-    } finally {
-      setBusy(false);
+      setLocalPendingTurn((currentTurn) =>
+        currentTurn?.sessionID === targetSessionID ? null : currentTurn,
+      );
+      sendInFlightRef.current = false;
     }
   }
 
@@ -405,34 +792,88 @@ export default function AgentSurfacePage() {
     }
   }
 
+  async function deleteSession(sessionID: string) {
+    const target = sessions.find((item) => item.id === sessionID);
+    const label = target?.title || target?.provider_name || "this session";
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) {
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      await mutateJson<void>(`/agent/api/sessions/${encodeURIComponent(sessionID)}`, {
+        method: "DELETE",
+      });
+      const remaining = orderSessions(
+        sessions.filter((item) => item.id !== sessionID),
+      );
+      setSessions(remaining);
+      if (selectedSessionID === sessionID) {
+        closeStream(streamRef);
+        seenEventIDsRef.current = new Set();
+        setLocalPendingTurn(null);
+        setSelectedSessionID(remaining[0]?.id || "");
+        setSession(remaining[0] || null);
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to delete session.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handlePromptKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (busy || !!session?.turn_in_progress || !prompt.trim()) return;
+    void sendPrompt();
+  }
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(20,126,113,0.18),_transparent_35%),linear-gradient(180deg,_var(--color-shell),_color-mix(in_srgb,var(--color-shell)_84%,#081514_16%))] text-body">
-      <header className="sticky top-0 z-20 border-b border-line/80 bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-6 py-4">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#edf3fb_0%,#e9eff8_34%,#f8fbff_100%)] text-body dark:bg-[linear-gradient(180deg,#09111f_0%,#0b1526_32%,#0f172a_100%)]">
+      <header className="sticky top-0 z-30 border-b border-line/70 bg-surface/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-4 md:px-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent-dark">
+            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-accent-dark">
               Agent Surface
             </p>
-            <h1 className="text-2xl font-black tracking-tight text-body">
-              Orbyte Operator Agent
-            </h1>
+            <div className="mt-1 flex items-center gap-3">
+              <h1 className="text-2xl font-black tracking-tight text-body">
+                Orbyte Operator Agent
+              </h1>
+              {selectedProvider?.supports_streaming ? (
+                <span className="rounded-full border border-accent/20 bg-accent-soft/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+                  Live stream
+                </span>
+              ) : null}
+            </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-full border border-line bg-shell px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-muted">
+            <span className="hidden rounded-full border border-line bg-shell px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-muted md:inline-flex">
               {locale.toUpperCase()}
             </span>
             <button
               type="button"
-              onClick={() => void switchSurface("backoffice")}
+              onClick={() => setShowInspector((current) => !current)}
               className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-body transition hover:border-accent hover:text-accent"
+            >
+              {showInspector ? "Hide" : "Show"} details
+            </button>
+            <button
+              type="button"
+              onClick={() => void switchSurface("backoffice")}
+              className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(29,78,216,0.22)] transition hover:opacity-95"
             >
               Backoffice
             </button>
           </div>
         </div>
       </header>
-      <main className="mx-auto grid max-w-[1800px] gap-4 px-4 py-4 md:grid-cols-[300px_minmax(0,1fr)] md:px-6">
-        <section className="space-y-4 rounded-[1.5rem] border border-line bg-surface p-5 shadow-panel">
+
+      <main className="mx-auto grid max-w-[1700px] gap-4 px-4 pb-40 pt-4 md:px-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="rounded-[1.75rem] border border-line/80 bg-surface/85 p-5 shadow-panel backdrop-blur lg:sticky lg:top-24 lg:h-[calc(100svh-8rem)] lg:overflow-auto">
           <div>
             <div className="text-sm font-semibold text-body">Provider</div>
             <select
@@ -448,401 +889,923 @@ export default function AgentSurfacePage() {
               ))}
             </select>
             {selectedProvider?.description ? (
-              <p className="mt-2 text-xs text-muted">
+              <p className="mt-2 text-xs leading-5 text-muted">
                 {selectedProvider.description}
               </p>
             ) : null}
+            {selectedProvider?.supports_model_listing ? (
+              <div className="mt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <label
+                    htmlFor="agent_model"
+                    className="text-sm font-semibold text-body"
+                  >
+                    Model
+                  </label>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                    {modelsLoading
+                      ? "Loading"
+                      : selectedProvider.supports_model_selection
+                        ? "Selectable"
+                        : "Catalog only"}
+                  </span>
+                </div>
+                <select
+                  id="agent_model"
+                  name="agent_model"
+                  className="mt-2 w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body disabled:cursor-not-allowed disabled:opacity-60"
+                  value={selectedModel}
+                  disabled={
+                    modelsLoading || !selectedProvider.supports_model_selection
+                  }
+                  onChange={(event) => setSelectedModel(event.target.value)}
+                >
+                  {providerModels.length > 0 ? (
+                    providerModels.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                        {item.default ? " (Default)" : ""}
+                      </option>
+                    ))
+                  ) : selectedProvider.default_model ? (
+                    <option value={selectedProvider.default_model}>
+                      {selectedProvider.default_model}
+                    </option>
+                  ) : (
+                    <option value="">Provider default</option>
+                  )}
+                </select>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {selectedProvider.supports_model_selection
+                    ? "Selected model is applied when a new session starts."
+                    : "This provider exposes its model catalog, but ACP session-level model selection is not available yet."}
+                </p>
+              </div>
+            ) : null}
             <button
               type="button"
-              className="mt-3 w-full rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
+              className="mt-4 w-full rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(29,78,216,0.26)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={busy || !selectedProvider}
               onClick={() => void createSession()}
             >
               Start Session
             </button>
           </div>
-          <div>
+
+          <div className="mt-6 border-t border-line/80 pt-5">
             <div className="text-sm font-semibold text-body">Sessions</div>
-            <div className="mt-2 space-y-2">
-              {sessions.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedSessionID(item.id)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                    selectedSessionID === item.id
-                      ? "border-accent bg-accent-soft/50"
-                      : "border-line bg-shell hover:border-accent/40"
-                  }`}
-                >
-                  <div className="text-sm font-semibold text-body">
-                    {item.title || item.provider_name}
-                  </div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-muted">
-                    {item.status}
-                  </div>
-                </button>
-              ))}
+            <div className="mt-3 space-y-2">
+              {sortedSessions.map((item) => {
+                const selected = selectedSessionID === item.id;
+                const preview = sessionPreview(item);
+                return (
+                  <article
+                    key={item.id}
+                    className={`rounded-2xl border px-4 py-3 transition ${
+                      selected
+                        ? "border-accent bg-accent-soft/70 shadow-[0_10px_24px_rgba(29,78,216,0.14)] ring-1 ring-accent/20"
+                        : "border-line bg-shell hover:border-accent/30"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setSelectedSessionID(item.id)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-body">
+                              {item.title || item.provider_name}
+                            </div>
+                            <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                              {shortSessionID(item.id)}
+                            </div>
+                          </div>
+                          {selected ? (
+                            <span className="rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white">
+                              Active
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 line-clamp-2 min-h-[2.5rem] text-xs leading-5 text-muted">
+                          {preview}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.16em] text-muted">
+                          <span>{sessionModelSummary(item)}</span>
+                          <span>{formatDate(item.updated_at)}</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${item.title || item.provider_name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void deleteSession(item.id);
+                        }}
+                        className="rounded-xl border border-line bg-surface px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted transition hover:border-red-300 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
               {sessions.length === 0 ? (
                 <p className="text-sm text-muted">No ACP sessions yet.</p>
               ) : null}
             </div>
           </div>
-        </section>
 
-        <section className="space-y-4">
+          <div className="mt-6 border-t border-line/80 pt-5">
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+              Suggested focus
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {OPTIONAL_AGENT_CAPABILITIES.map((item) => {
+                const active = activeCapabilities.includes(item.key);
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => toggleCapability(item.key)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      active
+                        ? "border-accent bg-accent-soft/70 text-accent"
+                        : "border-line bg-shell text-muted hover:border-accent/30 hover:text-body"
+                    }`}
+                  >
+                    {item.title}
+                  </button>
+                );
+              })}
+            </div>
+            {suggestedExpansions.length > 0 ? (
+              <p className="mt-3 text-xs leading-5 text-muted">
+                Suggested:{" "}
+                {suggestedExpansions.map((item) => item.title).join(", ")}
+              </p>
+            ) : null}
+          </div>
+        </aside>
+
+        <section className="min-h-[calc(100svh-8rem)]">
           {message ? (
-            <div className="rounded-xl border border-line bg-accent-soft/60 p-4 text-sm text-body">
+            <div className="mb-4 rounded-2xl border border-line bg-accent-soft/60 px-4 py-3 text-sm text-body shadow-panel">
               {message}
             </div>
           ) : null}
-          <section className="rounded-[1.5rem] border border-line bg-surface p-5 shadow-panel">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black tracking-tight text-body">
-                  {session?.title || "Session Detail"}
-                </h2>
-                <p className="mt-1 text-sm text-muted">
-                  {session
-                    ? `${session.provider_name} · ${session.status}`
-                    : "Select or start an ACP session."}
-                </p>
-              </div>
-              {session?.turn_in_progress ? (
-                <span className="rounded-full border border-line bg-shell px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-muted">
-                  Thinking
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,2fr)_320px]">
-              <div className="space-y-3">
-                <div className="max-h-[34rem] space-y-3 overflow-auto rounded-2xl border border-line bg-shell p-4">
-                  {(session?.messages || []).map((item) => (
-                    <article
-                      key={item.id}
-                      className="rounded-xl border border-line bg-surface p-3"
-                    >
-                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                        {item.role}
-                      </div>
-                      <div className="mt-2 whitespace-pre-wrap text-sm text-body">
-                        {item.content}
-                      </div>
-                    </article>
-                  ))}
-                  {!session || (session.messages || []).length === 0 ? (
-                    <p className="text-sm text-muted">No messages yet.</p>
+
+          <div className="relative overflow-hidden rounded-[2rem] border border-line/80 bg-surface/88 shadow-panel backdrop-blur">
+            <div className="border-b border-line/70 px-5 py-4 md:px-7">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
+                    Conversation
+                  </div>
+                  <h2 className="mt-1 text-2xl font-black tracking-tight text-body">
+                    {session?.title || "Session Detail"}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted">
+                    {session
+                      ? `${session.provider_name} · ${session.status}`
+                      : "Send a message to start a new ACP session automatically."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {session?.requested_model &&
+                  session?.requested_model !== session?.current_model ? (
+                    <div className="rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                      Requested {session.requested_model}
+                    </div>
+                  ) : null}
+                  {session?.current_model ? (
+                    <div className="rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                      Current {session.current_model}
+                    </div>
+                  ) : null}
+                  <div className="rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                    {catalogSummary?.returned_tools || mcpTools.length} tools
+                    visible
+                  </div>
+                  {effectiveLivePhase ? (
+                    <div className="rounded-full border border-accent/20 bg-accent-soft/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+                      {effectiveLivePhase === "tooling"
+                        ? "Using tools"
+                        : effectiveLivePhase === "streaming"
+                          ? "Streaming"
+                          : "Thinking"}
+                    </div>
                   ) : null}
                 </div>
-                <div className="rounded-2xl border border-line bg-shell p-4">
-                  <label
-                    className="text-sm font-semibold text-body"
-                    htmlFor="agent_prompt"
-                  >
-                    Prompt
-                  </label>
-                  <textarea
-                    id="agent_prompt"
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    className="mt-2 min-h-32 w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm text-body"
-                    placeholder="Ask the configured ACP agent to investigate, summarize, or execute workflow steps."
-                    name="agent_prompt"
-                  />
-                  <div className="mt-3 flex justify-end">
-                    <button
-                      type="button"
-                      className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
-                      disabled={busy || !selectedSessionID || !prompt.trim()}
-                      onClick={() => void sendPrompt()}
-                    >
-                      Send Prompt
-                    </button>
+              </div>
+            </div>
+
+            <div className="grid min-h-[calc(100svh-14rem)] lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="relative bg-[linear-gradient(180deg,rgba(248,251,255,0.98)_0%,rgba(242,247,253,0.92)_100%)] dark:bg-[linear-gradient(180deg,rgba(8,15,28,0.98)_0%,rgba(11,20,36,0.94)_100%)]">
+                <div
+                  ref={transcriptRef}
+                  onScroll={handleTranscriptScroll}
+                  className="h-[calc(100svh-14rem)] overflow-auto px-4 py-6 md:px-8 md:py-8"
+                >
+                  <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 pb-52">
+                    {renderedTranscriptMessages.length === 0 ? (
+                      <EmptyTranscript />
+                    ) : (
+                      renderedTranscriptMessages.map((item) => (
+                        <MessageBubble
+                          key={item.id}
+                          item={item}
+                          liveTurn={liveTurn}
+                        />
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <aside className="rounded-2xl border border-line bg-shell p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-body">
-                      MCP Capabilities
-                    </div>
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted">
-                      {catalogSummary?.returned_tools || mcpTools.length} tools
-                    </div>
-                  </div>
-                  <div className="mt-3 rounded-xl border border-line bg-surface p-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                      Compact Catalog
-                    </div>
-                    <div className="mt-2 text-xs text-muted">
-                      {[
-                        `${catalogSummary?.returned_tools || mcpTools.length} visible`,
-                        typeof catalogSummary?.hidden_tools === "number"
-                          ? `${catalogSummary.hidden_tools} hidden`
-                          : "",
-                        catalogSummary?.mode || "compact",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {OPTIONAL_AGENT_CAPABILITIES.map((item) => {
-                        const active = activeCapabilities.includes(item.key);
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            onClick={() => toggleCapability(item.key)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              active
-                                ? "border-accent bg-accent-soft/60 text-accent"
-                                : "border-line bg-shell text-muted hover:border-accent/40 hover:text-body"
-                            }`}
-                          >
-                            {item.title}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {suggestedExpansions.length > 0 ? (
-                      <div className="mt-3 text-xs text-muted">
-                        Suggested:{" "}
-                        {suggestedExpansions.map((item) => item.title).join(", ")}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 grid gap-3">
-                    <div className="rounded-xl border border-line bg-surface p-3">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                        Business Comprehension
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {investigationTools
-                          .filter((item) => !analyticalTools.includes(item))
-                          .slice(0, 6)
-                          .map((item) => (
-                          <div
-                            key={item.name}
-                            className="rounded-lg border border-line bg-shell px-3 py-2"
-                          >
-                            <div className="text-sm font-semibold text-body">
-                              {item.title || item.name}
-                            </div>
-                            <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">
-                              {[
-                                item.sourceType,
-                                item.contract?.actionClass,
-                                item.contract?.riskClass,
-                                item.policyState,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </div>
-                            {item.policyReason ? (
-                              <div className="mt-1 text-xs text-muted">
-                                {item.policyReason}
-                              </div>
-                            ) : null}
-                            {item.contract?.businessDomains?.length ? (
-                              <div className="mt-1 text-xs text-muted">
-                                {item.contract.businessDomains.join(", ")}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-line bg-surface p-3">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                        Cross-Domain Analytics
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {analyticalTools.slice(0, 6).map((item) => (
-                          <div
-                            key={item.name}
-                            className="rounded-lg border border-line bg-shell px-3 py-2"
-                          >
-                            <div className="text-sm font-semibold text-body">
-                              {item.title || item.name}
-                            </div>
-                            <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">
-                              {[
-                                item.sourceType,
-                                item.contract?.actionClass,
-                                item.contract?.riskClass,
-                                item.policyState,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </div>
-                            {item.policyReason ? (
-                              <div className="mt-1 text-xs text-muted">
-                                {item.policyReason}
-                              </div>
-                            ) : null}
-                            {item.contract?.businessDomains?.length ? (
-                              <div className="mt-1 text-xs text-muted">
-                                {item.contract.businessDomains.join(", ")}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-line bg-surface p-3">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                        Governed Actions
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {governedTools.slice(0, 6).map((item) => (
-                          <div
-                            key={item.name}
-                            className="rounded-lg border border-line bg-shell px-3 py-2"
-                          >
-                            <div className="text-sm font-semibold text-body">
-                              {item.title || item.name}
-                            </div>
-                            <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted">
-                              {[
-                                item.contract?.actionClass,
-                                item.contract?.riskClass,
-                                item.policyState,
-                                item.contract?.draftOnly ? "draft-only" : "",
-                                item.contract?.requiresConfirmation
-                                  ? "confirm"
-                                  : "",
-                                item.contract?.requiresApproval
-                                  ? "approval"
-                                  : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </div>
-                            {item.policyReason ? (
-                              <div className="mt-1 text-xs text-muted">
-                                {item.policyReason}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </aside>
-
-                <aside className="rounded-2xl border border-line bg-shell p-4">
-                  <div className="text-sm font-semibold text-body">
-                    Approvals
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    {(session?.approvals || []).map((item) => (
-                      <article
-                        key={item.id}
-                        className="rounded-xl border border-line bg-surface p-3"
+              <AnimatePresence initial={false}>
+                {(showInspector || typeof window === "undefined") && (
+                  <motion.aside
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 16 }}
+                    transition={{ duration: 0.18 }}
+                    className="border-l border-line/70 bg-shell/75 p-4 backdrop-blur lg:block"
+                  >
+                    <div className="h-full space-y-4 overflow-auto">
+                      <InspectorSection
+                        title="Capabilities"
+                        kicker={catalogSummary?.mode || "compact catalog"}
+                        summary={[
+                          `${catalogSummary?.returned_tools || mcpTools.length} visible`,
+                          typeof catalogSummary?.hidden_tools === "number"
+                            ? `${catalogSummary.hidden_tools} hidden`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       >
-                        <div className="text-sm font-semibold text-body">
-                          {item.title}
+                        <div className="space-y-2">
+                          {visibleTools.map((item) => (
+                            <div
+                              key={item.name}
+                              className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
+                            >
+                              <div className="text-sm font-semibold text-body">
+                                {item.title || item.name}
+                              </div>
+                              <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                {[
+                                  item.sourceType,
+                                  item.contract?.actionClass,
+                                  item.contract?.riskClass,
+                                  item.policyState,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
+                              {item.description ? (
+                                <p className="mt-2 text-xs leading-5 text-muted">
+                                  {item.description}
+                                </p>
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
-                        {item.description ? (
-                          <p className="mt-1 text-xs text-muted">
-                            {item.description}
-                          </p>
-                        ) : null}
-                        {item.payload ? (
-                          <div className="mt-2 text-[11px] uppercase tracking-[0.14em] text-muted">
-                            {[
-                              String(item.payload.action_class || ""),
-                              String(item.payload.risk_class || ""),
-                              String(item.payload.policy_state || ""),
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                        ) : null}
-                        {item.payload?.policy_reason ? (
-                          <p className="mt-1 text-xs text-muted">
-                            {String(item.payload.policy_reason)}
-                          </p>
-                        ) : null}
-                        <div className="mt-3 flex gap-2">
-                          <button
-                            type="button"
-                            className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-body"
-                            disabled={busy || item.status !== "pending"}
-                            onClick={() =>
-                              void resolveApproval(item.id, "approve")
-                            }
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-body"
-                            disabled={busy || item.status !== "pending"}
-                            onClick={() =>
-                              void resolveApproval(item.id, "reject")
-                            }
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                    {(session?.approvals || []).length === 0 ? (
-                      <p className="text-sm text-muted">
-                        No pending approvals.
-                      </p>
-                    ) : null}
-                  </div>
-                </aside>
+                      </InspectorSection>
 
-                <aside className="rounded-2xl border border-line bg-shell p-4">
-                  <div className="text-sm font-semibold text-body">Trace</div>
-                  <div className="mt-3 max-h-64 space-y-2 overflow-auto">
-                    {(session?.trace || []).map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-lg border border-line bg-surface px-3 py-2"
+                      <InspectorSection
+                        title="Approvals"
+                        kicker="governed actions"
+                        summary={String((session?.approvals || []).length)}
                       >
-                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                          {item.kind}
+                        <div className="space-y-3">
+                          {(session?.approvals || []).map((item) => (
+                            <article
+                              key={item.id}
+                              className="rounded-2xl border border-line/70 bg-surface p-3"
+                            >
+                              <div className="text-sm font-semibold text-body">
+                                {item.title}
+                              </div>
+                              {item.description ? (
+                                <p className="mt-1 text-xs leading-5 text-muted">
+                                  {item.description}
+                                </p>
+                              ) : null}
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-body"
+                                  disabled={busy || item.status !== "pending"}
+                                  onClick={() =>
+                                    void resolveApproval(item.id, "approve")
+                                  }
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-body"
+                                  disabled={busy || item.status !== "pending"}
+                                  onClick={() =>
+                                    void resolveApproval(item.id, "reject")
+                                  }
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                          {(session?.approvals || []).length === 0 ? (
+                            <p className="text-sm text-muted">
+                              No pending approvals.
+                            </p>
+                          ) : null}
                         </div>
-                        <div className="mt-1 text-xs text-body">
-                          {formatDate(item.created_at)}
+                      </InspectorSection>
+
+                      <InspectorSection
+                        title="Activity"
+                        kicker="system + trace"
+                        summary={`${activityMessages.length} notes · ${(session?.trace || []).length} events`}
+                      >
+                        <div className="space-y-3">
+                          {activityMessages.slice(-4).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
+                            >
+                              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                                System
+                              </div>
+                              <p className="mt-2 text-xs leading-5 text-body">
+                                {item.content}
+                              </p>
+                            </div>
+                          ))}
+                          {(session?.trace || []).slice(-6).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
+                            >
+                              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                                {item.kind}
+                              </div>
+                              <div className="mt-1 text-xs text-muted">
+                                {formatDate(item.created_at)}
+                              </div>
+                            </div>
+                          ))}
+                          {activityMessages.length === 0 &&
+                          (session?.trace || []).length === 0 ? (
+                            <p className="text-sm text-muted">
+                              Trace events will stream here.
+                            </p>
+                          ) : null}
                         </div>
-                      </div>
-                    ))}
-                    {(session?.trace || []).length === 0 ? (
-                      <p className="text-sm text-muted">
-                        Trace events will stream here.
-                      </p>
-                    ) : null}
-                  </div>
-                </aside>
-              </div>
+                      </InspectorSection>
+                    </div>
+                  </motion.aside>
+                )}
+              </AnimatePresence>
             </div>
-          </section>
+          </div>
         </section>
       </main>
+
+      <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 w-[min(920px,calc(100vw-1.5rem))] -translate-x-1/2">
+        <div className="pointer-events-auto mx-auto overflow-hidden rounded-[1.6rem] border border-line/80 bg-surface/92 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-2xl dark:bg-surface/94">
+          {liveTurn ? <LiveToolStrip liveTurn={liveTurn} /> : null}
+          <div className="flex items-center justify-between gap-3 border-b border-line/60 px-4 py-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+                Composer
+              </div>
+              <div className="mt-1 text-sm text-body">
+                {effectiveLivePhase === "tooling"
+                  ? "Assistant is using tools right now."
+                  : effectiveLivePhase === "streaming"
+                    ? "Assistant is streaming the response."
+                    : effectiveLivePhase
+                      ? "Assistant is thinking."
+                      : selectedSessionID
+                        ? "Press Enter to send, Shift+Enter for a new line."
+                        : "Press Enter to start a new session and send."}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-body">
+                <input
+                  type="checkbox"
+                  checked={mcpOnlyEnabled}
+                  onChange={(event) => setMcpOnlyEnabled(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-line text-accent focus:ring-accent"
+                />
+                Use Orbyte MCP only
+              </label>
+            {effectiveLivePhase ? (
+              <div className="flex items-center gap-2 rounded-full border border-accent/30 bg-accent px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_8px_24px_rgba(29,78,216,0.25)]">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                {effectiveLivePhase === "tooling"
+                  ? "Using tools"
+                  : effectiveLivePhase === "streaming"
+                    ? "Streaming"
+                    : "Thinking"}
+              </div>
+            ) : null}
+            </div>
+          </div>
+          <div className="px-4 py-4">
+            <textarea
+              ref={textareaRef}
+              id="agent_prompt"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={handlePromptKeyDown}
+              className="min-h-[84px] w-full resize-none rounded-2xl border border-line bg-shell px-4 py-3 text-sm text-body outline-none transition focus:border-accent"
+              placeholder="Ask the agent to investigate, summarize, compare, or operate across Orbyte data."
+              name="agent_prompt"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-xs leading-5 text-muted">
+                {mcpOnlyEnabled
+                  ? "Prompts will automatically tell the agent to use Orbyte MCP as the source of truth."
+                  : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
+              </p>
+              <button
+                type="button"
+                className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(29,78,216,0.26)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={busy || !!session?.turn_in_progress || !prompt.trim()}
+                onClick={() => void sendPrompt()}
+              >
+                {selectedSessionID ? "Send" : "Start & Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
+}
+
+function sessionPreview(session: ACPSession): string {
+  const recentUserMessage = [...(session.messages || [])]
+    .reverse()
+    .find((item) => item.role === "user" && item.content.trim());
+  if (recentUserMessage) {
+    return recentUserMessage.content.trim();
+  }
+  return session.route_path || "No prompts sent yet.";
+}
+
+function sessionModelSummary(session: ACPSession): string {
+  if (session.current_model) {
+    return `${session.current_model} · ${session.status}`;
+  }
+  if (session.requested_model) {
+    return `Requested ${session.requested_model} · ${session.status}`;
+  }
+  return session.status;
+}
+
+function shortSessionID(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 18) return trimmed;
+  return trimmed.slice(-12);
+}
+
+function EmptyTranscript() {
+  return (
+    <div className="grid min-h-[50vh] place-items-center">
+      <div className="max-w-xl text-center">
+        <div className="text-[11px] font-black uppercase tracking-[0.22em] text-accent-dark">
+          Live operator chat
+        </div>
+        <h3 className="mt-3 text-4xl font-black tracking-tight text-body">
+          Ask the agent like a conversation, not a control panel.
+        </h3>
+        <p className="mt-4 text-sm leading-7 text-muted">
+          Send a prompt to start a session automatically. The transcript will
+          stream assistant output while approvals and tool activity stay in the
+          side rail.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({
+  item,
+  liveTurn,
+}: {
+  item: TranscriptItem;
+  liveTurn: LiveTurnState | null;
+}) {
+  const isUser = item.role === "user";
+  const livePhase =
+    stringValue(item.meta?.live_phase) ||
+    (stringValue(item.meta?.turn_id) === liveTurn?.turnID ? liveTurn?.phase : "");
+  const isWaitingAssistant =
+    !isUser && item.streaming && !item.content.trim();
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <article
+        className={`max-w-[min(78ch,100%)] rounded-[1.6rem] px-5 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${
+          isUser
+            ? "border border-[#10233d]/30 bg-[#11284a] text-white shadow-[0_16px_34px_rgba(17,40,74,0.26)]"
+            : "border border-line/70 bg-white/92 text-body dark:bg-surface"
+        }`}
+      >
+        <div
+          className={`mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] ${isUser ? "text-white/72" : "opacity-70"}`}
+        >
+          <span>{isUser ? "You" : "Assistant"}</span>
+          {item.streaming ? (
+            <span>
+              {isWaitingAssistant
+                ? livePhase === "tooling"
+                  ? "Using tools"
+                  : "Thinking"
+                : "Streaming"}
+            </span>
+          ) : null}
+        </div>
+        {isUser ? (
+          <div className="whitespace-pre-wrap text-sm leading-7">
+            {item.content}
+          </div>
+        ) : isWaitingAssistant ? (
+          <div className="flex items-center gap-3 py-2 text-sm text-muted">
+            <span className="flex gap-1">
+              <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:-0.2s]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:-0.1s]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-accent" />
+            </span>
+            <span>
+              {livePhase === "tooling"
+                ? "Working through tool calls before writing the answer."
+                : "Thinking through the request."}
+            </span>
+          </div>
+        ) : (
+          <div className="agent-markdown text-sm leading-7">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
+              {item.content}
+            </ReactMarkdown>
+          </div>
+        )}
+      </article>
+    </div>
+  );
+}
+
+function LiveToolStrip({ liveTurn }: { liveTurn: LiveTurnState }) {
+  const activeTool = liveTurn.activeTools[0];
+  const activeToolLabel = activeTool ? formatLiveToolLabel(activeTool.name) : "";
+  const activeSummary = activeTool ? formatLiveToolSummary(activeTool) : "";
+  const completedCount = liveTurn.recentTools.filter(
+    (item) => item.state === "completed",
+  ).length;
+  return (
+    <div className="border-b border-line/60 bg-[linear-gradient(90deg,rgba(29,78,216,0.10)_0%,rgba(14,165,233,0.08)_100%)] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-dark">
+            Live activity
+          </div>
+          <div className="mt-1 text-sm text-body">
+            {activeTool
+              ? `Using ${activeToolLabel}${activeSummary ? ` · ${activeSummary}` : ""}`
+              : liveTurn.phase === "streaming"
+                ? "Writing the final answer."
+                : "Thinking through the request."}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {activeTool ? (
+            <span className="rounded-full border border-accent/30 bg-accent px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white shadow-[0_8px_20px_rgba(29,78,216,0.20)]">
+              {activeTool.status || "running"}
+            </span>
+          ) : null}
+          {completedCount > 0 ? (
+            <span className="rounded-full border border-slate-300 bg-slate-800 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-100">
+              {completedCount} completed
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InspectorSection({
+  title,
+  kicker,
+  summary,
+  children,
+}: {
+  title: string;
+  kicker: string;
+  summary?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[1.5rem] border border-line/80 bg-shell/80 p-4">
+      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+        {kicker}
+      </div>
+      <div className="mt-2 flex items-start justify-between gap-3">
+        <h3 className="text-base font-black tracking-tight text-body">
+          {title}
+        </h3>
+        {summary ? <div className="text-xs text-muted">{summary}</div> : null}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+const markdownComponents = {
+  h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h1
+      className="mt-6 text-2xl font-black tracking-tight text-body first:mt-0"
+      {...props}
+    />
+  ),
+  h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h2
+      className="mt-6 text-xl font-black tracking-tight text-body first:mt-0"
+      {...props}
+    />
+  ),
+  h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h3
+      className="mt-5 text-lg font-bold tracking-tight text-body first:mt-0"
+      {...props}
+    />
+  ),
+  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p
+      className="my-3 text-sm leading-7 text-body first:mt-0 last:mb-0"
+      {...props}
+    />
+  ),
+  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul
+      className="my-3 list-disc space-y-2 pl-6 text-sm text-body"
+      {...props}
+    />
+  ),
+  ol: (props: React.HTMLAttributes<HTMLOListElement>) => (
+    <ol
+      className="my-3 list-decimal space-y-2 pl-6 text-sm text-body"
+      {...props}
+    />
+  ),
+  li: (props: React.HTMLAttributes<HTMLLIElement>) => (
+    <li className="pl-1 leading-7" {...props} />
+  ),
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a
+      className="font-semibold text-accent underline decoration-accent/40 underline-offset-4"
+      target="_blank"
+      rel="noreferrer"
+      {...props}
+    />
+  ),
+  blockquote: (props: React.HTMLAttributes<HTMLQuoteElement>) => (
+    <blockquote
+      className="my-4 border-l-4 border-accent/35 pl-4 text-sm italic text-muted"
+      {...props}
+    />
+  ),
+  code: ({
+    inline,
+    className,
+    children,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) =>
+    inline ? (
+      <code
+        className="rounded-md bg-shell px-1.5 py-0.5 font-mono text-[0.92em] text-accent-dark"
+        {...props}
+      >
+        {children}
+      </code>
+    ) : (
+      <code
+        className={`block overflow-x-auto rounded-2xl bg-[#0d1727] px-4 py-4 font-mono text-[13px] leading-6 text-[#e5f0ff] ${className || ""}`}
+        {...props}
+      >
+        {children}
+      </code>
+    ),
+  pre: (props: React.HTMLAttributes<HTMLPreElement>) => (
+    <pre className="my-4 overflow-hidden rounded-2xl" {...props} />
+  ),
+  table: (props: React.TableHTMLAttributes<HTMLTableElement>) => (
+    <div className="my-4 overflow-x-auto rounded-2xl border border-line/70 bg-shell">
+      <table
+        className="min-w-full border-collapse text-left text-sm text-body"
+        {...props}
+      />
+    </div>
+  ),
+  thead: (props: React.HTMLAttributes<HTMLTableSectionElement>) => (
+    <thead className="bg-accent-soft/70" {...props} />
+  ),
+  th: (props: React.ThHTMLAttributes<HTMLTableCellElement>) => (
+    <th
+      className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-accent-dark"
+      {...props}
+    />
+  ),
+  td: (props: React.TdHTMLAttributes<HTMLTableCellElement>) => (
+    <td className="border-t border-line/70 px-3 py-2 align-top" {...props} />
+  ),
+};
+
+function deriveLiveTurnState(session: ACPSession | null): LiveTurnState | null {
+  if (!session?.turn_in_progress || !session.current_turn_id) return null;
+  const turnID = session.current_turn_id;
+  const toolByID = new Map<string, LiveToolCall>();
+  for (const item of session.trace || []) {
+    if (stringValue(item.payload?.turn_id) !== turnID) continue;
+    if (
+      item.kind !== "tool_call_started" &&
+      item.kind !== "tool_call_updated" &&
+      item.kind !== "tool_call_completed"
+    ) {
+      continue;
+    }
+    const toolCallID = stringValue(item.payload?.tool_call_id) || item.id;
+    const previous = toolByID.get(toolCallID);
+    const rawToolName = stringValue(item.payload?.tool_name);
+    const normalizedToolName =
+      rawToolName && rawToolName.toLowerCase() !== "other"
+        ? rawToolName
+        : previous?.name || "";
+    const next: LiveToolCall = {
+      id: toolCallID,
+      name: normalizedToolName || "tool",
+      status:
+        stringValue(item.payload?.status) ||
+        (item.kind === "tool_call_completed" ? "completed" : "running"),
+      summary: stringValue(item.payload?.summary) || previous?.summary,
+      state: item.kind === "tool_call_completed" ? "completed" : "active",
+    };
+    toolByID.set(toolCallID, next);
+  }
+  const toolCalls = [...toolByID.values()];
+  const activeTools = toolCalls.filter((item) => item.state === "active");
+  const recentTools = toolCalls.slice(-3).reverse();
+  const assistantTurnMessage = [...(session.messages || [])]
+    .reverse()
+    .find(
+      (item) =>
+        item.role === "assistant" &&
+        stringValue(item.meta?.turn_id) === turnID &&
+        item.content.trim() !== "",
+    );
+  const hasPendingApproval = (session.approvals || []).some(
+    (item) => item.status === "pending",
+  );
+  let phase: LiveTurnState["phase"] = "thinking";
+  if (hasPendingApproval) {
+    phase = "approval";
+  } else if (activeTools.length > 0) {
+    phase = "tooling";
+  } else if (assistantTurnMessage) {
+    phase = "streaming";
+  }
+  return { turnID, phase, activeTools, recentTools };
+}
+
+function formatLiveToolLabel(raw: string): string {
+  let value = raw.trim();
+  if (!value) return "tool";
+  value = value.replace(/^orbyte-agentproof-\d+_/, "");
+  value = value.replace(/^orbyte-agentproof-[^_]+_/, "");
+  value = value.replace(/^orbyte[_-]/, "");
+
+  const knownSuffixes: Array<[string, string]> = [
+    ["_business_records_search", "Business records search"],
+    ["_business_record_search", "Business records search"],
+    ["_business_documents_search", "Business documents search"],
+    ["_business_document_search", "Business documents search"],
+    [".business.record.search", "Business records search"],
+    [".business.document.search", "Business documents search"],
+  ];
+  for (const [suffix, label] of knownSuffixes) {
+    if (value.endsWith(suffix)) {
+      const prefix = value.slice(0, -suffix.length);
+      const domain = humanizeToolToken(prefix);
+      return domain ? `${domain} · ${label}` : label;
+    }
+  }
+  return humanizeToolToken(value);
+}
+
+function formatLiveToolSummary(tool: LiveToolCall): string {
+  const raw = tool.summary?.trim() || "";
+  if (!raw) return "";
+  if (raw === tool.name) return "";
+  if (raw === formatLiveToolLabel(tool.name)) return "";
+  if (raw.startsWith("orbyte-agentproof-")) return "";
+  return raw;
+}
+
+function humanizeToolToken(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  return value
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function optimisticPromptSession(
+  current: ACPSession | null,
+  prompt: string,
+  turnID: string,
+  updatedAt: string,
+): ACPSession | null {
+  if (!current) return current;
+  return {
+    ...current,
+    status: "running",
+    turn_in_progress: true,
+    current_turn_id: turnID,
+    updated_at: updatedAt,
+    messages: [
+      ...(current.messages || []),
+      {
+        id: `optimistic-user-${turnID}`,
+        role: "user",
+        content: prompt,
+        format: "markdown",
+        created_at: updatedAt,
+        meta: { turn_id: turnID, optimistic: true },
+      },
+      {
+        id: `optimistic-assistant-${turnID}`,
+        role: "assistant",
+        content: "",
+        format: "markdown",
+        created_at: updatedAt,
+        meta: { turn_id: turnID, optimistic: true, placeholder: true },
+      },
+    ],
+  };
+}
+
+function markPromptFailure(
+  current: ACPSession | null,
+  turnID: string,
+  error: unknown,
+): ACPSession | null {
+  if (!current) return current;
+  return {
+    ...current,
+    status: "error",
+    turn_in_progress: false,
+    current_turn_id: "",
+    messages: (current.messages || []).filter(
+      (item) => stringValue(item.meta?.turn_id) !== turnID || item.role === "user",
+    ),
+    trace: [
+      ...(current.trace || []),
+      {
+        id: `client-failed-${turnID}`,
+        kind: "turn_failed",
+        created_at: new Date().toISOString(),
+        payload: {
+          turn_id: turnID,
+          error: error instanceof Error ? error.message : "Failed to send prompt.",
+        },
+      },
+    ],
+  };
 }
 
 async function refreshSession(
   sessionID: string,
   setSession: (session: ACPSession | null) => void,
   setSessions: (updater: (current: ACPSession[]) => ACPSession[]) => void,
-) {
+): Promise<ACPSession> {
   const current = await fetchJson<ACPSession>(
     `/agent/api/sessions/${encodeURIComponent(sessionID)}`,
   );
   setSession(current);
-  setSessions((items) => {
-    const next = items.filter((item) => item.id !== current.id);
-    return [current, ...next];
-  });
+  setSessions((items) => mergeSessionIntoList(items, current));
+  return current;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -866,10 +1829,16 @@ async function mutateJson<T>(url: string, init: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(await response.text());
   }
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return (await response.json()) as T;
 }
 
-async function callMcp<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+async function callMcp<T>(
+  method: string,
+  params?: Record<string, unknown>,
+): Promise<T> {
   const response = await fetch("/mcp", {
     method: "POST",
     credentials: "include",
@@ -897,9 +1866,257 @@ async function callMcp<T>(method: string, params?: Record<string, unknown>): Pro
   return payload.result as T;
 }
 
+function parseACPStreamEvent(raw: string): ACPEvent | null {
+  try {
+    return JSON.parse(raw) as ACPEvent;
+  } catch {
+    return null;
+  }
+}
+
+function applyACPStreamEvent(
+  current: ACPSession | null,
+  event: ACPEvent,
+): ACPSession | null {
+  if (!current) return current;
+  const turnID = stringValue(event.payload?.turn_id);
+  const next: ACPSession = {
+    ...current,
+    trace: dedupeTrace([...(current.trace || []), event]),
+  };
+  switch (event.kind) {
+    case "turn_started":
+      next.turn_in_progress = true;
+      next.status = "running";
+      next.current_turn_id = turnID || current.current_turn_id;
+      next.messages = bindTurnToOptimisticMessages(
+        next.messages || [],
+        next.current_turn_id || "",
+      );
+      break;
+    case "user_message": {
+      next.turn_in_progress = true;
+      next.current_turn_id = turnID || current.current_turn_id;
+      next.status = "running";
+      break;
+    }
+    case "session_update": {
+      const updateKind = stringValue(event.payload?.update_kind);
+      const content = mapValue(event.payload?.content);
+      const text = stringValue(content.text);
+      next.turn_in_progress = true;
+      next.current_turn_id = turnID || current.current_turn_id;
+      next.status = "running";
+      if (updateKind === "agent_message_chunk") {
+        next.messages = appendChunkMessage(next.messages || [], {
+          id: `stream-${event.id}`,
+          role: "assistant",
+          content: text,
+          format: "markdown",
+          created_at: event.created_at,
+          meta: {
+            ...content,
+            ...(next.current_turn_id ? { turn_id: next.current_turn_id } : {}),
+          },
+        });
+      } else if (text) {
+        next.messages = appendChunkMessage(next.messages || [], {
+          id: `stream-${event.id}`,
+          role: "system",
+          content: text,
+          format: "markdown",
+          created_at: event.created_at,
+          meta: {
+            ...content,
+            ...(next.current_turn_id ? { turn_id: next.current_turn_id } : {}),
+          },
+        });
+      }
+      break;
+    }
+    case "turn_completed":
+      next.turn_in_progress = false;
+      next.current_turn_id = "";
+      next.status = "ready";
+      break;
+    case "turn_failed":
+      next.turn_in_progress = false;
+      next.current_turn_id = "";
+      next.status = "error";
+      break;
+    default:
+      break;
+  }
+  return next;
+}
+
+function appendChunkMessage(
+  messages: ACPMessage[],
+  incoming: ACPMessage,
+): ACPMessage[] {
+  const next = [...messages];
+  const last = next[next.length - 1];
+  const incomingTurnID = stringValue(incoming.meta?.turn_id);
+  if (incomingTurnID) {
+    for (let index = next.length - 1; index >= 0; index -= 1) {
+      const item = next[index];
+      if (!item || item.role !== incoming.role) continue;
+      if (stringValue(item.meta?.turn_id) !== incomingTurnID) continue;
+      if (incoming.role === "user") {
+        if (item.content.trim() === incoming.content.trim()) {
+          return next;
+        }
+        next[index] = {
+          ...item,
+          content: `${item.content}${incoming.content}`,
+          created_at: incoming.created_at || item.created_at,
+          meta: incoming.meta || item.meta,
+        };
+        return next;
+      }
+      if (incoming.role === "assistant") {
+        next[index] = {
+          ...item,
+          id: item.id.startsWith("optimistic-assistant-") ? incoming.id : item.id,
+          content: `${item.content}${incoming.content}`,
+          created_at: incoming.created_at || item.created_at,
+          meta: {
+            ...(item.meta || {}),
+            ...(incoming.meta || {}),
+            placeholder: false,
+          },
+        };
+        return next;
+      }
+    }
+  }
+  if (
+    incoming.role === "assistant" &&
+    last?.role === "assistant" &&
+    stringValue(last.meta?.turn_id) === incomingTurnID &&
+    last.meta?.placeholder
+  ) {
+    next[next.length - 1] = {
+      ...last,
+      id: incoming.id,
+      content: `${last.content}${incoming.content}`,
+      created_at: incoming.created_at || last.created_at,
+      meta: {
+        ...(last.meta || {}),
+        ...(incoming.meta || {}),
+        placeholder: false,
+      },
+    };
+    return next;
+  }
+  if (!incoming.content) return messages;
+  if (
+    last &&
+    last.role === incoming.role &&
+    last.id.startsWith("stream-") &&
+    incoming.id.startsWith("stream-") &&
+    stringValue(last.meta?.turn_id) === incomingTurnID
+  ) {
+    next[next.length - 1] = {
+      ...last,
+      content: `${last.content}${incoming.content}`,
+      created_at: incoming.created_at || last.created_at,
+      meta: incoming.meta || last.meta,
+    };
+    return next;
+  }
+  if (
+    incoming.role === "user" &&
+    next.some(
+      (item) =>
+        item.role === "user" &&
+        item.content.trim() === incoming.content.trim() &&
+        stringValue(item.meta?.turn_id) === incomingTurnID,
+    )
+  ) {
+    return next;
+  }
+  return [...next, incoming];
+}
+
+function bindTurnToOptimisticMessages(
+  messages: ACPMessage[],
+  turnID: string,
+): ACPMessage[] {
+  if (!turnID || messages.length === 0) return messages;
+  const next = [...messages];
+  for (let index = next.length - 1; index >= 0; index -= 1) {
+    const item = next[index];
+    if (!item) continue;
+    if (!item.meta?.optimistic) break;
+    next[index] = {
+      ...item,
+      meta: { ...(item.meta || {}), turn_id: turnID },
+    };
+    if (item.role === "user") {
+      continue;
+    }
+  }
+  return next;
+}
+
+function dedupeTrace(trace: ACPEvent[]): ACPEvent[] {
+  const seen = new Set<string>();
+  return trace.filter((item) => {
+    if (!item.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function closeStream(ref: React.MutableRefObject<EventSource | null>) {
+  if (ref.current) {
+    ref.current.close();
+    ref.current = null;
+  }
+}
+
+function mergeSessionIntoList(
+  items: ACPSession[],
+  session: ACPSession,
+): ACPSession[] {
+  let replaced = false;
+  const next = items.map((item) => {
+    if (item.id !== session.id) return item;
+    replaced = true;
+    return session;
+  });
+  return replaced ? next : [session, ...next];
+}
+
+function orderSessions(items: ACPSession[]): ACPSession[] {
+  return [...items].sort((left, right) => {
+    const updatedDelta =
+      parseDateValue(right.updated_at) - parseDateValue(left.updated_at);
+    if (updatedDelta !== 0) return updatedDelta;
+    const createdDelta =
+      parseDateValue(right.created_at) - parseDateValue(left.created_at);
+    if (createdDelta !== 0) return createdDelta;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function parseDateValue(value?: string): number {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function buildPromptPayload(prompt: string, mcpOnlyEnabled: boolean): string {
+  if (!mcpOnlyEnabled) return prompt;
+  return `${MCP_ONLY_PREFIX}\n\n${prompt}`;
+}
+
 function sortMcpTools(items: MCPTool[]): MCPTool[] {
   return [...items].sort((left, right) =>
-    String(left.title || left.name).localeCompare(String(right.title || right.name)),
+    String(left.title || left.name).localeCompare(
+      String(right.title || right.name),
+    ),
   );
 }
 
@@ -917,4 +2134,14 @@ function formatDate(value?: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(current);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function mapValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }

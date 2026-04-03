@@ -314,7 +314,7 @@ func (s *Server) businessDocumentSearch(actor ActorContext, arguments map[string
 		return nil, true, err
 	}
 	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d business documents.", len(items))}},
+		"content":           []ContentBlock{{Type: "text", Text: renderBusinessRecordSearchText("business documents", items)}},
 		"structuredContent": map[string]any{"items": items},
 	}, true, nil
 }
@@ -443,7 +443,7 @@ func (s *Server) businessRecordSearch(actor ActorContext, arguments map[string]a
 	moduleKey := strings.TrimSpace(stringArg(arguments, "module_key"))
 	kind := strings.TrimSpace(stringArg(arguments, "resource_kind"))
 	switch kind {
-	case "", "document":
+	case "":
 		documents := []businessRecordSummary(nil)
 		if allowsAll(actor.PermissionChecker, []string{"document.list"}) {
 			var err error
@@ -455,9 +455,6 @@ func (s *Server) businessRecordSearch(actor ActorContext, arguments map[string]a
 		models, err := s.filteredModelSummaries(actor, arguments)
 		if err != nil {
 			return nil, true, err
-		}
-		if kind == "document" {
-			models = nil
 		}
 		items := make([]businessRecordSummary, 0, len(documents)+len(models))
 		items = append(items, documents...)
@@ -473,7 +470,26 @@ func (s *Server) businessRecordSearch(actor ActorContext, arguments map[string]a
 		}
 		sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
 		return map[string]any{
-			"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d business records.", len(items))}},
+			"content":           []ContentBlock{{Type: "text", Text: renderBusinessRecordSearchText("business records", items)}},
+			"structuredContent": map[string]any{"items": items},
+		}, true, nil
+	case "document":
+		items, err := s.filteredDocumentSummaries(actor, arguments)
+		if err != nil {
+			return nil, true, err
+		}
+		if moduleKey != "" {
+			filtered := make([]businessRecordSummary, 0, len(items))
+			for _, item := range items {
+				if item.ModuleKey == moduleKey {
+					filtered = append(filtered, item)
+				}
+			}
+			items = filtered
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
+		return map[string]any{
+			"content":           []ContentBlock{{Type: "text", Text: renderBusinessRecordSearchText("business records", items)}},
 			"structuredContent": map[string]any{"items": items},
 		}, true, nil
 	case "model":
@@ -482,7 +498,7 @@ func (s *Server) businessRecordSearch(actor ActorContext, arguments map[string]a
 			return nil, true, err
 		}
 		return map[string]any{
-			"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d business records.", len(items))}},
+			"content":           []ContentBlock{{Type: "text", Text: renderBusinessRecordSearchText("business records", items)}},
 			"structuredContent": map[string]any{"items": items},
 		}, true, nil
 	default:
@@ -740,6 +756,7 @@ func (s *Server) filteredDocumentSummaries(actor ActorContext, arguments map[str
 	locationID := strings.TrimSpace(stringArg(arguments, "location_id"))
 	includeFull := boolArg(arguments, "include_full_payload")
 	query := strings.ToLower(strings.TrimSpace(stringArg(arguments, "query")))
+	filters := mapArg(arguments, "filters")
 	items := make([]businessRecordSummary, 0)
 	for _, item := range s.documents.List() {
 		if documentType != "" && item.Header.Type != documentType {
@@ -759,6 +776,9 @@ func (s *Server) filteredDocumentSummaries(actor ActorContext, arguments map[str
 			continue
 		}
 		if query != "" && !documentMatchesQuery(item, query) {
+			continue
+		}
+		if len(filters) > 0 && !documentMatchesFilters(item, filters) {
 			continue
 		}
 		sanitized := s.sanitizeDocumentRecord(actor, item)
@@ -850,6 +870,126 @@ func (s *Server) documentSummary(record document.Record, includeFull bool) busin
 	return summary
 }
 
+func renderBusinessRecordSearchText(label string, items []businessRecordSummary) string {
+	if len(items) == 0 {
+		return fmt.Sprintf("Found 0 %s.", label)
+	}
+	limit := len(items)
+	if limit > 5 {
+		limit = 5
+	}
+	lines := []string{fmt.Sprintf("Found %d %s.", len(items), label)}
+	for _, item := range items[:limit] {
+		line := item.RecordID
+		if item.ResourceKey != "" {
+			line = item.ResourceKey + " " + line
+		}
+		if item.Title != "" {
+			line += " - " + item.Title
+		}
+		if item.Status != "" {
+			line += " [" + item.Status + "]"
+		}
+		lines = append(lines, "- "+line)
+	}
+	if len(items) > limit {
+		lines = append(lines, fmt.Sprintf("- ... %d more", len(items)-limit))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func documentMatchesFilters(record document.Record, filters map[string]any) bool {
+	for key, expected := range filters {
+		if !documentFieldMatchesFilter(record, key, expected) {
+			return false
+		}
+	}
+	return true
+}
+
+func documentFieldMatchesFilter(record document.Record, key string, expected any) bool {
+	expectedText := strings.ToLower(strings.TrimSpace(anyString(expected)))
+	if expectedText == "" {
+		return true
+	}
+	candidates := documentFilterCandidateValues(record, key)
+	for _, candidate := range candidates {
+		candidateText := strings.ToLower(strings.TrimSpace(candidate))
+		if candidateText == "" {
+			continue
+		}
+		if candidateText == expectedText || strings.Contains(candidateText, expectedText) {
+			return true
+		}
+	}
+	return false
+}
+
+func documentFilterCandidateValues(record document.Record, key string) []string {
+	normalized := strings.TrimSpace(strings.ToLower(key))
+	switch normalized {
+	case "document_id", "id", "record_id":
+		return []string{record.Header.ID}
+	case "document_type", "type", "resource_key":
+		return []string{record.Header.Type}
+	case "status":
+		return []string{record.Header.Status}
+	case "number":
+		return []string{record.Header.Number}
+	case "organization_id":
+		return []string{record.Header.OrganizationID}
+	case "location_id":
+		return []string{record.Header.LocationID}
+	}
+	if value, ok := lookupPayloadValue(record.Body.Payload, normalized); ok {
+		return flattenFilterValues(value)
+	}
+	return nil
+}
+
+func lookupPayloadValue(payload map[string]any, key string) (any, bool) {
+	if payload == nil {
+		return nil, false
+	}
+	if value, ok := payload[key]; ok {
+		return value, true
+	}
+	for candidateKey, value := range payload {
+		if strings.EqualFold(strings.TrimSpace(candidateKey), key) {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func flattenFilterValues(value any) []string {
+	switch typed := value.(type) {
+	case string:
+		return []string{typed}
+	case fmt.Stringer:
+		return []string{typed.String()}
+	case []string:
+		return typed
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, flattenFilterValues(item)...)
+		}
+		return out
+	case map[string]any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, flattenFilterValues(item)...)
+		}
+		return out
+	default:
+		if text := anyString(value); text != "" {
+			return []string{text}
+		}
+		return nil
+	}
+}
+
 func (s *Server) modelSummary(def model.Definition, record model.Record) businessRecordSummary {
 	return businessRecordSummary{
 		ResourceKind:   "model",
@@ -870,16 +1010,123 @@ func (s *Server) modelSummary(def model.Definition, record model.Record) busines
 
 func (s *Server) renderBusinessDocumentResult(actor ActorContext, record document.Record, includeFull bool) (map[string]any, bool, error) {
 	sanitized := s.sanitizeDocumentRecord(actor, record)
+	summary := s.documentSummary(sanitized, false)
+	text := renderBusinessDocumentText(sanitized, summary)
 	if includeFull {
 		return map[string]any{
-			"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded business document %s.", record.Header.ID)}},
+			"content":           []ContentBlock{{Type: "text", Text: text}},
 			"structuredContent": sanitized,
 		}, true, nil
 	}
 	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded business document %s.", record.Header.ID)}},
-		"structuredContent": s.documentSummary(sanitized, false),
+		"content":           []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": summary,
 	}, true, nil
+}
+
+func renderBusinessDocumentText(record document.Record, item businessRecordSummary) string {
+	lines := []string{fmt.Sprintf("Loaded business document %s.", item.RecordID)}
+	if item.ResourceKey != "" {
+		lines = append(lines, "Type: "+item.ResourceKey)
+	}
+	if item.Title != "" {
+		lines = append(lines, "Title: "+item.Title)
+	}
+	if item.Status != "" {
+		lines = append(lines, "Status: "+item.Status)
+	}
+	if item.OrganizationID != "" {
+		lines = append(lines, "Organization: "+item.OrganizationID)
+	}
+	if item.LocationID != "" {
+		lines = append(lines, "Location: "+item.LocationID)
+	}
+	if payload, ok := item.Record["payload"]; ok && payload != nil {
+		if encoded, err := json.Marshal(payload); err == nil && len(encoded) > 2 {
+			lines = append(lines, "Payload summary: "+string(encoded))
+		}
+	}
+	lines = append(lines, businessDocumentInterpretationLines(record)...)
+	return strings.Join(lines, "\n")
+}
+
+func businessDocumentInterpretationLines(record document.Record) []string {
+	payload := record.Body.Payload
+	switch strings.TrimSpace(record.Header.Type) {
+	case "travel_request":
+		if amount := payloadValueText(payload, "estimated_total_amount", "approved_amount", "total_amount"); amount != "" {
+			return []string{fmt.Sprintf("Business summary: travel request amount is %s.", amount)}
+		}
+	case "cash_advance":
+		if amount := payloadValueText(payload, "approved_amount", "outstanding_amount", "total_amount", "requested_amount"); amount != "" {
+			return []string{fmt.Sprintf("Business summary: cash advance amount is %s and status is %s.", amount, firstNonEmpty(record.Header.Status, "unknown"))}
+		}
+	case "expense_claim":
+		if amount := payloadValueText(payload, "reimbursable_amount", "approved_amount", "claim_total_amount", "total_amount"); amount != "" {
+			return []string{fmt.Sprintf("Business summary: expense claim total is %s and status is %s.", amount, firstNonEmpty(record.Header.Status, "unknown"))}
+		}
+	case "advance_liquidation":
+		lines := make([]string, 0, 3)
+		claimTotal := payloadValueText(payload, "claim_total_amount", "reimbursable_amount", "total_amount")
+		advanceAmount := payloadValueText(payload, "advance_amount")
+		appliedAmount := payloadValueText(payload, "advance_applied_amount")
+		netAmount := payloadValueText(payload, "net_settlement_amount")
+		if claimTotal != "" || advanceAmount != "" || appliedAmount != "" || netAmount != "" {
+			lines = append(lines, fmt.Sprintf(
+				"Settlement summary: claim total %s, advance amount %s, advance applied %s, net settlement %s.",
+				firstNonEmpty(claimTotal, "0"),
+				firstNonEmpty(advanceAmount, "0"),
+				firstNonEmpty(appliedAmount, "0"),
+				firstNonEmpty(netAmount, "0"),
+			))
+		}
+		switch direction := strings.TrimSpace(anyString(payload["settlement_direction"])); direction {
+		case "company_owes_employee":
+			lines = append(lines, fmt.Sprintf("Interpretation: the company owes the employee %s.", firstNonEmpty(netAmount, "0")))
+		case "employee_owes_company":
+			lines = append(lines, fmt.Sprintf("Interpretation: the employee owes the company %s.", firstNonEmpty(netAmount, "0")))
+		case "balanced":
+			lines = append(lines, "Interpretation: the settlement is balanced and neither side owes the other.")
+		}
+		return lines
+	case "reimbursement_payment":
+		lines := make([]string, 0, 2)
+		if amount := payloadValueText(payload, "amount_paid", "net_settlement_amount", "total_amount"); amount != "" {
+			lines = append(lines, fmt.Sprintf("Payment summary: reimbursement payment amount is %s and status is %s.", amount, firstNonEmpty(record.Header.Status, "unknown")))
+		}
+		if settlement := payloadValueText(payload, "net_settlement_amount"); settlement != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation: this payment settles %s owed to the employee.", settlement))
+		}
+		return lines
+	}
+	return nil
+}
+
+func payloadValueText(payload map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value, ok := payload[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			if strings.TrimSpace(typed) != "" {
+				return strings.TrimSpace(typed)
+			}
+		case float64:
+			return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", typed), "0"), ".")
+		case float32:
+			return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", typed), "0"), ".")
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return fmt.Sprint(typed)
+		default:
+			text := strings.TrimSpace(fmt.Sprint(typed))
+			if text != "" && text != "<nil>" {
+				return text
+			}
+		}
+	}
+	return ""
 }
 
 func (s *Server) renderBusinessDocumentDraftResult(actor ActorContext, record document.Record, text string) (map[string]any, bool, error) {
@@ -1246,6 +1493,11 @@ func modelQueryFromArguments(arguments map[string]any) model.Query {
 	}
 	if query.PageSize <= 0 {
 		query.PageSize = model.DefaultPageSize
+	}
+	if strings.TrimSpace(query.SortKey) == "" {
+		// MCP generic record search should not inherit module defaults that may
+		// point to non-queryable fields such as "code".
+		query.SortKey = "updated_at"
 	}
 	return query
 }

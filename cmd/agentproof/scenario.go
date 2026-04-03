@@ -1,0 +1,1246 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	application "orbyte/internal/platform/application"
+	"orbyte/internal/platform/shared"
+)
+
+const (
+	defaultOrgID = "org_default"
+	defaultLocID = "loc_hq"
+)
+
+func seedEmployeeSpendScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	normalizer := application.NewEmployeeSpendCoreService(nil, nil)
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "employee_spend", "workforce-expense", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	primaryName := "Rina Hartono " + runID
+	primaryCode := "EMP-SPEND-" + suffix
+	primaryPartyID := "party_emp_" + suffix
+	primaryDeptID := "dept_spend_" + suffix
+	primaryCostCenterID := "cc_spend_" + suffix
+	primaryTreasuryID := "treasury_main_" + suffix
+
+	employeeRecord, err := client.createModel(ctx, "employee_profile", map[string]any{
+		"party_id":          primaryPartyID,
+		"name":              primaryName,
+		"user_id":           "user_admin",
+		"employee_code":     primaryCode,
+		"employment_status": "active",
+		"status":            "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create employee profile: %w", err)
+	}
+	employeeID := stringValue(employeeRecord["id"])
+	if _, err := client.createModel(ctx, "employee_assignment", map[string]any{
+		"employee_id":          employeeID,
+		"organization_id":      defaultOrgID,
+		"location_id":          defaultLocID,
+		"organization_unit_id": "ou_spend_" + suffix,
+		"department_id":        primaryDeptID,
+		"cost_center_id":       primaryCostCenterID,
+		"effective_from":       time.Now().UTC().Format("2006-01-02"),
+		"status":               "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create employee assignment: %w", err)
+	}
+
+	categoryRecord, err := client.createModel(ctx, "expense_category", map[string]any{
+		"code":                 "TRAVEL-" + suffix,
+		"name":                 "Travel Expense " + runID,
+		"expense_account_code": "6100-TRAVEL",
+		"payable_account_code": "2100-EMP",
+		"status":               "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create expense category: %w", err)
+	}
+	categoryID := stringValue(categoryRecord["id"])
+	categoryCode := stringValue(mapValue(categoryRecord, "values")["code"])
+
+	policyRecord, err := client.createModel(ctx, "expense_policy", map[string]any{
+		"code":                         "POL-" + suffix,
+		"name":                         "Travel Policy " + runID,
+		"organization_id":              defaultOrgID,
+		"location_id":                  defaultLocID,
+		"default_currency_code":        "IDR",
+		"default_payment_method_code":  "BANK",
+		"default_payable_account_code": "2100-EMP",
+		"default_expense_account_code": "6100-TRAVEL",
+		"default_treasury_account_id":  primaryTreasuryID,
+		"status":                       "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create expense policy: %w", err)
+	}
+	policyID := stringValue(policyRecord["id"])
+	if _, err := client.createModel(ctx, "travel_policy", map[string]any{
+		"code":                      "TRV-" + suffix,
+		"name":                      "Domestic Travel " + runID,
+		"organization_id":           defaultOrgID,
+		"location_id":               defaultLocID,
+		"default_expense_policy_id": policyID,
+		"status":                    "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create travel policy: %w", err)
+	}
+	if _, err := client.createModel(ctx, "employee_spend_profile", map[string]any{
+		"employee_id":                 employeeID,
+		"expense_policy_id":           policyID,
+		"default_currency_code":       "IDR",
+		"default_payment_method_code": "BANK",
+		"payable_account_code":        "2100-EMP",
+		"expense_account_code":        "6100-TRAVEL",
+		"treasury_account_id":         primaryTreasuryID,
+		"status":                      "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create employee spend profile: %w", err)
+	}
+
+	travelPayload := normalizer.NormalizePayload("travel_request", map[string]any{
+		"employee_id":         employeeID,
+		"party_id":            primaryPartyID,
+		"employee_code":       primaryCode,
+		"organization_id":     defaultOrgID,
+		"location_id":         defaultLocID,
+		"department_id":       primaryDeptID,
+		"cost_center_id":      primaryCostCenterID,
+		"currency_code":       "IDR",
+		"expense_category_id": categoryID,
+		"request_date":        "2099-10-01",
+		"travel_start_date":   "2099-10-10",
+		"travel_end_date":     "2099-10-12",
+		"destination":         "Jakarta",
+		"purpose":             "Customer visit for enterprise renewal",
+		"estimated_lines": []map[string]any{
+			{"description": "Hotel", "amount": 120.0},
+			{"description": "Meals", "amount": 30.0},
+		},
+	})
+	travelDoc, err := createAndApproveDocument(ctx, client, "travel_request", travelPayload)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed travel request: %w", err)
+	}
+
+	advanceDoc, err := createAndApproveDocument(ctx, client, "cash_advance", normalizer.NormalizePayload("cash_advance", map[string]any{
+		"employee_id":          employeeID,
+		"party_id":             primaryPartyID,
+		"employee_code":        primaryCode,
+		"organization_id":      defaultOrgID,
+		"location_id":          defaultLocID,
+		"department_id":        primaryDeptID,
+		"cost_center_id":       primaryCostCenterID,
+		"currency_code":        "IDR",
+		"payment_method_code":  "BANK",
+		"payable_account_code": "2100-EMP",
+		"expense_account_code": "6100-TRAVEL",
+		"treasury_account_id":  primaryTreasuryID,
+		"travel_request_id":    travelDoc.ID,
+		"requested_amount":     100.0,
+		"notes":                "Travel cash advance for Jakarta visit",
+	}))
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed cash advance: %w", err)
+	}
+
+	claimDoc, err := createAndApproveDocument(ctx, client, "expense_claim", normalizer.NormalizePayload("expense_claim", map[string]any{
+		"employee_id":       employeeID,
+		"party_id":          primaryPartyID,
+		"employee_code":     primaryCode,
+		"organization_id":   defaultOrgID,
+		"location_id":       defaultLocID,
+		"department_id":     primaryDeptID,
+		"cost_center_id":    primaryCostCenterID,
+		"currency_code":     "IDR",
+		"travel_request_id": travelDoc.ID,
+		"claim_date":        "2099-10-14",
+		"claim_lines": []map[string]any{
+			{"expense_category_code": categoryCode, "description": "Hotel", "amount": 150.0},
+			{"expense_category_code": categoryCode, "description": "Meals", "amount": 20.0},
+		},
+	}))
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed expense claim: %w", err)
+	}
+
+	liquidationDoc, err := createAndApproveDocument(ctx, client, "advance_liquidation", normalizer.NormalizePayload("advance_liquidation", map[string]any{
+		"employee_id":            employeeID,
+		"party_id":               primaryPartyID,
+		"employee_code":          primaryCode,
+		"organization_id":        defaultOrgID,
+		"location_id":            defaultLocID,
+		"department_id":          primaryDeptID,
+		"cost_center_id":         primaryCostCenterID,
+		"currency_code":          "IDR",
+		"travel_request_id":      travelDoc.ID,
+		"cash_advance_id":        advanceDoc.ID,
+		"expense_claim_id":       claimDoc.ID,
+		"claim_total_amount":     170.0,
+		"advance_amount":         30.0,
+		"advance_applied_amount": 30.0,
+		"net_settlement_amount":  140.0,
+		"settlement_direction":   "company_owes_employee",
+		"liquidation_date":       "2099-10-15",
+	}))
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed advance liquidation: %w", err)
+	}
+
+	reimbursementDoc, err := createAndApproveDocument(ctx, client, "reimbursement_payment", normalizer.NormalizePayload("reimbursement_payment", map[string]any{
+		"employee_id":           employeeID,
+		"party_id":              primaryPartyID,
+		"employee_code":         primaryCode,
+		"organization_id":       defaultOrgID,
+		"location_id":           defaultLocID,
+		"department_id":         primaryDeptID,
+		"cost_center_id":        primaryCostCenterID,
+		"currency_code":         "IDR",
+		"travel_request_id":     travelDoc.ID,
+		"cash_advance_id":       advanceDoc.ID,
+		"source_liquidation_id": liquidationDoc.ID,
+		"net_settlement_amount": 140.0,
+		"amount_paid":           140.0,
+		"payment_date":          "2099-10-16",
+		"notes":                 "Generated from advance liquidation " + liquidationDoc.ID,
+	}))
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed reimbursement payment: %w", err)
+	}
+
+	noiseName := "Adi Santoso " + runID
+	noiseCode := "EMP-NOISE-" + suffix
+	noisePartyID := "party_noise_" + suffix
+	noiseDeptID := "dept_noise_" + suffix
+	noiseEmployeeRecord, err := client.createModel(ctx, "employee_profile", map[string]any{
+		"party_id":          noisePartyID,
+		"name":              noiseName,
+		"user_id":           "user_admin",
+		"employee_code":     noiseCode,
+		"employment_status": "active",
+		"status":            "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create noise employee profile: %w", err)
+	}
+	noiseEmployeeID := stringValue(noiseEmployeeRecord["id"])
+	noiseTravelDoc, err := createAndApproveDocument(ctx, client, "travel_request", normalizer.NormalizePayload("travel_request", map[string]any{
+		"employee_id":         noiseEmployeeID,
+		"party_id":            noisePartyID,
+		"employee_code":       noiseCode,
+		"organization_id":     defaultOrgID,
+		"location_id":         defaultLocID,
+		"department_id":       noiseDeptID,
+		"cost_center_id":      "cc_noise_" + suffix,
+		"currency_code":       "IDR",
+		"expense_category_id": categoryID,
+		"request_date":        "2099-10-20",
+		"travel_start_date":   "2099-10-22",
+		"travel_end_date":     "2099-10-23",
+		"destination":         "Bandung",
+		"purpose":             "Internal workshop",
+		"estimated_lines":     []map[string]any{{"description": "Train", "amount": 55.0}},
+	}))
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed noise travel request: %w", err)
+	}
+
+	manifest.Entities = map[string]map[string]any{
+		"primary_employee": {"id": employeeID, "code": primaryCode, "party_id": primaryPartyID, "name": primaryName, "department_id": primaryDeptID},
+		"noise_employee":   {"id": noiseEmployeeID, "code": noiseCode, "party_id": noisePartyID, "name": noiseName, "department_id": noiseDeptID},
+	}
+	manifest.Documents = map[string]documentFacts{
+		"travel_request":        travelDoc,
+		"cash_advance":          advanceDoc,
+		"expense_claim":         claimDoc,
+		"advance_liquidation":   liquidationDoc,
+		"reimbursement_payment": reimbursementDoc,
+		"noise_travel_request":  noiseTravelDoc,
+	}
+	manifest.GroundTruth = map[string]any{
+		"approved_advance_amount":   100.0,
+		"approved_claim_total":      170.0,
+		"net_settlement_amount":     140.0,
+		"settlement_direction":      "company_owes_employee",
+		"reimbursement_status":      "paid",
+		"reimbursement_amount_paid": 140.0,
+		"pending_approval_count":    0,
+		"open_workflow_task_count":  0,
+	}
+	manifest.PromptPack = employeeSpendPromptPack(primaryName)
+	return manifest, nil
+}
+
+func seedOrderToCashScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "order_to_cash", "commercial-fulfillment", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	customer, err := client.createModel(ctx, "party", map[string]any{
+		"name":          "Atlas Retail " + runID,
+		"member_status": "active",
+		"status":        "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create customer: %w", err)
+	}
+	taxCode := "VAT11-" + suffix
+	if _, err := client.createModel(ctx, "commercial_tax_code", map[string]any{
+		"code":             taxCode,
+		"name":             "VAT 11",
+		"rate_percent":     11.0,
+		"mode":             "exclusive",
+		"tax_account_code": "2100-VATOUT",
+		"status":           "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create tax code: %w", err)
+	}
+	itemCode := "OTC-ITEM-" + suffix
+	if _, err := client.createModel(ctx, "commercial_item", map[string]any{
+		"sku":                          itemCode,
+		"name":                         "Field Router " + runID,
+		"kind":                         "simple",
+		"item_type":                    "product",
+		"uom_code":                     "EA",
+		"unit_price":                   100.0,
+		"tax_code":                     taxCode,
+		"revenue_account_code":         "4000-REV",
+		"inventory_enabled":            true,
+		"inventory_tracking_mode":      "quantity",
+		"inventory_asset_account_code": "1200-INV",
+		"status":                       "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create item: %w", err)
+	}
+	if _, err := createAndApproveDocument(ctx, client, "stock_receipt", map[string]any{
+		"receipt_date":   "2099-09-28",
+		"warehouse_code": "MAIN",
+		"lines": []map[string]any{{
+			"item_code":      itemCode,
+			"description":    "Opening stock",
+			"warehouse_code": "MAIN",
+			"uom_code":       "EA",
+			"quantity":       12.0,
+			"unit_cost":      60.0,
+		}},
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed stock receipt: %w", err)
+	}
+
+	orderDoc, err := createAndApproveDocument(ctx, client, "sales_order", map[string]any{
+		"party_id":          stringValue(customer["id"]),
+		"party_name":        stringValue(mapValue(customer, "values")["name"]),
+		"currency_code":     "IDR",
+		"order_date":        "2099-10-01",
+		"payment_term_days": 14.0,
+		"subtotal_amount":   500.0,
+		"tax_amount":        55.0,
+		"total_amount":      555.0,
+		"lines": []map[string]any{{
+			"item_code":      itemCode,
+			"description":    "Field Router",
+			"warehouse_code": "MAIN",
+			"uom_code":       "EA",
+			"quantity":       5.0,
+			"unit_price":     100.0,
+			"tax_code":       taxCode,
+			"tax_rate":       11.0,
+			"line_subtotal":  500.0,
+			"tax_amount":     55.0,
+			"line_total":     555.0,
+		}},
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create sales order: %w", err)
+	}
+
+	fulfillmentDoc, err := client.postDocument(ctx, "/commercial/orders/"+orderDoc.ID+"/generate-fulfillment", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("generate fulfillment: %w", err)
+	}
+	fulfillmentDoc, err = submitApproveDocument(ctx, client, fulfillmentDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve fulfillment: %w", err)
+	}
+
+	deliveryDoc, err := client.postDocument(ctx, "/delivery/fulfillments/"+fulfillmentDoc.ID+"/register-delivery", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("generate delivery: %w", err)
+	}
+	deliveryDoc, err = submitApproveAndActionDocument(ctx, client, deliveryDoc.ID, "mark_delivered")
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("deliver order: %w", err)
+	}
+
+	invoiceDoc, err := client.postDocument(ctx, "/commercial/orders/"+orderDoc.ID+"/generate-invoice", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("generate invoice: %w", err)
+	}
+	invoiceDoc, err = submitApproveDocument(ctx, client, invoiceDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve invoice: %w", err)
+	}
+
+	paymentDoc, err := client.postDocument(ctx, "/commercial/invoices/"+invoiceDoc.ID+"/register-payment", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("register payment: %w", err)
+	}
+	paymentDoc, err = submitApproveDocument(ctx, client, paymentDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve payment: %w", err)
+	}
+
+	returnDoc, err := client.postDocument(ctx, "/returns/fulfillments/"+fulfillmentDoc.ID+"/register-return", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("generate return: %w", err)
+	}
+	returnDoc, err = submitApproveDocument(ctx, client, returnDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve return: %w", err)
+	}
+
+	creditNoteDoc, err := client.postDocument(ctx, "/returns/returns/"+returnDoc.ID+"/issue-credit-note", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("issue credit note: %w", err)
+	}
+	creditNoteDoc, err = submitApproveDocument(ctx, client, creditNoteDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve credit note: %w", err)
+	}
+
+	manifest.Entities = map[string]map[string]any{
+		"customer": {"id": stringValue(customer["id"]), "name": stringValue(mapValue(customer, "values")["name"]), "code": "OTC-" + suffix},
+		"item":     {"code": itemCode, "name": "Field Router " + runID},
+	}
+	manifest.Documents = map[string]documentFacts{
+		"sales_order":       orderDoc,
+		"sales_fulfillment": fulfillmentDoc,
+		"delivery_order":    deliveryDoc,
+		"invoice":           invoiceDoc,
+		"payment_receipt":   paymentDoc,
+		"sales_return":      returnDoc,
+		"credit_note":       creditNoteDoc,
+	}
+	manifest.GroundTruth = map[string]any{
+		"delivered_quantity": 5.0,
+		"invoice_total":      555.0,
+		"payment_status":     paymentDoc.Status,
+		"return_exists":      true,
+		"credit_note_status": creditNoteDoc.Status,
+		"open_work_count":    0,
+	}
+	manifest.PromptPack = orderToCashPromptPack(stringValue(mapValue(customer, "values")["name"]), itemCode)
+	return manifest, nil
+}
+
+func seedProcureToPayInventoryScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "procure_to_pay_inventory", "procurement-inventory", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	vendor, err := client.createModel(ctx, "party", map[string]any{
+		"name":   "Nova Supplies " + runID,
+		"status": "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create vendor: %w", err)
+	}
+	itemCode := "P2P-ITEM-" + suffix
+	if _, err := client.createModel(ctx, "commercial_item", map[string]any{
+		"sku":                          itemCode,
+		"name":                         "Medical Cuff " + runID,
+		"uom_code":                     "EA",
+		"inventory_enabled":            true,
+		"inventory_tracking_mode":      "quantity",
+		"inventory_asset_account_code": "1200-INV-MED",
+		"status":                       "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create procurement item: %w", err)
+	}
+
+	poDoc, err := createAndApproveDocument(ctx, client, "purchase_order", map[string]any{
+		"vendor_id":     stringValue(vendor["id"]),
+		"vendor_name":   stringValue(mapValue(vendor, "values")["name"]),
+		"currency_code": "IDR",
+		"lines": []map[string]any{{
+			"item_code":            itemCode,
+			"description":          "Medical Cuff",
+			"warehouse_code":       "MAIN",
+			"uom_code":             "EA",
+			"ordered_qty":          15.0,
+			"quantity":             15.0,
+			"unit_price":           100.0,
+			"tax_code":             "VAT11",
+			"tax_rate":             11.0,
+			"tax_mode":             "exclusive",
+			"tax_account_code":     "1510-VAT-IN",
+			"expense_account_code": "5100-COGS",
+		}},
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create purchase order: %w", err)
+	}
+
+	receiptDoc, err := client.postDocument(ctx, "/procurement/orders/"+poDoc.ID+"/register-receipt", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("register goods receipt: %w", err)
+	}
+	receiptDoc, err = submitApproveDocument(ctx, client, receiptDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve goods receipt: %w", err)
+	}
+
+	billDoc, err := client.postDocument(ctx, "/procurement/receipts/"+receiptDoc.ID+"/register-vendor-bill", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("register vendor bill: %w", err)
+	}
+	billDoc, err = submitApproveDocument(ctx, client, billDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve vendor bill: %w", err)
+	}
+
+	paymentDoc, err := client.postDocument(ctx, "/procurement/bills/"+billDoc.ID+"/register-payment", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("register payment out: %w", err)
+	}
+	paymentDoc, err = submitApproveDocument(ctx, client, paymentDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve payment out: %w", err)
+	}
+
+	supplierReturnDoc, err := client.postDocument(ctx, "/procurement/bills/"+billDoc.ID+"/register-supplier-return", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("register supplier return: %w", err)
+	}
+	supplierReturnDoc, err = submitApproveDocument(ctx, client, supplierReturnDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve supplier return: %w", err)
+	}
+
+	vendorCreditDoc, err := client.postDocument(ctx, "/supplier-returns/returns/"+supplierReturnDoc.ID+"/issue-vendor-credit", nil)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("issue vendor credit: %w", err)
+	}
+	vendorCreditDoc, err = submitApproveDocument(ctx, client, vendorCreditDoc.ID)
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("approve vendor credit: %w", err)
+	}
+
+	manifest.Entities = map[string]map[string]any{
+		"vendor": {"id": stringValue(vendor["id"]), "name": stringValue(mapValue(vendor, "values")["name"]), "code": "VEN-" + suffix},
+		"item":   {"code": itemCode, "name": "Medical Cuff " + runID},
+	}
+	manifest.Documents = map[string]documentFacts{
+		"purchase_order":  poDoc,
+		"goods_receipt":   receiptDoc,
+		"vendor_bill":     billDoc,
+		"payment_out":     paymentDoc,
+		"supplier_return": supplierReturnDoc,
+		"vendor_credit":   vendorCreditDoc,
+	}
+	manifest.GroundTruth = map[string]any{
+		"received_quantity":     15.0,
+		"vendor_bill_total":     numberValue(billDoc.Payload["total_amount"]),
+		"payment_status":        paymentDoc.Status,
+		"supplier_return_state": supplierReturnDoc.Status,
+		"vendor_credit_state":   vendorCreditDoc.Status,
+	}
+	manifest.PromptPack = procureToPayPromptPack(stringValue(mapValue(vendor, "values")["name"]), itemCode)
+	return manifest, nil
+}
+
+func seedLeaveToPayrollScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "leave_to_payroll", "workforce-payroll", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	employee, err := client.createModel(ctx, "employee_profile", map[string]any{
+		"party_id":          "party_leave_" + suffix,
+		"name":              "Maya Putri " + runID,
+		"user_id":           "user_admin",
+		"employee_code":     "EMP-LV-" + suffix,
+		"employment_status": "active",
+		"status":            "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create employee profile: %w", err)
+	}
+	employeeID := stringValue(employee["id"])
+	if _, err := client.createModel(ctx, "employee_assignment", map[string]any{
+		"employee_id":          employeeID,
+		"organization_id":      defaultOrgID,
+		"location_id":          defaultLocID,
+		"organization_unit_id": "ou_lv_" + suffix,
+		"department_id":        "dept_lv_" + suffix,
+		"cost_center_id":       "cc_lv_" + suffix,
+		"effective_from":       "2099-10-01",
+		"status":               "active",
+	}); err != nil {
+		return scenarioManifest{}, err
+	}
+	absenceCode, err := client.createModel(ctx, "absence_code", map[string]any{
+		"code":                "LV-" + suffix,
+		"name":                "Annual Leave",
+		"category":            "leave",
+		"deduct_from_payroll": true,
+		"status":              "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	leavePolicy, err := client.createModel(ctx, "leave_policy", map[string]any{
+		"code":             "POL-LV-" + suffix,
+		"name":             "Annual Leave Policy",
+		"absence_code_id":  stringValue(absenceCode["id"]),
+		"paid_leave":       false,
+		"requires_balance": true,
+		"organization_id":  defaultOrgID,
+		"location_id":      defaultLocID,
+		"status":           "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	balanceAccount, err := client.createModel(ctx, "leave_balance_account", map[string]any{
+		"employee_id":                employeeID,
+		"leave_policy_id":            stringValue(leavePolicy["id"]),
+		"current_balance_days":       12.0,
+		"reserved_days":              0.0,
+		"available_days":             10.0,
+		"carry_forward_balance_days": 0.0,
+		"status":                     "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	leaveRequest, err := client.createModel(ctx, "leave_request", map[string]any{
+		"employee_id":     employeeID,
+		"organization_id": defaultOrgID,
+		"location_id":     defaultLocID,
+		"absence_code_id": stringValue(absenceCode["id"]),
+		"start_date":      "2099-10-06",
+		"end_date":        "2099-10-07",
+		"requested_days":  2.0,
+		"approval_status": "approved",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	period, err := client.createModel(ctx, "payroll_period", map[string]any{
+		"code":            "PR-" + suffix,
+		"name":            "October 2099",
+		"organization_id": defaultOrgID,
+		"location_id":     defaultLocID,
+		"start_date":      "2099-10-01",
+		"end_date":        "2099-10-31",
+		"pay_date":        "2099-10-31",
+		"status":          "open",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	runDoc, err := createAndApproveDocument(ctx, client, "payroll_run", map[string]any{
+		"payroll_period_id": periodID(period),
+		"pay_date":          "2099-10-31",
+		"currency_code":     "IDR",
+		"employee_ids":      []string{employeeID},
+		"payroll_lines": []map[string]any{{
+			"employee_id":                  employeeID,
+			"party_id":                     stringValue(mapValue(employee, "values")["party_id"]),
+			"organization_id":              defaultOrgID,
+			"location_id":                  defaultLocID,
+			"department_id":                "dept_lv_" + suffix,
+			"cost_center_id":               "cc_lv_" + suffix,
+			"currency_code":                "IDR",
+			"leave_days":                   2.0,
+			"gross_pay":                    1200.0,
+			"employee_deductions_total":    40.0,
+			"employee_contributions_total": 0.0,
+			"tax_withholding_total":        100.0,
+			"reimbursements_total":         0.0,
+			"net_pay":                      1060.0,
+		}},
+		"gross_pay_total":              1200.0,
+		"employee_deductions_total":    40.0,
+		"employee_contributions_total": 0.0,
+		"tax_withholding_total":        100.0,
+		"reimbursements_total":         0.0,
+		"net_pay_total":                1060.0,
+		"employer_cost_total":          1200.0,
+		"expense_account_code":         "6200-PAYROLL",
+		"payable_account_code":         "2105-PAYROLL",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create payroll run: %w", err)
+	}
+	paymentDoc, err := createAndApproveDocument(ctx, client, "payroll_payment", map[string]any{
+		"payroll_run_id":      runDoc.ID,
+		"payroll_period_id":   periodID(period),
+		"employee_id":         employeeID,
+		"party_id":            stringValue(mapValue(employee, "values")["party_id"]),
+		"payment_date":        "2099-10-31",
+		"currency_code":       "IDR",
+		"treasury_account_id": "treasury_payroll_" + suffix,
+		"payment_method_code": "BANK",
+		"net_pay":             1060.0,
+		"total_amount":        1060.0,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create payroll payment: %w", err)
+	}
+
+	manifest.Entities = map[string]map[string]any{
+		"employee": {"id": employeeID, "name": stringValue(mapValue(employee, "values")["name"]), "code": stringValue(mapValue(employee, "values")["employee_code"])},
+	}
+	manifest.Documents = map[string]documentFacts{
+		"payroll_run":     runDoc,
+		"payroll_payment": paymentDoc,
+	}
+	manifest.GroundTruth = map[string]any{
+		"approved_leave_days":     2.0,
+		"remaining_leave_balance": 10.0,
+		"payroll_deduction":       40.0,
+		"net_pay":                 1060.0,
+		"payment_status":          paymentDoc.Status,
+		"leave_request_id":        stringValue(leaveRequest["id"]),
+		"balance_account_id":      stringValue(balanceAccount["id"]),
+	}
+	manifest.PromptPack = leaveToPayrollPromptPack(stringValue(mapValue(employee, "values")["name"]))
+	return manifest, nil
+}
+
+func seedPayrollRemittanceScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "payroll_remittance", "payroll-treasury", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	authority, err := client.createModel(ctx, "remittance_authority", map[string]any{
+		"code":                        "AUTH-" + suffix,
+		"name":                        "Tax Authority " + runID,
+		"organization_id":             defaultOrgID,
+		"location_id":                 defaultLocID,
+		"default_currency_code":       "IDR",
+		"default_treasury_account_id": "treasury_remit_" + suffix,
+		"payment_method_code":         "BANK",
+		"status":                      "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	withholding, err := client.createModel(ctx, "remittance_obligation_type", map[string]any{
+		"remittance_authority_id": stringValue(authority["id"]),
+		"code":                    "WHT-" + suffix,
+		"name":                    "Withholding",
+		"obligation_class":        "withholding",
+		"liability_account_code":  "2310-WHT",
+		"status":                  "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	liabilityDoc, err := createAndApproveDocument(ctx, client, "payroll_remittance_liability", map[string]any{
+		"remittance_authority_id":       stringValue(authority["id"]),
+		"remittance_obligation_type_id": stringValue(withholding["id"]),
+		"organization_id":               defaultOrgID,
+		"location_id":                   defaultLocID,
+		"currency_code":                 "IDR",
+		"treasury_account_id":           "treasury_remit_" + suffix,
+		"payment_method_code":           "BANK",
+		"liability_account_code":        "2310-WHT",
+		"due_date":                      "2099-11-07",
+		"employee_withholding_amount":   120.0,
+		"total_amount":                  120.0,
+		"open_amount":                   120.0,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create remittance liability: %w", err)
+	}
+	batchDoc, err := createAndApproveDocument(ctx, client, "payroll_remittance_batch", map[string]any{
+		"liability_ids":       []string{liabilityDoc.ID},
+		"organization_id":     defaultOrgID,
+		"location_id":         defaultLocID,
+		"currency_code":       "IDR",
+		"treasury_account_id": "treasury_remit_" + suffix,
+		"payment_method_code": "BANK",
+		"payment_date":        "2099-11-05",
+		"total_amount":        120.0,
+		"open_amount":         120.0,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create remittance batch: %w", err)
+	}
+	paymentDoc, err := createAndApproveDocument(ctx, client, "payroll_remittance_payment", map[string]any{
+		"payroll_remittance_batch_id": batchDoc.ID,
+		"organization_id":             defaultOrgID,
+		"location_id":                 defaultLocID,
+		"currency_code":               "IDR",
+		"treasury_account_id":         "treasury_remit_" + suffix,
+		"payment_method_code":         "BANK",
+		"payment_date":                "2099-11-05",
+		"amount_paid":                 120.0,
+		"total_amount":                120.0,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create remittance payment: %w", err)
+	}
+
+	manifest.Entities = map[string]map[string]any{
+		"authority": {"id": stringValue(authority["id"]), "name": stringValue(mapValue(authority, "values")["name"]), "code": stringValue(mapValue(authority, "values")["code"])},
+	}
+	manifest.Documents = map[string]documentFacts{
+		"payroll_remittance_liability": liabilityDoc,
+		"payroll_remittance_batch":     batchDoc,
+		"payroll_remittance_payment":   paymentDoc,
+	}
+	manifest.GroundTruth = map[string]any{
+		"liability_total":       120.0,
+		"authority_name":        stringValue(mapValue(authority, "values")["name"]),
+		"obligation_class":      "withholding",
+		"batch_status":          batchDoc.Status,
+		"payment_status":        paymentDoc.Status,
+		"remaining_open_amount": 0.0,
+	}
+	manifest.PromptPack = payrollRemittancePromptPack(stringValue(mapValue(authority, "values")["name"]))
+	return manifest, nil
+}
+
+func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "production_costing", "production-inventory", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	finishedCode := "FG-" + suffix
+	componentA := "COMP-A-" + suffix
+	componentB := "COMP-B-" + suffix
+	for _, item := range []map[string]any{
+		{"sku": finishedCode, "name": "Finished Kit " + runID, "uom_code": "EA", "inventory_enabled": true, "status": "active"},
+		{"sku": componentA, "name": "Component A " + runID, "uom_code": "EA", "inventory_enabled": true, "status": "active"},
+		{"sku": componentB, "name": "Component B " + runID, "uom_code": "EA", "inventory_enabled": true, "inventory_tracking_mode": "batch", "status": "active"},
+	} {
+		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+			return scenarioManifest{}, err
+		}
+	}
+	bom, err := client.createModel(ctx, "production_bom", map[string]any{
+		"code":                 "BOM-" + suffix,
+		"name":                 "Proof BOM " + runID,
+		"finished_item_code":   finishedCode,
+		"default_version_code": "v1",
+		"status":               "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	if _, err := client.createModel(ctx, "production_bom_version", map[string]any{
+		"bom_id":         stringValue(bom["id"]),
+		"bom_code":       stringValue(mapValue(bom, "values")["code"]),
+		"version_code":   "v1",
+		"yield_quantity": 1.0,
+		"is_active":      true,
+		"status":         "active",
+		"lines": []map[string]any{
+			{"component_item_code": componentA, "quantity_per_unit": 2.0, "uom_code": "EA", "warehouse_code": "MAIN"},
+			{"component_item_code": componentB, "quantity_per_unit": 1.0, "uom_code": "EA", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix},
+		},
+	}); err != nil {
+		return scenarioManifest{}, err
+	}
+	for _, seed := range []map[string]any{
+		{"item_code": componentA, "warehouse_code": "MAIN", "quantity": 20.0, "unit_cost": 5.0},
+		{"item_code": componentB, "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "quantity": 10.0, "unit_cost": 10.0},
+	} {
+		if _, err := createAndApproveDocument(ctx, client, "stock_receipt", map[string]any{
+			"receipt_date":   "2099-09-28",
+			"warehouse_code": seed["warehouse_code"],
+			"lines": []map[string]any{{
+				"item_code":      seed["item_code"],
+				"warehouse_code": seed["warehouse_code"],
+				"batch_code":     seed["batch_code"],
+				"uom_code":       "EA",
+				"quantity":       seed["quantity"],
+				"unit_cost":      seed["unit_cost"],
+			}},
+		}); err != nil {
+			return scenarioManifest{}, err
+		}
+	}
+	productionOrder, err := createAndApproveDocument(ctx, client, "production_order", map[string]any{
+		"finished_item_code": finishedCode,
+		"production_pattern": "make_to_stock",
+		"warehouse_code":     "MAIN",
+		"planned_quantity":   3.0,
+		"stages":             []map[string]any{{"code": "mix", "name": "Mix", "required": true, "status": "completed"}, {"code": "pack", "name": "Pack", "required": true, "status": "completed"}},
+		"lines": []map[string]any{
+			{"component_item_code": componentA, "item_code": componentA, "quantity": 6.0, "uom_code": "EA", "warehouse_code": "MAIN", "unit_cost": 5.0},
+			{"component_item_code": componentB, "item_code": componentB, "quantity": 3.0, "uom_code": "EA", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "unit_cost": 10.0},
+		},
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create production order: %w", err)
+	}
+	issueDoc, err := createAndApproveDocument(ctx, client, "production_issue", map[string]any{
+		"source_production_order_id": productionOrder.ID,
+		"warehouse_code":             "MAIN",
+		"lines": []map[string]any{
+			{"item_code": componentA, "quantity": 6.0, "uom_code": "EA", "warehouse_code": "MAIN", "unit_cost": 5.0},
+			{"item_code": componentB, "quantity": 3.0, "uom_code": "EA", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "unit_cost": 10.0},
+		},
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create production issue: %w", err)
+	}
+	outputDoc, err := createAndApproveDocument(ctx, client, "production_output", map[string]any{
+		"source_production_order_id": productionOrder.ID,
+		"finished_item_code":         finishedCode,
+		"warehouse_code":             "MAIN",
+		"output_quantity":            3.0,
+		"production_lot_code":        "LOT-" + suffix,
+		"total_production_cost":      60.0,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create production output: %w", err)
+	}
+
+	manifest.Entities = map[string]map[string]any{
+		"finished_item": {"code": finishedCode, "name": "Finished Kit " + runID},
+	}
+	manifest.Documents = map[string]documentFacts{
+		"production_order":  productionOrder,
+		"production_issue":  issueDoc,
+		"production_output": outputDoc,
+	}
+	manifest.GroundTruth = map[string]any{
+		"consumed_component_a":     6.0,
+		"consumed_component_b":     3.0,
+		"output_quantity":          3.0,
+		"total_production_cost":    60.0,
+		"production_output_status": outputDoc.Status,
+	}
+	manifest.PromptPack = productionCostingPromptPack(finishedCode)
+	return manifest, nil
+}
+
+func newRunContext() (string, string) {
+	runID := time.Now().UTC().Format("20060102-150405")
+	return runID, strings.ReplaceAll(runID, "-", "")
+}
+
+func createScenarioWorkingDir(scenario, runID string) (string, error) {
+	base := filepath.Join(os.TempDir(), "orbyte-agentproof", strings.TrimSpace(scenario), strings.TrimSpace(runID))
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		return "", err
+	}
+	return base, nil
+}
+
+func createOpencodeHome(suffix string, snippet map[string]any) (string, error) {
+	home := filepath.Join(os.TempDir(), "orbyte-agentproof", "opencode", strings.ToLower(strings.TrimSpace(suffix)))
+	configDir := filepath.Join(home, ".config", "opencode")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return "", err
+	}
+	configPath := filepath.Join(configDir, "opencode.json")
+	data, err := json.MarshalIndent(snippet, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(configPath, append(data, '\n'), 0o644); err != nil {
+		return "", err
+	}
+	return home, nil
+}
+
+func newScenarioManifest(ctx context.Context, client *apiClient, baseURL, opencodeCommand, scenario, domainBundle, runID, suffix string) (scenarioManifest, error) {
+	servicePrincipal, opencodeConfig, err := configureAgentAccess(ctx, client, baseURL, opencodeCommand, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	workingDir, err := createScenarioWorkingDir(scenario, runID)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	return scenarioManifest{
+		Version:             "2026-04-02",
+		Scenario:            scenario,
+		DomainBundle:        domainBundle,
+		RunID:               runID,
+		GeneratedAt:         time.Now().UTC(),
+		BaseURL:             baseURL,
+		WorkingDir:          workingDir,
+		AgentRoutePath:      "/ui/agent/workspace",
+		SessionTitleHint:    "agentproof-" + scenario + "-" + runID,
+		SessionInstructions: defaultSessionInstructions(scenario),
+		ServicePrincipal:    servicePrincipal,
+		OpencodeConfig:      opencodeConfig,
+		Entities:            map[string]map[string]any{},
+		Documents:           map[string]documentFacts{},
+		GroundTruth:         map[string]any{},
+	}, nil
+}
+
+func defaultSessionInstructions(scenario string) string {
+	label := strings.ReplaceAll(strings.TrimSpace(scenario), "_", " ")
+	return strings.TrimSpace(fmt.Sprintf(`You are validating the Orbyte business system through its connected MCP tools.
+
+Rules for this session:
+- Ignore the local working directory and do not use local files as evidence. The working directory may be empty on purpose.
+- Use the connected Orbyte MCP tools. Prefer tools whose names start with orbyte_.
+- If a question asks for a status, amount, quantity, or open-work count, verify it from Orbyte data before answering.
+- If you cannot find evidence, say which Orbyte data you checked rather than guessing.
+- Briefly mention the retrieved document or record type in your answer.
+- This is the %s scenario.`, label))
+}
+
+func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, opencodeCommand, suffix string) (servicePrincipalOutput, opencodeConfigOutput, error) {
+	servicePrincipalID := shared.NewID("sp")
+	servicePrincipalKey := "agentproof_mcp_" + strings.ToLower(suffix)
+	servicePrincipal, err := client.createServicePrincipal(ctx, servicePrincipalID, servicePrincipalKey, agentproofMCPOperations())
+	if err != nil {
+		return servicePrincipalOutput{}, opencodeConfigOutput{}, fmt.Errorf("create service principal: %w", err)
+	}
+	token, err := client.issueServicePrincipalToken(ctx, servicePrincipal.ID, 24*60*60)
+	if err != nil {
+		return servicePrincipalOutput{}, opencodeConfigOutput{}, fmt.Errorf("issue service principal token: %w", err)
+	}
+	servicePrincipal.Token = token
+	serverName := "orbyte-agentproof-" + strings.ToLower(suffix)
+	mcpURL := strings.TrimRight(baseURL, "/") + "/mcp"
+	snippet := map[string]any{
+		"$schema": "https://opencode.ai/config.json",
+		"permission": map[string]any{
+			"*": "allow",
+		},
+		"mcp": map[string]any{
+			serverName: map[string]any{
+				"type":    "remote",
+				"url":     mcpURL,
+				"enabled": true,
+				"timeout": 5000,
+				"headers": map[string]any{
+					"Authorization": "Bearer " + token,
+				},
+			},
+		},
+	}
+	opencodeHome, err := createOpencodeHome(suffix, snippet)
+	if err != nil {
+		return servicePrincipalOutput{}, opencodeConfigOutput{}, fmt.Errorf("create opencode config: %w", err)
+	}
+	acpProvider := map[string]any{
+		"key":         "opencode",
+		"name":        "OpenCode ACP",
+		"description": "Agent proof ACP provider",
+		"command":     opencodeCommand,
+		"args":        []string{"acp", "--print-logs"},
+		"transport":   "jsonl",
+		"env": map[string]any{
+			"HOME":            opencodeHome,
+			"XDG_CONFIG_HOME": filepath.Join(opencodeHome, ".config"),
+		},
+	}
+	if err := client.putConfig(ctx, "platform.acp", map[string]any{
+		"enabled":        true,
+		"providers_json": mustJSONString([]map[string]any{acpProvider}),
+	}); err != nil {
+		return servicePrincipalOutput{}, opencodeConfigOutput{}, fmt.Errorf("enable acp: %w", err)
+	}
+	if err := client.putConfig(ctx, "platform.mcp", map[string]any{
+		"enabled":                            true,
+		"governance_enabled":                 true,
+		"default_action_mode":                "draft_only",
+		"tool_states_json":                   "{}",
+		"blocked_action_classes_json":        "[]",
+		"blocked_tool_keys_json":             "[]",
+		"blocked_document_types_json":        "[]",
+		"allowed_submit_document_types_json": "[]",
+		"domain_policy_overrides_json":       "{}",
+	}); err != nil {
+		return servicePrincipalOutput{}, opencodeConfigOutput{}, fmt.Errorf("enable mcp: %w", err)
+	}
+	return servicePrincipal, opencodeConfigOutput{
+		ServerName: serverName,
+		URL:        mcpURL,
+		Bearer:     token,
+		Snippet:    snippet,
+		Provider:   acpProvider,
+	}, nil
+}
+
+func createAndApproveDocument(ctx context.Context, client *apiClient, documentType string, payload map[string]any) (documentFacts, error) {
+	created, err := client.createDocument(ctx, map[string]any{
+		"type":            documentType,
+		"organization_id": defaultOrgID,
+		"location_id":     defaultLocID,
+		"payload":         payload,
+	})
+	if err != nil {
+		return documentFacts{}, err
+	}
+	return submitApproveDocument(ctx, client, created.ID)
+}
+
+func submitApproveDocument(ctx context.Context, client *apiClient, id string) (documentFacts, error) {
+	current, version, etag, err := client.getDocument(ctx, id)
+	if err != nil {
+		return documentFacts{}, err
+	}
+	current, version, etag, err = client.actionDocument(ctx, current.ID, version, etag, "submit")
+	if err != nil {
+		return documentFacts{}, err
+	}
+	current, _, _, err = client.actionDocument(ctx, current.ID, version, etag, "approve")
+	if err != nil {
+		return documentFacts{}, err
+	}
+	return current, nil
+}
+
+func submitApproveAndActionDocument(ctx context.Context, client *apiClient, id, action string) (documentFacts, error) {
+	current, err := submitApproveDocument(ctx, client, id)
+	if err != nil {
+		return documentFacts{}, err
+	}
+	_, version, etag, err := client.getDocument(ctx, current.ID)
+	if err != nil {
+		return documentFacts{}, err
+	}
+	current, _, _, err = client.actionDocument(ctx, current.ID, version, etag, action)
+	if err != nil {
+		return documentFacts{}, err
+	}
+	return current, nil
+}
+
+func employeeSpendPromptPack(name string) []promptExpectation {
+	return []promptExpectation{
+		{ID: "summary", Prompt: fmt.Sprintf("Give a concise summary of %s's employee-spend flow and current end state.", name), RequiredFacts: []requiredFact{{Key: "travel_request_approved", Severity: "high", Checks: []string{"travel request", "approved"}}, {Key: "cash_advance_approved", Severity: "high", Checks: []string{"cash advance", "100"}}, {Key: "expense_claim_approved", Severity: "high", Checks: []string{"expense claim", "170"}}, {Key: "reimbursement_paid", Severity: "high", Checks: []string{"reimbursement", "paid"}}}, ForbiddenPhrases: []string{"employee owes company", "pending approval"}},
+		{ID: "advance_amount", Prompt: fmt.Sprintf("What cash advance amount was approved for %s?", name), RequiredFacts: []requiredFact{{Key: "approved_advance_amount", Severity: "critical", Checks: []string{"100"}}}, ForbiddenPhrases: []string{"30", "140"}},
+		{ID: "claim_total", Prompt: fmt.Sprintf("What was the approved expense-claim total for %s?", name), RequiredFacts: []requiredFact{{Key: "approved_claim_total", Severity: "critical", Checks: []string{"170"}}}, ForbiddenPhrases: []string{"100", "140"}},
+		{ID: "settlement", Prompt: fmt.Sprintf("Did %s owe the company or did the company reimburse the employee, and by how much?", name), RequiredFacts: []requiredFact{{Key: "settlement_direction", Severity: "critical", Checks: []string{"company", "reimburse"}}, {Key: "settlement_amount", Severity: "critical", Checks: []string{"140"}}}, ForbiddenPhrases: []string{"employee owes company", "-30"}},
+		{ID: "payment_doc", Prompt: fmt.Sprintf("What reimbursement or payment document exists for %s, and what is its status?", name), RequiredFacts: []requiredFact{{Key: "payment_document_type", Severity: "high", Checks: []string{"reimbursement", "payment"}}, {Key: "payment_document_status", Severity: "critical", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"draft", "submitted", "approved only"}},
+		{ID: "pending_work", Prompt: fmt.Sprintf("Are there any pending approvals or open workflow tasks for %s's spend scenario?", name), RequiredFacts: []requiredFact{{Key: "pending_approvals", Severity: "critical", Checks: []string{"no"}}, {Key: "open_tasks", Severity: "critical", Checks: []string{"no"}}}, ForbiddenPhrases: []string{"pending approval", "open task"}},
+	}
+}
+
+func orderToCashPromptPack(customerName, itemCode string) []promptExpectation {
+	return []promptExpectation{
+		{ID: "summary", Prompt: fmt.Sprintf("Summarize the order-to-cash scenario for customer %s, including fulfillment and cash collection.", customerName), RequiredFacts: []requiredFact{{Key: "sales_order", Severity: "high", Checks: []string{"sales order"}}, {Key: "delivery", Severity: "high", Checks: []string{"delivered"}}, {Key: "invoice", Severity: "high", Checks: []string{"invoice"}}, {Key: "payment", Severity: "high", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"unpaid", "undelivered"}},
+		{ID: "delivered_qty", Prompt: fmt.Sprintf("How many units of %s were delivered to %s?", itemCode, customerName), RequiredFacts: []requiredFact{{Key: "delivered_qty", Severity: "critical", Checks: []string{"5"}}}, ForbiddenPhrases: []string{"3", "15"}},
+		{ID: "invoice_total", Prompt: fmt.Sprintf("What was the invoice total for %s?", customerName), RequiredFacts: []requiredFact{{Key: "invoice_total", Severity: "critical", Checks: []string{"555"}}}, ForbiddenPhrases: []string{"500", "155"}},
+		{ID: "payment_status", Prompt: fmt.Sprintf("What is the payment status for %s's invoice?", customerName), RequiredFacts: []requiredFact{{Key: "payment_status", Severity: "critical", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"open", "draft"}},
+		{ID: "return_reversal", Prompt: "Did this order have a return or reversal, and if so what document was created?", RequiredFacts: []requiredFact{{Key: "return_exists", Severity: "high", Checks: []string{"return"}}, {Key: "credit_note", Severity: "critical", Checks: []string{"credit note"}}}, ForbiddenPhrases: []string{"no return"}},
+		{ID: "pending_work", Prompt: fmt.Sprintf("Are there any open commercial workflow items left in %s's scenario?", customerName), RequiredFacts: []requiredFact{{Key: "no_open_work", Severity: "critical", Checks: []string{"no"}}}, ForbiddenPhrases: []string{"pending", "open task"}},
+	}
+}
+
+func procureToPayPromptPack(vendorName, itemCode string) []promptExpectation {
+	return []promptExpectation{
+		{ID: "summary", Prompt: fmt.Sprintf("Summarize the procure-to-pay scenario with vendor %s and item %s.", vendorName, itemCode), RequiredFacts: []requiredFact{{Key: "purchase_order", Severity: "high", Checks: []string{"purchase order"}}, {Key: "receipt", Severity: "high", Checks: []string{"goods receipt"}}, {Key: "bill", Severity: "high", Checks: []string{"vendor bill"}}, {Key: "payment", Severity: "high", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"unpaid", "not received"}},
+		{ID: "received_qty", Prompt: fmt.Sprintf("How many units of %s were received from %s?", itemCode, vendorName), RequiredFacts: []requiredFact{{Key: "received_qty", Severity: "critical", Checks: []string{"15"}}}, ForbiddenPhrases: []string{"5", "12"}},
+		{ID: "bill_total", Prompt: fmt.Sprintf("What was the vendor bill total for %s?", vendorName), RequiredFacts: []requiredFact{{Key: "bill_total", Severity: "critical", Checks: []string{"1665"}}}, ForbiddenPhrases: []string{"1500", "555"}},
+		{ID: "payment_status", Prompt: fmt.Sprintf("What is the payment status for the vendor bill from %s?", vendorName), RequiredFacts: []requiredFact{{Key: "payment_status", Severity: "critical", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"open", "draft"}},
+		{ID: "supplier_return", Prompt: "Was there a supplier return or vendor credit in this scenario?", RequiredFacts: []requiredFact{{Key: "supplier_return", Severity: "high", Checks: []string{"supplier return"}}, {Key: "vendor_credit", Severity: "critical", Checks: []string{"vendor credit"}}}, ForbiddenPhrases: []string{"no return"}},
+		{ID: "inventory_effect", Prompt: "What happened to inventory in this procurement scenario?", RequiredFacts: []requiredFact{{Key: "inventory_effect", Severity: "critical", Checks: []string{"received"}}}, ForbiddenPhrases: []string{"no inventory impact"}},
+	}
+}
+
+func leaveToPayrollPromptPack(employeeName string) []promptExpectation {
+	return []promptExpectation{
+		{ID: "summary", Prompt: fmt.Sprintf("Summarize %s's leave-to-payroll scenario.", employeeName), RequiredFacts: []requiredFact{{Key: "approved_leave", Severity: "high", Checks: []string{"approved", "leave"}}, {Key: "payroll", Severity: "high", Checks: []string{"payroll"}}, {Key: "payment", Severity: "high", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"pending leave"}},
+		{ID: "leave_days", Prompt: fmt.Sprintf("How many leave days were approved for %s?", employeeName), RequiredFacts: []requiredFact{{Key: "leave_days", Severity: "critical", Checks: []string{"2"}}}, ForbiddenPhrases: []string{"1", "3"}},
+		{ID: "balance", Prompt: fmt.Sprintf("What remaining leave balance is recorded for %s?", employeeName), RequiredFacts: []requiredFact{{Key: "leave_balance", Severity: "critical", Checks: []string{"10"}}}, ForbiddenPhrases: []string{"12", "2"}},
+		{ID: "payroll_impact", Prompt: fmt.Sprintf("Did payroll reflect the leave impact for %s, and by how much?", employeeName), RequiredFacts: []requiredFact{{Key: "payroll_deduction", Severity: "critical", Checks: []string{"40"}}}, ForbiddenPhrases: []string{"0 deduction"}},
+		{ID: "payment_status", Prompt: fmt.Sprintf("What is the payroll payment state for %s?", employeeName), RequiredFacts: []requiredFact{{Key: "payment_state", Severity: "critical", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"draft", "pending"}},
+	}
+}
+
+func payrollRemittancePromptPack(authorityName string) []promptExpectation {
+	return []promptExpectation{
+		{ID: "summary", Prompt: fmt.Sprintf("Summarize the payroll remittance scenario with authority %s.", authorityName), RequiredFacts: []requiredFact{{Key: "liability", Severity: "high", Checks: []string{"liability"}}, {Key: "batch", Severity: "high", Checks: []string{"batch"}}, {Key: "payment", Severity: "high", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"no remittance"}},
+		{ID: "liability_total", Prompt: fmt.Sprintf("What total remittance liability was due to %s?", authorityName), RequiredFacts: []requiredFact{{Key: "liability_total", Severity: "critical", Checks: []string{"120"}}}, ForbiddenPhrases: []string{"12", "220"}},
+		{ID: "obligation_type", Prompt: fmt.Sprintf("What obligation type was remitted to %s?", authorityName), RequiredFacts: []requiredFact{{Key: "obligation_type", Severity: "critical", Checks: []string{"withholding"}}}, ForbiddenPhrases: []string{"employer contribution only"}},
+		{ID: "batch_state", Prompt: fmt.Sprintf("What is the state of the remittance batch for %s?", authorityName), RequiredFacts: []requiredFact{{Key: "batch_state", Severity: "critical", Checks: []string{"approved"}}}, ForbiddenPhrases: []string{"draft", "cancelled"}},
+		{ID: "payment_state", Prompt: fmt.Sprintf("What is the remittance payment state for %s?", authorityName), RequiredFacts: []requiredFact{{Key: "payment_state", Severity: "critical", Checks: []string{"paid"}}}, ForbiddenPhrases: []string{"open", "draft"}},
+	}
+}
+
+func productionCostingPromptPack(finishedCode string) []promptExpectation {
+	return []promptExpectation{
+		{ID: "summary", Prompt: fmt.Sprintf("Summarize the production-costing scenario for finished item %s.", finishedCode), RequiredFacts: []requiredFact{{Key: "production_order", Severity: "high", Checks: []string{"production order"}}, {Key: "issue", Severity: "high", Checks: []string{"issue"}}, {Key: "output", Severity: "high", Checks: []string{"output"}}}, ForbiddenPhrases: []string{"not produced"}},
+		{ID: "materials", Prompt: fmt.Sprintf("What materials were consumed to produce %s?", finishedCode), RequiredFacts: []requiredFact{{Key: "component_a", Severity: "critical", Checks: []string{"6"}}, {Key: "component_b", Severity: "critical", Checks: []string{"3"}}}, ForbiddenPhrases: []string{"0"}},
+		{ID: "output_qty", Prompt: fmt.Sprintf("How many units of %s were produced?", finishedCode), RequiredFacts: []requiredFact{{Key: "output_qty", Severity: "critical", Checks: []string{"3"}}}, ForbiddenPhrases: []string{"1", "6"}},
+		{ID: "cost_total", Prompt: fmt.Sprintf("What total production cost was recorded for %s?", finishedCode), RequiredFacts: []requiredFact{{Key: "cost_total", Severity: "critical", Checks: []string{"60"}}}, ForbiddenPhrases: []string{"30", "600"}},
+		{ID: "status", Prompt: fmt.Sprintf("What is the status of the production output for %s?", finishedCode), RequiredFacts: []requiredFact{{Key: "output_state", Severity: "critical", Checks: []string{"posted"}}}, ForbiddenPhrases: []string{"draft", "cancelled"}},
+	}
+}
+
+func mustJSONString(value any) string {
+	data, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+func periodID(record map[string]any) string {
+	return stringValue(record["id"])
+}
+
+func numberValue(value any) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case json.Number:
+		f, _ := v.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+func agentproofMCPOperations() []string {
+	return []string{
+		"agent.workspace.use",
+		"platform.context.read",
+		"module.read",
+		"document.read",
+		"document.list",
+		"configuration.read",
+		"analytics.read",
+		"monitoring.read",
+		"template.read",
+		"audit.read",
+		"event.read",
+		"outbox.read",
+		"deadletter.read",
+	}
+}

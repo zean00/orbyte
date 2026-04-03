@@ -126,6 +126,9 @@ func New(opts Options) (*App, error) {
 	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, runtimeSettings.BootstrapAdminPassword()); err != nil {
 		return nil, err
 	}
+	if err := applyRuntimeACPBootstrap(graph.config, runtimeSettings); err != nil {
+		return nil, err
+	}
 	graph.runtimeHealth.SetBootstrapped(true)
 	if report := graph.config.ValidateAll("", ""); !report.Valid {
 		return nil, fmt.Errorf("configuration validation failed: %v", report.Issues)
@@ -220,6 +223,42 @@ func ensureJWTSecret(databaseURLConfigured bool) error {
 	_ = os.Setenv("APP_JWT_SECRET", secret)
 	log.Printf("APP_AUTH_DEV_MODE enabled; seeded ephemeral JWT secret for this process")
 	return nil
+}
+
+func applyRuntimeACPBootstrap(cfg *config.Service, runtime *runtimeconfig.Service) error {
+	if cfg == nil || runtime == nil {
+		return nil
+	}
+	enabled, configured := runtime.ACPBootstrapEnabled()
+	providersJSON := runtime.ACPBootstrapProvidersJSON()
+	if !configured && providersJSON == "" {
+		return nil
+	}
+	def, ok := cfg.Definition("platform.acp")
+	if !ok {
+		return fmt.Errorf("platform.acp configuration definition is not registered")
+	}
+	current, _ := cfg.Resolve("platform.acp", "", "")
+	value := map[string]any{}
+	for key, item := range current.Value {
+		value[key] = item
+	}
+	if configured {
+		value["enabled"] = enabled
+	}
+	if providersJSON != "" {
+		value["providers_json"] = providersJSON
+	}
+	return cfg.Save(config.Entry{
+		Key:         def.Key,
+		ModuleKey:   def.ModuleKey,
+		Category:    def.Category,
+		Scope:       "deployment",
+		Value:       value,
+		UpdatedAt:   time.Now().UTC(),
+		UpdatedBy:   "runtime_bootstrap",
+		Description: def.Description,
+	})
 }
 
 func generateDevelopmentJWTSecret() (string, error) {
