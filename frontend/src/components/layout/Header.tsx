@@ -39,6 +39,7 @@ export function Header() {
     setAdminBootstrap,
     setLocale,
     setRoutes,
+    setNavigationPending,
     toggleMobileNav,
     actions,
     routes,
@@ -95,6 +96,7 @@ export function Header() {
   }, [currentRoute, currentSurface, routes, shellKind]);
 
   const handleSurfaceChange = async (surface: string) => {
+    setNavigationPending(true);
     const bootstrap = await fetchWorkspaceBootstrap(surface);
     setRoutes(
       toShellRoutes(
@@ -109,32 +111,37 @@ export function Header() {
   };
 
   const handleLocaleChange = async (newLocale: string) => {
-    const activeLocale = await persistLocale(newLocale);
-    setLocale(activeLocale);
-    setPreferredLocale(activeLocale);
-    if (shellKind === "workspace") {
-      const bootstrap = await fetchWorkspaceBootstrap(currentSurface);
-      setWorkspaceBootstrap(bootstrap);
+    setNavigationPending(true);
+    try {
+      const activeLocale = await persistLocale(newLocale);
+      setLocale(activeLocale);
+      setPreferredLocale(activeLocale);
+      if (shellKind === "workspace") {
+        const bootstrap = await fetchWorkspaceBootstrap(currentSurface);
+        setWorkspaceBootstrap(bootstrap);
+        setRoutes(
+          toShellRoutes(
+            bootstrap.menus,
+            bootstrap.actions,
+            bootstrap.locale,
+            "workspace",
+          ),
+        );
+        return;
+      }
+      const bootstrap = await fetchAdminBootstrap();
+      setAdminBootstrap(bootstrap);
       setRoutes(
         toShellRoutes(
           bootstrap.menus,
           bootstrap.actions,
           bootstrap.locale,
-          "workspace",
+          "admin",
         ),
       );
-      return;
+    } finally {
+      setNavigationPending(false);
     }
-    const bootstrap = await fetchAdminBootstrap();
-    setAdminBootstrap(bootstrap);
-    setRoutes(
-      toShellRoutes(
-        bootstrap.menus,
-        bootstrap.actions,
-        bootstrap.locale,
-        "admin",
-      ),
-    );
   };
 
   const handleCommandSubmit = (event: FormEvent) => {
@@ -156,6 +163,7 @@ export function Header() {
         ? match?.path || raw
         : `/${match?.path || raw}`,
     );
+    setNavigationPending(true);
     setCommand("");
   };
 

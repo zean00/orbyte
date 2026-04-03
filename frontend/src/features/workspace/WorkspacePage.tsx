@@ -58,6 +58,7 @@ export default function WorkspacePage() {
     setWorkspaceBootstrap,
     setRoutes,
     shellKind,
+    setNavigationPending,
   } = useShellStore()
   const pathname = normalizeLegacyWorkspacePath(location.pathname || '/')
   const { route, loading } = useWorkspaceRouteResolution({
@@ -83,6 +84,13 @@ export default function WorkspacePage() {
   useEffect(() => {
     useShellStore.getState().setCurrentRoute(pathname)
   }, [pathname])
+
+  useEffect(() => {
+    setNavigationPending(loading)
+    return () => {
+      setNavigationPending(false)
+    }
+  }, [loading, setNavigationPending])
 
   async function reloadBootstrap(surface = currentSurface) {
     const bootstrap = await fetchWorkspaceBootstrap(surface)
@@ -193,7 +201,10 @@ export default function WorkspacePage() {
   }, [actions, addToast, currentSurface, defaultPath, loading, locale, navigate, pathname, route])
 
   return (
-    <Shell>
+    <Shell
+      loading={loading}
+      loadingLabel="Loading workspace data from PostgreSQL."
+    >
       {shellKind === 'workspace' ? content : <WorkspacePanel title="Unavailable" status="Workspace shell is not active." />}
     </Shell>
   )

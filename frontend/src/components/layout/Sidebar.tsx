@@ -17,8 +17,10 @@ export function Sidebar() {
     uiAccess,
     uiPath,
     currentRoute,
+    setNavigationPending,
   } = useShellStore()
-  const groupedRoutes = useMemo(() => groupRoutesByPath(routes), [routes])
+  const [routeFilter, setRouteFilter] = useState('')
+  const groupedRoutes = useMemo(() => groupRoutesByPath(routes, routeFilter), [routeFilter, routes])
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -79,6 +81,18 @@ export function Sidebar() {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+          {sidebarOpen ? (
+            <div className="mb-4">
+              <input
+                id="sidebar-route-filter"
+                value={routeFilter}
+                onChange={(event) => setRouteFilter(event.target.value)}
+                placeholder="Filter menu"
+                className="w-full rounded-2xl border border-line bg-shell px-3 py-2 text-sm text-body outline-none transition focus:border-accent"
+                name="sidebar_route_filter"
+              />
+            </div>
+          ) : null}
           {groupedRoutes.map((group) => (
             <div key={group.key} className="mb-5 last:mb-0">
               {sidebarOpen && (
@@ -101,7 +115,12 @@ export function Sidebar() {
                   <NavLink
                     key={item.key}
                     to={item.path}
-                    onClick={closeMobileNav}
+                    onClick={() => {
+                      if (item.path !== currentRoute) {
+                        setNavigationPending(true)
+                      }
+                      closeMobileNav()
+                    }}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors',
@@ -119,6 +138,9 @@ export function Sidebar() {
               </div>
             </div>
           ))}
+          {groupedRoutes.length === 0 && routeFilter.trim() ? (
+            <p className="px-3 py-2 text-sm text-muted">No matching routes.</p>
+          ) : null}
         </nav>
 
         <div className="shrink-0 border-t border-line p-3">
@@ -126,6 +148,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => {
+                setNavigationPending(true)
                 window.location.href = `/admin${adminPath === '/' ? '' : adminPath}`
               }}
               className="flex w-full items-center gap-3 rounded-2xl bg-transparent px-3 py-2.5 text-left text-muted transition-colors hover:bg-shell dark:hover:bg-ink/50"
@@ -138,6 +161,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => {
+                setNavigationPending(true)
                 window.location.href = `/ui${uiPath === '/' ? '' : uiPath}`
               }}
               className="flex w-full items-center gap-3 rounded-2xl bg-transparent px-3 py-2.5 text-left text-muted transition-colors hover:bg-shell dark:hover:bg-ink/50"
@@ -158,11 +182,19 @@ type RouteGroup = {
   items: ShellRoute[]
 }
 
-function groupRoutesByPath(routes: ShellRoute[]): RouteGroup[] {
+function groupRoutesByPath(routes: ShellRoute[], filterText = ''): RouteGroup[] {
   const groups = new Map<string, RouteGroup>()
   const order: string[] = []
+  const filterValue = filterText.trim().toLowerCase()
 
   for (const route of routes) {
+    if (
+      filterValue &&
+      !route.label.toLowerCase().includes(filterValue) &&
+      !route.path.toLowerCase().includes(filterValue)
+    ) {
+      continue
+    }
     const segment = firstPathSegment(route.path)
     const groupKey = segment || 'general'
     if (!groups.has(groupKey)) {

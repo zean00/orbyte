@@ -1551,6 +1551,8 @@ func ledgerFormSections() []module.SectionDefinition {
 
 func modelPermissionPrefix(modelKey string) string {
 	switch modelKey {
+	case "employee_profile", "employee_assignment", "employee_role_eligibility", "employee_compensation_profile":
+		return "employee"
 	case "customer_profile":
 		return "customer"
 	case "commercial_product":

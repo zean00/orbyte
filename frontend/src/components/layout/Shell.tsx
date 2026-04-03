@@ -6,10 +6,13 @@ import { useShellStore } from '@/stores/shellStore'
 
 export interface ShellProps {
   children: ReactNode
+  loading?: boolean
+  loadingLabel?: string
 }
 
-export function Shell({ children }: ShellProps) {
-  const { sidebarOpen } = useShellStore()
+export function Shell({ children, loading = false, loadingLabel }: ShellProps) {
+  const { sidebarOpen, navigationPending } = useShellStore()
+  const showLoading = loading || navigationPending
 
   return (
     <div className="flex min-h-screen bg-shell dark:bg-ink">
@@ -21,6 +24,19 @@ export function Shell({ children }: ShellProps) {
         )}
       >
         <Header />
+        {showLoading ? (
+          <div className="sticky top-16 z-20 px-4 pt-3 sm:px-6">
+            <div className="overflow-hidden rounded-2xl border border-accent/15 bg-surface/92 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+              <div className="h-1 w-full overflow-hidden bg-accent-soft/60">
+                <div className="h-full w-1/3 animate-[shell-progress_1.2s_ease-in-out_infinite] rounded-full bg-accent" />
+              </div>
+              <div className="flex items-center gap-3 px-4 py-3 text-sm text-body">
+                <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-accent" />
+                <span>{loadingLabel || "Loading data from the server."}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <main className="min-h-0 flex-1 overflow-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8">
           {children}
         </main>

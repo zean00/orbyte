@@ -75,6 +75,18 @@ textarea::placeholder {
   height: 100%;
 }
 
+@keyframes shell-progress {
+  0% {
+    transform: translateX(-120%);
+  }
+  55% {
+    transform: translateX(150%);
+  }
+  100% {
+    transform: translateX(150%);
+  }
+}
+
 /* Dark mode using class strategy */
 .dark {
   color-scheme: dark;

@@ -38,8 +38,9 @@ export default function AdminWorkspacePage() {
   const bootstrap = useShellStore((state) => state.adminBootstrap);
   const defaultPath = useShellStore((state) => state.defaultPath);
   const routes = useShellStore((state) => state.routes);
+  const setNavigationPending = useShellStore((state) => state.setNavigationPending);
   const path = normalizeShellPath(location.pathname || "/", "admin");
-  const payload = useAdminPageData(path, !!bootstrap);
+  const { payload, loading } = useAdminPageData(path, !!bootstrap);
 
   useEffect(() => {
     if (path === "/" && defaultPath && defaultPath !== "/") {
@@ -53,11 +54,25 @@ export default function AdminWorkspacePage() {
     );
   }, [path, routes]);
 
+  useEffect(() => {
+    setNavigationPending(loading);
+    return () => {
+      setNavigationPending(false);
+    };
+  }, [loading, setNavigationPending]);
+
   return (
-    <Shell>
+    <Shell
+      loading={loading}
+      loadingLabel="Loading admin data from PostgreSQL."
+    >
       <PageSection
         title={title}
-        status="Admin data rendered from the existing server APIs."
+        status={
+          loading
+            ? "Loading admin data from the current server APIs."
+            : "Admin data rendered from the existing server APIs."
+        }
       >
 
         {path === "/org" && bootstrap ? (

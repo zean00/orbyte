@@ -873,8 +873,8 @@ export default function AgentSurfacePage() {
       </header>
 
       <main className="mx-auto grid max-w-[1700px] gap-4 px-4 pb-40 pt-4 md:px-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="rounded-[1.75rem] border border-line/80 bg-surface/85 p-5 shadow-panel backdrop-blur lg:sticky lg:top-24 lg:h-[calc(100svh-8rem)] lg:overflow-auto">
-          <div>
+        <aside className="rounded-[1.75rem] border border-line/80 bg-surface/85 p-5 shadow-panel backdrop-blur lg:sticky lg:top-24 lg:flex lg:h-[calc(100svh-8rem)] lg:flex-col lg:overflow-hidden">
+          <div className="shrink-0">
             <div className="text-sm font-semibold text-body">Provider</div>
             <select
               className="mt-2 w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body"
@@ -952,9 +952,9 @@ export default function AgentSurfacePage() {
             </button>
           </div>
 
-          <div className="mt-6 border-t border-line/80 pt-5">
-            <div className="text-sm font-semibold text-body">Sessions</div>
-            <div className="mt-3 space-y-2">
+          <div className="mt-6 flex min-h-0 flex-1 flex-col border-t border-line/80 pt-5">
+            <div className="shrink-0 text-sm font-semibold text-body">Sessions</div>
+            <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {sortedSessions.map((item) => {
                 const selected = selectedSessionID === item.id;
                 const preview = sessionPreview(item);
@@ -1016,37 +1016,6 @@ export default function AgentSurfacePage() {
                 <p className="text-sm text-muted">No ACP sessions yet.</p>
               ) : null}
             </div>
-          </div>
-
-          <div className="mt-6 border-t border-line/80 pt-5">
-            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
-              Suggested focus
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {OPTIONAL_AGENT_CAPABILITIES.map((item) => {
-                const active = activeCapabilities.includes(item.key);
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => toggleCapability(item.key)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                      active
-                        ? "border-accent bg-accent-soft/70 text-accent"
-                        : "border-line bg-shell text-muted hover:border-accent/30 hover:text-body"
-                    }`}
-                  >
-                    {item.title}
-                  </button>
-                );
-              })}
-            </div>
-            {suggestedExpansions.length > 0 ? (
-              <p className="mt-3 text-xs leading-5 text-muted">
-                Suggested:{" "}
-                {suggestedExpansions.map((item) => item.title).join(", ")}
-              </p>
-            ) : null}
           </div>
         </aside>
 
@@ -1132,9 +1101,42 @@ export default function AgentSurfacePage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 16 }}
                     transition={{ duration: 0.18 }}
-                    className="border-l border-line/70 bg-shell/75 p-4 backdrop-blur lg:block"
+                    className="border-l border-line/70 bg-shell/75 p-4 backdrop-blur lg:block lg:h-[calc(100svh-14rem)] lg:overflow-hidden"
                   >
-                    <div className="h-full space-y-4 overflow-auto">
+                    <div className="flex h-full min-h-0 flex-col">
+                      <section className="shrink-0 rounded-[1.5rem] border border-line/80 bg-surface/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+                          Suggested focus
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {OPTIONAL_AGENT_CAPABILITIES.map((item) => {
+                            const active = activeCapabilities.includes(item.key);
+                            return (
+                              <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => toggleCapability(item.key)}
+                                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                  active
+                                    ? "border-accent bg-accent-soft/70 text-accent"
+                                    : "border-line bg-shell text-muted hover:border-accent/30 hover:text-body"
+                                }`}
+                              >
+                                {item.title}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {suggestedExpansions.length > 0 ? (
+                          <p className="mt-3 text-xs leading-5 text-muted">
+                            Suggested:{" "}
+                            {suggestedExpansions
+                              .map((item) => item.title)
+                              .join(", ")}
+                          </p>
+                        ) : null}
+                      </section>
+                      <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                       <InspectorSection
                         title="Capabilities"
                         kicker={catalogSummary?.mode || "compact catalog"}
@@ -1267,6 +1269,7 @@ export default function AgentSurfacePage() {
                           ) : null}
                         </div>
                       </InspectorSection>
+                      </div>
                     </div>
                   </motion.aside>
                 )}

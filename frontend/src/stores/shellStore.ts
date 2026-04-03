@@ -41,6 +41,7 @@ interface ShellState {
   customEntries: CustomEntryDefinition[]
   workspaceBootstrap: WorkspaceBootstrapResponse | null
   adminBootstrap: AdminBootstrapResponse | null
+  navigationPending: boolean
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   toggleMobileNav: () => void
@@ -50,6 +51,7 @@ interface ShellState {
   setAdminBootstrap: (data: AdminBootstrapResponse) => void
   setRoutes: (routes: ShellRoute[]) => void
   setLocale: (locale: string) => void
+  setNavigationPending: (pending: boolean) => void
 }
 
 export const useShellStore = create<ShellState>()(
@@ -76,6 +78,7 @@ export const useShellStore = create<ShellState>()(
       customEntries: [],
       workspaceBootstrap: null,
       adminBootstrap: null,
+      navigationPending: false,
 
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -115,6 +118,7 @@ export const useShellStore = create<ShellState>()(
         }),
       setRoutes: (routes) => set({ routes }),
       setLocale: (locale) => set({ locale }),
+      setNavigationPending: (pending) => set({ navigationPending: pending }),
     }),
     {
       name: 'orbyte-shell',
