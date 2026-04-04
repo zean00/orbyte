@@ -67,11 +67,28 @@ type POSCatalogItem struct {
 }
 
 type POSBootstrap struct {
-	Stores       []model.Record `json:"stores"`
-	Registers    []model.Record `json:"registers"`
-	TenderTypes  []model.Record `json:"tender_types"`
-	OpenShift    *model.Record  `json:"open_shift,omitempty"`
-	CurrentStore *model.Record  `json:"current_store,omitempty"`
+	Stores               []model.Record      `json:"stores"`
+	Registers            []model.Record      `json:"registers"`
+	TenderTypes          []model.Record      `json:"tender_types"`
+	OpenShift            *model.Record       `json:"open_shift,omitempty"`
+	CurrentStore         *model.Record       `json:"current_store,omitempty"`
+	CurrentCashier       *POSCashierSummary  `json:"current_cashier,omitempty"`
+	TerminalContext      *POSTerminalContext `json:"terminal_context,omitempty"`
+	CashierPINConfigured bool                `json:"cashier_pin_configured"`
+}
+
+type POSCashierSummary struct {
+	UserID   string `json:"user_id"`
+	Username string `json:"username,omitempty"`
+	Name     string `json:"name,omitempty"`
+}
+
+type POSTerminalContext struct {
+	CashierUserID string `json:"cashier_user_id"`
+	StoreCode     string `json:"store_code"`
+	RegisterCode  string `json:"register_code"`
+	ShiftID       string `json:"shift_id"`
+	VerifiedAt    string `json:"verified_at,omitempty"`
 }
 
 type POSCustomerLookupItem struct {
@@ -154,6 +171,22 @@ type POSCheckoutResult struct {
 	ReceiptTitle string            `json:"receipt_title,omitempty"`
 }
 
+type POSPromotionCodeValidation struct {
+	Code                  string   `json:"code"`
+	Status                string   `json:"status"`
+	Message               string   `json:"message"`
+	PromotionCampaignCode string   `json:"promotion_campaign_code,omitempty"`
+	DiscountAmount        float64  `json:"discount_amount,omitempty"`
+	RuleCodes             []string `json:"rule_codes,omitempty"`
+}
+
+type POSPromotionValidationResult struct {
+	Valid               bool                         `json:"valid"`
+	CurrencyCode        string                       `json:"currency_code,omitempty"`
+	DiscountAmountTotal float64                      `json:"discount_amount_total,omitempty"`
+	Codes               []POSPromotionCodeValidation `json:"codes"`
+}
+
 func (s *POSCoreService) Bootstrap(locationID, storeCode, registerCode, cashierUserID string) (POSBootstrap, error) {
 	stores := s.listActiveModels("pos_store")
 	registers := s.listActiveModels("pos_register")
@@ -181,6 +214,25 @@ func (s *POSCoreService) Bootstrap(locationID, storeCode, registerCode, cashierU
 		}
 	}
 	return bootstrap, nil
+}
+
+func (s *POSCoreService) ValidateTerminalContext(storeCode, registerCode, shiftID, cashierUserID string) (model.Record, error) {
+	shift, _, _, err := s.validateSaleContext(storeCode, registerCode, shiftID, cashierUserID)
+	if err != nil {
+		return model.Record{}, err
+	}
+	return shift, nil
+}
+
+func (s *POSCoreService) ResumeShift(storeCode, registerCode, shiftID, cashierUserID string) (model.Record, error) {
+	shift, err := s.ValidateTerminalContext(storeCode, registerCode, shiftID, cashierUserID)
+	if err != nil {
+		return model.Record{}, err
+	}
+	if textValue(shift.Values["status"]) != "opened" {
+		return model.Record{}, shared.Validation("shift is not open")
+	}
+	return shift, nil
 }
 
 func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, query string) ([]POSCatalogItem, error) {
@@ -272,6 +324,185 @@ func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, qu
 		return results[i].Name < results[j].Name
 	})
 	return results, nil
+}
+
+func (s *POSCoreService) ValidatePromotionCodes(organizationID, locationID, storeCode, partyID, partyName string, promotionCodes []string, lines []POSCartLineInput) (POSPromotionValidationResult, error) {
+	result := POSPromotionValidationResult{Valid: true, Codes: []POSPromotionCodeValidation{}}
+	normalizedCodes := make([]string, 0, len(promotionCodes))
+	seen := map[string]struct{}{}
+	for _, item := range promotionCodes {
+		code := strings.TrimSpace(item)
+		if code == "" {
+			continue
+		}
+		key := strings.ToLower(code)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalizedCodes = append(normalizedCodes, code)
+	}
+	if len(normalizedCodes) == 0 {
+		return result, nil
+	}
+	if strings.TrimSpace(storeCode) == "" {
+		return result, shared.Validation("store is required for promotion validation")
+	}
+	store, ok := s.findModelByField("pos_store", "code", storeCode)
+	if !ok {
+		return result, shared.NotFound("pos store not found")
+	}
+	payload, normalizedLines, err := s.buildOrderPayload(store, partyID, partyName, "", normalizedCodes, lines)
+	if err != nil {
+		return result, err
+	}
+	payload = s.commercial.NormalizePayload("sales_order", payload)
+	result.CurrencyCode = firstNonEmptyString(textValue(payload["currency_code"]), "IDR")
+	result.DiscountAmountTotal = roundMoney(numberValue(payload["discount_amount_total"]))
+
+	appliedByCode := map[string]*POSPromotionCodeValidation{}
+	for _, row := range normalizedLines {
+		for _, entry := range recordList(row["promotion_breakdown"]) {
+			code := strings.TrimSpace(textValue(entry["promotion_code"]))
+			if code == "" {
+				continue
+			}
+			key := strings.ToLower(code)
+			current := appliedByCode[key]
+			if current == nil {
+				current = &POSPromotionCodeValidation{
+					Code:                  code,
+					Status:                "applied",
+					Message:               "Code applied successfully.",
+					PromotionCampaignCode: textValue(entry["promotion_campaign_code"]),
+					RuleCodes:             []string{},
+				}
+				appliedByCode[key] = current
+			}
+			current.DiscountAmount = roundMoney(current.DiscountAmount + numberValue(entry["discount_value"]))
+			ruleCode := strings.TrimSpace(textValue(entry["rule_code"]))
+			if ruleCode != "" && !containsString(current.RuleCodes, ruleCode) {
+				current.RuleCodes = append(current.RuleCodes, ruleCode)
+			}
+		}
+	}
+
+	evalTime := s.commercial.discountEvaluationTime(payload)
+	partyValues := s.commercial.partyDiscountFields(partyID)
+	campaigns := s.commercial.listActivePromotionCampaigns()
+	activeCodes := s.commercial.listPromotionCodes()
+	for _, code := range normalizedCodes {
+		key := strings.ToLower(code)
+		if applied := appliedByCode[key]; applied != nil {
+			result.Codes = append(result.Codes, *applied)
+			continue
+		}
+		status := POSPromotionCodeValidation{
+			Code:    code,
+			Status:  "invalid",
+			Message: "Code is invalid.",
+		}
+		record, found := s.findModelByField("promotion_code", "code", code)
+		if !found {
+			status.Message = "Code was not found."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		recordStatus := strings.ToLower(strings.TrimSpace(textValue(record.Values["status"])))
+		if recordStatus != "" && recordStatus != "active" {
+			status.Message = "Code is inactive."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		promoCode, active := activeCodes[key]
+		if !active {
+			status.Message = "Code is inactive."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		status.PromotionCampaignCode = promoCode.promotionCampaignCode
+		campaign, ok := campaigns[strings.ToLower(strings.TrimSpace(promoCode.promotionCampaignCode))]
+		if !ok {
+			status.Message = "Campaign is inactive or unavailable."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		if !withinDateWindow(evalTime, campaign.startAt, campaign.endAt) || !withinDateWindow(evalTime, promoCode.startAt, promoCode.endAt) {
+			status.Message = "Code is outside its active date window."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		if len(campaign.salesChannels) > 0 {
+			if _, ok := campaign.salesChannels["pos"]; !ok {
+				status.Message = "Code is not valid for POS sales."
+				result.Valid = false
+				result.Codes = append(result.Codes, status)
+				continue
+			}
+		}
+		if len(campaign.storeCodes) > 0 {
+			if _, ok := campaign.storeCodes[strings.ToLower(strings.TrimSpace(storeCode))]; !ok {
+				status.Message = "Code is not valid for this store."
+				result.Valid = false
+				result.Codes = append(result.Codes, status)
+				continue
+			}
+		}
+		if !promotionCodeMatchesParty(promoCode, partyValues, evalTime) {
+			status.Message = "Code is not eligible for the attached customer."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		if promoCode.totalRedemptionLimit > 0 && s.commercial.promotionCodeUsageCount(promoCode.code, "") >= promoCode.totalRedemptionLimit {
+			status.Message = "Code redemption limit has been reached."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		if strings.TrimSpace(partyID) != "" && promoCode.perCustomerRedemptionLimit > 0 && s.commercial.promotionCodeUsageCount(promoCode.code, partyID) >= promoCode.perCustomerRedemptionLimit {
+			status.Message = "Customer redemption limit has been reached for this code."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		if campaign.globalUsageCap > 0 && s.commercial.promotionCampaignUsageCount(campaign.code, "") >= campaign.globalUsageCap {
+			status.Message = "Campaign usage limit has been reached."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		if strings.TrimSpace(partyID) != "" && campaign.perCustomerUsageCap > 0 && s.commercial.promotionCampaignUsageCount(campaign.code, partyID) >= campaign.perCustomerUsageCap {
+			status.Message = "Customer usage limit has been reached for this campaign."
+			result.Valid = false
+			result.Codes = append(result.Codes, status)
+			continue
+		}
+		status.Status = "not_applicable"
+		status.Message = "Code is valid, but it does not apply to the current basket."
+		result.Valid = false
+		result.Codes = append(result.Codes, status)
+	}
+	return result, nil
+}
+
+func posPromotionValidationMessage(result POSPromotionValidationResult) string {
+	parts := make([]string, 0, len(result.Codes))
+	for _, item := range result.Codes {
+		if strings.EqualFold(item.Status, "applied") {
+			continue
+		}
+		parts = append(parts, strings.TrimSpace(item.Code)+": "+strings.TrimSpace(item.Message))
+	}
+	if len(parts) == 0 {
+		return "promotion codes are invalid"
+	}
+	return "promotion validation failed: " + strings.Join(parts, "; ")
 }
 
 func (s *POSCoreService) SearchCustomers(query string) ([]POSCustomerLookupItem, error) {
@@ -526,6 +757,11 @@ func (s *POSCoreService) HoldSale(input POSHoldSaleInput, actorID string) (model
 	if err != nil {
 		return model.Record{}, err
 	}
+	if validation, validateErr := s.ValidatePromotionCodes(textValue(shift.Values["organization_id"]), textValue(shift.Values["location_id"]), input.StoreCode, input.PartyID, input.PartyName, input.PromotionCodes, input.Lines); validateErr != nil {
+		return model.Record{}, validateErr
+	} else if !validation.Valid {
+		return model.Record{}, shared.Validation(posPromotionValidationMessage(validation))
+	}
 	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.PromotionCodes, input.Lines)
 	if err != nil {
 		return model.Record{}, err
@@ -615,6 +851,11 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 	}
 	if len(input.Tenders) == 0 {
 		return POSCheckoutResult{}, shared.Validation("pos sale requires at least one tender")
+	}
+	if validation, validateErr := s.ValidatePromotionCodes(organizationID, locationID, input.StoreCode, input.PartyID, input.PartyName, input.PromotionCodes, input.Lines); validateErr != nil {
+		return POSCheckoutResult{}, validateErr
+	} else if !validation.Valid {
+		return POSCheckoutResult{}, shared.Validation(posPromotionValidationMessage(validation))
 	}
 	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.PromotionCodes, input.Lines)
 	if err != nil {

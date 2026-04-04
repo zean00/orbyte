@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -318,6 +319,164 @@ func TestPOSCheckoutCreatesPromotionRedemptionFromPromoCode(t *testing.T) {
 	}
 	if got := textValue(items[0].Values["promotion_code"]); got != "POS10" {
 		t.Fatalf("expected redemption code POS10, got %q", got)
+	}
+}
+
+func TestPOSValidatePromotionCodesReportsAppliedAndRejectsInvalid(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	mustRegisterPOSTestDocumentTypes(t, docs)
+	mustRegisterPOSTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                  "POS-PROMO",
+		"name":                 "Promo Tee",
+		"description":          "Promo POS item",
+		"kind":                 "product",
+		"uom_code":             "EA",
+		"unit_price":           100,
+		"tax_code":             "VAT11",
+		"revenue_account_code": "4000-REV",
+		"is_sellable":          true,
+		"inventory_enabled":    true,
+		"allow_negative_stock": false,
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("tax_code", "user_admin", map[string]any{
+		"code":             "VAT11",
+		"rate_percent":     11.0,
+		"mode":             "exclusive",
+		"tax_account_code": "2100-VATOUT",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create tax code: %v", err)
+	}
+	if _, err := models.Create("payment_method", "user_admin", map[string]any{
+		"code":                  "CASH",
+		"name":                  "Cash",
+		"clearing_account_code": "1000-CASH",
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create payment method: %v", err)
+	}
+	if _, err := models.Create("pos_store", "user_admin", map[string]any{
+		"code":             "STORE1",
+		"name":             "Store 1",
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "VAT11",
+		"currency_code":    "IDR",
+		"checkout_mode":    "invoice_first",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	if _, err := models.Create("pos_register", "user_admin", map[string]any{
+		"code":          "REG1",
+		"name":          "Register 1",
+		"store_code":    "STORE1",
+		"checkout_mode": "invoice_first",
+		"status":        "active",
+	}); err != nil {
+		t.Fatalf("create register: %v", err)
+	}
+	if _, err := models.Create("pos_tender_type", "user_admin", map[string]any{
+		"code":                  "CASH",
+		"name":                  "Cash",
+		"kind":                  "cash",
+		"payment_method_code":   "CASH",
+		"clearing_account_code": "1000-CASH",
+		"is_cash_like":          true,
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create tender type: %v", err)
+	}
+	if _, err := models.Create("promotion_campaign", "user_admin", map[string]any{
+		"code":           "POS10",
+		"name":           "POS Promo",
+		"trigger_mode":   "code",
+		"sales_channels": "pos",
+		"store_codes":    "STORE1",
+		"status":         "active",
+	}); err != nil {
+		t.Fatalf("create campaign: %v", err)
+	}
+	if _, err := models.Create("promotion_code", "user_admin", map[string]any{
+		"code":                    "POS10",
+		"promotion_campaign_code": "POS10",
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create promotion code: %v", err)
+	}
+	if _, err := models.Create("discount_rule", "user_admin", map[string]any{
+		"code":                    "POS10-RULE",
+		"name":                    "POS 10 Percent",
+		"promotion_campaign_code": "POS10",
+		"scope":                   "line",
+		"rule_kind":               "line_percent",
+		"item_codes":              "POS-PROMO",
+		"discount_percent":        10.0,
+		"status":                  "active",
+	}); err != nil {
+		t.Fatalf("create discount rule: %v", err)
+	}
+
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{
+		"item_code":          "POS-PROMO",
+		"warehouse_code":     "MAIN",
+		"quantity_delta":     3.0,
+		"movement_reason":    "seed",
+		"movement_direction": "in",
+		"movement_date":      time.Now().UTC().Format("2006-01-02"),
+	})
+
+	actions := NewDocumentActions(docs, flows, nil, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	commercialSvc := NewCommercialCoreService(docs, nil, models, nil)
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	fulfillmentSvc := NewFulfillmentCoreService(docs, nil, inventorySvc)
+	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
+	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
+
+	validation, err := posSvc.ValidatePromotionCodes("org_default", "loc_main", "STORE1", "", "", []string{"POS10"}, []POSCartLineInput{{
+		ItemCode: "POS-PROMO",
+		Quantity: 1,
+	}})
+	if err != nil {
+		t.Fatalf("validate promotions: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected valid promotion validation, got %+v", validation)
+	}
+	if len(validation.Codes) != 1 || validation.Codes[0].Status != "applied" {
+		t.Fatalf("expected applied validation code, got %+v", validation.Codes)
+	}
+	if validation.DiscountAmountTotal != 10 {
+		t.Fatalf("expected discount preview 10, got %+v", validation)
+	}
+
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100, "")
+	if err != nil {
+		t.Fatalf("open shift: %v", err)
+	}
+	if _, err := posSvc.Checkout("org_default", "loc_main", POSCheckoutInput{
+		StoreCode:      "STORE1",
+		RegisterCode:   "REG1",
+		ShiftID:        shift.ID,
+		PromotionCodes: []string{"BADCODE"},
+		Lines: []POSCartLineInput{{
+			ItemCode: "POS-PROMO",
+			Quantity: 1,
+		}},
+		Tenders: []POSTenderInput{{
+			TenderTypeCode: "CASH",
+			Amount:         110,
+		}},
+	}, "cashier_1"); err == nil || !strings.Contains(err.Error(), "promotion validation failed") {
+		t.Fatalf("expected checkout promotion validation error, got %v", err)
 	}
 }
 
@@ -827,6 +986,49 @@ func TestPOSCloseShiftRequiresOwningCashier(t *testing.T) {
 	}
 	if _, err := posSvc.CloseShift("org_default", "loc_main", shift.ID, "cashier_2", 100, ""); err == nil {
 		t.Fatalf("expected foreign cashier close to fail")
+	}
+}
+
+func TestPOSResumeShiftReturnsOpenedShiftRecord(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterPOSTestDocumentTypes(t, docs)
+	mustRegisterPOSTestModels(t, models)
+
+	if _, err := models.Create("pos_store", "user_admin", map[string]any{
+		"code":           "STORE1",
+		"name":           "Store 1",
+		"warehouse_code": "MAIN",
+		"currency_code":  "IDR",
+		"status":         "active",
+	}); err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	if _, err := models.Create("pos_register", "user_admin", map[string]any{
+		"code":              "REG1",
+		"name":              "Register 1",
+		"store_code":        "STORE1",
+		"cash_account_code": "1000-CASH",
+		"status":            "active",
+	}); err != nil {
+		t.Fatalf("create register: %v", err)
+	}
+
+	posSvc := NewPOSCoreService(docs, models, nil, nil, nil, nil, nil, nil)
+	opened, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100, "")
+	if err != nil {
+		t.Fatalf("open shift: %v", err)
+	}
+
+	resumed, err := posSvc.ResumeShift("STORE1", "REG1", opened.ID, "cashier_1")
+	if err != nil {
+		t.Fatalf("resume shift: %v", err)
+	}
+	if resumed.ID != opened.ID {
+		t.Fatalf("expected resumed shift %q, got %q", opened.ID, resumed.ID)
+	}
+	if got := textValue(resumed.Values["status"]); got != "opened" {
+		t.Fatalf("expected opened shift status, got %q", got)
 	}
 }
 

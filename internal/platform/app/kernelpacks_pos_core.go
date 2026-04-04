@@ -250,8 +250,8 @@ func posCoreKernelPackManifest() module.Manifest {
 			},
 			CustomEntries: []module.CustomEntryDefinition{{
 				Key:                 "pos.terminal",
-				Title:               "POS Terminal",
-				TitleI18n:           localize("POS Terminal", "Terminal POS"),
+				Title:               "",
+				TitleI18n:           localize("", ""),
 				RoutePath:           "/pos/terminal",
 				BundleKey:           "pos-terminal",
 				ComponentExport:     "render",

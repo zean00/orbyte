@@ -162,7 +162,7 @@ function POSCustomEntry({
   }, [entry.bundle_key, entry.component_export, locale, route])
 
   return (
-    <POSPanel title={pickText(entry, 'title', locale) || entry.key} status={error || undefined} padded={false}>
+    <POSPanel title={pickText(entry, 'title', locale)} status={error || undefined} padded={false}>
       <div ref={mountRef} className="min-h-[calc(100vh-10rem)]" />
     </POSPanel>
   )
@@ -174,17 +174,20 @@ function POSPanel({
   children,
   padded = true,
 }: {
-  title: string
+  title?: string
   status?: string
   children?: React.ReactNode
   padded?: boolean
 }) {
+  const showHeader = Boolean(title || status)
   return (
     <section className="overflow-hidden rounded-[1.5rem] border border-line bg-surface shadow-panel">
-      <div className={padded ? 'border-b border-line px-6 py-5' : 'border-b border-line px-6 py-5'}>
-        <h2 className="text-xl font-black tracking-tight text-body">{title}</h2>
-        {status ? <p className="mt-1 text-sm text-muted">{status}</p> : null}
-      </div>
+      {showHeader ? (
+        <div className={padded ? 'border-b border-line px-6 py-5' : 'border-b border-line px-6 py-5'}>
+          {title ? <h2 className="text-xl font-black tracking-tight text-body">{title}</h2> : null}
+          {status ? <p className={title ? 'mt-1 text-sm text-muted' : 'text-sm text-muted'}>{status}</p> : null}
+        </div>
+      ) : null}
       <div className={padded ? 'p-6' : 'p-0'}>{children}</div>
     </section>
   )
@@ -193,11 +196,16 @@ function POSPanel({
 async function loadBundleExport(bundleKey: string, exportName: string): Promise<(args: Record<string, unknown>) => Promise<void> | void> {
   const globalWindow = window as Window & {
     ClinicModuleBundles?: Record<string, Record<string, (args: Record<string, unknown>) => Promise<void> | void>>
+    __orbyteModuleBundleVersion__?: string
   }
+  const version =
+    globalWindow.__orbyteModuleBundleVersion__ ||
+    `${String(performance.timeOrigin || Date.now())}-${Math.random().toString(36).slice(2, 8)}`
+  globalWindow.__orbyteModuleBundleVersion__ = version
   if (!globalWindow.ClinicModuleBundles?.[bundleKey]) {
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement('script')
-      script.src = `/ui/assets/modules/${encodeURIComponent(bundleKey)}.js`
+      script.src = `/ui/assets/modules/${encodeURIComponent(bundleKey)}.js?v=${encodeURIComponent(version)}`
       script.onload = () => resolve()
       script.onerror = () => reject(new Error('Failed to load module bundle'))
       document.head.appendChild(script)

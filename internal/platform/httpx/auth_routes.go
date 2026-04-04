@@ -56,6 +56,15 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type setupCashierPINRequest struct {
+	NewPIN string `json:"new_pin"`
+}
+
+type changeCashierPINRequest struct {
+	CurrentPIN string `json:"current_pin"`
+	NewPIN     string `json:"new_pin"`
+}
+
 type createUserRequest struct {
 	Username          string `json:"username"`
 	Password          string `json:"password"`
@@ -803,6 +812,86 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			CorrelationID: logging.CorrelationID(r.Context()),
 		})
 		respondJSON(w, http.StatusOK, map[string]any{"status": "password_changed"})
+	})
+
+	mux.HandleFunc("GET /auth/cashier-pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		state, err := ident.CashierPINState(p.userID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, state)
+	})
+
+	mux.HandleFunc("POST /auth/cashier-pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req setupCashierPINRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid cashier PIN payload"))
+			return
+		}
+		if err := ident.SetCashierPIN(p.userID, req.NewPIN); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:auth:cashier_pin:set:" + p.userID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "auth.cashier_pin.set",
+			TargetType:    "user",
+			TargetID:      p.userID,
+			ActorID:       p.userID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"status": "cashier_pin_set"})
+	})
+
+	mux.HandleFunc("PUT /auth/cashier-pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req changeCashierPINRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid cashier PIN payload"))
+			return
+		}
+		if err := ident.ChangeCashierPIN(p.userID, req.CurrentPIN, req.NewPIN); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:auth:cashier_pin:change:" + p.userID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "auth.cashier_pin.change",
+			TargetType:    "user",
+			TargetID:      p.userID,
+			ActorID:       p.userID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"status": "cashier_pin_changed"})
 	})
 
 	mux.HandleFunc("POST /auth/refresh", func(w http.ResponseWriter, r *http.Request) {

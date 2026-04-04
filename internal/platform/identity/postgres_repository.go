@@ -143,7 +143,7 @@ func (r *PostgresRepository) DeleteRolePermission(roleID, permissionKey string) 
 
 func (r *PostgresRepository) Credentials() []Credential {
 	const query = `
-		SELECT user_id, password_hash, password_changed_at, failed_attempt_count, locked_until, updated_at
+		SELECT user_id, password_hash, password_changed_at, COALESCE(cashier_pin_hash, ''), cashier_pin_changed_at, failed_attempt_count, locked_until, updated_at
 		FROM user_credentials
 		ORDER BY updated_at ASC`
 
@@ -156,11 +156,15 @@ func (r *PostgresRepository) Credentials() []Credential {
 	items := make([]Credential, 0)
 	for rows.Next() {
 		var (
-			item        Credential
-			lockedUntil sql.NullTime
+			item                Credential
+			cashierPINChangedAt sql.NullTime
+			lockedUntil         sql.NullTime
 		)
-		if err := rows.Scan(&item.UserID, &item.PasswordHash, &item.PasswordChangedAt, &item.FailedAttemptCount, &lockedUntil, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.UserID, &item.PasswordHash, &item.PasswordChangedAt, &item.CashierPINHash, &cashierPINChangedAt, &item.FailedAttemptCount, &lockedUntil, &item.UpdatedAt); err != nil {
 			continue
+		}
+		if cashierPINChangedAt.Valid {
+			item.CashierPINChangedAt = cashierPINChangedAt.Time
 		}
 		if lockedUntil.Valid {
 			item.LockedUntil = lockedUntil.Time
@@ -247,24 +251,30 @@ func (r *PostgresRepository) FindUserByAuthenticationSubject(subject string) (Us
 
 func (r *PostgresRepository) FindCredentialByUserID(userID string) (Credential, bool) {
 	const query = `
-		SELECT user_id, password_hash, password_changed_at, failed_attempt_count, locked_until, updated_at
+		SELECT user_id, password_hash, password_changed_at, COALESCE(cashier_pin_hash, ''), cashier_pin_changed_at, failed_attempt_count, locked_until, updated_at
 		FROM user_credentials
 		WHERE user_id = $1`
 
 	var (
-		item        Credential
-		lockedUntil sql.NullTime
+		item                Credential
+		cashierPINChangedAt sql.NullTime
+		lockedUntil         sql.NullTime
 	)
 	err := r.db.QueryRowContext(context.Background(), query, userID).Scan(
 		&item.UserID,
 		&item.PasswordHash,
 		&item.PasswordChangedAt,
+		&item.CashierPINHash,
+		&cashierPINChangedAt,
 		&item.FailedAttemptCount,
 		&lockedUntil,
 		&item.UpdatedAt,
 	)
 	if err != nil {
 		return Credential{}, false
+	}
+	if cashierPINChangedAt.Valid {
+		item.CashierPINChangedAt = cashierPINChangedAt.Time
 	}
 	if lockedUntil.Valid {
 		item.LockedUntil = lockedUntil.Time
@@ -1244,14 +1254,20 @@ func (r *PostgresRepository) SaveSession(session Session) error {
 func (r *PostgresRepository) SaveCredential(credential Credential) error {
 	const query = `
 		INSERT INTO user_credentials (
-			user_id, password_hash, password_changed_at, failed_attempt_count, locked_until, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			user_id, password_hash, password_changed_at, cashier_pin_hash, cashier_pin_changed_at, failed_attempt_count, locked_until, updated_at
+		) VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8)
 		ON CONFLICT (user_id) DO UPDATE SET
 			password_hash = EXCLUDED.password_hash,
 			password_changed_at = EXCLUDED.password_changed_at,
+			cashier_pin_hash = EXCLUDED.cashier_pin_hash,
+			cashier_pin_changed_at = EXCLUDED.cashier_pin_changed_at,
 			failed_attempt_count = EXCLUDED.failed_attempt_count,
 			locked_until = EXCLUDED.locked_until,
 			updated_at = EXCLUDED.updated_at`
+	var cashierPINChangedAt any
+	if !credential.CashierPINChangedAt.IsZero() {
+		cashierPINChangedAt = credential.CashierPINChangedAt
+	}
 	var lockedUntil any
 	if !credential.LockedUntil.IsZero() {
 		lockedUntil = credential.LockedUntil
@@ -1262,6 +1278,8 @@ func (r *PostgresRepository) SaveCredential(credential Credential) error {
 		credential.UserID,
 		credential.PasswordHash,
 		credential.PasswordChangedAt,
+		credential.CashierPINHash,
+		cashierPINChangedAt,
 		credential.FailedAttemptCount,
 		lockedUntil,
 		credential.UpdatedAt,

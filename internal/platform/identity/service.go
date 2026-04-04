@@ -40,6 +40,7 @@ const (
 	maxFailedPasswordAttempt = 5
 	passwordLockoutWindow    = 15 * time.Minute
 	minPasswordLength        = 8
+	cashierPINLength         = 6
 )
 
 func NewService(org *organization.Service) *Service {
@@ -1542,6 +1543,104 @@ func (s *Service) startSessionForUser(user User, locationID, authenticationMetho
 
 func (s *Service) ChangePassword(userID, currentPassword, newPassword string) error {
 	return s.ChangePasswordWithPolicy(userID, currentPassword, newPassword, minPasswordLength)
+}
+
+func validateNewCashierPIN(pin string) error {
+	trimmed := strings.TrimSpace(pin)
+	if len(trimmed) != cashierPINLength {
+		return shared.Validation(fmt.Sprintf("cashier PIN must be %d digits", cashierPINLength))
+	}
+	for _, ch := range trimmed {
+		if ch < '0' || ch > '9' {
+			return shared.Validation("cashier PIN must contain digits only")
+		}
+	}
+	return nil
+}
+
+func (s *Service) CashierPINState(userID string) (map[string]any, error) {
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return nil, shared.NotFound("credential not found")
+	}
+	state := map[string]any{
+		"configured":          strings.TrimSpace(credential.CashierPINHash) != "",
+		"pin_length":          cashierPINLength,
+		"password_changed_at": credential.PasswordChangedAt,
+	}
+	if !credential.CashierPINChangedAt.IsZero() {
+		state["changed_at"] = credential.CashierPINChangedAt
+	}
+	return state, nil
+}
+
+func (s *Service) VerifyCashierPIN(userID, pin string) error {
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return shared.NotFound("credential not found")
+	}
+	if strings.TrimSpace(credential.CashierPINHash) == "" {
+		return shared.Forbidden("cashier PIN is not configured")
+	}
+	verified, err := VerifyPassword(credential.CashierPINHash, strings.TrimSpace(pin))
+	if err != nil {
+		return err
+	}
+	if !verified {
+		return shared.Unauthorized("cashier PIN is invalid")
+	}
+	return nil
+}
+
+func (s *Service) SetCashierPIN(userID, pin string) error {
+	if err := validateNewCashierPIN(pin); err != nil {
+		return err
+	}
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return shared.NotFound("credential not found")
+	}
+	if strings.TrimSpace(credential.CashierPINHash) != "" {
+		return shared.Conflict("cashier PIN is already configured")
+	}
+	hashedPIN, err := HashPassword(strings.TrimSpace(pin))
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	credential.CashierPINHash = hashedPIN
+	credential.CashierPINChangedAt = now
+	credential.UpdatedAt = now
+	return s.repo.SaveCredential(credential)
+}
+
+func (s *Service) ChangeCashierPIN(userID, currentPIN, newPIN string) error {
+	if err := validateNewCashierPIN(newPIN); err != nil {
+		return err
+	}
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return shared.NotFound("credential not found")
+	}
+	if strings.TrimSpace(credential.CashierPINHash) == "" {
+		return shared.Forbidden("cashier PIN is not configured")
+	}
+	verified, err := VerifyPassword(credential.CashierPINHash, strings.TrimSpace(currentPIN))
+	if err != nil {
+		return err
+	}
+	if !verified {
+		return shared.Unauthorized("current cashier PIN is invalid")
+	}
+	hashedPIN, err := HashPassword(strings.TrimSpace(newPIN))
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	credential.CashierPINHash = hashedPIN
+	credential.CashierPINChangedAt = now
+	credential.UpdatedAt = now
+	return s.repo.SaveCredential(credential)
 }
 
 func (s *Service) ChangePasswordWithPolicy(userID, currentPassword, newPassword string, passwordMinLength int) error {

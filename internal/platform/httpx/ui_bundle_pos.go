@@ -13,29 +13,42 @@ func POSTerminalBundle() string {
       const state = {
         loading: true,
         bootstrapping: false,
+        searchBusy: false,
         lookupBusy: false,
         customerBusy: false,
         busy: false,
+        terminalBusy: false,
         message: "",
         bootstrap: null,
         storeCode: params.store_code || "",
         registerCode: params.register_code || "",
         shiftId: "",
+        terminalPIN: "",
+        terminalOpeningCash: "0",
+        terminalNotes: "",
         searchQuery: "",
         searchResults: [],
         cart: [],
         tenders: [{ tender_type_code: "", amount: 0, reference: "", notes: "" }],
         heldSales: [],
         transactions: [],
+        cartQuantityDrafts: {},
+        tenderAmountDrafts: {},
         lookupQuery: "",
         customerQuery: "",
         customerResults: [],
         customer: initialCustomer,
         promotionCodes: "",
+        promotionValidationBusy: false,
+        promotionValidation: null,
         tenderInsights: {},
         catalogOpen: false,
+        customerModalOpen: false,
+        promoModalOpen: false,
+        tenderModalOpen: false,
         heldExpanded: false,
         transactionsExpanded: false,
+        controlCollapsed: true,
       };
 
       const escapeHTML = function(value) {
@@ -129,6 +142,28 @@ func POSTerminalBundle() string {
         const item = tenderTypeByCode(code);
         return item ? String(((item.values || {}).requires_party || "false")) === "true" : false;
       };
+      const currentCashier = function() {
+        return ((state.bootstrap || {}).current_cashier || null);
+      };
+      const terminalContext = function() {
+        return ((state.bootstrap || {}).terminal_context || null);
+      };
+      const terminalUnlocked = function() {
+        const context = terminalContext();
+        return !!(context && context.shift_id);
+      };
+      const resetSaleState = function() {
+        state.cart = [];
+        state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
+        state.cartQuantityDrafts = {};
+        state.tenderAmountDrafts = {};
+        state.customer = initialCustomer;
+        state.customerResults = [];
+        state.customerQuery = "";
+        state.promotionCodes = "";
+        state.promotionValidation = null;
+        state.tenderInsights = {};
+      };
       const totals = function() {
         const subtotal = state.cart.reduce(function(sum, line) { return sum + number(line.line_subtotal || line.unit_price * line.quantity); }, 0);
         const tax = state.cart.reduce(function(sum, line) { return sum + number(line.tax_amount); }, 0);
@@ -149,22 +184,25 @@ func POSTerminalBundle() string {
         const style = document.createElement("style");
         style.id = "pos-terminal-styles";
         style.textContent = ""
-          + ".pos-terminal { height:min(calc(100vh - 11rem), 84rem); min-height:46rem; display:grid; grid-template-rows:auto auto minmax(0,1fr); gap:1rem; color:var(--color-body); }"
-          + ".pos-terminal__topbar, .pos-terminal__customerbar, .pos-terminal__panel { border:1px solid color-mix(in srgb, var(--color-line) 88%, #101317 12%); background:color-mix(in srgb, var(--color-surface) 96%, #f7f2ec 4%); box-shadow:var(--shadow-panel); }"
-          + ".pos-terminal__topbar { display:grid; grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(12rem,1fr)); gap:0.75rem; border-radius:1.2rem; padding:1rem 1.1rem; }"
-          + ".pos-terminal__brand h2 { margin:0; font-size:1.45rem; line-height:1.1; letter-spacing:-0.02em; }"
-          + ".pos-terminal__brand p { margin:0.3rem 0 0; color:var(--color-muted); max-width:40rem; }"
+          + ".pos-terminal { height:min(calc(100vh - 11rem), 84rem); min-height:46rem; display:grid; grid-template-rows:auto minmax(0,1fr); gap:1rem; color:var(--color-body); }"
+          + ".pos-terminal__controlbar, .pos-terminal__panel { border:1px solid color-mix(in srgb, var(--color-line) 88%, #101317 12%); background:color-mix(in srgb, var(--color-surface) 96%, #f7f2ec 4%); box-shadow:var(--shadow-panel); }"
+          + ".pos-terminal__controlbar { display:grid; gap:0.65rem; border-radius:1.2rem; padding:0.75rem 0.9rem; }"
+          + ".pos-terminal__controlbar--compact { gap:0.5rem; }"
+          + ".pos-terminal__control-grid { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0.8rem; align-items:start; }"
+          + ".pos-terminal__control-actions, .pos-terminal__control-meta { display:flex; flex-wrap:wrap; gap:0.55rem; align-items:center; }"
+          + ".pos-terminal__control-selects { display:grid; grid-template-columns:repeat(2,minmax(10rem,1fr)); gap:0.7rem; }"
+          + ".pos-terminal__control-summary { display:flex; flex-wrap:wrap; gap:0.45rem; align-items:center; }"
+          + ".pos-terminal__control-pill { display:grid; gap:0.08rem; min-width:7rem; padding:0.45rem 0.7rem; border:1px solid color-mix(in srgb, var(--color-line) 86%, #171b20 14%); border-radius:0.9rem; background:color-mix(in srgb, var(--color-shell) 34%, var(--color-surface)); }"
+          + ".pos-terminal__control-pill strong { font-size:0.86rem; line-height:1.2; }"
           + ".pos-terminal__chiprow { display:flex; flex-wrap:wrap; gap:0.45rem; margin-top:0.8rem; }"
           + ".pos-terminal__chip { display:inline-flex; align-items:center; gap:0.35rem; border-radius:999px; padding:0.38rem 0.7rem; background:#efe4d3; color:#6d371c; font-size:0.74rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; }"
           + ".pos-terminal__chip--ok { background:#dae9dc; color:#1e5632; }"
           + ".pos-terminal__chip--warn { background:#f4e4d6; color:#9a4b17; }"
           + ".pos-terminal__chip--danger { background:#f3d8d8; color:#8a2121; }"
-          + ".pos-terminal__meta { display:grid; gap:0.5rem; padding:0.95rem 1rem; border-radius:1rem; background:linear-gradient(180deg, color-mix(in srgb, var(--color-shell) 55%, var(--color-surface) 45%), var(--color-surface)); }"
+          + ".pos-terminal__meta { display:grid; gap:0.3rem; padding:0.72rem 0.82rem; border-radius:1rem; background:linear-gradient(180deg, color-mix(in srgb, var(--color-shell) 55%, var(--color-surface) 45%), var(--color-surface)); }"
           + ".pos-terminal__meta-label { font-size:0.72rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-muted); }"
-          + ".pos-terminal__meta-value { font-size:1rem; font-weight:800; }"
-          + ".pos-terminal__meta-sub { color:var(--color-muted); font-size:0.84rem; }"
-          + ".pos-terminal__customerbar { display:grid; gap:0.9rem; border-radius:1.2rem; padding:0.9rem 1rem; }"
-          + ".pos-terminal__customer-top { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(18rem,0.8fr); gap:0.9rem; align-items:start; }"
+          + ".pos-terminal__meta-value { font-size:0.95rem; font-weight:800; }"
+          + ".pos-terminal__meta-sub { color:var(--color-muted); font-size:0.8rem; }"
           + ".pos-terminal__row { display:flex; flex-wrap:wrap; gap:0.7rem; align-items:end; }"
           + ".pos-terminal__field { display:flex; flex-direction:column; gap:0.35rem; min-width:10rem; flex:1; }"
           + ".pos-terminal__field span { font-size:0.72rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-muted); }"
@@ -178,17 +216,26 @@ func POSTerminalBundle() string {
           + ".pos-terminal__button--primary:hover { background:#8d4119; border-color:#8d4119; color:#fff; }"
           + ".pos-terminal__button--warn { border-color:#d45555; color:#a12d2d; }"
           + ".pos-terminal__button--soft { background:color-mix(in srgb, var(--color-accent-soft) 62%, var(--color-surface) 38%); color:#7b3a1d; border-color:color-mix(in srgb, var(--color-accent) 35%, var(--color-line) 65%); }"
+          + ".pos-terminal__button--compact { padding:0.62rem 0.82rem; min-height:2.35rem; }"
           + ".pos-terminal__customer-results, .pos-terminal__promo-list { display:grid; gap:0.55rem; max-height:11rem; overflow:auto; }"
           + ".pos-terminal__customer-card, .pos-terminal__promo-chip { border:1px solid color-mix(in srgb, var(--color-line) 88%, #171b20 12%); border-radius:0.95rem; background:color-mix(in srgb, var(--color-shell) 42%, var(--color-surface)); padding:0.75rem 0.85rem; }"
           + ".pos-terminal__customer-card { display:flex; justify-content:space-between; gap:0.8rem; align-items:flex-start; }"
           + ".pos-terminal__customer-name { font-weight:800; }"
           + ".pos-terminal__customer-meta { color:var(--color-muted); font-size:0.83rem; margin-top:0.2rem; }"
-          + ".pos-terminal__workspace { min-height:0; display:grid; grid-template-columns:minmax(0,1.7fr) minmax(22rem,25rem); gap:1rem; }"
+          + ".pos-terminal__mini-stack { display:grid; gap:0.25rem; }"
+          + ".pos-terminal__mini-meta { display:flex; flex-wrap:wrap; gap:0.55rem; align-items:center; }"
+          + ".pos-terminal__summary-chipline { display:flex; flex-wrap:wrap; gap:0.45rem; align-items:center; justify-content:flex-end; }"
+          + ".pos-terminal__summary-pill { display:inline-flex; align-items:center; gap:0.35rem; min-height:2.75rem; padding:0.45rem 0.8rem; border-radius:0.9rem; border:1px solid color-mix(in srgb, var(--color-line) 86%, #171b20 14%); background:color-mix(in srgb, var(--color-shell) 36%, var(--color-surface)); font-size:0.83rem; }"
+          + ".pos-terminal__readonly { display:block; min-height:2.35rem; padding:0.55rem 0.65rem; border-radius:0.8rem; background:color-mix(in srgb, var(--color-shell) 45%, var(--color-surface)); border:1px solid color-mix(in srgb, var(--color-line) 84%, #171b20 16%); font-weight:700; }"
+          + ".pos-terminal__workspace { min-height:0; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(25rem,28rem); gap:1rem; }"
           + ".pos-terminal__left { min-height:0; display:grid; grid-template-rows:minmax(0,1fr) auto; gap:1rem; }"
           + ".pos-terminal__aux { min-height:0; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1rem; align-content:start; }"
           + ".pos-terminal__rail { min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:1rem; }"
           + ".pos-terminal__panel { display:grid; grid-template-rows:auto minmax(0,1fr); min-height:0; border-radius:1.1rem; overflow:hidden; }"
+          + ".pos-terminal__panel--collapsed { grid-template-rows:auto; }"
           + ".pos-terminal__panel-head { display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start; padding:0.95rem 1rem; border-bottom:1px solid color-mix(in srgb, var(--color-line) 86%, #12161b 14%); }"
+          + ".pos-terminal__panel--collapsed .pos-terminal__panel-head { align-items:center; padding:0.78rem 1rem; min-height:4.2rem; }"
+          + ".pos-terminal__panel--collapsed .pos-terminal__panel-sub { display:none; }"
           + ".pos-terminal__panel-title { margin:0; font-size:0.92rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-muted); }"
           + ".pos-terminal__panel-sub { color:var(--color-muted); font-size:0.83rem; margin-top:0.25rem; }"
           + ".pos-terminal__panel-body { min-height:0; padding:0.95rem 1rem; }"
@@ -218,16 +265,14 @@ func POSTerminalBundle() string {
           + ".pos-terminal__notice { padding:0.85rem 1rem; border-radius:1rem; background:color-mix(in srgb, var(--color-accent-soft) 58%, var(--color-surface) 42%); color:var(--color-body); border:1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-line) 76%); }"
           + ".pos-terminal__stack { display:grid; gap:0.75rem; }"
           + ".pos-terminal__toggle { appearance:none; border:0; background:transparent; color:var(--color-accent-dark); font:inherit; font-weight:800; cursor:pointer; padding:0.2rem 0; }"
-          + ".pos-terminal__collapsed { display:grid; place-items:center; min-height:7rem; padding:1rem; text-align:center; color:var(--color-muted); }"
-          + ".pos-terminal__catalog-trigger { display:flex; justify-content:space-between; gap:0.9rem; align-items:center; padding:1rem 1.05rem; border:1px dashed color-mix(in srgb, var(--color-line) 78%, #171b20 22%); border-radius:1rem; background:color-mix(in srgb, var(--color-shell) 45%, var(--color-surface)); }"
-          + ".pos-terminal__catalog-meta { display:grid; gap:0.22rem; }"
+          + ".pos-terminal__collapsed { display:grid; place-items:center; min-height:4.35rem; padding:0.75rem 1rem; text-align:center; color:var(--color-muted); }"
           + ".pos-terminal__overlay { position:fixed; inset:0; z-index:80; display:grid; place-items:center; background:rgba(9, 12, 16, 0.46); padding:1.5rem; backdrop-filter:blur(5px); }"
           + ".pos-terminal__modal { width:min(72rem, calc(100vw - 3rem)); height:min(48rem, calc(100vh - 3rem)); display:grid; grid-template-rows:auto minmax(0,1fr); border:1px solid color-mix(in srgb, var(--color-line) 84%, #101317 16%); border-radius:1.3rem; background:color-mix(in srgb, var(--color-surface) 97%, #faf6f1 3%); box-shadow:0 2rem 5rem rgba(12, 16, 22, 0.24); overflow:hidden; }"
           + ".pos-terminal__modal-head { display:flex; justify-content:space-between; gap:0.9rem; align-items:flex-start; padding:1rem 1.1rem; border-bottom:1px solid color-mix(in srgb, var(--color-line) 86%, #12161b 14%); }"
           + ".pos-terminal__modal-body { min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); gap:0.95rem; padding:1rem 1.1rem 1.1rem; }"
           + ".pos-terminal__modal-body .pos-terminal__scroll { padding-right:0.25rem; }"
-          + "@media (max-width: 1200px) { .pos-terminal { height:auto; min-height:0; } .pos-terminal__workspace { grid-template-columns:1fr; } .pos-terminal__rail { grid-template-rows:auto auto auto; } .pos-terminal__left { grid-template-rows:auto auto auto; } .pos-terminal__aux { grid-template-columns:1fr; } }"
-          + "@media (max-width: 820px) { .pos-terminal__topbar, .pos-terminal__customer-top, .pos-terminal__statgrid { grid-template-columns:1fr; } .pos-terminal__overlay { padding:0.75rem; } .pos-terminal__modal { width:calc(100vw - 1.5rem); height:calc(100vh - 1.5rem); } }";
+          + "@media (max-width: 1360px) { .pos-terminal { height:auto; min-height:0; } .pos-terminal__workspace { grid-template-columns:1fr; } .pos-terminal__rail { grid-template-rows:auto auto auto; } .pos-terminal__left { grid-template-rows:auto auto auto; } .pos-terminal__aux { grid-template-columns:1fr; } .pos-terminal__control-grid { grid-template-columns:1fr; } .pos-terminal__control-summary { width:100%; } }"
+          + "@media (max-width: 820px) { .pos-terminal__control-selects, .pos-terminal__statgrid { grid-template-columns:1fr; } .pos-terminal__overlay { padding:0.75rem; } .pos-terminal__modal { width:calc(100vw - 1.5rem); height:calc(100vh - 1.5rem); } }";
         document.head.appendChild(style);
       };
 
@@ -285,6 +330,19 @@ func POSTerminalBundle() string {
         }).filter(Boolean);
       }
 
+      function appliedPromotionCodes() {
+        if (!state.promotionValidation || !Array.isArray(state.promotionValidation.codes)) return [];
+        return state.promotionValidation.codes.filter(function(item) {
+          return String(item && item.status || "").toLowerCase() === "applied";
+        }).map(function(item) {
+          return String(item.code || "").trim();
+        }).filter(Boolean);
+      }
+
+      function activePromotionCodes() {
+        return appliedPromotionCodes();
+      }
+
       function payloadTenders() {
         return state.tenders.filter(function(tender) { return String(tender.tender_type_code || "").trim() !== "" && number(tender.amount) > 0; }).map(function(tender) {
           return {
@@ -296,12 +354,59 @@ func POSTerminalBundle() string {
         });
       }
 
+      function commitLineQuantity(index, rawValue) {
+        const line = state.cart[index];
+        if (!line) return;
+        const value = rawValue == null ? "" : String(rawValue);
+        const requested = value === "" ? 0 : number(value);
+        const available = number(line.available_quantity);
+        if (line.inventory_enabled && requested > available) {
+          line.quantity = available;
+          delete state.cartQuantityDrafts[String(index)];
+          recalcLine(line);
+          state.promotionValidation = null;
+          persist();
+          render();
+          notify(text("Insufficient available stock for this item.", "Stok tersedia untuk item ini tidak cukup."), "error");
+          return;
+        }
+        if (value === "") {
+          line.quantity = 0;
+        } else {
+          line.quantity = requested;
+        }
+        delete state.cartQuantityDrafts[String(index)];
+        recalcLine(line);
+        state.promotionValidation = null;
+        persist();
+        render();
+      }
+
+      function commitTenderAmount(index, rawValue) {
+        const line = state.tenders[index];
+        if (!line) return;
+        const value = rawValue == null ? "" : String(rawValue);
+        if (value === "") {
+          line.amount = 0;
+        } else {
+          line.amount = number(value);
+        }
+        delete state.tenderAmountDrafts[String(index)];
+        persist();
+        render();
+      }
+
       function addCatalogItem(item) {
         const existing = state.cart.find(function(line) {
           return String(line.item_code || "") === String(item.item_code || "") && String(line.variant_signature || "") === String(item.variant_signature || "");
         });
         if (existing) {
-          existing.quantity = number(existing.quantity) + 1;
+          const nextQuantity = number(existing.quantity) + 1;
+          if (existing.inventory_enabled && nextQuantity > number(existing.available_quantity)) {
+            notify(text("Insufficient available stock for this item.", "Stok tersedia untuk item ini tidak cukup."), "error");
+            return;
+          }
+          existing.quantity = nextQuantity;
           recalcLine(existing);
         } else {
           state.cart.push(recalcLine({
@@ -322,6 +427,7 @@ func POSTerminalBundle() string {
             line_total: 0,
           }));
         }
+        state.promotionValidation = null;
         persist();
         render();
       }
@@ -334,15 +440,73 @@ func POSTerminalBundle() string {
           if (state.storeCode) query.set("store_code", state.storeCode);
           if (state.registerCode) query.set("register_code", state.registerCode);
           state.bootstrap = await api("/ui/data/pos/bootstrap" + (query.toString() ? "?" + query.toString() : ""));
+          if (state.bootstrap.terminal_context) {
+            state.storeCode = String((state.bootstrap.terminal_context.store_code || state.storeCode || ""));
+            state.registerCode = String((state.bootstrap.terminal_context.register_code || state.registerCode || ""));
+            state.shiftId = String((state.bootstrap.terminal_context.shift_id || ""));
+          } else {
+            state.shiftId = "";
+          }
           if (!state.storeCode && state.bootstrap.current_store && state.bootstrap.current_store.values) {
             state.storeCode = String(state.bootstrap.current_store.values.code || "");
-          }
-          if (!state.shiftId && state.bootstrap.open_shift && state.bootstrap.open_shift.id) {
-            state.shiftId = String(state.bootstrap.open_shift.id || "");
           }
         } finally {
           state.bootstrapping = false;
         }
+      }
+
+      async function enterTerminal(mode) {
+        if (!state.storeCode || !state.registerCode) {
+          notify(text("Store and register are required.", "Toko dan register wajib diisi."), "error");
+          return;
+        }
+        if (!String(state.terminalPIN || "").trim()) {
+          notify(text("Enter your cashier PIN.", "Masukkan PIN kasir."), "error");
+          return;
+        }
+        state.terminalBusy = true;
+        render();
+        try {
+          const request = {
+            store_code: state.storeCode,
+            register_code: state.registerCode,
+            pin: String(state.terminalPIN || ""),
+            opening_cash_amount: number(state.terminalOpeningCash || 0),
+            notes: state.terminalNotes || "",
+          };
+          if (mode === "resume" && state.bootstrap && state.bootstrap.open_shift && state.bootstrap.open_shift.id) {
+            request.shift_id = String(state.bootstrap.open_shift.id || "");
+          }
+          const payload = await api("/ui/data/pos/terminal/enter", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(request),
+          });
+          state.terminalPIN = "";
+          state.shiftId = String((((payload || {}).terminal_context || {}).shift_id) || "");
+          await loadBootstrap();
+          await loadHeldSales();
+          notify(mode === "resume" ? text("Shift resumed.", "Shift dilanjutkan.") : text("Terminal unlocked.", "Terminal terbuka."));
+          persist();
+          render();
+        } catch (error) {
+          notify(error instanceof Error ? error.message : text("Failed to enter terminal.", "Gagal masuk terminal."), "error");
+        } finally {
+          state.terminalBusy = false;
+          render();
+        }
+      }
+
+      async function lockTerminal() {
+        await api("/ui/data/pos/terminal/lock", { method: "POST" });
+        state.shiftId = "";
+        state.terminalPIN = "";
+        resetSaleState();
+        await loadBootstrap();
+        await loadHeldSales();
+        persist();
+        notify(text("Terminal locked.", "Terminal dikunci."));
+        render();
       }
 
       async function searchCatalog() {
@@ -350,13 +514,19 @@ func POSTerminalBundle() string {
           notify(text("Select a store first.", "Pilih toko terlebih dahulu."), "error");
           return;
         }
-        const query = new URLSearchParams();
-        query.set("store_code", state.storeCode);
-        query.set("q", state.searchQuery);
-        const payload = await api("/ui/data/pos/catalog/search?" + query.toString());
-        state.searchResults = payload.items || [];
-        emitHardwareEvent("orbyte:pos-scanner-input", { query: state.searchQuery, matches: state.searchResults });
+        state.searchBusy = true;
         render();
+        try {
+          const query = new URLSearchParams();
+          query.set("store_code", state.storeCode);
+          query.set("q", state.searchQuery);
+          const payload = await api("/ui/data/pos/catalog/search?" + query.toString());
+          state.searchResults = payload.items || [];
+          emitHardwareEvent("orbyte:pos-scanner-input", { query: state.searchQuery, matches: state.searchResults });
+        } finally {
+          state.searchBusy = false;
+          render();
+        }
       }
 
       function openCatalog() {
@@ -370,6 +540,62 @@ func POSTerminalBundle() string {
       function closeCatalog() {
         state.catalogOpen = false;
         render();
+      }
+
+      function openCustomerModal() {
+        state.customerModalOpen = true;
+        render();
+        window.requestAnimationFrame(function() {
+          mount.querySelector("#pos-customer-search")?.focus();
+        });
+      }
+
+      function closeCustomerModal() {
+        state.customerModalOpen = false;
+        render();
+      }
+
+      function openPromoModal() {
+        state.promoModalOpen = true;
+        render();
+        window.requestAnimationFrame(function() {
+          mount.querySelector("#pos-voucher-codes")?.focus();
+        });
+      }
+
+      function closePromoModal() {
+        state.promoModalOpen = false;
+        render();
+      }
+
+      function openTenderModal() {
+        state.tenderModalOpen = true;
+        render();
+      }
+
+      function closeTenderModal() {
+        state.tenderModalOpen = false;
+        render();
+      }
+
+      function renderPromotionValidation() {
+        if (state.promotionValidationBusy) {
+          return '<div class="pos-terminal__empty">' + escapeHTML(text("Validating promo / voucher codes…", "Memvalidasi kode promo / voucher…")) + '</div>';
+        }
+        if (!state.promotionValidation || !Array.isArray(state.promotionValidation.codes) || !state.promotionValidation.codes.length) {
+          return '<div class="pos-terminal__empty">' + escapeHTML(text("Validate codes to preview whether they apply to the current basket.", "Validasi kode untuk melihat apakah kode berlaku pada keranjang saat ini.")) + '</div>';
+        }
+        const summary = state.promotionValidation.valid
+          ? text("All entered codes are valid for this basket.", "Semua kode valid untuk keranjang ini.")
+          : text("Some codes are invalid or not applicable.", "Beberapa kode tidak valid atau tidak berlaku.");
+        return ''
+          + '<div class="pos-terminal__stack">'
+          +   '<div class="pos-terminal__notice">' + escapeHTML(summary) + (state.promotionValidation.discount_amount_total > 0 ? ' ' + escapeHTML(text("Discount preview:", "Pratinjau diskon:")) + ' ' + escapeHTML(money(state.promotionValidation.discount_amount_total || 0)) : '') + '</div>'
+          +   '<div class="pos-terminal__promo-list">' + state.promotionValidation.codes.map(function(item) {
+                const tone = item.status === "applied" ? "pos-terminal__chip--ok" : item.status === "not_applicable" ? "pos-terminal__chip--warn" : "pos-terminal__chip--danger";
+                return '<div class="pos-terminal__promo-chip"><div class="pos-terminal__sale-head"><div><div class="pos-terminal__title">' + escapeHTML(String(item.code || "")) + '</div><div class="pos-terminal__muted">' + escapeHTML(String(item.message || "")) + '</div></div><span class="pos-terminal__chip ' + tone + '">' + escapeHTML(String(item.status || "")) + '</span></div>' + (Number(item.discount_amount || 0) > 0 ? '<div class="pos-terminal__muted" style="margin-top:0.55rem">' + escapeHTML(text("Discount", "Diskon")) + ': ' + escapeHTML(money(item.discount_amount || 0)) + '</div>' : '') + '</div>';
+              }).join("") + '</div>'
+          + '</div>';
       }
 
       async function searchCustomers() {
@@ -388,6 +614,43 @@ func POSTerminalBundle() string {
         }
       }
 
+      async function validatePromotions() {
+        const codes = payloadPromotionCodes();
+        if (!codes.length) {
+          state.promotionValidation = null;
+          notify(text("Enter at least one promo or voucher code.", "Masukkan minimal satu kode promo atau voucher."), "error");
+          render();
+          return;
+        }
+        state.promotionValidationBusy = true;
+        render();
+        try {
+          const payload = await api("/ui/data/pos/promotions/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              store_code: state.storeCode,
+              party_id: state.customer ? state.customer.party_id : "",
+              party_name: state.customer ? state.customer.customer_name : "",
+              lines: payloadLines(),
+              promotion_codes: codes,
+            }),
+          });
+          state.promotionValidation = payload;
+          if (payload && payload.valid) {
+            notify(text("Promo / voucher codes validated.", "Kode promo / voucher tervalidasi."));
+          } else {
+            notify(text("Some promo / voucher codes need attention.", "Ada kode promo / voucher yang perlu diperiksa."), "error");
+          }
+        } catch (error) {
+          state.promotionValidation = null;
+          notify(error instanceof Error ? error.message : text("Promo validation failed.", "Validasi promo gagal."), "error");
+        } finally {
+          state.promotionValidationBusy = false;
+          render();
+        }
+      }
+
       function attachCustomer(item) {
         state.customer = item ? {
           party_id: String(item.party_id || ""),
@@ -399,6 +662,8 @@ func POSTerminalBundle() string {
         } : null;
         state.customerResults = [];
         state.customerQuery = state.customer ? state.customer.customer_name : "";
+        state.customerModalOpen = false;
+        state.promotionValidation = null;
         persist();
         maybeRefreshStoreCreditInsights();
         render();
@@ -436,25 +701,7 @@ func POSTerminalBundle() string {
       }
 
       async function openShift() {
-        if (!state.storeCode || !state.registerCode) {
-          notify(text("Store and register are required.", "Toko dan register wajib diisi."), "error");
-          return;
-        }
-        const opening = Number(window.prompt(text("Opening cash amount", "Jumlah kas awal"), "0") || "0");
-        const payload = await api("/ui/data/pos/shifts/open", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            store_code: state.storeCode,
-            register_code: state.registerCode,
-            opening_cash_amount: Number.isFinite(opening) ? opening : 0,
-          }),
-        });
-        state.shiftId = String(((payload || {}).record || {}).id || "");
-        await loadBootstrap();
-        persist();
-        notify(text("Shift opened.", "Shift dibuka."));
-        render();
+        return enterTerminal("open");
       }
 
       async function closeShift() {
@@ -462,13 +709,18 @@ func POSTerminalBundle() string {
           notify(text("No open shift.", "Tidak ada shift terbuka."), "error");
           return;
         }
-        const actual = Number(window.prompt(text("Counted cash amount", "Jumlah kas aktual"), String(totals().tendered || 0)) || "0");
+        const entered = window.prompt(text("Counted cash amount", "Jumlah kas aktual"), String(totals().tendered || 0));
+        if (entered === null) {
+          return;
+        }
+        const actual = Number(String(entered).trim() || "0");
         await api("/ui/data/pos/shifts/" + encodeURIComponent(state.shiftId) + "/close", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ actual_cash_amount: Number.isFinite(actual) ? actual : 0 }),
         });
         state.shiftId = "";
+        resetSaleState();
         await loadBootstrap();
         persist();
         notify(text("Shift closed.", "Shift ditutup."));
@@ -488,7 +740,7 @@ func POSTerminalBundle() string {
       }
 
       async function holdSale() {
-        if (!state.shiftId) {
+        if (!terminalUnlocked()) {
           notify(text("Open a shift first.", "Buka shift terlebih dahulu."), "error");
           return;
         }
@@ -503,7 +755,7 @@ func POSTerminalBundle() string {
             party_name: state.customer ? state.customer.customer_name : "",
             lines: payloadLines(),
             tenders: payloadTenders(),
-            promotion_codes: payloadPromotionCodes(),
+            promotion_codes: activePromotionCodes(),
             offline_cached: !navigator.onLine,
           }),
         });
@@ -511,6 +763,7 @@ func POSTerminalBundle() string {
         state.cart = [];
         state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
         state.promotionCodes = "";
+        state.promotionValidation = null;
         state.tenderInsights = {};
         persist();
         notify(text("Sale held.", "Penjualan disimpan."));
@@ -532,6 +785,7 @@ func POSTerminalBundle() string {
           };
           state.cart = state.cart.map(recalcLine);
           state.tenderInsights = {};
+          state.promotionValidation = null;
           persist();
           maybeRefreshStoreCreditInsights();
           notify(text("Held sale loaded.", "Penjualan tertahan dimuat."));
@@ -546,7 +800,7 @@ func POSTerminalBundle() string {
           notify(text("Checkout requires a live connection.", "Checkout membutuhkan koneksi aktif."), "error");
           return;
         }
-        if (!state.shiftId) {
+        if (!terminalUnlocked()) {
           notify(text("Open a shift before checkout.", "Buka shift sebelum checkout."), "error");
           return;
         }
@@ -568,7 +822,7 @@ func POSTerminalBundle() string {
               party_name: state.customer ? state.customer.customer_name : "",
               lines: payloadLines(),
               tenders: payloadTenders(),
-              promotion_codes: payloadPromotionCodes(),
+              promotion_codes: activePromotionCodes(),
               offline_cached: false,
             }),
           });
@@ -577,6 +831,7 @@ func POSTerminalBundle() string {
           state.cart = [];
           state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
           state.promotionCodes = "";
+          state.promotionValidation = null;
           state.tenderInsights = {};
           persist();
           await loadHeldSales();
@@ -651,18 +906,13 @@ func POSTerminalBundle() string {
 
       function renderCustomerSummary() {
         if (!state.customer) {
-          return '<div class="pos-terminal__empty">' + escapeHTML(text("Attach a customer or member for loyalty, voucher, and store-credit flows.", "Pasang pelanggan atau member untuk flow loyalti, voucher, dan store credit.")) + '</div>';
+          return '<div class="pos-terminal__summary-pill">' + escapeHTML(text("No member attached", "Belum ada member")) + '</div>';
         }
         return ''
-          + '<div class="pos-terminal__customer-card">'
-          +   '<div>'
+          + '<div class="pos-terminal__summary-pill">'
+          +   '<div class="pos-terminal__mini-stack">'
           +     '<div class="pos-terminal__customer-name">' + escapeHTML(state.customer.customer_name || state.customer.party_id || "") + '</div>'
           +     '<div class="pos-terminal__customer-meta">' + escapeHTML(state.customer.party_id || "") + '</div>'
-          +     '<div class="pos-terminal__chiprow">'
-          +       (state.customer.member_status ? '<span class="pos-terminal__chip pos-terminal__chip--ok">' + escapeHTML(state.customer.member_status) + '</span>' : '')
-          +       (state.customer.member_tier ? '<span class="pos-terminal__chip">' + escapeHTML(state.customer.member_tier) + '</span>' : '')
-          +       (state.customer.customer_type ? '<span class="pos-terminal__chip">' + escapeHTML(state.customer.customer_type) + '</span>' : '')
-          +     '</div>'
           +   '</div>'
           +   '<div class="pos-terminal__buttons">'
           +     '<button type="button" class="pos-terminal__button" data-action="clear-customer">' + escapeHTML(text("Clear", "Lepas")) + '</button>'
@@ -680,10 +930,6 @@ func POSTerminalBundle() string {
             +   '<div>'
             +     '<div class="pos-terminal__customer-name">' + escapeHTML(item.customer_name || item.party_id || "") + '</div>'
             +     '<div class="pos-terminal__customer-meta">' + escapeHTML(String(item.party_id || "")) + '</div>'
-            +     '<div class="pos-terminal__chiprow">'
-            +       (item.member_status ? '<span class="pos-terminal__chip pos-terminal__chip--ok">' + escapeHTML(String(item.member_status || "")) + '</span>' : '')
-            +       (item.member_tier ? '<span class="pos-terminal__chip">' + escapeHTML(String(item.member_tier || "")) + '</span>' : '')
-            +     '</div>'
             +   '</div>'
             +   '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-attach-customer="' + String(index) + '">' + escapeHTML(text("Attach", "Pakai")) + '</button></div>'
             + '</article>';
@@ -700,11 +946,13 @@ func POSTerminalBundle() string {
           +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="close-catalog">' + escapeHTML(text("Close", "Tutup")) + '</button></div>'
           +     '</div>'
           +     '<div class="pos-terminal__modal-body">'
-          +     '<div class="pos-terminal__row">'
+          +     '<form class="pos-terminal__row" data-form="catalog-search">'
           +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Barcode or item", "Barcode atau item")) + '</span><input id="pos-search" name="pos_search" placeholder="' + escapeHTML(text("Scan barcode or type item name", "Scan barcode atau ketik nama barang")) + '" value="' + escapeHTML(state.searchQuery) + '"></div>'
-          +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button pos-terminal__button--primary" data-action="search">' + escapeHTML(text("Search", "Cari")) + '</button></div>'
-          +     '</div>'
-          +     '<div class="pos-terminal__scroll">' + (state.searchResults.length ? '<div class="pos-terminal__result-list">' + state.searchResults.map(function(item, index) {
+          +       '<div class="pos-terminal__buttons"><button type="submit" class="pos-terminal__button pos-terminal__button--primary" data-action="search">' + escapeHTML(state.searchBusy ? text("Searching…", "Mencari…") : text("Search", "Cari")) + '</button></div>'
+          +     '</form>'
+          +     '<div class="pos-terminal__scroll">' + (state.searchBusy
+              ? '<div class="pos-terminal__empty">' + escapeHTML(text("Searching catalog…", "Mencari katalog…")) + '</div>'
+              : state.searchResults.length ? '<div class="pos-terminal__result-list">' + state.searchResults.map(function(item, index) {
                 return ''
                   + '<article class="pos-terminal__result">'
                   +   '<div class="pos-terminal__result-head">'
@@ -721,6 +969,7 @@ func POSTerminalBundle() string {
       }
 
       function renderCartPanel() {
+        const promoCodes = appliedPromotionCodes();
         return ''
           + '<article class="pos-terminal__panel">'
           +   '<div class="pos-terminal__panel-head">'
@@ -728,9 +977,17 @@ func POSTerminalBundle() string {
           +     '<div class="pos-terminal__buttons">' + (state.cart.length ? '<span class="pos-terminal__chip">' + escapeHTML(String(state.cart.length)) + " " + escapeHTML(text("lines", "baris")) + '</span>' : "") + '<button type="button" class="pos-terminal__button pos-terminal__button--primary" data-action="open-catalog">' + escapeHTML(text("Find items", "Cari item")) + '</button></div>'
           +   '</div>'
           +   '<div class="pos-terminal__panel-body" style="display:grid;grid-template-rows:auto minmax(0,1fr);gap:0.9rem">'
-          +     '<div class="pos-terminal__catalog-trigger"><div class="pos-terminal__catalog-meta"><strong>' + escapeHTML(text("Need another item?", "Butuh item lain?")) + '</strong><div class="pos-terminal__muted">' + escapeHTML(text("Open catalog search in a full overlay so the basket stays maximized.", "Buka pencarian katalog dalam overlay penuh supaya keranjang tetap dominan.")) + '</div></div><div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="open-catalog">' + escapeHTML(text("Open catalog", "Buka katalog")) + '</button></div></div>'
+          +     '<div class="pos-terminal__mini-meta">'
+          +       renderCustomerSummary()
+          +       '<div class="pos-terminal__summary-chipline">'
+          +         '<button type="button" class="pos-terminal__button" data-action="open-customer">' + escapeHTML(state.customer ? text("Change member", "Ganti member") : text("Find member", "Cari member")) + '</button>'
+          +         '<button type="button" class="pos-terminal__button" data-action="open-promo">' + escapeHTML(text("Promo / voucher", "Promo / voucher")) + '</button>'
+          +         (promoCodes.length ? promoCodes.slice(0, 2).map(function(code) { return '<span class="pos-terminal__chip">' + escapeHTML(code) + '</span>'; }).join("") : '<span class="pos-terminal__summary-pill">' + escapeHTML(text("No promo applied", "Belum ada promo")) + '</span>')
+          +         (promoCodes.length > 2 ? '<span class="pos-terminal__chip">+' + escapeHTML(String(promoCodes.length - 2)) + '</span>' : '')
+          +       '</div>'
+          +     '</div>'
           +     '<div class="pos-terminal__scroll">' + (state.cart.length ? '<table class="pos-terminal__cart-table"><thead><tr><th style="width:34%">' + escapeHTML(text("Item", "Item")) + '</th><th style="width:13%">' + escapeHTML(text("Qty", "Qty")) + '</th><th style="width:16%">' + escapeHTML(text("Price", "Harga")) + '</th><th style="width:16%">' + escapeHTML(text("Discount", "Diskon")) + '</th><th style="width:13%">' + escapeHTML(text("Total", "Total")) + '</th><th style="width:8%"></th></tr></thead><tbody>' + state.cart.map(function(line, index) {
-                return '<tr><td><div class="pos-terminal__title">' + escapeHTML(line.description || line.item_code) + '</div><div class="pos-terminal__muted">' + escapeHTML(String(line.item_code || "")) + '</div></td><td><input id="pos-line-qty-' + String(index) + '" name="pos_line_qty_' + String(index) + '" type="number" min="0" step="1" data-line-qty="' + String(index) + '" value="' + escapeHTML(String(line.quantity || 0)) + '"></td><td><input id="pos-line-price-' + String(index) + '" name="pos_line_price_' + String(index) + '" type="number" min="0" step="0.01" data-line-price="' + String(index) + '" value="' + escapeHTML(String(line.unit_price || 0)) + '"></td><td><input id="pos-line-discount-' + String(index) + '" name="pos_line_discount_' + String(index) + '" type="number" min="0" step="0.01" data-line-discount="' + String(index) + '" value="' + escapeHTML(String(line.discount_amount || 0)) + '"></td><td><strong>' + escapeHTML(money(line.line_total || 0)) + '</strong></td><td><button type="button" class="pos-terminal__button pos-terminal__button--warn" data-remove-line="' + String(index) + '">' + escapeHTML(text("Remove", "Hapus")) + '</button></td></tr>';
+                return '<tr><td><div class="pos-terminal__title">' + escapeHTML(line.description || line.item_code) + '</div><div class="pos-terminal__muted">' + escapeHTML(String(line.item_code || "")) + '</div>' + (line.inventory_enabled ? '<div class="pos-terminal__muted" style="margin-top:0.25rem">' + escapeHTML(text("Available", "Tersedia")) + ': ' + escapeHTML(String(number(line.available_quantity))) + '</div>' : '') + '</td><td><input id="pos-line-qty-' + String(index) + '" name="pos_line_qty_' + String(index) + '" type="number" min="0" step="1" data-line-qty="' + String(index) + '" value="' + escapeHTML(Object.prototype.hasOwnProperty.call(state.cartQuantityDrafts, String(index)) ? String(state.cartQuantityDrafts[String(index)]) : String(line.quantity || 0)) + '"></td><td><span class="pos-terminal__readonly">' + escapeHTML(money(line.unit_price || 0)) + '</span></td><td><span class="pos-terminal__readonly">' + escapeHTML(money(line.discount_amount || 0)) + '</span></td><td><strong>' + escapeHTML(money(line.line_total || 0)) + '</strong></td><td><button type="button" class="pos-terminal__button pos-terminal__button--warn" data-remove-line="' + String(index) + '">' + escapeHTML(text("Remove", "Hapus")) + '</button></td></tr>';
               }).join("") + '</tbody></table>' : '<div class="pos-terminal__empty">' + escapeHTML(text("No items in cart yet.", "Belum ada item di keranjang.")) + '</div>') + '</div>'
           +   '</div>'
           + '</article>';
@@ -739,16 +996,16 @@ func POSTerminalBundle() string {
       function renderAuxPanel() {
         return ''
           + '<div class="pos-terminal__aux">'
-          +   '<article class="pos-terminal__panel">'
+          +   '<article class="pos-terminal__panel' + (state.heldExpanded ? '' : ' pos-terminal__panel--collapsed') + '">'
           +     '<div class="pos-terminal__panel-head"><div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Held sales", "Penjualan tertahan")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Resume suspended baskets without leaving the terminal.", "Lanjutkan basket tertahan tanpa keluar dari terminal.")) + '</div></div><div class="pos-terminal__buttons"><button type="button" class="pos-terminal__toggle" data-action="toggle-held">' + escapeHTML(state.heldExpanded ? text("Collapse", "Tutup") : text("Expand", "Buka")) + '</button></div></div>'
           +     (state.heldExpanded
                 ? '<div class="pos-terminal__panel-body pos-terminal__scroll">' + (state.heldSales.length ? '<div class="pos-terminal__held-list">' + state.heldSales.map(function(item, index) {
                 const values = item.values || {};
                 return '<article class="pos-terminal__held"><div class="pos-terminal__sale-head"><div><div class="pos-terminal__title">' + escapeHTML(String(values.sale_number || item.id || "")) + '</div><div class="pos-terminal__muted">' + escapeHTML(String(values.party_name || text("Walk-in customer", "Pelanggan umum"))) + '</div></div><strong>' + escapeHTML(money(values.total_amount || 0)) + '</strong></div><div class="pos-terminal__buttons" style="margin-top:0.75rem"><button type="button" class="pos-terminal__button" data-resume-held="' + String(index) + '">' + escapeHTML(text("Resume", "Lanjutkan")) + '</button></div></article>';
               }).join("") + '</div>' : '<div class="pos-terminal__empty">' + escapeHTML(text("No held sales for this register.", "Tidak ada penjualan tertahan untuk register ini.")) + '</div>') + '</div>'
-                : '<div class="pos-terminal__collapsed">' + escapeHTML(text("Held sales stay tucked away until the cashier needs to resume a basket.", "Penjualan tertahan disimpan rapat sampai kasir perlu melanjutkan basket.")) + '</div>')
+                : '')
           +   '</article>'
-          +   '<article class="pos-terminal__panel">'
+          +   '<article class="pos-terminal__panel' + (state.transactionsExpanded ? '' : ' pos-terminal__panel--collapsed') + '">'
           +     '<div class="pos-terminal__panel-head"><div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Transaction lookup", "Pencarian transaksi")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Refund, exchange, or convert to store credit from here.", "Refund, tukar, atau ubah ke store credit dari sini.")) + '</div></div><div class="pos-terminal__buttons"><button type="button" class="pos-terminal__toggle" data-action="toggle-transactions">' + escapeHTML(state.transactionsExpanded ? text("Collapse", "Tutup") : text("Expand", "Buka")) + '</button></div></div>'
           +     (state.transactionsExpanded
                 ? '<div class="pos-terminal__panel-body" style="display:grid;grid-template-rows:auto minmax(0,1fr);gap:0.9rem">'
@@ -758,7 +1015,7 @@ func POSTerminalBundle() string {
                 return '<article class="pos-terminal__txn"><div class="pos-terminal__sale-head"><div><div class="pos-terminal__title">' + escapeHTML(String(values.sale_number || "")) + '</div><div class="pos-terminal__muted">' + escapeHTML(String(values.invoice_number || values.order_number || "")) + (values.party_name ? " • " + escapeHTML(String(values.party_name || "")) : "") + '</div></div><strong>' + escapeHTML(money(values.total_amount || 0)) + '</strong></div><div class="pos-terminal__buttons" style="margin-top:0.75rem"><button type="button" class="pos-terminal__button" data-refund-sale="' + String(index) + '">' + escapeHTML(text("Refund", "Refund")) + '</button><button type="button" class="pos-terminal__button" data-exchange-sale="' + String(index) + '">' + escapeHTML(text("Exchange", "Tukar")) + '</button><button type="button" class="pos-terminal__button pos-terminal__button--soft" data-refund-store-credit="' + String(index) + '">' + escapeHTML(text("Store credit", "Store credit")) + '</button></div></article>';
               }).join("") + '</div>' : '<div class="pos-terminal__empty">' + escapeHTML(text("No transactions loaded yet.", "Belum ada transaksi dimuat.")) + '</div>') + '</div>'
           +     '</div>'
-                : '<div class="pos-terminal__collapsed">' + escapeHTML(text("Transaction history stays collapsed until the cashier needs refunds or exchanges.", "Riwayat transaksi disimpan tertutup sampai kasir perlu refund atau tukar.")) + '</div>')
+                : '')
           +   '</article>'
           + '</div>';
       }
@@ -787,7 +1044,7 @@ func POSTerminalBundle() string {
                   const selected = code === String(line.tender_type_code || "") ? " selected" : "";
                   return '<option value="' + escapeHTML(code) + '"' + selected + ">" + escapeHTML(String((item.values || {}).name || code)) + "</option>";
                 })).join("") + '</select></div>'
-          +     '<div class="pos-terminal__field"><span>' + escapeHTML(text("Amount", "Jumlah")) + '</span><input id="pos-tender-amount-' + String(index) + '" name="pos_tender_amount_' + String(index) + '" type="number" min="0" step="0.01" data-tender-amount="' + String(index) + '" value="' + escapeHTML(String(line.amount || 0)) + '"></div>'
+          +     '<div class="pos-terminal__field"><span>' + escapeHTML(text("Amount", "Jumlah")) + '</span><input id="pos-tender-amount-' + String(index) + '" name="pos_tender_amount_' + String(index) + '" type="number" min="0" step="0.01" data-tender-amount="' + String(index) + '" value="' + escapeHTML(Object.prototype.hasOwnProperty.call(state.tenderAmountDrafts, String(index)) ? String(state.tenderAmountDrafts[String(index)]) : String(line.amount || 0)) + '"></div>'
           +   '</div>'
           +   '<div class="pos-terminal__row" style="margin-top:0.7rem">'
           +     '<div class="pos-terminal__field"><span>' + escapeHTML(tenderRequiresReference(line.tender_type_code) ? text("Reference (required)", "Referensi (wajib)") : text("Reference", "Referensi")) + '</span><input id="pos-tender-reference-' + String(index) + '" name="pos_tender_reference_' + String(index) + '" type="text" data-tender-reference="' + String(index) + '" value="' + escapeHTML(String(line.reference || "")) + '" placeholder="' + escapeHTML(kind === "gift_card" ? text("Gift card code", "Kode gift card") : kind === "voucher" ? text("Voucher reference", "Referensi voucher") : text("Optional reference", "Referensi opsional")) + '"></div>'
@@ -800,6 +1057,9 @@ func POSTerminalBundle() string {
       function renderRail(totalsPayload) {
         const activeStore = selectedStore();
         const activeRegister = selectedRegister();
+        const tenderCount = state.tenders.filter(function(line) {
+          return String(line.tender_type_code || "").trim() !== "" || number(line.amount) > 0 || String(line.reference || "").trim() !== "";
+        }).length;
         return ''
           + '<aside class="pos-terminal__rail">'
           +   '<article class="pos-terminal__panel">'
@@ -814,12 +1074,13 @@ func POSTerminalBundle() string {
           +         '<div class="pos-terminal__summary-row"><strong>' + escapeHTML(text("Total", "Total")) + '</strong><strong>' + escapeHTML(money(totalsPayload.total)) + '</strong></div>'
           +         '<div class="pos-terminal__summary-row"><span>' + escapeHTML(text("Tendered", "Dibayar")) + '</span><span>' + escapeHTML(money(totalsPayload.tendered)) + '</span></div>'
           +         '<div class="pos-terminal__summary-row"><span>' + escapeHTML(text("Change", "Kembalian")) + '</span><span>' + escapeHTML(money(totalsPayload.change)) + '</span></div>'
+          +         '<div class="pos-terminal__summary-row"><span>' + escapeHTML(text("Tender lines", "Baris tender")) + '</span><span>' + escapeHTML(String(tenderCount || 0)) + '</span></div>'
           +       '</div>'
           +     '</div>'
           +   '</article>'
           +   '<article class="pos-terminal__panel">'
-          +     '<div class="pos-terminal__panel-head"><div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Tenders", "Tender")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Keep cash, voucher, gift card, and store credit flows explicit.", "Buat flow kas, voucher, gift card, dan store credit tetap jelas.")) + '</div></div><div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="add-tender">' + escapeHTML(text("Add tender", "Tambah tender")) + '</button></div></div>'
-          +     '<div class="pos-terminal__panel-body pos-terminal__scroll">' + '<div class="pos-terminal__tender-list">' + state.tenders.map(renderTenderCard).join("") + '</div></div>'
+          +     '<div class="pos-terminal__panel-head"><div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Tenders", "Tender")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Open the tender workspace to capture payments, voucher references, and stored-value checks.", "Buka workspace tender untuk menangkap pembayaran, referensi voucher, dan cek stored-value.")) + '</div></div></div>'
+          +     '<div class="pos-terminal__panel-body"><div class="pos-terminal__buttons" style="justify-content:space-between"><span class="pos-terminal__summary-pill">' + escapeHTML(tenderCount ? text("Tender lines ready", "Baris tender siap") : text("No tender captured", "Belum ada tender")) + (tenderCount ? ': ' + escapeHTML(String(tenderCount)) : '') + '</span><button type="button" class="pos-terminal__button" data-action="open-tender">' + escapeHTML(text("Manage tenders", "Kelola tender")) + '</button></div></div>'
           +   '</article>'
           +   '<article class="pos-terminal__panel">'
           +     '<div class="pos-terminal__panel-body">'
@@ -832,45 +1093,135 @@ func POSTerminalBundle() string {
           + '</aside>';
       }
 
-      function renderTopBar() {
+      function renderControlBar() {
         const bootstrap = state.bootstrap || { stores: [], registers: [], tender_types: [] };
+        const cashier = currentCashier();
+        const context = terminalContext();
+        const activeShift = (bootstrap.open_shift || {});
+        const isCollapsed = state.controlCollapsed !== false;
+        const cashierLabel = String((cashier && (cashier.name || cashier.username || cashier.user_id)) || "—");
+        const cashierSub = String((cashier && (cashier.username || cashier.user_id)) || "");
+        const storeLabel = String((selectedStore() && selectedStore().values && selectedStore().values.name) || state.storeCode || "—");
+        const registerLabel = String((selectedRegister() && selectedRegister().values && selectedRegister().values.name) || state.registerCode || "—");
+        const shiftLabel = String(((activeShift.values || {}).shift_number || context && context.shift_id || state.shiftId || "—"));
+        const shiftSub = String(((activeShift.values || {}).status || text("opened", "terbuka")));
         return ''
-          + '<section class="pos-terminal__topbar">'
-          +   '<div class="pos-terminal__brand">'
-          +     '<h2>' + escapeHTML(text("Counter terminal", "Terminal counter")) + '</h2>'
-          +     '<p>' + escapeHTML(text("Designed for fast cashier work: search, basket control, tenders, and post-sale actions stay visible without page-length scrolling.", "Dirancang untuk kerja kasir cepat: pencarian, kontrol basket, tender, dan aksi pasca-penjualan tetap terlihat tanpa scroll panjang.")) + '</p>'
-          +     '<div class="pos-terminal__chiprow">'
+          + '<section class="pos-terminal__controlbar' + (isCollapsed ? ' pos-terminal__controlbar--compact' : '') + '">'
+          +   '<div class="pos-terminal__control-grid">'
+          +     '<div class="pos-terminal__control-summary">'
+          +       '<article class="pos-terminal__control-pill"><span class="pos-terminal__meta-label">' + escapeHTML(text("Cashier", "Kasir")) + '</span><strong>' + escapeHTML(cashierLabel) + '</strong>' + (isCollapsed ? '' : '<div class="pos-terminal__meta-sub">' + escapeHTML(cashierSub) + '</div>') + '</article>'
+          +       '<article class="pos-terminal__control-pill"><span class="pos-terminal__meta-label">' + escapeHTML(text("Store", "Toko")) + '</span><strong>' + escapeHTML(storeLabel) + '</strong>' + (isCollapsed ? '' : '<div class="pos-terminal__meta-sub">' + escapeHTML(String(state.storeCode || "")) + '</div>') + '</article>'
+          +       '<article class="pos-terminal__control-pill"><span class="pos-terminal__meta-label">' + escapeHTML(text("Register", "Register")) + '</span><strong>' + escapeHTML(registerLabel) + '</strong>' + (isCollapsed ? '' : '<div class="pos-terminal__meta-sub">' + escapeHTML(String(state.registerCode || "")) + '</div>') + '</article>'
+          +       '<article class="pos-terminal__control-pill"><span class="pos-terminal__meta-label">' + escapeHTML(text("Shift", "Shift")) + '</span><strong>' + escapeHTML(shiftLabel) + '</strong>' + (isCollapsed ? '' : '<div class="pos-terminal__meta-sub">' + escapeHTML(shiftSub) + '</div>') + '</article>'
+          +     '</div>'
+          +     '<div class="pos-terminal__control-actions">'
+          +       '<button type="button" class="pos-terminal__button pos-terminal__button--compact" data-action="toggle-control-details">' + escapeHTML(isCollapsed ? text("Details", "Detail") : text("Hide details", "Sembunyikan detail")) + '</button>'
+          +       (state.shiftId ? '<button type="button" class="pos-terminal__button pos-terminal__button--warn pos-terminal__button--compact" data-action="close-shift">' + escapeHTML(text("Close shift", "Tutup shift")) + '</button>' : '<button type="button" class="pos-terminal__button pos-terminal__button--primary pos-terminal__button--compact" data-action="open-shift">' + escapeHTML(text("Open shift", "Buka shift")) + '</button>')
+          +       '<button type="button" class="pos-terminal__button pos-terminal__button--compact" data-action="lock-terminal">' + escapeHTML(text("Lock", "Kunci")) + '</button>'
+          +       '<button type="button" class="pos-terminal__button pos-terminal__button--compact" data-action="refresh-terminal">' + escapeHTML(text("Refresh", "Muat ulang")) + '</button>'
+          +     '</div>'
+          +   '</div>'
+          +   (!isCollapsed
+                ? '<div class="pos-terminal__control-selects">'
+                  + '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Cashier", "Kasir")) + '</span><div class="pos-terminal__meta-value">' + escapeHTML(cashierLabel) + '</div><div class="pos-terminal__meta-sub">' + escapeHTML(cashierSub) + '</div></article>'
+                  + '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Store", "Toko")) + '</span><div class="pos-terminal__meta-value">' + escapeHTML(storeLabel) + '</div><div class="pos-terminal__meta-sub">' + escapeHTML(String(state.storeCode || "")) + '</div></article>'
+                  + '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Register", "Register")) + '</span><div class="pos-terminal__meta-value">' + escapeHTML(registerLabel) + '</div><div class="pos-terminal__meta-sub">' + escapeHTML(String(state.registerCode || "")) + '</div></article>'
+                  + '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Shift", "Shift")) + '</span><div class="pos-terminal__meta-value">' + escapeHTML(shiftLabel) + '</div><div class="pos-terminal__meta-sub">' + escapeHTML(shiftSub) + '</div></article>'
+                  + '</div>'
+                : '')
+          +   '<div class="pos-terminal__control-meta">'
           +       '<span class="pos-terminal__chip ' + (navigator.onLine ? 'pos-terminal__chip--ok' : 'pos-terminal__chip--danger') + '">' + escapeHTML(navigator.onLine ? text("Online", "Online") : text("Offline", "Offline")) + '</span>'
           +       '<span class="pos-terminal__chip ' + (state.shiftId ? 'pos-terminal__chip--ok' : 'pos-terminal__chip--warn') + '">' + escapeHTML(state.shiftId ? text("Shift open", "Shift terbuka") : text("Shift closed", "Shift tutup")) + '</span>'
           +       '<span class="pos-terminal__chip">' + escapeHTML(text("Stores", "Toko")) + ': ' + escapeHTML(String((bootstrap.stores || []).length)) + '</span>'
           +       '<span class="pos-terminal__chip">' + escapeHTML(text("Tenders", "Tender")) + ': ' + escapeHTML(String((bootstrap.tender_types || []).length)) + '</span>'
           +       (state.bootstrapping ? '<span class="pos-terminal__chip pos-terminal__chip--warn">' + escapeHTML(text("Refreshing terminal…", "Memuat ulang terminal…")) + '</span>' : '')
-          +     '</div>'
           +   '</div>'
-          +   '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Store", "Toko")) + '</span><div class="pos-terminal__meta-value"><select id="pos-store" name="pos_store">' + renderStoreOptions(bootstrap.stores, "code", "name", state.storeCode) + '</select></div><div class="pos-terminal__meta-sub">' + escapeHTML(text("Route items and stock to the correct outlet.", "Arahkan item dan stok ke outlet yang tepat.")) + '</div></article>'
-          +   '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Register", "Register")) + '</span><div class="pos-terminal__meta-value"><select id="pos-register" name="pos_register">' + renderStoreOptions((bootstrap.registers || []).filter(function(item) { return !state.storeCode || String((item.values || {}).store_code || "") === state.storeCode; }), "code", "name", state.registerCode) + '</select></div><div class="pos-terminal__meta-sub">' + escapeHTML(text("Use the assigned drawer and settlement profile.", "Gunakan laci dan profil settlement yang ditetapkan.")) + '</div></article>'
-          +   '<article class="pos-terminal__meta"><span class="pos-terminal__meta-label">' + escapeHTML(text("Shift control", "Kontrol shift")) + '</span><div class="pos-terminal__buttons">' + (state.shiftId ? '<button type="button" class="pos-terminal__button pos-terminal__button--warn" data-action="close-shift">' + escapeHTML(text("Close shift", "Tutup shift")) + '</button>' : '<button type="button" class="pos-terminal__button pos-terminal__button--primary" data-action="open-shift">' + escapeHTML(text("Open shift", "Buka shift")) + '</button>') + '<button type="button" class="pos-terminal__button" data-action="refresh-terminal">' + escapeHTML(text("Refresh", "Muat ulang")) + '</button></div><div class="pos-terminal__meta-sub">' + escapeHTML(text("Keep cashier context current before tendering.", "Pastikan konteks kasir terbaru sebelum tender.")) + '</div></article>'
           + '</section>';
       }
 
-      function renderCustomerBar() {
+      function renderTerminalGate(bootstrap) {
+        const cashier = currentCashier();
+        const matchingShift = bootstrap.open_shift || null;
         return ''
-          + '<section class="pos-terminal__customerbar">'
-          +   '<div class="pos-terminal__customer-top">'
-          +     '<div class="pos-terminal__stack">'
-          +       '<div class="pos-terminal__row">'
-          +         '<div class="pos-terminal__field"><span>' + escapeHTML(text("Customer or member", "Pelanggan atau member")) + '</span><input id="pos-customer-search" name="pos_customer_search" placeholder="' + escapeHTML(text("Member ID, customer name, or party ID", "ID member, nama pelanggan, atau ID party")) + '" value="' + escapeHTML(state.customerQuery) + '"></div>'
-          +         '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="search-customers">' + escapeHTML(state.customerBusy ? text("Searching…", "Mencari…") : text("Search", "Cari")) + '</button></div>'
-          +       '</div>'
-          +       renderCustomerResults()
+          + '<section class="pos-terminal__setup">'
+          +   '<div class="pos-terminal__stack" style="width:min(46rem,100%);text-align:left">'
+          +     '<div style="display:grid;gap:0.5rem">'
+          +       '<strong style="font-size:1.2rem">' + escapeHTML(text("Unlock terminal", "Buka terminal")) + '</strong>'
+          +       '<div>' + escapeHTML(text("Select the counter context, confirm the cashier, then enter your cashier PIN to resume or open a shift.", "Pilih konteks counter, konfirmasi kasir, lalu masukkan PIN kasir untuk melanjutkan atau membuka shift.")) + '</div>'
           +     '</div>'
-          +     '<div class="pos-terminal__stack">'
-          +       renderCustomerSummary()
-          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Promo / voucher codes", "Kode promo / voucher")) + '</span><textarea id="pos-voucher-codes" name="pos_voucher_codes" placeholder="' + escapeHTML(text("Each line or comma-separated code", "Satu baris atau dipisah koma")) + '">' + escapeHTML(state.promotionCodes) + '</textarea></div>'
-          +       '<div class="pos-terminal__muted">' + escapeHTML(text("Voucher redemption is captured through promo / voucher codes, while gift card and store credit stay in the tender rail with balance lookup.", "Redeem voucher dicatat melalui kode promo / voucher, sementara gift card dan store credit tetap di rail tender dengan pengecekan saldo.")) + '</div>'
+          +     '<div class="pos-terminal__row">'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Cashier", "Kasir")) + '</span><div class="pos-terminal__readonly">' + escapeHTML(String((cashier && (cashier.name || cashier.username || cashier.user_id)) || "—")) + '<div class="pos-terminal__muted">' + escapeHTML(String((cashier && (cashier.username || cashier.user_id)) || "")) + '</div></div></div>'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Store", "Toko")) + '</span><select id="pos-store" name="pos_store">' + renderStoreOptions(bootstrap.stores, "code", "name", state.storeCode) + '</select></div>'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Register", "Register")) + '</span><select id="pos-register" name="pos_register">' + renderStoreOptions((bootstrap.registers || []).filter(function(item) { return !state.storeCode || String((item.values || {}).store_code || "") === state.storeCode; }), "code", "name", state.registerCode) + '</select></div>'
+          +     '</div>'
+          +     (!bootstrap.cashier_pin_configured ? '<div class="pos-terminal__notice">' + escapeHTML(text("Cashier PIN is not set yet. Set it once in Settings before using this terminal.", "PIN kasir belum disetel. Atur sekali di Pengaturan sebelum memakai terminal ini.")) + ' <button type="button" class="pos-terminal__button pos-terminal__button--compact" data-nav="/ui/settings">' + escapeHTML(text("Open settings", "Buka pengaturan")) + '</button></div>' : '')
+          +     '<div class="pos-terminal__row">'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Cashier PIN", "PIN kasir")) + '</span><input id="pos-terminal-pin" name="pos_terminal_pin" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="' + escapeHTML(text("6-digit PIN", "PIN 6 digit")) + '" value="' + escapeHTML(String(state.terminalPIN || "")) + '"></div>'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Opening cash", "Kas awal")) + '</span><input id="pos-opening-cash" name="pos_opening_cash" type="number" min="0" step="0.01" value="' + escapeHTML(String(state.terminalOpeningCash || "0")) + '"></div>'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Notes", "Catatan")) + '</span><input id="pos-terminal-notes" name="pos_terminal_notes" type="text" value="' + escapeHTML(String(state.terminalNotes || "")) + '" placeholder="' + escapeHTML(text("Optional opening note", "Catatan pembukaan opsional")) + '"></div>'
+          +     '</div>'
+          +     (matchingShift ? '<div class="pos-terminal__notice">' + escapeHTML(text("Matching open shift found for this cashier and register.", "Ditemukan shift terbuka yang cocok untuk kasir dan register ini.")) + ' <strong>' + escapeHTML(String(((matchingShift.values || {}).shift_number || matchingShift.id || ""))) + '</strong></div>' : '')
+          +     '<div class="pos-terminal__buttons">'
+          +       (matchingShift ? '<button type="button" class="pos-terminal__button pos-terminal__button--primary" data-action="resume-terminal"' + (state.terminalBusy || !bootstrap.cashier_pin_configured ? " disabled" : "") + '>' + escapeHTML(state.terminalBusy ? text("Entering…", "Masuk…") : text("Resume shift", "Lanjutkan shift")) + '</button>' : '<button type="button" class="pos-terminal__button pos-terminal__button--primary" data-action="open-shift"' + (state.terminalBusy || !bootstrap.cashier_pin_configured ? " disabled" : "") + '>' + escapeHTML(state.terminalBusy ? text("Entering…", "Masuk…") : text("Open shift", "Buka shift")) + '</button>')
+          +       '<button type="button" class="pos-terminal__button" data-action="refresh-terminal">' + escapeHTML(text("Refresh", "Muat ulang")) + '</button>'
           +     '</div>'
           +   '</div>'
           + '</section>';
+      }
+
+      function renderCustomerModal() {
+        if (!state.customerModalOpen) return "";
+        return ''
+          + '<div class="pos-terminal__overlay" data-action="close-customer-overlay">'
+          +   '<section class="pos-terminal__modal" role="dialog" aria-modal="true" aria-label="' + escapeHTML(text("Member search", "Pencarian member")) + '">'
+          +     '<div class="pos-terminal__modal-head">'
+          +       '<div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Member search", "Pencarian member")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Search by member ID, customer name, or party ID, then attach the result to this sale.", "Cari dengan ID member, nama pelanggan, atau ID party, lalu pasang ke transaksi ini.")) + '</div></div>'
+          +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="close-customer">' + escapeHTML(text("Close", "Tutup")) + '</button></div>'
+          +     '</div>'
+          +     '<div class="pos-terminal__modal-body">'
+          +       '<div class="pos-terminal__row">'
+          +         '<div class="pos-terminal__field"><span>' + escapeHTML(text("Customer or member", "Pelanggan atau member")) + '</span><input id="pos-customer-search" name="pos_customer_search" placeholder="' + escapeHTML(text("Member ID, customer name, or party ID", "ID member, nama pelanggan, atau ID party")) + '" value="' + escapeHTML(state.customerQuery) + '"></div>'
+          +         '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button pos-terminal__button--primary" data-action="search-customers">' + escapeHTML(state.customerBusy ? text("Searching…", "Mencari…") : text("Search", "Cari")) + '</button></div>'
+          +       '</div>'
+          +       '<div class="pos-terminal__scroll">' + renderCustomerResults() + '</div>'
+          +     '</div>'
+          +   '</section>'
+          + '</div>';
+      }
+
+      function renderPromoModal() {
+        if (!state.promoModalOpen) return "";
+        return ''
+          + '<div class="pos-terminal__overlay" data-action="close-promo-overlay">'
+          +   '<section class="pos-terminal__modal" role="dialog" aria-modal="true" aria-label="' + escapeHTML(text("Promo and voucher codes", "Kode promo dan voucher")) + '">'
+          +     '<div class="pos-terminal__modal-head">'
+          +       '<div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Promo / voucher codes", "Kode promo / voucher")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Keep voucher redemption compact here while gift card and store credit stay in the tender rail.", "Kelola voucher di sini secara ringkas, sementara gift card dan store credit tetap di rail tender.")) + '</div></div>'
+          +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="close-promo">' + escapeHTML(text("Close", "Tutup")) + '</button></div>'
+          +     '</div>'
+          +     '<div class="pos-terminal__modal-body">'
+          +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Promo / voucher codes", "Kode promo / voucher")) + '</span><textarea id="pos-voucher-codes" name="pos_voucher_codes" placeholder="' + escapeHTML(text("Each line or comma-separated code", "Satu baris atau dipisah koma")) + '">' + escapeHTML(state.promotionCodes) + '</textarea></div>'
+          +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button pos-terminal__button--soft pos-terminal__button--compact" data-action="validate-promo">' + escapeHTML(state.promotionValidationBusy ? text("Validating…", "Memvalidasi…") : text("Validate codes", "Validasi kode")) + '</button></div>'
+          +       '<div class="pos-terminal__scroll">' + renderPromotionValidation() + '</div>'
+          +     '</div>'
+          +   '</section>'
+          + '</div>';
+      }
+
+      function renderTenderModal() {
+        if (!state.tenderModalOpen) return "";
+        return ''
+          + '<div class="pos-terminal__overlay" data-action="close-tender-overlay">'
+          +   '<section class="pos-terminal__modal" role="dialog" aria-modal="true" aria-label="' + escapeHTML(text("Manage tenders", "Kelola tender")) + '">'
+          +     '<div class="pos-terminal__modal-head">'
+          +       '<div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Tenders", "Tender")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Capture cash, voucher, gift card, and store credit flows without shrinking the cart.", "Kelola kas, voucher, gift card, dan store credit tanpa mengecilkan keranjang.")) + '</div></div>'
+          +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="close-tender">' + escapeHTML(text("Close", "Tutup")) + '</button></div>'
+          +     '</div>'
+          +     '<div class="pos-terminal__modal-body">'
+          +       '<div class="pos-terminal__buttons" style="justify-content:space-between"><span class="pos-terminal__summary-pill">' + escapeHTML(text("Tender lines", "Baris tender")) + ': ' + escapeHTML(String(state.tenders.length)) + '</span><button type="button" class="pos-terminal__button" data-action="add-tender">' + escapeHTML(text("Add tender", "Tambah tender")) + '</button></div>'
+          +       '<div class="pos-terminal__scroll"><div class="pos-terminal__tender-list">' + state.tenders.map(renderTenderCard).join("") + '</div></div>'
+          +     '</div>'
+          +   '</section>'
+          + '</div>';
       }
 
       function bindEvents() {
@@ -881,7 +1232,11 @@ func POSTerminalBundle() string {
         });
         mount.querySelector("#pos-store")?.addEventListener("change", function(event) {
           state.storeCode = String(event.target.value || "");
+          state.registerCode = "";
+          state.shiftId = "";
           state.searchResults = [];
+          resetSaleState();
+          state.promotionValidation = null;
           persist();
           loadBootstrap().then(function() { return loadHeldSales(); }).then(render).catch(function(error) {
             notify(error instanceof Error ? error.message : "Failed to load store context", "error");
@@ -889,16 +1244,39 @@ func POSTerminalBundle() string {
         });
         mount.querySelector("#pos-register")?.addEventListener("change", function(event) {
           state.registerCode = String(event.target.value || "");
+          state.shiftId = "";
+          resetSaleState();
           persist();
           loadBootstrap().then(function() { return loadHeldSales(); }).then(render).catch(function(error) {
             notify(error instanceof Error ? error.message : "Failed to load register context", "error");
           });
         });
+        mount.querySelector("#pos-terminal-pin")?.addEventListener("input", function(event) {
+          state.terminalPIN = String(event.target.value || "");
+        });
+        mount.querySelector("#pos-opening-cash")?.addEventListener("input", function(event) {
+          state.terminalOpeningCash = String(event.target.value || "0");
+        });
+        mount.querySelector("#pos-terminal-notes")?.addEventListener("input", function(event) {
+          state.terminalNotes = String(event.target.value || "");
+        });
+        mount.querySelector("#pos-terminal-pin")?.addEventListener("keydown", function(event) {
+          if (event.key === "Enter" || event.code === "NumpadEnter") {
+            event.preventDefault();
+            enterTerminal(state.bootstrap && state.bootstrap.open_shift ? "resume" : "open");
+          }
+        });
         mount.querySelector("#pos-search")?.addEventListener("input", function(event) {
           state.searchQuery = String(event.target.value || "");
         });
+        mount.querySelector("[data-form='catalog-search']")?.addEventListener("submit", function(event) {
+          event.preventDefault();
+          searchCatalog().catch(function(error) {
+            notify(error instanceof Error ? error.message : "Search failed", "error");
+          });
+        });
         mount.querySelector("#pos-search")?.addEventListener("keydown", function(event) {
-          if (event.key === "Enter") {
+          if (event.key === "Enter" || event.code === "NumpadEnter") {
             event.preventDefault();
             searchCatalog().catch(function(error) {
               notify(error instanceof Error ? error.message : "Search failed", "error");
@@ -921,10 +1299,7 @@ func POSTerminalBundle() string {
         });
         mount.querySelector("#pos-voucher-codes")?.addEventListener("input", function(event) {
           state.promotionCodes = String(event.target.value || "");
-          persist();
-        });
-        mount.querySelector("#pos-promotion-codes")?.addEventListener("input", function(event) {
-          state.promotionCodes = String(event.target.value || "");
+          state.promotionValidation = null;
           persist();
         });
         mount.querySelectorAll("[data-attach-customer]").forEach(function(node) {
@@ -977,37 +1352,25 @@ func POSTerminalBundle() string {
         });
         mount.querySelectorAll("[data-line-qty]").forEach(function(node) {
           node.addEventListener("input", function() {
-            const line = state.cart[number(node.getAttribute("data-line-qty"))];
-            if (!line) return;
-            line.quantity = number(node.value);
-            recalcLine(line);
-            persist();
-            render();
+            const index = number(node.getAttribute("data-line-qty"));
+            state.cartQuantityDrafts[String(index)] = String(node.value || "");
           });
-        });
-        mount.querySelectorAll("[data-line-price]").forEach(function(node) {
-          node.addEventListener("input", function() {
-            const line = state.cart[number(node.getAttribute("data-line-price"))];
-            if (!line) return;
-            line.unit_price = number(node.value);
-            recalcLine(line);
-            persist();
-            render();
+          node.addEventListener("blur", function() {
+            const index = number(node.getAttribute("data-line-qty"));
+            commitLineQuantity(index, node.value);
           });
-        });
-        mount.querySelectorAll("[data-line-discount]").forEach(function(node) {
-          node.addEventListener("input", function() {
-            const line = state.cart[number(node.getAttribute("data-line-discount"))];
-            if (!line) return;
-            line.discount_amount = number(node.value);
-            recalcLine(line);
-            persist();
-            render();
+          node.addEventListener("keydown", function(event) {
+            if (event.key === "Enter" || event.code === "NumpadEnter") {
+              event.preventDefault();
+              const index = number(node.getAttribute("data-line-qty"));
+              commitLineQuantity(index, node.value);
+            }
           });
         });
         mount.querySelectorAll("[data-remove-line]").forEach(function(node) {
           node.addEventListener("click", function() {
             state.cart.splice(number(node.getAttribute("data-remove-line")), 1);
+            state.promotionValidation = null;
             persist();
             render();
           });
@@ -1031,11 +1394,19 @@ func POSTerminalBundle() string {
         });
         mount.querySelectorAll("[data-tender-amount]").forEach(function(node) {
           node.addEventListener("input", function() {
-            const line = state.tenders[number(node.getAttribute("data-tender-amount"))];
-            if (!line) return;
-            line.amount = number(node.value);
-            persist();
-            render();
+            const index = number(node.getAttribute("data-tender-amount"));
+            state.tenderAmountDrafts[String(index)] = String(node.value || "");
+          });
+          node.addEventListener("blur", function() {
+            const index = number(node.getAttribute("data-tender-amount"));
+            commitTenderAmount(index, node.value);
+          });
+          node.addEventListener("keydown", function(event) {
+            if (event.key === "Enter" || event.code === "NumpadEnter") {
+              event.preventDefault();
+              const index = number(node.getAttribute("data-tender-amount"));
+              commitTenderAmount(index, node.value);
+            }
           });
         });
         mount.querySelectorAll("[data-tender-reference]").forEach(function(node) {
@@ -1077,16 +1448,52 @@ func POSTerminalBundle() string {
               closeCatalog();
               return;
             }
+            if (action === "open-customer") {
+              openCustomerModal();
+              return;
+            }
+            if (action === "close-customer") {
+              closeCustomerModal();
+              return;
+            }
             if (action === "search-customers") {
               searchCustomers().catch(function(error) { notify(error instanceof Error ? error.message : "Customer lookup failed", "error"); });
+              return;
+            }
+            if (action === "open-promo") {
+              openPromoModal();
+              return;
+            }
+            if (action === "open-tender") {
+              openTenderModal();
+              return;
+            }
+            if (action === "validate-promo") {
+              validatePromotions();
+              return;
+            }
+            if (action === "close-promo") {
+              closePromoModal();
+              return;
+            }
+            if (action === "close-tender") {
+              closeTenderModal();
               return;
             }
             if (action === "open-shift") {
               openShift().catch(function(error) { notify(error instanceof Error ? error.message : "Open shift failed", "error"); });
               return;
             }
+            if (action === "resume-terminal") {
+              enterTerminal("resume").catch(function(error) { notify(error instanceof Error ? error.message : "Resume shift failed", "error"); });
+              return;
+            }
             if (action === "close-shift") {
               closeShift().catch(function(error) { notify(error instanceof Error ? error.message : "Close shift failed", "error"); });
+              return;
+            }
+            if (action === "lock-terminal") {
+              lockTerminal().catch(function(error) { notify(error instanceof Error ? error.message : "Lock failed", "error"); });
               return;
             }
             if (action === "hold") {
@@ -1107,6 +1514,11 @@ func POSTerminalBundle() string {
             }
             if (action === "toggle-held") {
               state.heldExpanded = !state.heldExpanded;
+              render();
+              return;
+            }
+            if (action === "toggle-control-details") {
+              state.controlCollapsed = !state.controlCollapsed;
               render();
               return;
             }
@@ -1131,6 +1543,21 @@ func POSTerminalBundle() string {
             if (event.target === node) closeCatalog();
           });
         });
+        mount.querySelectorAll("[data-action='close-customer-overlay']").forEach(function(node) {
+          node.addEventListener("click", function(event) {
+            if (event.target === node) closeCustomerModal();
+          });
+        });
+        mount.querySelectorAll("[data-action='close-promo-overlay']").forEach(function(node) {
+          node.addEventListener("click", function(event) {
+            if (event.target === node) closePromoModal();
+          });
+        });
+        mount.querySelectorAll("[data-action='close-tender-overlay']").forEach(function(node) {
+          node.addEventListener("click", function(event) {
+            if (event.target === node) closeTenderModal();
+          });
+        });
       }
 
       function render() {
@@ -1144,12 +1571,12 @@ func POSTerminalBundle() string {
 
         mount.innerHTML = ''
           + '<section class="pos-terminal">'
-          +   renderTopBar()
-          +   renderCustomerBar()
           +   (state.message ? '<div class="pos-terminal__notice">' + escapeHTML(state.message) + '</div>' : '')
           +   (!(bootstrap.stores || []).length || !(bootstrap.registers || []).length || !(bootstrap.tender_types || []).length
                 ? renderSetupState(bootstrap)
-                : '<section class="pos-terminal__workspace"><div class="pos-terminal__left">' + renderCartPanel() + renderAuxPanel() + '</div>' + renderRail(totalsPayload) + '</section>' + renderCatalogModal())
+                : (terminalUnlocked()
+                    ? renderControlBar() + '<section class="pos-terminal__workspace"><div class="pos-terminal__left">' + renderCartPanel() + renderAuxPanel() + '</div>' + renderRail(totalsPayload) + '</section>' + renderCatalogModal() + renderCustomerModal() + renderPromoModal() + renderTenderModal()
+                    : renderTerminalGate(bootstrap)))
           + '</section>';
         bindEvents();
       }

@@ -333,6 +333,45 @@ func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	}
 }
 
+func TestSetVerifyAndChangeCashierPIN(t *testing.T) {
+	svc := NewService(organization.NewService())
+	state, err := svc.CashierPINState("user_admin")
+	if err != nil {
+		t.Fatalf("cashier PIN state before setup failed: %v", err)
+	}
+	if _, ok := state["changed_at"]; ok {
+		t.Fatalf("expected changed_at to be omitted before setup, got %+v", state)
+	}
+	if err := svc.SetCashierPIN("user_admin", "123456"); err != nil {
+		t.Fatalf("set cashier PIN failed: %v", err)
+	}
+	if err := svc.SetCashierPIN("user_admin", "222222"); err == nil {
+		t.Fatal("expected second cashier PIN setup to be rejected")
+	}
+	state, err = svc.CashierPINState("user_admin")
+	if err != nil {
+		t.Fatalf("cashier PIN state failed: %v", err)
+	}
+	if configured, _ := state["configured"].(bool); !configured {
+		t.Fatalf("expected cashier PIN to be configured, got %+v", state)
+	}
+	if _, ok := state["changed_at"]; !ok {
+		t.Fatalf("expected changed_at after setup, got %+v", state)
+	}
+	if err := svc.VerifyCashierPIN("user_admin", "123456"); err != nil {
+		t.Fatalf("verify cashier PIN failed: %v", err)
+	}
+	if err := svc.ChangeCashierPIN("user_admin", "123456", "654321"); err != nil {
+		t.Fatalf("change cashier PIN failed: %v", err)
+	}
+	if err := svc.VerifyCashierPIN("user_admin", "123456"); err == nil {
+		t.Fatal("expected old cashier PIN to stop working")
+	}
+	if err := svc.VerifyCashierPIN("user_admin", "654321"); err != nil {
+		t.Fatalf("expected new cashier PIN to work: %v", err)
+	}
+}
+
 func TestCreateUserAndChangePasswordEnforceComplexityPolicy(t *testing.T) {
 	svc := NewService(organization.NewService())
 	policy := PasswordPolicy{MinLength: 10, RequireUppercase: true, RequireNumber: true, RequireSpecial: true}
