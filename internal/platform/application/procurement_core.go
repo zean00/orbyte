@@ -83,6 +83,9 @@ func (s *ProcurementCoreService) GeneratePurchaseOrderFromRequest(requestID, act
 		return document.Record{}, shared.Conflict("purchase order can only be generated from an approved request")
 	}
 	payload := s.NormalizePayload(req.Header.Type, req.Body.Payload)
+	if err := s.validateProcurementReferencePayload(payload, "purchase_request"); err != nil {
+		return document.Record{}, err
+	}
 	now := time.Now().UTC()
 	poPayload := map[string]any{
 		"vendor_id":                      textValue(payload["vendor_id"]),
@@ -131,6 +134,9 @@ func (s *ProcurementCoreService) CreateGoodsReceiptFromOrder(orderID, actorID st
 		return document.Record{}, shared.Conflict("goods receipt can only be registered from an approved or partially received purchase order")
 	}
 	payload := s.NormalizePayload(order.Header.Type, order.Body.Payload)
+	if err := s.validateProcurementReferencePayload(payload, "purchase_order"); err != nil {
+		return document.Record{}, err
+	}
 	rows := make([]map[string]any, 0)
 	for _, line := range recordList(payload["lines"]) {
 		orderedQty := roundMoney(numberValue(line["ordered_qty"]))
@@ -233,6 +239,9 @@ func (s *ProcurementCoreService) CreatePaymentOutFromBill(billID, actorID string
 		return document.Record{}, shared.Conflict("payment out can only be registered from an issued vendor bill")
 	}
 	payload := clonedPayload(bill.Body.Payload)
+	if err := validateVendorID(s.models, textValue(payload["vendor_id"])); err != nil {
+		return document.Record{}, err
+	}
 	openAmount := roundMoney(numberValue(payload["balance_due_amount"]))
 	if openAmount <= 0 {
 		openAmount = roundMoney(numberValue(payload["total_amount"]) - numberValue(payload["paid_amount"]) - numberValue(payload["credited_amount"]))
@@ -334,6 +343,9 @@ func (s *ProcurementCoreService) CreateVendorCreditFromBill(billID, actorID stri
 }
 
 func (s *ProcurementCoreService) ValidateApprove(record document.Record) error {
+	if err := s.validateProcurementReferencePayload(record.Body.Payload, record.Header.Type); err != nil {
+		return err
+	}
 	switch record.Header.Type {
 	case "vendor_bill":
 		if strings.TrimSpace(textValue(record.Body.Payload["vendor_id"])) == "" {
@@ -584,6 +596,9 @@ func procurementActivityValues(record document.Record, payload map[string]any) (
 
 func (s *ProcurementCoreService) createVendorBillFromSource(source document.Record, actorID, sourceType string) (document.Record, error) {
 	payload := s.NormalizePayload(source.Header.Type, source.Body.Payload)
+	if err := s.validateProcurementReferencePayload(payload, source.Header.Type); err != nil {
+		return document.Record{}, err
+	}
 	now := time.Now().UTC()
 	termDays := int(numberValue(payload["payment_term_days"]))
 	if termDays <= 0 {
@@ -657,6 +672,21 @@ func (s *ProcurementCoreService) createVendorBillFromSource(source document.Reco
 	}
 	s.refreshDocuments(created, source)
 	return created, nil
+}
+
+func (s *ProcurementCoreService) validateProcurementReferencePayload(payload map[string]any, documentType string) error {
+	if err := validateVendorID(s.models, textValue(payload["vendor_id"])); err != nil {
+		return err
+	}
+	for _, line := range recordList(payload["lines"]) {
+		if err := validateCommercialItemCode(s.models, textValue(line["item_code"])); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.models, textValue(line["warehouse_code"])); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *ProcurementCoreService) vendorBillLinesFromSource(payload map[string]any, sourceType string) []map[string]any {

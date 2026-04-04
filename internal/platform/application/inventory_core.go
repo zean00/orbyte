@@ -566,6 +566,12 @@ func (s *InventoryCoreService) validateStockAdjustment(record document.Record) e
 		if strings.TrimSpace(textValue(line["warehouse_code"])) == "" {
 			return shared.Validation("warehouse code is required")
 		}
+		if err := validateCommercialItemCode(s.models, textValue(line["item_code"])); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.models, textValue(line["warehouse_code"])); err != nil {
+			return err
+		}
 		if roundMoney(numberValue(line["quantity"])) == 0 {
 			return shared.Validation("adjustment quantity must be non-zero")
 		}
@@ -591,6 +597,15 @@ func (s *InventoryCoreService) validateStockTransfer(record document.Record) err
 		}
 		if strings.TrimSpace(textValue(line["source_warehouse_code"])) == "" || strings.TrimSpace(textValue(line["target_warehouse_code"])) == "" {
 			return shared.Validation("source and target warehouses are required")
+		}
+		if err := validateCommercialItemCode(s.models, textValue(line["item_code"])); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.models, textValue(line["source_warehouse_code"])); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.models, textValue(line["target_warehouse_code"])); err != nil {
+			return err
 		}
 		if textValue(line["source_warehouse_code"]) == textValue(line["target_warehouse_code"]) {
 			return shared.Validation("source and target warehouses must differ")
@@ -806,8 +821,15 @@ func (s *InventoryCoreService) validateInventoryLine(line map[string]any, inboun
 	if itemCode == "" {
 		return shared.Validation("item code is required")
 	}
-	if textValue(line["warehouse_code"]) == "" {
+	warehouseCode := textValue(line["warehouse_code"])
+	if warehouseCode == "" {
 		return shared.Validation(fmt.Sprintf("warehouse code is required for item %s", itemCode))
+	}
+	if err := validateCommercialItemCode(s.models, itemCode); err != nil {
+		return err
+	}
+	if err := validateWarehouseCode(s.models, warehouseCode); err != nil {
+		return err
 	}
 	qty := roundMoney(numberValue(line["quantity"]))
 	if qty <= 0 {

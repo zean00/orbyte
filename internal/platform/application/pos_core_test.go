@@ -539,6 +539,108 @@ func TestPOSBuildOrderPayloadUsesBusinessTimezoneTimestamp(t *testing.T) {
 	}
 }
 
+func TestPOSBuildOrderPayloadRejectsUnknownCustomer(t *testing.T) {
+	models := model.NewService()
+	mustRegisterPOSTestModels(t, models)
+	if err := models.Register(model.Definition{
+		Key:         "party",
+		DisplayName: "Party",
+		DefaultSort: "name",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string"},
+		},
+	}); err != nil {
+		t.Fatalf("register party model: %v", err)
+	}
+
+	store, err := models.Create("pos_store", "user_admin", map[string]any{
+		"code":             "STORE1",
+		"name":             "Store 1",
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "VAT11",
+		"currency_code":    "IDR",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "POS-KOPI",
+		"name":              "POS Kopi",
+		"kind":              "product",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+		"status":            "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+
+	posSvc := &POSCoreService{models: models}
+	_, _, err = posSvc.buildOrderPayload(store, "party-missing", "Ghost Customer", "", nil, []POSCartLineInput{{
+		ItemCode: "POS-KOPI",
+		Quantity: 1,
+	}})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "party not found") {
+		t.Fatalf("expected party not found validation, got %v", err)
+	}
+}
+
+func TestPOSBuildOrderPayloadAllowsGenericPartyID(t *testing.T) {
+	models := model.NewService()
+	mustRegisterPOSTestModels(t, models)
+	if err := models.Register(model.Definition{
+		Key:         "party",
+		DisplayName: "Party",
+		DefaultSort: "name",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string"},
+		},
+	}); err != nil {
+		t.Fatalf("register party model: %v", err)
+	}
+
+	store, err := models.Create("pos_store", "user_admin", map[string]any{
+		"code":             "STORE1",
+		"name":             "Store 1",
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "VAT11",
+		"currency_code":    "IDR",
+		"status":           "active",
+	})
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "POS-KOPI",
+		"name":              "POS Kopi",
+		"kind":              "product",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+		"status":            "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	party, err := models.Create("party", "user_admin", map[string]any{"name": "Walk-in Customer"})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+
+	posSvc := &POSCoreService{models: models, commercial: NewCommercialCoreService(document.NewService(), nil, models, nil)}
+	payload, orderLines, err := posSvc.buildOrderPayload(store, party.ID, "Walk-in Customer", "", nil, []POSCartLineInput{{
+		ItemCode: "POS-KOPI",
+		Quantity: 1,
+	}})
+	if err != nil {
+		t.Fatalf("expected generic party to be accepted, got %v", err)
+	}
+	if got := textValue(payload["party_id"]); got != party.ID {
+		t.Fatalf("expected party id %s, got %s", party.ID, got)
+	}
+	if len(orderLines) != 1 {
+		t.Fatalf("expected 1 order line, got %d", len(orderLines))
+	}
+}
+
 func TestPOSRefundSaleCreatesReturnFlow(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()

@@ -1,6 +1,7 @@
 package application
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -335,6 +336,66 @@ func TestReplenishmentPrefersLowestPriorityVendorAndNormalizesQuantity(t *testin
 	}
 }
 
+func TestGeneratePurchaseRequestsRejectsUnknownWarehouse(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterPlanningTestDocumentTypes(t, docs)
+	mustRegisterPlanningTestModels(t, models)
+	if err := models.Register(model.Definition{
+		Key:         "warehouse",
+		DisplayName: "Warehouse",
+		DefaultSort: "code",
+		Fields: []model.FieldDefinition{
+			{Key: "code", Type: "string", Required: true},
+			{Key: "name", Type: "string"},
+		},
+	}); err != nil {
+		t.Fatalf("register warehouse model: %v", err)
+	}
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                                  "WH-CHECK",
+		"name":                                 "Warehouse Check Item",
+		"kind":                                 "item",
+		"uom_code":                             "EA",
+		"base_price":                           10.0,
+		"inventory_enabled":                    true,
+		"replenishment_enabled":                true,
+		"replenishment_mode":                   "reorder_point_target",
+		"reorder_point_quantity":               5.0,
+		"target_stock_quantity":                12.0,
+		"default_replenishment_warehouse_code": "UNKNOWN",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	order, err := docs.Create("sales_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_name": "Warehouse Check Customer",
+		"lines": []map[string]any{{
+			"item_code":      "WH-CHECK",
+			"warehouse_code": "UNKNOWN",
+			"quantity":       8.0,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create sales order: %v", err)
+	}
+	order.Header.Status = "confirmed"
+	if err := docs.Save(order); err != nil {
+		t.Fatalf("save sales order: %v", err)
+	}
+
+	procurementSvc := NewProcurementCoreService(docs, config.NewService(), models, nil)
+	planningSvc := NewPlanningCoreService(docs, models, nil, nil, nil, procurementSvc)
+	_, err = planningSvc.GeneratePurchaseRequests("org_default", "loc_main", "user_admin", []ReplenishmentSelection{{
+		ItemCode:      "WH-CHECK",
+		WarehouseCode: "UNKNOWN",
+		Quantity:      4.0,
+	}})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "warehouse not found") {
+		t.Fatalf("expected warehouse not found validation, got %v", err)
+	}
+}
+
 func TestCreatePlanningRunPersistsForecastAndProjectedDates(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -363,8 +424,8 @@ func TestCreatePlanningRunPersistsForecastAndProjectedDates(t *testing.T) {
 			"delivery_date":  deliveryDate.Format("2006-01-02"),
 			"delivered_date": deliveryDate.Format("2006-01-02"),
 			"lines": []map[string]any{{
-				"item_code":         "SEASONAL-JUICE",
-				"warehouse_code":    "MAIN",
+				"item_code":          "SEASONAL-JUICE",
+				"warehouse_code":     "MAIN",
 				"delivered_quantity": 4.0,
 			}},
 		})
@@ -379,12 +440,12 @@ func TestCreatePlanningRunPersistsForecastAndProjectedDates(t *testing.T) {
 	po, err := docs.Create("purchase_order", "org_default", "loc_main", "user_admin", map[string]any{
 		"expected_receipt_date": now.AddDate(0, 0, 3).Format("2006-01-02"),
 		"lines": []map[string]any{{
-			"item_code":              "SEASONAL-JUICE",
-			"warehouse_code":         "MAIN",
-			"ordered_qty":            10.0,
-			"received_qty":           0.0,
-			"quantity":               10.0,
-			"expected_receipt_date":  now.AddDate(0, 0, 3).Format("2006-01-02"),
+			"item_code":             "SEASONAL-JUICE",
+			"warehouse_code":        "MAIN",
+			"ordered_qty":           10.0,
+			"received_qty":          0.0,
+			"quantity":              10.0,
+			"expected_receipt_date": now.AddDate(0, 0, 3).Format("2006-01-02"),
 		}},
 	})
 	if err != nil {

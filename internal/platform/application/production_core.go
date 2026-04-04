@@ -350,6 +350,12 @@ func (s *ProductionCoreService) validateProductionOrder(record document.Record) 
 	if textValue(payload["finished_item_code"]) == "" {
 		return shared.Validation("finished item is required")
 	}
+	if err := validateCommercialItemCode(s.models, textValue(payload["finished_item_code"])); err != nil {
+		return err
+	}
+	if err := validateWarehouseCode(s.models, textValue(payload["warehouse_code"])); err != nil {
+		return err
+	}
 	finishedPolicy := s.inventory.lookupItemPolicy(textValue(payload["finished_item_code"]))
 	if !finishedPolicy.Enabled {
 		return shared.Validation("finished item must be inventory-tracked")
@@ -363,6 +369,14 @@ func (s *ProductionCoreService) validateProductionOrder(record document.Record) 
 	if textValue(payload["production_pattern"]) == "make_to_order" && textValue(payload["source_sales_order_id"]) == "" {
 		return shared.Validation("make-to-order production requires a source sales order")
 	}
+	for _, line := range recordList(payload["lines"]) {
+		if err := validateCommercialItemCode(s.models, firstNonEmptyString(textValue(line["actual_item_code"]), textValue(line["component_item_code"]), textValue(line["item_code"]))); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.models, textValue(line["warehouse_code"])); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -373,6 +387,12 @@ func (s *ProductionCoreService) validateProductionIssue(record document.Record) 
 		allowedSubstitutes := normalizeStringList(line["allowed_substitute_item_codes"])
 		if actualItemCode != "" && plannedItemCode != "" && actualItemCode != plannedItemCode && !containsString(allowedSubstitutes, actualItemCode) {
 			return shared.Validation(fmt.Sprintf("item %s is not an approved substitute for component %s", actualItemCode, plannedItemCode))
+		}
+		if err := validateCommercialItemCode(s.models, actualItemCode); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.models, textValue(line["warehouse_code"])); err != nil {
+			return err
 		}
 	}
 	lines, err := s.inventory.resolveIssueMovementLines(record.Header.OrganizationID, record.Header.LocationID, record.Body.Payload)
@@ -391,8 +411,14 @@ func (s *ProductionCoreService) validateProductionOutput(record document.Record)
 	if itemCode == "" {
 		return shared.Validation("finished item is required")
 	}
+	if err := validateCommercialItemCode(s.models, itemCode); err != nil {
+		return err
+	}
 	if textValue(payload["warehouse_code"]) == "" {
 		return shared.Validation("warehouse code is required")
+	}
+	if err := validateWarehouseCode(s.models, textValue(payload["warehouse_code"])); err != nil {
+		return err
 	}
 	if roundMoney(numberValue(payload["output_quantity"])) <= 0 {
 		return shared.Validation("output quantity must be greater than zero")

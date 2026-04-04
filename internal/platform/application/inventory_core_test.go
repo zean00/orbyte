@@ -209,6 +209,48 @@ func TestValidateFulfillmentIssueRejectsBlockedBatch(t *testing.T) {
 	}
 }
 
+func TestValidateStockAdjustmentRejectsUnknownWarehouse(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterInventoryTestDocumentTypes(t, docs)
+	mustRegisterInventoryTestModels(t, models)
+	if err := models.Register(model.Definition{
+		Key:         "warehouse",
+		DisplayName: "Warehouse",
+		DefaultSort: "code",
+		Fields: []model.FieldDefinition{
+			{Key: "code", Type: "string", Required: true},
+			{Key: "name", Type: "string"},
+		},
+	}); err != nil {
+		t.Fatalf("register warehouse model: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                     "ADJ-ITEM",
+		"name":                    "Adjustment Item",
+		"inventory_enabled":       true,
+		"inventory_tracking_mode": "quantity",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	record := document.Record{
+		Header: document.Header{Type: "stock_adjustment"},
+		Body: document.Body{Payload: map[string]any{
+			"lines": []map[string]any{{
+				"item_code":      "ADJ-ITEM",
+				"warehouse_code": "UNKNOWN",
+				"quantity":       2.0,
+			}},
+		}},
+	}
+
+	service := NewInventoryCoreService(docs, config.NewService(), models, nil)
+	err := service.ValidateApprove(record)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "warehouse not found") {
+		t.Fatalf("expected warehouse not found validation, got %v", err)
+	}
+}
+
 func TestDecorateBatchRecordReflectsEffectiveStatusAndAvailability(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()

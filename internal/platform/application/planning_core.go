@@ -45,14 +45,14 @@ type ReplenishmentGenerationResult struct {
 }
 
 type PlanningRunSummary struct {
-	RunCount                     int              `json:"run_count"`
-	OpenRunCount                 int              `json:"open_run_count"`
-	ProposalCount                int              `json:"proposal_count"`
-	ConvertedProposalCount       int              `json:"converted_proposal_count"`
-	TotalForecastDemandQuantity  float64          `json:"total_forecast_demand_quantity"`
-	ProjectedShortageItemCount   int              `json:"projected_shortage_item_count"`
-	TimeCriticalProposalCount    int              `json:"time_critical_proposal_count"`
-	Items                        []map[string]any `json:"items"`
+	RunCount                    int              `json:"run_count"`
+	OpenRunCount                int              `json:"open_run_count"`
+	ProposalCount               int              `json:"proposal_count"`
+	ConvertedProposalCount      int              `json:"converted_proposal_count"`
+	TotalForecastDemandQuantity float64          `json:"total_forecast_demand_quantity"`
+	ProjectedShortageItemCount  int              `json:"projected_shortage_item_count"`
+	TimeCriticalProposalCount   int              `json:"time_critical_proposal_count"`
+	Items                       []map[string]any `json:"items"`
 }
 
 type PlanningProposalSummary struct {
@@ -169,6 +169,12 @@ func (s *PlanningCoreService) GeneratePurchaseRequests(organizationID, locationI
 		quantity := roundMoney(selection.Quantity)
 		if itemCode == "" || warehouseCode == "" || quantity <= 0 {
 			return nil, shared.Validation("item_code, warehouse_code, and quantity are required")
+		}
+		if err := validateCommercialItemCode(s.models, itemCode); err != nil {
+			return nil, err
+		}
+		if err := validateWarehouseCode(s.models, warehouseCode); err != nil {
+			return nil, err
 		}
 		row := currentRows[planningKey(itemCode, warehouseCode)]
 		if row == nil {
@@ -315,26 +321,26 @@ func (s *PlanningCoreService) CreatePlanningRun(organizationID, locationID, acto
 		summary.TotalForecastDemandQuantity = roundMoney(summary.TotalForecastDemandQuantity + roundMoney(numberValue(row["forecast_demand_quantity"])))
 	}
 	run, err := s.models.Create("planning_run", actorID, map[string]any{
-		"organization_id":                  organizationID,
-		"location_id":                      locationID,
-		"run_date":                         now.Format("2006-01-02"),
-		"warehouse_code":                   warehouseCode,
-		"item_code":                        itemCode,
-		"category_code":                    categoryCode,
-		"coverage_status":                  coverageStatus,
-		"shortage_only":                    shortageOnly,
-		"has_inbound_only":                 hasInboundOnly,
-		"has_preferred_vendor_only":        hasPreferredVendorOnly,
-		"forecast_method":                  "seasonal_buckets",
-		"forecast_window_days":             planningForecastWindowDays(),
-		"seasonal_history_weeks":           planningForecastHistoryWeeks(),
-		"proposal_count":                   len(rows),
-		"projected_shortage_item_count":    summary.ShortageItemCount,
-		"total_shortage_quantity":          summary.TotalShortageQuantity,
-		"total_forecast_demand_quantity":   summary.TotalForecastDemandQuantity,
+		"organization_id":                   organizationID,
+		"location_id":                       locationID,
+		"run_date":                          now.Format("2006-01-02"),
+		"warehouse_code":                    warehouseCode,
+		"item_code":                         itemCode,
+		"category_code":                     categoryCode,
+		"coverage_status":                   coverageStatus,
+		"shortage_only":                     shortageOnly,
+		"has_inbound_only":                  hasInboundOnly,
+		"has_preferred_vendor_only":         hasPreferredVendorOnly,
+		"forecast_method":                   "seasonal_buckets",
+		"forecast_window_days":              planningForecastWindowDays(),
+		"seasonal_history_weeks":            planningForecastHistoryWeeks(),
+		"proposal_count":                    len(rows),
+		"projected_shortage_item_count":     summary.ShortageItemCount,
+		"total_shortage_quantity":           summary.TotalShortageQuantity,
+		"total_forecast_demand_quantity":    summary.TotalForecastDemandQuantity,
 		"total_normalized_request_quantity": summary.TotalSuggestedRequestQuantity,
-		"due_soon_count":                   summary.DueSoonCount,
-		"status":                           "completed",
+		"due_soon_count":                    summary.DueSoonCount,
+		"status":                            "completed",
 	})
 	if err != nil {
 		return model.Record{}, err
@@ -374,20 +380,20 @@ func (s *PlanningCoreService) PlanningRunsSummaryScoped(organizationID, location
 			continue
 		}
 		item := map[string]any{
-			"id":                              run.ID,
-			"status":                          firstNonEmptyString(textValue(run.Values["status"]), "completed"),
-			"run_date":                        textValue(run.Values["run_date"]),
-			"warehouse_code":                  textValue(run.Values["warehouse_code"]),
-			"item_code":                       textValue(run.Values["item_code"]),
-			"category_code":                   textValue(run.Values["category_code"]),
-			"proposal_count":                  numberValue(run.Values["proposal_count"]),
-			"projected_shortage_item_count":   numberValue(run.Values["projected_shortage_item_count"]),
-			"total_shortage_quantity":         numberValue(run.Values["total_shortage_quantity"]),
-			"total_forecast_demand_quantity":  numberValue(run.Values["total_forecast_demand_quantity"]),
+			"id":                                run.ID,
+			"status":                            firstNonEmptyString(textValue(run.Values["status"]), "completed"),
+			"run_date":                          textValue(run.Values["run_date"]),
+			"warehouse_code":                    textValue(run.Values["warehouse_code"]),
+			"item_code":                         textValue(run.Values["item_code"]),
+			"category_code":                     textValue(run.Values["category_code"]),
+			"proposal_count":                    numberValue(run.Values["proposal_count"]),
+			"projected_shortage_item_count":     numberValue(run.Values["projected_shortage_item_count"]),
+			"total_shortage_quantity":           numberValue(run.Values["total_shortage_quantity"]),
+			"total_forecast_demand_quantity":    numberValue(run.Values["total_forecast_demand_quantity"]),
 			"total_normalized_request_quantity": numberValue(run.Values["total_normalized_request_quantity"]),
-			"due_soon_count":                  numberValue(run.Values["due_soon_count"]),
-			"created_at":                      run.CreatedAt.Format(time.RFC3339),
-			"updated_at":                      run.UpdatedAt.Format(time.RFC3339),
+			"due_soon_count":                    numberValue(run.Values["due_soon_count"]),
+			"created_at":                        run.CreatedAt.Format(time.RFC3339),
+			"updated_at":                        run.UpdatedAt.Format(time.RFC3339),
 		}
 		summary.Items = append(summary.Items, item)
 		summary.RunCount++
@@ -426,25 +432,25 @@ func (s *PlanningCoreService) PlanningRunProposalsScoped(runID, organizationID, 
 		return summary, shared.Forbidden("planning run is not allowed")
 	}
 	summary.Run = map[string]any{
-		"id":                              run.ID,
-		"status":                          textValue(run.Values["status"]),
-		"run_date":                        textValue(run.Values["run_date"]),
-		"warehouse_code":                  textValue(run.Values["warehouse_code"]),
-		"item_code":                       textValue(run.Values["item_code"]),
-		"category_code":                   textValue(run.Values["category_code"]),
-		"coverage_status":                 textValue(run.Values["coverage_status"]),
-		"shortage_only":                   boolValue(run.Values["shortage_only"]),
-		"has_inbound_only":                boolValue(run.Values["has_inbound_only"]),
-		"has_preferred_vendor_only":       boolValue(run.Values["has_preferred_vendor_only"]),
-		"forecast_method":                 textValue(run.Values["forecast_method"]),
-		"forecast_window_days":            numberValue(run.Values["forecast_window_days"]),
-		"seasonal_history_weeks":          numberValue(run.Values["seasonal_history_weeks"]),
-		"proposal_count":                  numberValue(run.Values["proposal_count"]),
-		"projected_shortage_item_count":   numberValue(run.Values["projected_shortage_item_count"]),
-		"total_shortage_quantity":         numberValue(run.Values["total_shortage_quantity"]),
-		"total_forecast_demand_quantity":  numberValue(run.Values["total_forecast_demand_quantity"]),
+		"id":                                run.ID,
+		"status":                            textValue(run.Values["status"]),
+		"run_date":                          textValue(run.Values["run_date"]),
+		"warehouse_code":                    textValue(run.Values["warehouse_code"]),
+		"item_code":                         textValue(run.Values["item_code"]),
+		"category_code":                     textValue(run.Values["category_code"]),
+		"coverage_status":                   textValue(run.Values["coverage_status"]),
+		"shortage_only":                     boolValue(run.Values["shortage_only"]),
+		"has_inbound_only":                  boolValue(run.Values["has_inbound_only"]),
+		"has_preferred_vendor_only":         boolValue(run.Values["has_preferred_vendor_only"]),
+		"forecast_method":                   textValue(run.Values["forecast_method"]),
+		"forecast_window_days":              numberValue(run.Values["forecast_window_days"]),
+		"seasonal_history_weeks":            numberValue(run.Values["seasonal_history_weeks"]),
+		"proposal_count":                    numberValue(run.Values["proposal_count"]),
+		"projected_shortage_item_count":     numberValue(run.Values["projected_shortage_item_count"]),
+		"total_shortage_quantity":           numberValue(run.Values["total_shortage_quantity"]),
+		"total_forecast_demand_quantity":    numberValue(run.Values["total_forecast_demand_quantity"]),
 		"total_normalized_request_quantity": numberValue(run.Values["total_normalized_request_quantity"]),
-		"due_soon_count":                  numberValue(run.Values["due_soon_count"]),
+		"due_soon_count":                    numberValue(run.Values["due_soon_count"]),
 	}
 	proposals, _, err := s.models.List("planning_proposal", model.Query{Page: 1, PageSize: 2000, Filters: map[string]string{"planning_run_id": runID}})
 	if err != nil {
@@ -682,51 +688,51 @@ func (s *PlanningCoreService) replenishmentRowsScoped(organizationID, locationID
 		}
 
 		rows = append(rows, map[string]any{
-			"item_code":                   itemCode,
-			"item_name":                   policy.Name,
-			"category_code":               policy.CategoryCode,
-			"warehouse_code":              warehouseCode,
-			"uom_code":                    policy.UOMCode,
-			"on_hand_quantity":            onHandQty,
-			"reserved_quantity":           reservedQty,
-			"available_quantity":          roundMoney(maxFloat(onHandQty-reservedQty, 0)),
-			"inbound_quantity":            orderedQty,
-			"net_available_quantity":      netPosition,
-			"projected_net_position":      projectedNetPosition,
-			"reorder_point_quantity":      policy.ReorderPoint,
-			"target_stock_quantity":       policy.TargetStock,
-			"sales_demand_quantity":       demandQty,
-			"forecast_demand_quantity":    forecastQty,
-			"historical_average_quantity": historicalAverageQty,
-			"forecast_window_days":        planningForecastWindowDays(),
-			"seasonal_bucket_key":         seasonalBuckets[key],
-			"shortage_quantity":           shortageQty,
-			"requested_quantity":          requestedQty,
-			"ordered_quantity":            orderedQty,
-			"received_quantity":           receivedQty,
-			"uncovered_shortage_quantity": uncoveredShortage,
-			"suggested_request_quantity":  suggestedQty,
-			"normalized_request_quantity": normalizedQty,
-			"planning_quantity_rule":      quantityRule,
-			"default_replenishment_mode":  policy.Mode,
-			"default_warehouse_code":      policy.DefaultWHCode,
-			"preferred_vendor_id":         vendor.VendorID,
-			"preferred_vendor_name":       vendor.VendorName,
-			"vendor_item_code":            vendor.VendorItemCode,
-			"purchase_uom_code":           vendor.PurchaseUOMCode,
-			"lead_time_days":              vendor.LeadTimeDays,
+			"item_code":                       itemCode,
+			"item_name":                       policy.Name,
+			"category_code":                   policy.CategoryCode,
+			"warehouse_code":                  warehouseCode,
+			"uom_code":                        policy.UOMCode,
+			"on_hand_quantity":                onHandQty,
+			"reserved_quantity":               reservedQty,
+			"available_quantity":              roundMoney(maxFloat(onHandQty-reservedQty, 0)),
+			"inbound_quantity":                orderedQty,
+			"net_available_quantity":          netPosition,
+			"projected_net_position":          projectedNetPosition,
+			"reorder_point_quantity":          policy.ReorderPoint,
+			"target_stock_quantity":           policy.TargetStock,
+			"sales_demand_quantity":           demandQty,
+			"forecast_demand_quantity":        forecastQty,
+			"historical_average_quantity":     historicalAverageQty,
+			"forecast_window_days":            planningForecastWindowDays(),
+			"seasonal_bucket_key":             seasonalBuckets[key],
+			"shortage_quantity":               shortageQty,
+			"requested_quantity":              requestedQty,
+			"ordered_quantity":                orderedQty,
+			"received_quantity":               receivedQty,
+			"uncovered_shortage_quantity":     uncoveredShortage,
+			"suggested_request_quantity":      suggestedQty,
+			"normalized_request_quantity":     normalizedQty,
+			"planning_quantity_rule":          quantityRule,
+			"default_replenishment_mode":      policy.Mode,
+			"default_warehouse_code":          policy.DefaultWHCode,
+			"preferred_vendor_id":             vendor.VendorID,
+			"preferred_vendor_name":           vendor.VendorName,
+			"vendor_item_code":                vendor.VendorItemCode,
+			"purchase_uom_code":               vendor.PurchaseUOMCode,
+			"lead_time_days":                  vendor.LeadTimeDays,
 			"preferred_vendor_lead_time_days": vendor.LeadTimeDays,
-			"vendor_priority":             vendor.Priority,
-			"pack_size":                   vendor.PackSize,
-			"minimum_order_quantity":      vendor.MinimumOrderQty,
-			"coverage_status":             coverage,
-			"next_inbound_date":           inboundDates[key],
-			"projected_shortage_date":     formatPlanningDate(projectedShortageDate),
-			"days_until_shortage":         daysUntilShortage,
-			"recommended_order_by_date":   recommendedOrderByDate,
-			"time_critical":               timeCritical,
-			"purchase_request_refs":       refsToMaps(requestRefs[key]),
-			"purchase_order_refs":         refsToMaps(orderRefs[key]),
+			"vendor_priority":                 vendor.Priority,
+			"pack_size":                       vendor.PackSize,
+			"minimum_order_quantity":          vendor.MinimumOrderQty,
+			"coverage_status":                 coverage,
+			"next_inbound_date":               inboundDates[key],
+			"projected_shortage_date":         formatPlanningDate(projectedShortageDate),
+			"days_until_shortage":             daysUntilShortage,
+			"recommended_order_by_date":       recommendedOrderByDate,
+			"time_critical":                   timeCritical,
+			"purchase_request_refs":           refsToMaps(requestRefs[key]),
+			"purchase_order_refs":             refsToMaps(orderRefs[key]),
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -874,7 +880,7 @@ func (s *PlanningCoreService) historicalDemandByWarehouse(organizationID, locati
 					continue
 				}
 				warehouseCode := firstNonEmptyString(textValue(line["warehouse_code"]), policy.DefaultWHCode, "MAIN")
-					qty := roundMoney(maxFloat(numberValue(line["delivered_quantity"]), maxFloat(numberValue(line["fulfilled_quantity"]), numberValue(line["quantity"]))))
+				qty := roundMoney(maxFloat(numberValue(line["delivered_quantity"]), maxFloat(numberValue(line["fulfilled_quantity"]), numberValue(line["quantity"]))))
 				if qty <= 0 {
 					continue
 				}

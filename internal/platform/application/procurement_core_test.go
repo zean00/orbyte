@@ -1,6 +1,7 @@
 package application
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,13 @@ func TestCreateGoodsReceiptFromOrderCopiesWarehouseCode(t *testing.T) {
 	models := model.NewService()
 	mustRegisterProcurementGenerationDocumentTypes(t, docs)
 	mustRegisterProcurementGenerationModels(t, models)
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "CUFF-STD",
+		"name":              "Blood Pressure Cuff",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
 
 	order, err := docs.Create("purchase_order", "org_default", "loc_main", "user_admin", map[string]any{
 		"vendor_id":     "vendor-1",
@@ -61,6 +69,14 @@ func TestCreateVendorBillFromReceiptUsesReceiptQuantityAndTotals(t *testing.T) {
 	models := model.NewService()
 	mustRegisterProcurementGenerationDocumentTypes(t, docs)
 	mustRegisterProcurementGenerationModels(t, models)
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "CUFF-STD",
+		"name":              "Blood Pressure Cuff",
+		"inventory_enabled": true,
+		"tax_code":          "VAT11",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
 
 	receipt, err := docs.Create("goods_receipt", "org_default", "loc_main", "user_admin", map[string]any{
 		"vendor_id":                    "vendor-1",
@@ -110,6 +126,40 @@ func TestCreateVendorBillFromReceiptUsesReceiptQuantityAndTotals(t *testing.T) {
 	}
 	if got := numberValue(bill.Body.Payload["total_amount"]); got != 1665.0 {
 		t.Fatalf("expected total 1665, got %v", got)
+	}
+}
+
+func TestValidateApproveVendorBillRejectsUnknownVendor(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterProcurementGenerationDocumentTypes(t, docs)
+	mustRegisterProcurementGenerationModels(t, models)
+	if err := models.Register(model.Definition{
+		Key:         "vendor_profile",
+		DisplayName: "Vendor Profile",
+		DefaultSort: "vendor_name",
+		Fields: []model.FieldDefinition{
+			{Key: "vendor_name", Type: "string"},
+			{Key: "status", Type: "string"},
+		},
+	}); err != nil {
+		t.Fatalf("register vendor model: %v", err)
+	}
+
+	service := NewProcurementCoreService(docs, config.NewService(), models, nil)
+	record, err := docs.Create("vendor_bill", "org_default", "loc_main", "user_admin", map[string]any{
+		"vendor_id": "missing-vendor",
+		"lines": []map[string]any{{
+			"item_code": "UNKNOWN-ITEM",
+			"quantity":  1.0,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create vendor bill: %v", err)
+	}
+	err = service.ValidateApprove(record)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "vendor not found") {
+		t.Fatalf("expected vendor not found validation, got %v", err)
 	}
 }
 

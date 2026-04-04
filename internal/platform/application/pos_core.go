@@ -1237,10 +1237,16 @@ func (s *POSCoreService) normalizeTenders(inputs []POSTenderInput) ([]normalized
 }
 
 func (s *POSCoreService) buildOrderPayload(store model.Record, partyID, partyName, notes string, promotionCodes []string, lines []POSCartLineInput) (map[string]any, []map[string]any, error) {
+	if err := validateCustomerPartyID(s.models, partyID); err != nil {
+		return nil, nil, err
+	}
 	orderLines := make([]map[string]any, 0, len(lines))
 	for _, line := range lines {
 		if roundMoney(line.Quantity) <= 0 {
 			continue
+		}
+		if err := validateCommercialItemCode(s.models, line.ItemCode); err != nil {
+			return nil, nil, err
 		}
 		orderLines = append(orderLines, map[string]any{
 			"product_code":      line.ProductCode,
