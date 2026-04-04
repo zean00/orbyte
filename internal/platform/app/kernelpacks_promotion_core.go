@@ -79,6 +79,8 @@ func promotionCoreKernelPackManifest() module.Manifest {
 				{Key: "promotion.campaigns.list", Label: "Promotion Campaigns", LabelI18n: localize("Promotion Campaigns", "Kampanye Promosi"), Kind: "navigate", RoutePath: "/promotion/campaigns", ViewKey: "promotion.campaigns.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"promotion_campaign.list"}},
 				{Key: "promotion.campaigns.detail", Label: "Promotion Campaign Detail", LabelI18n: localize("Promotion Campaign Detail", "Detail Kampanye Promosi"), Kind: "navigate", RoutePath: "/promotion/campaigns/detail", ViewKey: "promotion.campaigns.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"promotion_campaign.read"}},
 				{Key: "promotion.campaigns.form", Label: "Promotion Campaign Form", LabelI18n: localize("Promotion Campaign Form", "Form Kampanye Promosi"), Kind: "navigate", RoutePath: "/promotion/campaigns/form", ViewKey: "promotion.campaigns.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"promotion_campaign.update"}},
+				{Key: "promotion.plans.detail", Label: "Promotion Plan Detail", LabelI18n: localize("Promotion Plan Detail", "Detail Rencana Promosi"), Kind: "navigate", RoutePath: "/promotion/plans/detail", ViewKey: "promotion.plans.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"document.read"}},
+				{Key: "promotion.plans.form", Label: "Promotion Plan Form", LabelI18n: localize("Promotion Plan Form", "Form Rencana Promosi"), Kind: "navigate", RoutePath: "/promotion/plans/form", ViewKey: "promotion.plans.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"document.update_draft"}},
 				{Key: "promotion.codes.list", Label: "Promotion Codes", LabelI18n: localize("Promotion Codes", "Kode Promosi"), Kind: "navigate", RoutePath: "/promotion/codes", ViewKey: "promotion.codes.list", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"promotion_code.list"}},
 				{Key: "promotion.codes.detail", Label: "Promotion Code Detail", LabelI18n: localize("Promotion Code Detail", "Detail Kode Promosi"), Kind: "navigate", RoutePath: "/promotion/codes/detail", ViewKey: "promotion.codes.detail", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"promotion_code.read"}},
 				{Key: "promotion.codes.form", Label: "Promotion Code Form", LabelI18n: localize("Promotion Code Form", "Form Kode Promosi"), Kind: "navigate", RoutePath: "/promotion/codes/form", ViewKey: "promotion.codes.form", RenderMode: module.RenderModeGeneric, RequiredPermissions: []string{"promotion_code.update"}},
@@ -97,6 +99,38 @@ func promotionCoreKernelPackManifest() module.Manifest {
 				}, []string{"draft", "active", "inactive", "expired"}),
 				commercialModelDetailView("promotion.campaigns.detail", "Promotion Campaign Detail", "promotion_campaign", promotionCampaignFields(false)),
 				commercialModelFormView("promotion.campaigns.form", "Promotion Campaign Form", "promotion_campaign", promotionCampaignFields(true)),
+				{
+					Key:                 "promotion.plans.detail",
+					Title:               "Promotion Plan Detail",
+					TitleI18n:           localize("Promotion Plan Detail", "Detail Rencana Promosi"),
+					Kind:                "detail",
+					DocumentType:        "generic_request",
+					RequiredPermissions: []string{"document.read"},
+					AllowedActions:      []string{"submit", "approve", "reject", "reopen", "cancel"},
+					Sections: []module.SectionDefinition{
+						{
+							Key: "promotion_plan_header", Title: "Header", TitleI18n: localize("Header", "Header"), Fields: []module.FieldDefinition{
+								{Key: "doc_id", Label: "Document ID", LabelI18n: localize("Document ID", "ID Dokumen"), Path: "header.id", Type: "string", ReadOnly: true},
+								{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "header.status", Type: "string", ReadOnly: true},
+								{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", ReadOnly: true},
+							},
+						},
+						{
+							Key: "promotion_plan_payload", Title: "Promotion Plan", TitleI18n: localize("Promotion Plan", "Rencana Promosi"), Fields: promotionPlanRequestFields(false),
+						},
+					},
+				},
+				{
+					Key:                 "promotion.plans.form",
+					Title:               "Promotion Plan Form",
+					TitleI18n:           localize("Promotion Plan Form", "Form Rencana Promosi"),
+					Kind:                "form",
+					DocumentType:        "generic_request",
+					RequiredPermissions: []string{"document.update_draft"},
+					Sections: []module.SectionDefinition{{
+						Key: "promotion_plan_fields", Title: "Promotion Plan", TitleI18n: localize("Promotion Plan", "Rencana Promosi"), Fields: promotionPlanRequestFields(true),
+					}},
+				},
 				commercialModelListView("promotion.codes.list", "Promotion Codes", "promotion_code", []module.ColumnDefinition{
 					{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Path: "values.code"},
 					{Key: "promotion_campaign_code", Label: "Campaign", LabelI18n: localize("Campaign", "Kampanye"), Path: "values.promotion_campaign_code"},
@@ -231,6 +265,25 @@ func promotionCampaignFields(form bool) []module.FieldDefinition {
 		{Key: "combinability_mode", Label: "Combinability", LabelI18n: localize("Combinability", "Kombinasi"), Path: "values.combinability_mode", Type: "string", Widget: widget("select"), Options: []string{"inherit", "exclusive", "stackable"}},
 		{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Path: "values.status", Type: "string", Widget: widget("select"), Options: []string{"draft", "active", "inactive", "expired"}},
 		{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Path: "values.notes", Type: "string", Widget: widget("textarea")},
+	}
+}
+
+func promotionPlanRequestFields(form bool) []module.FieldDefinition {
+	widget := func(value string) string {
+		if form {
+			return value
+		}
+		return ""
+	}
+	return []module.FieldDefinition{
+		{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Path: "body.payload.title", Type: "string", Widget: widget("text"), Required: form},
+		{Key: "summary", Label: "Summary", LabelI18n: localize("Summary", "Ringkasan"), Path: "body.payload.summary", Type: "string", Widget: widget("textarea")},
+		{Key: "campaign_kind", Label: "Campaign Kind", LabelI18n: localize("Campaign Kind", "Jenis Kampanye"), Path: "body.payload.campaign_kind", Type: "string", Widget: widget("text")},
+		{Key: "target_products", Label: "Target Products", LabelI18n: localize("Target Products", "Produk Target"), Path: "body.payload.target_products", Type: "string", Widget: widget("textarea")},
+		{Key: "target_segment", Label: "Target Segment", LabelI18n: localize("Target Segment", "Segmen Target"), Path: "body.payload.target_segment", Type: "string", Widget: widget("text")},
+		{Key: "replaced_campaign", Label: "Replaced Campaign", LabelI18n: localize("Replaced Campaign", "Kampanye Diganti"), Path: "body.payload.replaced_campaign", Type: "string", Widget: widget("text")},
+		{Key: "request_kind", Label: "Request Kind", LabelI18n: localize("Request Kind", "Jenis Permintaan"), Path: "body.payload.request_kind", Type: "string", Widget: widget("text"), ReadOnly: !form},
+		{Key: "viewer_hint", Label: "Viewer Hint", LabelI18n: localize("Viewer Hint", "Hint Viewer"), Path: "body.payload.viewer_hint", Type: "string", Widget: widget("text"), ReadOnly: !form},
 	}
 }
 

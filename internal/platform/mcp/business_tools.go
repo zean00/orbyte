@@ -32,6 +32,7 @@ type businessModuleInfo struct {
 	Datasets             []string                       `json:"datasets,omitempty"`
 	Dependencies         []module.DependencyRequirement `json:"dependencies,omitempty"`
 	Dependents           []string                       `json:"dependents,omitempty"`
+	RecommendedTools     []string                       `json:"recommended_tools,omitempty"`
 }
 
 type businessRecordSummary struct {
@@ -115,10 +116,11 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 			continue
 		}
 		moduleKey := detail.Manifest.Key
+		moduleName := detail.Manifest.Name
 		items = append(items,
 			syntheticToolDefinition{
 				Name:                moduleKey + ".business.info.get",
-				Title:               detail.Manifest.Name + " Business Info",
+				Title:               moduleName + " Business Info",
 				Description:         "Get business metadata and capabilities for " + moduleKey + ".",
 				ModuleKey:           moduleKey,
 				RequiredPermissions: []string{"module.read"},
@@ -133,8 +135,8 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 		if len(moduleOwnedModelKeys(detail.Manifest)) > 0 || len(moduleOwnedDocumentTypes(detail.Manifest)) > 0 {
 			items = append(items, syntheticToolDefinition{
 				Name:                moduleKey + ".business.records.search",
-				Title:               detail.Manifest.Name + " Business Records",
-				Description:         "Search business records owned by " + moduleKey + ".",
+				Title:               moduleName + " Business Records",
+				Description:         businessRecordSearchDescription(moduleKey),
 				ModuleKey:           moduleKey,
 				RequiredPermissions: []string{"module.read"},
 				InputSchema:         map[string]any{"type": "object", "properties": map[string]any{"resource_kind": map[string]any{"type": "string"}, "document_type": map[string]any{"type": "string"}, "model_key": map[string]any{"type": "string"}, "query": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "filters": map[string]any{"type": "object"}, "page": map[string]any{"type": "integer"}, "page_size": map[string]any{"type": "integer"}, "include_full_payload": map[string]any{"type": "boolean"}}},
@@ -149,7 +151,7 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 			items = append(items,
 				syntheticToolDefinition{
 					Name:                moduleKey + ".business.documents.search",
-					Title:               detail.Manifest.Name + " Business Documents",
+					Title:               moduleName + " Business Documents",
 					Description:         "Search business documents owned by " + moduleKey + ".",
 					ModuleKey:           moduleKey,
 					RequiredPermissions: []string{"document.list"},
@@ -162,7 +164,7 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 				},
 				syntheticToolDefinition{
 					Name:                moduleKey + ".business.document.draft.create",
-					Title:               detail.Manifest.Name + " Create Draft Document",
+					Title:               moduleName + " Create Draft Document",
 					Description:         "Create a draft document owned by " + moduleKey + " after confirmation.",
 					ModuleKey:           moduleKey,
 					RequiredPermissions: []string{"document.create"},
@@ -175,7 +177,7 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 				},
 				syntheticToolDefinition{
 					Name:                moduleKey + ".business.document.draft.update",
-					Title:               detail.Manifest.Name + " Update Draft Document",
+					Title:               moduleName + " Update Draft Document",
 					Description:         "Update a draft document owned by " + moduleKey + " after confirmation.",
 					ModuleKey:           moduleKey,
 					RequiredPermissions: []string{"document.update_draft"},
@@ -184,6 +186,66 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 						arguments["module_key"] = moduleKey
 						resp, _, err := s.businessDocumentDraftUpdate(actor, arguments)
 						return resp, err
+					},
+				},
+			)
+		}
+		switch moduleKey {
+		case "pos_core":
+			mk := moduleKey
+			items = append(items, syntheticToolDefinition{
+				Name:                mk + ".sales.strategy.summary",
+				Title:               moduleName + " Sales Strategy Summary",
+				Description:         "Summarize POS sales, best-selling items, repeat bundle patterns, and member segment behavior for campaign planning. Use this before recommending a promotion strategy.",
+				ModuleKey:           mk,
+				RequiredPermissions: []string{"module.read"},
+				InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+					"date_from":     map[string]any{"type": "string"},
+					"date_to":       map[string]any{"type": "string"},
+					"store_code":    map[string]any{"type": "string"},
+					"register_code": map[string]any{"type": "string"},
+					"limit":         map[string]any{"type": "integer"},
+				}},
+				Handler: func(s *Server, actor ActorContext, arguments map[string]any) (map[string]any, error) {
+					return s.posSalesStrategySummary(actor, arguments)
+				},
+			})
+		case "promotion_core":
+			mk := moduleKey
+			items = append(items,
+				syntheticToolDefinition{
+					Name:                mk + ".performance.summary",
+					Title:               moduleName + " Promotion Performance Summary",
+					Description:         "Summarize promotion campaigns, codes, redemptions, and likely underperforming offers. Use this when deciding which current promotion to replace.",
+					ModuleKey:           mk,
+					RequiredPermissions: []string{"module.read"},
+					InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+						"store_code": map[string]any{"type": "string"},
+						"limit":      map[string]any{"type": "integer"},
+					}},
+					Handler: func(s *Server, actor ActorContext, arguments map[string]any) (map[string]any, error) {
+						return s.promotionPerformanceSummary(actor, arguments)
+					},
+				},
+				syntheticToolDefinition{
+					Name:                mk + ".strategy.plan.draft.create",
+					Title:               moduleName + " Create Promotion Plan Draft",
+					Description:         "Create a draft generic_request promotion strategy plan. Use this when asked to create a draft recommendation or promotion plan artifact.",
+					ModuleKey:           mk,
+					RequiredPermissions: []string{"document.create"},
+					InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+						"title":             map[string]any{"type": "string"},
+						"summary":           map[string]any{"type": "string"},
+						"target_products":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						"target_segment":    map[string]any{"type": "string"},
+						"replaced_campaign": map[string]any{"type": "string"},
+						"campaign_kind":     map[string]any{"type": "string"},
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"confirm_apply":     map[string]any{"type": "boolean"},
+					}, "required": []string{"title", "confirm_apply"}},
+					Handler: func(s *Server, actor ActorContext, arguments map[string]any) (map[string]any, error) {
+						return s.promotionStrategyPlanDraftCreate(actor, arguments)
 					},
 				},
 			)
@@ -231,8 +293,9 @@ func (s *Server) businessModuleGet(actor ActorContext, arguments map[string]any)
 	items := s.businessModuleInfos(actor, stringArg(arguments, "organization_id"), stringArg(arguments, "location_id"))
 	for _, item := range items {
 		if item.Key == moduleKey {
+			item.RecommendedTools = s.recommendedModuleToolNames(item.Key, actor)
 			return map[string]any{
-				"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded business module %s.", moduleKey)}},
+				"content":           []ContentBlock{{Type: "text", Text: businessModuleGetText(moduleKey, item.RecommendedTools)}},
 				"structuredContent": item,
 			}, true, nil
 		}
@@ -358,8 +421,8 @@ func (s *Server) businessDocumentDraftCreate(actor ActorContext, arguments map[s
 		return nil, true, shared.Validation("document_type is not owned by module")
 	}
 	payload := mapArg(arguments, "payload")
-	locationID := firstNonEmpty(stringArg(arguments, "location_id"), strings.TrimSpace(actor.LocationID))
-	organizationID := strings.TrimSpace(stringArg(arguments, "organization_id"))
+	locationID := firstNonEmpty(stringArg(arguments, "location_id"), strings.TrimSpace(actor.LocationID), "loc_hq")
+	organizationID := firstNonEmpty(stringArg(arguments, "organization_id"), strings.TrimSpace(actor.OrganizationID), "org_default")
 	candidate := document.Record{
 		Header: document.Header{
 			Type:           documentType,
@@ -375,7 +438,7 @@ func (s *Server) businessDocumentDraftCreate(actor ActorContext, arguments map[s
 	if err := validateMCPDocumentPayloadForType(s.modules, documentType, payload); err != nil {
 		return nil, true, err
 	}
-	record, err := s.documents.Create(documentType, organizationID, locationID, effectiveActorID(actor), payload)
+	record, err := s.documents.Create(documentType, organizationID, locationID, documentWriteActorID(actor), payload)
 	if err != nil {
 		return nil, true, err
 	}
@@ -502,7 +565,7 @@ func (s *Server) businessRecordSearch(actor ActorContext, arguments map[string]a
 			"structuredContent": map[string]any{"items": items},
 		}, true, nil
 	default:
-		return nil, true, shared.Validation("resource_kind must be document or model")
+		return nil, true, shared.Validation("resource_kind must be document or model; for POS sales or promotion strategy use pos_core.sales.strategy.summary or promotion_core.performance.summary")
 	}
 }
 
@@ -745,6 +808,41 @@ func businessModuleMatches(item businessModuleInfo, query string) bool {
 	return false
 }
 
+func businessRecordSearchDescription(moduleKey string) string {
+	switch strings.TrimSpace(moduleKey) {
+	case "pos_core":
+		return "Search business records owned by pos_core. For campaign planning, prefer pos_core.sales.strategy.summary over generic record search."
+	case "promotion_core":
+		return "Search business records owned by promotion_core. For replacement analysis, prefer promotion_core.performance.summary over generic record search."
+	default:
+		return "Search business records owned by " + moduleKey + "."
+	}
+}
+
+func (s *Server) recommendedModuleToolNames(moduleKey string, actor ActorContext) []string {
+	defs := s.syntheticToolDefinitions(actor)
+	items := make([]string, 0)
+	for _, def := range defs {
+		if def.ModuleKey == moduleKey {
+			items = append(items, def.Name)
+		}
+	}
+	sort.Strings(items)
+	return items
+}
+
+func businessModuleGetText(moduleKey string, recommendedTools []string) string {
+	text := fmt.Sprintf("Loaded business module %s.", moduleKey)
+	if len(recommendedTools) == 0 {
+		return text
+	}
+	limit := len(recommendedTools)
+	if limit > 3 {
+		limit = 3
+	}
+	return text + " Recommended tools: " + strings.Join(recommendedTools[:limit], ", ") + "."
+}
+
 func (s *Server) filteredDocumentSummaries(actor ActorContext, arguments map[string]any) ([]businessRecordSummary, error) {
 	if s == nil || s.documents == nil {
 		return nil, fmt.Errorf("documents are unavailable")
@@ -896,6 +994,606 @@ func renderBusinessRecordSearchText(label string, items []businessRecordSummary)
 		lines = append(lines, fmt.Sprintf("- ... %d more", len(items)-limit))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (s *Server) posSalesStrategySummary(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.models == nil {
+		return nil, fmt.Errorf("models are unavailable")
+	}
+	sales, err := s.listModelRecordsForTool(actor, "pos_sale", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.listModelRecordsForTool(actor, "commercial_item", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	customers, err := s.listModelRecordsForTool(actor, "customer_profile", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	storeCode := strings.TrimSpace(stringArg(arguments, "store_code"))
+	registerCode := strings.TrimSpace(stringArg(arguments, "register_code"))
+	dateFrom, dateTo := strategyDateBounds(arguments)
+	itemNames := make(map[string]string, len(items))
+	for _, item := range items {
+		itemNames[textValue(item.Values["sku"])] = textValue(item.Values["name"])
+	}
+	type productAggregate struct {
+		ItemCode  string  `json:"item_code"`
+		ItemName  string  `json:"item_name"`
+		SaleCount int     `json:"sale_count"`
+		UnitsSold float64 `json:"units_sold"`
+		Revenue   float64 `json:"revenue_total"`
+	}
+	type segmentAggregate struct {
+		Segment        string  `json:"segment"`
+		SaleCount      int     `json:"sale_count"`
+		RevenueTotal   float64 `json:"revenue_total"`
+		ComboSaleCount int     `json:"combo_sale_count"`
+		CustomerCount  int     `json:"customer_count"`
+	}
+	type comboAggregate struct {
+		Key         string   `json:"key"`
+		ItemCodes   []string `json:"item_codes"`
+		ItemNames   []string `json:"item_names"`
+		SaleCount   int      `json:"sale_count"`
+		CustomerIDs map[string]struct{}
+		MemberTiers map[string]struct{}
+	}
+	customerByParty := make(map[string]model.Record, len(customers))
+	for _, customer := range customers {
+		customerByParty[textValue(customer.Values["party_id"])] = customer
+	}
+	productMap := map[string]*productAggregate{}
+	segmentMap := map[string]*segmentAggregate{}
+	comboMap := map[string]*comboAggregate{}
+	repeatCustomerSales := map[string]int{}
+	repeatCustomerRevenue := map[string]float64{}
+	totalSales := 0
+	totalRevenue := 0.0
+	for _, sale := range sales {
+		if textValue(sale.Values["status"]) != "completed" {
+			continue
+		}
+		if storeCode != "" && textValue(sale.Values["store_code"]) != storeCode {
+			continue
+		}
+		if registerCode != "" && textValue(sale.Values["register_code"]) != registerCode {
+			continue
+		}
+		if !withinStrategyTimeWindow(sale.CreatedAt, dateFrom, dateTo) {
+			continue
+		}
+		totalSales++
+		totalRevenue += roundBusinessMoney(numberValue(sale.Values["total_amount"]))
+		partyID := textValue(sale.Values["party_id"])
+		customer := customerByParty[partyID]
+		memberTier := firstNonEmptyString(textValue(customer.Values["member_tier"]), "walk-in")
+		segment := strings.ToLower(strings.TrimSpace(memberTier))
+		if segment == "" {
+			segment = "walk-in"
+		}
+		seg := segmentMap[segment]
+		if seg == nil {
+			seg = &segmentAggregate{Segment: segment}
+			segmentMap[segment] = seg
+		}
+		seg.SaleCount++
+		seg.RevenueTotal = roundBusinessMoney(seg.RevenueTotal + numberValue(sale.Values["total_amount"]))
+		if partyID != "" {
+			repeatCustomerSales[partyID]++
+			repeatCustomerRevenue[partyID] = roundBusinessMoney(repeatCustomerRevenue[partyID] + numberValue(sale.Values["total_amount"]))
+		}
+		var lines []map[string]any
+		_ = json.Unmarshal([]byte(textValue(sale.Values["lines_json"])), &lines)
+		seenCodes := make([]string, 0, len(lines))
+		seenSet := map[string]struct{}{}
+		for _, line := range lines {
+			itemCode := textValue(line["item_code"])
+			if itemCode == "" {
+				continue
+			}
+			agg := productMap[itemCode]
+			if agg == nil {
+				agg = &productAggregate{ItemCode: itemCode, ItemName: firstNonEmptyString(itemNames[itemCode], itemCode)}
+				productMap[itemCode] = agg
+			}
+			agg.SaleCount++
+			agg.UnitsSold += numberValue(line["quantity"])
+			agg.Revenue = roundBusinessMoney(agg.Revenue + numberValue(line["line_total"]))
+			if _, exists := seenSet[itemCode]; !exists {
+				seenSet[itemCode] = struct{}{}
+				seenCodes = append(seenCodes, itemCode)
+			}
+		}
+		sort.Strings(seenCodes)
+		if len(seenCodes) >= 2 {
+			for i := 0; i < len(seenCodes)-1; i++ {
+				for j := i + 1; j < len(seenCodes); j++ {
+					key := seenCodes[i] + "|" + seenCodes[j]
+					combo := comboMap[key]
+					if combo == nil {
+						combo = &comboAggregate{
+							Key:         key,
+							ItemCodes:   []string{seenCodes[i], seenCodes[j]},
+							ItemNames:   []string{firstNonEmptyString(itemNames[seenCodes[i]], seenCodes[i]), firstNonEmptyString(itemNames[seenCodes[j]], seenCodes[j])},
+							CustomerIDs: map[string]struct{}{},
+							MemberTiers: map[string]struct{}{},
+						}
+						comboMap[key] = combo
+					}
+					combo.SaleCount++
+					if partyID != "" {
+						combo.CustomerIDs[partyID] = struct{}{}
+					}
+					if memberTier != "" {
+						combo.MemberTiers[strings.ToLower(memberTier)] = struct{}{}
+					}
+					seg.ComboSaleCount++
+				}
+			}
+		}
+	}
+	products := make([]productAggregate, 0, len(productMap))
+	for _, item := range productMap {
+		products = append(products, *item)
+	}
+	sort.Slice(products, func(i, j int) bool {
+		if products[i].SaleCount == products[j].SaleCount {
+			return products[i].Revenue > products[j].Revenue
+		}
+		return products[i].SaleCount > products[j].SaleCount
+	})
+	segments := make([]segmentAggregate, 0, len(segmentMap))
+	for _, item := range segmentMap {
+		customerCount := 0
+		for partyID := range repeatCustomerSales {
+			customer := customerByParty[partyID]
+			if strings.EqualFold(textValue(customer.Values["member_tier"]), item.Segment) {
+				customerCount++
+			}
+		}
+		item.CustomerCount = customerCount
+		segments = append(segments, *item)
+	}
+	sort.Slice(segments, func(i, j int) bool {
+		if segments[i].ComboSaleCount == segments[j].ComboSaleCount {
+			return segments[i].RevenueTotal > segments[j].RevenueTotal
+		}
+		return segments[i].ComboSaleCount > segments[j].ComboSaleCount
+	})
+	type comboSummary struct {
+		ItemCodes           []string `json:"item_codes"`
+		ItemNames           []string `json:"item_names"`
+		SaleCount           int      `json:"sale_count"`
+		RepeatCustomerCount int      `json:"repeat_customer_count"`
+		MemberTiers         []string `json:"member_tiers"`
+	}
+	combos := make([]comboSummary, 0, len(comboMap))
+	for _, combo := range comboMap {
+		memberTiers := setToSortedSlice(combo.MemberTiers)
+		combos = append(combos, comboSummary{
+			ItemCodes:           combo.ItemCodes,
+			ItemNames:           combo.ItemNames,
+			SaleCount:           combo.SaleCount,
+			RepeatCustomerCount: len(combo.CustomerIDs),
+			MemberTiers:         memberTiers,
+		})
+	}
+	sort.Slice(combos, func(i, j int) bool {
+		if combos[i].SaleCount == combos[j].SaleCount {
+			return combos[i].RepeatCustomerCount > combos[j].RepeatCustomerCount
+		}
+		return combos[i].SaleCount > combos[j].SaleCount
+	})
+	limit := intArg(arguments, "limit")
+	if limit <= 0 {
+		limit = 5
+	}
+	if len(products) > limit {
+		products = products[:limit]
+	}
+	if len(combos) > limit {
+		combos = combos[:limit]
+	}
+	if len(segments) > limit {
+		segments = segments[:limit]
+	}
+	recommendation := map[string]any{}
+	if len(combos) > 0 {
+		topCombo := combos[0]
+		targetSegment := "all customers"
+		if len(topCombo.MemberTiers) > 0 {
+			targetSegment = topCombo.MemberTiers[0] + " members"
+		} else if len(segments) > 0 && segments[0].Segment != "" && segments[0].Segment != "walk-in" {
+			targetSegment = segments[0].Segment + " members"
+		}
+		recommendation = map[string]any{
+			"campaign_kind":   "bundle",
+			"target_products": topCombo.ItemNames,
+			"target_segment":  targetSegment,
+			"rationale":       fmt.Sprintf("%s were purchased together %d times, concentrated in %s.", strings.Join(topCombo.ItemNames, " + "), topCombo.SaleCount, targetSegment),
+		}
+	}
+	text := fmt.Sprintf("Reviewed %d completed POS sales totaling %.0f.", totalSales, roundBusinessMoney(totalRevenue))
+	if len(products) > 0 {
+		top := products[0]
+		text += fmt.Sprintf("\nTop product: %s sold %.0f units across %d sales.", top.ItemName, top.UnitsSold, top.SaleCount)
+	}
+	if len(combos) > 0 {
+		topCombo := combos[0]
+		text += fmt.Sprintf("\nStrongest bundle signal: %s were purchased together %d times", strings.Join(topCombo.ItemNames, " + "), topCombo.SaleCount)
+		if len(topCombo.MemberTiers) > 0 {
+			text += fmt.Sprintf(" by %s.", strings.Join(topCombo.MemberTiers, ", "))
+		} else {
+			text += "."
+		}
+	}
+	if len(segments) > 0 {
+		topSegment := segments[0]
+		text += fmt.Sprintf("\nMost responsive segment: %s with %d sales and %d combo-sale occurrences.", topSegment.Segment, topSegment.SaleCount, topSegment.ComboSaleCount)
+	}
+	if len(recommendation) > 0 {
+		text += fmt.Sprintf("\nRecommendation signal: run a %s campaign for %s targeting %s.", stringValue(recommendation["campaign_kind"]), strings.Join(anyStringSlice(recommendation["target_products"]), " + "), stringValue(recommendation["target_segment"]))
+	}
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"summary": map[string]any{
+				"sale_count":    totalSales,
+				"revenue_total": roundBusinessMoney(totalRevenue),
+				"date_from":     dateStringOrEmpty(dateFrom),
+				"date_to":       dateStringOrEmpty(dateTo),
+			},
+			"top_products":          products,
+			"bundle_patterns":       combos,
+			"segment_performance":   segments,
+			"recommendation_signal": recommendation,
+		},
+	}, nil
+}
+
+func (s *Server) promotionPerformanceSummary(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.models == nil {
+		return nil, fmt.Errorf("models are unavailable")
+	}
+	campaigns, err := s.listModelRecordsForTool(actor, "promotion_campaign", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	codes, err := s.listModelRecordsForTool(actor, "promotion_code", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	redemptions, err := s.listModelRecordsForTool(actor, "promotion_redemption", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	rules, err := s.listModelRecordsForTool(actor, "discount_rule", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.listModelRecordsForTool(actor, "commercial_item", model.Query{PageSize: model.MaxPageSize})
+	if err != nil {
+		return nil, err
+	}
+	storeCode := strings.TrimSpace(stringArg(arguments, "store_code"))
+	itemNames := make(map[string]string, len(items))
+	for _, item := range items {
+		itemNames[textValue(item.Values["sku"])] = textValue(item.Values["name"])
+	}
+	type campaignSummary struct {
+		CampaignCode    string   `json:"campaign_code"`
+		CampaignName    string   `json:"campaign_name"`
+		TriggerMode     string   `json:"trigger_mode,omitempty"`
+		PromoCodes      []string `json:"promo_codes,omitempty"`
+		LinkedItems     []string `json:"linked_items,omitempty"`
+		RedemptionCount int      `json:"redemption_count"`
+		DiscountTotal   float64  `json:"discount_total"`
+		Status          string   `json:"status,omitempty"`
+	}
+	campaignMap := map[string]*campaignSummary{}
+	for _, campaign := range campaigns {
+		code := textValue(campaign.Values["code"])
+		if code == "" {
+			continue
+		}
+		if storeCode != "" {
+			storeCodes := strings.ToLower(textValue(campaign.Values["store_codes"]))
+			if storeCodes != "" && !strings.Contains(storeCodes, strings.ToLower(storeCode)) {
+				continue
+			}
+		}
+		campaignMap[code] = &campaignSummary{
+			CampaignCode: code,
+			CampaignName: textValue(campaign.Values["name"]),
+			TriggerMode:  textValue(campaign.Values["trigger_mode"]),
+			Status:       textValue(campaign.Values["status"]),
+		}
+	}
+	for _, code := range codes {
+		campaignCode := textValue(code.Values["promotion_campaign_code"])
+		summary := campaignMap[campaignCode]
+		if summary == nil {
+			continue
+		}
+		summary.PromoCodes = append(summary.PromoCodes, textValue(code.Values["code"]))
+	}
+	for _, rule := range rules {
+		campaignCode := textValue(rule.Values["promotion_campaign_code"])
+		summary := campaignMap[campaignCode]
+		if summary == nil {
+			continue
+		}
+		for _, itemCode := range splitCSVStrings(textValue(rule.Values["item_codes"])) {
+			name := firstNonEmptyString(itemNames[itemCode], itemCode)
+			if !containsString(summary.LinkedItems, name) {
+				summary.LinkedItems = append(summary.LinkedItems, name)
+			}
+		}
+	}
+	for _, redemption := range redemptions {
+		if textValue(redemption.Values["status"]) != "active" {
+			continue
+		}
+		if storeCode != "" && textValue(redemption.Values["store_code"]) != storeCode {
+			continue
+		}
+		campaignCode := textValue(redemption.Values["promotion_campaign_code"])
+		summary := campaignMap[campaignCode]
+		if summary == nil {
+			continue
+		}
+		summary.RedemptionCount++
+		summary.DiscountTotal = roundBusinessMoney(summary.DiscountTotal + numberValue(redemption.Values["discount_amount_total"]))
+	}
+	list := make([]campaignSummary, 0, len(campaignMap))
+	for _, item := range campaignMap {
+		sort.Strings(item.PromoCodes)
+		sort.Strings(item.LinkedItems)
+		list = append(list, *item)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].RedemptionCount == list[j].RedemptionCount {
+			return list[i].CampaignName < list[j].CampaignName
+		}
+		return list[i].RedemptionCount < list[j].RedemptionCount
+	})
+	underperforming := map[string]any{}
+	if len(list) > 0 {
+		item := list[0]
+		underperforming = map[string]any{
+			"campaign_name":    item.CampaignName,
+			"campaign_code":    item.CampaignCode,
+			"redemption_count": item.RedemptionCount,
+			"reason":           fmt.Sprintf("%s has only %d redemption(s) and weaker demand than the strongest POS bundle signal.", item.CampaignName, item.RedemptionCount),
+			"linked_items":     item.LinkedItems,
+		}
+	}
+	text := fmt.Sprintf("Reviewed %d promotion campaigns and %d redemption records.", len(list), len(redemptions))
+	if len(list) > 0 {
+		item := list[0]
+		text += fmt.Sprintf("\nWeakest current promotion: %s with %d redemption(s).", item.CampaignName, item.RedemptionCount)
+		if len(item.LinkedItems) > 0 {
+			text += fmt.Sprintf(" Linked items: %s.", strings.Join(item.LinkedItems, ", "))
+		}
+	}
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"campaigns":              list,
+			"underperforming_signal": underperforming,
+		},
+	}, nil
+}
+
+func (s *Server) promotionStrategyPlanDraftCreate(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.documents == nil {
+		return nil, fmt.Errorf("documents are unavailable")
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"document.create"}) {
+		return nil, fmt.Errorf("tool is not allowed")
+	}
+	if !boolArg(arguments, "confirm_apply") {
+		return nil, shared.Validation("confirm_apply must be true")
+	}
+	title := strings.TrimSpace(stringArg(arguments, "title"))
+	if title == "" {
+		return nil, shared.Validation("title is required")
+	}
+	payload := map[string]any{
+		"title":             title,
+		"summary":           strings.TrimSpace(stringArg(arguments, "summary")),
+		"target_products":   anyStringSlice(arguments["target_products"]),
+		"target_segment":    strings.TrimSpace(stringArg(arguments, "target_segment")),
+		"replaced_campaign": strings.TrimSpace(stringArg(arguments, "replaced_campaign")),
+		"campaign_kind":     firstNonEmpty(stringArg(arguments, "campaign_kind"), "promotion_strategy_plan"),
+		"request_kind":      "promotion_plan",
+		"viewer_hint":       "promotion.plan",
+		"status":            "draft",
+	}
+	if payload["summary"] == "" {
+		payload["summary"] = strings.TrimSpace(fmt.Sprintf("Promotion strategy for %s targeting %s. Replace %s.", strings.Join(anyStringSlice(payload["target_products"]), ", "), stringValue(payload["target_segment"]), stringValue(payload["replaced_campaign"])))
+	}
+	locationID := firstNonEmpty(stringArg(arguments, "location_id"), strings.TrimSpace(actor.LocationID))
+	organizationID := firstNonEmpty(stringArg(arguments, "organization_id"), strings.TrimSpace(actor.OrganizationID), "org_default")
+	locationID = firstNonEmpty(locationID, "loc_hq")
+	candidate := document.Record{
+		Header: document.Header{
+			Type:           "generic_request",
+			Status:         "draft",
+			OrganizationID: organizationID,
+			LocationID:     locationID,
+		},
+		Body: document.Body{Payload: payload},
+	}
+	if err := s.validateDocumentWrite(actor, candidate, payload); err != nil {
+		return nil, err
+	}
+	record, err := s.documents.Create("generic_request", organizationID, locationID, documentWriteActorID(actor), payload)
+	if err != nil {
+		return nil, err
+	}
+	if s.search != nil {
+		s.search.RefreshDocument(record)
+	}
+	resp, _, err := s.renderBusinessDocumentDraftResult(actor, record, "Created promotion strategy draft "+record.Header.ID+" as generic_request.")
+	return resp, err
+}
+
+func (s *Server) listModelRecordsForTool(actor ActorContext, modelKey string, query model.Query) ([]model.Record, error) {
+	if s == nil || s.models == nil {
+		return nil, fmt.Errorf("models are unavailable")
+	}
+	def, ok := s.models.Definition(modelKey)
+	if !ok {
+		return nil, shared.NotFound("model definition not found")
+	}
+	if !allowsAll(actor.PermissionChecker, []string{def.ListPermissionKey}) {
+		return nil, fmt.Errorf("tool is not allowed")
+	}
+	if query.PageSize <= 0 || query.PageSize > model.MaxPageSize {
+		query.PageSize = model.MaxPageSize
+	}
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	out := make([]model.Record, 0)
+	for page := query.Page; ; page++ {
+		pageQuery := query
+		pageQuery.Page = page
+		items, total, err := s.models.List(modelKey, pageQuery)
+		if err != nil {
+			return nil, err
+		}
+		items = s.sanitizeModelRecords(actor, def, items)
+		out = append(out, items...)
+		if len(items) == 0 || page*pageQuery.PageSize >= total {
+			break
+		}
+	}
+	return out, nil
+}
+
+func strategyDateBounds(arguments map[string]any) (time.Time, time.Time) {
+	return parseStrategyDate(stringArg(arguments, "date_from")), parseStrategyDate(stringArg(arguments, "date_to"))
+}
+
+func parseStrategyDate(value string) time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC()
+		}
+	}
+	return time.Time{}
+}
+
+func withinStrategyTimeWindow(at, from, to time.Time) bool {
+	if !from.IsZero() && at.Before(from) {
+		return false
+	}
+	if !to.IsZero() {
+		end := to
+		if to.Hour() == 0 && to.Minute() == 0 && to.Second() == 0 {
+			end = to.Add(24*time.Hour - time.Nanosecond)
+		}
+		if at.After(end) {
+			return false
+		}
+	}
+	return true
+}
+
+func splitCSVStrings(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ';' || r == '\n' })
+	items := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			items = append(items, part)
+		}
+	}
+	return items
+}
+
+func setToSortedSlice(items map[string]struct{}) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for item := range items {
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func roundBusinessMoney(value float64) float64 {
+	return float64(int(value*100+0.5)) / 100
+}
+
+func dateStringOrEmpty(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format("2006-01-02")
+}
+
+func textValue(value any) string {
+	return stringValue(value)
+}
+
+func numberValue(value any) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case int32:
+		return float64(v)
+	case json.Number:
+		f, _ := v.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	return firstNonEmpty(values...)
+}
+
+func anyStringSlice(value any) []string {
+	switch items := value.(type) {
+	case []string:
+		return append([]string(nil), items...)
+	case []any:
+		result := make([]string, 0, len(items))
+		for _, item := range items {
+			if text := strings.TrimSpace(stringValue(item)); text != "" {
+				result = append(result, text)
+			}
+		}
+		return result
+	default:
+		text := strings.TrimSpace(stringValue(value))
+		if text == "" {
+			return nil
+		}
+		return []string{text}
+	}
 }
 
 func documentMatchesFilters(record document.Record, filters map[string]any) bool {
@@ -1131,11 +1829,24 @@ func payloadValueText(payload map[string]any, keys ...string) string {
 
 func (s *Server) renderBusinessDocumentDraftResult(actor ActorContext, record document.Record, text string) (map[string]any, bool, error) {
 	sanitized := s.sanitizeDocumentRecord(actor, record)
+	openPath := ""
+	if s.documents != nil {
+		openPath = s.documents.ResolveWorkspaceOpenPath(record)
+	}
+	resultText := strings.TrimSpace(text)
+	if openPath != "" {
+		resultText = strings.TrimSpace(resultText + " Open draft: " + openPath)
+	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: text}},
+		"content": []ContentBlock{{Type: "text", Text: resultText}},
 		"structuredContent": map[string]any{
-			"record":  sanitized,
-			"summary": s.documentSummary(sanitized, false),
+			"record":          sanitized,
+			"summary":         s.documentSummary(sanitized, false),
+			"document_id":     record.Header.ID,
+			"document_type":   record.Header.Type,
+			"document_status": record.Header.Status,
+			"title":           strings.TrimSpace(stringValue(record.Body.Payload["title"])),
+			"open_path":       openPath,
 		},
 	}, true, nil
 }
@@ -1553,6 +2264,16 @@ func mergeMap(base, patch map[string]any) map[string]any {
 
 func effectiveActorID(actor ActorContext) string {
 	return firstNonEmpty(strings.TrimSpace(actor.EffectiveUserID), strings.TrimSpace(actor.ActorID))
+}
+
+func documentWriteActorID(actor ActorContext) string {
+	if userID := firstNonEmpty(strings.TrimSpace(actor.EffectiveUserID), strings.TrimSpace(actor.OnBehalfOfUserID)); userID != "" {
+		return userID
+	}
+	if strings.EqualFold(strings.TrimSpace(actor.ActorKind), "service") {
+		return "user_admin"
+	}
+	return strings.TrimSpace(actor.ActorID)
 }
 
 func firstString(values []string) string {

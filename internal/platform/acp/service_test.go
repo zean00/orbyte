@@ -651,6 +651,55 @@ func TestExtractToolActivity(t *testing.T) {
 	}
 }
 
+func TestExtractToolActivitySynthesizesDraftOpenPath(t *testing.T) {
+	payload, ok := extractToolActivity("tool_call_update", map[string]any{
+		"title":      "orbyte-agentproof-promotion_core_strategy_plan_draft_create",
+		"toolCallId": "call-draft-1",
+		"status":     "completed",
+		"rawInput": map[string]any{
+			"title": "Promotion Plan 20260404-002446",
+		},
+		"rawOutput": map[string]any{
+			"output": "Created promotion strategy draft doc_01KNAY520Q98F95WCV2YQ6CSCB as generic_request.",
+		},
+	})
+	if !ok {
+		t.Fatal("expected tool activity extraction")
+	}
+	if payload["document_id"] != "doc_01KNAY520Q98F95WCV2YQ6CSCB" {
+		t.Fatalf("expected synthesized document_id, got %#v", payload)
+	}
+	if payload["title"] != "Promotion Plan 20260404-002446" {
+		t.Fatalf("expected synthesized title, got %#v", payload)
+	}
+	if payload["open_path"] != "/ui/documents/detail?id=doc_01KNAY520Q98F95WCV2YQ6CSCB" {
+		t.Fatalf("expected synthesized open_path, got %#v", payload)
+	}
+}
+
+func TestExtractToolActivitySynthesizesDraftOpenPathFromRawOutput(t *testing.T) {
+	payload, ok := extractToolActivity("tool_call_update", map[string]any{
+		"kind":       "other",
+		"toolCallId": "call-draft-2",
+		"status":     "completed",
+		"rawInput": map[string]any{
+			"title": "Promotion Plan 20260404-002446",
+		},
+		"rawOutput": map[string]any{
+			"output": "Created promotion strategy draft doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y as generic_request. Open draft: /ui/promotion/plans/form?id=doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y",
+		},
+	})
+	if !ok {
+		t.Fatal("expected tool activity extraction")
+	}
+	if payload["document_id"] != "doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y" {
+		t.Fatalf("expected raw output document_id, got %#v", payload)
+	}
+	if payload["open_path"] != "/ui/promotion/plans/form?id=doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y" {
+		t.Fatalf("expected raw output open_path, got %#v", payload)
+	}
+}
+
 func TestExtractToolActivityPrefersTitleOverGenericKind(t *testing.T) {
 	payload, ok := extractToolActivity("tool_call_update", map[string]any{
 		"kind":       "other",

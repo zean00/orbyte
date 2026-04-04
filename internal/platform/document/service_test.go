@@ -131,3 +131,29 @@ func TestRegisterExtensionAndRenderViews(t *testing.T) {
 		t.Fatalf("expected raw view to expose hidden extension, got %+v", got)
 	}
 }
+
+func TestResolveWorkspaceOpenPathUsesSpecializedViewer(t *testing.T) {
+	svc := NewService()
+	svc.RegisterSpecializedViewer(SpecializedViewer{
+		Hint:             "promotion.plan",
+		RequestKinds:     []string{"promotion_plan"},
+		DetailPath:       "/ui/promotion/plans/detail",
+		FormPath:         "/ui/promotion/plans/form",
+		EditableStatuses: []string{"draft"},
+	})
+	record, err := svc.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{
+		"title":        "Plan",
+		"request_kind": "promotion_plan",
+		"viewer_hint":  "promotion.plan",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/promotion/plans/form?id="+record.Header.ID {
+		t.Fatalf("expected specialized form path, got %s", got)
+	}
+	record.Header.Status = "submitted"
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/promotion/plans/detail?id="+record.Header.ID {
+		t.Fatalf("expected specialized detail path, got %s", got)
+	}
+}

@@ -140,6 +140,13 @@ type TranscriptItem = ACPMessage & {
   streaming?: boolean;
 };
 
+type DraftLink = {
+  key: string;
+  openPath: string;
+  title?: string;
+  documentID?: string;
+};
+
 const DEFAULT_AGENT_CAPABILITIES = [
   "discovery",
   "business_overview",
@@ -1087,6 +1094,14 @@ export default function AgentSurfacePage() {
                           key={item.id}
                           item={item}
                           liveTurn={liveTurn}
+                          draftLinks={
+                            item.role === "assistant"
+                              ? draftLinksForTurn(
+                                  session?.trace,
+                                  stringValue(item.meta?.turn_id),
+                                )
+                              : []
+                          }
                         />
                       ))
                     )}
@@ -1403,9 +1418,11 @@ function EmptyTranscript() {
 function MessageBubble({
   item,
   liveTurn,
+  draftLinks,
 }: {
   item: TranscriptItem;
   liveTurn: LiveTurnState | null;
+  draftLinks?: DraftLink[];
 }) {
   const isUser = item.role === "user";
   const livePhase =
@@ -1454,14 +1471,34 @@ function MessageBubble({
             </span>
           </div>
         ) : (
-          <div className="agent-markdown text-sm leading-7">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {item.content}
-            </ReactMarkdown>
-          </div>
+          <>
+            <div className="agent-markdown text-sm leading-7">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {item.content}
+              </ReactMarkdown>
+            </div>
+            {draftLinks && draftLinks.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-line/60 pt-3">
+                {draftLinks.map((link) => (
+                  <a
+                    key={link.key}
+                    href={link.openPath}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-soft/70 px-3 py-1.5 text-xs font-bold text-accent-dark transition hover:border-accent hover:bg-accent-soft"
+                  >
+                    <span>Open draft</span>
+                    <span className="opacity-70">
+                      {link.title?.trim() || link.documentID || "document"}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            ) : null}
+          </>
         )}
       </article>
     </div>
@@ -2070,6 +2107,60 @@ function dedupeTrace(trace: ACPEvent[]): ACPEvent[] {
     seen.add(item.id);
     return true;
   });
+}
+
+function draftLinksForTurn(
+  trace: ACPEvent[] | undefined,
+  turnID: string,
+): DraftLink[] {
+  if (!trace || !turnID) return [];
+  const links = new Map<string, DraftLink>();
+  for (const item of trace) {
+    if (stringValue(item.payload?.turn_id) !== turnID) continue;
+    for (const link of extractDraftLinks(item.payload)) {
+      if (!links.has(link.key)) {
+        links.set(link.key, link);
+      }
+    }
+  }
+  return [...links.values()];
+}
+
+function extractDraftLinks(value: unknown, depth = 0): DraftLink[] {
+  if (depth > 6 || value == null) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractDraftLinks(item, depth + 1));
+  }
+  if (typeof value !== "object") return [];
+  const record = value as Record<string, unknown>;
+  const directPath = stringValue(record.open_path);
+  const links: DraftLink[] = [];
+  if (directPath) {
+    const documentID =
+      stringValue(record.document_id) ||
+      stringValue(
+        (record.record as { header?: { id?: string } } | undefined)?.header?.id,
+      );
+    const title =
+      stringValue(record.title) ||
+      stringValue(
+        (
+          record.record as {
+            body?: { payload?: Record<string, unknown> };
+          } | undefined
+        )?.body?.payload?.title,
+      );
+    links.push({
+      key: `${directPath}|${documentID}|${title}`,
+      openPath: directPath,
+      title,
+      documentID,
+    });
+  }
+  for (const nested of Object.values(record)) {
+    links.push(...extractDraftLinks(nested, depth + 1));
+  }
+  return links;
 }
 
 function closeStream(ref: React.MutableRefObject<EventSource | null>) {

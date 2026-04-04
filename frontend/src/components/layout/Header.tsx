@@ -4,6 +4,7 @@ import { useShellStore } from "@/stores/shellStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { usePreferencesStore } from "@/stores/preferencesStore";
+import { useToast } from "@/components/ui/Toast";
 import {
   fetchAdminBootstrap,
   fetchWorkspaceBootstrap,
@@ -47,14 +48,22 @@ export function Header() {
   } = useShellStore();
   const { setLocale: setPreferredLocale } = usePreferencesStore();
   const { darkMode, toggleDarkMode } = useDarkMode();
-  const { user, logout, clearAuth } = useAuth();
+  const { user, logout } = useAuth();
+  const { addToast } = useToast();
   const [command, setCommand] = useState("");
 
   const handleLogout = async () => {
     try {
       await logout();
-    } catch {
-      clearAuth();
+    } catch (error) {
+      addToast({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Logout failed. Please try again.",
+        variant: "error",
+      });
+      return;
     }
     if (shellKind === "admin") {
       window.location.href = "/ui/login";

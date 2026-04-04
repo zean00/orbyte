@@ -28,6 +28,16 @@ function getCookie(name: string): string {
   return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : ''
 }
 
+async function postLogout(): Promise<Response> {
+  return fetch('/auth/logout', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'X-CSRF-Token': getCookie('orbyte_csrf'),
+    },
+  })
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -100,13 +110,13 @@ export const useAuthStore = create<AuthState>()(
         },
 
       logout: async () => {
-        const response = await fetch('/auth/logout', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'X-CSRF-Token': getCookie('orbyte_csrf'),
-          },
-        })
+        let response = await postLogout()
+        if (response.status === 403) {
+          await fetch('/auth/session', {
+            credentials: 'include',
+          })
+          response = await postLogout()
+        }
         if (!response.ok && response.status !== 401) {
           throw new Error(`Logout failed: ${response.status}`)
         }

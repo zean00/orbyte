@@ -55,7 +55,7 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 				if manualJournalReadBlocked(ident, p, record) {
 					continue
 				}
-				filtered = append(filtered, documentListProjectionItem(item))
+				filtered = append(filtered, documentListProjectionItem(item, record, docs))
 			}
 			sortDocumentProjectionItems(filtered, sortKey)
 			respondJSON(w, http.StatusOK, map[string]any{"items": filtered})
@@ -102,6 +102,8 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 					"created_at":      rendered.Header.CreatedAt,
 					"updated_at":      rendered.Header.UpdatedAt,
 				},
+				"open_path": docs.ResolveWorkspaceOpenPath(rendered),
+				"edit_path": docs.ResolveWorkspaceEditPath(rendered),
 				"body": map[string]any{
 					"schema_version": rendered.Body.SchemaVersion,
 					"payload":        rendered.Body.Payload,
@@ -159,6 +161,8 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			"links":         record.Links,
 			"attachments":   record.Attachments,
 			"documentType":  record.Header.Type,
+			"open_path":     docs.ResolveWorkspaceOpenPath(rendered),
+			"edit_path":     docs.ResolveWorkspaceEditPath(rendered),
 			"flow_instance": flowInstance,
 		})
 	})
@@ -203,7 +207,7 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 
 }
 
-func documentListProjectionItem(item search.DocumentSummary) map[string]any {
+func documentListProjectionItem(item search.DocumentSummary, record document.Record, docs *document.Service) map[string]any {
 	return map[string]any{
 		"header": map[string]any{
 			"id":              item.DocumentID,
@@ -215,6 +219,8 @@ func documentListProjectionItem(item search.DocumentSummary) map[string]any {
 			"location_id":     item.LocationID,
 			"updated_at":      item.UpdatedAt,
 		},
+		"open_path": docs.ResolveWorkspaceOpenPath(record),
+		"edit_path": docs.ResolveWorkspaceEditPath(record),
 	}
 }
 

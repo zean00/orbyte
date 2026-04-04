@@ -177,7 +177,7 @@ func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, cur
 		if dueFilter == "overdue" && (item.DueAt.IsZero() || !item.DueAt.Before(now)) {
 			continue
 		}
-		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
+		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt, openPath := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
 		output = append(output, uiWorklistTask{
 			ID:              item.ID,
 			WorkflowKey:     item.WorkflowKey,
@@ -189,6 +189,7 @@ func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, cur
 			TargetNumber:    targetNumber,
 			TargetStatus:    targetStatus,
 			TargetUpdatedAt: targetUpdatedAt,
+			OpenPath:        openPath,
 			TaskType:        item.TaskType,
 			Status:          item.Status,
 			AssignmentMode:  item.AssignmentMode,
@@ -227,7 +228,7 @@ func filterWorkflowApprovalsForUI(docs *document.Service, items []workflow.Appro
 		if dueFilter == "overdue" && (item.DueAt.IsZero() || !item.DueAt.Before(now)) {
 			continue
 		}
-		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
+		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt, openPath := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
 		output = append(output, uiWorklistApproval{
 			ID:              item.ID,
 			WorkflowKey:     item.WorkflowKey,
@@ -239,6 +240,7 @@ func filterWorkflowApprovalsForUI(docs *document.Service, items []workflow.Appro
 			TargetNumber:    targetNumber,
 			TargetStatus:    targetStatus,
 			TargetUpdatedAt: targetUpdatedAt,
+			OpenPath:        openPath,
 			Status:          item.Status,
 			StageKey:        item.StageKey,
 			RequestedBy:     item.RequestedBy,
@@ -256,16 +258,16 @@ func formatOptionalTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
-func workflowTargetDocumentSummary(docs *document.Service, targetType, targetID string) (documentType, title, number, status, updatedAt string) {
+func workflowTargetDocumentSummary(docs *document.Service, targetType, targetID string) (documentType, title, number, status, updatedAt, openPath string) {
 	if docs == nil || targetType != "document" || strings.TrimSpace(targetID) == "" {
-		return "", "", "", "", ""
+		return "", "", "", "", "", ""
 	}
 	record, err := docs.Get(targetID)
 	if err != nil {
-		return "", "", "", "", ""
+		return "", "", "", "", "", ""
 	}
 	title, _ = record.Body.Payload["title"].(string)
-	return record.Header.Type, title, record.Header.Number, record.Header.Status, formatOptionalTime(record.Header.UpdatedAt)
+	return record.Header.Type, title, record.Header.Number, record.Header.Status, formatOptionalTime(record.Header.UpdatedAt), docs.ResolveWorkspaceOpenPath(record)
 }
 
 func countWorkflowItems[T interface{ GetStatus() string }](items []T, status string) int {

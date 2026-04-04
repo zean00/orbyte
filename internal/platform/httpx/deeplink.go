@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"orbyte/internal/platform/communication"
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/communication"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/logging"
@@ -83,7 +83,7 @@ func registerDeepLinkRoutes(mux *http.ServeMux, ident *identity.Service, docs *d
 			"approval_id": approval.ID,
 			"document_id": record.Header.ID,
 		})
-		renderWorkflowApprovalLandingPage(w, r, ident, p, approval, record)
+		renderWorkflowApprovalLandingPage(w, r, ident, docs, p, approval, record)
 	})
 
 	mux.HandleFunc("POST /link/workflow/approval/", func(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +161,7 @@ func registerDeepLinkRoutes(mux *http.ServeMux, ident *identity.Service, docs *d
 			"approval_id":     approval.ID,
 			"document_id":     updated.Header.ID,
 			"document_status": updated.Header.Status,
-			"open_path":       fmt.Sprintf("/ui#/documents/detail?document_id=%s", url.QueryEscape(updated.Header.ID)),
+			"open_path":       recordWorkspacePath(docs, updated),
 		})
 	})
 
@@ -209,7 +209,7 @@ func registerDeepLinkRoutes(mux *http.ServeMux, ident *identity.Service, docs *d
 			renderDeepLinkErrorPage(w, http.StatusNotFound, "Target not found", "The document referenced by this task is no longer available.")
 			return
 		}
-		renderWorkflowTaskLandingPage(w, task, record)
+		renderWorkflowTaskLandingPage(w, docs, task, record)
 	})
 
 	mux.HandleFunc("GET /link/document/", func(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +221,12 @@ func registerDeepLinkRoutes(mux *http.ServeMux, ident *identity.Service, docs *d
 		if !ensureDeepLinkDocumentAccess(w, r, ident, docs, documentID, "", "document") {
 			return
 		}
-		http.Redirect(w, r, "/ui#/documents/detail?document_id="+url.QueryEscape(documentID), http.StatusFound)
+		record, err := docs.Get(documentID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		http.Redirect(w, r, recordWorkspacePath(docs, record), http.StatusFound)
 	})
 
 	mux.HandleFunc("GET /ops/workflow/approvals/", func(w http.ResponseWriter, r *http.Request) {
@@ -436,7 +441,7 @@ func renderDeepLinkErrorPage(w http.ResponseWriter, status int, title, message s
 	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>` + html.EscapeString(title) + `</title><style>` + workflowApprovalPageCSS + `</style></head><body><main class="approval-page"><section class="approval-card"><span class="approval-badge error">Link unavailable</span><h1>` + html.EscapeString(title) + `</h1><p class="approval-copy">` + html.EscapeString(message) + `</p></section></main></body></html>`))
 }
 
-func renderWorkflowApprovalLandingPage(w http.ResponseWriter, r *http.Request, ident *identity.Service, p principal, approval workflow.Approval, record document.Record) {
+func renderWorkflowApprovalLandingPage(w http.ResponseWriter, r *http.Request, ident *identity.Service, docs *document.Service, p principal, approval workflow.Approval, record document.Record) {
 	title := firstNonEmptyString(strings.TrimSpace(record.Header.Number), record.Header.ID)
 	stage := firstNonEmptyString(strings.TrimSpace(approval.StageKey), strings.TrimSpace(approval.WorkflowKey), "review")
 	copyText := "Review the request details before choosing an action."
@@ -458,12 +463,12 @@ func renderWorkflowApprovalLandingPage(w http.ResponseWriter, r *http.Request, i
 		"step_up_verified":    !grant.RequireStepUp || p.stepUpVerified,
 		"allow_approve":       allowedApprove,
 		"allow_reject":        allowedReject,
-		"open_workspace_path": fmt.Sprintf("/ui#/documents/detail?document_id=%s", url.QueryEscape(record.Header.ID)),
+		"open_workspace_path": recordWorkspacePath(docs, record),
 	}
 	payloadJSON, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Approval ` + html.EscapeString(title) + `</title><style>` + workflowApprovalPageCSS + `</style></head><body><main class="approval-page"><section class="approval-card"><span class="approval-badge">Workflow approval</span><h1>` + html.EscapeString(title) + `</h1><p class="approval-copy">` + html.EscapeString(copyText) + `</p><dl class="approval-meta"><div><dt>Approval</dt><dd>` + html.EscapeString(approval.ID) + `</dd></div><div><dt>Stage</dt><dd>` + html.EscapeString(stage) + `</dd></div><div><dt>Status</dt><dd>` + html.EscapeString(record.Header.Status) + `</dd></div><div><dt>Requested by</dt><dd>` + html.EscapeString(firstNonEmptyString(approval.RequestedBy, "unknown")) + `</dd></div></dl><div id="approval-status" class="approval-status"></div><div id="approval-step-up" class="approval-step-up"><label>Confirm your password to continue<input id="approval-step-up-password" type="password" name="step_up_password" autocomplete="current-password"></label><button type="button" id="approval-step-up-submit" class="secondary">Verify</button></div><div class="approval-actions">` + renderApprovalActionButton("approve", "Approve", allowedApprove) + renderApprovalActionButton("reject", "Reject", allowedReject) + `<a class="approval-link" href="/ui#/documents/detail?document_id=` + url.QueryEscape(record.Header.ID) + `">Open full context</a></div></section></main><script>window.__ORBYTE_APPROVAL__=` + string(payloadJSON) + `;` + workflowApprovalPageJS + `</script></body></html>`))
+	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Approval ` + html.EscapeString(title) + `</title><style>` + workflowApprovalPageCSS + `</style></head><body><main class="approval-page"><section class="approval-card"><span class="approval-badge">Workflow approval</span><h1>` + html.EscapeString(title) + `</h1><p class="approval-copy">` + html.EscapeString(copyText) + `</p><dl class="approval-meta"><div><dt>Approval</dt><dd>` + html.EscapeString(approval.ID) + `</dd></div><div><dt>Stage</dt><dd>` + html.EscapeString(stage) + `</dd></div><div><dt>Status</dt><dd>` + html.EscapeString(record.Header.Status) + `</dd></div><div><dt>Requested by</dt><dd>` + html.EscapeString(firstNonEmptyString(approval.RequestedBy, "unknown")) + `</dd></div></dl><div id="approval-status" class="approval-status"></div><div id="approval-step-up" class="approval-step-up"><label>Confirm your password to continue<input id="approval-step-up-password" type="password" name="step_up_password" autocomplete="current-password"></label><button type="button" id="approval-step-up-submit" class="secondary">Verify</button></div><div class="approval-actions">` + renderApprovalActionButton("approve", "Approve", allowedApprove) + renderApprovalActionButton("reject", "Reject", allowedReject) + `<a class="approval-link" href="` + html.EscapeString(recordWorkspacePath(docs, record)) + `">Open full context</a></div></section></main><script>window.__ORBYTE_APPROVAL__=` + string(payloadJSON) + `;` + workflowApprovalPageJS + `</script></body></html>`))
 }
 
 func renderApprovalActionButton(action, label string, enabled bool) string {
@@ -579,12 +584,21 @@ func handleWorkflowApprovalStepUp(w http.ResponseWriter, r *http.Request, ident 
 	respondJSON(w, http.StatusOK, map[string]any{"status": "verified"})
 }
 
-func renderWorkflowTaskLandingPage(w http.ResponseWriter, task workflow.Task, record document.Record) {
+func renderWorkflowTaskLandingPage(w http.ResponseWriter, docs *document.Service, task workflow.Task, record document.Record) {
 	title := firstNonEmptyString(strings.TrimSpace(record.Header.Number), record.Header.ID)
 	copyText := "Open the linked document to continue working on this task."
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Task ` + html.EscapeString(title) + `</title><style>` + workflowApprovalPageCSS + `</style></head><body><main class="approval-page"><section class="approval-card"><span class="approval-badge warning">Workflow task</span><h1>` + html.EscapeString(title) + `</h1><p class="approval-copy">` + html.EscapeString(copyText) + `</p><dl class="approval-meta"><div><dt>Task</dt><dd>` + html.EscapeString(task.ID) + `</dd></div><div><dt>Workflow</dt><dd>` + html.EscapeString(firstNonEmptyString(task.WorkflowKey, task.TaskType, "task")) + `</dd></div><div><dt>Status</dt><dd>` + html.EscapeString(record.Header.Status) + `</dd></div><div><dt>Assigned</dt><dd>` + html.EscapeString(firstNonEmptyString(task.AssigneeUserID, task.AssigneeRoleKey, "queue")) + `</dd></div></dl><div class="approval-actions"><a class="approval-link" href="/ui#/documents/detail?document_id=` + url.QueryEscape(record.Header.ID) + `&work_item_kind=task&work_item_id=` + url.QueryEscape(task.ID) + `">Open full context</a></div></section></main></body></html>`))
+	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Task ` + html.EscapeString(title) + `</title><style>` + workflowApprovalPageCSS + `</style></head><body><main class="approval-page"><section class="approval-card"><span class="approval-badge warning">Workflow task</span><h1>` + html.EscapeString(title) + `</h1><p class="approval-copy">` + html.EscapeString(copyText) + `</p><dl class="approval-meta"><div><dt>Task</dt><dd>` + html.EscapeString(task.ID) + `</dd></div><div><dt>Workflow</dt><dd>` + html.EscapeString(firstNonEmptyString(task.WorkflowKey, task.TaskType, "task")) + `</dd></div><div><dt>Status</dt><dd>` + html.EscapeString(record.Header.Status) + `</dd></div><div><dt>Assigned</dt><dd>` + html.EscapeString(firstNonEmptyString(task.AssigneeUserID, task.AssigneeRoleKey, "queue")) + `</dd></div></dl><div class="approval-actions"><a class="approval-link" href="` + html.EscapeString(recordWorkspacePath(docs, record)) + `">Open full context</a></div></section></main></body></html>`))
+}
+
+func recordWorkspacePath(docs *document.Service, record document.Record) string {
+	if docs != nil {
+		if path := docs.ResolveWorkspaceOpenPath(record); path != "" {
+			return path
+		}
+	}
+	return "/ui/documents/detail?id=" + url.QueryEscape(record.Header.ID)
 }
 
 func workflowApprovalCommunicationPayload(r *http.Request, tokenManager *identity.TokenManager, ident *identity.Service, docs *document.Service, workflowSvc *workflow.Service, approvalID string) (map[string]any, error) {

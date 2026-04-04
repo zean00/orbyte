@@ -496,9 +496,21 @@ func TestBusinessDocumentDraftCreateRequiresConfirmationAndSupportsSyntheticModu
 	if resp.Error != nil {
 		t.Fatalf("synthetic business draft create failed: %+v", resp.Error)
 	}
-	record := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["record"].(document.Record)
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	record := structured["record"].(document.Record)
 	if record.Header.Type != "promotion_plan" || record.Header.Status != "draft" {
 		t.Fatalf("expected promotion draft, got %+v", record)
+	}
+	expectedOpenPath := "/ui/documents/detail?id=" + url.QueryEscape(record.Header.ID)
+	if structured["document_id"] != record.Header.ID {
+		t.Fatalf("expected document_id in structured content, got %+v", structured)
+	}
+	if structured["open_path"] != expectedOpenPath {
+		t.Fatalf("expected open_path %s, got %+v", expectedOpenPath, structured["open_path"])
+	}
+	content := resp.Result.(map[string]any)["content"].([]ContentBlock)
+	if len(content) == 0 || !strings.Contains(content[0].Text, expectedOpenPath) {
+		t.Fatalf("expected draft response text to include deep link, got %+v", content)
 	}
 }
 
@@ -560,6 +572,227 @@ func TestBusinessModelReadIsSanitized(t *testing.T) {
 	values := items[0].Record["record"].(model.Record).Values
 	if _, ok := values["internal_formula"]; ok {
 		t.Fatalf("expected internal_formula to be sanitized, got %+v", values)
+	}
+}
+
+func TestPOSPromotionStrategyTools(t *testing.T) {
+	server := newTestServer(t)
+	modelDefs := []model.Definition{
+		{Key: "commercial_item", DisplayName: "Commercial Item", OwnerModuleKey: "pos_core", ListPermissionKey: "commercial_item.list", ReadPermissionKey: "commercial_item.read", Fields: []model.FieldDefinition{{Key: "sku", Type: "string"}, {Key: "name", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "customer_profile", DisplayName: "Customer Profile", OwnerModuleKey: "pos_core", ListPermissionKey: "customer_profile.list", ReadPermissionKey: "customer_profile.read", Fields: []model.FieldDefinition{{Key: "party_id", Type: "string"}, {Key: "customer_name", Type: "string"}, {Key: "member_tier", Type: "string"}, {Key: "member_status", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "pos_sale", DisplayName: "POS Sale", OwnerModuleKey: "pos_core", ListPermissionKey: "pos_sale.list", ReadPermissionKey: "pos_sale.read", Fields: []model.FieldDefinition{{Key: "store_code", Type: "string"}, {Key: "register_code", Type: "string"}, {Key: "status", Type: "string"}, {Key: "party_id", Type: "string"}, {Key: "total_amount", Type: "number"}, {Key: "lines_json", Type: "string"}}},
+		{Key: "promotion_campaign", DisplayName: "Promotion Campaign", OwnerModuleKey: "promotion_core", ListPermissionKey: "promotion_campaign.list", ReadPermissionKey: "promotion_campaign.read", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "status", Type: "string"}, {Key: "trigger_mode", Type: "string"}}},
+		{Key: "promotion_code", DisplayName: "Promotion Code", OwnerModuleKey: "promotion_core", ListPermissionKey: "promotion_code.list", ReadPermissionKey: "promotion_code.read", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "promotion_campaign_code", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "promotion_redemption", DisplayName: "Promotion Redemption", OwnerModuleKey: "promotion_core", ListPermissionKey: "promotion_redemption.list", ReadPermissionKey: "promotion_redemption.read", Fields: []model.FieldDefinition{{Key: "promotion_campaign_code", Type: "string"}, {Key: "promotion_code", Type: "string"}, {Key: "store_code", Type: "string"}, {Key: "discount_amount_total", Type: "number"}, {Key: "status", Type: "string"}}},
+		{Key: "discount_rule", DisplayName: "Discount Rule", OwnerModuleKey: "promotion_core", ListPermissionKey: "discount_rule.list", ReadPermissionKey: "discount_rule.read", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "promotion_campaign_code", Type: "string"}, {Key: "item_codes", Type: "string"}, {Key: "status", Type: "string"}}},
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:    "pos_core",
+		Name:   "POS Core",
+		Models: []model.Definition{modelDefs[0], modelDefs[1], modelDefs[2]},
+	}, "system"); err != nil {
+		t.Fatalf("register pos_core manifest failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:    "promotion_core",
+		Name:   "Promotion Core",
+		Models: []model.Definition{modelDefs[3], modelDefs[4], modelDefs[5], modelDefs[6]},
+	}, "system"); err != nil {
+		t.Fatalf("register promotion_core manifest failed: %v", err)
+	}
+	for _, def := range modelDefs {
+		if err := server.models.Register(def); err != nil {
+			t.Fatalf("register model %s failed: %v", def.Key, err)
+		}
+	}
+	create := func(modelKey string, values map[string]any) {
+		t.Helper()
+		if _, err := server.models.Create(modelKey, "user_admin", values); err != nil {
+			t.Fatalf("create %s failed: %v", modelKey, err)
+		}
+	}
+	create("commercial_item", map[string]any{"sku": "ESP-1", "name": "Espresso Double", "status": "active"})
+	create("commercial_item", map[string]any{"sku": "CRO-1", "name": "Butter Croissant", "status": "active"})
+	create("commercial_item", map[string]any{"sku": "BEAN-1", "name": "House Beans 1kg", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-gold-1", "customer_name": "Alya Santoso", "member_tier": "gold", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-gold-2", "customer_name": "Bima Pratama", "member_tier": "gold", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-silver-1", "customer_name": "Citra Lestari", "member_tier": "silver", "member_status": "active", "status": "active"})
+	for _, sale := range []map[string]any{
+		{"store_code": "PROMO-STORE", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-gold-1", "total_amount": 50000.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"CRO-1","quantity":1,"line_total":22000}]`},
+		{"store_code": "PROMO-STORE", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-gold-2", "total_amount": 50000.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"CRO-1","quantity":1,"line_total":22000}]`},
+		{"store_code": "PROMO-STORE", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-gold-1", "total_amount": 85500.0, "lines_json": `[{"item_code":"BEAN-1","quantity":1,"line_total":85500}]`},
+		{"store_code": "PROMO-STORE", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-silver-1", "total_amount": 18000.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":18000}]`},
+	} {
+		create("pos_sale", sale)
+	}
+	create("promotion_campaign", map[string]any{"code": "BEANS-BOOST", "name": "Beans Boost", "status": "active", "trigger_mode": "code"})
+	create("promotion_code", map[string]any{"code": "BEANS10", "promotion_campaign_code": "BEANS-BOOST", "status": "active"})
+	create("discount_rule", map[string]any{"code": "BEANS-RULE", "name": "Beans 10 Percent", "promotion_campaign_code": "BEANS-BOOST", "item_codes": "BEAN-1", "status": "active"})
+	create("promotion_redemption", map[string]any{"promotion_campaign_code": "BEANS-BOOST", "promotion_code": "BEANS10", "store_code": "PROMO-STORE", "discount_amount_total": 9500.0, "status": "active"})
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "document.create", "commercial_item.list", "customer_profile.list", "pos_sale.list", "promotion_campaign.list", "promotion_code.list", "promotion_redemption.list", "discount_rule.list":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+	listResp := server.Handle(context.Background(), JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}, actor)
+	if listResp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", listResp.Error)
+	}
+	tools := listResp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	for _, expected := range []string{"pos_core.sales.strategy.summary", "promotion_core.performance.summary", "promotion_core.strategy.plan.draft.create"} {
+		if !containsToolNamed(tools, expected) {
+			t.Fatalf("expected tool %s to be listed", expected)
+		}
+	}
+	salesResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0", ID: 2, Method: "tools/call",
+		Params: mustJSON(t, map[string]any{"name": "pos_core.sales.strategy.summary", "arguments": map[string]any{"store_code": "PROMO-STORE"}}),
+	}, actor)
+	if salesResp.Error != nil {
+		t.Fatalf("pos strategy summary failed: %+v", salesResp.Error)
+	}
+	salesStructured := salesResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	recommendation := salesStructured["recommendation_signal"].(map[string]any)
+	if recommendation["target_segment"] != "gold members" {
+		t.Fatalf("expected gold members recommendation, got %+v", recommendation)
+	}
+	targetProducts := recommendation["target_products"].([]string)
+	if len(targetProducts) != 2 || targetProducts[0] != "Butter Croissant" && targetProducts[1] != "Butter Croissant" {
+		t.Fatalf("expected espresso/croissant recommendation, got %+v", targetProducts)
+	}
+	promoResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0", ID: 3, Method: "tools/call",
+		Params: mustJSON(t, map[string]any{"name": "promotion_core.performance.summary", "arguments": map[string]any{"store_code": "PROMO-STORE"}}),
+	}, actor)
+	if promoResp.Error != nil {
+		t.Fatalf("promotion performance summary failed: %+v", promoResp.Error)
+	}
+	underperforming := promoResp.Result.(map[string]any)["structuredContent"].(map[string]any)["underperforming_signal"].(map[string]any)
+	if underperforming["campaign_name"] != "Beans Boost" {
+		t.Fatalf("expected Beans Boost underperforming signal, got %+v", underperforming)
+	}
+	if int(numberValue(underperforming["redemption_count"])) != 1 {
+		t.Fatalf("expected one redemption, got %+v", underperforming)
+	}
+	draftResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0", ID: 4, Method: "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "promotion_core.strategy.plan.draft.create",
+			"arguments": map[string]any{
+				"title":             "Promotion Plan Test",
+				"summary":           "Bundle espresso and croissant for gold members. Replace Beans Boost.",
+				"target_products":   []string{"Espresso Double", "Butter Croissant"},
+				"target_segment":    "gold members",
+				"replaced_campaign": "Beans Boost",
+				"confirm_apply":     true,
+			},
+		}),
+	}, actor)
+	if draftResp.Error != nil {
+		t.Fatalf("promotion draft create failed: %+v", draftResp.Error)
+	}
+	structured := draftResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	record := structured["record"].(document.Record)
+	if record.Header.Type != "generic_request" || stringValue(record.Body.Payload["title"]) != "Promotion Plan Test" {
+		t.Fatalf("expected generic_request promotion plan draft, got %+v", record)
+	}
+	if stringValue(record.Body.Payload["request_kind"]) != "promotion_plan" || stringValue(record.Body.Payload["viewer_hint"]) != "promotion.plan" {
+		t.Fatalf("expected promotion plan routing payload, got %+v", record.Body.Payload)
+	}
+	expectedOpenPath := "/ui/promotion/plans/form?id=" + url.QueryEscape(record.Header.ID)
+	if structured["open_path"] != expectedOpenPath {
+		t.Fatalf("expected promotion draft open_path %s, got %+v", expectedOpenPath, structured["open_path"])
+	}
+}
+
+func TestPOSPromotionStrategySummaryTargetsComboAudience(t *testing.T) {
+	server := newTestServer(t)
+	modelDefs := []model.Definition{
+		{Key: "commercial_item", DisplayName: "Commercial Item", OwnerModuleKey: "pos_core", ListPermissionKey: "commercial_item.list", ReadPermissionKey: "commercial_item.read", Fields: []model.FieldDefinition{{Key: "sku", Type: "string"}, {Key: "name", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "customer_profile", DisplayName: "Customer Profile", OwnerModuleKey: "pos_core", ListPermissionKey: "customer_profile.list", ReadPermissionKey: "customer_profile.read", Fields: []model.FieldDefinition{{Key: "party_id", Type: "string"}, {Key: "customer_name", Type: "string"}, {Key: "member_tier", Type: "string"}, {Key: "member_status", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "pos_sale", DisplayName: "POS Sale", OwnerModuleKey: "pos_core", ListPermissionKey: "pos_sale.list", ReadPermissionKey: "pos_sale.read", Fields: []model.FieldDefinition{{Key: "store_code", Type: "string"}, {Key: "register_code", Type: "string"}, {Key: "status", Type: "string"}, {Key: "party_id", Type: "string"}, {Key: "total_amount", Type: "number"}, {Key: "lines_json", Type: "string"}}},
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:    "pos_core",
+		Name:   "POS Core",
+		Models: []model.Definition{modelDefs[0], modelDefs[1], modelDefs[2]},
+	}, "system"); err != nil {
+		t.Fatalf("register pos_core manifest failed: %v", err)
+	}
+	for _, def := range modelDefs {
+		if err := server.models.Register(def); err != nil {
+			t.Fatalf("register model %s failed: %v", def.Key, err)
+		}
+	}
+	create := func(modelKey string, values map[string]any) {
+		t.Helper()
+		if _, err := server.models.Create(modelKey, "user_admin", values); err != nil {
+			t.Fatalf("create %s failed: %v", modelKey, err)
+		}
+	}
+	create("commercial_item", map[string]any{"sku": "ESP-1", "name": "Espresso Double", "status": "active"})
+	create("commercial_item", map[string]any{"sku": "CRO-1", "name": "Butter Croissant", "status": "active"})
+	create("commercial_item", map[string]any{"sku": "BEAN-1", "name": "House Beans 1kg", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-gold-1", "customer_name": "Gold One", "member_tier": "gold", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-gold-2", "customer_name": "Gold Two", "member_tier": "gold", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-gold-3", "customer_name": "Gold Three", "member_tier": "gold", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-silver-1", "customer_name": "Silver One", "member_tier": "silver", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-silver-2", "customer_name": "Silver Two", "member_tier": "silver", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-silver-3", "customer_name": "Silver Three", "member_tier": "silver", "member_status": "active", "status": "active"})
+	create("customer_profile", map[string]any{"party_id": "party-silver-4", "customer_name": "Silver Four", "member_tier": "silver", "member_status": "active", "status": "active"})
+	for _, sale := range []map[string]any{
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-gold-1", "total_amount": 50000.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"CRO-1","quantity":1,"line_total":22000}]`},
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-gold-2", "total_amount": 50000.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"CRO-1","quantity":1,"line_total":22000}]`},
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-gold-3", "total_amount": 50000.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"CRO-1","quantity":1,"line_total":22000}]`},
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-silver-1", "total_amount": 113500.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"BEAN-1","quantity":1,"line_total":85500}]`},
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-silver-2", "total_amount": 113500.0, "lines_json": `[{"item_code":"ESP-1","quantity":1,"line_total":28000},{"item_code":"BEAN-1","quantity":1,"line_total":85500}]`},
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-silver-3", "total_amount": 107500.0, "lines_json": `[{"item_code":"CRO-1","quantity":1,"line_total":22000},{"item_code":"BEAN-1","quantity":1,"line_total":85500}]`},
+		{"store_code": "PROMO-STORE-MIXED", "register_code": "PROMO-REG", "status": "completed", "party_id": "party-silver-4", "total_amount": 107500.0, "lines_json": `[{"item_code":"CRO-1","quantity":1,"line_total":22000},{"item_code":"BEAN-1","quantity":1,"line_total":85500}]`},
+	} {
+		create("pos_sale", sale)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "commercial_item.list", "customer_profile.list", "pos_sale.list":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0", ID: 1, Method: "tools/call",
+		Params: mustJSON(t, map[string]any{"name": "pos_core.sales.strategy.summary", "arguments": map[string]any{"store_code": "PROMO-STORE-MIXED"}}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("pos strategy summary failed: %+v", resp.Error)
+	}
+	recommendation := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["recommendation_signal"].(map[string]any)
+	if recommendation["target_segment"] != "gold members" {
+		t.Fatalf("expected combo audience to drive recommendation, got %+v", recommendation)
+	}
+}
+
+func TestBusinessRecordSearchValidationSuggestsStrategyTools(t *testing.T) {
+	server := newTestServer(t)
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0", ID: 1, Method: "tools/call",
+		Params: mustJSON(t, map[string]any{"name": "business.record.search", "arguments": map[string]any{"resource_kind": "sales"}}),
+	}, ActorContext{ActorID: "user_admin", PermissionChecker: func(permissionKey string) bool { return permissionKey == "module.read" }})
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "pos_core.sales.strategy.summary") {
+		t.Fatalf("expected strategy summary guidance in validation error, got %+v", resp.Error)
 	}
 }
 
@@ -1456,12 +1689,12 @@ func TestBusinessDocumentGetIncludesReadableSummaryText(t *testing.T) {
 		t.Fatalf("register expense_claim failed: %v", err)
 	}
 	record, err := server.documents.Create("expense_claim", "org_default", "loc_hq", "user_admin", map[string]any{
-		"employee_code":          "EMP-SPEND-001",
-		"title":                  "Travel Claim",
-		"claim_total_amount":     170,
-		"net_settlement_amount":  140,
-		"settlement_direction":   "company_owes_employee",
-		"reimbursement_status":   "paid",
+		"employee_code":         "EMP-SPEND-001",
+		"title":                 "Travel Claim",
+		"claim_total_amount":    170,
+		"net_settlement_amount": 140,
+		"settlement_direction":  "company_owes_employee",
+		"reimbursement_status":  "paid",
 	})
 	if err != nil {
 		t.Fatalf("create expense claim failed: %v", err)
@@ -4389,6 +4622,13 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	modules := newTestModules(t)
 	documents := document.NewService()
+	documents.RegisterSpecializedViewer(document.SpecializedViewer{
+		Hint:             "promotion.plan",
+		RequestKinds:     []string{"promotion_plan"},
+		DetailPath:       "/ui/promotion/plans/detail",
+		FormPath:         "/ui/promotion/plans/form",
+		EditableStatuses: []string{"draft"},
+	})
 	flows := workflow.NewService()
 	ident := newTestIdentity(t)
 	cfg := config.NewService()

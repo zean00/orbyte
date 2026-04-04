@@ -3,9 +3,11 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1138,7 +1140,147 @@ func extractToolActivity(updateKind string, content map[string]any) (map[string]
 	} else if arguments := nestedMap(content, "args"); len(arguments) > 0 {
 		payload["arguments"] = arguments
 	}
+	for key, value := range extractDraftToolMetadata(toolName, summary, content) {
+		payload[key] = value
+	}
 	return payload, true
+}
+
+var documentIDPattern = regexp.MustCompile(`\b(?:doc_[A-Za-z0-9]+|[a-z_]+:[A-Za-z0-9]+)\b`)
+
+func extractDraftToolMetadata(toolName, summary string, content map[string]any) map[string]any {
+	rawOutputText := firstNonEmptyString(
+		findStringField(nestedMap(content, "rawOutput"), "output", 0),
+		findStringField(nestedMap(content, "raw_output"), "output", 0),
+		findStringField(nestedMap(content, "rawOutput"), "text", 0),
+		findStringField(nestedMap(content, "raw_output"), "text", 0),
+	)
+	lowerToolName := strings.ToLower(strings.TrimSpace(toolName))
+	lowerSummary := strings.ToLower(strings.TrimSpace(summary))
+	lowerRawOutput := strings.ToLower(strings.TrimSpace(rawOutputText))
+	if !strings.Contains(lowerToolName, "draft") &&
+		!strings.Contains(lowerSummary, "draft") &&
+		!strings.Contains(lowerRawOutput, "draft") {
+		return nil
+	}
+	documentID := firstNonEmptyString(
+		findStringField(content, "document_id", 0),
+		findDocumentID(content, 0),
+	)
+	if documentID == "" {
+		return nil
+	}
+	openPath := firstNonEmptyString(
+		findStringField(content, "open_path", 0),
+		findOpenPath(content, 0),
+	)
+	if openPath == "" {
+		openPath = documentOpenPath(documentID)
+	}
+	result := map[string]any{
+		"document_id": documentID,
+		"open_path":   openPath,
+	}
+	if title := firstNonEmptyString(
+		findStringField(nestedMap(content, "rawInput"), "title", 0),
+		findStringField(content, "title", 0),
+	); title != "" && !strings.Contains(strings.ToLower(title), "draft_create") {
+		result["title"] = title
+	}
+	return result
+}
+
+func findDocumentID(value any, depth int) string {
+	if depth > 6 || value == nil {
+		return ""
+	}
+	switch current := value.(type) {
+	case string:
+		match := documentIDPattern.FindString(current)
+		return strings.TrimSpace(match)
+	case []any:
+		for _, item := range current {
+			if match := findDocumentID(item, depth+1); match != "" {
+				return match
+			}
+		}
+	case map[string]any:
+		for _, item := range current {
+			if match := findDocumentID(item, depth+1); match != "" {
+				return match
+			}
+		}
+	}
+	return ""
+}
+
+func findStringField(value any, field string, depth int) string {
+	if depth > 6 || value == nil {
+		return ""
+	}
+	switch current := value.(type) {
+	case map[string]any:
+		if direct := stringValue(current[field]); direct != "" {
+			return direct
+		}
+		for _, item := range current {
+			if match := findStringField(item, field, depth+1); match != "" {
+				return match
+			}
+		}
+	case []any:
+		for _, item := range current {
+			if match := findStringField(item, field, depth+1); match != "" {
+				return match
+			}
+		}
+	}
+	return ""
+}
+
+func findOpenPath(value any, depth int) string {
+	if depth > 6 || value == nil {
+		return ""
+	}
+	switch current := value.(type) {
+	case string:
+		for _, token := range strings.Fields(current) {
+			trimmed := strings.TrimSpace(strings.Trim(token, `"'()[]<>.,`))
+			if strings.HasPrefix(trimmed, "/ui/") && strings.Contains(trimmed, "?id=") {
+				return trimmed
+			}
+			if strings.HasPrefix(trimmed, "/ui/documents/detail?id=") {
+				return trimmed
+			}
+			if strings.HasPrefix(trimmed, "/ui#/documents/detail?document_id=") {
+				documentID := strings.TrimPrefix(trimmed, "/ui#/documents/detail?document_id=")
+				if documentID != "" {
+					return documentOpenPath(documentID)
+				}
+			}
+		}
+	case map[string]any:
+		for _, item := range current {
+			if match := findOpenPath(item, depth+1); match != "" {
+				return match
+			}
+		}
+	case []any:
+		for _, item := range current {
+			if match := findOpenPath(item, depth+1); match != "" {
+				return match
+			}
+		}
+	}
+	return ""
+}
+
+func documentOpenPath(documentID string) string {
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return ""
+	}
+	return "/ui/documents/detail?id=" + url.QueryEscape(documentID)
 }
 
 func toolActivityEventKind(updateKind string, payload map[string]any) string {

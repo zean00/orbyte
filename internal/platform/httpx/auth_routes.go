@@ -370,6 +370,11 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			case userPrincipal:
 				payload["user_id"] = p.userID
 				payload["effective_user_id"] = p.effectiveUserID
+				if p.authMethod == "cookie" && p.sessionID != "" {
+					if csrfCookie, cookieErr := buildCSRFCookie(p.sessionID); cookieErr == nil {
+						http.SetCookie(w, csrfCookie)
+					}
+				}
 			case servicePrincipal:
 				payload["service_id"] = p.serviceID
 			}

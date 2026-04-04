@@ -565,6 +565,282 @@ func seedProcureToPayInventoryScenario(ctx context.Context, client *apiClient, b
 	return manifest, nil
 }
 
+func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "pos_promotion_strategy", "retail-promotion", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	storeCode := "PROMO-STORE-" + suffix
+	registerCode := "PROMO-REG-" + suffix
+	espressoCode := "PROMO-ESPRESSO-" + suffix
+	croissantCode := "PROMO-CROISSANT-" + suffix
+	beansCode := "PROMO-BEANS-" + suffix
+	teaCode := "PROMO-TEA-" + suffix
+	beansCampaignCode := "BEANS-BOOST-" + suffix
+	beansPromoCode := "BEANS10-" + suffix
+	beansRuleCode := "RULE-BEANS10-" + suffix
+	draftTitle := "Promotion Plan " + runID
+
+	paymentMethod, err := client.createModel(ctx, "payment_method", map[string]any{
+		"code":                  "CASHPROMO-" + suffix,
+		"name":                  "Cash Promo " + runID,
+		"clearing_account_code": "1000-CASH",
+		"status":                "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create payment method: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_store", map[string]any{
+		"code":             storeCode,
+		"name":             "Promotion Test Store " + runID,
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "",
+		"currency_code":    "IDR",
+		"checkout_mode":    "invoice_first",
+		"status":           "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create pos store: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_register", map[string]any{
+		"code":              registerCode,
+		"name":              "Promotion Register " + runID,
+		"store_code":        storeCode,
+		"checkout_mode":     "invoice_first",
+		"cash_account_code": "1000-CASH",
+		"status":            "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create pos register: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_tender_type", map[string]any{
+		"code":                  "CASH-" + suffix,
+		"name":                  "Cash",
+		"kind":                  "cash",
+		"payment_method_code":   stringValue(mapValue(paymentMethod, "values")["code"]),
+		"clearing_account_code": "1000-CASH",
+		"is_cash_like":          true,
+		"status":                "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create pos tender type: %w", err)
+	}
+
+	for _, item := range []map[string]any{
+		{
+			"sku":                  espressoCode,
+			"name":                 "Espresso Double " + runID,
+			"description":          "Frequent coffee purchase",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           28000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+		{
+			"sku":                  croissantCode,
+			"name":                 "Butter Croissant " + runID,
+			"description":          "Frequent pastry attachment",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           22000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+		{
+			"sku":                  beansCode,
+			"name":                 "House Beans 1kg " + runID,
+			"description":          "Higher-value packaged beans",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           95000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+		{
+			"sku":                  teaCode,
+			"name":                 "Iced Tea " + runID,
+			"description":          "Secondary beverage",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           18000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+	} {
+		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+			return scenarioManifest{}, fmt.Errorf("create item %s: %w", stringValue(item["sku"]), err)
+		}
+	}
+
+	goldOne, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":        "party_gold_1_" + suffix,
+		"customer_name":   "Alya Santoso " + runID,
+		"customer_type":   "member",
+		"member_status":   "active",
+		"member_tier":     "gold",
+		"member_valid_to": "2099-12-31",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create gold customer 1: %w", err)
+	}
+	goldTwo, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":        "party_gold_2_" + suffix,
+		"customer_name":   "Bima Pratama " + runID,
+		"customer_type":   "member",
+		"member_status":   "active",
+		"member_tier":     "gold",
+		"member_valid_to": "2099-12-31",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create gold customer 2: %w", err)
+	}
+	silverCustomer, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":        "party_silver_" + suffix,
+		"customer_name":   "Citra Lestari " + runID,
+		"customer_type":   "member",
+		"member_status":   "active",
+		"member_tier":     "silver",
+		"member_valid_to": "2099-12-31",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create silver customer: %w", err)
+	}
+
+	if _, err := client.createModel(ctx, "promotion_campaign", map[string]any{
+		"code":           beansCampaignCode,
+		"name":           "Beans Boost " + runID,
+		"trigger_mode":   "code",
+		"sales_channels": "pos",
+		"store_codes":    storeCode,
+		"status":         "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create promotion campaign: %w", err)
+	}
+	if _, err := client.createModel(ctx, "promotion_code", map[string]any{
+		"code":                    beansPromoCode,
+		"promotion_campaign_code": beansCampaignCode,
+		"status":                  "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create promotion code: %w", err)
+	}
+	if _, err := client.createModel(ctx, "discount_rule", map[string]any{
+		"code":                    beansRuleCode,
+		"name":                    "Beans 10 Percent " + runID,
+		"promotion_campaign_code": beansCampaignCode,
+		"scope":                   "line",
+		"rule_kind":               "line_percent",
+		"item_codes":              beansCode,
+		"discount_percent":        10.0,
+		"status":                  "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create discount rule: %w", err)
+	}
+
+	shift, err := client.openPOSShift(ctx, storeCode, registerCode, 500000.0, "Agentproof promotion strategy seed")
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("open pos shift: %w", err)
+	}
+	shiftID := stringValue(shift["id"])
+	if shiftID == "" {
+		return scenarioManifest{}, fmt.Errorf("open pos shift: missing shift id")
+	}
+
+	checkout := func(party map[string]any, lines []map[string]any, promotionCodes []string, tenderAmount float64, reference string) error {
+		req := map[string]any{
+			"store_code":      storeCode,
+			"register_code":   registerCode,
+			"shift_id":        shiftID,
+			"promotion_codes": promotionCodes,
+			"lines":           lines,
+			"tenders": []map[string]any{{
+				"tender_type_code": "CASH-" + suffix,
+				"amount":           tenderAmount,
+			}},
+			"reference": reference,
+		}
+		if party != nil {
+			req["party_id"] = stringValue(mapValue(party, "values")["party_id"])
+			req["party_name"] = stringValue(mapValue(party, "values")["customer_name"])
+		}
+		_, err := client.posCheckout(ctx, req)
+		return err
+	}
+
+	comboLines := []map[string]any{
+		{"item_code": espressoCode, "quantity": 1.0},
+		{"item_code": croissantCode, "quantity": 1.0},
+	}
+	for index, party := range []map[string]any{goldOne, goldOne, goldTwo, goldTwo, goldOne, goldTwo} {
+		if err := checkout(party, comboLines, nil, 50000.0, fmt.Sprintf("PROMO-COMBO-%s-%d", suffix, index+1)); err != nil {
+			return scenarioManifest{}, fmt.Errorf("seed combo sale %d: %w", index+1, err)
+		}
+	}
+	if err := checkout(goldOne, []map[string]any{{"item_code": espressoCode, "quantity": 1.0}}, nil, 28000.0, "PROMO-ESPRESSO-"+suffix); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed espresso sale: %w", err)
+	}
+	if err := checkout(silverCustomer, []map[string]any{{"item_code": teaCode, "quantity": 1.0}}, nil, 18000.0, "PROMO-TEA-"+suffix); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed tea sale: %w", err)
+	}
+	if err := checkout(goldOne, []map[string]any{{"item_code": beansCode, "quantity": 1.0}}, []string{beansPromoCode}, 85500.0, "PROMO-BEANS-"+suffix); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed beans promo sale: %w", err)
+	}
+	if err := checkout(nil, []map[string]any{{"item_code": beansCode, "quantity": 1.0}}, nil, 95000.0, "PROMO-BEANS-WALKIN-"+suffix); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed beans walk-in sale: %w", err)
+	}
+
+	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("pos_promotion_strategy") + `
+- Review POS sales, customer/member profiles, promotion campaigns, promotion redemptions, and discount rules before recommending a campaign.
+- Start with MCP tools pos_core.sales.strategy.summary and promotion_core.performance.summary before using generic business record search.
+- If the MCP server prefixes tool names, choose the tools whose names end with pos_core_sales_strategy_summary, promotion_core_performance_summary, and promotion_core_strategy_plan_draft_create.
+- Prefer a concrete campaign design with target products, target member/customer segment, and a specific current promotion to replace if the data supports it.
+- If asked to create a draft, use promotion_core.strategy.plan.draft.create to create a draft generic_request and do not submit it.`)
+	manifest.Entities = map[string]map[string]any{
+		"store":           {"code": storeCode, "register_code": registerCode},
+		"gold_member_one": {"party_id": stringValue(mapValue(goldOne, "values")["party_id"]), "name": stringValue(mapValue(goldOne, "values")["customer_name"]), "member_tier": "gold"},
+		"gold_member_two": {"party_id": stringValue(mapValue(goldTwo, "values")["party_id"]), "name": stringValue(mapValue(goldTwo, "values")["customer_name"]), "member_tier": "gold"},
+		"silver_member":   {"party_id": stringValue(mapValue(silverCustomer, "values")["party_id"]), "name": stringValue(mapValue(silverCustomer, "values")["customer_name"]), "member_tier": "silver"},
+		"espresso":        {"sku": espressoCode, "name": "Espresso Double " + runID},
+		"croissant":       {"sku": croissantCode, "name": "Butter Croissant " + runID},
+		"beans":           {"sku": beansCode, "name": "House Beans 1kg " + runID},
+		"tea":             {"sku": teaCode, "name": "Iced Tea " + runID},
+	}
+	manifest.GroundTruth = map[string]any{
+		"recommended_campaign_kind":    "member_bundle_discount",
+		"recommended_products":         []string{"Espresso Double " + runID, "Butter Croissant " + runID},
+		"recommended_segment":          "gold members",
+		"supporting_pattern":           "espresso and croissant were repeatedly purchased together by gold members",
+		"underperforming_campaign":     "Beans Boost " + runID,
+		"underperforming_promo_code":   beansPromoCode,
+		"underperforming_reason":       "only one redemption and weak demand signal compared with the breakfast bundle pattern",
+		"combo_sale_count":             6,
+		"beans_promo_redemption_count": 1,
+		"draft_title":                  draftTitle,
+		"draft_document_type":          "generic_request",
+	}
+	manifest.PromptPack = posPromotionStrategyPromptPack(runID, storeCode, espressoCode, croissantCode, beansPromoCode, draftTitle)
+	manifest.SessionInstructions = strings.TrimSpace(manifest.SessionInstructions + fmt.Sprintf(`
+- For this scenario, use store code %s when calling POS sales and promotion summary tools.
+- Leave date_from and date_to empty unless the prompt explicitly asks for a date window.
+- Start with pos_core.sales.strategy.summary and promotion_core.performance.summary, then answer directly if they already provide enough evidence.
+- If those tools return a clear recommendation signal and underperforming campaign, do not fall back to generic business record search.`, storeCode))
+	return manifest, nil
+}
+
 func seedLeaveToPayrollScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
 	runID, suffix := newRunContext()
 	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "leave_to_payroll", "workforce-payroll", runID, suffix)
@@ -1197,6 +1473,68 @@ func productionCostingPromptPack(finishedCode string) []promptExpectation {
 	}
 }
 
+func posPromotionStrategyPromptPack(runID, storeCode, espressoCode, croissantCode, beansPromoCode, draftTitle string) []promptExpectation {
+	espressoName := "Espresso Double " + runID
+	croissantName := "Butter Croissant " + runID
+	beansCampaignName := "Beans Boost " + runID
+	return []promptExpectation{
+		{
+			ID:     "strategy",
+			Prompt: fmt.Sprintf("For store %s, review the current POS sales trend, member behavior, and promotion setup. What promotion campaign should we run next, for which products and customer segment, and why?", storeCode),
+			RequiredFacts: []requiredFact{
+				{Key: "campaign_shape", Severity: "critical", Checks: []string{"bundle"}},
+				{Key: "target_product_espresso", Severity: "critical", Checks: []string{espressoName}},
+				{Key: "target_product_croissant", Severity: "critical", Checks: []string{croissantName}},
+				{Key: "target_segment", Severity: "critical", Checks: []string{"gold", "member"}},
+			},
+			ForbiddenPhrases: []string{"all customers", "discount espresso only"},
+		},
+		{
+			ID:     "evidence",
+			Prompt: fmt.Sprintf("For store %s, what sales pattern is the strongest evidence for that recommendation?", storeCode),
+			RequiredFacts: []requiredFact{
+				{Key: "repeat_combo_pattern", Severity: "critical", Checks: []string{"espresso", "croissant", "together"}},
+				{Key: "member_pattern", Severity: "high", Checks: []string{"gold", "member"}},
+			},
+			ForbiddenPhrases: []string{"beans was the top bundle", "no repeat pattern"},
+		},
+		{
+			ID:     "retire",
+			Prompt: fmt.Sprintf("For store %s, which current promotion should we retire or replace, and why?", storeCode),
+			RequiredFacts: []requiredFact{
+				{Key: "underperforming_campaign", Severity: "critical", Checks: []string{beansCampaignName}},
+				{Key: "underperforming_reason", Severity: "critical", Checks: []string{"one", "redemption"}},
+			},
+			ForbiddenPhrases: []string{"keep beans boost", "espresso bundle is underperforming"},
+		},
+		{
+			ID:     "products_segment",
+			Prompt: fmt.Sprintf("For store %s, name the exact products and customer segment you would target in the next campaign.", storeCode),
+			RequiredFacts: []requiredFact{
+				{Key: "target_product_espresso", Severity: "critical", Checks: []string{espressoName}},
+				{Key: "target_product_croissant", Severity: "critical", Checks: []string{croissantName}},
+				{Key: "target_segment", Severity: "critical", Checks: []string{"gold", "member"}},
+			},
+			ForbiddenPhrases: []string{"house beans 1kg", "walk-in only"},
+		},
+		{
+			ID:     "draft",
+			Prompt: fmt.Sprintf("Create a draft generic request titled %q that captures the recommended promotion plan. Include the target products, the gold-member segment, and that %s should be replaced. Do not submit it. After creating it, tell me the draft id and restate the recommendation briefly.", draftTitle, beansCampaignName),
+			RequiredFacts: []requiredFact{
+				{Key: "draft_created", Severity: "critical", Checks: []string{"draft"}},
+				{Key: "draft_title", Severity: "critical", Checks: []string{draftTitle}},
+				{Key: "recommendation_restated", Severity: "high", Checks: []string{"bundle", "gold"}},
+			},
+			ForbiddenPhrases: []string{"submitted", beansPromoCode + " should continue"},
+			ExpectedDraft: &draftExpectation{
+				DocumentType:  "generic_request",
+				TitleChecks:   []string{draftTitle},
+				PayloadChecks: []string{"espresso", "croissant", "gold", "beans boost"},
+			},
+		},
+	}
+}
+
 func mustJSONString(value any) string {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -1232,8 +1570,10 @@ func agentproofMCPOperations() []string {
 		"agent.workspace.use",
 		"platform.context.read",
 		"module.read",
+		"document.create",
 		"document.read",
 		"document.list",
+		"document.update_draft",
 		"configuration.read",
 		"analytics.read",
 		"monitoring.read",
@@ -1242,5 +1582,12 @@ func agentproofMCPOperations() []string {
 		"event.read",
 		"outbox.read",
 		"deadletter.read",
+		"item.list",
+		"customer.list",
+		"pos_sale.list",
+		"promotion_campaign.list",
+		"promotion_code.list",
+		"promotion_redemption.list",
+		"discount_rule.list",
 	}
 }

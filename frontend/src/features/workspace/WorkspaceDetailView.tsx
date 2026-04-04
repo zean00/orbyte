@@ -129,6 +129,14 @@ export function WorkspaceDetailView({
     }
   }, [documentID, fetchJSON, reloadKey, view.model_key])
 
+  useEffect(() => {
+    if (view.model_key || !payload) return
+    if (!currentPath.startsWith('/documents/detail')) return
+    const nextPath = normalizeWorkspaceRoute(String(payload.open_path || ''))
+    if (!nextPath || nextPath === currentPath) return
+    onNavigate(nextPath)
+  }, [currentPath, documentID, onNavigate, payload, view.model_key])
+
   if (!documentID) {
     return renderPanel({
       title: pickText(view, 'title', locale) || 'Detail',
@@ -327,6 +335,12 @@ export function WorkspaceDetailView({
       </>
     ),
   })
+}
+
+function normalizeWorkspaceRoute(path: string): string {
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+  return trimmed.startsWith('/ui/') ? trimmed.slice(3) : trimmed
 }
 
 function InventoryBatchControlPanel({

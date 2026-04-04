@@ -40,6 +40,16 @@ export function normalizeActionPath(path: string): string {
   );
 }
 
+export function normalizeWorkspaceRoute(path: string): string {
+  const normalized = normalizeShellPath(path, "workspace");
+  if (!normalized) return "";
+  return normalized.startsWith("/ui/")
+    ? normalized.slice(3)
+    : normalized === "/ui"
+      ? "/"
+      : normalized;
+}
+
 export function routeForCreate(
   currentPath: string,
   actions: ActionDefinition[],
@@ -128,6 +138,8 @@ export function routeForWorkItem(
   row: Record<string, unknown>,
   actions: ActionDefinition[],
 ): string {
+  const directPath = String(row.open_path || '');
+  if (directPath) return normalizeWorkspaceRoute(directPath);
   const documentType = String(row.document_type || "");
   const targetID = String(row.target_id || "");
   const path = routeForDocument(documentType, "detail", actions, "/documents");

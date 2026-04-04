@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { pickText, type ActionDefinition, type ViewDefinition } from '@/services/bootstrap'
+import { normalizeWorkspaceRoute } from './workspaceRouteHelpers'
 
 export function WorkspaceListView({
   view,
@@ -193,6 +194,17 @@ export function WorkspaceListView({
           emptyText: pickText(view, 'empty_state', locale) || 'No records.',
           renderAction: (row) => {
             const id = String(view.model_key ? row.id || '' : resolvePath(row, 'header.id') || '')
+            const directPath = String(row.open_path || '')
+            if (directPath) {
+              return (
+                <button
+                  onClick={() => onNavigate(normalizeWorkspaceRoute(directPath))}
+                  className="rounded-lg border border-line px-3 py-1.5 text-sm text-body"
+                >
+                  Open
+                </button>
+              )
+            }
             const detailTarget = view.model_key ? routeForModel(view.model_key, 'detail', routeActions, currentPath) : routeForDocument(view.document_type || '', 'detail', routeActions, currentPath)
             if (!detailTarget || !id) return null
             return (

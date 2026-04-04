@@ -12,7 +12,9 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo                Repository
+	specializedViewers  map[string]SpecializedViewer
+	specializedFallback map[string]string
 }
 
 func NewService() *Service {
@@ -30,7 +32,11 @@ func NewService() *Service {
 }
 
 func NewServiceWithRepository(repo Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{
+		repo:                repo,
+		specializedViewers:  map[string]SpecializedViewer{},
+		specializedFallback: map[string]string{},
+	}
 }
 
 func (s *Service) Register(def Definition) error {

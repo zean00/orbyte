@@ -34,6 +34,18 @@ type documentResponse struct {
 	} `json:"body"`
 }
 
+type uiDocumentListItem struct {
+	Header struct {
+		ID     string `json:"id"`
+		Type   string `json:"type"`
+		Status string `json:"status"`
+		Number string `json:"number"`
+	} `json:"header"`
+	Body struct {
+		Payload map[string]any `json:"payload"`
+	} `json:"body"`
+}
+
 func newAPIClient(baseURL string) (*apiClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -174,6 +186,51 @@ func (c *apiClient) getSession(ctx context.Context, id string) (sessionTranscrip
 	var resp sessionTranscript
 	if err := c.doJSON(ctx, http.MethodGet, "/agent/api/sessions/"+id, nil, &resp); err != nil {
 		return sessionTranscript{}, err
+	}
+	return resp, nil
+}
+
+func (c *apiClient) listUIDocuments(ctx context.Context, documentType string, includePayload bool) ([]uiDocumentListItem, error) {
+	values := url.Values{}
+	if strings.TrimSpace(documentType) != "" {
+		values.Set("type", strings.TrimSpace(documentType))
+	}
+	values.Set("sort", "updated_at")
+	if includePayload {
+		values.Set("include_payload", "1")
+	}
+	requestPath := "/ui/data/documents"
+	if encoded := values.Encode(); encoded != "" {
+		requestPath += "?" + encoded
+	}
+	var resp struct {
+		Items []uiDocumentListItem `json:"items"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, requestPath, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Items, nil
+}
+
+func (c *apiClient) openPOSShift(ctx context.Context, storeCode, registerCode string, openingCash float64, notes string) (map[string]any, error) {
+	var resp struct {
+		Record map[string]any `json:"record"`
+	}
+	if err := c.doJSON(ctx, http.MethodPost, "/ui/data/pos/shifts/open", map[string]any{
+		"store_code":          storeCode,
+		"register_code":       registerCode,
+		"opening_cash_amount": openingCash,
+		"notes":               notes,
+	}, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Record, nil
+}
+
+func (c *apiClient) posCheckout(ctx context.Context, req map[string]any) (map[string]any, error) {
+	var resp map[string]any
+	if err := c.doJSON(ctx, http.MethodPost, "/ui/data/pos/checkout", req, &resp); err != nil {
+		return nil, err
 	}
 	return resp, nil
 }

@@ -43,6 +43,9 @@ func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioMan
 			traceCursor = nextTraceCursor
 		}
 		classifyPrompt(&result, prompt, traceWindow)
+		if prompt.ExpectedDraft != nil {
+			verifyDraft(ctx, client, &result, *prompt.ExpectedDraft)
+		}
 		switch result.Classification {
 		case "exact":
 			exactCount++
@@ -138,6 +141,52 @@ func classifyPrompt(result *promptAnalysisResult, prompt promptExpectation, trac
 	result.Investigation = investigateResult(*result)
 }
 
+func verifyDraft(ctx context.Context, client *apiClient, result *promptAnalysisResult, expected draftExpectation) {
+	items, err := client.listUIDocuments(ctx, expected.DocumentType, true)
+	if err != nil {
+		result.Classification = "unacceptable"
+		result.MissingFacts = append(result.MissingFacts, "draft_lookup_failed")
+		result.Investigation = "The answer required a draft artifact, but draft verification failed while listing documents."
+		return
+	}
+	for _, item := range items {
+		if strings.ToLower(strings.TrimSpace(item.Header.Status)) != "draft" {
+			continue
+		}
+		title := strings.ToLower(strings.TrimSpace(stringValue(item.Body.Payload["title"])))
+		if !allChecksMatch(title, expected.TitleChecks) {
+			continue
+		}
+		payloadText := strings.ToLower(strings.TrimSpace(flattenPayloadText(item.Body.Payload)))
+		if !allChecksMatch(payloadText, expected.PayloadChecks) {
+			continue
+		}
+		result.DraftVerified = true
+		result.DraftDocumentID = strings.TrimSpace(item.Header.ID)
+		result.MissingFacts = removeFactKey(result.MissingFacts, "draft_title")
+		if len(result.Contradictions) == 0 {
+			criticalMissing := false
+			for _, missing := range result.MissingFacts {
+				if missing == "draft_created" || missing == "draft_title" {
+					criticalMissing = true
+					break
+				}
+			}
+			switch {
+			case !criticalMissing && len(result.MissingFacts) == 0:
+				result.Classification = "exact"
+			case !criticalMissing:
+				result.Classification = "reasonable"
+			}
+		}
+		return
+	}
+	result.DraftVerified = false
+	result.Classification = "unacceptable"
+	result.MissingFacts = append(result.MissingFacts, "expected_draft_document")
+	result.Investigation = "The answer did not result in the expected draft artifact, or the created draft did not contain the required recommendation details."
+}
+
 func traceWindowForPrompt(prompt string, trace []sessionTraceEvent, cursor int) ([]sessionTraceEvent, int) {
 	needle := strings.TrimSpace(prompt)
 	if needle == "" {
@@ -190,6 +239,36 @@ func countToolCalls(trace []sessionTraceEvent) int {
 	return total
 }
 
+func allChecksMatch(answer string, checks []string) bool {
+	for _, check := range checks {
+		if !containsCheck(answer, check) {
+			return false
+		}
+	}
+	return true
+}
+
+func flattenPayloadText(value any) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, flattenPayloadText(item))
+		}
+		return strings.Join(parts, " ")
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, flattenPayloadText(item))
+		}
+		return strings.Join(parts, " ")
+	case string:
+		return typed
+	default:
+		return fmt.Sprint(typed)
+	}
+}
+
 func investigateResult(result promptAnalysisResult) string {
 	switch result.Classification {
 	case "exact":
@@ -226,7 +305,18 @@ func containsCheck(answer, check string) bool {
 		}
 		return regexp.MustCompile(`(^|[^0-9])`+regexp.QuoteMeta(normalizedNeedle)+`([^0-9]|$)`).FindStringIndex(normalizedAnswer) != nil
 	}
-	return strings.Contains(normalizedAnswer, normalizedNeedle)
+	if strings.Contains(normalizedAnswer, normalizedNeedle) {
+		return true
+	}
+	relaxedAnswer := stripRunIDSuffixes(normalizedAnswer)
+	relaxedNeedle := stripRunIDSuffixes(normalizedNeedle)
+	if numericCheckMatches(wordNumberNormalized(answer), relaxedNeedle) {
+		return true
+	}
+	if strings.Contains(relaxedAnswer, relaxedNeedle) {
+		return true
+	}
+	return strings.Contains(normalizeComparable(wordNumberNormalized(answer)), normalizeComparable(wordNumberNormalized(needle)))
 }
 
 func containsContradiction(answer, forbidden string) bool {
@@ -294,4 +384,42 @@ func numericCheckMatches(answer, needle string) bool {
 		}
 	}
 	return false
+}
+
+func wordNumberNormalized(value string) string {
+	replacer := strings.NewReplacer(
+		" zero ", " 0 ",
+		" one ", " 1 ",
+		" two ", " 2 ",
+		" three ", " 3 ",
+		" four ", " 4 ",
+		" five ", " 5 ",
+		" six ", " 6 ",
+		" seven ", " 7 ",
+		" eight ", " 8 ",
+		" nine ", " 9 ",
+		" ten ", " 10 ",
+	)
+	return replacer.Replace(" " + strings.ToLower(value) + " ")
+}
+
+func stripRunIDSuffixes(value string) string {
+	return regexp.MustCompile(`\b20\d{6} \d{6}\b|\b20\d{6}-\d{6}\b`).ReplaceAllString(value, "")
+}
+
+func removeFactKey(items []string, key string) []string {
+	if len(items) == 0 {
+		return items
+	}
+	filtered := items[:0]
+	for _, item := range items {
+		if item == key {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
 }

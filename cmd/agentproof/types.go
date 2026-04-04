@@ -3,22 +3,22 @@ package main
 import "time"
 
 type scenarioManifest struct {
-	Version          string                    `json:"version"`
-	Scenario         string                    `json:"scenario"`
-	DomainBundle     string                    `json:"domain_bundle"`
-	RunID            string                    `json:"run_id"`
-	GeneratedAt      time.Time                 `json:"generated_at"`
-	BaseURL          string                    `json:"base_url"`
-	WorkingDir       string                    `json:"working_dir,omitempty"`
-	AgentRoutePath   string                    `json:"agent_route_path"`
-	SessionTitleHint string                    `json:"session_title_hint"`
-	ServicePrincipal servicePrincipalOutput    `json:"service_principal"`
-	OpencodeConfig   opencodeConfigOutput      `json:"opencode_config"`
-	Entities         map[string]map[string]any `json:"entities,omitempty"`
-	Documents        map[string]documentFacts  `json:"documents,omitempty"`
-	GroundTruth      map[string]any            `json:"ground_truth,omitempty"`
-	SessionInstructions string                   `json:"session_instructions,omitempty"`
-	PromptPack           []promptExpectation     `json:"prompt_pack"`
+	Version             string                    `json:"version"`
+	Scenario            string                    `json:"scenario"`
+	DomainBundle        string                    `json:"domain_bundle"`
+	RunID               string                    `json:"run_id"`
+	GeneratedAt         time.Time                 `json:"generated_at"`
+	BaseURL             string                    `json:"base_url"`
+	WorkingDir          string                    `json:"working_dir,omitempty"`
+	AgentRoutePath      string                    `json:"agent_route_path"`
+	SessionTitleHint    string                    `json:"session_title_hint"`
+	ServicePrincipal    servicePrincipalOutput    `json:"service_principal"`
+	OpencodeConfig      opencodeConfigOutput      `json:"opencode_config"`
+	Entities            map[string]map[string]any `json:"entities,omitempty"`
+	Documents           map[string]documentFacts  `json:"documents,omitempty"`
+	GroundTruth         map[string]any            `json:"ground_truth,omitempty"`
+	SessionInstructions string                    `json:"session_instructions,omitempty"`
+	PromptPack          []promptExpectation       `json:"prompt_pack"`
 }
 
 type servicePrincipalOutput struct {
@@ -43,17 +43,24 @@ type documentFacts struct {
 }
 
 type promptExpectation struct {
-	ID               string         `json:"id"`
-	Prompt           string         `json:"prompt"`
-	RequiredFacts    []requiredFact `json:"required_facts"`
-	AllowedVariants  []string       `json:"allowed_variants,omitempty"`
-	ForbiddenPhrases []string       `json:"forbidden_phrases,omitempty"`
+	ID               string            `json:"id"`
+	Prompt           string            `json:"prompt"`
+	RequiredFacts    []requiredFact    `json:"required_facts"`
+	AllowedVariants  []string          `json:"allowed_variants,omitempty"`
+	ForbiddenPhrases []string          `json:"forbidden_phrases,omitempty"`
+	ExpectedDraft    *draftExpectation `json:"expected_draft,omitempty"`
 }
 
 type requiredFact struct {
 	Key      string   `json:"key"`
 	Severity string   `json:"severity"`
 	Checks   []string `json:"checks"`
+}
+
+type draftExpectation struct {
+	DocumentType  string   `json:"document_type"`
+	TitleChecks   []string `json:"title_checks,omitempty"`
+	PayloadChecks []string `json:"payload_checks,omitempty"`
 }
 
 type sessionTranscript struct {
@@ -99,6 +106,8 @@ type promptAnalysisResult struct {
 	Contradictions     []string `json:"contradictions"`
 	Investigation      string   `json:"investigation"`
 	ToolCallCount      int      `json:"tool_call_count"`
+	DraftVerified      bool     `json:"draft_verified,omitempty"`
+	DraftDocumentID    string   `json:"draft_document_id,omitempty"`
 }
 
 type analysisSummary struct {

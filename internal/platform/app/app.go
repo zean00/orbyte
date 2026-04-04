@@ -123,6 +123,7 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	graph := constructServiceGraph(postgres, businessManifests)
+	registerSpecializedRequestViewers(graph.documents)
 	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, runtimeSettings.BootstrapAdminPassword()); err != nil {
 		return nil, err
 	}
@@ -187,6 +188,19 @@ func New(opts Options) (*App, error) {
 		ModelActions:       graph.modelActions,
 		Dispatcher:         runtime.dispatcher,
 	}, nil
+}
+
+func registerSpecializedRequestViewers(docs *document.Service) {
+	if docs == nil {
+		return
+	}
+	docs.RegisterSpecializedViewer(document.SpecializedViewer{
+		Hint:             "promotion.plan",
+		RequestKinds:     []string{"promotion_plan"},
+		DetailPath:       "/ui/promotion/plans/detail",
+		FormPath:         "/ui/promotion/plans/form",
+		EditableStatuses: []string{"draft"},
+	})
 }
 
 func initializeTracing() (func() error, error) {

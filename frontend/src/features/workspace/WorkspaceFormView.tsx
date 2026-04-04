@@ -76,6 +76,7 @@ export function WorkspaceFormView({
   }) => JSX.Element
 }) {
   const targetID = searchParams.get('id') || ''
+  const [payload, setPayload] = useState<Record<string, unknown> | null>(null)
   const [values, setValues] = useState<FormState>({})
   const [version, setVersion] = useState(0)
   const [etag, setETag] = useState('')
@@ -90,6 +91,7 @@ export function WorkspaceFormView({
       if (view.model_key) {
         const payload = await fetchJSON<Record<string, unknown>>(`/ui/data/models/${encodeURIComponent(view.model_key)}/${encodeURIComponent(targetID)}`)
         if (!mounted) return
+        setPayload(payload)
         const record = payload.record as Record<string, unknown>
         setValues(((record.values as Record<string, unknown>) || {}) as FormState)
         setVersion(Number(record.version || 0))
@@ -99,6 +101,7 @@ export function WorkspaceFormView({
       }
       const payload = await fetchJSON<Record<string, unknown>>(`/ui/data/documents/${encodeURIComponent(targetID)}`)
       if (!mounted) return
+      setPayload(payload)
       const record = payload.record as Record<string, unknown>
       const header = (record.header || {}) as Record<string, unknown>
       const body = (record.body || {}) as Record<string, unknown>
@@ -113,6 +116,14 @@ export function WorkspaceFormView({
       mounted = false
     }
   }, [fetchJSON, targetID, view.model_key])
+
+  useEffect(() => {
+    if (view.model_key || !targetID || !currentPath.startsWith('/documents/form')) return
+    const payloadPath = normalizeWorkspaceRoute(String(payload?.edit_path || ''))
+    if (payloadPath && payloadPath !== currentPath) {
+      onNavigate(payloadPath)
+    }
+  }, [currentPath, onNavigate, payload, targetID, view.model_key])
 
   useEffect(() => {
     let mounted = true
@@ -392,4 +403,10 @@ export function WorkspaceFormView({
       </>
     ),
   })
+}
+
+function normalizeWorkspaceRoute(path: string): string {
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+  return trimmed.startsWith('/ui/') ? trimmed.slice(3) : trimmed
 }
