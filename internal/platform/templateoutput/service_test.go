@@ -2,6 +2,7 @@ package templateoutput
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -530,6 +531,111 @@ func TestTemplateValidationHelpersAndFixtureBranches(t *testing.T) {
 	}
 	if _, err := svc.CompareVersions("missing", 1, 2); err == nil {
 		t.Fatal("expected compare versions to fail for missing versions")
+	}
+}
+
+func TestVisualTemplateLayoutFieldsRenderAndValidate(t *testing.T) {
+	visual := VisualTemplate{
+		SchemaVersion: "visual-grid/v1",
+		Title:         "Promo Sheet",
+		Sections: []VisualSection{
+			{
+				ID:    "body",
+				Title: "Body",
+				Rows: []VisualRow{
+					{
+						ID:            "body-row-1",
+						Width:         "72%",
+						Height:        "180px",
+						AlignX:        "center",
+						AlignY:        "stretch",
+						ContentAlignX: "center",
+						ContentAlignY: "stretch",
+						Columns: []VisualCell{
+							{
+								ID:            "body-cell-1",
+								Span:          6,
+								Width:         "50%",
+								Height:        "160px",
+								AlignX:        "end",
+								AlignY:        "center",
+								ContentAlignX: "center",
+								ContentAlignY: "end",
+								Blocks:        []VisualBlock{{Type: "text", Text: "Hello world"}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	issues := validateVisualTemplate(visual)
+	if len(filterIssues(issues, "error")) != 0 {
+		t.Fatalf("expected layout fields to validate, got %+v", issues)
+	}
+
+	body, err := json.Marshal(visual)
+	if err != nil {
+		t.Fatalf("marshal visual template failed: %v", err)
+	}
+	html, err := renderVisualTemplate(Version{RendererKind: "visual", Body: string(body)}, map[string]any{})
+	if err != nil {
+		t.Fatalf("renderVisualTemplate failed: %v", err)
+	}
+	if !strings.Contains(html, `class="template-row-shell"`) {
+		t.Fatalf("expected row shell wrapper in html, got %s", html)
+	}
+	if !strings.Contains(html, `width:72%`) || !strings.Contains(html, `min-height:180px`) {
+		t.Fatalf("expected row layout styles in html, got %s", html)
+	}
+	if !strings.Contains(html, `width:50%`) || !strings.Contains(html, `justify-self:end`) || !strings.Contains(html, `min-height:160px`) {
+		t.Fatalf("expected cell layout styles in html, got %s", html)
+	}
+}
+
+func TestVisualTemplateWidthColumnsSkipSpanErrorsAndStretchDoesNotLeakToJustifyContent(t *testing.T) {
+	visual := VisualTemplate{
+		SchemaVersion: "visual-grid/v1",
+		Sections: []VisualSection{
+			{
+				ID: "body",
+				Rows: []VisualRow{
+					{
+						ID:     "body-row-1",
+						AlignX: "stretch",
+						Columns: []VisualCell{
+							{
+								ID:            "body-cell-1",
+								Span:          0,
+								Width:         "48%",
+								ContentAlignY: "stretch",
+								Blocks:        []VisualBlock{{Type: "text", Text: "Width-based column"}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	issues := validateVisualTemplate(visual)
+	for _, item := range issues {
+		if item.Code == "visual_span_invalid" {
+			t.Fatalf("did not expect span validation error for explicit-width column, got %+v", issues)
+		}
+	}
+
+	body, err := json.Marshal(visual)
+	if err != nil {
+		t.Fatalf("marshal visual template failed: %v", err)
+	}
+	html, err := renderVisualTemplate(Version{RendererKind: "visual", Body: string(body)}, map[string]any{})
+	if err != nil {
+		t.Fatalf("renderVisualTemplate failed: %v", err)
+	}
+	if strings.Contains(html, "justify-content:stretch") {
+		t.Fatalf("did not expect invalid stretch justify-content in html, got %s", html)
 	}
 }
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { cloneElement, isValidElement, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { fetchJson, formatDateTime, mutateJson } from './adminClient'
@@ -106,11 +106,23 @@ type TemplateBlock = {
 type TemplateCell = {
   id: string
   span: number
+  width?: string
+  height?: string
+  align_x?: 'start' | 'center' | 'end' | 'stretch' | ''
+  align_y?: 'start' | 'center' | 'end' | 'stretch' | ''
+  content_align_x?: 'start' | 'center' | 'end' | ''
+  content_align_y?: 'start' | 'center' | 'end' | 'stretch' | ''
   blocks: TemplateBlock[]
 }
 
 type TemplateRow = {
   id: string
+  width?: string
+  height?: string
+  align_x?: 'start' | 'center' | 'end' | 'stretch' | ''
+  align_y?: 'start' | 'center' | 'end' | 'stretch' | ''
+  content_align_x?: 'start' | 'center' | 'end' | ''
+  content_align_y?: 'start' | 'center' | 'end' | 'stretch' | ''
   columns: TemplateCell[]
 }
 
@@ -167,6 +179,21 @@ const PALETTE: Array<{ type: string; label: string }> = [
   { type: 'signature', label: 'Signature' },
 ]
 
+const WIDTH_PRESETS = [
+  { value: '', label: 'Auto / Span-based' },
+  { value: '100%', label: 'Full' },
+  { value: '50%', label: 'Half' },
+  { value: '33.333%', label: 'Third' },
+  { value: '25%', label: 'Quarter' },
+]
+
+const HEIGHT_PRESETS = [
+  { value: '', label: 'Auto' },
+  { value: '120px', label: 'Compact' },
+  { value: '180px', label: 'Medium' },
+  { value: '240px', label: 'Tall' },
+]
+
 function nextDesignerID(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
@@ -191,6 +218,138 @@ function createTemplateBlock(type: string): TemplateBlock {
     default:
       return { id, type: 'text', text: 'New text block' }
   }
+}
+
+function normalizeAlignX(value: unknown): TemplateRow['align_x'] {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'center':
+      return 'center'
+    case 'end':
+      return 'end'
+    case 'stretch':
+      return 'stretch'
+    case 'start':
+      return 'start'
+    default:
+      return ''
+  }
+}
+
+function normalizeAlignY(value: unknown): TemplateRow['align_y'] {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'center':
+      return 'center'
+    case 'end':
+      return 'end'
+    case 'stretch':
+      return 'stretch'
+    case 'start':
+      return 'start'
+    default:
+      return ''
+  }
+}
+
+function normalizeContentAlignX(value: unknown): TemplateRow['content_align_x'] {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'center':
+      return 'center'
+    case 'end':
+      return 'end'
+    case 'start':
+      return 'start'
+    default:
+      return ''
+  }
+}
+
+function normalizeContentAlignY(value: unknown): TemplateRow['content_align_y'] {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'center':
+      return 'center'
+    case 'end':
+      return 'end'
+    case 'stretch':
+      return 'stretch'
+    case 'start':
+      return 'start'
+    default:
+      return ''
+  }
+}
+
+function normalizeLength(value: unknown): string {
+  return String(value || '').trim()
+}
+
+function cssPosition(value: string, fallback: 'start' | 'stretch' = 'start'): CSSProperties['justifyContent'] {
+  switch (value) {
+    case 'center':
+      return 'center'
+    case 'end':
+      return 'flex-end'
+    case 'stretch':
+      return fallback === 'stretch' ? 'stretch' : 'flex-start'
+    default:
+      return fallback === 'stretch' ? 'stretch' : 'flex-start'
+  }
+}
+
+function cssItemPosition(value: string, fallback: 'start' | 'stretch' = 'start'): 'start' | 'center' | 'end' | 'stretch' {
+  switch (value) {
+    case 'center':
+      return 'center'
+    case 'end':
+      return 'end'
+    case 'stretch':
+      return 'stretch'
+    default:
+      return fallback
+  }
+}
+
+function rowShellStyle(row: TemplateRow): CSSProperties {
+  return {
+    display: 'flex',
+    width: '100%',
+    minHeight: row.height || undefined,
+    justifyContent: cssPosition(row.align_x || ''),
+    alignItems: cssPosition(row.align_y || '', 'stretch') as CSSProperties['alignItems'],
+  }
+}
+
+function rowCanvasStyle(row: TemplateRow): CSSProperties {
+  return {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(12, minmax(0, 1fr))',
+    gap: '12px',
+    width: row.width || '100%',
+    minHeight: row.height || undefined,
+    justifyItems: cssItemPosition(row.content_align_x || '', 'stretch'),
+    alignItems: cssItemPosition(row.content_align_y || '', 'stretch'),
+  }
+}
+
+function cellCanvasStyle(cell: TemplateCell): CSSProperties {
+  const style: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    minHeight: cell.height || undefined,
+    justifyContent: cssPosition(cell.content_align_y || '') as CSSProperties['justifyContent'],
+    alignItems: cssItemPosition(cell.content_align_x || '', 'stretch'),
+    alignSelf: cssItemPosition(cell.align_y || '', 'stretch'),
+  }
+  if (cell.width) {
+    style.gridColumn = 'auto'
+    style.width = cell.width
+    style.justifySelf = cssItemPosition(cell.align_x || '')
+  } else {
+    style.gridColumn = `span ${cell.span} / span ${cell.span}`
+    style.width = '100%'
+    style.justifySelf = 'stretch'
+  }
+  return style
 }
 
 function templateDefaultLayout(definition: TemplateDefinition | null): TemplateLayout {
@@ -235,11 +394,23 @@ function normalizeLayout(layout: unknown, definition: TemplateDefinition | null)
           const rowID = row.id || `${sectionID}-row-${rowIndex + 1}`
           return {
             id: rowID,
+            width: normalizeLength((row as TemplateRow).width),
+            height: normalizeLength((row as TemplateRow).height),
+            align_x: normalizeAlignX((row as TemplateRow).align_x),
+            align_y: normalizeAlignY((row as TemplateRow).align_y),
+            content_align_x: normalizeContentAlignX((row as TemplateRow).content_align_x),
+            content_align_y: normalizeContentAlignY((row as TemplateRow).content_align_y),
             columns: (Array.isArray(row.columns) && row.columns.length ? row.columns : [{ id: '', span: 12, blocks: [] }]).map((column, columnIndex) => {
               const columnID = column.id || `${rowID}-cell-${columnIndex + 1}`
               return {
                 id: columnID,
                 span: Math.min(12, Math.max(1, Number(column.span) || 12)),
+                width: normalizeLength((column as TemplateCell).width),
+                height: normalizeLength((column as TemplateCell).height),
+                align_x: normalizeAlignX((column as TemplateCell).align_x),
+                align_y: normalizeAlignY((column as TemplateCell).align_y),
+                content_align_x: normalizeContentAlignX((column as TemplateCell).content_align_x),
+                content_align_y: normalizeContentAlignY((column as TemplateCell).content_align_y),
                 blocks: Array.isArray(column.blocks)
                   ? column.blocks.map((block, blockIndex) => ({
                       id: block.id || `${columnID}-block-${blockIndex + 1}`,
@@ -300,6 +471,7 @@ export function TemplateDesignerPage() {
   const [selectedRowID, setSelectedRowID] = useState('')
   const [selectedCellID, setSelectedCellID] = useState('')
   const [selectedBlockID, setSelectedBlockID] = useState('')
+  const [activeSelection, setActiveSelection] = useState<'canvas' | 'row' | 'cell' | 'block'>('canvas')
   const [bindings, setBindings] = useState<TemplateBinding[]>([])
   const [targetCatalog, setTargetCatalog] = useState<TemplateTargetCatalog>({})
   const [definitionDraft, setDefinitionDraft] = useState({
@@ -446,6 +618,7 @@ export function TemplateDesignerPage() {
         setSelectedRowID(defaultRow?.id || '')
         setSelectedCellID(defaultCell?.id || '')
         setSelectedBlockID('')
+        setActiveSelection('canvas')
         setPreview(null)
         setComparison(null)
         setCompareLeft(orderedVersions[0]?.version || null)
@@ -522,6 +695,18 @@ export function TemplateDesignerPage() {
     setSelectedRowID(selectedBlockRef.row.id)
     setSelectedCellID(selectedBlockRef.column.id)
   }, [selectedBlockRef])
+
+  useEffect(() => {
+    if (activeSelection === 'block' && !selectedBlockRef) {
+      setActiveSelection(selectedCell ? 'cell' : selectedRow ? 'row' : 'canvas')
+    }
+    if (activeSelection === 'cell' && !selectedCell) {
+      setActiveSelection(selectedRow ? 'row' : 'canvas')
+    }
+    if (activeSelection === 'row' && !selectedRow) {
+      setActiveSelection('canvas')
+    }
+  }, [activeSelection, selectedBlockRef, selectedCell, selectedRow])
 
   function updateLayout(mutator: (next: TemplateLayout) => void) {
     if (!layout) return
@@ -828,6 +1013,7 @@ export function TemplateDesignerPage() {
       setSelectedRowID(row?.id || '')
       setSelectedCellID(cell.id)
       setSelectedBlockID(block.id)
+      setActiveSelection('block')
     })
   }
 
@@ -845,6 +1031,7 @@ export function TemplateDesignerPage() {
       setSelectedRowID(rowID)
       setSelectedCellID(cellID)
       setSelectedBlockID('')
+      setActiveSelection('row')
     })
   }
 
@@ -861,6 +1048,7 @@ export function TemplateDesignerPage() {
         setSelectedRowID(row.id)
         setSelectedCellID(cellID)
         setSelectedBlockID('')
+        setActiveSelection('cell')
       }
     })
   }
@@ -879,6 +1067,7 @@ export function TemplateDesignerPage() {
             setSelectedRowID(row.id)
             setSelectedCellID(fallbackCell?.id || '')
             setSelectedBlockID('')
+            setActiveSelection(fallbackCell ? 'cell' : 'row')
           }
         }
       }
@@ -909,6 +1098,7 @@ export function TemplateDesignerPage() {
         setSelectedRowID(fallbackRow?.id || '')
         setSelectedCellID(fallbackRow?.columns[0]?.id || '')
         setSelectedBlockID('')
+        setActiveSelection(fallbackRow ? 'row' : 'canvas')
       }
     })
   }
@@ -925,6 +1115,27 @@ export function TemplateDesignerPage() {
     })
   }
 
+  function updateRow(updater: (row: TemplateRow) => void) {
+    if (!selectedSection || !selectedRow) return
+    updateLayout((next) => {
+      const section = next.sections.find((item) => item.id === selectedSection.id)
+      const row = section?.rows.find((item) => item.id === selectedRow.id)
+      if (!row) return
+      updater(row)
+    })
+  }
+
+  function updateCell(updater: (cell: TemplateCell) => void) {
+    if (!selectedSection || !selectedRow || !selectedCell) return
+    updateLayout((next) => {
+      const section = next.sections.find((item) => item.id === selectedSection.id)
+      const row = section?.rows.find((item) => item.id === selectedRow.id)
+      const cell = row?.columns.find((item) => item.id === selectedCell.id)
+      if (!cell) return
+      updater(cell)
+    })
+  }
+
   useEffect(() => {
     if (!layout) return
     syncVisualBody(layout)
@@ -936,6 +1147,10 @@ export function TemplateDesignerPage() {
   }
 
   const bindingResolution = preview?.binding_resolution
+  const rowWidthPreset = WIDTH_PRESETS.some((item) => item.value === (selectedRow?.width || '')) ? (selectedRow?.width || '') : '__custom__'
+  const rowHeightPreset = HEIGHT_PRESETS.some((item) => item.value === (selectedRow?.height || '')) ? (selectedRow?.height || '') : '__custom__'
+  const cellWidthPreset = WIDTH_PRESETS.some((item) => item.value === (selectedCell?.width || '')) ? (selectedCell?.width || '') : '__custom__'
+  const cellHeightPreset = HEIGHT_PRESETS.some((item) => item.value === (selectedCell?.height || '')) ? (selectedCell?.height || '') : '__custom__'
 
   return (
     <div className="space-y-6">
@@ -1072,6 +1287,7 @@ export function TemplateDesignerPage() {
                     setSelectedRowID(section.rows[0]?.id || '')
                     setSelectedCellID(section.rows[0]?.columns[0]?.id || '')
                     setSelectedBlockID('')
+                    setActiveSelection('canvas')
                   }}
                 >
                   {section.title}
@@ -1088,6 +1304,16 @@ export function TemplateDesignerPage() {
               <p className="text-sm text-muted">Visual blocks round-trip into the existing template body JSON.</p>
             </div>
             <div className="flex gap-2">
+              <button
+                type="button"
+                className="admin-button admin-button-secondary"
+                onClick={() => {
+                  setSelectedBlockID('')
+                  setActiveSelection('canvas')
+                }}
+              >
+                Canvas Settings
+              </button>
               <button type="button" className="admin-button admin-button-secondary" onClick={addRow}>
                 Add Row
               </button>
@@ -1106,6 +1332,7 @@ export function TemplateDesignerPage() {
                   setSelectedRowID(row.id)
                   setSelectedCellID(row.columns[0]?.id || '')
                   setSelectedBlockID('')
+                  setActiveSelection('row')
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1113,6 +1340,7 @@ export function TemplateDesignerPage() {
                     setSelectedRowID(row.id)
                     setSelectedCellID(row.columns[0]?.id || '')
                     setSelectedBlockID('')
+                    setActiveSelection('row')
                   }
                 }}
               >
@@ -1125,6 +1353,7 @@ export function TemplateDesignerPage() {
                       setSelectedRowID(row.id)
                       setSelectedCellID(row.columns[0]?.id || '')
                       setSelectedBlockID('')
+                      setActiveSelection('row')
                     }}
                   >
                     Row {rowIndex + 1}
@@ -1144,79 +1373,94 @@ export function TemplateDesignerPage() {
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-12 gap-3">
-                  {row.columns.map((column, columnIndex) => (
-                    <div
-                      key={column.id}
-                      data-template-cell-id={column.id}
-                      role="button"
-                      tabIndex={0}
-                      className={`space-y-3 rounded-xl border p-3 text-left ${selectedCellID === column.id ? 'border-accent bg-surface shadow-panel' : 'border-line bg-accent-soft/60'}`}
-                      style={{ gridColumn: `span ${column.span} / span ${column.span}` }}
-                      onClick={() => {
-                        setSelectedRowID(row.id)
-                        setSelectedCellID(column.id)
-                        setSelectedBlockID('')
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
+                <div style={rowShellStyle(row)}>
+                  <div style={rowCanvasStyle(row)}>
+                    {row.columns.map((column, columnIndex) => (
+                      <div
+                        key={column.id}
+                        data-template-cell-id={column.id}
+                        role="button"
+                        tabIndex={0}
+                        className={`space-y-3 rounded-xl border p-3 text-left ${selectedCellID === column.id ? 'border-accent bg-accent-soft/30 shadow-panel' : 'border-line bg-surface'}`}
+                        style={cellCanvasStyle(column)}
+                        onClick={(event) => {
+                          event.stopPropagation()
                           setSelectedRowID(row.id)
                           setSelectedCellID(column.id)
                           setSelectedBlockID('')
-                        }
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          className={`text-xs font-semibold uppercase tracking-[0.14em] ${selectedCellID === column.id ? 'text-accent-dark' : 'text-muted'}`}
-                          onClick={(event) => {
+                          setActiveSelection('cell')
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
                             event.stopPropagation()
                             setSelectedRowID(row.id)
                             setSelectedCellID(column.id)
                             setSelectedBlockID('')
-                          }}
-                        >
-                          Column {columnIndex + 1} · Span {column.span}/12
-                        </button>
-                        {row.columns.length > 1 ? (
+                            setActiveSelection('cell')
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
                           <button
                             type="button"
-                            className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-dark"
+                            className={`text-xs font-semibold uppercase tracking-[0.14em] ${selectedCellID === column.id ? 'text-accent-dark' : 'text-muted'}`}
                             onClick={(event) => {
                               event.stopPropagation()
-                              removeColumn(column.id)
+                              setSelectedRowID(row.id)
+                              setSelectedCellID(column.id)
+                              setSelectedBlockID('')
+                              setActiveSelection('cell')
                             }}
                           >
-                            Remove
+                            Column {columnIndex + 1} · {column.width ? `Width ${column.width}` : `Span ${column.span}/12`}
                           </button>
-                        ) : null}
-                      </div>
-                      <div className="space-y-2">
-                        {column.blocks.length ? (
-                          column.blocks.map((block) => (
+                          {row.columns.length > 1 ? (
                             <button
-                              key={block.id}
                               type="button"
-                              className={`block w-full rounded-xl border p-3 text-left ${selectedBlockID === block.id ? 'border-accent bg-surface shadow-panel' : 'border-line bg-surface'}`}
+                              className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-dark"
                               onClick={(event) => {
                                 event.stopPropagation()
-                                setSelectedRowID(row.id)
-                                setSelectedCellID(column.id)
-                                setSelectedBlockID(block.id)
+                                removeColumn(column.id)
                               }}
                             >
-                              <div className="text-sm font-semibold text-body">{block.label || block.text || block.type}</div>
-                              <div className="mt-1 text-xs uppercase tracking-[0.14em] text-muted">{[block.type, block.path || block.rows_path].filter(Boolean).join(' · ')}</div>
+                              Remove
                             </button>
-                          ))
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-line px-3 py-5 text-center text-sm text-muted">No blocks in this column yet.</div>
-                        )}
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          {column.blocks.length ? (
+                            column.blocks.map((block) => (
+                              <button
+                                key={block.id}
+                                type="button"
+                                className={`block w-full rounded-xl border p-3 text-left ${selectedBlockID === block.id ? 'border-line bg-shell shadow-sm' : 'border-line bg-surface'}`}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  if (selectedCellID !== column.id) {
+                                    setSelectedRowID(row.id)
+                                    setSelectedCellID(column.id)
+                                    setSelectedBlockID('')
+                                    setActiveSelection('cell')
+                                    return
+                                  }
+                                  setSelectedRowID(row.id)
+                                  setSelectedCellID(column.id)
+                                  setSelectedBlockID(block.id)
+                                  setActiveSelection('block')
+                                }}
+                              >
+                                <div className="text-sm font-semibold text-body">{block.label || block.text || block.type}</div>
+                                <div className="mt-1 text-xs uppercase tracking-[0.14em] text-muted">{[block.type, block.path || block.rows_path].filter(Boolean).join(' · ')}</div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-line px-3 py-5 text-center text-sm text-muted">No blocks in this column yet.</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}
@@ -1224,119 +1468,322 @@ export function TemplateDesignerPage() {
         </section>
 
         <section className="space-y-6">
-          <Panel title="Inspector" subtitle="Select a block to edit its settings.">
-            {selectedBlockRef ? (
-              <div className="space-y-3">
-                <Field label="Label">
-                  <input className="admin-input" value={selectedBlockRef.block.label || ''} onChange={(event) => updateBlock((block) => { block.label = event.target.value })} />
-                </Field>
-                {selectedBlockRef.block.type === 'text' ? (
-                  <Field label="Text">
-                    <textarea className="admin-input min-h-24" value={selectedBlockRef.block.text || ''} onChange={(event) => updateBlock((block) => { block.text = event.target.value })} />
-                  </Field>
-                ) : null}
-                {['field', 'barcode', 'totals'].includes(selectedBlockRef.block.type) ? (
-                  <Field label="Path">
-                    <input className="admin-input" value={selectedBlockRef.block.path || ''} onChange={(event) => updateBlock((block) => { block.path = event.target.value })} />
-                  </Field>
-                ) : null}
-                {['table', 'totals'].includes(selectedBlockRef.block.type) ? (
-                  <Field label="Rows Path">
-                    <input className="admin-input" value={selectedBlockRef.block.rows_path || ''} onChange={(event) => updateBlock((block) => { block.rows_path = event.target.value })} />
-                  </Field>
-                ) : null}
-                {selectedBlockRef.block.type === 'image' ? (
-                  <Field label="Image URL">
-                    <input className="admin-input" value={selectedBlockRef.block.image_url || ''} onChange={(event) => updateBlock((block) => { block.image_url = event.target.value })} />
-                  </Field>
-                ) : null}
-                <Field label="Column Span">
-                  <input
-                    className="admin-input"
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={selectedBlockRef.column.span}
-                    onChange={(event) =>
-                      updateBlock((_, column) => {
-                        column.span = Math.min(12, Math.max(1, Number(event.target.value) || 12))
-                      })
-                    }
-                  />
-                </Field>
-                {selectedBlockRef.block.type === 'table' ? (
-                  <div className="space-y-2">
-                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Columns</div>
-                    {(selectedBlockRef.block.columns || []).map((column, index) => (
-                      <div key={`${column.label}-${index}`} className="grid grid-cols-2 gap-2">
-                        <input
-                          className="admin-input"
-                          placeholder="Label"
-                          value={column.label}
-                          onChange={(event) =>
-                            updateBlock((block) => {
-                              block.columns = [...(block.columns || [])]
-                              block.columns[index] = { label: event.target.value, path: block.columns[index]?.path || '' }
-                            })
-                          }
-                        />
-                        <input
-                          className="admin-input"
-                          placeholder="Path"
-                          value={column.path}
-                          onChange={(event) =>
-                            updateBlock((block) => {
-                              block.columns = [...(block.columns || [])]
-                              block.columns[index] = { label: block.columns[index]?.label || '', path: event.target.value }
-                            })
-                          }
-                        />
-                      </div>
-                    ))}
+          <Panel title="Inspector" subtitle="Tune row and column layout, then refine individual blocks.">
+            <div className="space-y-6">
+              {activeSelection === 'row' && selectedRow ? (
+                <article className="space-y-3 rounded-xl border border-line bg-accent-soft/30 p-4">
+                  <div className="text-sm font-semibold text-body">Row Layout</div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <Field label="Width Preset">
+                      <select
+                        className="admin-input"
+                        value={rowWidthPreset}
+                        onChange={(event) =>
+                          updateRow((row) => {
+                            row.width = event.target.value === '__custom__' ? row.width || '50%' : event.target.value
+                          })
+                        }
+                      >
+                        {WIDTH_PRESETS.map((item) => (
+                          <option key={item.label} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="__custom__">Custom</option>
+                      </select>
+                    </Field>
+                    <Field label="Custom Width">
+                      <input className="admin-input" placeholder="e.g. 72%, 640px" value={selectedRow.width || ''} onChange={(event) => updateRow((row) => { row.width = event.target.value.trim() })} />
+                    </Field>
+                    <Field label="Height Preset">
+                      <select
+                        className="admin-input"
+                        value={rowHeightPreset}
+                        onChange={(event) =>
+                          updateRow((row) => {
+                            row.height = event.target.value === '__custom__' ? row.height || '180px' : event.target.value
+                          })
+                        }
+                      >
+                        {HEIGHT_PRESETS.map((item) => (
+                          <option key={item.label} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="__custom__">Custom</option>
+                      </select>
+                    </Field>
+                    <Field label="Custom Height">
+                      <input className="admin-input" placeholder="e.g. 180px" value={selectedRow.height || ''} onChange={(event) => updateRow((row) => { row.height = event.target.value.trim() })} />
+                    </Field>
+                    <Field label="Container Horizontal">
+                      <select className="admin-input" value={selectedRow.align_x || ''} onChange={(event) => updateRow((row) => { row.align_x = normalizeAlignX(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                        <option value="stretch">Stretch</option>
+                      </select>
+                    </Field>
+                    <Field label="Container Vertical">
+                      <select className="admin-input" value={selectedRow.align_y || ''} onChange={(event) => updateRow((row) => { row.align_y = normalizeAlignY(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                        <option value="stretch">Stretch</option>
+                      </select>
+                    </Field>
+                    <Field label="Content Horizontal">
+                      <select className="admin-input" value={selectedRow.content_align_x || ''} onChange={(event) => updateRow((row) => { row.content_align_x = normalizeContentAlignX(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                      </select>
+                    </Field>
+                    <Field label="Content Vertical">
+                      <select className="admin-input" value={selectedRow.content_align_y || ''} onChange={(event) => updateRow((row) => { row.content_align_y = normalizeContentAlignY(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                        <option value="stretch">Stretch</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="flex justify-end">
                     <button
                       type="button"
                       className="admin-button admin-button-secondary"
                       onClick={() =>
-                        updateBlock((block) => {
-                          block.columns = [...(block.columns || []), { label: 'Column', path: '' }]
+                        updateRow((row) => {
+                          row.width = ''
+                          row.height = ''
+                          row.align_x = ''
+                          row.align_y = ''
+                          row.content_align_x = ''
+                          row.content_align_y = ''
                         })
                       }
                     >
-                      Add Column
+                      Reset Row
                     </button>
                   </div>
-                ) : null}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="admin-button admin-button-secondary"
-                    onClick={() =>
-                      updateBlock((block, cell) => {
-                        const copy = JSON.parse(JSON.stringify(block)) as TemplateBlock
-                        copy.id = nextDesignerID('block')
-                        cell.blocks.push(copy)
-                        setSelectedBlockID(copy.id)
-                      })
-                    }
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-button admin-button-secondary"
-                    onClick={() =>
-                      updateBlock((block, cell) => {
-                        cell.blocks = cell.blocks.filter((item) => item.id !== block.id)
-                        setSelectedBlockID('')
-                      })
-                    }
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
+                </article>
+              ) : null}
+
+              {activeSelection === 'cell' && selectedCell ? (
+                <article className="space-y-3 rounded-xl border border-line bg-surface p-4">
+                  <div className="text-sm font-semibold text-body">Column Layout</div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <Field label="Span">
+                      <input
+                        className="admin-input"
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={selectedCell.span}
+                        onChange={(event) =>
+                          updateCell((cell) => {
+                            cell.span = Math.min(12, Math.max(1, Number(event.target.value) || 12))
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Width Preset">
+                      <select
+                        className="admin-input"
+                        value={cellWidthPreset}
+                        onChange={(event) =>
+                          updateCell((cell) => {
+                            cell.width = event.target.value === '__custom__' ? cell.width || '50%' : event.target.value
+                          })
+                        }
+                      >
+                        {WIDTH_PRESETS.map((item) => (
+                          <option key={item.label} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="__custom__">Custom</option>
+                      </select>
+                    </Field>
+                    <Field label="Custom Width">
+                      <input className="admin-input" placeholder="Leave blank to use span" value={selectedCell.width || ''} onChange={(event) => updateCell((cell) => { cell.width = event.target.value.trim() })} />
+                    </Field>
+                    <Field label="Height Preset">
+                      <select
+                        className="admin-input"
+                        value={cellHeightPreset}
+                        onChange={(event) =>
+                          updateCell((cell) => {
+                            cell.height = event.target.value === '__custom__' ? cell.height || '180px' : event.target.value
+                          })
+                        }
+                      >
+                        {HEIGHT_PRESETS.map((item) => (
+                          <option key={item.label} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="__custom__">Custom</option>
+                      </select>
+                    </Field>
+                    <Field label="Custom Height">
+                      <input className="admin-input" placeholder="e.g. 160px" value={selectedCell.height || ''} onChange={(event) => updateCell((cell) => { cell.height = event.target.value.trim() })} />
+                    </Field>
+                    <Field label="Container Horizontal">
+                      <select className="admin-input" value={selectedCell.align_x || ''} onChange={(event) => updateCell((cell) => { cell.align_x = normalizeAlignX(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                        <option value="stretch">Stretch</option>
+                      </select>
+                    </Field>
+                    <Field label="Container Vertical">
+                      <select className="admin-input" value={selectedCell.align_y || ''} onChange={(event) => updateCell((cell) => { cell.align_y = normalizeAlignY(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                        <option value="stretch">Stretch</option>
+                      </select>
+                    </Field>
+                    <Field label="Content Horizontal">
+                      <select className="admin-input" value={selectedCell.content_align_x || ''} onChange={(event) => updateCell((cell) => { cell.content_align_x = normalizeContentAlignX(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                      </select>
+                    </Field>
+                    <Field label="Content Vertical">
+                      <select className="admin-input" value={selectedCell.content_align_y || ''} onChange={(event) => updateCell((cell) => { cell.content_align_y = normalizeContentAlignY(event.target.value) })}>
+                        <option value="">Start</option>
+                        <option value="center">Center</option>
+                        <option value="end">End</option>
+                        <option value="stretch">Stretch</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="admin-button admin-button-secondary"
+                      onClick={() =>
+                        updateCell((cell) => {
+                          cell.width = ''
+                          cell.height = ''
+                          cell.align_x = ''
+                          cell.align_y = ''
+                          cell.content_align_x = ''
+                          cell.content_align_y = ''
+                        })
+                      }
+                    >
+                      Reset Column
+                    </button>
+                  </div>
+                </article>
+              ) : null}
+
+              {activeSelection === 'block' && selectedBlockRef ? (
+                <article className="space-y-3 rounded-xl border border-line bg-surface p-4">
+                  <div className="text-sm font-semibold text-body">Block</div>
+                  <Field label="Label">
+                    <input className="admin-input" value={selectedBlockRef.block.label || ''} onChange={(event) => updateBlock((block) => { block.label = event.target.value })} />
+                  </Field>
+                  {selectedBlockRef.block.type === 'text' ? (
+                    <Field label="Text">
+                      <textarea className="admin-input min-h-24" value={selectedBlockRef.block.text || ''} onChange={(event) => updateBlock((block) => { block.text = event.target.value })} />
+                    </Field>
+                  ) : null}
+                  {['field', 'barcode', 'totals'].includes(selectedBlockRef.block.type) ? (
+                    <Field label="Path">
+                      <input className="admin-input" value={selectedBlockRef.block.path || ''} onChange={(event) => updateBlock((block) => { block.path = event.target.value })} />
+                    </Field>
+                  ) : null}
+                  {['table', 'totals'].includes(selectedBlockRef.block.type) ? (
+                    <Field label="Rows Path">
+                      <input className="admin-input" value={selectedBlockRef.block.rows_path || ''} onChange={(event) => updateBlock((block) => { block.rows_path = event.target.value })} />
+                    </Field>
+                  ) : null}
+                  {selectedBlockRef.block.type === 'image' ? (
+                    <Field label="Image URL">
+                      <input className="admin-input" value={selectedBlockRef.block.image_url || ''} onChange={(event) => updateBlock((block) => { block.image_url = event.target.value })} />
+                    </Field>
+                  ) : null}
+                  {selectedBlockRef.block.type === 'table' ? (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Columns</div>
+                      {(selectedBlockRef.block.columns || []).map((column, index) => (
+                        <div key={`${column.label}-${index}`} className="grid grid-cols-2 gap-2">
+                          <input
+                            className="admin-input"
+                            placeholder="Label"
+                            value={column.label}
+                            onChange={(event) =>
+                              updateBlock((block) => {
+                                block.columns = [...(block.columns || [])]
+                                block.columns[index] = { label: event.target.value, path: block.columns[index]?.path || '' }
+                              })
+                            }
+                          />
+                          <input
+                            className="admin-input"
+                            placeholder="Path"
+                            value={column.path}
+                            onChange={(event) =>
+                              updateBlock((block) => {
+                                block.columns = [...(block.columns || [])]
+                                block.columns[index] = { label: block.columns[index]?.label || '', path: event.target.value }
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className="admin-button admin-button-secondary"
+                        onClick={() =>
+                          updateBlock((block) => {
+                            block.columns = [...(block.columns || []), { label: 'Column', path: '' }]
+                          })
+                        }
+                      >
+                        Add Column
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="admin-button admin-button-secondary"
+                      onClick={() =>
+                        updateBlock((block, cell) => {
+                          const copy = JSON.parse(JSON.stringify(block)) as TemplateBlock
+                          copy.id = nextDesignerID('block')
+                          cell.blocks.push(copy)
+                          setSelectedBlockID(copy.id)
+                        })
+                      }
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-button admin-button-secondary"
+                      onClick={() =>
+                        updateBlock((block, cell) => {
+                          cell.blocks = cell.blocks.filter((item) => item.id !== block.id)
+                          setSelectedBlockID('')
+                        })
+                      }
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ) : null}
+
+              {activeSelection === 'canvas' ? (
+              <article className="space-y-3 rounded-xl border border-line bg-surface p-4">
+                <div className="text-sm font-semibold text-body">Canvas Defaults</div>
                 <Field label="Paper Preset">
                   <select
                     className="admin-input"
@@ -1371,8 +1818,9 @@ export function TemplateDesignerPage() {
                     <option value="compact">Compact</option>
                   </select>
                 </Field>
-              </div>
-            )}
+              </article>
+              ) : null}
+            </div>
           </Panel>
 
           <Panel title="Data Sources" subtitle="Choose the primary target and related documents the template can render.">

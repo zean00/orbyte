@@ -883,12 +883,16 @@ func validateVisualTemplate(visual VisualTemplate) []ValidationIssue {
 			if len(row.Columns) == 0 {
 				issues = append(issues, ValidationIssue{Code: "visual_row_empty", Path: fmt.Sprintf("sections[%d].rows[%d]", sectionIndex, rowIndex), Severity: "warning", Message: "row has no columns"})
 			}
+			rowPath := fmt.Sprintf("sections[%d].rows[%d]", sectionIndex, rowIndex)
+			issues = append(issues, validateVisualLayoutFields(rowPath, row.Width, row.Height, row.AlignX, row.AlignY, row.ContentAlignX, row.ContentAlignY)...)
 			for colIndex, column := range row.Columns {
-				if column.Span <= 0 || column.Span > 12 {
-					issues = append(issues, ValidationIssue{Code: "visual_span_invalid", Path: fmt.Sprintf("sections[%d].rows[%d].columns[%d].span", sectionIndex, rowIndex, colIndex), Severity: "error", Message: "column span must be between 1 and 12"})
+				columnPath := fmt.Sprintf("sections[%d].rows[%d].columns[%d]", sectionIndex, rowIndex, colIndex)
+				if strings.TrimSpace(column.Width) == "" && (column.Span <= 0 || column.Span > 12) {
+					issues = append(issues, ValidationIssue{Code: "visual_span_invalid", Path: columnPath + ".span", Severity: "error", Message: "column span must be between 1 and 12"})
 				}
+				issues = append(issues, validateVisualLayoutFields(columnPath, column.Width, column.Height, column.AlignX, column.AlignY, column.ContentAlignX, column.ContentAlignY)...)
 				for blockIndex, block := range column.Blocks {
-					path := fmt.Sprintf("sections[%d].rows[%d].columns[%d].blocks[%d]", sectionIndex, rowIndex, colIndex, blockIndex)
+					path := fmt.Sprintf("%s.blocks[%d]", columnPath, blockIndex)
 					switch strings.ToLower(strings.TrimSpace(block.Type)) {
 					case "text", "divider", "image", "barcode", "qr", "signature":
 					case "field":
@@ -909,6 +913,29 @@ func validateVisualTemplate(visual VisualTemplate) []ValidationIssue {
 				}
 			}
 		}
+	}
+	return issues
+}
+
+func validateVisualLayoutFields(path, width, height, alignX, alignY, contentAlignX, contentAlignY string) []ValidationIssue {
+	issues := make([]ValidationIssue, 0)
+	if width != "" && strings.TrimSpace(width) == "" {
+		issues = append(issues, ValidationIssue{Code: "visual_width_invalid", Path: path + ".width", Severity: "warning", Message: "width should be a non-empty css length or percentage"})
+	}
+	if height != "" && strings.TrimSpace(height) == "" {
+		issues = append(issues, ValidationIssue{Code: "visual_height_invalid", Path: path + ".height", Severity: "warning", Message: "height should be a non-empty css length"})
+	}
+	if alignX != "" && normalizeVisualAlignX(alignX) == "" {
+		issues = append(issues, ValidationIssue{Code: "visual_align_x_invalid", Path: path + ".align_x", Severity: "warning", Message: "align_x must be start, center, end, or stretch"})
+	}
+	if alignY != "" && normalizeVisualAlignY(alignY) == "" {
+		issues = append(issues, ValidationIssue{Code: "visual_align_y_invalid", Path: path + ".align_y", Severity: "warning", Message: "align_y must be start, center, end, or stretch"})
+	}
+	if contentAlignX != "" && normalizeVisualContentAlignX(contentAlignX) == "" {
+		issues = append(issues, ValidationIssue{Code: "visual_content_align_x_invalid", Path: path + ".content_align_x", Severity: "warning", Message: "content_align_x must be start, center, or end"})
+	}
+	if contentAlignY != "" && normalizeVisualContentAlignY(contentAlignY) == "" {
+		issues = append(issues, ValidationIssue{Code: "visual_content_align_y_invalid", Path: path + ".content_align_y", Severity: "warning", Message: "content_align_y must be start, center, end, or stretch"})
 	}
 	return issues
 }
@@ -1090,13 +1117,26 @@ func renderVisualTemplate(version Version, ctx map[string]any) (string, error) {
 			out.WriteString(`<h2>` + html.EscapeString(section.Title) + `</h2>`)
 		}
 		for _, row := range section.Rows {
-			out.WriteString(`<div class="template-row">`)
+			out.WriteString(`<div class="template-row-shell"`)
+			if style := visualRowShellStyle(row); style != "" {
+				out.WriteString(` style="` + html.EscapeString(style) + `"`)
+			}
+			out.WriteString(`>`)
+			out.WriteString(`<div class="template-row"`)
+			if style := visualRowStyle(row); style != "" {
+				out.WriteString(` style="` + html.EscapeString(style) + `"`)
+			}
+			out.WriteString(`>`)
 			for _, cell := range row.Columns {
 				span := cell.Span
 				if span <= 0 || span > 12 {
 					span = 12
 				}
-				out.WriteString(`<div class="template-cell span-` + fmt.Sprintf("%d", span) + `">`)
+				out.WriteString(`<div class="template-cell span-` + fmt.Sprintf("%d", span) + `"`)
+				if style := visualCellStyle(cell); style != "" {
+					out.WriteString(` style="` + html.EscapeString(style) + `"`)
+				}
+				out.WriteString(`>`)
 				for _, block := range cell.Blocks {
 					if !visualVisible(ctx, block.VisibleIf) {
 						continue
@@ -1106,6 +1146,7 @@ func renderVisualTemplate(version Version, ctx map[string]any) (string, error) {
 				out.WriteString(`</div>`)
 			}
 			out.WriteString(`</div>`)
+			out.WriteString(`</div>`)
 		}
 		out.WriteString(`</article>`)
 	}
@@ -1114,6 +1155,168 @@ func renderVisualTemplate(version Version, ctx map[string]any) (string, error) {
 		return "<style>" + version.Style + "</style>" + out.String(), nil
 	}
 	return out.String(), nil
+}
+
+func visualRowShellStyle(row VisualRow) string {
+	parts := []string{
+		"display:flex",
+		"width:100%",
+		"align-items:" + visualCSSPosition(normalizeVisualAlignY(row.AlignY), false),
+	}
+	if justify := visualFlexJustifyPosition(normalizeVisualAlignX(row.AlignX)); justify != "" {
+		parts = append(parts, "justify-content:"+justify)
+	}
+	if value := visualLength(row.Height); value != "" {
+		parts = append(parts, "min-height:"+value)
+	}
+	return strings.Join(parts, ";")
+}
+
+func visualRowStyle(row VisualRow) string {
+	parts := []string{
+		"display:grid",
+		"grid-template-columns:repeat(12,minmax(0,1fr))",
+		"gap:12px",
+		"width:" + visualWidthValue(row.Width),
+		"justify-items:" + visualCSSPosition(normalizeVisualContentAlignX(row.ContentAlignX), true),
+		"align-items:" + visualCSSPosition(normalizeVisualContentAlignY(row.ContentAlignY), false),
+	}
+	if value := visualLength(row.Height); value != "" {
+		parts = append(parts, "min-height:"+value)
+	}
+	return strings.Join(parts, ";")
+}
+
+func visualCellStyle(cell VisualCell) string {
+	parts := []string{
+		"display:flex",
+		"flex-direction:column",
+		"gap:12px",
+		"justify-content:" + visualCSSPosition(normalizeVisualContentAlignY(cell.ContentAlignY), false),
+		"align-items:" + visualCSSPosition(normalizeVisualContentAlignX(cell.ContentAlignX), true),
+	}
+	if justify := visualFlexJustifyPosition(normalizeVisualContentAlignY(cell.ContentAlignY)); justify != "" {
+		parts[3] = "justify-content:" + justify
+	} else {
+		parts = append(parts[:3], parts[4:]...)
+	}
+	if value := visualLength(cell.Width); value != "" {
+		parts = append(parts, "grid-column:auto")
+		parts = append(parts, "width:"+value)
+		parts = append(parts, "justify-self:"+visualCSSPosition(normalizeVisualAlignX(cell.AlignX), true))
+	} else {
+		parts = append(parts, "grid-column:span "+fmt.Sprintf("%d", cell.Span)+" / span "+fmt.Sprintf("%d", cell.Span))
+	}
+	parts = append(parts, "align-self:"+visualCSSPosition(normalizeVisualAlignY(cell.AlignY), false))
+	if value := visualLength(cell.Height); value != "" {
+		parts = append(parts, "min-height:"+value)
+	}
+	return strings.Join(parts, ";")
+}
+
+func visualLength(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return value
+}
+
+func visualWidthValue(value string) string {
+	if trimmed := visualLength(value); trimmed != "" {
+		return trimmed
+	}
+	return "100%"
+}
+
+func normalizeVisualAlignX(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "start":
+		return "start"
+	case "center":
+		return "center"
+	case "end":
+		return "end"
+	case "stretch":
+		return "stretch"
+	default:
+		return ""
+	}
+}
+
+func normalizeVisualAlignY(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "start":
+		return "start"
+	case "center":
+		return "center"
+	case "end":
+		return "end"
+	case "stretch":
+		return "stretch"
+	default:
+		return ""
+	}
+}
+
+func normalizeVisualContentAlignX(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "start":
+		return "start"
+	case "center":
+		return "center"
+	case "end":
+		return "end"
+	default:
+		return ""
+	}
+}
+
+func normalizeVisualContentAlignY(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "start":
+		return "start"
+	case "center":
+		return "center"
+	case "end":
+		return "end"
+	case "stretch":
+		return "stretch"
+	default:
+		return ""
+	}
+}
+
+func visualCSSPosition(value string, horizontal bool) string {
+	switch value {
+	case "center":
+		return "center"
+	case "end":
+		return "end"
+	case "stretch":
+		if horizontal {
+			return "stretch"
+		}
+		return "stretch"
+	default:
+		if horizontal {
+			return "start"
+		}
+		return "start"
+	}
+}
+
+func visualFlexJustifyPosition(value string) string {
+	switch value {
+	case "center":
+		return "center"
+	case "end":
+		return "flex-end"
+	case "stretch":
+		return ""
+	default:
+		return "flex-start"
+	}
 }
 
 func renderVisualBlock(ctx map[string]any, block VisualBlock) string {
@@ -1538,6 +1741,12 @@ func normalizeVisualTemplate(visual VisualTemplate) VisualTemplate {
 			if strings.TrimSpace(row.ID) == "" {
 				row.ID = fmt.Sprintf("%s-row-%d", visual.Sections[i].ID, rowIdx+1)
 			}
+			row.Width = visualLength(row.Width)
+			row.Height = visualLength(row.Height)
+			row.AlignX = normalizeVisualAlignX(row.AlignX)
+			row.AlignY = normalizeVisualAlignY(row.AlignY)
+			row.ContentAlignX = normalizeVisualContentAlignX(row.ContentAlignX)
+			row.ContentAlignY = normalizeVisualContentAlignY(row.ContentAlignY)
 			for cellIdx := range row.Columns {
 				cell := &row.Columns[cellIdx]
 				if strings.TrimSpace(cell.ID) == "" {
@@ -1546,6 +1755,12 @@ func normalizeVisualTemplate(visual VisualTemplate) VisualTemplate {
 				if cell.Span <= 0 || cell.Span > 12 {
 					cell.Span = 12
 				}
+				cell.Width = visualLength(cell.Width)
+				cell.Height = visualLength(cell.Height)
+				cell.AlignX = normalizeVisualAlignX(cell.AlignX)
+				cell.AlignY = normalizeVisualAlignY(cell.AlignY)
+				cell.ContentAlignX = normalizeVisualContentAlignX(cell.ContentAlignX)
+				cell.ContentAlignY = normalizeVisualContentAlignY(cell.ContentAlignY)
 			}
 		}
 	}
