@@ -14,7 +14,7 @@ POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-all
+.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-all reset-and-seed
 
 test:
 	./scripts/test.sh
@@ -84,25 +84,40 @@ app-wait-postgres:
 
 app-stop-postgres:
 	@if [ ! -f "$(APP_PID_FILE)" ]; then \
-		echo "App is not running"; \
-		exit 0; \
+		echo "App pidfile not found"; \
+	else \
+		pid="$$(cat "$(APP_PID_FILE)")"; \
+		if kill -0 "$$pid" 2>/dev/null; then \
+			echo "Stopping app PID $$pid"; \
+			kill "$$pid"; \
+			for _ in 1 2 3 4 5 6 7 8 9 10; do \
+				if ! kill -0 "$$pid" 2>/dev/null; then break; fi; \
+				sleep 1; \
+			done; \
+			if kill -0 "$$pid" 2>/dev/null; then \
+				echo "Force stopping app PID $$pid"; \
+				kill -9 "$$pid"; \
+			fi; \
+		else \
+			echo "Removing stale pid file for PID $$pid"; \
+		fi; \
+		rm -f "$(APP_PID_FILE)"; \
 	fi
-	@pid="$$(cat "$(APP_PID_FILE)")"; \
-	if kill -0 "$$pid" 2>/dev/null; then \
-		echo "Stopping app PID $$pid"; \
-		kill "$$pid"; \
+	@listener_pid="$$(lsof -tiTCP:$$(printf '%s\n' "$(APP_ADDRESS)" | awk -F: '{print $$NF}') -sTCP:LISTEN 2>/dev/null | head -n 1)"; \
+	if [ -n "$$listener_pid" ]; then \
+		echo "Stopping listener PID $$listener_pid on $(APP_ADDRESS)"; \
+		kill "$$listener_pid" 2>/dev/null || true; \
 		for _ in 1 2 3 4 5 6 7 8 9 10; do \
-			if ! kill -0 "$$pid" 2>/dev/null; then break; fi; \
+			if ! kill -0 "$$listener_pid" 2>/dev/null; then break; fi; \
 			sleep 1; \
 		done; \
-		if kill -0 "$$pid" 2>/dev/null; then \
-			echo "Force stopping app PID $$pid"; \
-			kill -9 "$$pid"; \
+		if kill -0 "$$listener_pid" 2>/dev/null; then \
+			echo "Force stopping listener PID $$listener_pid"; \
+			kill -9 "$$listener_pid" 2>/dev/null || true; \
 		fi; \
 	else \
-		echo "Removing stale pid file for PID $$pid"; \
-	fi; \
-	rm -f "$(APP_PID_FILE)"
+		echo "No listener running on $(APP_ADDRESS)"; \
+	fi
 
 app-status-postgres:
 	@if [ -f "$(APP_PID_FILE)" ] && kill -0 "$$(cat "$(APP_PID_FILE)")" 2>/dev/null; then \
@@ -135,3 +150,5 @@ seed-pos:
 seed-all: seed-agent-continuity seed-pos
 	@echo "Continuity seed manifest: $(AGENT_SEED_OUTPUT)"
 	@echo "POS seed manifest: $(POS_SEED_OUTPUT)"
+
+reset-and-seed: db-reset-postgres app-start-postgres seed-all
