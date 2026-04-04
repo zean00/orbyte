@@ -14,7 +14,7 @@ POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-all reset-and-seed
+.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-all reset-and-seed demo-continuity
 
 test:
 	./scripts/test.sh
@@ -152,3 +152,7 @@ seed-all: seed-agent-continuity seed-pos
 	@echo "POS seed manifest: $(POS_SEED_OUTPUT)"
 
 reset-and-seed: db-reset-postgres app-start-postgres seed-all
+
+demo-continuity: seed-agent-continuity
+	@echo "Continuity manifest: $(AGENT_SEED_OUTPUT)"
+	@python3 -c 'import json; path="$(AGENT_SEED_OUTPUT)"; manifest=json.load(open(path, "r", encoding="utf-8")); warehouse=manifest.get("entities", {}).get("warehouse", {}).get("code", ""); vendor=manifest.get("entities", {}).get("vendor", {}).get("name", ""); print("Warehouse:", warehouse); print("Vendor:", vendor) if vendor else None; print(); [print("{}. {}".format(idx, text)) for idx, text in ((idx, prompt.get("prompt", "").strip()) for idx, prompt in enumerate(manifest.get("prompt_pack", []), start=1)) if text]'

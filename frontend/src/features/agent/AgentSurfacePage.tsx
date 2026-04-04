@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AnimatePresence, motion } from "framer-motion";
@@ -838,6 +838,10 @@ export default function AgentSurfacePage() {
     void sendPrompt();
   }
 
+  function handlePromptInput(event: ChangeEvent<HTMLTextAreaElement>) {
+    setPrompt(event.target.value);
+  }
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#edf3fb_0%,#e9eff8_34%,#f8fbff_100%)] text-body dark:bg-[linear-gradient(180deg,#09111f_0%,#0b1526_32%,#0f172a_100%)]">
       <header className="sticky top-0 z-30 border-b border-line/70 bg-surface/85 backdrop-blur-xl">
@@ -1341,7 +1345,8 @@ export default function AgentSurfacePage() {
               ref={textareaRef}
               id="agent_prompt"
               value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
+              onChange={handlePromptInput}
+              onInput={handlePromptInput}
               onKeyDown={handlePromptKeyDown}
               className="min-h-[84px] w-full resize-none rounded-2xl border border-line bg-shell px-4 py-3 text-sm text-body outline-none transition focus:border-accent"
               placeholder="Ask the agent to investigate, summarize, compare, or operate across Orbyte data."
