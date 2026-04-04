@@ -341,6 +341,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 		Offline:                   graph.offline,
 		Dataops:                   graph.dataops,
 		Engagement:                graph.engagement,
+		Planning:                  graph.planningCore,
 		AnalyticsStreamPath:       analyticsMCPStreamPath,
 		AnalyticsScopedStreamPath: analyticsScopedMCPStreamPath,
 		OTel:                      graph.otel,

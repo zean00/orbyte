@@ -112,6 +112,7 @@ type Server struct {
 	dataops                   *dataops.Service
 	engagement                *engagement.Service
 	implementation            *ImplementationService
+	planning                  *application.PlanningCoreService
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
 	builtInToolRegistrations  []builtInToolRegistration
@@ -145,6 +146,7 @@ type ServerDeps struct {
 	Offline                   *offline.Service
 	Dataops                   *dataops.Service
 	Engagement                *engagement.Service
+	Planning                  *application.PlanningCoreService
 	AnalyticsStreamPath       string
 	AnalyticsScopedStreamPath string
 	OTel                      *otel.Service
@@ -176,6 +178,7 @@ func NewServer(deps ServerDeps) *Server {
 		dataops:                   deps.Dataops,
 		engagement:                deps.Engagement,
 		implementation:            NewImplementationService(),
+		planning:                  deps.Planning,
 		analyticsStreamPath:       deps.AnalyticsStreamPath,
 		analyticsScopedStreamPath: deps.AnalyticsScopedStreamPath,
 	}

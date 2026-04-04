@@ -191,6 +191,67 @@ func (s *Server) syntheticToolDefinitions(actor ActorContext) []syntheticToolDef
 			)
 		}
 		switch moduleKey {
+		case "planning_core":
+			mk := moduleKey
+			items = append(items,
+				syntheticToolDefinition{
+					Name:                mk + ".replenishment.insight.summary",
+					Title:               moduleName + " Replenishment Insight Summary",
+					Description:         "Summarize replenishment risk, healthy items, shortage pressure, and vendor readiness for a warehouse. Use this first when deciding what needs replenishment now.",
+					ModuleKey:           mk,
+					RequiredPermissions: []string{"module.read"},
+					InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+						"warehouse_code":            map[string]any{"type": "string"},
+						"item_code":                 map[string]any{"type": "string"},
+						"category_code":             map[string]any{"type": "string"},
+						"coverage_status":           map[string]any{"type": "string"},
+						"shortage_only":             map[string]any{"type": "boolean"},
+						"has_inbound_only":          map[string]any{"type": "boolean"},
+						"has_preferred_vendor_only": map[string]any{"type": "boolean"},
+						"limit":                     map[string]any{"type": "integer"},
+					}},
+					Handler: func(s *Server, actor ActorContext, arguments map[string]any) (map[string]any, error) {
+						return s.replenishmentInsightSummary(actor, arguments)
+					},
+				},
+				syntheticToolDefinition{
+					Name:                mk + ".replenishment.plan.summary",
+					Title:               moduleName + " Replenishment Plan Summary",
+					Description:         "Recommend replenishment quantities and vendor grouping based on current shortage rows. Use this after the insight summary to turn risk signals into an executable replenishment plan.",
+					ModuleKey:           mk,
+					RequiredPermissions: []string{"module.read"},
+					InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+						"warehouse_code":            map[string]any{"type": "string"},
+						"item_code":                 map[string]any{"type": "string"},
+						"category_code":             map[string]any{"type": "string"},
+						"coverage_status":           map[string]any{"type": "string"},
+						"shortage_only":             map[string]any{"type": "boolean"},
+						"has_inbound_only":          map[string]any{"type": "boolean"},
+						"has_preferred_vendor_only": map[string]any{"type": "boolean"},
+						"limit":                     map[string]any{"type": "integer"},
+					}},
+					Handler: func(s *Server, actor ActorContext, arguments map[string]any) (map[string]any, error) {
+						return s.replenishmentPlanSummary(actor, arguments)
+					},
+				},
+				syntheticToolDefinition{
+					Name:                mk + ".purchase_requests.draft.create",
+					Title:               moduleName + " Create Draft Purchase Requests",
+					Description:         "Create draft purchase requests from replenishment selections. Use this only after confirming the recommended items and quantities.",
+					ModuleKey:           mk,
+					RequiredPermissions: []string{"document.create"},
+					InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+						"selections": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+							"item_code":      map[string]any{"type": "string"},
+							"warehouse_code": map[string]any{"type": "string"},
+							"quantity":       map[string]any{"type": "number"},
+						}, "required": []string{"item_code", "warehouse_code", "quantity"}}},
+					}},
+					Handler: func(s *Server, actor ActorContext, arguments map[string]any) (map[string]any, error) {
+						return s.replenishmentPurchaseRequestDraftCreate(actor, arguments)
+					},
+				},
+			)
 		case "pos_core":
 			mk := moduleKey
 			items = append(items, syntheticToolDefinition{
@@ -996,6 +1057,407 @@ func renderBusinessRecordSearchText(label string, items []businessRecordSummary)
 	return strings.Join(lines, "\n")
 }
 
+type replenishmentRecommendation struct {
+	ItemCode            string   `json:"item_code"`
+	ItemName            string   `json:"item_name"`
+	WarehouseCode       string   `json:"warehouse_code"`
+	RecommendedQuantity float64  `json:"recommended_quantity"`
+	ShortageQuantity    float64  `json:"shortage_quantity"`
+	ForecastDemand      float64  `json:"forecast_demand_quantity"`
+	AvailableQuantity   float64  `json:"available_quantity"`
+	CoverageStatus      string   `json:"coverage_status"`
+	PreferredVendorID   string   `json:"preferred_vendor_id,omitempty"`
+	PreferredVendorName string   `json:"preferred_vendor_name,omitempty"`
+	LeadTimeDays        float64  `json:"lead_time_days,omitempty"`
+	RecommendedOrderBy  string   `json:"recommended_order_by_date,omitempty"`
+	TimeCritical        bool     `json:"time_critical"`
+	PurchaseRequestRefs []string `json:"purchase_request_refs,omitempty"`
+	Rationale           string   `json:"rationale"`
+}
+
+func replenishmentQueryFromArguments(arguments map[string]any) (string, string, string, string, bool, bool, bool) {
+	return strings.TrimSpace(stringArg(arguments, "warehouse_code")),
+		strings.TrimSpace(stringArg(arguments, "item_code")),
+		strings.TrimSpace(stringArg(arguments, "category_code")),
+		strings.TrimSpace(stringArg(arguments, "coverage_status")),
+		boolArg(arguments, "shortage_only"),
+		boolArg(arguments, "has_inbound_only"),
+		boolArg(arguments, "has_preferred_vendor_only")
+}
+
+func replenishmentPurchaseRequestRefs(value any) []string {
+	refs := recordList(value)
+	items := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		number := strings.TrimSpace(textValue(ref["number"]))
+		if number == "" {
+			number = strings.TrimSpace(textValue(ref["id"]))
+		}
+		if number != "" {
+			items = append(items, number)
+		}
+	}
+	sort.Strings(items)
+	return items
+}
+
+func canonicalReplenishmentKey(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, "_", " ")
+	value = strings.ReplaceAll(value, "-", " ")
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func replenishmentRecommendationFromRow(row map[string]any) replenishmentRecommendation {
+	itemName := firstNonEmptyString(textValue(row["item_name"]), textValue(row["item_code"]))
+	vendorName := strings.TrimSpace(textValue(row["preferred_vendor_name"]))
+	coverage := strings.TrimSpace(textValue(row["coverage_status"]))
+	forecast := roundBusinessMoney(numberValue(row["forecast_demand_quantity"]))
+	available := roundBusinessMoney(numberValue(row["available_quantity"]))
+	shortage := roundBusinessMoney(numberValue(row["shortage_quantity"]))
+	recommended := roundBusinessMoney(numberValue(row["normalized_request_quantity"]))
+	rationaleParts := []string{
+		fmt.Sprintf("available %.0f", available),
+		fmt.Sprintf("forecast %.0f", forecast),
+		fmt.Sprintf("shortage %.0f", shortage),
+	}
+	if vendorName != "" {
+		rationaleParts = append(rationaleParts, "vendor "+vendorName)
+	}
+	if boolValue(row["time_critical"]) {
+		rationaleParts = append(rationaleParts, "time critical")
+	}
+	return replenishmentRecommendation{
+		ItemCode:            strings.TrimSpace(textValue(row["item_code"])),
+		ItemName:            itemName,
+		WarehouseCode:       strings.TrimSpace(textValue(row["warehouse_code"])),
+		RecommendedQuantity: recommended,
+		ShortageQuantity:    shortage,
+		ForecastDemand:      forecast,
+		AvailableQuantity:   available,
+		CoverageStatus:      coverage,
+		PreferredVendorID:   strings.TrimSpace(textValue(row["preferred_vendor_id"])),
+		PreferredVendorName: vendorName,
+		LeadTimeDays:        roundBusinessMoney(numberValue(row["lead_time_days"])),
+		RecommendedOrderBy:  strings.TrimSpace(textValue(row["recommended_order_by_date"])),
+		TimeCritical:        boolValue(row["time_critical"]),
+		PurchaseRequestRefs: replenishmentPurchaseRequestRefs(row["purchase_request_refs"]),
+		Rationale:           strings.Join(rationaleParts, ", "),
+	}
+}
+
+func (s *Server) replenishmentInsightSummary(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.planning == nil {
+		return nil, fmt.Errorf("planning is unavailable")
+	}
+	warehouseCode, itemCode, categoryCode, coverageStatus, shortageOnly, hasInboundOnly, hasPreferredVendorOnly := replenishmentQueryFromArguments(arguments)
+	summary := s.planning.ReplenishmentSummaryScoped(firstNonEmpty(actor.OrganizationID, "org_default"), firstNonEmpty(actor.LocationID, "loc_hq"), warehouseCode, itemCode, categoryCode, coverageStatus, shortageOnly, hasInboundOnly, hasPreferredVendorOnly, time.Now().UTC())
+	atRisk := make([]replenishmentRecommendation, 0)
+	healthy := make([]map[string]any, 0)
+	limit := intArg(arguments, "limit")
+	if limit <= 0 {
+		limit = 5
+	}
+	for _, row := range summary.Items {
+		if roundBusinessMoney(numberValue(row["normalized_request_quantity"])) > 0 {
+			atRisk = append(atRisk, replenishmentRecommendationFromRow(row))
+			continue
+		}
+		healthy = append(healthy, map[string]any{
+			"item_code":          strings.TrimSpace(textValue(row["item_code"])),
+			"item_name":          firstNonEmptyString(textValue(row["item_name"]), textValue(row["item_code"])),
+			"warehouse_code":     strings.TrimSpace(textValue(row["warehouse_code"])),
+			"available_quantity": roundBusinessMoney(numberValue(row["available_quantity"])),
+			"coverage_status":    strings.TrimSpace(textValue(row["coverage_status"])),
+		})
+	}
+	if len(atRisk) > limit {
+		atRisk = atRisk[:limit]
+	}
+	if len(healthy) > limit {
+		healthy = healthy[:limit]
+	}
+	text := fmt.Sprintf("Reviewed %d replenishment candidates across %d warehouse(s). %d item(s) are at active replenishment risk with %.0f suggested units total.", summary.CandidateCount, summary.WarehouseCount, summary.ShortageItemCount, roundBusinessMoney(summary.TotalSuggestedRequestQuantity))
+	if len(atRisk) > 0 {
+		names := make([]string, 0, len(atRisk))
+		for _, item := range atRisk {
+			names = append(names, fmt.Sprintf("%s (%.0f)", item.ItemName, item.RecommendedQuantity))
+		}
+		text += fmt.Sprintf("\nTop replenishment risks: %s.", strings.Join(names, ", "))
+	}
+	if len(healthy) > 0 {
+		names := make([]string, 0, len(healthy))
+		for _, item := range healthy {
+			names = append(names, firstNonEmptyString(textValue(item["item_name"]), textValue(item["item_code"])))
+		}
+		text += fmt.Sprintf("\nHealthy / skip for now: %s.", strings.Join(names, ", "))
+	}
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"summary":       summary,
+			"at_risk_items": atRisk,
+			"healthy_items": healthy,
+		},
+	}, nil
+}
+
+func (s *Server) replenishmentPlanSummary(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.planning == nil {
+		return nil, fmt.Errorf("planning is unavailable")
+	}
+	warehouseCode, itemCode, categoryCode, coverageStatus, shortageOnly, hasInboundOnly, hasPreferredVendorOnly := replenishmentQueryFromArguments(arguments)
+	summary := s.planning.ReplenishmentSummaryScoped(firstNonEmpty(actor.OrganizationID, "org_default"), firstNonEmpty(actor.LocationID, "loc_hq"), warehouseCode, itemCode, categoryCode, coverageStatus, shortageOnly, hasInboundOnly, hasPreferredVendorOnly, time.Now().UTC())
+	limit := intArg(arguments, "limit")
+	if limit <= 0 {
+		limit = 5
+	}
+	recommended := make([]replenishmentRecommendation, 0)
+	groups := map[string]map[string]any{}
+	for _, row := range summary.Items {
+		if roundBusinessMoney(numberValue(row["normalized_request_quantity"])) <= 0 {
+			continue
+		}
+		item := replenishmentRecommendationFromRow(row)
+		recommended = append(recommended, item)
+		groupKey := strings.TrimSpace(item.WarehouseCode) + "|" + strings.TrimSpace(item.PreferredVendorID)
+		group := groups[groupKey]
+		if group == nil {
+			group = map[string]any{
+				"warehouse_code":         item.WarehouseCode,
+				"preferred_vendor_id":    item.PreferredVendorID,
+				"preferred_vendor_name":  item.PreferredVendorName,
+				"recommended_items":      []map[string]any{},
+				"recommended_line_count": 0,
+				"recommended_total_qty":  0.0,
+			}
+			groups[groupKey] = group
+		}
+		group["recommended_items"] = append(group["recommended_items"].([]map[string]any), map[string]any{
+			"item_code": item.ItemCode,
+			"item_name": item.ItemName,
+			"quantity":  item.RecommendedQuantity,
+		})
+		group["recommended_line_count"] = anyInt(group["recommended_line_count"]) + 1
+		group["recommended_total_qty"] = roundBusinessMoney(numberValue(group["recommended_total_qty"]) + item.RecommendedQuantity)
+	}
+	if len(recommended) > limit {
+		recommended = recommended[:limit]
+	}
+	groupList := make([]map[string]any, 0, len(groups))
+	for _, group := range groups {
+		groupList = append(groupList, group)
+	}
+	sort.Slice(groupList, func(i, j int) bool {
+		left := numberValue(groupList[i]["recommended_total_qty"])
+		right := numberValue(groupList[j]["recommended_total_qty"])
+		if left != right {
+			return left > right
+		}
+		return textValue(groupList[i]["warehouse_code"]) < textValue(groupList[j]["warehouse_code"])
+	})
+	text := fmt.Sprintf("Built a replenishment plan with %d recommended line(s) totaling %.0f units.", len(recommended), roundBusinessMoney(summary.TotalSuggestedRequestQuantity))
+	if len(recommended) > 0 {
+		names := make([]string, 0, len(recommended))
+		for _, item := range recommended {
+			if item.PreferredVendorName != "" {
+				names = append(names, fmt.Sprintf("%s %.0f via %s", item.ItemName, item.RecommendedQuantity, item.PreferredVendorName))
+			} else {
+				names = append(names, fmt.Sprintf("%s %.0f", item.ItemName, item.RecommendedQuantity))
+			}
+		}
+		text += fmt.Sprintf("\nRecommended replenishment lines: %s.", strings.Join(names, ", "))
+	}
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"recommended_lines": recommended,
+			"request_groups":    groupList,
+			"summary": map[string]any{
+				"recommended_line_count": len(recommended),
+				"recommended_total_qty":  roundBusinessMoney(summary.TotalSuggestedRequestQuantity),
+				"warehouse_code":         warehouseCode,
+			},
+		},
+	}, nil
+}
+
+func (s *Server) replenishmentPurchaseRequestDraftCreate(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.planning == nil || s.documents == nil {
+		return nil, fmt.Errorf("planning is unavailable")
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"document.create"}) {
+		return nil, fmt.Errorf("tool is not allowed")
+	}
+	rawSelections, _ := arguments["selections"].([]any)
+	selections := make([]application.ReplenishmentSelection, 0, len(rawSelections))
+	for _, item := range rawSelections {
+		row, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		selections = append(selections, application.ReplenishmentSelection{
+			ItemCode:      strings.TrimSpace(stringValue(row["item_code"])),
+			WarehouseCode: strings.TrimSpace(stringValue(row["warehouse_code"])),
+			Quantity:      roundBusinessMoney(numberValue(row["quantity"])),
+		})
+	}
+	if len(selections) == 0 {
+		return nil, shared.Validation("at least one replenishment selection is required")
+	}
+	organizationID := firstNonEmpty(actor.OrganizationID, "org_default")
+	locationID := firstNonEmpty(actor.LocationID, "loc_hq")
+	type selectedRecommendation struct {
+		Recommendation replenishmentRecommendation
+		Quantity       float64
+	}
+	recommendations := map[string]selectedRecommendation{}
+	for _, selection := range selections {
+		selectionKey := canonicalReplenishmentKey(selection.ItemCode)
+		var matched *replenishmentRecommendation
+		queryCodes := []string{selection.ItemCode, ""}
+		if s.models != nil && selectionKey != "" {
+			if items, _, err := s.models.List("commercial_item", model.Query{Page: 1, PageSize: model.MaxPageSize}); err == nil {
+				for _, item := range items {
+					nameKey := canonicalReplenishmentKey(stringValue(item.Values["name"]))
+					sku := strings.TrimSpace(stringValue(item.Values["sku"]))
+					if sku == "" {
+						continue
+					}
+					if nameKey == selectionKey || strings.Contains(nameKey, selectionKey) || strings.Contains(selectionKey, nameKey) {
+						queryCodes = append([]string{sku}, queryCodes...)
+						break
+					}
+				}
+			}
+		}
+		for _, queryItemCode := range queryCodes {
+			summary := s.planning.ReplenishmentSummaryScoped(organizationID, locationID, selection.WarehouseCode, queryItemCode, "", "", false, false, false, time.Now().UTC())
+			for _, row := range summary.Items {
+				itemCode := strings.TrimSpace(textValue(row["item_code"]))
+				itemName := firstNonEmptyString(textValue(row["item_name"]), itemCode)
+				itemCodeKey := canonicalReplenishmentKey(itemCode)
+				itemNameKey := canonicalReplenishmentKey(itemName)
+				codeMatches := itemCode == queryItemCode || itemCode == selection.ItemCode || itemCodeKey == selectionKey || strings.Contains(itemCodeKey, selectionKey) || strings.Contains(selectionKey, itemCodeKey)
+				nameMatches := itemNameKey == selectionKey || strings.Contains(itemNameKey, selectionKey) || strings.Contains(selectionKey, itemNameKey)
+				if !codeMatches && !nameMatches {
+					continue
+				}
+				item := replenishmentRecommendationFromRow(row)
+				matched = &item
+				break
+			}
+			if matched != nil {
+				break
+			}
+		}
+		if matched == nil || matched.ItemCode == "" {
+			return nil, shared.Validation(fmt.Sprintf("no replenishment recommendation exists for %s in %s", selection.ItemCode, selection.WarehouseCode))
+		}
+		if matched.RecommendedQuantity <= 0 {
+			return nil, shared.Validation(fmt.Sprintf("%s in %s is currently covered and should not be turned into a purchase request", matched.ItemCode, selection.WarehouseCode))
+		}
+		key := selection.WarehouseCode + "|" + matched.ItemCode
+		recommendations[key] = selectedRecommendation{
+			Recommendation: *matched,
+			Quantity:       roundBusinessMoney(selection.Quantity),
+		}
+	}
+	type requestGroup struct {
+		WarehouseCode string
+		VendorID      string
+		VendorName    string
+		Lines         []map[string]any
+	}
+	groupOrder := make([]string, 0)
+	groups := map[string]*requestGroup{}
+	for _, selected := range recommendations {
+		recommendation := selected.Recommendation
+		groupKey := recommendation.WarehouseCode + "|" + recommendation.PreferredVendorID + "|" + recommendation.PreferredVendorName
+		group := groups[groupKey]
+		if group == nil {
+			group = &requestGroup{
+				WarehouseCode: recommendation.WarehouseCode,
+				VendorID:      recommendation.PreferredVendorID,
+				VendorName:    recommendation.PreferredVendorName,
+				Lines:         make([]map[string]any, 0),
+			}
+			groups[groupKey] = group
+			groupOrder = append(groupOrder, groupKey)
+		}
+		group.Lines = append(group.Lines, map[string]any{
+			"item_code":      recommendation.ItemCode,
+			"description":    recommendation.ItemName,
+			"warehouse_code": recommendation.WarehouseCode,
+			"quantity":       roundBusinessMoney(selected.Quantity),
+		})
+	}
+	records := make([]document.Record, 0, len(groupOrder))
+	for _, key := range groupOrder {
+		group := groups[key]
+		payload := map[string]any{
+			"planning_generated":      true,
+			"planning_source":         "replenishment",
+			"planning_warehouse_code": group.WarehouseCode,
+			"request_date":            time.Now().UTC().Format("2006-01-02"),
+			"lines":                   group.Lines,
+		}
+		if group.VendorID != "" {
+			payload["vendor_id"] = group.VendorID
+		}
+		if group.VendorName != "" {
+			payload["vendor_name"] = group.VendorName
+		}
+		record, err := s.documents.Create("purchase_request", organizationID, locationID, documentWriteActorID(actor), payload)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	items := make([]map[string]any, 0, len(records))
+	text := fmt.Sprintf("Prepared %d draft purchase request(s) from replenishment planning.", len(records))
+	for _, record := range records {
+		openPath := ""
+		if s.documents != nil {
+			openPath = s.documents.ResolveWorkspaceOpenPath(record)
+		}
+		lineSummaries := make([]string, 0, len(recordList(record.Body.Payload["lines"])))
+		for _, line := range recordList(record.Body.Payload["lines"]) {
+			description := firstNonEmptyString(strings.TrimSpace(textValue(line["description"])), strings.TrimSpace(textValue(line["item_code"])))
+			lineSummaries = append(lineSummaries, fmt.Sprintf("%s x%.0f", description, roundBusinessMoney(numberValue(line["quantity"]))))
+		}
+		sort.Strings(lineSummaries)
+		if vendor := strings.TrimSpace(textValue(record.Body.Payload["vendor_name"])); vendor != "" {
+			text += fmt.Sprintf(" %s for %s.", vendor, strings.Join(lineSummaries, ", "))
+		} else {
+			text += fmt.Sprintf(" %s.", strings.Join(lineSummaries, ", "))
+		}
+		if openPath != "" {
+			text += " Open draft: " + openPath
+		}
+		sanitized := s.sanitizeDocumentRecord(actor, record)
+		items = append(items, map[string]any{
+			"record":          sanitized,
+			"summary":         s.documentSummary(sanitized, false),
+			"document_id":     record.Header.ID,
+			"document_type":   record.Header.Type,
+			"document_status": record.Header.Status,
+			"title":           strings.TrimSpace(firstNonEmptyString(record.Header.Number, textValue(record.Body.Payload["vendor_name"]), record.Header.ID)),
+			"open_path":       openPath,
+			"vendor_name":     strings.TrimSpace(textValue(record.Body.Payload["vendor_name"])),
+			"warehouse_code":  strings.TrimSpace(textValue(record.Body.Payload["planning_warehouse_code"])),
+			"line_count":      len(recordList(record.Body.Payload["lines"])),
+		})
+	}
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"documents": items,
+			"count":     len(items),
+		},
+	}, nil
+}
+
 func (s *Server) posSalesStrategySummary(actor ActorContext, arguments map[string]any) (map[string]any, error) {
 	if s == nil || s.models == nil {
 		return nil, fmt.Errorf("models are unavailable")
@@ -1571,6 +2033,17 @@ func numberValue(value any) float64 {
 	}
 }
 
+func boolValue(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	default:
+		return false
+	}
+}
+
 func firstNonEmptyString(values ...string) string {
 	return firstNonEmpty(values...)
 }
@@ -1593,6 +2066,23 @@ func anyStringSlice(value any) []string {
 			return nil
 		}
 		return []string{text}
+	}
+}
+
+func recordList(value any) []map[string]any {
+	switch typed := value.(type) {
+	case []map[string]any:
+		return append([]map[string]any(nil), typed...)
+	case []any:
+		rows := make([]map[string]any, 0, len(typed))
+		for _, item := range typed {
+			if row, ok := item.(map[string]any); ok {
+				rows = append(rows, row)
+			}
+		}
+		return rows
+	default:
+		return nil
 	}
 }
 

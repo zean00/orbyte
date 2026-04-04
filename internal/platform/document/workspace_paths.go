@@ -13,6 +13,13 @@ type SpecializedViewer struct {
 	EditableStatuses []string
 }
 
+type NativeDocumentViewer struct {
+	DocumentType     string
+	DetailPath       string
+	FormPath         string
+	EditableStatuses []string
+}
+
 func (s *Service) RegisterSpecializedViewer(viewer SpecializedViewer) {
 	if s == nil {
 		return
@@ -40,10 +47,44 @@ func (s *Service) RegisterSpecializedViewer(viewer SpecializedViewer) {
 	}
 }
 
+func (s *Service) RegisterNativeDocumentViewer(viewer NativeDocumentViewer) {
+	if s == nil {
+		return
+	}
+	documentType := strings.TrimSpace(viewer.DocumentType)
+	if documentType == "" {
+		return
+	}
+	normalized := viewer
+	normalized.DocumentType = documentType
+	if len(normalized.EditableStatuses) == 0 {
+		normalized.EditableStatuses = []string{"draft"}
+	}
+	if s.specializedViewers == nil {
+		s.specializedViewers = map[string]SpecializedViewer{}
+	}
+	if s.specializedFallback == nil {
+		s.specializedFallback = map[string]string{}
+	}
+	if s.nativeDocumentViewers == nil {
+		s.nativeDocumentViewers = map[string]NativeDocumentViewer{}
+	}
+	s.nativeDocumentViewers[documentType] = normalized
+}
+
 func (s *Service) ResolveWorkspaceOpenPath(record Record) string {
 	if viewer, ok := s.specializedViewerForRecord(record); ok {
 		documentID := url.QueryEscape(strings.TrimSpace(record.Header.ID))
 		if viewer.FormPath != "" && viewerAllowsEdit(viewer, record.Header.Status) {
+			return viewer.FormPath + "?id=" + documentID
+		}
+		if viewer.DetailPath != "" {
+			return viewer.DetailPath + "?id=" + documentID
+		}
+	}
+	if viewer, ok := s.nativeDocumentViewerForRecord(record); ok {
+		documentID := url.QueryEscape(strings.TrimSpace(record.Header.ID))
+		if viewer.FormPath != "" && nativeViewerAllowsEdit(viewer, record.Header.Status) {
 			return viewer.FormPath + "?id=" + documentID
 		}
 		if viewer.DetailPath != "" {
@@ -55,6 +96,10 @@ func (s *Service) ResolveWorkspaceOpenPath(record Record) string {
 
 func (s *Service) ResolveWorkspaceEditPath(record Record) string {
 	if viewer, ok := s.specializedViewerForRecord(record); ok && viewer.FormPath != "" {
+		documentID := url.QueryEscape(strings.TrimSpace(record.Header.ID))
+		return viewer.FormPath + "?id=" + documentID
+	}
+	if viewer, ok := s.nativeDocumentViewerForRecord(record); ok && viewer.FormPath != "" {
 		documentID := url.QueryEscape(strings.TrimSpace(record.Header.ID))
 		return viewer.FormPath + "?id=" + documentID
 	}
@@ -82,7 +127,31 @@ func (s *Service) specializedViewerForRecord(record Record) (SpecializedViewer, 
 	return viewer, ok
 }
 
+func (s *Service) nativeDocumentViewerForRecord(record Record) (NativeDocumentViewer, bool) {
+	if s == nil || s.nativeDocumentViewers == nil {
+		return NativeDocumentViewer{}, false
+	}
+	if strings.TrimSpace(record.Header.Type) == "" || strings.TrimSpace(record.Header.Type) == "generic_request" {
+		return NativeDocumentViewer{}, false
+	}
+	viewer, ok := s.nativeDocumentViewers[strings.TrimSpace(record.Header.Type)]
+	return viewer, ok
+}
+
 func viewerAllowsEdit(viewer SpecializedViewer, status string) bool {
+	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+	if normalizedStatus == "" {
+		return false
+	}
+	for _, candidate := range viewer.EditableStatuses {
+		if normalizedStatus == strings.ToLower(strings.TrimSpace(candidate)) {
+			return true
+		}
+	}
+	return false
+}
+
+func nativeViewerAllowsEdit(viewer NativeDocumentViewer, status string) bool {
 	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
 	if normalizedStatus == "" {
 		return false

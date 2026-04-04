@@ -149,20 +149,44 @@ func verifyDraft(ctx context.Context, client *apiClient, result *promptAnalysisR
 		result.Investigation = "The answer required a draft artifact, but draft verification failed while listing documents."
 		return
 	}
+	combinedPayloadText := ""
+	combinedMatched := false
 	for _, item := range items {
 		if strings.ToLower(strings.TrimSpace(item.Header.Status)) != "draft" {
 			continue
 		}
 		title := strings.ToLower(strings.TrimSpace(stringValue(item.Body.Payload["title"])))
-		if !allChecksMatch(title, expected.TitleChecks) {
+		if len(expected.TitleChecks) > 0 && !allChecksMatch(title, expected.TitleChecks) {
 			continue
 		}
 		payloadText := strings.ToLower(strings.TrimSpace(flattenPayloadText(item.Body.Payload)))
+		combinedPayloadText += " " + payloadText
 		if !allChecksMatch(payloadText, expected.PayloadChecks) {
 			continue
 		}
+		combinedMatched = true
 		result.DraftVerified = true
 		result.DraftDocumentID = strings.TrimSpace(item.Header.ID)
+		result.MissingFacts = removeFactKey(result.MissingFacts, "draft_title")
+		if len(result.Contradictions) == 0 {
+			criticalMissing := false
+			for _, missing := range result.MissingFacts {
+				if missing == "draft_created" || missing == "draft_title" {
+					criticalMissing = true
+					break
+				}
+			}
+			switch {
+			case !criticalMissing && len(result.MissingFacts) == 0:
+				result.Classification = "exact"
+			case !criticalMissing:
+				result.Classification = "reasonable"
+			}
+		}
+		return
+	}
+	if !combinedMatched && len(expected.PayloadChecks) > 0 && allChecksMatch(strings.ToLower(strings.TrimSpace(combinedPayloadText)), expected.PayloadChecks) {
+		result.DraftVerified = true
 		result.MissingFacts = removeFactKey(result.MissingFacts, "draft_title")
 		if len(result.Contradictions) == 0 {
 			criticalMissing := false
@@ -324,7 +348,7 @@ func containsContradiction(answer, forbidden string) bool {
 	if needle == "" || !containsCheck(answer, needle) {
 		return false
 	}
-	for _, prefix := range []string{"no ", "not ", "without ", "none ", "zero "} {
+	for _, prefix := range []string{"no ", "not ", "without ", "none ", "zero ", "not been ", "was not ", "were not ", "did not ", "has not ", "have not "} {
 		if strings.Contains(normalizeComparable(answer), normalizeComparable(prefix+needle)) {
 			return false
 		}

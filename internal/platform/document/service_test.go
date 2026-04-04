@@ -157,3 +157,32 @@ func TestResolveWorkspaceOpenPathUsesSpecializedViewer(t *testing.T) {
 		t.Fatalf("expected specialized detail path, got %s", got)
 	}
 }
+
+func TestResolveWorkspaceOpenPathUsesNativeDocumentViewer(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Definition{Type: "purchase_request", DisplayName: "Purchase Request", SchemaVersion: "v1"}); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+	svc.RegisterNativeDocumentViewer(NativeDocumentViewer{
+		DocumentType:     "purchase_request",
+		DetailPath:       "/ui/procurement/requests/detail",
+		FormPath:         "/ui/procurement/requests/form",
+		EditableStatuses: []string{"draft"},
+	})
+	record, err := svc.Create("purchase_request", "org_default", "loc_hq", "user_admin", map[string]any{
+		"vendor_name": "North Roast",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/procurement/requests/form?id="+record.Header.ID {
+		t.Fatalf("expected native form path, got %s", got)
+	}
+	if got := svc.ResolveWorkspaceEditPath(record); got != "/ui/procurement/requests/form?id="+record.Header.ID {
+		t.Fatalf("expected native edit path, got %s", got)
+	}
+	record.Header.Status = "submitted"
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/procurement/requests/detail?id="+record.Header.ID {
+		t.Fatalf("expected native detail path, got %s", got)
+	}
+}

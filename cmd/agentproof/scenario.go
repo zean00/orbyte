@@ -565,6 +565,233 @@ func seedProcureToPayInventoryScenario(ctx context.Context, client *apiClient, b
 	return manifest, nil
 }
 
+func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "inventory_replenishment_execute", "planning-procurement", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	warehouseCode := "WH-REPL-" + suffix
+	coldBrewCode := "REPL-CB-" + suffix
+	oatMilkCode := "REPL-OAT-" + suffix
+	matchaCode := "REPL-MATCHA-" + suffix
+	cupsCode := "REPL-CUPS-" + suffix
+	vendorName := "North Roast Supply " + runID
+
+	vendorParty, err := client.createModel(ctx, "party", map[string]any{
+		"name":   vendorName,
+		"status": "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create vendor party: %w", err)
+	}
+	vendor, err := client.createModel(ctx, "vendor_profile", map[string]any{
+		"party_id":    stringValue(vendorParty["id"]),
+		"vendor_name": vendorName,
+		"status":      "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create vendor profile: %w", err)
+	}
+	customer, err := client.createModel(ctx, "party", map[string]any{
+		"name":   "Cafe Horizon " + runID,
+		"status": "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create customer: %w", err)
+	}
+	if _, err := client.createModel(ctx, "warehouse", map[string]any{
+		"code":   warehouseCode,
+		"name":   "Replenishment Warehouse " + runID,
+		"kind":   "storage",
+		"status": "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create warehouse: %w", err)
+	}
+
+	for _, item := range []map[string]any{
+		{
+			"sku":                                  coldBrewCode,
+			"name":                                 "Cold Brew Beans 1kg " + runID,
+			"kind":                                 "item",
+			"item_type":                            "product",
+			"uom_code":                             "EA",
+			"base_price":                           180000.0,
+			"inventory_enabled":                    true,
+			"inventory_tracking_mode":              "quantity",
+			"inventory_asset_account_code":         "1200-INV",
+			"revenue_account_code":                 "4000-REV",
+			"replenishment_enabled":                true,
+			"replenishment_mode":                   "reorder_point_target",
+			"reorder_point_quantity":               10.0,
+			"target_stock_quantity":                24.0,
+			"default_replenishment_warehouse_code": warehouseCode,
+			"status":                               "active",
+		},
+		{
+			"sku":                                  oatMilkCode,
+			"name":                                 "Oat Milk Barista 1L " + runID,
+			"kind":                                 "item",
+			"item_type":                            "product",
+			"uom_code":                             "EA",
+			"base_price":                           42000.0,
+			"inventory_enabled":                    true,
+			"inventory_tracking_mode":              "quantity",
+			"inventory_asset_account_code":         "1200-INV",
+			"revenue_account_code":                 "4000-REV",
+			"replenishment_enabled":                true,
+			"replenishment_mode":                   "reorder_point_target",
+			"reorder_point_quantity":               12.0,
+			"target_stock_quantity":                22.0,
+			"default_replenishment_warehouse_code": warehouseCode,
+			"status":                               "active",
+		},
+		{
+			"sku":                                  matchaCode,
+			"name":                                 "Matcha Powder 500g " + runID,
+			"kind":                                 "item",
+			"item_type":                            "product",
+			"uom_code":                             "EA",
+			"base_price":                           125000.0,
+			"inventory_enabled":                    true,
+			"inventory_tracking_mode":              "quantity",
+			"inventory_asset_account_code":         "1200-INV",
+			"revenue_account_code":                 "4000-REV",
+			"replenishment_enabled":                true,
+			"replenishment_mode":                   "reorder_point_target",
+			"reorder_point_quantity":               8.0,
+			"target_stock_quantity":                16.0,
+			"default_replenishment_warehouse_code": warehouseCode,
+			"status":                               "active",
+		},
+		{
+			"sku":                                  cupsCode,
+			"name":                                 "Paper Cups 16oz " + runID,
+			"kind":                                 "item",
+			"item_type":                            "product",
+			"uom_code":                             "EA",
+			"base_price":                           2500.0,
+			"inventory_enabled":                    true,
+			"inventory_tracking_mode":              "quantity",
+			"inventory_asset_account_code":         "1200-INV",
+			"revenue_account_code":                 "4000-REV",
+			"replenishment_enabled":                true,
+			"replenishment_mode":                   "reorder_point_target",
+			"reorder_point_quantity":               15.0,
+			"target_stock_quantity":                30.0,
+			"default_replenishment_warehouse_code": warehouseCode,
+			"status":                               "active",
+		},
+	} {
+		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+			return scenarioManifest{}, fmt.Errorf("create item %s: %w", stringValue(item["sku"]), err)
+		}
+	}
+
+	for _, vendorItem := range []map[string]any{
+		{
+			"vendor_id":              stringValue(vendor["id"]),
+			"vendor_name":            vendorName,
+			"item_code":              coldBrewCode,
+			"preferred":              true,
+			"priority":               1.0,
+			"purchase_uom_code":      "EA",
+			"lead_time_days":         5.0,
+			"minimum_order_quantity": 10.0,
+			"pack_size":              5.0,
+			"last_purchase_price":    172000.0,
+			"status":                 "active",
+		},
+		{
+			"vendor_id":              stringValue(vendor["id"]),
+			"vendor_name":            vendorName,
+			"item_code":              oatMilkCode,
+			"preferred":              true,
+			"priority":               1.0,
+			"purchase_uom_code":      "EA",
+			"lead_time_days":         4.0,
+			"minimum_order_quantity": 4.0,
+			"pack_size":              4.0,
+			"last_purchase_price":    39000.0,
+			"status":                 "active",
+		},
+	} {
+		if _, err := client.createModel(ctx, "vendor_item_profile", vendorItem); err != nil {
+			return scenarioManifest{}, fmt.Errorf("create vendor item profile for %s: %w", stringValue(vendorItem["item_code"]), err)
+		}
+	}
+
+	now := time.Now().UTC()
+	if _, err := createAndApproveDocument(ctx, client, "stock_receipt", map[string]any{
+		"receipt_date":   now.AddDate(0, -2, 0).Format("2006-01-02"),
+		"warehouse_code": warehouseCode,
+		"lines": []map[string]any{
+			{"item_code": coldBrewCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 46.0, "unit_cost": 172000.0},
+			{"item_code": oatMilkCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 36.0, "unit_cost": 39000.0},
+			{"item_code": matchaCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 30.0, "unit_cost": 120000.0},
+			{"item_code": cupsCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 40.0, "unit_cost": 1800.0},
+		},
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed stock receipt: %w", err)
+	}
+
+	for week := 1; week <= 6; week++ {
+		fulfillmentDate := now.AddDate(0, 0, -(7 * week)).Format("2006-01-02")
+		if _, err := createAndApproveDocument(ctx, client, "sales_fulfillment", map[string]any{
+			"source_order_number": fmt.Sprintf("SO-HIST-%s-%d", suffix, week),
+			"party_name":          "Cafe Horizon " + runID,
+			"fulfillment_date":    fulfillmentDate,
+			"lines": []map[string]any{
+				{"item_code": coldBrewCode, "description": "Cold brew beans historical issue", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 7.0},
+				{"item_code": oatMilkCode, "description": "Oat milk historical issue", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 5.0},
+			},
+		}); err != nil {
+			return scenarioManifest{}, fmt.Errorf("seed historical fulfillment %d: %w", week, err)
+		}
+	}
+
+	if _, err := createAndApproveDocument(ctx, client, "sales_order", map[string]any{
+		"party_id":      stringValue(customer["id"]),
+		"party_name":    stringValue(mapValue(customer, "values")["name"]),
+		"currency_code": "IDR",
+		"order_date":    now.Format("2006-01-02"),
+		"total_amount":  846000.0,
+		"lines": []map[string]any{
+			{"item_code": coldBrewCode, "description": "Cold brew beans urgent demand", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 4.0, "unit_price": 180000.0, "line_total": 720000.0},
+			{"item_code": oatMilkCode, "description": "Oat milk urgent demand", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 3.0, "unit_price": 42000.0, "line_total": 126000.0},
+		},
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed confirmed sales order: %w", err)
+	}
+
+	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("inventory_replenishment_execute") + fmt.Sprintf(`
+- Review replenishment risk through the dedicated planning MCP tools before using generic business record search.
+- Start with planning_core.replenishment.insight.summary for warehouse %s.
+- Then use planning_core.replenishment.plan.summary to turn the risk signal into recommended quantities and vendor grouping.
+- If asked to execute, use planning_core.purchase_requests.draft.create with the recommended item_code, warehouse_code, and quantity selections, and do not submit the resulting purchase request drafts.
+- If the MCP server prefixes tool names, choose the tools whose names end with planning_core_replenishment_insight_summary, planning_core_replenishment_plan_summary, and planning_core_purchase_requests_draft_create.`, warehouseCode))
+	manifest.Entities = map[string]map[string]any{
+		"warehouse":       {"code": warehouseCode},
+		"vendor":          {"id": stringValue(vendor["id"]), "name": vendorName},
+		"cold_brew_beans": {"sku": coldBrewCode, "name": "Cold Brew Beans 1kg " + runID},
+		"oat_milk":        {"sku": oatMilkCode, "name": "Oat Milk Barista 1L " + runID},
+		"matcha":          {"sku": matchaCode, "name": "Matcha Powder 500g " + runID},
+		"paper_cups":      {"sku": cupsCode, "name": "Paper Cups 16oz " + runID},
+	}
+	manifest.GroundTruth = map[string]any{
+		"warehouse_code":         warehouseCode,
+		"recommended_items":      []string{"Cold Brew Beans 1kg " + runID, "Oat Milk Barista 1L " + runID},
+		"recommended_quantities": map[string]float64{coldBrewCode: 20.0, oatMilkCode: 16.0},
+		"recommended_vendor":     vendorName,
+		"skip_items":             []string{"Matcha Powder 500g " + runID, "Paper Cups 16oz " + runID},
+		"forecast_signal":        "six weeks of repeated fulfillment demand plus one current confirmed sales order",
+		"draft_document_type":    "purchase_request",
+	}
+	manifest.PromptPack = inventoryReplenishmentExecutePromptPack(runID, warehouseCode, vendorName, coldBrewCode, oatMilkCode)
+	return manifest, nil
+}
+
 func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
 	runID, suffix := newRunContext()
 	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "pos_promotion_strategy", "retail-promotion", runID, suffix)
@@ -1314,7 +1541,7 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 				"type":    "remote",
 				"url":     mcpURL,
 				"enabled": true,
-				"timeout": 5000,
+				"timeout": 20000,
 				"headers": map[string]any{
 					"Authorization": "Bearer " + token,
 				},
@@ -1470,6 +1697,50 @@ func productionCostingPromptPack(finishedCode string) []promptExpectation {
 		{ID: "output_qty", Prompt: fmt.Sprintf("How many units of %s were produced?", finishedCode), RequiredFacts: []requiredFact{{Key: "output_qty", Severity: "critical", Checks: []string{"3"}}}, ForbiddenPhrases: []string{"1", "6"}},
 		{ID: "cost_total", Prompt: fmt.Sprintf("What total production cost was recorded for %s?", finishedCode), RequiredFacts: []requiredFact{{Key: "cost_total", Severity: "critical", Checks: []string{"60"}}}, ForbiddenPhrases: []string{"30", "600"}},
 		{ID: "status", Prompt: fmt.Sprintf("What is the status of the production output for %s?", finishedCode), RequiredFacts: []requiredFact{{Key: "output_state", Severity: "critical", Checks: []string{"posted"}}}, ForbiddenPhrases: []string{"draft", "cancelled"}},
+	}
+}
+
+func inventoryReplenishmentExecutePromptPack(runID, warehouseCode, vendorName, coldBrewCode, oatMilkCode string) []promptExpectation {
+	coldBrewName := "Cold Brew Beans 1kg " + runID
+	oatMilkName := "Oat Milk Barista 1L " + runID
+	matchaName := "Matcha Powder 500g " + runID
+	cupsName := "Paper Cups 16oz " + runID
+	return []promptExpectation{
+		{
+			ID:     "insight",
+			Prompt: fmt.Sprintf("For warehouse %s, which inventory items are currently at replenishment risk, which items are healthy enough to skip, and why?", warehouseCode),
+			RequiredFacts: []requiredFact{
+				{Key: "risk_cold_brew", Severity: "critical", Checks: []string{coldBrewName}},
+				{Key: "risk_oat_milk", Severity: "critical", Checks: []string{oatMilkName}},
+				{Key: "healthy_matcha", Severity: "high", Checks: []string{matchaName}},
+				{Key: "healthy_cups", Severity: "high", Checks: []string{cupsName}},
+			},
+			ForbiddenPhrases: []string{"reorder matcha", "reorder paper cups"},
+		},
+		{
+			ID:     "plan",
+			Prompt: fmt.Sprintf("For warehouse %s, what replenishment plan should we run next, including exact quantities and vendor?", warehouseCode),
+			RequiredFacts: []requiredFact{
+				{Key: "plan_cold_brew_qty", Severity: "critical", Checks: []string{coldBrewName, "20"}},
+				{Key: "plan_oat_milk_qty", Severity: "critical", Checks: []string{oatMilkName, "16"}},
+				{Key: "plan_vendor", Severity: "critical", Checks: []string{vendorName}},
+			},
+			ForbiddenPhrases: []string{"reorder matcha", "reorder paper cups", "all vendors"},
+		},
+		{
+			ID:     "execute",
+			Prompt: fmt.Sprintf("Create draft purchase request documents for that replenishment plan for warehouse %s. Use the recommended quantities and do not submit them. After creating them, tell me the draft ids and summarize what was created.", warehouseCode),
+			RequiredFacts: []requiredFact{
+				{Key: "draft_created", Severity: "critical", Checks: []string{"draft", "purchase request"}},
+				{Key: "draft_items", Severity: "critical", Checks: []string{"cold brew", "oat milk"}},
+				{Key: "draft_vendor", Severity: "high", Checks: []string{"north roast"}},
+			},
+			ForbiddenPhrases: []string{"submitted", matchaName, cupsName},
+			ExpectedDraft: &draftExpectation{
+				DocumentType:  "purchase_request",
+				PayloadChecks: []string{"cold brew", "20", "oat milk", "16", "north roast"},
+			},
+		},
 	}
 }
 

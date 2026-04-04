@@ -123,7 +123,7 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	graph := constructServiceGraph(postgres, businessManifests)
-	registerSpecializedRequestViewers(graph.documents)
+	registerWorkspaceDocumentViewers(graph.documents, append(builtInModuleManifests(), businessManifests...))
 	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, runtimeSettings.BootstrapAdminPassword()); err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func New(opts Options) (*App, error) {
 	}, nil
 }
 
-func registerSpecializedRequestViewers(docs *document.Service) {
+func registerWorkspaceDocumentViewers(docs *document.Service, manifests []module.Manifest) {
 	if docs == nil {
 		return
 	}
@@ -201,6 +201,63 @@ func registerSpecializedRequestViewers(docs *document.Service) {
 		FormPath:         "/ui/promotion/plans/form",
 		EditableStatuses: []string{"draft"},
 	})
+	registerNativeDocumentViewers(docs, manifests)
+}
+
+func registerNativeDocumentViewers(docs *document.Service, manifests []module.Manifest) {
+	if docs == nil {
+		return
+	}
+	for _, manifest := range manifests {
+		viewsByKey := make(map[string]module.ViewDefinition, len(manifest.Frontend.Views))
+		for _, view := range manifest.Frontend.Views {
+			if strings.TrimSpace(view.Key) == "" || strings.TrimSpace(view.DocumentType) == "" {
+				continue
+			}
+			viewsByKey[strings.TrimSpace(view.Key)] = view
+		}
+		nativeByDocument := map[string]document.NativeDocumentViewer{}
+		for _, action := range manifest.Frontend.Actions {
+			if action.RenderMode != module.RenderModeGeneric || strings.TrimSpace(action.ViewKey) == "" || strings.TrimSpace(action.RoutePath) == "" {
+				continue
+			}
+			view, ok := viewsByKey[strings.TrimSpace(action.ViewKey)]
+			if !ok || strings.TrimSpace(view.DocumentType) == "" {
+				continue
+			}
+			viewer := nativeByDocument[strings.TrimSpace(view.DocumentType)]
+			viewer.DocumentType = strings.TrimSpace(view.DocumentType)
+			switch strings.TrimSpace(view.Kind) {
+			case "detail":
+				viewer.DetailPath = canonicalWorkspacePath(action.RoutePath)
+			case "form":
+				viewer.FormPath = canonicalWorkspacePath(action.RoutePath)
+			default:
+				continue
+			}
+			nativeByDocument[viewer.DocumentType] = viewer
+		}
+		for _, viewer := range nativeByDocument {
+			if strings.TrimSpace(viewer.DetailPath) == "" && strings.TrimSpace(viewer.FormPath) == "" {
+				continue
+			}
+			docs.RegisterNativeDocumentViewer(viewer)
+		}
+	}
+}
+
+func canonicalWorkspacePath(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "/ui/") || trimmed == "/ui" {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		return "/ui" + trimmed
+	}
+	return "/ui/" + trimmed
 }
 
 func initializeTracing() (func() error, error) {

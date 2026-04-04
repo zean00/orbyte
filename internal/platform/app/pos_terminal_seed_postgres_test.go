@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"orbyte/internal/modules"
 	"orbyte/internal/platform/application"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/store"
-	"orbyte/internal/modules"
 )
 
 type posTerminalSeedManifest struct {
@@ -24,7 +24,7 @@ type posTerminalSeedManifest struct {
 	RegisterName   string `json:"register_name"`
 	ShiftID        string `json:"shift_id"`
 	ShiftNumber    string `json:"shift_number"`
-	Customer struct {
+	Customer       struct {
 		PartyID      string `json:"party_id"`
 		Name         string `json:"name"`
 		MemberStatus string `json:"member_status"`
@@ -195,11 +195,11 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 
 	customerPartyID := "party_pos_" + suffix
 	customerRecord := ensureModelByCode(t, graph.models, "customer_profile", "party_id", customerPartyID, map[string]any{
-		"party_id":         customerPartyID,
-		"customer_name":    "Alya Santoso " + suffix,
-		"customer_type":    "member",
-		"member_status":    "active",
-		"member_tier":      "gold",
+		"party_id":          customerPartyID,
+		"customer_name":     "Alya Santoso " + suffix,
+		"customer_type":     "member",
+		"member_status":     "active",
+		"member_tier":       "gold",
 		"member_valid_from": "2026-01-01",
 		"member_valid_to":   "2099-12-31",
 	}, actorID)
@@ -327,12 +327,11 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 	}
 
 	heldSale, err := graph.posCore.HoldSale(application.POSHoldSaleInput{
-		StoreCode:      storeCode,
-		RegisterCode:   registerCode,
-		ShiftID:        shift.ID,
-		PartyID:        customerPartyID,
-		PartyName:      textValue(customerRecord.Values["customer_name"]),
-		PromotionCodes: []string{promoCode},
+		StoreCode:    storeCode,
+		RegisterCode: registerCode,
+		ShiftID:      shift.ID,
+		PartyID:      customerPartyID,
+		PartyName:    textValue(customerRecord.Values["customer_name"]),
 		Lines: []application.POSCartLineInput{
 			{ItemCode: textValue(itemBeans.Values["sku"]), Quantity: 1},
 		},

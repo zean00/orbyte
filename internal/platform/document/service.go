@@ -12,9 +12,10 @@ import (
 )
 
 type Service struct {
-	repo                Repository
-	specializedViewers  map[string]SpecializedViewer
-	specializedFallback map[string]string
+	repo                  Repository
+	specializedViewers    map[string]SpecializedViewer
+	specializedFallback   map[string]string
+	nativeDocumentViewers map[string]NativeDocumentViewer
 }
 
 func NewService() *Service {
@@ -33,9 +34,10 @@ func NewService() *Service {
 
 func NewServiceWithRepository(repo Repository) *Service {
 	return &Service{
-		repo:                repo,
-		specializedViewers:  map[string]SpecializedViewer{},
-		specializedFallback: map[string]string{},
+		repo:                  repo,
+		specializedViewers:    map[string]SpecializedViewer{},
+		specializedFallback:   map[string]string{},
+		nativeDocumentViewers: map[string]NativeDocumentViewer{},
 	}
 }
 
