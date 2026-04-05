@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchWorkspaceBootstrap, pickText, toShellRoutes } from "@/services/bootstrap";
+import { fetchWorkspaceBootstrap, pickText, toShellRoutes, workspaceSurfaceTarget } from "@/services/bootstrap";
 import { useShellStore } from "@/stores/shellStore";
 
 type DashboardWidgetDefinition = {
@@ -85,7 +85,6 @@ export default function DashboardSurfacePage() {
     setWorkspaceBootstrap,
     setRoutes,
     adminAccess,
-    defaultPath,
   } = useShellStore();
   const [payload, setPayload] = useState<DashboardBoardResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,7 +99,7 @@ export default function DashboardSurfacePage() {
     const bootstrap = await fetchWorkspaceBootstrap(nextSurface);
     setWorkspaceBootstrap(bootstrap);
     setRoutes(toShellRoutes(bootstrap.menus, bootstrap.actions, bootstrap.locale, "workspace"));
-    navigate(defaultPath || "/", { replace: true });
+    navigate(workspaceSurfaceTarget(bootstrap, nextSurface) || "/", { replace: true });
   }
 
   useEffect(() => {
@@ -254,9 +253,9 @@ export default function DashboardSurfacePage() {
                 {payload.widgets.map((widget, index) => (
                   <div
                     key={widget.id}
-                    className="animate-[fade-in_0.45s_ease_forwards] opacity-0"
+                    className="motion-safe:transition-transform motion-safe:duration-200"
                     style={{
-                      animationDelay: `${index * 60}ms`,
+                      transitionDelay: `${index * 40}ms`,
                       gridColumn: `span ${Math.min(Math.max(widget.width || 3, 1), 12)} / span ${Math.min(Math.max(widget.width || 3, 1), 12)}`,
                     }}
                   >
@@ -517,9 +516,9 @@ function renderMetricWidget(definition: DashboardWidgetDefinition, data: unknown
   const delta = spec.delta_path ? valueAtPath(data, spec.delta_path) : undefined;
   return (
     <div>
-      <div className="text-4xl font-semibold tracking-tight text-slate-950">{formatWidgetValue(value, spec.format, spec.unit)}</div>
+      <div className="text-4xl font-semibold tracking-tight text-body">{formatWidgetValue(value, spec.format, spec.unit)}</div>
       {delta !== undefined ? (
-        <div className="mt-3 inline-flex rounded-full border border-line/70 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+        <div className="mt-3 inline-flex rounded-full border border-line bg-shell px-3 py-1 text-xs font-semibold text-body">
           Context {formatWidgetValue(delta, spec.format, spec.unit)}
         </div>
       ) : null}
@@ -536,22 +535,25 @@ function renderTableWidget(definition: DashboardWidgetDefinition, data: unknown)
     return <div className="rounded-[1rem] border border-dashed border-line px-4 py-8 text-sm text-slate-500">No rows available.</div>;
   }
   return (
-    <div className="overflow-hidden rounded-[1rem] border border-line/70">
+    <div className="overflow-hidden rounded-[1rem] border border-line bg-surface">
       <table className="min-w-full text-sm">
-        <thead className="bg-slate-50/90 text-slate-500">
+        <thead className="bg-shell text-muted">
           <tr>
             {columns.map((column) => (
-              <th key={column.key} className="px-3 py-2 text-left text-[11px] font-bold uppercase tracking-[0.18em]">
+              <th key={column.key} className="px-3 py-2 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
                 {column.label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-line/70 bg-white/70">
+        <tbody className="divide-y divide-line bg-surface">
           {rows.map((row, index) => (
             <tr key={`${index}-${String(row.id || row.code || index)}`}>
-              {columns.map((column) => (
-                <td key={column.key} className="px-3 py-2 text-slate-700">
+              {columns.map((column, columnIndex) => (
+                <td
+                  key={column.key}
+                  className={columnIndex === 0 ? "px-3 py-2 font-medium text-body" : "px-3 py-2 text-body"}
+                >
                   {formatWidgetValue(valueAtPath(row, column.path))}
                 </td>
               ))}
@@ -575,10 +577,10 @@ function renderGaugeWidget(definition: DashboardWidgetDefinition, data: unknown)
   return (
     <div>
       <div className="flex items-end justify-between gap-4">
-        <div className="text-4xl font-semibold tracking-tight text-slate-950">
+        <div className="text-4xl font-semibold tracking-tight text-body">
           {formatWidgetValue(rawValue, spec.format)}
         </div>
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
           {Math.round(ratio * 100)}%
         </div>
       </div>
@@ -643,11 +645,11 @@ function renderChartWidget(definition: DashboardWidgetDefinition, data: unknown)
           const value = Number(valueAtPath(row, spec.value) || 0);
           return (
             <div key={index}>
-              <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-                <span>{String(valueAtPath(row, spec.category) ?? "-")}</span>
-                <span>{formatWidgetValue(value, spec.format)}</span>
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className="font-semibold text-body">{String(valueAtPath(row, spec.category) ?? "-")}</span>
+                <span className="font-semibold text-body">{formatWidgetValue(value, spec.format)}</span>
               </div>
-              <div className="h-2.5 rounded-full bg-slate-100">
+              <div className="h-2.5 rounded-full bg-line">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${(value / maxValue) * 100}%`, backgroundColor: palette(index) }}
@@ -669,25 +671,39 @@ function renderChartWidget(definition: DashboardWidgetDefinition, data: unknown)
   });
   const polyline = points.join(" ");
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-36 w-full">
+    <div className="space-y-3">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-36 w-full">
       <defs>
         <linearGradient id="dashboard-area-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="rgba(37,99,235,0.32)" />
           <stop offset="100%" stopColor="rgba(37,99,235,0.02)" />
         </linearGradient>
       </defs>
+      <line x1="10" y1={height - 10} x2={width - 10} y2={height - 10} stroke="#cbd5e1" strokeWidth="1.5" />
+      <line x1="10" y1={height / 2} x2={width - 10} y2={height / 2} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" />
       {definition.renderer_kind === "chart_area" ? (
         <polygon
           points={`${points.join(" ")} ${width - 10},${height - 10} 10,${height - 10}`}
           fill="url(#dashboard-area-fill)"
         />
       ) : null}
-      <polyline fill="none" stroke="#2563eb" strokeWidth="3" points={polyline} />
+      <polyline fill="none" stroke="#1d4ed8" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" points={polyline} />
       {points.map((point, index) => {
         const [cx, cy] = point.split(",").map(Number);
-        return <circle key={index} cx={cx} cy={cy} r="3.5" fill="#2563eb" />;
+        return (
+          <g key={index}>
+            <circle cx={cx} cy={cy} r="4" fill="#1d4ed8" />
+            <circle cx={cx} cy={cy} r="2" fill="#eff6ff" />
+          </g>
+        );
       })}
-    </svg>
+      </svg>
+      <div className="flex items-center justify-between text-xs font-medium text-muted">
+        <span>{String(valueAtPath(rows[0], spec.category) ?? "-")}</span>
+        <span className="text-body">{formatWidgetValue(maxValue, spec.format)}</span>
+        <span>{String(valueAtPath(rows[rows.length - 1], spec.category) ?? "-")}</span>
+      </div>
+    </div>
   );
 }
 
@@ -705,15 +721,36 @@ function renderMapWidget(definition: DashboardWidgetDefinition, data: unknown) {
   const minLng = Math.min(...longitudes);
   const maxLng = Math.max(...longitudes);
   return (
-    <svg viewBox="0 0 320 180" className="h-40 w-full rounded-[1rem] bg-[linear-gradient(180deg,#f8fbff,#ecf4ff)]">
-      {points.map((point, index) => {
-        const lat = Number(valueAtPath(point, spec.latitude) || 0);
-        const lng = Number(valueAtPath(point, spec.longitude) || 0);
-        const x = ((lng - minLng) / Math.max(maxLng - minLng, 0.0001)) * 280 + 20;
-        const y = 160 - ((lat - minLat) / Math.max(maxLat - minLat, 0.0001)) * 120;
-        return <circle key={index} cx={x} cy={y} r="5" fill={palette(index)} />;
-      })}
-    </svg>
+    <div className="space-y-3">
+      <svg viewBox="0 0 320 180" className="h-40 w-full rounded-[1rem] border border-line/70 bg-[linear-gradient(180deg,#f6f9ff,#e7eefb)]">
+        <path d="M18 32 C62 18, 118 54, 160 44 S252 22, 302 40" fill="none" stroke="#d7e4f6" strokeWidth="2" />
+        <path d="M12 108 C54 88, 110 126, 170 112 S258 88, 308 118" fill="none" stroke="#d7e4f6" strokeWidth="2" />
+        <path d="M24 150 C76 134, 142 168, 210 150 S280 140, 308 154" fill="none" stroke="#d7e4f6" strokeWidth="2" />
+        {points.map((point, index) => {
+          const lat = Number(valueAtPath(point, spec.latitude) || 0);
+          const lng = Number(valueAtPath(point, spec.longitude) || 0);
+          const x = ((lng - minLng) / Math.max(maxLng - minLng, 0.0001)) * 280 + 20;
+          const y = 160 - ((lat - minLat) / Math.max(maxLat - minLat, 0.0001)) * 120;
+          return (
+            <g key={index}>
+              <circle cx={x} cy={y} r="7" fill={palette(index)} fillOpacity="0.18" />
+              <circle cx={x} cy={y} r="4.5" fill={palette(index)} stroke="#ffffff" strokeWidth="2" />
+            </g>
+          );
+        })}
+      </svg>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {points.slice(0, 4).map((point, index) => (
+          <div key={index} className="flex items-center justify-between rounded-xl border border-line/70 bg-shell px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: palette(index) }} />
+              <span className="font-semibold text-body">{String(valueAtPath(point, spec.label || "label") ?? `Point ${index + 1}`)}</span>
+            </div>
+            {spec.value ? <span className="font-semibold text-body">{formatWidgetValue(valueAtPath(point, spec.value))}</span> : null}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -11,10 +11,11 @@ APP_LOG_FILE ?= $(RUN_DIR)/orbyte-postgres.log
 AGENT_SCENARIO ?= inventory_replenishment_execute
 AGENT_SEED_OUTPUT ?= /tmp/agentproof-inventory-replenishment.json
 POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
+DASHBOARD_SEED_OUTPUT ?= /tmp/orbyte-dashboard-seed.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-all reset-and-seed demo-continuity
+.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-dashboard seed-all reset-and-seed demo-continuity
 
 test:
 	./scripts/test.sh
@@ -147,9 +148,14 @@ seed-pos:
 	DATABASE_URL="$(DATABASE_URL)" POS_SEED=1 go test -run TestSeedPOSTerminalSyntheticScenario -v ./internal/platform/app
 	@echo "POS seed manifest is written by the test harness to $(POS_SEED_OUTPUT)"
 
-seed-all: seed-agent-continuity seed-pos
+seed-dashboard:
+	DATABASE_URL="$(DATABASE_URL)" DASHBOARD_SEED=1 go test -run TestSeedDashboardSyntheticScenario -v ./internal/platform/app
+	@echo "Dashboard seed manifest is written by the test harness to $(DASHBOARD_SEED_OUTPUT)"
+
+seed-all: seed-agent-continuity seed-pos seed-dashboard
 	@echo "Continuity seed manifest: $(AGENT_SEED_OUTPUT)"
 	@echo "POS seed manifest: $(POS_SEED_OUTPUT)"
+	@echo "Dashboard seed manifest: $(DASHBOARD_SEED_OUTPUT)"
 
 reset-and-seed: db-reset-postgres app-start-postgres seed-all
 
