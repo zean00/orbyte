@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/acp"
+	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/featureflags"
@@ -116,9 +117,9 @@ type adminModuleDependencySummary struct {
 	TotalEdges       int `json:"total_edges"`
 }
 
-func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service, health *runtimehealth.Tracker, acpSvc *acp.Service, mcpServer *mcp.Server) {
+func registerAdminRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, analyticsSvc *analytics.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, obsSvc *observability.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service, health *runtimehealth.Tracker, acpSvc *acp.Service, mcpServer *mcp.Server) {
 	registerAdminShellRoutes(mux, ident)
-	registerAdminCoreRoutes(mux, cfg, org, ident, modules, workflowSvc, auditSvc, policySvc, obsSvc, acpSvc, mcpServer)
+	registerAdminCoreRoutes(mux, cfg, org, ident, analyticsSvc, modules, workflowSvc, auditSvc, policySvc, obsSvc, acpSvc, mcpServer)
 	registerAdminIntegrationRoutes(mux, ident, auditSvc, integrationSvc, idempotencySvc)
 	registerAdminConfigRoutes(mux, cfg, flags, org, ident, modules, auditSvc, policySvc, integrationSvc, referenceSvc, idempotencySvc, health)
 }

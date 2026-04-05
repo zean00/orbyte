@@ -215,6 +215,7 @@ func (r *uiBootstrapResolver) availableSurfaces() []string {
 		module.UISurfaceSelfService,
 		module.UISurfaceAgent,
 		module.UISurfacePOS,
+		module.UISurfaceDashboard,
 	} {
 		menus, actions, _, _, _ := r.visibleContracts(surface)
 		if len(menus) > 0 || len(actions) > 0 {

@@ -26,6 +26,8 @@ export function endpointForAdminPath(path: string): string {
       return '/admin/api/security/policy-hooks'
     case '/observability':
       return '/admin/api/observability/contracts'
+    case '/dashboards':
+      return '/admin/api/dashboards'
     case '/templates':
       return '/admin/api/templates/definitions'
     case '/templates/designer':
@@ -65,6 +67,8 @@ export function titleForAdminPath(path: string): string {
       return 'Security'
     case '/observability':
       return 'Observability'
+    case '/dashboards':
+      return 'Dashboards'
     case '/templates':
       return 'Templates'
     case '/templates/designer':

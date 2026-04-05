@@ -21,6 +21,7 @@ const surfaceLabels: Record<string, string> = {
   self_service: "Self-Service",
   agent: "Agent",
   pos: "POS",
+  dashboard: "Dashboard",
 };
 
 export function Header() {

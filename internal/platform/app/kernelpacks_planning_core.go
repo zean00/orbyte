@@ -182,6 +182,46 @@ func planningCoreKernelPackManifest() module.Manifest {
 					},
 				},
 			},
+			DashboardWidgets: []module.DashboardWidgetDefinition{
+				{
+					Key:                 "planning.replenishment.shortages",
+					Title:               "Replenishment Risk",
+					TitleI18n:           localize("Replenishment Risk", "Risiko Replenishment"),
+					Surface:             module.UISurfaceDashboard,
+					RendererKind:        "metric",
+					RefreshPolicy:       "hourly",
+					DataPath:            "/ui/data/planning/replenishment/summary",
+					RequiredPermissions: []string{"document.list"},
+					DefaultWidth:        3,
+					DefaultHeight:       1,
+					Metric: &module.DashboardMetricSpec{
+						ValuePath: "shortage_item_count",
+						DeltaPath: "due_soon_count",
+						Format:    "number",
+					},
+				},
+				{
+					Key:                 "planning.replenishment.items",
+					Title:               "Shortage Candidates",
+					TitleI18n:           localize("Shortage Candidates", "Kandidat Kekurangan"),
+					Surface:             module.UISurfaceDashboard,
+					RendererKind:        "table",
+					RefreshPolicy:       "hourly",
+					DataPath:            "/ui/data/planning/replenishment/summary?shortage_only=true",
+					RequiredPermissions: []string{"document.list"},
+					DefaultWidth:        6,
+					DefaultHeight:       2,
+					Table: &module.DashboardTableSpec{
+						RowsPath: "items",
+						Columns: []module.ColumnDefinition{
+							{Key: "item_code", Label: "Item", LabelI18n: localize("Item", "Item"), Path: "item_code"},
+							{Key: "warehouse_code", Label: "Warehouse", LabelI18n: localize("Warehouse", "Gudang"), Path: "warehouse_code"},
+							{Key: "shortage_quantity", Label: "Shortage", LabelI18n: localize("Shortage", "Kekurangan"), Path: "shortage_quantity"},
+							{Key: "suggested_request_quantity", Label: "Suggested", LabelI18n: localize("Suggested", "Disarankan"), Path: "suggested_request_quantity"},
+						},
+					},
+				},
+			},
 		},
 	}
 }

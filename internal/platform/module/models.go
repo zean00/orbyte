@@ -295,11 +295,68 @@ type DomainEventDefinition struct {
 }
 
 type FrontendDefinition struct {
-	Menus         []MenuDefinition         `json:"menus,omitempty"`
-	Actions       []ActionDefinition       `json:"actions,omitempty"`
-	Views         []ViewDefinition         `json:"views,omitempty"`
-	CustomEntries []CustomEntryDefinition  `json:"custom_entries,omitempty"`
-	DocumentFlows []DocumentFlowDefinition `json:"document_flows,omitempty"`
+	Menus            []MenuDefinition            `json:"menus,omitempty"`
+	Actions          []ActionDefinition          `json:"actions,omitempty"`
+	Views            []ViewDefinition            `json:"views,omitempty"`
+	CustomEntries    []CustomEntryDefinition     `json:"custom_entries,omitempty"`
+	DocumentFlows    []DocumentFlowDefinition    `json:"document_flows,omitempty"`
+	DashboardWidgets []DashboardWidgetDefinition `json:"dashboard_widgets,omitempty"`
+}
+
+type DashboardWidgetDefinition struct {
+	Key                 string               `json:"key"`
+	Title               string               `json:"title"`
+	TitleI18n           i18n.LocalizedText   `json:"title_i18n,omitempty"`
+	Surface             UISurface            `json:"surface,omitempty"`
+	RendererKind        string               `json:"renderer_kind"`
+	RefreshPolicy       string               `json:"refresh_policy,omitempty"`
+	DataPath            string               `json:"data_path"`
+	RequiredPermissions []string             `json:"required_permissions,omitempty"`
+	DefaultWidth        int                  `json:"default_width,omitempty"`
+	DefaultHeight       int                  `json:"default_height,omitempty"`
+	Metric              *DashboardMetricSpec `json:"metric,omitempty"`
+	Table               *DashboardTableSpec  `json:"table,omitempty"`
+	Chart               *DashboardChartSpec  `json:"chart,omitempty"`
+	Gauge               *DashboardGaugeSpec  `json:"gauge,omitempty"`
+	Map                 *DashboardMapSpec    `json:"map,omitempty"`
+}
+
+type DashboardMetricSpec struct {
+	ValuePath  string `json:"value_path"`
+	Format     string `json:"format,omitempty"`
+	Unit       string `json:"unit,omitempty"`
+	DeltaPath  string `json:"delta_path,omitempty"`
+	TargetPath string `json:"target_path,omitempty"`
+}
+
+type DashboardTableSpec struct {
+	RowsPath string             `json:"rows_path"`
+	Columns  []ColumnDefinition `json:"columns,omitempty"`
+}
+
+type DashboardChartSpec struct {
+	SeriesPath string `json:"series_path"`
+	Category   string `json:"category"`
+	Value      string `json:"value"`
+	Series     string `json:"series,omitempty"`
+	Stacked    bool   `json:"stacked,omitempty"`
+	Format     string `json:"format,omitempty"`
+}
+
+type DashboardGaugeSpec struct {
+	ValuePath  string    `json:"value_path"`
+	MinValue   float64   `json:"min_value,omitempty"`
+	MaxValue   float64   `json:"max_value,omitempty"`
+	Thresholds []float64 `json:"thresholds,omitempty"`
+	Format     string    `json:"format,omitempty"`
+}
+
+type DashboardMapSpec struct {
+	PointsPath string `json:"points_path"`
+	Latitude   string `json:"latitude"`
+	Longitude  string `json:"longitude"`
+	Label      string `json:"label,omitempty"`
+	Value      string `json:"value,omitempty"`
 }
 
 type AdminConsoleDefinition struct {
@@ -352,6 +409,7 @@ const (
 	UISurfaceSelfService UISurface = "self_service"
 	UISurfaceAgent       UISurface = "agent"
 	UISurfacePOS         UISurface = "pos"
+	UISurfaceDashboard   UISurface = "dashboard"
 	UISurfaceMobile      UISurface = "mobile"
 )
 

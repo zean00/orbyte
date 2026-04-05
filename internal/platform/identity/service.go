@@ -536,6 +536,41 @@ func (s *Service) DefaultRoute(userID, surface string) string {
 	return ""
 }
 
+func (s *Service) ActiveRoleIDsForUser(userID, organizationID, locationID, operatingUnitID string, at time.Time) []string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil
+	}
+	now := resolveTime(at)
+	set := map[string]struct{}{}
+	items := make([]string, 0)
+	for _, binding := range s.repo.RoleBindings() {
+		if binding.UserID != userID || binding.Status != "active" {
+			continue
+		}
+		if binding.EffectiveFrom.After(now) {
+			continue
+		}
+		if !binding.EffectiveTo.IsZero() && binding.EffectiveTo.Before(now) {
+			continue
+		}
+		if !bindingMatchesScope(binding, organizationID, locationID, operatingUnitID) {
+			continue
+		}
+		roleID := strings.TrimSpace(binding.RoleID)
+		if roleID == "" {
+			continue
+		}
+		if _, ok := set[roleID]; ok {
+			continue
+		}
+		set[roleID] = struct{}{}
+		items = append(items, roleID)
+	}
+	sort.Strings(items)
+	return items
+}
+
 func (s *Service) Bindings() []RoleBinding {
 	return s.repo.RoleBindings()
 }

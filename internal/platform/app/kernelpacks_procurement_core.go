@@ -221,6 +221,25 @@ func procurementCoreKernelPackManifest() module.Manifest {
 			},
 			Actions: procurementFrontendActions(),
 			Views:   procurementFrontendViews(),
+			DashboardWidgets: []module.DashboardWidgetDefinition{
+				{
+					Key:                 "procurement.payables.balance",
+					Title:               "Payables Open Balance",
+					TitleI18n:           localize("Payables Open Balance", "Saldo Utang Terbuka"),
+					Surface:             module.UISurfaceDashboard,
+					RendererKind:        "metric",
+					RefreshPolicy:       "hourly",
+					DataPath:            "/ui/data/procurement/payables/summary",
+					RequiredPermissions: []string{"document.list"},
+					DefaultWidth:        3,
+					DefaultHeight:       1,
+					Metric: &module.DashboardMetricSpec{
+						ValuePath: "open_balance_total",
+						DeltaPath: "overdue_balance_total",
+						Format:    "currency",
+					},
+				},
+			},
 		},
 		Templates: []module.TemplateDefinition{
 			commercialTemplateDefinition("procurement.purchase_request.print.default", "Purchase Request Print", "purchase_request", "Purchase Request", []string{"vendor_name", "request_date", "currency_code", "total_amount", "lines"}),

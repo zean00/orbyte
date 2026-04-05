@@ -48,7 +48,7 @@ func TestDashboardAuthoringDefaultsAndCRUD(t *testing.T) {
 	if saved.ID == "" || !strings.HasPrefix(saved.ID, "analytics-dashboard:") {
 		t.Fatalf("expected generated dashboard id, got %+v", saved)
 	}
-	if saved.Visibility != "private" || saved.ScopeType != "user" || saved.Status != "active" {
+	if saved.Visibility != "private" || saved.ScopeType != "deployment" || saved.Status != "active" {
 		t.Fatalf("expected defaults applied, got %+v", saved)
 	}
 	if saved.Widgets[0].ID == "" {
@@ -74,6 +74,42 @@ func TestDashboardAuthoringDefaultsAndCRUD(t *testing.T) {
 	nilRepo := &Service{}
 	_, err = nilRepo.SaveDashboard(Dashboard{Name: "x"})
 	assertConflictError(t, err)
+}
+
+func TestDashboardsForSurfaceIncludesLegacyDashboards(t *testing.T) {
+	svc := newAuthoringTestService()
+	now := time.Now().UTC()
+	legacy := Dashboard{
+		ID:        "dashboard:legacy",
+		Name:      "Legacy Dashboard",
+		Surface:   "",
+		IsDefault: true,
+		Status:    "active",
+		UpdatedAt: now,
+		CreatedAt: now,
+	}
+	if err := svc.repo.SaveDashboard(legacy); err != nil {
+		t.Fatalf("save legacy dashboard failed: %v", err)
+	}
+	if _, err := svc.SaveDashboard(Dashboard{
+		ID:        "dashboard:dashboard",
+		Name:      "Dedicated Dashboard",
+		Surface:   "dashboard",
+		IsDefault: true,
+		Status:    "active",
+		UpdatedAt: now.Add(time.Second),
+	}); err != nil {
+		t.Fatalf("save surface dashboard failed: %v", err)
+	}
+
+	items := svc.DashboardsForSurface("dashboard")
+	if len(items) != 2 {
+		t.Fatalf("expected legacy and explicit dashboards for dashboard surface, got %+v", items)
+	}
+
+	if _, ok := svc.EffectiveDashboard("dashboard", "", "", nil); !ok {
+		t.Fatal("expected effective dashboard lookup to consider legacy dashboard surfaces")
+	}
 }
 
 func TestSavedQueryAndMetricAuthoringDefaultsCRUDAndValidation(t *testing.T) {

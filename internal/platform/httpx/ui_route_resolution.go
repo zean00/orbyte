@@ -131,6 +131,8 @@ func requestedUISurface(r *http.Request) module.UISurface {
 		return module.UISurfaceAgent
 	case module.UISurfacePOS:
 		return module.UISurfacePOS
+	case module.UISurfaceDashboard:
+		return module.UISurfaceDashboard
 	case module.UISurfaceMobile:
 		return module.UISurfaceMobile
 	default:

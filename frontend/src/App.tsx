@@ -17,6 +17,9 @@ const LoginPage = lazy(() => import("@/features/auth/LoginPage"));
 const AgentSurfacePage = lazy(
   () => import("@/features/agent/AgentSurfacePage"),
 );
+const DashboardSurfacePage = lazy(
+  () => import("@/features/dashboard/DashboardSurfacePage"),
+);
 const POSSurfacePage = lazy(() => import("@/features/pos/POSSurfacePage"));
 const WorkspacePage = lazy(() => import("@/features/workspace/WorkspacePage"));
 
@@ -58,6 +61,8 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
           surface = "pos";
         } else if (location.pathname.startsWith("/agent")) {
           surface = "agent";
+        } else if (location.pathname.startsWith("/dashboard")) {
+          surface = "dashboard";
         } else if (
           location.pathname === "/worklist" ||
           location.pathname.startsWith("/worklist/")
@@ -140,6 +145,22 @@ function AgentProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SurfaceProtectedRoute({
+  surface,
+  children,
+}: {
+  surface: string;
+  children: React.ReactNode;
+}) {
+  const availableSurfaces = useShellStore((state) => state.availableSurfaces);
+  const defaultPath = useShellStore((state) => state.defaultPath);
+
+  if (!availableSurfaces.includes(surface)) {
+    return <Navigate to={defaultPath || "/"} replace />;
+  }
+  return <>{children}</>;
+}
+
 function LoginGate() {
   const { isAuthenticated, isLoading, hasCheckedAuth, checkAuth } = useAuth();
   const navigate = useNavigate();
@@ -176,10 +197,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <AgentProtectedRoute>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentSurfacePage />
-                  </Suspense>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentSurfacePage />
+                </Suspense>
                 </AgentProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <SurfaceProtectedRoute surface="dashboard">
+                  <Suspense fallback={<PageLoader />}>
+                    <DashboardSurfacePage />
+                  </Suspense>
+                </SurfaceProtectedRoute>
               </ProtectedRoute>
             }
           />
@@ -187,9 +220,11 @@ export default function App() {
             path="/pos/terminal"
             element={
               <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <POSSurfacePage />
-                </Suspense>
+                <SurfaceProtectedRoute surface="pos">
+                  <Suspense fallback={<PageLoader />}>
+                    <POSSurfacePage />
+                  </Suspense>
+                </SurfaceProtectedRoute>
               </ProtectedRoute>
             }
           />

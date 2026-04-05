@@ -202,6 +202,48 @@ func TestDefaultRoutePrefersUserOverrideThenHighestPriorityRole(t *testing.T) {
 	}
 }
 
+func TestActiveRoleIDsForUserFiltersInactiveDatesAndScope(t *testing.T) {
+	svc := NewService(organization.NewService())
+	now := time.Now().UTC()
+	for _, role := range []Role{
+		{ID: "role_org", Key: "org", Name: "Org", ScopeType: "organization"},
+		{ID: "role_loc", Key: "loc", Name: "Loc", ScopeType: "location"},
+		{ID: "role_future", Key: "future", Name: "Future", ScopeType: "deployment"},
+		{ID: "role_inactive", Key: "inactive", Name: "Inactive", ScopeType: "deployment"},
+	} {
+		if err := svc.UpsertRole(role); err != nil {
+			t.Fatalf("upsert role %s failed: %v", role.ID, err)
+		}
+	}
+	repo := svc.repo
+	for _, binding := range []RoleBinding{
+		{ID: "rb_org", UserID: "user_admin", RoleID: "role_org", ScopeType: "organization", ScopeID: "org_default", EffectiveFrom: now.Add(-time.Hour), Status: "active"},
+		{ID: "rb_loc", UserID: "user_admin", RoleID: "role_loc", ScopeType: "location", ScopeID: "loc_hq", EffectiveFrom: now.Add(-time.Hour), Status: "active"},
+		{ID: "rb_future", UserID: "user_admin", RoleID: "role_future", ScopeType: "deployment", EffectiveFrom: now.Add(time.Hour), Status: "active"},
+		{ID: "rb_inactive", UserID: "user_admin", RoleID: "role_inactive", ScopeType: "deployment", EffectiveFrom: now.Add(-time.Hour), Status: "inactive"},
+	} {
+		if err := repo.SaveRoleBinding(binding); err != nil {
+			t.Fatalf("save role binding %s failed: %v", binding.ID, err)
+		}
+	}
+
+	got := svc.ActiveRoleIDsForUser("user_admin", "org_default", "loc_hq", "", now)
+	if len(got) != 3 {
+		t.Fatalf("expected bootstrap role plus 2 active scoped roles, got %+v", got)
+	}
+	if got[0] != "role_admin" || got[1] != "role_loc" || got[2] != "role_org" {
+		t.Fatalf("unexpected active role ids: %+v", got)
+	}
+
+	got = svc.ActiveRoleIDsForUser("user_admin", "org_default", "loc_other", "", now)
+	if len(got) != 2 {
+		t.Fatalf("expected bootstrap role plus org role outside location scope, got %+v", got)
+	}
+	if got[0] != "role_admin" || got[1] != "role_org" {
+		t.Fatalf("unexpected scoped role ids: %+v", got)
+	}
+}
+
 func TestRevokeRolePermission(t *testing.T) {
 	svc := NewService(organization.NewService())
 	if err := svc.UpsertRole(Role{ID: "role_ops", Key: "ops", Name: "Ops", ScopeType: "deployment"}); err != nil {

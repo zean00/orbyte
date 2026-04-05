@@ -132,6 +132,7 @@ type AdminDeps struct {
 	Flags         *featureflags.Service
 	Organization  *organization.Service
 	Identity      *identity.Service
+	Analytics     *analytics.Service
 	Modules       *module.Service
 	Workflows     *workflow.Service
 	Audit         *audit.Service
@@ -292,7 +293,7 @@ func RegisterSearchSurface(deps SearchDeps) RouteRegistrar {
 
 func RegisterAdminSurface(deps AdminDeps) RouteRegistrar {
 	return func(mux *http.ServeMux) {
-		registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP, deps.MCP)
+		registerAdminRoutes(mux, deps.Config, deps.Flags, deps.Organization, deps.Identity, deps.Analytics, deps.Modules, deps.Workflows, deps.Audit, deps.Policy, deps.Observability, deps.Integration, deps.Reference, deps.Idempotency, deps.Health, deps.ACP, deps.MCP)
 	}
 }
 

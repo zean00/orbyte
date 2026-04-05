@@ -87,13 +87,19 @@ type SavedMetric struct {
 }
 
 type DashboardWidget struct {
-	ID            string    `json:"id"`
-	Title         string    `json:"title"`
-	Kind          string    `json:"kind"`
-	QueryID       string    `json:"query_id,omitempty"`
-	MetricID      string    `json:"metric_id,omitempty"`
-	InlineQuery   QuerySpec `json:"inline_query,omitempty"`
-	ChartOverride string    `json:"chart_override,omitempty"`
+	ID              string         `json:"id"`
+	Title           string         `json:"title"`
+	Kind            string         `json:"kind"`
+	QueryID         string         `json:"query_id,omitempty"`
+	MetricID        string         `json:"metric_id,omitempty"`
+	InlineQuery     QuerySpec      `json:"inline_query,omitempty"`
+	ChartOverride   string         `json:"chart_override,omitempty"`
+	WidgetKey       string         `json:"widget_key,omitempty"`
+	Width           int            `json:"width,omitempty"`
+	Height          int            `json:"height,omitempty"`
+	Order           int            `json:"order,omitempty"`
+	RefreshOverride string         `json:"refresh_override,omitempty"`
+	Filters         map[string]any `json:"filters,omitempty"`
 }
 
 type Dashboard struct {
@@ -101,6 +107,8 @@ type Dashboard struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	Visibility  string            `json:"visibility,omitempty"`
+	Surface     string            `json:"surface,omitempty"`
+	IsDefault   bool              `json:"is_default,omitempty"`
 	Layout      map[string]any    `json:"layout,omitempty"`
 	Widgets     []DashboardWidget `json:"widgets,omitempty"`
 	RuntimeScope
@@ -121,8 +129,11 @@ func (s *Service) SaveDashboard(item Dashboard) (Dashboard, error) {
 	if strings.TrimSpace(item.Visibility) == "" {
 		item.Visibility = "private"
 	}
+	if strings.TrimSpace(item.Surface) == "" {
+		item.Surface = "backoffice"
+	}
 	if strings.TrimSpace(item.ScopeType) == "" {
-		item.ScopeType = "user"
+		item.ScopeType = "deployment"
 	}
 	if strings.TrimSpace(item.Status) == "" {
 		item.Status = "active"
@@ -135,11 +146,127 @@ func (s *Service) SaveDashboard(item Dashboard) (Dashboard, error) {
 		if strings.TrimSpace(item.Widgets[i].ID) == "" {
 			item.Widgets[i].ID = fmt.Sprintf("%s-widget-%d", item.ID, i+1)
 		}
+		if item.Widgets[i].Order <= 0 {
+			item.Widgets[i].Order = i + 1
+		}
+		if item.Widgets[i].Width <= 0 {
+			item.Widgets[i].Width = 4
+		}
+		if item.Widgets[i].Height <= 0 {
+			item.Widgets[i].Height = 1
+		}
 	}
 	if s.repo == nil {
 		return Dashboard{}, shared.Conflict("analytics repository is not configured")
 	}
 	return item, s.repo.SaveDashboard(item)
+}
+
+func (s *Service) DashboardsForSurface(surface string) []Dashboard {
+	surface = strings.TrimSpace(surface)
+	items := make([]Dashboard, 0)
+	for _, item := range s.Dashboards() {
+		if dashboardMatchesSurface(strings.TrimSpace(item.Surface), surface) {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+	return items
+}
+
+func dashboardMatchesSurface(itemSurface, requestedSurface string) bool {
+	itemSurface = strings.TrimSpace(itemSurface)
+	requestedSurface = strings.TrimSpace(requestedSurface)
+	if itemSurface == "" {
+		// Legacy dashboards predate surface-aware persistence. Treat them as
+		// historical defaults so upgrades do not silently hide existing boards.
+		return true
+	}
+	if requestedSurface == "" {
+		return true
+	}
+	return itemSurface == requestedSurface
+}
+
+func (s *Service) EffectiveDashboard(surface, organizationID, locationID string, roleIDs []string) (Dashboard, bool) {
+	roleSet := map[string]struct{}{}
+	for _, id := range roleIDs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			roleSet[id] = struct{}{}
+		}
+	}
+	best := Dashboard{}
+	bestScore := -1
+	for _, item := range s.DashboardsForSurface(surface) {
+		if item.Status != "" && item.Status != "active" {
+			continue
+		}
+		if !item.IsDefault {
+			continue
+		}
+		score := dashboardScopeScore(item, organizationID, locationID, roleSet)
+		if score < 0 {
+			continue
+		}
+		if score > bestScore || (score == bestScore && item.UpdatedAt.After(best.UpdatedAt)) {
+			best = item
+			bestScore = score
+		}
+	}
+	if bestScore < 0 {
+		return Dashboard{}, false
+	}
+	sort.Slice(best.Widgets, func(i, j int) bool {
+		if best.Widgets[i].Order == best.Widgets[j].Order {
+			return best.Widgets[i].ID < best.Widgets[j].ID
+		}
+		return best.Widgets[i].Order < best.Widgets[j].Order
+	})
+	return best, true
+}
+
+func dashboardScopeScore(item Dashboard, organizationID, locationID string, roleSet map[string]struct{}) int {
+	scopeType := strings.TrimSpace(item.ScopeType)
+	scopeID := strings.TrimSpace(item.ScopeID)
+	switch scopeType {
+	case "", "deployment":
+		return 10
+	case "organization":
+		if scopeID == "" || scopeID != strings.TrimSpace(organizationID) {
+			return -1
+		}
+		return 20
+	case "location":
+		if scopeID == "" || scopeID != strings.TrimSpace(locationID) {
+			return -1
+		}
+		return 30
+	case "role":
+		if _, ok := roleSet[scopeID]; !ok {
+			return -1
+		}
+		if strings.TrimSpace(item.LocationID) != "" {
+			if strings.TrimSpace(item.LocationID) != strings.TrimSpace(locationID) {
+				return -1
+			}
+			return 50
+		}
+		if strings.TrimSpace(item.OrganizationID) != "" {
+			if strings.TrimSpace(item.OrganizationID) != strings.TrimSpace(organizationID) {
+				return -1
+			}
+			return 45
+		}
+		return 40
+	default:
+		return -1
+	}
 }
 
 func (s *Service) Dashboards() []Dashboard {

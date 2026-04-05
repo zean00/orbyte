@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/acp"
+	"orbyte/internal/platform/analytics"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
@@ -21,7 +22,7 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, acpSvc *acp.Service, mcpServer *mcp.Server) {
+func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *organization.Service, ident *identity.Service, analyticsSvc *analytics.Service, modules *module.Service, workflowSvc *workflow.Service, auditSvc *audit.Service, policySvc *policy.Service, acpSvc *acp.Service, mcpServer *mcp.Server) {
 	mux.HandleFunc("GET /admin/api/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read")
 		if !ok {
@@ -93,6 +94,22 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListDefinitions()})
+	})
+
+	mux.HandleFunc("GET /admin/api/dashboards/summary", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAuthorization(w, r, ident, "analytics.read", "", "analytics.read"); !ok {
+			return
+		}
+		surface := strings.TrimSpace(r.URL.Query().Get("surface"))
+		if surface == "" {
+			surface = string(module.UISurfaceDashboard)
+		}
+		items := analyticsSvc.DashboardsForSurface(surface)
+		respondJSON(w, http.StatusOK, map[string]any{
+			"surface": surface,
+			"count":   len(items),
+			"items":   items,
+		})
 	})
 
 	mux.HandleFunc("GET /admin/api/mcp", func(w http.ResponseWriter, r *http.Request) {

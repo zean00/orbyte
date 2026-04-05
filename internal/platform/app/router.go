@@ -129,6 +129,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 				Flags:         graph.flags,
 				Organization:  graph.organization,
 				Identity:      graph.identity,
+				Analytics:     graph.analytics,
 				Modules:       graph.modules,
 				Workflows:     graph.workflows,
 				Audit:         graph.audit,

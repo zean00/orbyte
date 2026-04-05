@@ -507,6 +507,46 @@ func commercialCoreKernelPackManifest() module.Manifest {
 					)...,
 				)...,
 			),
+			DashboardWidgets: []module.DashboardWidgetDefinition{
+				{
+					Key:                 "commercial.receivables.balance",
+					Title:               "Receivables Open Balance",
+					TitleI18n:           localize("Receivables Open Balance", "Saldo Piutang Terbuka"),
+					Surface:             module.UISurfaceDashboard,
+					RendererKind:        "metric",
+					RefreshPolicy:       "hourly",
+					DataPath:            "/ui/data/commercial/receivables/summary",
+					RequiredPermissions: []string{"document.list"},
+					DefaultWidth:        3,
+					DefaultHeight:       1,
+					Metric: &module.DashboardMetricSpec{
+						ValuePath: "open_balance_total",
+						DeltaPath: "overdue_balance_total",
+						Format:    "currency",
+					},
+				},
+				{
+					Key:                 "commercial.receivables.items",
+					Title:               "Receivables Aging",
+					TitleI18n:           localize("Receivables Aging", "Penuaan Piutang"),
+					Surface:             module.UISurfaceDashboard,
+					RendererKind:        "table",
+					RefreshPolicy:       "hourly",
+					DataPath:            "/ui/data/commercial/receivables/summary",
+					RequiredPermissions: []string{"document.list"},
+					DefaultWidth:        6,
+					DefaultHeight:       2,
+					Table: &module.DashboardTableSpec{
+						RowsPath: "items",
+						Columns: []module.ColumnDefinition{
+							{Key: "number", Label: "Invoice", LabelI18n: localize("Invoice", "Faktur"), Path: "number"},
+							{Key: "party_name", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Path: "party_name"},
+							{Key: "balance_due", Label: "Open Balance", LabelI18n: localize("Open Balance", "Saldo Terbuka"), Path: "balance_due"},
+							{Key: "aging_bucket", Label: "Aging", LabelI18n: localize("Aging", "Penuaan"), Path: "aging_bucket"},
+						},
+					},
+				},
+			},
 		},
 		Templates: []module.TemplateDefinition{
 			commercialTemplateDefinition("commercial.sales_order.print.default", "Sales Order Print", "sales_order", "Sales Order", []string{"party_name", "order_date", "currency_code", "total_amount", "lines"}),
@@ -1517,7 +1557,7 @@ func refundFormSections() []module.SectionDefinition {
 }
 
 func ledgerFormSections() []module.SectionDefinition {
-		return []module.SectionDefinition{
+	return []module.SectionDefinition{
 		{Key: "posting", Title: "Posting Details", TitleI18n: localize("Posting Details", "Detail Posting"), Fields: []module.FieldDefinition{
 			{Key: "source_document_type", Label: "Source Document Type", LabelI18n: localize("Source Document Type", "Tipe Dokumen Sumber"), Path: "body.payload.source_document_type", Type: "string", Widget: "text"},
 			{Key: "source_document_id", Label: "Source Document ID", LabelI18n: localize("Source Document ID", "ID Dokumen Sumber"), Path: "body.payload.source_document_id", Type: "string", Widget: "text"},

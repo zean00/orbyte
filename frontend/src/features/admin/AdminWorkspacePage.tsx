@@ -17,6 +17,7 @@ import {
   ModuleDependencyGraphPanel,
 } from "./AdminModuleConsolePage";
 import { AdminObservabilityContent } from "./AdminObservabilityContent";
+import { AdminDashboardBoardsPage } from "./AdminDashboardBoardsPage";
 import { AdminSecurityHooksPage } from "./AdminSecurityHooksPage";
 import { AdminTemplateListPage } from "./AdminTemplateListPage";
 import { AdminWorkflowListPage } from "./AdminWorkflowListPage";
@@ -184,6 +185,7 @@ function AdminContent({
           />
         );
       }}
+      renderDashboards={(data) => <AdminDashboardBoardsPage payload={data} />}
       renderFallback={(targetPath, data, adminBootstrap) => (
         <ValueCard
           label="Raw payload"

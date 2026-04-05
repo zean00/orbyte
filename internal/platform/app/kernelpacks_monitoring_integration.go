@@ -66,6 +66,27 @@ func monitoringKernelPackManifest() module.Manifest {
 					{Key: "projections", Label: "Document Summaries", LabelI18n: localize("Document Summaries", "Ringkasan Dokumen"), Path: "projections.document_summaries"},
 				},
 			}},
+			DashboardWidgets: []module.DashboardWidgetDefinition{
+				{
+					Key:                 "monitoring.outbox.pending",
+					Title:               "Outbox Pending",
+					TitleI18n:           localize("Outbox Pending", "Outbox Tertunda"),
+					Surface:             module.UISurfaceDashboard,
+					RendererKind:        "gauge",
+					RefreshPolicy:       "minutes",
+					DataPath:            "/ui/data/monitoring/summary",
+					RequiredPermissions: []string{"monitoring.read"},
+					DefaultWidth:        3,
+					DefaultHeight:       2,
+					Gauge: &module.DashboardGaugeSpec{
+						ValuePath:  "outbox.pending",
+						MinValue:   0,
+						MaxValue:   50,
+						Thresholds: []float64{5, 15, 30},
+						Format:     "number",
+					},
+				},
+			},
 		},
 	}
 }
