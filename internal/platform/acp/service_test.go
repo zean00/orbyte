@@ -565,6 +565,15 @@ func TestHandleNotificationAndSessionUpdate(t *testing.T) {
 	svc.handleNotification("session-1", "session/update", json.RawMessage(`{"sessionId":"remote","update":{"sessionUpdate":"agent_message_chunk","content":{"text":"hello"}}}`))
 	svc.handleNotification("session-1", "other/event", json.RawMessage(`{}`))
 	svc.handleSessionUpdate("session-1", "plan", map[string]any{"text": "step 1"})
+	svc.handleSessionUpdate("session-1", "artifact", map[string]any{
+		"kind":  "dashboard_board",
+		"title": "Sales Dashboard",
+		"metadata": map[string]any{
+			"kind":    "dashboard_board",
+			"title":   "Sales Dashboard",
+			"widgets": []map[string]any{{"id": "w1"}},
+		},
+	})
 	svc.handleSessionUpdate("session-1", "user_message_chunk", map[string]any{"text": "user"})
 	svc.handleSessionUpdate("session-1", "unknown", map[string]any{"text": "system"})
 	svc.handleSessionUpdate("session-1", "tool_call_started", map[string]any{"tool_name": "orbyte_module_list", "status": "running", "text": "listing modules"})
@@ -581,6 +590,9 @@ func TestHandleNotificationAndSessionUpdate(t *testing.T) {
 	if len(session.CurrentPlan) != 1 || session.CurrentPlan[0].Content != "step 1" {
 		t.Fatalf("unexpected plan entries: %#v", session.CurrentPlan)
 	}
+	if len(session.Artifacts) != 1 || session.Artifacts[0].Kind != "dashboard_board" {
+		t.Fatalf("expected dashboard artifact, got %#v", session.Artifacts)
+	}
 	var foundToolEvent bool
 	for _, item := range session.Trace {
 		if item.Kind == "tool_call_started" {
@@ -592,6 +604,40 @@ func TestHandleNotificationAndSessionUpdate(t *testing.T) {
 	}
 	if !foundToolEvent {
 		t.Fatal("expected tool_call_started event in trace")
+	}
+}
+
+func TestSendPromptPromotesDashboardArtifactsFromAssistantMessage(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		RemoteSession: "remote-1",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, _ *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			return errors.New("unexpected method")
+		}
+		session := svc.sessions["session-1"]
+		appendChunkMessage(session, "assistant", `Here is the dashboard.
+<orbyte-dashboard-artifact>{"kind":"dashboard_board","title":"Sales Dashboard","metadata":{"kind":"dashboard_board","title":"Sales Dashboard","widgets":[{"id":"w1","title":"Net Sales","kind":"metric","width":3,"height":1,"definition":{"key":"analytics.sales.net_sales","title":"Net Sales","renderer_kind":"metric","data_path":"/ui/data/dashboard/sales-demo","metric":{"value_path":"overview.net_sales"}}}]}}</orbyte-dashboard-artifact>`, map[string]any{"turn_id": session.CurrentTurnID})
+		client := svc.runtimes["session-1"].client
+		client.mu.Lock()
+		ch := client.pending[id]
+		client.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Create dashboard"})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(updated.Artifacts) != 1 || updated.Artifacts[0].Kind != "dashboard_board" {
+		t.Fatalf("expected promoted dashboard artifact, got %#v", updated.Artifacts)
 	}
 }
 

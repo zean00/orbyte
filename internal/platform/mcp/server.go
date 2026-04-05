@@ -4,9 +4,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -616,10 +619,316 @@ func (s *Server) analyticsDashboardGet(actor ActorContext, arguments map[string]
 		return nil, true, shared.NotFound("dashboard not found")
 	}
 	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded analytics dashboard %s.", item.Name)}},
-		"structuredContent": item,
-		"_meta":             s.analyticsAppMeta("dashboard", item.ID),
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded analytics dashboard %s.", item.Name)}},
+		"structuredContent": map[string]any{
+			"dashboard": item,
+			"artifact":  s.dashboardBoardArtifactPayload(item, actor),
+		},
+		"_meta": s.analyticsAppMeta("dashboard", item.ID),
 	}, true, nil
+}
+
+func (s *Server) analyticsDashboardWidgetCatalog(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	surface := firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard))
+	items := make([]module.DashboardWidgetDefinition, 0)
+	for _, item := range s.modules.DashboardWidgetsForSurface(module.UISurface(surface)) {
+		if !allowsAll(actor.PermissionChecker, item.RequiredPermissions) {
+			continue
+		}
+		items = append(items, item)
+	}
+	summary := fmt.Sprintf("Found %d dashboard widgets for %s.", len(items), surface)
+	if len(items) > 0 {
+		lines := make([]string, 0, len(items))
+		for _, item := range items {
+			lines = append(lines, fmt.Sprintf("%s (%s, %s, %s)", item.Key, firstNonEmpty(item.Title, item.Key), firstNonEmpty(item.RendererKind, "metric"), firstNonEmpty(item.DataPath, "-")))
+		}
+		summary = summary + " Available widgets: " + strings.Join(lines, "; ")
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: summary}},
+		"structuredContent": map[string]any{"surface": surface, "items": items},
+	}, true, nil
+}
+
+func (s *Server) analyticsDashboardBoardPreview(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	board, err := s.dashboardBoardFromArguments(actor, arguments, false)
+	if err != nil {
+		return nil, true, err
+	}
+	artifact := s.dashboardBoardArtifactPayload(board, actor)
+	artifactBlock := dashboardArtifactBlockText(artifact)
+	insightSummary := s.dashboardBoardInsightSummary(actor, board)
+	text := fmt.Sprintf("Prepared dashboard board preview %s. Widget keys: %s.", board.Name, dashboardWidgetKeySummary(board.Widgets))
+	if strings.TrimSpace(insightSummary) != "" {
+		text += " " + insightSummary
+	}
+	text += fmt.Sprintf(" Include this exact dashboard artifact block in your final answer when presenting this preview: %s", artifactBlock)
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"dashboard": board,
+			"artifact":  artifact,
+		},
+	}, true, nil
+}
+
+func (s *Server) analyticsDashboardBoardCreate(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.analytics == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.author"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	board, err := s.dashboardBoardFromArguments(actor, arguments, true)
+	if err != nil {
+		return nil, true, err
+	}
+	saved, err := s.analytics.SaveDashboard(board)
+	if err != nil {
+		return nil, true, err
+	}
+	artifact := s.dashboardBoardArtifactPayload(saved, actor)
+	artifactBlock := dashboardArtifactBlockText(artifact)
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Include this exact dashboard artifact block in your final answer so the workspace can render it live: %s", saved.Name, dashboardWidgetKeySummary(saved.Widgets), artifactBlock)}},
+		"structuredContent": map[string]any{
+			"dashboard": saved,
+			"artifact":  artifact,
+		},
+		"_meta": s.analyticsAppMeta("dashboard", saved.ID),
+	}, true, nil
+}
+
+func dashboardWidgetKeySummary(widgets []analytics.DashboardWidget) string {
+	if len(widgets) == 0 {
+		return "none"
+	}
+	lines := make([]string, 0, len(widgets))
+	for _, widget := range widgets {
+		lines = append(lines, firstNonEmpty(widget.WidgetKey, firstNonEmpty(widget.Title, "widget")))
+	}
+	return strings.Join(lines, ", ")
+}
+
+func (s *Server) dashboardBoardInsightSummary(actor ActorContext, board analytics.Dashboard) string {
+	if len(board.Widgets) == 0 {
+		return ""
+	}
+	hasSalesDemo := false
+	hasPlanningReplenishment := false
+	for _, widget := range board.Widgets {
+		key := strings.TrimSpace(widget.WidgetKey)
+		if strings.HasPrefix(key, "analytics.demo.sales.") {
+			hasSalesDemo = true
+		}
+		if strings.HasPrefix(key, "planning.replenishment.") {
+			hasPlanningReplenishment = true
+		}
+	}
+	if hasSalesDemo {
+		return s.dashboardDemoSalesSummary()
+	}
+	if hasPlanningReplenishment && s != nil && s.planning != nil {
+		return s.dashboardPlanningReplenishmentSummary(actor, board)
+	}
+	return ""
+}
+
+func (s *Server) dashboardDemoSalesSummary() string {
+	if s == nil || s.analytics == nil {
+		return ""
+	}
+	points := mcpDashboardDemoSalesRows(s.analytics.Snapshot())
+	if len(points) == 0 {
+		return ""
+	}
+	best := points[0]
+	laggards := make([]mcpDashboardDemoSalesRow, 0, 2)
+	for _, point := range points[1:] {
+		laggards = append(laggards, point)
+	}
+	sort.SliceStable(laggards, func(i, j int) bool {
+		return laggards[i].NetSales < laggards[j].NetSales
+	})
+	parts := []string{
+		fmt.Sprintf("Demo sales highlights: %s leads on net sales at %s.", best.Label, formatWholeNumber(best.NetSales)),
+	}
+	if len(laggards) > 0 {
+		names := make([]string, 0, len(laggards))
+		for _, point := range laggards {
+			names = append(names, point.Label)
+			if len(names) >= 2 {
+				break
+			}
+		}
+		if len(names) > 0 {
+			parts = append(parts, fmt.Sprintf("%s are trailing the benchmark in this demo dataset.", strings.Join(names, " and ")))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+type mcpDashboardDemoSalesRow struct {
+	LocationID  string
+	Label       string
+	NetSales    float64
+	TargetSales float64
+}
+
+func mcpDashboardDemoSalesRows(snapshot analytics.Snapshot) []mcpDashboardDemoSalesRow {
+	keys := make([]string, 0, len(snapshot.Segments.ByLocation))
+	for key := range snapshot.Segments.ByLocation {
+		if !strings.HasPrefix(strings.TrimSpace(key), "loc_demo_") {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	rows := make([]mcpDashboardDemoSalesRow, 0, len(keys))
+	for _, key := range keys {
+		kpi := snapshot.Segments.ByLocation[key]
+		netSales, targetSales := mcpSyntheticSalesForLocation(key, kpi)
+		rows = append(rows, mcpDashboardDemoSalesRow{
+			LocationID:  key,
+			Label:       mcpDashboardLocationLabel(key),
+			NetSales:    netSales,
+			TargetSales: targetSales,
+		})
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		return rows[i].NetSales > rows[j].NetSales
+	})
+	return rows
+}
+
+func mcpSyntheticSalesForLocation(locationID string, kpi analytics.DocumentKPI) (float64, float64) {
+	switch strings.TrimSpace(locationID) {
+	case "loc_demo_central":
+		return 7900000, 10800000
+	case "loc_demo_west":
+		return 9800000, 11800000
+	case "loc_demo_east":
+		return 15800000, 14900000
+	default:
+		baseSales := float64(kpi.Submitted*1250000 + kpi.Approved*1850000 + 3500000)
+		targetSales := baseSales * 1.1
+		return baseSales, targetSales
+	}
+}
+
+func mcpDashboardLocationLabel(locationID string) string {
+	switch strings.TrimSpace(locationID) {
+	case "":
+		return "Unscoped"
+	case "loc_hq":
+		return "Head Office"
+	case "loc_demo_central":
+		return "Loc Demo Central"
+	case "loc_demo_east":
+		return "Loc Demo East"
+	case "loc_demo_west":
+		return "Loc Demo West"
+	default:
+		return locationID
+	}
+}
+
+func formatWholeNumber(value float64) string {
+	return strconv.FormatFloat(math.Round(value), 'f', 0, 64)
+}
+
+func (s *Server) dashboardPlanningReplenishmentSummary(actor ActorContext, board analytics.Dashboard) string {
+	if s == nil || s.planning == nil {
+		return ""
+	}
+	warehouseCode := extractWarehouseCode(board.Description + " " + board.Name)
+	summary := s.planning.ReplenishmentSummaryScoped(
+		actor.OrganizationID,
+		actor.LocationID,
+		warehouseCode,
+		"",
+		"",
+		"",
+		false,
+		false,
+		false,
+		time.Now().UTC(),
+	)
+	if len(summary.Items) == 0 {
+		return ""
+	}
+	atRisk := make([]string, 0, 2)
+	healthy := make([]string, 0, 2)
+	for _, row := range summary.Items {
+		name := firstNonEmpty(textValue(row["item_name"]), textValue(row["item_code"]))
+		if name == "" {
+			continue
+		}
+		if roundedQuantity(numberValue(row["suggested_request_quantity"])) > 0 {
+			atRisk = append(atRisk, fmt.Sprintf("%s (%s suggested)", name, formatQuantityLabel(numberValue(row["suggested_request_quantity"]))))
+		} else {
+			healthy = append(healthy, name)
+		}
+		if len(atRisk) >= 2 && len(healthy) >= 2 {
+			break
+		}
+	}
+	parts := []string{
+		fmt.Sprintf("Replenishment highlights: %d shortage candidates and %s suggested units", summary.ShortageItemCount, formatQuantityLabel(summary.TotalSuggestedRequestQuantity)),
+	}
+	if warehouseCode != "" {
+		parts = append(parts, fmt.Sprintf("for warehouse %s", warehouseCode))
+	}
+	if len(atRisk) > 0 {
+		parts = append(parts, "At-risk items: "+strings.Join(atRisk, "; "))
+	}
+	if len(healthy) > 0 {
+		parts = append(parts, "Healthy items to skip: "+strings.Join(healthy, "; "))
+	}
+	return strings.Join(parts, ". ") + "."
+}
+
+func extractWarehouseCode(text string) string {
+	for _, token := range strings.Fields(strings.NewReplacer(",", " ", ".", " ", ";", " ", "\"", " ").Replace(text)) {
+		token = strings.TrimSpace(token)
+		if strings.HasPrefix(token, "WH-") {
+			return token
+		}
+	}
+	return ""
+}
+
+func formatQuantityLabel(value float64) string {
+	rounded := roundedQuantity(value)
+	if math.Abs(rounded-math.Round(rounded)) < 0.00001 {
+		return strconv.FormatInt(int64(math.Round(rounded)), 10)
+	}
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
+}
+
+func roundedQuantity(value float64) float64 {
+	return math.Round(value*100) / 100
+}
+
+func dashboardArtifactBlockText(artifact map[string]any) string {
+	body, err := json.Marshal(artifact)
+	if err != nil {
+		return "<orbyte-dashboard-artifact>{}</orbyte-dashboard-artifact>"
+	}
+	return "<orbyte-dashboard-artifact>" + string(body) + "</orbyte-dashboard-artifact>"
 }
 
 func (s *Server) analyticsDashboardSave(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
@@ -642,9 +951,12 @@ func (s *Server) analyticsDashboardSave(actor ActorContext, arguments map[string
 		return nil, true, err
 	}
 	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Saved analytics dashboard %s.", saved.Name)}},
-		"structuredContent": saved,
-		"_meta":             s.analyticsAppMeta("dashboard", saved.ID),
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Saved analytics dashboard %s.", saved.Name)}},
+		"structuredContent": map[string]any{
+			"dashboard": saved,
+			"artifact":  s.dashboardBoardArtifactPayload(saved, actor),
+		},
+		"_meta": s.analyticsAppMeta("dashboard", saved.ID),
 	}, true, nil
 }
 
@@ -660,6 +972,181 @@ func (s *Server) analyticsDashboardDelete(actor ActorContext, arguments map[stri
 		return nil, true, err
 	}
 	return map[string]any{"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Deleted analytics dashboard %s.", id)}}}, true, nil
+}
+
+func (s *Server) dashboardBoardFromArguments(actor ActorContext, arguments map[string]any, requireTitle bool) (analytics.Dashboard, error) {
+	surface := firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard))
+	widgetKeys := stringArrayArg(arguments, "widget_keys")
+	title := strings.TrimSpace(stringArg(arguments, "title"))
+	if requireTitle && title == "" {
+		return analytics.Dashboard{}, shared.Validation("title is required")
+	}
+	if title == "" {
+		title = "Agent Dashboard Preview"
+	}
+	description := strings.TrimSpace(stringArg(arguments, "description"))
+	if len(widgetKeys) == 0 {
+		widgetKeys = s.recommendedDashboardWidgetKeys(actor, module.UISurface(surface), title, description)
+	}
+	if len(widgetKeys) == 0 {
+		return analytics.Dashboard{}, shared.Validation("widget_keys is required when Orbyte cannot infer matching widgets from the title and description")
+	}
+	widgets := make([]analytics.DashboardWidget, 0, len(widgetKeys))
+	for index, key := range widgetKeys {
+		def, ok := s.modules.DashboardWidgetForSurface(key, module.UISurface(surface))
+		if !ok {
+			return analytics.Dashboard{}, shared.NotFound("dashboard widget not found")
+		}
+		if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+			return analytics.Dashboard{}, shared.Forbidden("dashboard widget is not allowed")
+		}
+		widgets = append(widgets, analytics.DashboardWidget{
+			Title:     firstNonEmpty(def.Title, key),
+			Kind:      firstNonEmpty(def.RendererKind, "metric"),
+			WidgetKey: def.Key,
+			Width:     widgetSizeValue(def.DefaultWidth, 3),
+			Height:    widgetSizeValue(def.DefaultHeight, 1),
+			Order:     index + 1,
+		})
+	}
+	return analytics.Dashboard{
+		Name:        title,
+		Description: description,
+		Surface:     surface,
+		Visibility:  "private",
+		IsDefault:   false,
+		Status:      "active",
+		Widgets:     widgets,
+		RuntimeScope: analytics.RuntimeScope{
+			ScopeType:      "user",
+			OwnerUserID:    firstNonEmpty(actor.EffectiveUserID, actor.ActorID),
+			OrganizationID: actor.OrganizationID,
+			LocationID:     actor.LocationID,
+		},
+		UpdatedBy: firstNonEmpty(actor.EffectiveUserID, actor.ActorID),
+	}, nil
+}
+
+func (s *Server) recommendedDashboardWidgetKeys(actor ActorContext, surface module.UISurface, title, description string) []string {
+	if s == nil || s.modules == nil {
+		return nil
+	}
+	items := s.modules.DashboardWidgetsForSurface(surface)
+	if len(items) == 0 {
+		return nil
+	}
+	needles := strings.ToLower(strings.TrimSpace(title + " " + description))
+	if needles == "" {
+		return nil
+	}
+	selected := make([]string, 0)
+	seen := make(map[string]struct{})
+	add := func(key string) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return
+		}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		selected = append(selected, key)
+	}
+	// Demo-only sales widgets are intentionally never inferred for generic
+	// sales prompts. They should only be selected explicitly through the
+	// catalog or via scenario-specific prompts that pass widget keys.
+	if strings.Contains(needles, "replenishment") ||
+		strings.Contains(needles, "shortage") ||
+		(strings.Contains(needles, "warehouse") &&
+			(strings.Contains(needles, "suggested") ||
+				strings.Contains(needles, "risk") ||
+				strings.Contains(needles, "stock"))) {
+		for _, key := range []string{
+			"planning.replenishment.shortages",
+			"planning.replenishment.items",
+		} {
+			if def, ok := s.modules.DashboardWidgetForSurface(key, surface); ok && allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+				add(key)
+			}
+		}
+		if len(selected) > 0 {
+			return selected
+		}
+	}
+	type scoredWidget struct {
+		key   string
+		score int
+	}
+	scored := make([]scoredWidget, 0, len(items))
+	for _, item := range items {
+		if !allowsAll(actor.PermissionChecker, item.RequiredPermissions) {
+			continue
+		}
+		text := strings.ToLower(strings.Join([]string{item.Key, item.Title, item.RendererKind, item.DataPath}, " "))
+		score := 0
+		for _, token := range strings.Fields(needles) {
+			if len(token) < 3 {
+				continue
+			}
+			if strings.Contains(text, token) {
+				score++
+			}
+		}
+		if score == 0 {
+			continue
+		}
+		scored = append(scored, scoredWidget{key: item.Key, score: score})
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return scored[i].key < scored[j].key
+		}
+		return scored[i].score > scored[j].score
+	})
+	for _, item := range scored {
+		add(item.key)
+		if len(selected) >= 6 {
+			break
+		}
+	}
+	return selected
+}
+
+func (s *Server) dashboardBoardArtifactPayload(item analytics.Dashboard, actor ActorContext) map[string]any {
+	surface := firstNonEmpty(strings.TrimSpace(item.Surface), string(module.UISurfaceDashboard))
+	widgets := make([]map[string]any, 0, len(item.Widgets))
+	for _, widget := range item.Widgets {
+		def, ok := s.modules.DashboardWidgetForSurface(widget.WidgetKey, module.UISurface(surface))
+		if !ok {
+			continue
+		}
+		if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+			continue
+		}
+		widgets = append(widgets, map[string]any{
+			"id":               widget.ID,
+			"title":            firstNonEmpty(widget.Title, def.Title),
+			"kind":             firstNonEmpty(widget.Kind, def.RendererKind),
+			"width":            widgetSizeValue(widget.Width, widgetSizeValue(def.DefaultWidth, 3)),
+			"height":           widgetSizeValue(widget.Height, widgetSizeValue(def.DefaultHeight, 1)),
+			"refresh_override": widget.RefreshOverride,
+			"definition":       def,
+		})
+	}
+	return map[string]any{
+		"id":      firstNonEmpty(item.ID, shared.NewID("artifact")),
+		"kind":    "dashboard_board",
+		"title":   firstNonEmpty(item.Name, "Dashboard board"),
+		"content": "",
+		"metadata": map[string]any{
+			"kind":      "dashboard_board",
+			"title":     firstNonEmpty(item.Name, "Dashboard board"),
+			"surface":   surface,
+			"board_id":  item.ID,
+			"open_path": "/ui/dashboard",
+			"widgets":   widgets,
+		},
+	}
 }
 
 func (s *Server) analyticsMetricList(actor ActorContext, _ map[string]any) (map[string]any, bool, error) {
@@ -1075,6 +1562,27 @@ func boolArg(arguments map[string]any, key string) bool {
 	value, _ := arguments[key]
 	typed, _ := value.(bool)
 	return typed
+}
+
+func stringArrayArg(arguments map[string]any, key string) []string {
+	value, _ := arguments[key]
+	items, _ := value.([]any)
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		text, _ := item.(string)
+		text = strings.TrimSpace(text)
+		if text != "" {
+			result = append(result, text)
+		}
+	}
+	return result
+}
+
+func widgetSizeValue(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
 
 func encodeBytes(payload []byte) string {

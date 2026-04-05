@@ -43,12 +43,14 @@ type documentFacts struct {
 }
 
 type promptExpectation struct {
-	ID               string            `json:"id"`
-	Prompt           string            `json:"prompt"`
-	RequiredFacts    []requiredFact    `json:"required_facts"`
-	AllowedVariants  []string          `json:"allowed_variants,omitempty"`
-	ForbiddenPhrases []string          `json:"forbidden_phrases,omitempty"`
-	ExpectedDraft    *draftExpectation `json:"expected_draft,omitempty"`
+	ID               string               `json:"id"`
+	Prompt           string               `json:"prompt"`
+	RequiredFacts    []requiredFact       `json:"required_facts"`
+	AllowedVariants  []string             `json:"allowed_variants,omitempty"`
+	ForbiddenPhrases []string             `json:"forbidden_phrases,omitempty"`
+	ExpectedArtifact *artifactExpectation `json:"expected_artifact,omitempty"`
+	ExpectedPlan     *planExpectation     `json:"expected_plan,omitempty"`
+	ExpectedDraft    *draftExpectation    `json:"expected_draft,omitempty"`
 }
 
 type requiredFact struct {
@@ -63,11 +65,25 @@ type draftExpectation struct {
 	PayloadChecks []string `json:"payload_checks,omitempty"`
 }
 
+type artifactExpectation struct {
+	Kind        string   `json:"kind"`
+	TitleChecks []string `json:"title_checks,omitempty"`
+	WidgetKeys  []string `json:"widget_keys,omitempty"`
+	MinWidgets  int      `json:"min_widgets,omitempty"`
+}
+
+type planExpectation struct {
+	MinSteps      int      `json:"min_steps,omitempty"`
+	ContentChecks []string `json:"content_checks,omitempty"`
+}
+
 type sessionTranscript struct {
-	ID       string              `json:"id"`
-	Title    string              `json:"title"`
-	Messages []sessionMessage    `json:"messages"`
-	Trace    []sessionTraceEvent `json:"trace"`
+	ID          string              `json:"id"`
+	Title       string              `json:"title"`
+	Messages    []sessionMessage    `json:"messages"`
+	Trace       []sessionTraceEvent `json:"trace"`
+	Artifacts   []sessionArtifact   `json:"artifacts,omitempty"`
+	CurrentPlan []sessionPlanEntry  `json:"current_plan,omitempty"`
 }
 
 type sessionMessage struct {
@@ -80,6 +96,19 @@ type sessionTraceEvent struct {
 	ID      string         `json:"id"`
 	Kind    string         `json:"kind"`
 	Payload map[string]any `json:"payload"`
+}
+
+type sessionArtifact struct {
+	ID       string         `json:"id"`
+	Kind     string         `json:"kind"`
+	Title    string         `json:"title"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+type sessionPlanEntry struct {
+	Content  string `json:"content"`
+	Priority string `json:"priority,omitempty"`
+	Status   string `json:"status,omitempty"`
 }
 
 type analysisReport struct {
@@ -106,6 +135,10 @@ type promptAnalysisResult struct {
 	Contradictions     []string `json:"contradictions"`
 	Investigation      string   `json:"investigation"`
 	ToolCallCount      int      `json:"tool_call_count"`
+	ArtifactVerified   bool     `json:"artifact_verified,omitempty"`
+	ArtifactKind       string   `json:"artifact_kind,omitempty"`
+	PlanVerified       bool     `json:"plan_verified,omitempty"`
+	PlanStepCount      int      `json:"plan_step_count,omitempty"`
 	DraftVerified      bool     `json:"draft_verified,omitempty"`
 	DraftDocumentID    string   `json:"draft_document_id,omitempty"`
 }

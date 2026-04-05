@@ -792,6 +792,131 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 	return manifest, nil
 }
 
+func seedInventoryDashboardReplenishmentExecuteScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	manifest, err := seedInventoryReplenishmentExecuteScenario(ctx, client, baseURL, opencodeCommand)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+	warehouseCode := stringValue(manifest.Entities["warehouse"]["code"])
+	vendorName := stringValue(manifest.Entities["vendor"]["name"])
+	coldBrewCode := stringValue(manifest.Entities["cold_brew_beans"]["sku"])
+	oatMilkCode := stringValue(manifest.Entities["oat_milk"]["sku"])
+	manifest.Scenario = "inventory_dashboard_replenishment_execute"
+	manifest.DomainBundle = "planning-procurement-dashboard"
+	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("inventory_dashboard_replenishment_execute") + fmt.Sprintf(`
+- For replenishment insight questions, first call analytics.dashboard.widget_catalog with surface "dashboard".
+- Then call analytics.dashboard.board.preview with title "Replenishment Risk Dashboard", surface "dashboard", and a description covering warehouse %s replenishment risk, shortage candidates, suggested request quantity, and due-soon replenishment.
+- For this replenishment dashboard scenario, use the planning.replenishment widget family and do not use unrelated sales or demo widgets in the dashboard artifact.
+- Do not hand-pick dashboard widget keys for the insight turn. Let analytics.dashboard.board.preview infer the planning widget set from the title and description.
+- In the first paragraph of the insight answer, explicitly identify the at-risk items and the healthy items to skip for warehouse %s when the dashboard evidence supports it.
+- When the dashboard preview tool returns the <orbyte-dashboard-artifact> block, copy that block exactly into your final answer unchanged.
+- For planning questions, base the plan on the dashboard evidence, keep the answer stepwise as a numbered list using "1.", "2.", and "3." style markers, and do not execute the plan.
+- For execute questions, do not call dashboard or analytics tools again. Immediately call planning_core.purchase_requests.draft.create with the recommended selections for warehouse %s, do not submit the drafts, and restate the created purchase request draft ids, vendor, and line quantities.`, warehouseCode, warehouseCode, warehouseCode))
+	manifest.GroundTruth["dashboard_widget_keys"] = []string{
+		"planning.replenishment.shortages",
+		"planning.replenishment.items",
+	}
+	manifest.PromptPack = inventoryDashboardReplenishmentExecutePromptPack(manifest.RunID, warehouseCode, vendorName, coldBrewCode, oatMilkCode)
+	return manifest, nil
+}
+
+func seedSalesDashboardRecoveryExecuteScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "sales_dashboard_recovery_execute", "analytics-recovery", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	draftTitle := "Sales Recovery Plan " + runID
+	type documentSeed struct {
+		documentType string
+		locationID   string
+		status       string
+		title        string
+	}
+	batches := [][]documentSeed{
+		{
+			{documentType: "generic_request", locationID: "loc_demo_central", status: "submitted", title: "Central soft demand " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "approved", title: "West branch sale " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East branch flagship sale " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East branch receivable " + runID},
+		},
+		{
+			{documentType: "generic_request", locationID: "loc_demo_central", status: "submitted", title: "Central recovery escalation " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "submitted", title: "West catch-up order " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "approved", title: "West branch invoice " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East expansion sale " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East branch billing " + runID},
+		},
+		{
+			{documentType: "generic_request", locationID: "loc_demo_central", status: "draft", title: "Central tentative order " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "approved", title: "West branch renewal " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East enterprise uplift " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East month-end invoice " + runID},
+		},
+	}
+
+	for batchIndex, batch := range batches {
+		for _, item := range batch {
+			created, err := client.createDocument(ctx, map[string]any{
+				"type":            item.documentType,
+				"organization_id": defaultOrgID,
+				"location_id":     item.locationID,
+				"payload":         map[string]any{"title": item.title},
+			})
+			if err != nil {
+				return scenarioManifest{}, fmt.Errorf("seed %s: %w", item.documentType, err)
+			}
+			switch item.status {
+			case "approved":
+				if _, err := submitApproveAndMaybeStop(ctx, client, created.ID, true); err != nil {
+					return scenarioManifest{}, fmt.Errorf("seed approved %s: %w", item.documentType, err)
+				}
+			case "submitted":
+				if _, err := submitApproveAndMaybeStop(ctx, client, created.ID, false); err != nil {
+					return scenarioManifest{}, fmt.Errorf("submit %s: %w", item.documentType, err)
+				}
+			}
+		}
+		if err := client.captureAnalyticsSnapshot(ctx); err != nil {
+			return scenarioManifest{}, fmt.Errorf("capture analytics snapshot batch %d: %w", batchIndex+1, err)
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+
+	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("sales_dashboard_recovery_execute") + `
+- For insight questions about branch performance, first call analytics.dashboard.widget_catalog with surface "dashboard".
+- Then call analytics.dashboard.board.preview with title "Sales Performance Dashboard", surface "dashboard", and explicit widget_keys from the analytics.demo.sales widget family.
+- Use the analytics.demo.sales widget family for this synthetic scenario and do not mix in other widget families.
+- In the first paragraph of the insight answer, explicitly state that Loc Demo Central and Loc Demo West are underperforming compared with Loc Demo East as the benchmark leader when the data supports it.
+- When the dashboard preview tool returns the <orbyte-dashboard-artifact> block, copy that block exactly into your final answer unchanged.
+- Name Loc Demo Central and Loc Demo West explicitly as underperforming when they trail the benchmark, and explicitly name Loc Demo East as the benchmark when it leads.
+- For planning questions, base the plan on the dashboard evidence, keep the answer stepwise as a numbered list using "1.", "2.", and "3." style markers, and do not execute the plan.
+- For execute questions, do not call analytics or business-info tools again. Immediately call business.document.draft.create with document_type "generic_request", location_id "loc_hq", organization_id "org_default", confirm_apply true, and a payload containing title, summary, branches, benchmark, and follow_up.
+- After creating the draft, restate it as a draft generic request including the exact draft title, draft id, open path, and the seeded branch/benchmark/follow-up details.`)
+	manifest.Entities = map[string]map[string]any{
+		"central_branch": {"location_id": "loc_demo_central", "label": "Loc Demo Central"},
+		"east_branch":    {"location_id": "loc_demo_east", "label": "Loc Demo East"},
+		"west_branch":    {"location_id": "loc_demo_west", "label": "Loc Demo West"},
+	}
+	manifest.GroundTruth = map[string]any{
+		"underperforming_branches": []string{"Loc Demo Central", "Loc Demo West"},
+		"benchmark_branch":         "Loc Demo East",
+		"dashboard_widget_keys": []string{
+			"analytics.demo.sales.net_sales",
+			"analytics.demo.sales.target_attainment",
+			"analytics.demo.sales.daily_trend",
+			"analytics.demo.sales.branch_mix",
+			"analytics.demo.sales.branch_table",
+			"analytics.demo.sales.branch_map",
+		},
+		"draft_title":         draftTitle,
+		"draft_document_type": "generic_request",
+	}
+	manifest.PromptPack = salesDashboardRecoveryExecutePromptPack(runID, draftTitle)
+	return manifest, nil
+}
+
 func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
 	runID, suffix := newRunContext()
 	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "pos_promotion_strategy", "retail-promotion", runID, suffix)
@@ -1637,6 +1762,25 @@ func submitApproveAndActionDocument(ctx context.Context, client *apiClient, id, 
 	return current, nil
 }
 
+func submitApproveAndMaybeStop(ctx context.Context, client *apiClient, id string, approve bool) (documentFacts, error) {
+	current, version, etag, err := client.getDocument(ctx, id)
+	if err != nil {
+		return documentFacts{}, err
+	}
+	current, version, etag, err = client.actionDocument(ctx, current.ID, version, etag, "submit")
+	if err != nil {
+		return documentFacts{}, err
+	}
+	if !approve {
+		return current, nil
+	}
+	current, _, _, err = client.actionDocument(ctx, current.ID, version, etag, "approve")
+	if err != nil {
+		return documentFacts{}, err
+	}
+	return current, nil
+}
+
 func employeeSpendPromptPack(name string) []promptExpectation {
 	return []promptExpectation{
 		{ID: "summary", Prompt: fmt.Sprintf("Give a concise summary of %s's employee-spend flow and current end state.", name), RequiredFacts: []requiredFact{{Key: "travel_request_approved", Severity: "high", Checks: []string{"travel request", "approved"}}, {Key: "cash_advance_approved", Severity: "high", Checks: []string{"cash advance", "100"}}, {Key: "expense_claim_approved", Severity: "high", Checks: []string{"expense claim", "170"}}, {Key: "reimbursement_paid", Severity: "high", Checks: []string{"reimbursement", "paid"}}}, ForbiddenPhrases: []string{"employee owes company", "pending approval"}},
@@ -1739,6 +1883,112 @@ func inventoryReplenishmentExecutePromptPack(runID, warehouseCode, vendorName, c
 			ExpectedDraft: &draftExpectation{
 				DocumentType:  "purchase_request",
 				PayloadChecks: []string{"cold brew", "20", "oat milk", "16", "north roast"},
+			},
+		},
+	}
+}
+
+func inventoryDashboardReplenishmentExecutePromptPack(runID, warehouseCode, vendorName, coldBrewCode, oatMilkCode string) []promptExpectation {
+	coldBrewName := "Cold Brew Beans 1kg " + runID
+	oatMilkName := "Oat Milk Barista 1L " + runID
+	matchaName := "Matcha Powder 500g " + runID
+	cupsName := "Paper Cups 16oz " + runID
+	return []promptExpectation{
+		{
+			ID:     "insight",
+			Prompt: fmt.Sprintf("For warehouse %s, show me the most relevant dashboard widgets for replenishment risk and tell me which inventory items are at active replenishment risk, which items are healthy enough to skip, and why.", warehouseCode),
+			RequiredFacts: []requiredFact{
+				{Key: "risk_cold_brew", Severity: "critical", Checks: []string{coldBrewName}},
+				{Key: "risk_oat_milk", Severity: "critical", Checks: []string{oatMilkName}},
+				{Key: "skip_matcha", Severity: "high", Checks: []string{matchaName}},
+				{Key: "skip_cups", Severity: "high", Checks: []string{cupsName}},
+			},
+			ForbiddenPhrases: []string{"all items are healthy", "no replenishment risk"},
+			ExpectedArtifact: &artifactExpectation{
+				Kind:        "dashboard_board",
+				TitleChecks: []string{"replenishment", "dashboard"},
+				WidgetKeys:  []string{"planning.replenishment.shortages", "planning.replenishment.items"},
+				MinWidgets:  2,
+			},
+		},
+		{
+			ID:     "plan",
+			Prompt: fmt.Sprintf("Based on that dashboard, create a stepwise replenishment plan for warehouse %s. Keep it focused on the at-risk items, include exact quantities and vendor, and do not execute it.", warehouseCode),
+			RequiredFacts: []requiredFact{
+				{Key: "plan_cold_brew_qty", Severity: "critical", Checks: []string{coldBrewName, "20"}},
+				{Key: "plan_oat_milk_qty", Severity: "critical", Checks: []string{oatMilkName, "16"}},
+				{Key: "plan_vendor", Severity: "critical", Checks: []string{vendorName}},
+			},
+			ExpectedPlan: &planExpectation{
+				MinSteps:      2,
+				ContentChecks: []string{coldBrewName, oatMilkName, vendorName, "20", "16"},
+			},
+			ForbiddenPhrases: []string{"submit now"},
+		},
+		{
+			ID:     "execute",
+			Prompt: fmt.Sprintf("Create draft purchase request documents from that replenishment plan for warehouse %s. Use the recommended quantities, do not submit them, and then tell me the draft ids, vendor, and what was created.", warehouseCode),
+			RequiredFacts: []requiredFact{
+				{Key: "draft_created", Severity: "critical", Checks: []string{"draft", "purchase request"}},
+				{Key: "draft_vendor", Severity: "critical", Checks: []string{vendorName}},
+				{Key: "draft_items", Severity: "critical", Checks: []string{"cold brew", "20", "oat milk", "16"}},
+			},
+			ForbiddenPhrases: []string{"submitted", matchaName, cupsName},
+		},
+	}
+}
+
+func salesDashboardRecoveryExecutePromptPack(runID, draftTitle string) []promptExpectation {
+	return []promptExpectation{
+		{
+			ID:     "insight",
+			Prompt: "Which branches are underperforming this week compared with the strongest branch, and show me the most relevant dashboard widgets for why?",
+			RequiredFacts: []requiredFact{
+				{Key: "underperforming_central", Severity: "critical", Checks: []string{"loc demo central"}},
+				{Key: "underperforming_west", Severity: "critical", Checks: []string{"loc demo west"}},
+				{Key: "benchmark_east", Severity: "high", Checks: []string{"loc demo east"}},
+			},
+			ForbiddenPhrases: []string{"all branches are performing evenly", "loc demo east is underperforming"},
+			ExpectedArtifact: &artifactExpectation{
+				Kind:        "dashboard_board",
+				TitleChecks: []string{"dashboard"},
+				WidgetKeys: []string{
+					"analytics.demo.sales.net_sales",
+					"analytics.demo.sales.target_attainment",
+					"analytics.demo.sales.daily_trend",
+					"analytics.demo.sales.branch_mix",
+					"analytics.demo.sales.branch_table",
+					"analytics.demo.sales.branch_map",
+				},
+				MinWidgets: 4,
+			},
+		},
+		{
+			ID:     "plan",
+			Prompt: "Based on that dashboard, create a stepwise branch recovery plan. Keep it focused on Loc Demo Central and Loc Demo West, use Loc Demo East as the benchmark, and do not execute it.",
+			RequiredFacts: []requiredFact{
+				{Key: "focus_central", Severity: "critical", Checks: []string{"loc demo central"}},
+				{Key: "focus_west", Severity: "critical", Checks: []string{"loc demo west"}},
+				{Key: "benchmark_east", Severity: "high", Checks: []string{"loc demo east"}},
+			},
+			ExpectedPlan: &planExpectation{
+				MinSteps:      3,
+				ContentChecks: []string{"loc demo central", "loc demo west", "loc demo east", "target"},
+			},
+			ForbiddenPhrases: []string{"execute immediately", "submit the request now"},
+		},
+		{
+			ID:     "execute",
+			Prompt: fmt.Sprintf("Create a draft generic request titled %q from that plan. Include Loc Demo Central, Loc Demo West, Loc Demo East as the benchmark, and a next-week target-attainment follow-up. Do not submit it. After creating it, tell me the draft id and link.", draftTitle),
+			RequiredFacts: []requiredFact{
+				{Key: "draft_created", Severity: "critical", Checks: []string{"draft", "generic request", draftTitle}},
+				{Key: "draft_title", Severity: "critical", Checks: []string{draftTitle}},
+			},
+			ForbiddenPhrases: []string{"submitted", "approved"},
+			ExpectedDraft: &draftExpectation{
+				DocumentType:  "generic_request",
+				TitleChecks:   []string{draftTitle},
+				PayloadChecks: []string{"loc demo central", "loc demo west", "loc demo east", "target-attainment"},
 			},
 		},
 	}

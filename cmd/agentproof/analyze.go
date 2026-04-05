@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -9,6 +10,9 @@ import (
 	"time"
 	"unicode"
 )
+
+var dashboardArtifactPattern = regexp.MustCompile(`(?s)<orbyte-dashboard-artifact>\s*(\{.*?\})\s*</orbyte-dashboard-artifact>`)
+var planStepPattern = regexp.MustCompile(`(?m)^\s*(?:[-*]|\d+[.)])\s+`)
 
 func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioManifest, sessionID, titlePrefix string) (analysisReport, error) {
 	session, err := findSession(ctx, client, sessionID, titlePrefix)
@@ -43,6 +47,12 @@ func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioMan
 			traceCursor = nextTraceCursor
 		}
 		classifyPrompt(&result, prompt, traceWindow)
+		if prompt.ExpectedArtifact != nil {
+			verifyArtifact(&result, *prompt.ExpectedArtifact, session)
+		}
+		if prompt.ExpectedPlan != nil {
+			verifyPlan(&result, *prompt.ExpectedPlan, session)
+		}
 		if prompt.ExpectedDraft != nil {
 			verifyDraft(ctx, client, &result, *prompt.ExpectedDraft)
 		}
@@ -209,6 +219,129 @@ func verifyDraft(ctx context.Context, client *apiClient, result *promptAnalysisR
 	result.Classification = "unacceptable"
 	result.MissingFacts = append(result.MissingFacts, "expected_draft_document")
 	result.Investigation = "The answer did not result in the expected draft artifact, or the created draft did not contain the required recommendation details."
+}
+
+func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, session sessionTranscript) {
+	artifacts := extractArtifactsFromAnswer(result.Answer)
+	if len(artifacts) == 0 && len(session.Artifacts) > 0 {
+		for _, item := range session.Artifacts {
+			artifacts = append(artifacts, map[string]any{
+				"kind":     item.Kind,
+				"title":    item.Title,
+				"metadata": item.Metadata,
+			})
+		}
+	}
+	for _, artifact := range artifacts {
+		kind := strings.TrimSpace(stringValue(artifact["kind"]))
+		if strings.TrimSpace(expected.Kind) != "" && kind != strings.TrimSpace(expected.Kind) {
+			continue
+		}
+		title := strings.ToLower(strings.TrimSpace(stringValue(artifact["title"])))
+		if !allChecksMatch(title, expected.TitleChecks) {
+			continue
+		}
+		metadata := mapValue(artifact, "metadata")
+		widgets := anySlice(firstNonNil(artifact["widgets"], metadata["widgets"]))
+		if expected.MinWidgets > 0 && len(widgets) < expected.MinWidgets {
+			continue
+		}
+		widgetKeys := artifactWidgetKeys(widgets)
+		if len(expected.WidgetKeys) > 0 && !allChecksMatch(strings.ToLower(strings.Join(widgetKeys, " ")), expected.WidgetKeys) {
+			continue
+		}
+		result.ArtifactVerified = true
+		result.ArtifactKind = kind
+		return
+	}
+	result.ArtifactVerified = false
+	result.Classification = "unacceptable"
+	result.MissingFacts = append(result.MissingFacts, "expected_dashboard_artifact")
+	result.Investigation = "The answer did not include the expected dashboard artifact block, or the artifact did not contain the required widget set."
+}
+
+func verifyPlan(result *promptAnalysisResult, expected planExpectation, session sessionTranscript) {
+	answer := strings.TrimSpace(result.Answer)
+	stepCount := len(planStepPattern.FindAllString(answer, -1))
+	if stepCount == 0 {
+		stepCount = len(session.CurrentPlan)
+	}
+	result.PlanStepCount = stepCount
+	combined := strings.ToLower(strings.TrimSpace(answer))
+	if combined == "" && len(session.CurrentPlan) > 0 {
+		parts := make([]string, 0, len(session.CurrentPlan))
+		for _, item := range session.CurrentPlan {
+			parts = append(parts, item.Content)
+		}
+		combined = strings.ToLower(strings.Join(parts, " "))
+	}
+	if expected.MinSteps > 0 && stepCount < expected.MinSteps {
+		result.PlanVerified = false
+		result.Classification = "unacceptable"
+		result.MissingFacts = append(result.MissingFacts, "expected_plan_steps")
+		result.Investigation = "The planning answer did not produce enough explicit steps for the requested plan."
+		return
+	}
+	if !allChecksMatch(combined, expected.ContentChecks) {
+		result.PlanVerified = false
+		result.Classification = "unacceptable"
+		result.MissingFacts = append(result.MissingFacts, "expected_plan_content")
+		result.Investigation = "The planning answer did not cover the expected plan focus areas."
+		return
+	}
+	result.PlanVerified = true
+}
+
+func extractArtifactsFromAnswer(answer string) []map[string]any {
+	matches := dashboardArtifactPattern.FindAllStringSubmatch(answer, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	artifacts := make([]map[string]any, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(match[1])), &payload); err != nil {
+			continue
+		}
+		artifacts = append(artifacts, payload)
+	}
+	return artifacts
+}
+
+func artifactWidgetKeys(items []any) []string {
+	keys := make([]string, 0, len(items))
+	for _, item := range items {
+		record, _ := item.(map[string]any)
+		if record == nil {
+			continue
+		}
+		key := stringValue(record["widget_key"])
+		if key == "" {
+			key = stringValue(mapValue(record, "definition")["key"])
+		}
+		if key == "" {
+			continue
+		}
+		keys = append(keys, strings.ToLower(strings.TrimSpace(key)))
+	}
+	return keys
+}
+
+func anySlice(value any) []any {
+	items, _ := value.([]any)
+	return items
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
 }
 
 func traceWindowForPrompt(prompt string, trace []sessionTraceEvent, cursor int) ([]sessionTraceEvent, int) {

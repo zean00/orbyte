@@ -4,6 +4,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import {
+  DashboardWidgetCard,
+  type DashboardResolvedWidget,
+  type DashboardWidgetDefinition,
+  type WidgetDataState,
+  defaultWidgetDataState,
+  useSharedDashboardData,
+} from "@/features/dashboard/runtime";
 import { fetchWorkspaceBootstrap, toShellRoutes } from "@/services/bootstrap";
 import { useShellStore } from "@/stores/shellStore";
 
@@ -61,6 +69,16 @@ type ACPPlanEntry = {
   status?: string;
 };
 
+type ACPArtifact = {
+  id: string;
+  kind: string;
+  title: string;
+  content_type?: string;
+  content?: string;
+  created_at?: string;
+  metadata?: Record<string, unknown>;
+};
+
 type ACPSession = {
   id: string;
   provider_key: string;
@@ -78,6 +96,22 @@ type ACPSession = {
   approvals?: ACPApproval[];
   trace?: ACPEvent[];
   current_plan?: ACPPlanEntry[];
+  artifacts?: ACPArtifact[];
+};
+
+type DashboardBoardArtifact = {
+  id: string;
+  kind: "dashboard_board";
+  title: string;
+  openPath?: string;
+  widgets: DashboardResolvedWidget[];
+};
+
+type DashboardWidgetArtifact = {
+  id: string;
+  kind: "dashboard_widget";
+  title: string;
+  widget: DashboardResolvedWidget;
 };
 
 type LiveToolCall = {
@@ -101,6 +135,7 @@ type LocalPendingTurn = {
 };
 
 type ComposerMode = "ask" | "plan" | "execute";
+type AgentContentTab = "conversation" | "artifacts";
 
 const NEW_SESSION_PENDING_ID = "__new_session__";
 
@@ -213,6 +248,7 @@ export default function AgentSurfacePage() {
   const [mcpOnlyEnabled, setMcpOnlyEnabled] = useState(true);
   const [localPendingTurn, setLocalPendingTurn] = useState<LocalPendingTurn | null>(null);
   const [composerMode, setComposerMode] = useState<ComposerMode>("ask");
+  const [contentTab, setContentTab] = useState<AgentContentTab>("conversation");
   const [prompt, setPrompt] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -668,6 +704,16 @@ export default function AgentSurfacePage() {
   const visibleTools = useMemo(() => mcpTools.slice(0, 10), [mcpTools]);
   const currentPlan = useMemo(() => deriveCurrentPlan(session), [session]);
   const hasCurrentPlan = currentPlan.length > 0;
+  const dashboardArtifacts = useMemo(
+    () => deriveDashboardArtifacts(session),
+    [session],
+  );
+  const dashboardArtifactWidgets = useMemo(
+    () => flattenArtifactWidgets(dashboardArtifacts),
+    [dashboardArtifacts],
+  );
+  const dashboardArtifactData = useSharedDashboardData(dashboardArtifactWidgets);
+  const hasDashboardArtifacts = dashboardArtifacts.length > 0;
   const providerSupportsPlanUpdates =
     selectedSessionProvider?.supports_plan_updates ??
     selectedProvider?.supports_plan_updates ??
@@ -677,6 +723,12 @@ export default function AgentSurfacePage() {
     typeof window === "undefined" ||
     hasCurrentPlan ||
     composerMode !== "ask";
+
+  useEffect(() => {
+    if (contentTab === "artifacts" && !hasDashboardArtifacts) {
+      setContentTab("conversation");
+    }
+  }, [contentTab, hasDashboardArtifacts]);
 
   useEffect(() => {
     const panel = transcriptRef.current;
@@ -1196,30 +1248,73 @@ export default function AgentSurfacePage() {
 
             <div className="grid min-h-[calc(100svh-14rem)] lg:grid-cols-[minmax(0,1fr)_340px]">
               <div className="relative bg-[linear-gradient(180deg,rgba(248,251,255,0.98)_0%,rgba(242,247,253,0.92)_100%)] dark:bg-[linear-gradient(180deg,rgba(8,15,28,0.98)_0%,rgba(11,20,36,0.94)_100%)]">
+                <div className="border-b border-line/60 px-4 py-3 md:px-8">
+                  <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3">
+                    <div className="inline-flex rounded-full border border-line bg-shell p-1">
+                      {([
+                        ["conversation", "Conversation"],
+                        ["artifacts", `Artifacts${hasDashboardArtifacts ? ` (${dashboardArtifacts.length})` : ""}`],
+                      ] as const).map(([key, label]) => {
+                        const selected = contentTab === key;
+                        const disabled = key === "artifacts" && !hasDashboardArtifacts;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setContentTab(key)}
+                            className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] transition ${
+                              selected
+                                ? "bg-accent text-white shadow-[0_8px_18px_rgba(29,78,216,0.22)]"
+                                : "text-muted hover:text-body"
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="text-xs text-muted">
+                      {contentTab === "conversation"
+                        ? "Transcript with inline dashboard rendering."
+                        : "Wide dashboard gallery for generated artifacts."}
+                    </div>
+                  </div>
+                </div>
                 <div
                   ref={transcriptRef}
                   onScroll={handleTranscriptScroll}
                   className="h-[calc(100svh-14rem)] overflow-auto px-4 py-6 md:px-8 md:py-8"
                 >
                   <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 pb-52">
-                    {renderedTranscriptMessages.length === 0 ? (
-                      <EmptyTranscript />
+                    {contentTab === "conversation" ? (
+                      renderedTranscriptMessages.length === 0 ? (
+                        <EmptyTranscript />
+                      ) : (
+                        renderedTranscriptMessages.map((item) => (
+                          <MessageBubble
+                            key={item.id}
+                            item={item}
+                            liveTurn={liveTurn}
+                            locale={locale}
+                            draftLinks={
+                              item.role === "assistant"
+                                ? draftLinksForTurn(
+                                    session?.trace,
+                                    stringValue(item.meta?.turn_id),
+                                  )
+                                : []
+                            }
+                            dashboardArtifactData={dashboardArtifactData}
+                          />
+                        ))
+                      )
                     ) : (
-                      renderedTranscriptMessages.map((item) => (
-                        <MessageBubble
-                          key={item.id}
-                          item={item}
-                          liveTurn={liveTurn}
-                          draftLinks={
-                            item.role === "assistant"
-                              ? draftLinksForTurn(
-                                  session?.trace,
-                                  stringValue(item.meta?.turn_id),
-                                )
-                              : []
-                          }
-                        />
-                      ))
+                      <ArtifactGallery
+                        artifacts={dashboardArtifacts}
+                        locale={locale}
+                        dashboardArtifactData={dashboardArtifactData}
+                      />
                     )}
                   </div>
                 </div>
@@ -1628,14 +1723,108 @@ function EmptyTranscript() {
   );
 }
 
+function ArtifactGallery({
+  artifacts,
+  locale,
+  dashboardArtifactData,
+  compact = false,
+}: {
+  artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact>;
+  locale: string;
+  dashboardArtifactData: Record<string, WidgetDataState>;
+  compact?: boolean;
+}) {
+  if (!artifacts.length) {
+    return (
+      <div className="grid min-h-[32vh] place-items-center rounded-[1.5rem] border border-dashed border-line/70 bg-surface/70 p-6 text-center">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
+            Artifacts
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            Ask the agent to preview or create a dashboard board to render live widgets here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={`space-y-4 ${compact ? "" : "pb-24"}`}>
+      {artifacts.map((artifact) =>
+        artifact.kind === "dashboard_board" ? (
+          <article
+            key={artifact.id}
+            className="rounded-[1.5rem] border border-line/70 bg-surface/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                  Dashboard board
+                </div>
+                <div className="mt-1 text-base font-semibold text-body">
+                  {artifact.title}
+                </div>
+              </div>
+              {artifact.openPath ? (
+                <a
+                  href={artifact.openPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl border border-line bg-shell px-3 py-2 text-xs font-semibold text-body transition hover:border-accent hover:text-accent"
+                >
+                  Open board
+                </a>
+              ) : null}
+            </div>
+            <div className={`mt-4 grid gap-3 ${compact ? "" : "md:grid-cols-2"}`}>
+              {artifact.widgets.map((widget) => (
+                <DashboardWidgetCard
+                  key={widget.id}
+                  widget={widget}
+                  locale={locale}
+                  state={
+                    dashboardArtifactData[widget.definition.data_path] ||
+                    defaultWidgetDataState()
+                  }
+                />
+              ))}
+            </div>
+          </article>
+        ) : (
+          <article
+            key={artifact.id}
+            className="rounded-[1.5rem] border border-line/70 bg-surface/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+          >
+            <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+              Dashboard widget
+            </div>
+            <DashboardWidgetCard
+              widget={artifact.widget}
+              locale={locale}
+              state={
+                dashboardArtifactData[artifact.widget.definition.data_path] ||
+                defaultWidgetDataState()
+              }
+            />
+          </article>
+        ),
+      )}
+    </div>
+  );
+}
+
 function MessageBubble({
   item,
   liveTurn,
+  locale,
   draftLinks,
+  dashboardArtifactData,
 }: {
   item: TranscriptItem;
   liveTurn: LiveTurnState | null;
+  locale: string;
   draftLinks?: DraftLink[];
+  dashboardArtifactData: Record<string, WidgetDataState>;
 }) {
   const isUser = item.role === "user";
   const livePhase =
@@ -1643,6 +1832,8 @@ function MessageBubble({
     (stringValue(item.meta?.turn_id) === liveTurn?.turnID ? liveTurn?.phase : "");
   const isWaitingAssistant =
     !isUser && item.streaming && !item.content.trim();
+  const inlineArtifacts = !isUser ? dashboardArtifactsFromMessage(item.content) : [];
+  const visibleContent = !isUser ? stripDashboardArtifactBlocks(item.content).trim() : item.content;
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <article
@@ -1685,14 +1876,26 @@ function MessageBubble({
           </div>
         ) : (
           <>
-            <div className="agent-markdown text-sm leading-7">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-              >
-                {item.content}
-              </ReactMarkdown>
-            </div>
+            {visibleContent ? (
+              <div className="agent-markdown text-sm leading-7">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
+                  {visibleContent}
+                </ReactMarkdown>
+              </div>
+            ) : null}
+            {inlineArtifacts.length > 0 ? (
+              <div className="mt-4 border-t border-line/60 pt-4">
+                <ArtifactGallery
+                  artifacts={inlineArtifacts}
+                  locale={locale}
+                  dashboardArtifactData={dashboardArtifactData}
+                  compact
+                />
+              </div>
+            ) : null}
             {draftLinks && draftLinks.length > 0 ? (
               <div className="mt-4 flex flex-wrap gap-2 border-t border-line/60 pt-3">
                 {draftLinks.map((link) => (
@@ -2182,6 +2385,11 @@ function applyACPStreamEvent(
         });
       } else if (updateKind === "plan" && text) {
         next.current_plan = [...(next.current_plan || []), { content: text }];
+      } else if (updateKind === "artifact") {
+        const artifact = artifactFromEventContent(content);
+        if (artifact) {
+          next.artifacts = mergeArtifacts(next.artifacts || [], artifact);
+        }
       } else if (text) {
         next.messages = appendChunkMessage(next.messages || [], {
           id: `stream-${event.id}`,
@@ -2335,6 +2543,32 @@ function dedupeTrace(trace: ACPEvent[]): ACPEvent[] {
   });
 }
 
+function artifactFromEventContent(content: Record<string, unknown>): ACPArtifact | null {
+  const kind =
+    stringValue(content.kind) ||
+    stringValue(mapValue(content.metadata).kind);
+  if (!kind) return null;
+  return {
+    id: stringValue(content.id) || `artifact-${kind}`,
+    kind,
+    title: stringValue(content.title) || "Artifact",
+    content_type: stringValue(content.content_type) || undefined,
+    content: stringValue(content.content) || undefined,
+    created_at: new Date().toISOString(),
+    metadata: mapValue(content.metadata),
+  };
+}
+
+function mergeArtifacts(items: ACPArtifact[], artifact: ACPArtifact): ACPArtifact[] {
+  let replaced = false;
+  const next = items.map((item) => {
+    if (item.id !== artifact.id) return item;
+    replaced = true;
+    return artifact;
+  });
+  return replaced ? next : [...next, artifact];
+}
+
 function draftLinksForTurn(
   trace: ACPEvent[] | undefined,
   turnID: string,
@@ -2465,6 +2699,18 @@ function buildPromptPayload(
       );
     }
   }
+  if (looksLikeDashboardPrompt(prompt)) {
+    sections.push(
+      [
+        "For dashboard requests, first call analytics.dashboard.widget_catalog with surface=\"dashboard\".",
+        "Then use analytics.dashboard.board.preview for a live artifact preview, or analytics.dashboard.board.create when the user explicitly asks to save the board.",
+        "If widget keys are not obvious, call the preview or create tool with title, surface, and description only so Orbyte can infer the most relevant registered widgets.",
+        "When a dashboard preview or create tool returns artifact metadata, copy the exact <orbyte-dashboard-artifact>...</orbyte-dashboard-artifact> block from the tool result into your final answer without changing the JSON.",
+        "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog.",
+        "Do not omit the artifact block when dashboard MCP tools return artifact metadata.",
+      ].join(" "),
+    );
+  }
   sections.push(prompt);
   return sections.join("\n\n");
 }
@@ -2517,6 +2763,156 @@ function deriveCurrentPlan(session: ACPSession | null): ACPPlanEntry[] {
       : mergedPlan;
   }
   return session.current_plan || [];
+}
+
+function looksLikeDashboardPrompt(prompt: string): boolean {
+  const normalized = prompt.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.includes("dashboard")) {
+    return true;
+  }
+  const explicitPhrases = [
+    "show me dashboard widgets",
+    "show me a dashboard widget",
+    "render dashboard widgets",
+    "render a dashboard widget",
+    "preview dashboard",
+    "create dashboard",
+    "save dashboard",
+    "open dashboard",
+    "live dashboard",
+    "dashboard artifact",
+  ];
+  return explicitPhrases.some((phrase) => normalized.includes(phrase));
+}
+
+function deriveDashboardArtifacts(
+  session: ACPSession | null,
+): Array<DashboardBoardArtifact | DashboardWidgetArtifact> {
+  const items = session?.artifacts || [];
+  const artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact> = [];
+  for (const item of items) {
+    const metadata = item.metadata || {};
+    if (item.kind === "dashboard_board") {
+      const widgets = asResolvedWidgets(metadata.widgets);
+      if (!widgets.length) {
+        continue;
+      }
+      artifacts.push({
+        id: item.id,
+        kind: "dashboard_board",
+        title: item.title || stringValue(metadata.title) || "Dashboard board",
+        openPath: stringValue(metadata.open_path),
+        widgets,
+      });
+    } else if (item.kind === "dashboard_widget") {
+      const widget = asResolvedWidget(metadata.widget);
+      if (!widget) {
+        continue;
+      }
+      artifacts.push({
+        id: item.id,
+        kind: "dashboard_widget",
+        title: item.title || widget.title,
+        widget,
+      });
+    }
+  }
+  return artifacts;
+}
+
+const DASHBOARD_ARTIFACT_BLOCK_PATTERN =
+  /<orbyte-dashboard-artifact>([\s\S]*?)<\/orbyte-dashboard-artifact>/gi;
+
+function stripDashboardArtifactBlocks(content: string): string {
+  return content.replace(DASHBOARD_ARTIFACT_BLOCK_PATTERN, "").replace(/\n{3,}/g, "\n\n");
+}
+
+function dashboardArtifactsFromMessage(
+  content: string,
+): Array<DashboardBoardArtifact | DashboardWidgetArtifact> {
+  const artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact> = [];
+  for (const match of content.matchAll(DASHBOARD_ARTIFACT_BLOCK_PATTERN)) {
+    const payload = match[1]?.trim();
+    if (!payload) continue;
+    try {
+      const parsed = JSON.parse(payload) as Record<string, unknown>;
+      const kind = stringValue(parsed.kind);
+      const metadata =
+        parsed.metadata && typeof parsed.metadata === "object"
+          ? (parsed.metadata as Record<string, unknown>)
+          : {};
+      if (kind === "dashboard_board") {
+        const widgets = asResolvedWidgets(metadata.widgets);
+        if (!widgets.length) continue;
+        artifacts.push({
+          id: stringValue(parsed.id) || `dashboard-board-${artifacts.length}`,
+          kind: "dashboard_board",
+          title:
+            stringValue(parsed.title) ||
+            stringValue(metadata.title) ||
+            "Dashboard board",
+          openPath: stringValue(metadata.open_path) || undefined,
+          widgets,
+        });
+      } else if (kind === "dashboard_widget") {
+        const widget = asResolvedWidget(metadata.widget);
+        if (!widget) continue;
+        artifacts.push({
+          id: stringValue(parsed.id) || `dashboard-widget-${artifacts.length}`,
+          kind: "dashboard_widget",
+          title: stringValue(parsed.title) || widget.title,
+          widget,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+  return artifacts;
+}
+
+function flattenArtifactWidgets(
+  artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact>,
+): DashboardResolvedWidget[] {
+  const widgets: DashboardResolvedWidget[] = [];
+  for (const artifact of artifacts) {
+    if (artifact.kind === "dashboard_board") {
+      widgets.push(...artifact.widgets);
+    } else {
+      widgets.push(artifact.widget);
+    }
+  }
+  return widgets;
+}
+
+function asResolvedWidgets(value: unknown): DashboardResolvedWidget[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => asResolvedWidget(item))
+    .filter((item): item is DashboardResolvedWidget => Boolean(item));
+}
+
+function asResolvedWidget(value: unknown): DashboardResolvedWidget | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const definitionValue = record.definition;
+  if (!definitionValue || typeof definitionValue !== "object") {
+    return null;
+  }
+  return {
+    id: stringValue(record.id) || `artifact-widget-${Math.random().toString(36).slice(2)}`,
+    title: stringValue(record.title) || "Dashboard widget",
+    kind: stringValue(record.kind) || stringValue((definitionValue as Record<string, unknown>).renderer_kind) || "metric",
+    width: numberValue(record.width, 4),
+    height: numberValue(record.height, 1),
+    refresh_override: stringValue(record.refresh_override) || undefined,
+    definition: definitionValue as DashboardWidgetDefinition,
+  };
 }
 
 function isExecuteTurn(trace: ACPEvent[], turnID: string): boolean {
@@ -2709,6 +3105,10 @@ function formatDate(value?: string): string {
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function mapValue(value: unknown): Record<string, unknown> {

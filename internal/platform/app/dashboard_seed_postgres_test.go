@@ -15,14 +15,25 @@ import (
 )
 
 type dashboardSeedManifest struct {
-	SeededAt       string `json:"seeded_at"`
-	OrganizationID string `json:"organization_id"`
-	Surface        string `json:"surface"`
-	BoardID        string `json:"board_id"`
-	BoardName      string `json:"board_name"`
-	BoardPath      string `json:"board_path"`
-	DataPath       string `json:"data_path"`
-	Widgets        []struct {
+	SeededAt          string   `json:"seeded_at"`
+	OrganizationID    string   `json:"organization_id"`
+	Surface           string   `json:"surface"`
+	BoardID           string   `json:"board_id"`
+	BoardName         string   `json:"board_name"`
+	BoardPath         string   `json:"board_path"`
+	DataPath          string   `json:"data_path"`
+	AgentPrompts      []string `json:"agent_prompts,omitempty"`
+	ExpectedResponses struct {
+		UnderperformingBranches []string `json:"underperforming_branches,omitempty"`
+		BenchmarkBranch         string   `json:"benchmark_branch,omitempty"`
+		DraftTitle              string   `json:"draft_title,omitempty"`
+	} `json:"expected_responses,omitempty"`
+	ExpectedArtifacts struct {
+		Kind       string   `json:"kind,omitempty"`
+		WidgetKeys []string `json:"widget_keys,omitempty"`
+	} `json:"expected_artifacts,omitempty"`
+	ExpectedPlanSteps []string `json:"expected_plan_steps,omitempty"`
+	Widgets           []struct {
 		Key   string `json:"key"`
 		Title string `json:"title"`
 		Kind  string `json:"kind"`
@@ -162,8 +173,8 @@ func TestSeedDashboardSyntheticScenario(t *testing.T) {
 	}
 
 	board, err := graph.analytics.SaveDashboard(analytics.Dashboard{
-		Name:        "Operations Demo Board " + suffix,
-		Description: "Synthetic business dashboard board for renderer verification across metric, gauge, chart, table, and map widgets.",
+		Name:        "Sales Performance Board " + suffix,
+		Description: "Synthetic sales performance dashboard board for live widget rendering across metric, gauge, chart, table, and map widgets.",
 		Surface:     "dashboard",
 		IsDefault:   true,
 		Visibility:  "private",
@@ -172,12 +183,12 @@ func TestSeedDashboardSyntheticScenario(t *testing.T) {
 			ScopeType: "deployment",
 		},
 		Widgets: []analytics.DashboardWidget{
-			{WidgetKey: "analytics.demo.submitted_documents", Title: "Submitted Documents", Kind: "metric", Width: 3, Height: 1, Order: 1},
-			{WidgetKey: "analytics.demo.approval_rate", Title: "Approval Rate", Kind: "gauge", Width: 3, Height: 2, Order: 2},
-			{WidgetKey: "analytics.demo.submission_trend", Title: "Submission Trend", Kind: "chart_line", Width: 6, Height: 2, Order: 3},
-			{WidgetKey: "analytics.demo.document_mix", Title: "Document Type Mix", Kind: "chart_bar", Width: 6, Height: 2, Order: 4},
-			{WidgetKey: "analytics.demo.document_breakdown", Title: "Document Breakdown", Kind: "table", Width: 6, Height: 2, Order: 5},
-			{WidgetKey: "analytics.demo.branch_map", Title: "Branch Performance", Kind: "map", Width: 6, Height: 2, Order: 6},
+			{WidgetKey: "analytics.demo.sales.net_sales", Title: "Net Sales", Kind: "metric", Width: 3, Height: 1, Order: 1},
+			{WidgetKey: "analytics.demo.sales.target_attainment", Title: "Target Attainment", Kind: "gauge", Width: 3, Height: 2, Order: 2},
+			{WidgetKey: "analytics.demo.sales.daily_trend", Title: "Daily Sales Trend", Kind: "chart_line", Width: 6, Height: 2, Order: 3},
+			{WidgetKey: "analytics.demo.sales.branch_mix", Title: "Branch Sales Mix", Kind: "chart_bar", Width: 6, Height: 2, Order: 4},
+			{WidgetKey: "analytics.demo.sales.branch_table", Title: "Branch Sales Breakdown", Kind: "table", Width: 6, Height: 2, Order: 5},
+			{WidgetKey: "analytics.demo.sales.branch_map", Title: "Branch Performance", Kind: "map", Width: 6, Height: 2, Order: 6},
 		},
 	})
 	if err != nil {
@@ -191,7 +202,29 @@ func TestSeedDashboardSyntheticScenario(t *testing.T) {
 		BoardID:        board.ID,
 		BoardName:      board.Name,
 		BoardPath:      "/ui/dashboard",
-		DataPath:       "/ui/data/dashboard/demo",
+		DataPath:       "/ui/data/dashboard/sales-demo",
+		AgentPrompts: []string{
+			"Which branches are underperforming this week compared with the strongest branch, and show me the most relevant dashboard widgets for why?",
+			"Based on that dashboard, create a stepwise branch recovery plan. Keep it focused on Loc Demo Central and Loc Demo West, use Loc Demo East as the benchmark, and do not execute it.",
+			"Create a draft generic request titled \"Sales Recovery Plan\" from that plan. Include Loc Demo Central, Loc Demo West, Loc Demo East as the benchmark, and a next-week target-attainment follow-up. Do not submit it. After creating it, tell me the draft id and link.",
+		},
+	}
+	manifest.ExpectedResponses.UnderperformingBranches = []string{"Loc Demo Central", "Loc Demo West"}
+	manifest.ExpectedResponses.BenchmarkBranch = "Loc Demo East"
+	manifest.ExpectedResponses.DraftTitle = "Sales Recovery Plan"
+	manifest.ExpectedArtifacts.Kind = "dashboard_board"
+	manifest.ExpectedArtifacts.WidgetKeys = []string{
+		"analytics.demo.sales.net_sales",
+		"analytics.demo.sales.target_attainment",
+		"analytics.demo.sales.daily_trend",
+		"analytics.demo.sales.branch_mix",
+		"analytics.demo.sales.branch_table",
+		"analytics.demo.sales.branch_map",
+	}
+	manifest.ExpectedPlanSteps = []string{
+		"Focus on Loc Demo Central and Loc Demo West first",
+		"Use Loc Demo East as the performance benchmark",
+		"Track next-week target attainment follow-up",
 	}
 	for _, widget := range board.Widgets {
 		manifest.Widgets = append(manifest.Widgets, struct {

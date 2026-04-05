@@ -37,6 +37,7 @@ type sessionRuntime struct {
 var currentModelResolver = resolveCurrentModel
 var providerModelCatalogResolver = resolveProviderModelCatalog
 var acpClientStarter = startACPClient
+var dashboardArtifactBlockPattern = regexp.MustCompile(`(?s)<orbyte-dashboard-artifact>\s*(\{.*?\})\s*</orbyte-dashboard-artifact>`)
 
 func NewService(cfg *config.Service, instr *Instrumentation) *Service {
 	return &Service{
@@ -109,8 +110,8 @@ func (s *Service) ContractMetadata() map[string]any {
 			"approved",
 			"rejected",
 		},
-		"supports_streaming": true,
-		"supports_approvals": true,
+		"supports_streaming":    true,
+		"supports_approvals":    true,
 		"supports_plan_updates": true,
 	}
 }
@@ -345,6 +346,7 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 	}
 	s.mu.Lock()
 	if session := s.sessions[sessionID]; session != nil {
+		s.promoteDashboardArtifactsFromTurn(session, turnID)
 		session.TurnInProgress = false
 		session.CurrentTurnID = ""
 		session.Status = "ready"
@@ -622,6 +624,10 @@ func (s *Service) handleSessionUpdate(sessionID, updateKind string, content map[
 		// Provider-echoed user chunks are trace/status signals only.
 	case "plan":
 		session.CurrentPlan = append(session.CurrentPlan, PlanEntry{Content: text})
+	case "artifact":
+		if artifact, ok := artifactFromContent(content); ok {
+			appendSessionArtifact(session, artifact)
+		}
 	default:
 		if text != "" {
 			appendChunkMessage(session, "system", text, meta)
@@ -642,6 +648,84 @@ func (s *Service) handleSessionUpdate(sessionID, updateKind string, content map[
 	if model := firstNonEmptyString(content["modelID"], content["model_id"], nestedMapString(content, "model", "id")); model != "" {
 		s.setCurrentModel(sessionID, model)
 	}
+}
+
+func artifactFromContent(content map[string]any) (Artifact, bool) {
+	kind := strings.TrimSpace(stringValue(content["kind"]))
+	title := strings.TrimSpace(stringValue(content["title"]))
+	metadata := nestedMap(content, "metadata")
+	if kind == "" {
+		metadata = cloneMap(content)
+		kind = strings.TrimSpace(stringValue(metadata["kind"]))
+		title = firstNonEmptyString(title, strings.TrimSpace(stringValue(metadata["title"])))
+	}
+	if kind == "" {
+		return Artifact{}, false
+	}
+	id := strings.TrimSpace(stringValue(content["id"]))
+	if id == "" {
+		id = shared.NewID("artifact")
+	}
+	return Artifact{
+		ID:          id,
+		Kind:        kind,
+		Title:       firstNonEmptyString(title, "Artifact"),
+		ContentType: strings.TrimSpace(stringValue(content["content_type"])),
+		Content:     strings.TrimSpace(stringValue(content["content"])),
+		CreatedAt:   time.Now().UTC(),
+		Metadata:    metadata,
+	}, true
+}
+
+func appendSessionArtifact(session *Session, artifact Artifact) {
+	if session == nil || strings.TrimSpace(artifact.Kind) == "" {
+		return
+	}
+	for index, item := range session.Artifacts {
+		if item.ID == artifact.ID {
+			session.Artifacts[index] = artifact
+			return
+		}
+	}
+	session.Artifacts = append(session.Artifacts, artifact)
+}
+
+func (s *Service) promoteDashboardArtifactsFromTurn(session *Session, turnID string) {
+	if session == nil || strings.TrimSpace(turnID) == "" {
+		return
+	}
+	for _, message := range session.Messages {
+		if message.Role != "assistant" {
+			continue
+		}
+		if stringValue(message.Meta["turn_id"]) != turnID {
+			continue
+		}
+		for _, artifact := range extractDashboardArtifactsFromMessage(message.Content) {
+			appendSessionArtifact(session, artifact)
+		}
+	}
+}
+
+func extractDashboardArtifactsFromMessage(content string) []Artifact {
+	matches := dashboardArtifactBlockPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	artifacts := make([]Artifact, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(match[1])), &payload); err != nil {
+			continue
+		}
+		if artifact, ok := artifactFromContent(payload); ok {
+			artifacts = append(artifacts, artifact)
+		}
+	}
+	return artifacts
 }
 
 func (s *Service) setCurrentModel(sessionID, model string) {

@@ -235,6 +235,10 @@ func (c *apiClient) posCheckout(ctx context.Context, req map[string]any) (map[st
 	return resp, nil
 }
 
+func (c *apiClient) captureAnalyticsSnapshot(ctx context.Context) error {
+	return c.doJSON(ctx, http.MethodPost, "/ops/analytics/snapshots", nil, nil)
+}
+
 func (c *apiClient) doJSON(ctx context.Context, method, requestPath string, body any, out any) error {
 	var reader io.Reader
 	if body != nil {

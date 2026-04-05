@@ -116,6 +116,52 @@ func registerUIDashboardRoutes(mux *http.ServeMux, ident *identity.Service, anal
 			},
 		})
 	})
+
+	mux.HandleFunc("GET /ui/data/dashboard/sales-demo", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"analytics.read"}) {
+			respondError(w, shared.Forbidden("dashboard sales demo is not allowed"))
+			return
+		}
+
+		latest := analyticsSvc.Snapshot()
+		points := dashboardSalesBranchRows(latest)
+		totalSales := 0.0
+		targetSales := 0.0
+		for _, point := range points {
+			totalSales += point.NetSales
+			targetSales += point.TargetSales
+		}
+		targetAttainment := 0.0
+		if targetSales > 0 {
+			targetAttainment = (totalSales / targetSales) * 100
+		}
+
+		respondJSON(w, http.StatusOK, map[string]any{
+			"generated_at": latest.GeneratedAt,
+			"overview": map[string]any{
+				"net_sales":                 totalSales,
+				"target_sales":              targetSales,
+				"target_attainment_percent": targetAttainment,
+				"best_branch":               dashboardBestSalesBranch(points),
+			},
+			"trends": map[string]any{
+				"sales": dashboardSalesTrendRows(analyticsSvc.Trends(7)),
+			},
+			"tables": map[string]any{
+				"branches": dashboardSalesTableRows(points),
+			},
+			"charts": map[string]any{
+				"branches": dashboardSalesChartRows(points),
+			},
+			"map": map[string]any{
+				"branches": dashboardSalesMapRows(points),
+			},
+		})
+	})
 }
 
 func dashboardTrendRows(points []analytics.TrendPoint) []map[string]any {
@@ -227,4 +273,130 @@ func dashboardLocationLabel(locationID string) string {
 		parts[index] = string(runes)
 	}
 	return strings.Join(parts, " ")
+}
+
+type dashboardSalesBranch struct {
+	LocationID  string
+	Label       string
+	Latitude    float64
+	Longitude   float64
+	NetSales    float64
+	TargetSales float64
+	Orders      int
+	ApprovalPct float64
+}
+
+func dashboardSalesBranchRows(snapshot analytics.Snapshot) []dashboardSalesBranch {
+	keys := make([]string, 0, len(snapshot.Segments.ByLocation))
+	for key := range snapshot.Segments.ByLocation {
+		if !strings.HasPrefix(strings.TrimSpace(key), "loc_demo_") {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	rows := make([]dashboardSalesBranch, 0, len(keys))
+	for index, key := range keys {
+		kpi := snapshot.Segments.ByLocation[key]
+		lat, lng := dashboardCoordinateForIndex(index)
+		baseSales, targetSales := dashboardSyntheticSalesForLocation(key, kpi)
+		approvalPct := 0.0
+		if kpi.Submitted > 0 {
+			approvalPct = (float64(kpi.Approved) / float64(kpi.Submitted)) * 100
+		}
+		rows = append(rows, dashboardSalesBranch{
+			LocationID:  key,
+			Label:       dashboardLocationLabel(key),
+			Latitude:    lat,
+			Longitude:   lng,
+			NetSales:    baseSales,
+			TargetSales: targetSales,
+			Orders:      kpi.Submitted + kpi.Approved + kpi.Draft,
+			ApprovalPct: approvalPct,
+		})
+	}
+	return rows
+}
+
+func dashboardSyntheticSalesForLocation(locationID string, kpi analytics.DocumentKPI) (float64, float64) {
+	switch strings.TrimSpace(locationID) {
+	case "loc_demo_central":
+		return 7900000, 10800000
+	case "loc_demo_west":
+		return 9800000, 11800000
+	case "loc_demo_east":
+		return 15800000, 14900000
+	default:
+		baseSales := float64(kpi.Submitted*1250000 + kpi.Approved*1850000 + 3500000)
+		targetSales := baseSales * 1.1
+		return baseSales, targetSales
+	}
+}
+
+func dashboardSalesTrendRows(points []analytics.TrendPoint) []map[string]any {
+	rows := make([]map[string]any, 0, len(points))
+	for index, point := range points {
+		netSales := float64(point.SubmittedDocuments*1450000 + point.ApprovedDocuments*2100000 + (index+1)*900000)
+		rows = append(rows, map[string]any{
+			"label":       point.GeneratedAt.Format("02 Jan"),
+			"net_sales":   netSales,
+			"orders":      point.SubmittedDocuments + point.ApprovedDocuments,
+			"generated":   point.GeneratedAt.Format(time.RFC3339),
+			"snapshot_id": point.SnapshotID,
+		})
+	}
+	return rows
+}
+
+func dashboardSalesTableRows(points []dashboardSalesBranch) []map[string]any {
+	rows := make([]map[string]any, 0, len(points))
+	for _, point := range points {
+		gap := point.NetSales - point.TargetSales
+		rows = append(rows, map[string]any{
+			"branch":             point.Label,
+			"net_sales":          point.NetSales,
+			"target_sales":       point.TargetSales,
+			"orders":             point.Orders,
+			"approval_percent":   point.ApprovalPct,
+			"variance_to_target": gap,
+		})
+	}
+	return rows
+}
+
+func dashboardSalesChartRows(points []dashboardSalesBranch) []map[string]any {
+	rows := make([]map[string]any, 0, len(points))
+	for _, point := range points {
+		rows = append(rows, map[string]any{
+			"branch":    point.Label,
+			"net_sales": point.NetSales,
+		})
+	}
+	return rows
+}
+
+func dashboardSalesMapRows(points []dashboardSalesBranch) []map[string]any {
+	rows := make([]map[string]any, 0, len(points))
+	for _, point := range points {
+		rows = append(rows, map[string]any{
+			"location_id": point.LocationID,
+			"label":       point.Label,
+			"latitude":    point.Latitude,
+			"longitude":   point.Longitude,
+			"net_sales":   point.NetSales,
+		})
+	}
+	return rows
+}
+
+func dashboardBestSalesBranch(points []dashboardSalesBranch) string {
+	best := ""
+	bestValue := -1.0
+	for _, point := range points {
+		if point.NetSales > bestValue {
+			best = point.Label
+			bestValue = point.NetSales
+		}
+	}
+	return best
 }

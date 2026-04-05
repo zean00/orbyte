@@ -99,6 +99,8 @@ func TestServerListsToolsAndResourcesByPermission(t *testing.T) {
 		"template.draft.get",
 		"analytics.snapshot.get",
 		"analytics.dashboard.list",
+		"analytics.dashboard.widget_catalog",
+		"analytics.dashboard.board.preview",
 		"analytics.query.execute",
 		"analytics.report.definition.list",
 	} {
@@ -224,7 +226,7 @@ func TestServerAnalyticsAuthoringAndAdHocQueryFlow(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("analytics.dashboard.save failed: %+v", resp.Error)
 	}
-	savedDashboard := resp.Result.(map[string]any)["structuredContent"].(analytics.Dashboard)
+	savedDashboard := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["dashboard"].(analytics.Dashboard)
 	if savedDashboard.ID == "" || len(savedDashboard.Widgets) != 1 {
 		t.Fatalf("expected saved dashboard with widget, got %+v", savedDashboard)
 	}
@@ -3513,7 +3515,104 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("analytics.dashboard.save failed: %+v", resp.Error)
 	}
-	dashboard := resp.Result.(map[string]any)["structuredContent"].(analytics.Dashboard)
+	dashboard := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["dashboard"].(analytics.Dashboard)
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      13.1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.widget_catalog",
+			"arguments": map[string]any{
+				"surface": "dashboard",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.widget_catalog failed: %+v", resp.Error)
+	}
+	catalogResult := resp.Result.(map[string]any)
+	catalog := catalogResult["structuredContent"].(map[string]any)
+	if len(catalog["items"].([]module.DashboardWidgetDefinition)) == 0 {
+		t.Fatalf("expected dashboard widget catalog items, got %+v", catalog)
+	}
+	catalogContent := catalogResult["content"].([]ContentBlock)[0].Text
+	if !strings.Contains(catalogContent, "analytics.demo.submitted_documents") {
+		t.Fatalf("expected widget catalog content to list widget keys, got %q", catalogContent)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      13.2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.board.preview",
+			"arguments": map[string]any{
+				"title":       "Preview board",
+				"surface":     "dashboard",
+				"widget_keys": []string{"analytics.demo.submitted_documents"},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.board.preview failed: %+v", resp.Error)
+	}
+	previewResult := resp.Result.(map[string]any)
+	preview := previewResult["structuredContent"].(map[string]any)
+	if preview["artifact"] == nil {
+		t.Fatalf("expected preview artifact payload, got %+v", preview)
+	}
+	previewContent := previewResult["content"].([]ContentBlock)[0].Text
+	if !strings.Contains(previewContent, "<orbyte-dashboard-artifact>") {
+		t.Fatalf("expected preview content to include artifact block, got %q", previewContent)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      133,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.board.create",
+			"arguments": map[string]any{
+				"title":       "Created board",
+				"surface":     "dashboard",
+				"widget_keys": []string{"analytics.demo.submitted_documents", "analytics.demo.approval_rate"},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.board.create failed: %+v", resp.Error)
+	}
+	createdResult := resp.Result.(map[string]any)
+	createdBoard := createdResult["structuredContent"].(map[string]any)
+	if createdBoard["artifact"] == nil {
+		t.Fatalf("expected created dashboard artifact payload, got %+v", createdBoard)
+	}
+	createdContent := createdResult["content"].([]ContentBlock)[0].Text
+	if !strings.Contains(createdContent, "<orbyte-dashboard-artifact>") {
+		t.Fatalf("expected created dashboard content to include artifact block, got %q", createdContent)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      133.1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.board.preview",
+			"arguments": map[string]any{
+				"title":       "Submitted Approval Dashboard",
+				"surface":     "dashboard",
+				"description": "submitted approval rate",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.board.preview without widget_keys failed: %+v", resp.Error)
+	}
+	inferredPreview := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["dashboard"].(analytics.Dashboard)
+	if len(inferredPreview.Widgets) == 0 {
+		t.Fatalf("expected inferred dashboard widgets, got %+v", inferredPreview)
+	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
@@ -4790,6 +4889,24 @@ func newTestModules(t *testing.T) *module.Service {
 			CustomEntries: []module.CustomEntryDefinition{{
 				Key: "analytics.cockpit", Title: "Analytics Cockpit", RoutePath: "/analytics/cockpit", BundleKey: "analytics-cockpit", ComponentExport: "render",
 			}},
+			DashboardWidgets: []module.DashboardWidgetDefinition{
+				{
+					Key:          "analytics.demo.submitted_documents",
+					Title:        "Submitted Documents",
+					Surface:      module.UISurfaceDashboard,
+					RendererKind: "metric",
+					DataPath:     "/ui/data/dashboard/demo",
+					Metric:       &module.DashboardMetricSpec{ValuePath: "overview.submitted_documents"},
+				},
+				{
+					Key:          "analytics.demo.approval_rate",
+					Title:        "Approval Rate",
+					Surface:      module.UISurfaceDashboard,
+					RendererKind: "gauge",
+					DataPath:     "/ui/data/dashboard/demo",
+					Gauge:        &module.DashboardGaugeSpec{ValuePath: "overview.approval_rate"},
+				},
+			},
 		},
 		Bundles: []module.BundleDefinition{{Key: "analytics-cockpit", Script: "console.log('analytics')"}},
 		MCP: module.MCPDefinition{
