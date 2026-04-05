@@ -167,6 +167,37 @@ func TestCreateVendorCreditFromSupplierReturn(t *testing.T) {
 	}
 }
 
+func TestSupplierReturnValidateApproveRejectsUnknownWarehouse(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterSupplierReturnTestDocumentTypes(t, docs)
+	mustRegisterSupplierReturnTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "MILK-1L",
+		"name":              "Milk 1L",
+		"uom_code":          "EA",
+		"inventory_enabled": true,
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+
+	service := NewSupplierReturnsCoreService(docs, nil, NewInventoryCoreService(docs, nil, models, nil), NewProcurementCoreService(docs, nil, models, nil))
+	record, err := docs.Create("supplier_return", "org_default", "loc_main", "user_admin", map[string]any{
+		"lines": []map[string]any{{
+			"item_code":      "MILK-1L",
+			"warehouse_code": "MISSING",
+			"quantity":       1.0,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create supplier return: %v", err)
+	}
+	if err := service.ValidateApprove(record); err == nil {
+		t.Fatal("expected unknown warehouse to be rejected")
+	}
+}
+
 func mustRegisterSupplierReturnTestDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{
@@ -186,6 +217,14 @@ func mustRegisterSupplierReturnTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	for _, def := range []model.Definition{
 		{
+			Key:         "warehouse",
+			DisplayName: "Warehouse",
+			DefaultSort: "code",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+			},
+		},
+		{
 			Key:         "commercial_item",
 			DisplayName: "Commercial Item",
 			DefaultSort: "sku",
@@ -204,5 +243,8 @@ func mustRegisterSupplierReturnTestModels(t *testing.T, models *model.Service) {
 		if err := models.Register(def); err != nil {
 			t.Fatalf("register model %s: %v", def.Key, err)
 		}
+	}
+	if _, err := models.Create("warehouse", "user_admin", map[string]any{"code": "MAIN"}); err != nil {
+		t.Fatalf("create warehouse: %v", err)
 	}
 }

@@ -579,6 +579,9 @@ func (s *CommercialCoreService) ValidateAction(record document.Record, action, a
 	if action != "approve" {
 		return nil
 	}
+	if err := s.validateCommercialDocumentReferences(record); err != nil {
+		return err
+	}
 	switch record.Header.Type {
 	case "credit_note":
 		if strings.TrimSpace(textValue(record.Body.Payload["source_invoice_id"])) == "" {
@@ -590,6 +593,33 @@ func (s *CommercialCoreService) ValidateAction(record document.Record, action, a
 		}
 		if strings.TrimSpace(textValue(record.Body.Payload["source_invoice_id"])) == "" {
 			return shared.Validation("refund source invoice is required")
+		}
+	}
+	return nil
+}
+
+func (s *CommercialCoreService) validateCommercialDocumentReferences(record document.Record) error {
+	payload := clonedPayload(record.Body.Payload)
+	switch record.Header.Type {
+	case "sales_order", "invoice", "credit_note", "payment_receipt", "payment_refund":
+	default:
+		return nil
+	}
+	if err := validatePartyID(s.models, textValue(payload["party_id"])); err != nil {
+		return err
+	}
+	if err := validateCommercialTaxCode(s.models, textValue(payload["default_tax_code"])); err != nil {
+		return err
+	}
+	switch record.Header.Type {
+	case "sales_order", "invoice", "credit_note":
+		for _, line := range recordList(payload["lines"]) {
+			if err := validateCommercialItemCode(s.models, textValue(line["item_code"])); err != nil {
+				return err
+			}
+			if err := validateCommercialTaxCode(s.models, textValue(line["tax_code"])); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

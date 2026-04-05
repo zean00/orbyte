@@ -1288,6 +1288,135 @@ func TestPOSHeldSalesAndTransactionLookupAreCashierScoped(t *testing.T) {
 	}
 }
 
+func TestPOSCheckoutFinalizesHeldSaleAndRemovesItFromHeldList(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	mustRegisterPOSTestDocumentTypes(t, docs)
+	mustRegisterPOSTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                  "POS-HOLD",
+		"name":                 "Held Item",
+		"description":          "Held POS item",
+		"kind":                 "product",
+		"uom_code":             "EA",
+		"unit_price":           50.0,
+		"tax_code":             "VAT11",
+		"revenue_account_code": "4000-REV",
+		"is_sellable":          true,
+		"inventory_enabled":    false,
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("tax_code", "user_admin", map[string]any{
+		"code":             "VAT11",
+		"rate_percent":     11.0,
+		"mode":             "exclusive",
+		"tax_account_code": "2100-VATOUT",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create tax code: %v", err)
+	}
+	if _, err := models.Create("payment_method", "user_admin", map[string]any{
+		"code":                  "CASH",
+		"name":                  "Cash",
+		"clearing_account_code": "1000-CASH",
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create payment method: %v", err)
+	}
+	if _, err := models.Create("pos_store", "user_admin", map[string]any{
+		"code":             "STORE1",
+		"name":             "Store 1",
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "VAT11",
+		"currency_code":    "IDR",
+		"checkout_mode":    "invoice_first",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	if _, err := models.Create("pos_register", "user_admin", map[string]any{
+		"code":          "REG1",
+		"name":          "Register 1",
+		"store_code":    "STORE1",
+		"checkout_mode": "invoice_first",
+		"status":        "active",
+	}); err != nil {
+		t.Fatalf("create register: %v", err)
+	}
+	if _, err := models.Create("pos_tender_type", "user_admin", map[string]any{
+		"code":                  "CASH",
+		"name":                  "Cash",
+		"kind":                  "cash",
+		"payment_method_code":   "CASH",
+		"clearing_account_code": "1000-CASH",
+		"is_cash_like":          true,
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create tender type: %v", err)
+	}
+
+	actions := NewDocumentActions(docs, flows, nil, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	commercialSvc := NewCommercialCoreService(docs, nil, models, nil)
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	fulfillmentSvc := NewFulfillmentCoreService(docs, nil, inventorySvc)
+	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
+	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
+
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 0, "")
+	if err != nil {
+		t.Fatalf("open shift: %v", err)
+	}
+	held, err := posSvc.HoldSale(POSHoldSaleInput{
+		StoreCode:    "STORE1",
+		RegisterCode: "REG1",
+		ShiftID:      shift.ID,
+		Lines: []POSCartLineInput{{
+			ItemCode: "POS-HOLD",
+			Quantity: 1,
+		}},
+	}, "cashier_1")
+	if err != nil {
+		t.Fatalf("hold sale: %v", err)
+	}
+
+	result, err := posSvc.Checkout("org_default", "loc_main", POSCheckoutInput{
+		SaleID:       held.ID,
+		StoreCode:    "STORE1",
+		RegisterCode: "REG1",
+		ShiftID:      shift.ID,
+		Lines: []POSCartLineInput{{
+			ItemCode: "POS-HOLD",
+			Quantity: 1,
+		}},
+		Tenders: []POSTenderInput{{
+			TenderTypeCode: "CASH",
+			Amount:         55.5,
+		}},
+	}, "cashier_1")
+	if err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	if result.Sale.ID != held.ID {
+		t.Fatalf("expected checkout to finalize held sale %s, got %s", held.ID, result.Sale.ID)
+	}
+	if got := textValue(result.Sale.Values["status"]); got != "completed" {
+		t.Fatalf("expected completed sale, got %q", got)
+	}
+	heldItems, err := posSvc.HeldSales("cashier_1", "REG1", shift.ID)
+	if err != nil {
+		t.Fatalf("held sales: %v", err)
+	}
+	if len(heldItems) != 0 {
+		t.Fatalf("expected no held sales after finalizing held sale, got %d", len(heldItems))
+	}
+}
+
 func mustRegisterPOSTestDocumentTypes(t *testing.T, docs *document.Service) {
 	t.Helper()
 	for _, def := range []document.Definition{

@@ -74,6 +74,32 @@ func (s *EmployeeSpendCoreService) NormalizePayload(documentType string, payload
 	return next
 }
 
+func (s *EmployeeSpendCoreService) ValidateApprove(record document.Record) error {
+	if s == nil {
+		return nil
+	}
+	normalized := s.NormalizePayload(record.Header.Type, record.Body.Payload)
+	if message := strings.TrimSpace(textValue(normalized["liquidation_consistency_error"])); message != "" {
+		return shared.Validation(message)
+	}
+	switch strings.TrimSpace(record.Header.Type) {
+	case "travel_request", "cash_advance", "expense_claim", "advance_liquidation", "reimbursement_payment":
+		if err := validateEmployeeID(s.models, textValue(normalized["employee_id"])); err != nil {
+			return err
+		}
+		if err := validatePartyID(s.models, textValue(normalized["party_id"])); err != nil {
+			return err
+		}
+		if err := validateCostCenterID(s.models, textValue(normalized["cost_center_id"])); err != nil {
+			return err
+		}
+		if err := validateTreasuryAccountID(s.models, textValue(normalized["treasury_account_id"])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *EmployeeSpendCoreService) CreateReimbursementPaymentFromLiquidation(liquidationID, actorID string) (document.Record, error) {
 	if s == nil || s.documents == nil || strings.TrimSpace(liquidationID) == "" {
 		return document.Record{}, shared.Validation("advance liquidation is required")
@@ -163,6 +189,12 @@ func (s *EmployeeSpendCoreService) normalizeLiquidation(next map[string]any) {
 	claimTotal := firstPositive(numberValue(next["claim_total_amount"]), numberValue(next["reimbursable_amount"]))
 	if claimID := strings.TrimSpace(textValue(next["expense_claim_id"])); claimID != "" && s != nil && s.documents != nil {
 		if claim, err := s.documents.Get(claimID); err == nil {
+			if employeeID := textValue(claim.Body.Payload["employee_id"]); textValue(next["employee_id"]) != "" && employeeID != "" && textValue(next["employee_id"]) != employeeID {
+				next["liquidation_consistency_error"] = "expense claim employee does not match liquidation employee"
+			}
+			if partyID := textValue(claim.Body.Payload["party_id"]); textValue(next["party_id"]) != "" && partyID != "" && textValue(next["party_id"]) != partyID {
+				next["liquidation_consistency_error"] = "expense claim party does not match liquidation party"
+			}
 			assignIfEmpty(next, "employee_id", claim.Body.Payload["employee_id"])
 			assignIfEmpty(next, "party_id", claim.Body.Payload["party_id"])
 			assignIfEmpty(next, "travel_request_id", claim.Body.Payload["travel_request_id"])
@@ -173,6 +205,15 @@ func (s *EmployeeSpendCoreService) normalizeLiquidation(next map[string]any) {
 	advanceAmount := firstPositive(numberValue(next["advance_amount"]), numberValue(next["advance_applied_amount"]))
 	if advanceID := strings.TrimSpace(textValue(next["cash_advance_id"])); advanceID != "" && s != nil && s.documents != nil {
 		if advance, err := s.documents.Get(advanceID); err == nil {
+			if employeeID := textValue(advance.Body.Payload["employee_id"]); textValue(next["employee_id"]) != "" && employeeID != "" && textValue(next["employee_id"]) != employeeID {
+				next["liquidation_consistency_error"] = "cash advance employee does not match liquidation employee"
+			}
+			if partyID := textValue(advance.Body.Payload["party_id"]); textValue(next["party_id"]) != "" && partyID != "" && textValue(next["party_id"]) != partyID {
+				next["liquidation_consistency_error"] = "cash advance party does not match liquidation party"
+			}
+			if travelRequestID := textValue(advance.Body.Payload["travel_request_id"]); textValue(next["travel_request_id"]) != "" && travelRequestID != "" && textValue(next["travel_request_id"]) != travelRequestID {
+				next["liquidation_consistency_error"] = "cash advance travel request does not match liquidation travel request"
+			}
 			assignIfEmpty(next, "employee_id", advance.Body.Payload["employee_id"])
 			assignIfEmpty(next, "party_id", advance.Body.Payload["party_id"])
 			assignIfEmpty(next, "travel_request_id", advance.Body.Payload["travel_request_id"])

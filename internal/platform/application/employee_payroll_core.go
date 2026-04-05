@@ -69,6 +69,23 @@ func (s *EmployeePayrollCoreService) CreatePaymentBatchFromRun(runID, actorID st
 	if len(runLines) == 0 {
 		return document.Record{}, nil, document.Record{}, shared.Validation("payroll run has no payroll lines")
 	}
+	if err := validateTreasuryAccountID(s.models, textValue(runPayload["treasury_account_id"])); err != nil {
+		return document.Record{}, nil, document.Record{}, err
+	}
+	for _, row := range runLines {
+		if err := validateEmployeeID(s.models, textValue(row["employee_id"])); err != nil {
+			return document.Record{}, nil, document.Record{}, err
+		}
+		if err := validatePartyID(s.models, textValue(row["party_id"])); err != nil {
+			return document.Record{}, nil, document.Record{}, err
+		}
+		if err := validateCostCenterID(s.models, textValue(row["cost_center_id"])); err != nil {
+			return document.Record{}, nil, document.Record{}, err
+		}
+		if err := validateTreasuryAccountID(s.models, firstNonEmptyString(textValue(row["treasury_account_id"]), textValue(runPayload["treasury_account_id"]))); err != nil {
+			return document.Record{}, nil, document.Record{}, err
+		}
+	}
 
 	batchPayload := s.NormalizePayload("payroll_payment_batch", map[string]any{
 		"payroll_run_id":      run.Header.ID,

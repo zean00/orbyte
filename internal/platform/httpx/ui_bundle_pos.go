@@ -29,6 +29,7 @@ func POSTerminalBundle() string {
         searchQuery: "",
         searchResults: [],
         cart: [],
+        currentSaleID: "",
         tenders: [{ tender_type_code: "", amount: 0, reference: "", notes: "" }],
         heldSales: [],
         transactions: [],
@@ -89,6 +90,7 @@ func POSTerminalBundle() string {
             registerCode: state.registerCode,
             shiftId: state.shiftId,
             cart: state.cart,
+            currentSaleID: state.currentSaleID,
             tenders: state.tenders,
             promotionCodes: state.promotionCodes,
             customer: state.customer,
@@ -105,6 +107,7 @@ func POSTerminalBundle() string {
             state.registerCode = state.registerCode || String(payload.registerCode || "");
             state.shiftId = state.shiftId || String(payload.shiftId || "");
             state.cart = Array.isArray(payload.cart) ? payload.cart : state.cart;
+            state.currentSaleID = String(payload.currentSaleID || "");
             state.tenders = Array.isArray(payload.tenders) && payload.tenders.length ? payload.tenders : state.tenders;
             state.promotionCodes = String(payload.promotionCodes || "");
             if (!state.customer && payload.customer && typeof payload.customer === "object") {
@@ -154,6 +157,7 @@ func POSTerminalBundle() string {
       };
       const resetSaleState = function() {
         state.cart = [];
+        state.currentSaleID = "";
         state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
         state.cartQuantityDrafts = {};
         state.tenderAmountDrafts = {};
@@ -164,11 +168,19 @@ func POSTerminalBundle() string {
         state.promotionValidation = null;
         state.tenderInsights = {};
       };
+      const effectiveTenderAmount = function(index, line) {
+        const key = String(index);
+        if (Object.prototype.hasOwnProperty.call(state.tenderAmountDrafts, key)) {
+          const raw = String(state.tenderAmountDrafts[key] || "");
+          return raw === "" ? 0 : number(raw);
+        }
+        return number((line || {}).amount);
+      };
       const totals = function() {
         const subtotal = state.cart.reduce(function(sum, line) { return sum + number(line.line_subtotal || line.unit_price * line.quantity); }, 0);
         const tax = state.cart.reduce(function(sum, line) { return sum + number(line.tax_amount); }, 0);
         const total = state.cart.reduce(function(sum, line) { return sum + number(line.line_total || (line.line_subtotal + line.tax_amount)); }, 0);
-        const tendered = state.tenders.reduce(function(sum, line) { return sum + number(line.amount); }, 0);
+        const tendered = state.tenders.reduce(function(sum, line, index) { return sum + effectiveTenderAmount(index, line); }, 0);
         return {
           subtotal: subtotal,
           tax: tax,
@@ -344,13 +356,28 @@ func POSTerminalBundle() string {
       }
 
       function payloadTenders() {
-        return state.tenders.filter(function(tender) { return String(tender.tender_type_code || "").trim() !== "" && number(tender.amount) > 0; }).map(function(tender) {
+        return state.tenders.filter(function(tender, index) { return String(tender.tender_type_code || "").trim() !== "" && effectiveTenderAmount(index, tender) > 0; }).map(function(tender, index) {
           return {
             tender_type_code: tender.tender_type_code,
-            amount: number(tender.amount),
+            amount: effectiveTenderAmount(index, tender),
             reference: tender.reference || "",
             notes: tender.notes || "",
           };
+        });
+      }
+
+      function flushPendingDrafts() {
+        Object.keys(state.cartQuantityDrafts).forEach(function(key) {
+          const index = number(key);
+          const node = mount.querySelector("[data-line-qty='" + String(index) + "']");
+          const value = node ? node.value : state.cartQuantityDrafts[key];
+          commitLineQuantity(index, value);
+        });
+        Object.keys(state.tenderAmountDrafts).forEach(function(key) {
+          const index = number(key);
+          const node = mount.querySelector("[data-tender-amount='" + String(index) + "']");
+          const value = node ? node.value : state.tenderAmountDrafts[key];
+          commitTenderAmount(index, value);
         });
       }
 
@@ -574,6 +601,7 @@ func POSTerminalBundle() string {
       }
 
       function closeTenderModal() {
+        flushPendingDrafts();
         state.tenderModalOpen = false;
         render();
       }
@@ -740,6 +768,7 @@ func POSTerminalBundle() string {
       }
 
       async function holdSale() {
+        flushPendingDrafts();
         if (!terminalUnlocked()) {
           notify(text("Open a shift first.", "Buka shift terlebih dahulu."), "error");
           return;
@@ -748,6 +777,7 @@ func POSTerminalBundle() string {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            sale_id: state.currentSaleID,
             store_code: state.storeCode,
             register_code: state.registerCode,
             shift_id: state.shiftId,
@@ -761,6 +791,7 @@ func POSTerminalBundle() string {
         });
         await loadHeldSales();
         state.cart = [];
+        state.currentSaleID = "";
         state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
         state.promotionCodes = "";
         state.promotionValidation = null;
@@ -773,6 +804,7 @@ func POSTerminalBundle() string {
 
       function resumeHeldSale(record) {
         try {
+          state.currentSaleID = String((record || {}).id || "");
           state.cart = JSON.parse(String(((record || {}).values || {}).lines_json || "[]"));
           state.tenders = JSON.parse(String(((record || {}).values || {}).tenders_json || "[{\"tender_type_code\":\"\",\"amount\":0}]"));
           state.promotionCodes = JSON.parse(String(((record || {}).values || {}).promotion_codes_json || "[]")).join(", ");
@@ -796,6 +828,7 @@ func POSTerminalBundle() string {
       }
 
       async function checkout() {
+        flushPendingDrafts();
         if (!navigator.onLine) {
           notify(text("Checkout requires a live connection.", "Checkout membutuhkan koneksi aktif."), "error");
           return;
@@ -818,6 +851,7 @@ func POSTerminalBundle() string {
               store_code: state.storeCode,
               register_code: state.registerCode,
               shift_id: state.shiftId,
+              sale_id: state.currentSaleID,
               party_id: state.customer ? state.customer.party_id : "",
               party_name: state.customer ? state.customer.customer_name : "",
               lines: payloadLines(),
@@ -829,6 +863,7 @@ func POSTerminalBundle() string {
           emitHardwareEvent("orbyte:pos-receipt-print", result);
           emitHardwareEvent("orbyte:pos-cash-drawer-open", { total: totals().total, change: totals().change });
           state.cart = [];
+          state.currentSaleID = "";
           state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
           state.promotionCodes = "";
           state.promotionValidation = null;
@@ -959,7 +994,7 @@ func POSTerminalBundle() string {
                   +     '<div><div class="pos-terminal__title">' + escapeHTML(item.name || item.item_code) + '</div><div class="pos-terminal__muted">' + escapeHTML((item.item_code || "") + (item.variant_label ? " • " + item.variant_label : "")) + '</div></div>'
                   +     '<div><strong>' + escapeHTML(money(item.unit_price)) + '</strong></div>'
                   +   '</div>'
-                  +   '<div class="pos-terminal__muted" style="margin-top:0.55rem">' + escapeHTML(text("Available", "Tersedia")) + ': ' + escapeHTML(String(number(item.available_quantity))) + '</div>'
+                  +   '<div class="pos-terminal__muted" style="margin-top:0.55rem">' + (item.inventory_enabled ? escapeHTML(text("Available", "Tersedia")) + ': ' + escapeHTML(String(number(item.available_quantity))) : escapeHTML(text("Non-stock item", "Item nonstok"))) + '</div>'
                   +   '<div class="pos-terminal__buttons" style="margin-top:0.75rem"><button type="button" class="pos-terminal__button" data-add-result="' + String(index) + '">' + escapeHTML(text("Add to cart", "Tambah ke keranjang")) + '</button></div>'
                   + '</article>';
               }).join("") + '</div>' : '<div class="pos-terminal__empty">' + escapeHTML(text("Search results appear here.", "Hasil pencarian muncul di sini.")) + '</div>') + '</div>'
@@ -1065,7 +1100,7 @@ func POSTerminalBundle() string {
           +   '<article class="pos-terminal__panel">'
           +     '<div class="pos-terminal__panel-head"><div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Checkout summary", "Ringkasan checkout")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(state.shiftId ? text("Shift is open and ready to settle.", "Shift terbuka dan siap settle.") : text("Open a shift before accepting payments.", "Buka shift sebelum menerima pembayaran.")) + '</div></div></div>'
           +     '<div class="pos-terminal__panel-body">'
-          +       '<div class="pos-terminal__due"><span class="pos-terminal__meta-label">' + escapeHTML(text("Amount due", "Jumlah kurang")) + '</span><strong>' + escapeHTML(money(totalsPayload.due > 0 ? totalsPayload.due : totalsPayload.total)) + '</strong><small>' + escapeHTML(totalsPayload.change > 0 ? text("Change due: ", "Kembalian: ") + money(totalsPayload.change) : text("Tender until due becomes zero.", "Tender hingga nilai kurang menjadi nol.")) + '</small></div>'
+          +       '<div class="pos-terminal__due"><span class="pos-terminal__meta-label">' + escapeHTML(text("Amount due", "Jumlah kurang")) + '</span><strong>' + escapeHTML(money(totalsPayload.due)) + '</strong><small>' + escapeHTML(totalsPayload.change > 0 ? text("Change due: ", "Kembalian: ") + money(totalsPayload.change) : text("Tender until due becomes zero.", "Tender hingga nilai kurang menjadi nol.")) + '</small></div>'
           +       '<div class="pos-terminal__summary" style="margin-top:0.95rem">'
           +         '<div class="pos-terminal__summary-row"><span>' + escapeHTML(text("Store", "Toko")) + '</span><span>' + escapeHTML(String((activeStore && activeStore.values && activeStore.values.name) || state.storeCode || "—")) + '</span></div>'
           +         '<div class="pos-terminal__summary-row"><span>' + escapeHTML(text("Register", "Register")) + '</span><span>' + escapeHTML(String((activeRegister && activeRegister.values && activeRegister.values.name) || state.registerCode || "—")) + '</span></div>'

@@ -204,28 +204,28 @@ func (s *PayrollRemittanceCoreService) GenerateLiabilitiesFromPayrollRun(runID, 
 	for _, key := range keys {
 		item := aggregates[key]
 		payload := s.NormalizePayload("payroll_remittance_liability", map[string]any{
-			"source_payroll_run_id":           run.Header.ID,
-			"payroll_period_id":               textValue(runPayload["payroll_period_id"]),
-			"remittance_authority_id":         item.AuthorityID,
-			"remittance_obligation_type_id":   item.ObligationTypeID,
-			"organization_id":                 item.OrganizationID,
-			"location_id":                     item.LocationID,
-			"currency_code":                   item.CurrencyCode,
-			"treasury_account_id":             item.TreasuryAccountID,
-			"payment_method_code":             item.PaymentMethodCode,
-			"liability_account_code":          item.LiabilityAccount,
-			"due_date":                        item.DueDate,
-			"employee_withholding_amount":     roundMoney(item.WithholdingAmount),
-			"employee_contribution_amount":    roundMoney(item.EmployeeAmount),
-			"employer_contribution_amount":    roundMoney(item.EmployerAmount),
-			"net_liability_amount":            roundMoney(item.TotalAmount),
-			"amount":                          roundMoney(item.TotalAmount),
-			"total_amount":                    roundMoney(item.TotalAmount),
-			"outstanding_amount":              roundMoney(item.TotalAmount),
-			"paid_amount":                     0.0,
-			"generation_posting_id":           posting.Header.ID,
-			"source_employee_ids":             item.SourceLineEmployee,
-			"notes":                           fmt.Sprintf("Generated from payroll run %s", firstNonEmptyString(run.Header.Number, run.Header.ID)),
+			"source_payroll_run_id":         run.Header.ID,
+			"payroll_period_id":             textValue(runPayload["payroll_period_id"]),
+			"remittance_authority_id":       item.AuthorityID,
+			"remittance_obligation_type_id": item.ObligationTypeID,
+			"organization_id":               item.OrganizationID,
+			"location_id":                   item.LocationID,
+			"currency_code":                 item.CurrencyCode,
+			"treasury_account_id":           item.TreasuryAccountID,
+			"payment_method_code":           item.PaymentMethodCode,
+			"liability_account_code":        item.LiabilityAccount,
+			"due_date":                      item.DueDate,
+			"employee_withholding_amount":   roundMoney(item.WithholdingAmount),
+			"employee_contribution_amount":  roundMoney(item.EmployeeAmount),
+			"employer_contribution_amount":  roundMoney(item.EmployerAmount),
+			"net_liability_amount":          roundMoney(item.TotalAmount),
+			"amount":                        roundMoney(item.TotalAmount),
+			"total_amount":                  roundMoney(item.TotalAmount),
+			"outstanding_amount":            roundMoney(item.TotalAmount),
+			"paid_amount":                   0.0,
+			"generation_posting_id":         posting.Header.ID,
+			"source_employee_ids":           item.SourceLineEmployee,
+			"notes":                         fmt.Sprintf("Generated from payroll run %s", firstNonEmptyString(run.Header.Number, run.Header.ID)),
 		})
 		liability, err := s.documents.Create("payroll_remittance_liability", item.OrganizationID, item.LocationID, actorID, payload)
 		if err != nil {
@@ -293,6 +293,9 @@ func (s *PayrollRemittanceCoreService) CreatePaymentFromBatch(batchID, actorID s
 		currencyCode := firstNonEmptyString(textValue(liability.Body.Payload["currency_code"]), "IDR")
 		treasuryAccountID := textValue(liability.Body.Payload["treasury_account_id"])
 		paymentMethodCode := firstNonEmptyString(textValue(liability.Body.Payload["payment_method_code"]), "BANK")
+		if err := validateTreasuryAccountID(s.models, treasuryAccountID); err != nil {
+			return document.Record{}, document.Record{}, err
+		}
 		if expectedOrgID == "" {
 			expectedOrgID = orgID
 			expectedLocID = locID
@@ -695,13 +698,13 @@ func (s *PayrollRemittanceCoreService) existingPaymentForBatch(batchID string) s
 
 func (s *PayrollRemittanceCoreService) resolveTreasuryGLAccount(treasuryAccountID string) string {
 	if s == nil || s.models == nil || strings.TrimSpace(treasuryAccountID) == "" {
-		return "1010-BANK"
+		return ""
 	}
-	account, err := s.models.Get("treasury_account", treasuryAccountID)
-	if err != nil {
-		return "1010-BANK"
+	account, ok := resolveExistingModelRecord(s.models, "treasury_account", treasuryAccountID)
+	if !ok {
+		return ""
 	}
-	return firstNonEmptyString(textValue(account.Values["gl_account_code"]), "1010-BANK")
+	return textValue(account.Values["gl_account_code"])
 }
 
 func (s *PayrollRemittanceCoreService) isOpenLiability(status string) bool {

@@ -524,6 +524,48 @@ func (s *FinanceCollectionsCoreService) statementReport(kind, organizationID, lo
 	}
 }
 
+func (s *FinanceCollectionsCoreService) statementReportForCounterparty(kind, organizationID, locationID, asOfDate, requestedCounterpartyID, canonicalCounterpartyID string) FinanceStatementReport {
+	candidates := []string{}
+	seen := map[string]struct{}{}
+	addCandidate := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		candidates = append(candidates, value)
+	}
+	addCandidate(requestedCounterpartyID)
+	addCandidate(canonicalCounterpartyID)
+	if kind == "ap" {
+		if record, ok := resolveExistingModelRecord(s.models, "vendor_profile", requestedCounterpartyID); ok {
+			addCandidate(record.ID)
+			addCandidate(textValue(record.Values["code"]))
+		}
+	} else {
+		if record, ok := resolveExistingModelRecord(s.models, "party", requestedCounterpartyID); ok {
+			addCandidate(record.ID)
+			addCandidate(textValue(record.Values["code"]))
+		}
+	}
+	if len(candidates) == 0 {
+		return s.statementReport(kind, organizationID, locationID, asOfDate, "")
+	}
+	for _, candidate := range candidates {
+		report := s.statementReport(kind, organizationID, locationID, asOfDate, candidate)
+		if len(report.Rows) > 0 {
+			report.CounterpartyID = canonicalCounterpartyID
+			return report
+		}
+	}
+	report := s.statementReport(kind, organizationID, locationID, asOfDate, candidates[0])
+	report.CounterpartyID = canonicalCounterpartyID
+	return report
+}
+
 func (s *FinanceCollectionsCoreService) generateStatementRun(kind, organizationID, locationID, counterpartyID, asOfDate, actorID string) (model.Record, error) {
 	if s.models == nil {
 		return model.Record{}, shared.NotFound("statement runs are not available")
@@ -531,7 +573,23 @@ func (s *FinanceCollectionsCoreService) generateStatementRun(kind, organizationI
 	if strings.TrimSpace(counterpartyID) == "" {
 		return model.Record{}, shared.Validation("counterparty is required")
 	}
-	report := s.statementReport(kind, organizationID, locationID, asOfDate, counterpartyID)
+	canonicalCounterpartyID := strings.TrimSpace(counterpartyID)
+	if kind == "ap" {
+		if err := validateVendorID(s.models, canonicalCounterpartyID); err != nil {
+			return model.Record{}, err
+		}
+		if record, ok := resolveExistingModelRecord(s.models, "vendor_profile", canonicalCounterpartyID); ok {
+			canonicalCounterpartyID = record.ID
+		}
+	} else {
+		if err := validatePartyID(s.models, canonicalCounterpartyID); err != nil {
+			return model.Record{}, err
+		}
+		if record, ok := resolveExistingModelRecord(s.models, "party", canonicalCounterpartyID); ok {
+			canonicalCounterpartyID = record.ID
+		}
+	}
+	report := s.statementReportForCounterparty(kind, organizationID, locationID, asOfDate, counterpartyID, canonicalCounterpartyID)
 	if len(report.Rows) == 0 {
 		return model.Record{}, shared.Validation("statement has no open items")
 	}
@@ -544,7 +602,7 @@ func (s *FinanceCollectionsCoreService) generateStatementRun(kind, organizationI
 	return s.models.Create(modelKey, actorID, map[string]any{
 		"organization_id":      organizationID,
 		"location_id":          locationID,
-		counterpartyField:      counterpartyID,
+		counterpartyField:      canonicalCounterpartyID,
 		"counterparty_name":    report.CounterpartyName,
 		"as_of_date":           report.AsOfDate,
 		"status":               "issued",

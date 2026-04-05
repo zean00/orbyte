@@ -253,9 +253,10 @@ func TestEmployeePayrollCreatePaymentBatchFromProcessedRunRejectsDuplicate(t *te
 		"net_pay_total":       1180.0,
 		"employer_cost_total": 1200.0,
 		"payroll_lines": []map[string]any{{
-			"employee_id": "emp_1",
-			"party_id":    "party_emp",
-			"net_pay":     1180.0,
+			"employee_id":    "emp_1",
+			"party_id":       "party_emp",
+			"cost_center_id": "cc_payroll",
+			"net_pay":        1180.0,
 		}},
 	})
 	if err != nil {
@@ -274,10 +275,84 @@ func TestEmployeePayrollCreatePaymentBatchFromProcessedRunRejectsDuplicate(t *te
 	}
 }
 
+func TestEmployeePayrollCreatePaymentBatchFromProcessedRunRejectsUnknownTreasuryAccount(t *testing.T) {
+	models := model.NewService()
+	registerEmployeePayrollTestModels(t, models)
+	docs := document.NewService()
+	registerEmployeePayrollTestDocuments(t, docs)
+	service := NewEmployeePayrollCoreService(docs, models, nil, nil)
+
+	run, err := docs.Create("payroll_run", "org_default", "loc_hq", "user_admin", map[string]any{
+		"payroll_period_id":   "period_1",
+		"pay_date":            "2099-10-31",
+		"currency_code":       "IDR",
+		"treasury_account_id": "missing_treasury",
+		"payment_method_code": "BANK",
+		"net_pay_total":       1180.0,
+		"employer_cost_total": 1200.0,
+		"payroll_lines": []map[string]any{{
+			"employee_id": "emp_1",
+			"party_id":    "party_emp",
+			"net_pay":     1180.0,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create payroll run: %v", err)
+	}
+	run.Header.Status = "processed"
+	if err := docs.Save(run); err != nil {
+		t.Fatalf("save payroll run: %v", err)
+	}
+
+	if _, _, _, err := service.CreatePaymentBatchFromRun(run.Header.ID, "user_admin"); err == nil {
+		t.Fatal("expected missing treasury account to be rejected")
+	}
+}
+
+func TestEmployeePayrollCreatePaymentBatchFromProcessedRunDoesNotPersistBatchOnLineValidationFailure(t *testing.T) {
+	models := model.NewService()
+	registerEmployeePayrollTestModels(t, models)
+	docs := document.NewService()
+	registerEmployeePayrollTestDocuments(t, docs)
+	service := NewEmployeePayrollCoreService(docs, models, nil, nil)
+
+	run, err := docs.Create("payroll_run", "org_default", "loc_hq", "user_admin", map[string]any{
+		"payroll_period_id":   "period_1",
+		"pay_date":            "2099-10-31",
+		"currency_code":       "IDR",
+		"treasury_account_id": "treasury_main",
+		"payment_method_code": "BANK",
+		"net_pay_total":       1180.0,
+		"employer_cost_total": 1200.0,
+		"payroll_lines": []map[string]any{{
+			"employee_id": "emp_1",
+			"party_id":    "missing_party",
+			"net_pay":     1180.0,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create payroll run: %v", err)
+	}
+	run.Header.Status = "processed"
+	if err := docs.Save(run); err != nil {
+		t.Fatalf("save payroll run: %v", err)
+	}
+
+	if _, _, _, err := service.CreatePaymentBatchFromRun(run.Header.ID, "user_admin"); err == nil {
+		t.Fatal("expected invalid payroll line to be rejected")
+	}
+	if got := service.existingPaymentBatchForRun(run.Header.ID); got != "" {
+		t.Fatalf("expected no persisted batch after validation failure, got %q", got)
+	}
+}
+
 func registerEmployeePayrollTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	defs := []model.Definition{
-		{Key: "employee_profile", DisplayName: "Employee Profile", DefaultSort: "party_id", Fields: []model.FieldDefinition{{Key: "party_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "status", Type: "string"}}},
+		{Key: "party", DisplayName: "Party", DefaultSort: "name", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}}},
+		{Key: "cost_center", DisplayName: "Cost Center", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}}},
+		{Key: "treasury_account", DisplayName: "Treasury Account", DefaultSort: "name", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "gl_account_code", Type: "string"}}},
+		{Key: "employee_profile", DisplayName: "Employee Profile", DefaultSort: "party_id", Fields: []model.FieldDefinition{{Key: "party_id", Type: "string"}, {Key: "employee_code", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_assignment", DisplayName: "Employee Assignment", DefaultSort: "effective_from", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "effective_to", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_compensation_profile", DisplayName: "Employee Compensation Profile", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "currency_code", Type: "string"}, {Key: "standard_hourly_rate", Type: "number"}, {Key: "overtime_hourly_rate", Type: "number"}, {Key: "status", Type: "string"}}},
 		{Key: "attendance_day", DisplayName: "Attendance Day", DefaultSort: "attendance_date", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "attendance_date", Type: "string"}, {Key: "worked_hours", Type: "number"}, {Key: "overtime_hours", Type: "number"}, {Key: "leave_request_id", Type: "string"}, {Key: "status", Type: "string"}}},
@@ -294,6 +369,18 @@ func registerEmployeePayrollTestModels(t *testing.T, models *model.Service) {
 		if err := models.Register(def); err != nil {
 			t.Fatalf("register model %s: %v", def.Key, err)
 		}
+	}
+	if _, err := models.Create("party", "user_admin", map[string]any{"code": "party_emp", "name": "Employee Party"}); err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	if _, err := models.Create("cost_center", "user_admin", map[string]any{"code": "cc_payroll"}); err != nil {
+		t.Fatalf("create cost center: %v", err)
+	}
+	if _, err := models.Create("treasury_account", "user_admin", map[string]any{"code": "treasury_main", "name": "Main Treasury", "gl_account_code": "1010-BANK"}); err != nil {
+		t.Fatalf("create treasury account: %v", err)
+	}
+	if _, err := models.Create("employee_profile", "user_admin", map[string]any{"employee_code": "emp_1", "party_id": "party_emp", "status": "active"}); err != nil {
+		t.Fatalf("seed employee: %v", err)
 	}
 }
 

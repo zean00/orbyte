@@ -313,7 +313,14 @@ export default function AgentSurfacePage() {
         const preferredSession =
           orderedSessions.find((item) => item.turn_in_progress) ||
           orderedSessions[0];
-        if (!selectedSessionID && preferredSession) {
+        const selectedStillExists =
+          selectedSessionID &&
+          nextSessions.some((item) => item.id === selectedSessionID);
+        if (selectedSessionID && !selectedStillExists) {
+          setSelectedSessionID(preferredSession?.id || "");
+          setSession(preferredSession || null);
+          setLocalPendingTurn(null);
+        } else if (!selectedSessionID && preferredSession) {
           setSelectedSessionID(preferredSession.id);
         }
       } catch (error) {
@@ -383,11 +390,26 @@ export default function AgentSurfacePage() {
     let disposed = false;
     closeStream(streamRef);
     void (async () => {
-      const current = await refreshSession(
-        selectedSessionID,
-        setSession,
-        setSessions,
-      );
+      let current: ACPSession;
+      try {
+        current = await refreshSession(
+          selectedSessionID,
+          setSession,
+          setSessions,
+        );
+      } catch (error) {
+        if (disposed) return;
+        const messageText =
+          error instanceof Error ? error.message : "Failed to refresh session.";
+        if (messageText.toLowerCase().includes("session not found")) {
+          setSelectedSessionID("");
+          setSession(null);
+          setLocalPendingTurn(null);
+          return;
+        }
+        setMessage(messageText);
+        return;
+      }
       if (disposed) return;
       seenEventIDsRef.current = new Set(
         (current.trace || []).map((item) => item.id).filter(Boolean),
@@ -730,6 +752,16 @@ export default function AgentSurfacePage() {
     let targetSessionID = selectedSessionID;
     let targetSession: ACPSession | null =
       selectedSessionID && session?.id === selectedSessionID ? session : null;
+    if (
+      targetSessionID &&
+      !sessions.some((item) => item.id === targetSessionID)
+    ) {
+      targetSessionID = "";
+      targetSession = null;
+      setSelectedSessionID("");
+      setSession(null);
+      setLocalPendingTurn(null);
+    }
     setLocalPendingTurn({
       sessionID: targetSessionID || NEW_SESSION_PENDING_ID,
       phase: "thinking",

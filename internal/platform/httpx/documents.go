@@ -61,7 +61,7 @@ type createDocumentAttachmentRequest struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, deliverySvc *application.DeliveryCoreService, returnsSvc *application.ReturnsCoreService, supplierReturnsSvc *application.SupplierReturnsCoreService, productionSvc *application.ProductionCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, payrollSvc *application.EmployeePayrollCoreService, remittanceSvc *application.PayrollRemittanceCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
+func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, docs *document.Service, docActions *application.DocumentActions, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, deliverySvc *application.DeliveryCoreService, returnsSvc *application.ReturnsCoreService, supplierReturnsSvc *application.SupplierReturnsCoreService, productionSvc *application.ProductionCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, employeeSpendSvc *application.EmployeeSpendCoreService, payrollSvc *application.EmployeePayrollCoreService, remittanceSvc *application.PayrollRemittanceCoreService, auditSvc *audit.Service, policySvc *policy.Service, searchSvc *search.Service, fieldSecurity *securityfields.Service, obs *observability.Service) {
 	_ = traceabilitySvc
 	if commercialSvc != nil {
 		mux.HandleFunc("POST /commercial/products/", func(w http.ResponseWriter, r *http.Request) {
@@ -697,6 +697,8 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			req.Payload = productionSvc.NormalizePayload(req.Type, req.Payload)
 		} else if recallSvc != nil && isRecallManagedType(req.Type) {
 			req.Payload = recallSvc.NormalizePayload(req.Type, req.Payload)
+		} else if employeeSpendSvc != nil && isEmployeeSpendManagedType(req.Type) {
+			req.Payload = employeeSpendSvc.NormalizePayload(req.Type, req.Payload)
 		} else if payrollSvc != nil && isPayrollManagedType(req.Type) {
 			req.Payload = payrollSvc.NormalizePayload(req.Type, req.Payload)
 		} else if remittanceSvc != nil && isRemittanceManagedType(req.Type) {
@@ -938,6 +940,8 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 			req.Payload = productionSvc.NormalizePayload(current.Header.Type, req.Payload)
 		} else if recallSvc != nil && isRecallManagedType(current.Header.Type) {
 			req.Payload = recallSvc.NormalizePayload(current.Header.Type, req.Payload)
+		} else if employeeSpendSvc != nil && isEmployeeSpendManagedType(current.Header.Type) {
+			req.Payload = employeeSpendSvc.NormalizePayload(current.Header.Type, req.Payload)
 		} else if payrollSvc != nil && isPayrollManagedType(current.Header.Type) {
 			req.Payload = payrollSvc.NormalizePayload(current.Header.Type, req.Payload)
 		} else if remittanceSvc != nil && isRemittanceManagedType(current.Header.Type) {
@@ -1176,6 +1180,18 @@ func registerDocumentRoutes(mux *http.ServeMux, cfg *config.Service, ident *iden
 				validationErr = recallSvc.ValidateApprove(current)
 			case "cancel":
 				validationErr = recallSvc.ValidateCancel(current)
+			}
+			if validationErr != nil {
+				incActionMetric(obs, req.Action, "error")
+				respondError(w, validationErr)
+				return
+			}
+		}
+		if employeeSpendSvc != nil && isEmployeeSpendManagedType(current.Header.Type) {
+			var validationErr error
+			switch req.Action {
+			case "approve":
+				validationErr = employeeSpendSvc.ValidateApprove(current)
 			}
 			if validationErr != nil {
 				incActionMetric(obs, req.Action, "error")
@@ -1586,6 +1602,15 @@ func isProductionManagedType(documentType string) bool {
 func isRecallManagedType(documentType string) bool {
 	switch strings.ToLower(strings.TrimSpace(documentType)) {
 	case "recall_case", "recall_action":
+		return true
+	default:
+		return false
+	}
+}
+
+func isEmployeeSpendManagedType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "travel_request", "cash_advance", "expense_claim", "advance_liquidation", "reimbursement_payment":
 		return true
 	default:
 		return false

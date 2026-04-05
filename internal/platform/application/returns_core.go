@@ -505,6 +505,12 @@ func (s *ReturnsCoreService) validateReturnReceipt(record document.Record) error
 		if itemCode == "" || qty <= 0 || warehouseCode == "" {
 			return shared.Validation("return receipt lines require item, warehouse, and quantity")
 		}
+		if err := validateCommercialItemCode(s.inventory.models, itemCode); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.inventory.models, warehouseCode); err != nil {
+			return err
+		}
 		policy := s.inventory.lookupItemPolicy(itemCode)
 		if !policy.Enabled {
 			return shared.Validation(fmt.Sprintf("item %s is not inventory-tracked", itemCode))

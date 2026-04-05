@@ -146,6 +146,7 @@ type POSHoldSaleInput struct {
 }
 
 type POSCheckoutInput struct {
+	SaleID         string             `json:"sale_id,omitempty"`
 	StoreCode      string             `json:"store_code"`
 	RegisterCode   string             `json:"register_code"`
 	ShiftID        string             `json:"shift_id"`
@@ -981,9 +982,25 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 		"device_id":            input.DeviceID,
 		"offline_cached":       input.OfflineCached,
 	}
-	sale, err := s.models.Create("pos_sale", actorID, saleValues)
-	if err != nil {
-		return POSCheckoutResult{}, err
+	var sale model.Record
+	if strings.TrimSpace(input.SaleID) != "" {
+		current, getErr := s.models.Get("pos_sale", input.SaleID)
+		if getErr != nil {
+			return POSCheckoutResult{}, getErr
+		}
+		if textValue(current.Values["status"]) != "held" {
+			return POSCheckoutResult{}, shared.Validation("pos sale is not in held status")
+		}
+		saleValues["sale_number"] = firstNonEmptyString(textValue(current.Values["sale_number"]), textValue(saleValues["sale_number"]))
+		sale, err = s.models.Update("pos_sale", current.ID, actorID, saleValues, current.Version)
+		if err != nil {
+			return POSCheckoutResult{}, err
+		}
+	} else {
+		sale, err = s.models.Create("pos_sale", actorID, saleValues)
+		if err != nil {
+			return POSCheckoutResult{}, err
+		}
 	}
 	if s.retail != nil {
 		if err := s.retail.RecordStoredValueRedemptions(organizationID, locationID, sale, payments, normalizedTenders, actorID, input.PartyID); err != nil {

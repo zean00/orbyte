@@ -365,6 +365,12 @@ func (s *SupplierReturnsCoreService) validateSupplierReturn(record document.Reco
 		if itemCode == "" || warehouseCode == "" || qty <= 0 {
 			return shared.Validation("supplier return lines require item, warehouse, and quantity")
 		}
+		if err := validateCommercialItemCode(s.inventory.models, itemCode); err != nil {
+			return err
+		}
+		if err := validateWarehouseCode(s.inventory.models, warehouseCode); err != nil {
+			return err
+		}
 		policy := s.inventory.lookupItemPolicy(itemCode)
 		if !policy.Enabled {
 			return shared.Validation(fmt.Sprintf("item %s is not inventory-tracked", itemCode))

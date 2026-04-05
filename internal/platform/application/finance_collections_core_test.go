@@ -50,6 +50,54 @@ func TestFinanceCollectionsGenerateARStatementRun(t *testing.T) {
 	}
 }
 
+func TestFinanceCollectionsGenerateARStatementRunAcceptsPartyCodeReference(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	registerFinanceCollectionsTestDocumentTypes(t, docs)
+	registerFinanceCollectionsTestModels(t, models)
+	reporting := NewFinanceReportingCoreService(docs, models, nil)
+	recon := NewFinanceReconciliationCoreService(docs, models, reporting)
+	svc := NewFinanceCollectionsCoreService(docs, models, recon, NewCommercialCoreService(docs, nil, models, nil), NewProcurementCoreService(docs, nil, models, nil), reporting)
+
+	items, _, err := models.List("party", model.Query{Filters: map[string]string{"code": "party-a"}, Page: 1, PageSize: 1})
+	if err != nil || len(items) == 0 {
+		t.Fatalf("list party by code: %v", err)
+	}
+	party := items[0]
+	invoice, err := docs.Create("invoice", "org_default", "loc_hq", "user_admin", map[string]any{
+		"party_id":                party.ID,
+		"party_name":              "Party A",
+		"invoice_date":            "2099-04-01",
+		"due_date":                "2099-04-15",
+		"total_amount":            220.0,
+		"paid_amount":             100.0,
+		"credited_amount":         0.0,
+		"refunded_amount":         0.0,
+		"writeoff_amount":         0.0,
+		"balance_due_amount":      120.0,
+		"receivable_account_code": "1100-AR",
+	})
+	if err != nil {
+		t.Fatalf("create invoice: %v", err)
+	}
+	invoice.Header.Number = "INV-AR-CODE-1"
+	invoice.Header.Status = "partially_paid"
+	if err := docs.Save(invoice); err != nil {
+		t.Fatalf("save invoice: %v", err)
+	}
+
+	record, err := svc.GenerateARStatementRun("org_default", "loc_hq", "party-a", "2099-04-30", "user_admin")
+	if err != nil {
+		t.Fatalf("generate statement run with party code: %v", err)
+	}
+	if got := textValue(record.Values["party_id"]); got != party.ID {
+		t.Fatalf("expected canonical party id %q, got %q", party.ID, got)
+	}
+	if got := numberValue(record.Values["open_amount_total"]); got != 120.0 {
+		t.Fatalf("expected open amount 120, got %v", got)
+	}
+}
+
 func TestFinanceCollectionsApplySettlementException(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -290,9 +338,41 @@ func TestFinanceCollectionsSyncSettlementExceptionsPreservesOtherKinds(t *testin
 	}
 }
 
+func TestFinanceCollectionsGenerateARStatementRunRejectsUnknownParty(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	registerFinanceCollectionsTestDocumentTypes(t, docs)
+	registerFinanceCollectionsTestModels(t, models)
+	reporting := NewFinanceReportingCoreService(docs, models, nil)
+	recon := NewFinanceReconciliationCoreService(docs, models, reporting)
+	svc := NewFinanceCollectionsCoreService(docs, models, recon, NewCommercialCoreService(docs, nil, models, nil), NewProcurementCoreService(docs, nil, models, nil), reporting)
+
+	invoice, err := docs.Create("invoice", "org_default", "loc_hq", "user_admin", map[string]any{
+		"party_id":           "missing-party",
+		"party_name":         "Missing Party",
+		"invoice_date":       "2099-04-01",
+		"due_date":           "2099-04-15",
+		"total_amount":       220.0,
+		"balance_due_amount": 220.0,
+	})
+	if err != nil {
+		t.Fatalf("create invoice: %v", err)
+	}
+	invoice.Header.Status = "issued"
+	if err := docs.Save(invoice); err != nil {
+		t.Fatalf("save invoice: %v", err)
+	}
+
+	if _, err := svc.GenerateARStatementRun("org_default", "loc_hq", "missing-party", "2099-04-30", "user_admin"); err == nil {
+		t.Fatal("expected unknown party to be rejected")
+	}
+}
+
 func registerFinanceCollectionsTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	defs := []model.Definition{
+		{Key: "party", DisplayName: "Party", Version: "v1", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}}},
+		{Key: "vendor_profile", DisplayName: "Vendor", Version: "v1", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "vendor_name", Type: "string"}}},
 		{Key: "party_statement_run", DisplayName: "Party Statement Run", Version: "v1", CreatePermissionKey: "party_statement_run.create", ListPermissionKey: "party_statement_run.list", ReadPermissionKey: "party_statement_run.read", UpdatePermissionKey: "party_statement_run.update", Fields: []model.FieldDefinition{{Key: "organization_id", Type: "string", Required: true}, {Key: "location_id", Type: "string"}, {Key: "party_id", Type: "string", Required: true}, {Key: "as_of_date", Type: "string", Required: true}}},
 		{Key: "vendor_statement_run", DisplayName: "Vendor Statement Run", Version: "v1", CreatePermissionKey: "vendor_statement_run.create", ListPermissionKey: "vendor_statement_run.list", ReadPermissionKey: "vendor_statement_run.read", UpdatePermissionKey: "vendor_statement_run.update", Fields: []model.FieldDefinition{{Key: "organization_id", Type: "string", Required: true}, {Key: "location_id", Type: "string"}, {Key: "vendor_id", Type: "string", Required: true}, {Key: "as_of_date", Type: "string", Required: true}}},
 		{Key: "collection_case", DisplayName: "Collection Case", Version: "v1", CreatePermissionKey: "collection_case.create", ListPermissionKey: "collection_case.list", ReadPermissionKey: "collection_case.read", UpdatePermissionKey: "collection_case.update", Fields: []model.FieldDefinition{{Key: "organization_id", Type: "string", Required: true}, {Key: "location_id", Type: "string"}, {Key: "kind", Type: "string", Required: true}, {Key: "counterparty_id", Type: "string", Required: true}}},
@@ -302,6 +382,18 @@ func registerFinanceCollectionsTestModels(t *testing.T, models *model.Service) {
 		if err := models.Register(def); err != nil {
 			t.Fatalf("register model %s: %v", def.Key, err)
 		}
+	}
+	if _, err := models.Create("party", "user_admin", map[string]any{"code": "party-a", "name": "Party A"}); err != nil {
+		t.Fatalf("create party a: %v", err)
+	}
+	if _, err := models.Create("party", "user_admin", map[string]any{"code": "party-writeoff", "name": "Writeoff Party"}); err != nil {
+		t.Fatalf("create writeoff party: %v", err)
+	}
+	if _, err := models.Create("party", "user_admin", map[string]any{"code": "party-ar", "name": "Party AR"}); err != nil {
+		t.Fatalf("create party ar: %v", err)
+	}
+	if _, err := models.Create("vendor_profile", "user_admin", map[string]any{"code": "vendor-a", "vendor_name": "Vendor A"}); err != nil {
+		t.Fatalf("create vendor a: %v", err)
 	}
 }
 

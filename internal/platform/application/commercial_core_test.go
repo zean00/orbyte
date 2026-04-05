@@ -2286,28 +2286,28 @@ func TestApplyPartyCommercialDefaultsPrefersActiveCustomerProfile(t *testing.T) 
 		t.Fatalf("create party: %v", err)
 	}
 	if _, err := models.Create("customer_profile", "user_admin", map[string]any{
-		"party_id":                 party.ID,
-		"customer_name":            "AAA Inactive",
-		"tax_profile_code":         "INACTIVE-TAX",
-		"default_price_list_code":  "INACTIVE-PRICE",
-		"payment_term_days":        14,
-		"customer_type":            "inactive-type",
-		"member_status":            "inactive",
-		"member_tier":              "silver",
-		"status":                   "inactive",
+		"party_id":                party.ID,
+		"customer_name":           "AAA Inactive",
+		"tax_profile_code":        "INACTIVE-TAX",
+		"default_price_list_code": "INACTIVE-PRICE",
+		"payment_term_days":       14,
+		"customer_type":           "inactive-type",
+		"member_status":           "inactive",
+		"member_tier":             "silver",
+		"status":                  "inactive",
 	}); err != nil {
 		t.Fatalf("create inactive customer profile: %v", err)
 	}
 	if _, err := models.Create("customer_profile", "user_admin", map[string]any{
-		"party_id":                 party.ID,
-		"customer_name":            "ZZZ Active",
-		"tax_profile_code":         "ACTIVE-TAX",
-		"default_price_list_code":  "ACTIVE-PRICE",
-		"payment_term_days":        45,
-		"customer_type":            "active-type",
-		"member_status":            "active",
-		"member_tier":              "gold",
-		"status":                   "active",
+		"party_id":                party.ID,
+		"customer_name":           "ZZZ Active",
+		"tax_profile_code":        "ACTIVE-TAX",
+		"default_price_list_code": "ACTIVE-PRICE",
+		"payment_term_days":       45,
+		"customer_type":           "active-type",
+		"member_status":           "active",
+		"member_tier":             "gold",
+		"status":                  "active",
 	}); err != nil {
 		t.Fatalf("create active customer profile: %v", err)
 	}
@@ -2335,6 +2335,30 @@ func TestApplyPartyCommercialDefaultsPrefersActiveCustomerProfile(t *testing.T) 
 	}
 	if got := textValue(fields["member_tier"]); got != "gold" {
 		t.Fatalf("expected active member tier, got %q", got)
+	}
+}
+
+func TestCommercialValidateApproveRejectsUnknownReferences(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	mustRegisterCommercialDocumentTypes(t, docs)
+	mustRegisterCommercialModels(t, models)
+
+	service := NewCommercialCoreService(docs, config.NewService(), models, nil)
+	record, err := docs.Create("sales_order", "org_default", "loc_main", "user_admin", map[string]any{
+		"party_id":         "missing_party",
+		"default_tax_code": "missing_tax",
+		"lines": []map[string]any{{
+			"item_code": "missing_item",
+			"quantity":  1.0,
+			"tax_code":  "missing_tax",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create sales order: %v", err)
+	}
+	if err := service.ValidateApprove(record); err == nil {
+		t.Fatal("expected unknown commercial references to be rejected")
 	}
 }
 

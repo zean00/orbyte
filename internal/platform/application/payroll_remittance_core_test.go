@@ -25,11 +25,11 @@ func TestPayrollRemittanceGenerateLiabilitiesFromProcessedRun(t *testing.T) {
 		t.Fatalf("create treasury account: %v", err)
 	}
 	authority, err := models.Create("remittance_authority", "user_admin", map[string]any{
-		"code":                       "TAX",
-		"name":                       "Tax Office",
+		"code":                        "TAX",
+		"name":                        "Tax Office",
 		"default_treasury_account_id": treasuryAccount.ID,
-		"payment_method_code":        "BANK",
-		"status":                     "active",
+		"payment_method_code":         "BANK",
+		"status":                      "active",
 	})
 	if err != nil {
 		t.Fatalf("create remittance authority: %v", err)
@@ -68,9 +68,9 @@ func TestPayrollRemittanceGenerateLiabilitiesFromProcessedRun(t *testing.T) {
 		t.Fatalf("create employer contribution obligation: %v", err)
 	}
 	if _, err := models.Create("remittance_schedule_rule", "user_admin", map[string]any{
-		"remittance_authority_id":       authority.ID,
-		"due_days_after_period_end":     10,
-		"status":                        "active",
+		"remittance_authority_id":   authority.ID,
+		"due_days_after_period_end": 10,
+		"status":                    "active",
 	}); err != nil {
 		t.Fatalf("create schedule rule: %v", err)
 	}
@@ -261,6 +261,59 @@ func TestPayrollRemittanceCreatePaymentFromApprovedBatchRejectsDuplicate(t *test
 	}
 }
 
+func TestPayrollRemittanceCreatePaymentFromApprovedBatchAcceptsTreasuryCodeReference(t *testing.T) {
+	models := model.NewService()
+	registerEmployeePayrollTestModels(t, models)
+	registerPayrollRemittanceTestModels(t, models)
+	docs := document.NewService()
+	registerEmployeePayrollTestDocuments(t, docs)
+	registerPayrollRemittanceTestDocuments(t, docs)
+	service := NewPayrollRemittanceCoreService(docs, models)
+
+	mustCreateRemittanceSetup(t, models)
+	run := mustCreateProcessedRemittancePayrollRun(t, docs)
+	liabilities, _, err := service.GenerateLiabilitiesFromPayrollRun(run.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("generate liabilities: %v", err)
+	}
+	liabilityIDs := make([]string, 0, len(liabilities))
+	for _, liability := range liabilities {
+		payload := cloneMap(liability.Body.Payload)
+		payload["treasury_account_id"] = "TR-MAIN"
+		liability.Body.Payload = document.NormalizePayload(payload)
+		if err := docs.Save(liability); err != nil {
+			t.Fatalf("save liability with code treasury ref: %v", err)
+		}
+		liabilityIDs = append(liabilityIDs, liability.Header.ID)
+	}
+	batch, err := docs.Create("payroll_remittance_batch", "org_default", "loc_hq", "user_admin", service.NormalizePayload("payroll_remittance_batch", map[string]any{
+		"liability_ids": liabilityIDs,
+	}))
+	if err != nil {
+		t.Fatalf("create batch: %v", err)
+	}
+	batch.Header.Status = "approved"
+	if err := docs.Save(batch); err != nil {
+		t.Fatalf("save batch: %v", err)
+	}
+
+	_, posting, err := service.CreatePaymentFromBatch(batch.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("create payment from batch with treasury code ref: %v", err)
+	}
+	lines := recordList(posting.Body.Payload["journal_lines"])
+	foundBankLine := false
+	for _, line := range lines {
+		if textValue(line["account_code"]) == "1010-BANK" {
+			foundBankLine = true
+			break
+		}
+	}
+	if !foundBankLine {
+		t.Fatal("expected remittance posting to resolve treasury GL account from treasury code reference")
+	}
+}
+
 func TestPayrollRemittanceCreatePaymentFromApprovedBatchRejectsIncompatibleLiabilities(t *testing.T) {
 	models := model.NewService()
 	registerEmployeePayrollTestModels(t, models)
@@ -324,10 +377,48 @@ func TestPayrollRemittanceCreatePaymentFromApprovedBatchRejectsIncompatibleLiabi
 	}
 }
 
+func TestPayrollRemittanceCreatePaymentFromBatchRejectsUnknownTreasuryAccount(t *testing.T) {
+	models := model.NewService()
+	registerEmployeePayrollTestModels(t, models)
+	registerPayrollRemittanceTestModels(t, models)
+	docs := document.NewService()
+	registerEmployeePayrollTestDocuments(t, docs)
+	registerPayrollRemittanceTestDocuments(t, docs)
+	service := NewPayrollRemittanceCoreService(docs, models)
+
+	mustCreateRemittanceSetup(t, models)
+	run := mustCreateProcessedRemittancePayrollRun(t, docs)
+	liabilities, _, err := service.GenerateLiabilitiesFromPayrollRun(run.Header.ID, "user_admin")
+	if err != nil {
+		t.Fatalf("generate liabilities: %v", err)
+	}
+	if len(liabilities) == 0 {
+		t.Fatal("expected liabilities")
+	}
+	payload := cloneMap(liabilities[0].Body.Payload)
+	payload["treasury_account_id"] = "missing_treasury"
+	liabilities[0].Body.Payload = document.NormalizePayload(payload)
+	if err := docs.Save(liabilities[0]); err != nil {
+		t.Fatalf("save liability: %v", err)
+	}
+	batch, err := docs.Create("payroll_remittance_batch", "org_default", "loc_hq", "user_admin", service.NormalizePayload("payroll_remittance_batch", map[string]any{
+		"liability_ids": []string{liabilities[0].Header.ID},
+	}))
+	if err != nil {
+		t.Fatalf("create batch: %v", err)
+	}
+	batch.Header.Status = "approved"
+	if err := docs.Save(batch); err != nil {
+		t.Fatalf("save batch: %v", err)
+	}
+	if _, _, err := service.CreatePaymentFromBatch(batch.Header.ID, "user_admin"); err == nil {
+		t.Fatal("expected unknown treasury account to be rejected")
+	}
+}
+
 func registerPayrollRemittanceTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	defs := []model.Definition{
-		{Key: "treasury_account", DisplayName: "Treasury Account", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "gl_account_code", Type: "string"}}},
 		{Key: "remittance_authority", DisplayName: "Remittance Authority", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "default_treasury_account_id", Type: "string"}, {Key: "payment_method_code", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "remittance_obligation_type", DisplayName: "Remittance Obligation Type", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "remittance_authority_id", Type: "string"}, {Key: "code", Type: "string"}, {Key: "name", Type: "string"}, {Key: "obligation_class", Type: "string"}, {Key: "liability_account_code", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "remittance_schedule_rule", DisplayName: "Remittance Schedule Rule", DefaultSort: "remittance_authority_id", Fields: []model.FieldDefinition{{Key: "remittance_authority_id", Type: "string"}, {Key: "remittance_obligation_type_id", Type: "string"}, {Key: "due_days_after_period_end", Type: "number"}, {Key: "due_day_of_month", Type: "number"}, {Key: "status", Type: "string"}}},
@@ -366,11 +457,11 @@ func mustCreateRemittanceSetup(t *testing.T, models *model.Service) {
 		t.Fatalf("create treasury account: %v", err)
 	}
 	authority, err := models.Create("remittance_authority", "user_admin", map[string]any{
-		"code":                       "AUTH",
-		"name":                       "Authority",
+		"code":                        "AUTH",
+		"name":                        "Authority",
 		"default_treasury_account_id": treasuryAccount.ID,
-		"payment_method_code":        "BANK",
-		"status":                     "active",
+		"payment_method_code":         "BANK",
+		"status":                      "active",
 	})
 	if err != nil {
 		t.Fatalf("create authority: %v", err)

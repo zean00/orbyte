@@ -129,7 +129,7 @@ func TestEmployeeSpendNormalizeLiquidationUsesRemainingAdvanceBalance(t *testing
 		t.Fatalf("create cash advance: %v", err)
 	}
 	liquidation, err := docs.Create("advance_liquidation", "org_default", "loc_hq", "user_admin", map[string]any{
-		"cash_advance_id":       advance.Header.ID,
+		"cash_advance_id":        advance.Header.ID,
 		"advance_applied_amount": 70.0,
 	})
 	if err != nil {
@@ -141,8 +141,8 @@ func TestEmployeeSpendNormalizeLiquidationUsesRemainingAdvanceBalance(t *testing
 	}
 
 	payload := service.NormalizePayload("advance_liquidation", map[string]any{
-		"cash_advance_id":   advance.Header.ID,
-		"expense_claim_id":  "claim_2",
+		"cash_advance_id":    advance.Header.ID,
+		"expense_claim_id":   "claim_2",
 		"claim_total_amount": 170.0,
 	})
 
@@ -157,9 +157,76 @@ func TestEmployeeSpendNormalizeLiquidationUsesRemainingAdvanceBalance(t *testing
 	}
 }
 
+func TestEmployeeSpendNormalizeLiquidationMarksCrossDocumentMismatch(t *testing.T) {
+	models := model.NewService()
+	registerEmployeeSpendTestModels(t, models)
+	docs := document.NewService()
+	registerEmployeeSpendTestDocuments(t, docs)
+	service := NewEmployeeSpendCoreService(docs, models)
+
+	claim, err := docs.Create("expense_claim", "org_default", "loc_hq", "user_admin", map[string]any{
+		"employee_id": "emp_claim",
+		"party_id":    "party_claim",
+	})
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+	advance, err := docs.Create("cash_advance", "org_default", "loc_hq", "user_admin", map[string]any{
+		"employee_id": "emp_advance",
+		"party_id":    "party_advance",
+	})
+	if err != nil {
+		t.Fatalf("create advance: %v", err)
+	}
+
+	payload := service.NormalizePayload("advance_liquidation", map[string]any{
+		"expense_claim_id": claim.Header.ID,
+		"cash_advance_id":  advance.Header.ID,
+	})
+	if textValue(payload["liquidation_consistency_error"]) == "" {
+		t.Fatal("expected liquidation consistency error to be marked")
+	}
+}
+
+func TestEmployeeSpendValidateApproveRejectsCrossDocumentMismatch(t *testing.T) {
+	models := model.NewService()
+	registerEmployeeSpendTestModels(t, models)
+	docs := document.NewService()
+	registerEmployeeSpendTestDocuments(t, docs)
+	service := NewEmployeeSpendCoreService(docs, models)
+
+	claim, err := docs.Create("expense_claim", "org_default", "loc_hq", "user_admin", map[string]any{
+		"employee_id": "emp_claim",
+		"party_id":    "party_claim",
+	})
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+	advance, err := docs.Create("cash_advance", "org_default", "loc_hq", "user_admin", map[string]any{
+		"employee_id": "emp_advance",
+		"party_id":    "party_advance",
+	})
+	if err != nil {
+		t.Fatalf("create advance: %v", err)
+	}
+	liquidation, err := docs.Create("advance_liquidation", "org_default", "loc_hq", "user_admin", map[string]any{
+		"expense_claim_id": claim.Header.ID,
+		"cash_advance_id":  advance.Header.ID,
+	})
+	if err != nil {
+		t.Fatalf("create liquidation: %v", err)
+	}
+	if err := service.ValidateApprove(liquidation); err == nil {
+		t.Fatal("expected liquidation mismatch to be rejected on approve")
+	}
+}
+
 func registerEmployeeSpendTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	defs := []model.Definition{
+		{Key: "party", DisplayName: "Party", DefaultSort: "name", Fields: []model.FieldDefinition{{Key: "name", Type: "string"}}},
+		{Key: "treasury_account", DisplayName: "Treasury Account", DefaultSort: "name", Fields: []model.FieldDefinition{{Key: "name", Type: "string"}}},
+		{Key: "cost_center", DisplayName: "Cost Center", DefaultSort: "code", Fields: []model.FieldDefinition{{Key: "code", Type: "string"}}},
 		{Key: "employee_profile", DisplayName: "Employee Profile", DefaultSort: "employee_code", Fields: []model.FieldDefinition{{Key: "party_id", Type: "string"}, {Key: "employee_code", Type: "string"}, {Key: "employment_status", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_assignment", DisplayName: "Employee Assignment", DefaultSort: "effective_from", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "organization_id", Type: "string"}, {Key: "location_id", Type: "string"}, {Key: "organization_unit_id", Type: "string"}, {Key: "department_id", Type: "string"}, {Key: "cost_center_id", Type: "string"}, {Key: "effective_from", Type: "string"}, {Key: "status", Type: "string"}}},
 		{Key: "employee_spend_profile", DisplayName: "Employee Spend Profile", DefaultSort: "employee_id", Fields: []model.FieldDefinition{{Key: "employee_id", Type: "string"}, {Key: "default_currency_code", Type: "string"}, {Key: "default_payment_method_code", Type: "string"}, {Key: "payable_account_code", Type: "string"}, {Key: "expense_account_code", Type: "string"}, {Key: "treasury_account_id", Type: "string"}, {Key: "status", Type: "string"}}},
@@ -169,11 +236,21 @@ func registerEmployeeSpendTestModels(t *testing.T, models *model.Service) {
 			t.Fatalf("register model %s: %v", def.Key, err)
 		}
 	}
+	if _, err := models.Create("party", "user_admin", map[string]any{"id": "party_emp", "name": "Employee Party"}); err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	if _, err := models.Create("treasury_account", "user_admin", map[string]any{"id": "treasury_main", "name": "Main Treasury"}); err != nil {
+		t.Fatalf("create treasury account: %v", err)
+	}
+	if _, err := models.Create("cost_center", "user_admin", map[string]any{"id": "cc_ops", "code": "CC-OPS"}); err != nil {
+		t.Fatalf("create cost center: %v", err)
+	}
 }
 
 func registerEmployeeSpendTestDocuments(t *testing.T, docs *document.Service) {
 	t.Helper()
 	defs := []document.Definition{
+		{Type: "expense_claim", DisplayName: "Expense Claim", SchemaVersion: "v1", WorkflowKey: "expense_claim_flow", NumberingKey: "expense_claim_number"},
 		{Type: "cash_advance", DisplayName: "Cash Advance", SchemaVersion: "v1", WorkflowKey: "cash_advance_flow", NumberingKey: "cash_advance_number"},
 		{Type: "advance_liquidation", DisplayName: "Advance Liquidation", SchemaVersion: "v1", WorkflowKey: "advance_liquidation_flow", NumberingKey: "advance_liquidation_number"},
 		{Type: "reimbursement_payment", DisplayName: "Reimbursement Payment", SchemaVersion: "v1", WorkflowKey: "reimbursement_payment_flow", NumberingKey: "reimbursement_payment_number"},

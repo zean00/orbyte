@@ -190,6 +190,12 @@ func (s *FinanceAssetCoreService) TransferFixedAsset(id, organizationID, locatio
 	fromCostCenter := firstNonEmptyString(textValue(asset.Values["current_cost_center_code"]), textValue(asset.Values["cost_center_code"]))
 	toLocation := firstNonEmptyString(textValue(payload["to_location_id"]), fromLocation)
 	toCostCenter := firstNonEmptyString(textValue(payload["to_cost_center_code"]), fromCostCenter)
+	if err := validateLocationID(s.models, toLocation); err != nil {
+		return model.Record{}, err
+	}
+	if err := validateCostCenterID(s.models, toCostCenter); err != nil {
+		return model.Record{}, err
+	}
 	if toLocation == fromLocation && toCostCenter == fromCostCenter {
 		return model.Record{}, shared.Validation("transfer target must change location or cost center")
 	}

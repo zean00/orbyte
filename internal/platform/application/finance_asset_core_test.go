@@ -411,10 +411,68 @@ func TestFinanceAssetLifecycleDisposeTransferImpairAndRevalue(t *testing.T) {
 	}
 }
 
+func TestFinanceAssetTransferRejectsUnknownTargets(t *testing.T) {
+	docs := document.NewService()
+	if err := docs.Register(document.Definition{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"posting_for"}}); err != nil {
+		t.Fatalf("register ledger_posting: %v", err)
+	}
+	models := model.NewService()
+	registerFinanceAssetTestModels(t, models)
+	cfg := config.NewService()
+	finance := NewFinanceReportingCoreService(docs, models, cfg)
+	svc := NewFinanceAssetCoreService(docs, models, cfg, finance)
+
+	result, err := svc.CreateFixedAsset("org-1", "loc-1", "tester", map[string]any{
+		"code":             "FA-TRANSFER-01",
+		"name":             "Transfer Asset",
+		"basis_amount":     500.0,
+		"method":           "straight_line",
+		"cadence":          "monthly",
+		"total_periods":    5,
+		"acquisition_date": "2099-10-01",
+		"cost_center_code": "OPS",
+	})
+	if err != nil {
+		t.Fatalf("create fixed asset: %v", err)
+	}
+	asset := result["asset"].(model.Record)
+
+	if _, err := svc.TransferFixedAsset(asset.ID, "org-1", "loc-1", "tester", map[string]any{
+		"effective_date":      "2099-11-01",
+		"to_location_id":      "missing-location",
+		"to_cost_center_code": "FIN",
+	}); err == nil {
+		t.Fatal("expected unknown transfer location to be rejected")
+	}
+	if _, err := svc.TransferFixedAsset(asset.ID, "org-1", "loc-1", "tester", map[string]any{
+		"effective_date":      "2099-11-01",
+		"to_location_id":      "loc-2",
+		"to_cost_center_code": "MISSING",
+	}); err == nil {
+		t.Fatal("expected unknown transfer cost center to be rejected")
+	}
+}
+
 func registerFinanceAssetTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
 	registerFinancePeriodEndTestModels(t, models)
 	defs := []model.Definition{
+		{
+			Key:         "location",
+			DisplayName: "Location",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "name", Type: "string"},
+			},
+		},
+		{
+			Key:         "cost_center",
+			DisplayName: "Cost Center",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "name", Type: "string"},
+			},
+		},
 		{
 			Key:         "fixed_asset",
 			DisplayName: "Fixed Asset",
@@ -629,6 +687,19 @@ func registerFinanceAssetTestModels(t *testing.T, models *model.Service) {
 	for _, def := range defs {
 		if err := models.Register(def); err != nil {
 			t.Fatalf("register %s: %v", def.Key, err)
+		}
+	}
+	for _, entry := range []struct {
+		model string
+		data  map[string]any
+	}{
+		{model: "location", data: map[string]any{"code": "loc-1", "name": "Location 1"}},
+		{model: "location", data: map[string]any{"code": "loc-2", "name": "Location 2"}},
+		{model: "cost_center", data: map[string]any{"code": "OPS", "name": "Operations"}},
+		{model: "cost_center", data: map[string]any{"code": "FIN", "name": "Finance"}},
+	} {
+		if _, err := models.Create(entry.model, "tester", entry.data); err != nil {
+			t.Fatalf("seed %s: %v", entry.model, err)
 		}
 	}
 }
