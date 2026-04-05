@@ -20,14 +20,14 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 	defer func() { _ = postgres.Close() }()
 
 	graph := constructServiceGraph(postgres, nil)
-	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel: %v", err)
 	}
 
 	orgID := "org_default"
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
-	approverUser, err := graph.identity.CreateUser("payroll-approver-"+suffix, "bootstrap-123!", locID, "role_admin", "location", locID)
+	approverUser, err := graph.identity.CreateUser("payroll-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 	}
 
 	reloaded := constructServiceGraph(postgres, nil)
-	if err := seedPlatformKernel(reloaded.config, reloaded.identity, reloaded.modules, reloaded.models, reloaded.reporting, reloaded.templates, reloaded.reference, reloaded.search, reloaded.documents, reloaded.workflows, reloaded.policy, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(reloaded.config, reloaded.identity, reloaded.modules, reloaded.models, reloaded.reporting, reloaded.templates, reloaded.reference, reloaded.search, reloaded.documents, reloaded.workflows, reloaded.policy, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("reseed platform kernel: %v", err)
 	}
 	persistedRun, err := reloaded.documents.Get(run.Header.ID)

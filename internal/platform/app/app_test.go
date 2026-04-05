@@ -154,14 +154,14 @@ func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel failed: %v", err)
 	}
 
 	if _, ok := ident.FindUserByUsername("admin"); !ok {
 		t.Fatal("expected bootstrap admin user")
 	}
-	if _, err := ident.AuthenticatePassword("admin", "bootstrap-123!", "loc_hq", nil, defaultBootstrapSessionTTL()); err != nil {
+	if _, err := ident.AuthenticatePassword("admin", testBootstrapAdminPassword, "loc_hq", nil, defaultBootstrapSessionTTL()); err != nil {
 		t.Fatalf("expected seeded bootstrap admin credential to authenticate: %v", err)
 	}
 	def, err := docs.Definition("generic_request")
@@ -205,10 +205,10 @@ func TestSeedPlatformKernelIsIdempotentForRestart(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("first seed failed: %v", err)
 	}
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("second seed failed: %v", err)
 	}
 }

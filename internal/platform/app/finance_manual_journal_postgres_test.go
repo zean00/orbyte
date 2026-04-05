@@ -20,7 +20,7 @@ func TestFinanceManualJournalPostgresWorkflowAndReversal(t *testing.T) {
 	defer func() { _ = postgres.Close() }()
 
 	graph := constructServiceGraph(postgres, nil)
-	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func TestFinanceManualJournalPostgresWorkflowAndReversal(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create reversal period: %v", err)
 	}
-	approverUser, err := graph.identity.CreateUser("finance-approver-"+suffix, "bootstrap-123!", locID, "role_admin", "location", locID)
+	approverUser, err := graph.identity.CreateUser("finance-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
 	}

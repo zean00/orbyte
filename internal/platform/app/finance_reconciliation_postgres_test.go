@@ -19,7 +19,7 @@ func TestFinanceReconciliationPostgresAgingAndReconciliation(t *testing.T) {
 	defer func() { _ = postgres.Close() }()
 
 	graph := constructServiceGraph(postgres, nil)
-	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel: %v", err)
 	}
 

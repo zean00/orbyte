@@ -72,7 +72,7 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 		t.Fatalf("load business manifests: %v", err)
 	}
 	graph := constructServiceGraph(postgres, manifests)
-	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, manifests, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, manifests, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel: %v", err)
 	}
 

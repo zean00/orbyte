@@ -22,7 +22,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	defer func() { _ = postgres.Close() }()
 
 	graph := constructServiceGraph(postgres, nil)
-	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel: %v", err)
 	}
 	suffix := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
@@ -550,7 +550,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 
 	reloaded := constructServiceGraph(postgres, nil)
-	if err := seedPlatformKernel(reloaded.config, reloaded.identity, reloaded.modules, reloaded.models, reloaded.reporting, reloaded.templates, reloaded.reference, reloaded.search, reloaded.documents, reloaded.workflows, reloaded.policy, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(reloaded.config, reloaded.identity, reloaded.modules, reloaded.models, reloaded.reporting, reloaded.templates, reloaded.reference, reloaded.search, reloaded.documents, reloaded.workflows, reloaded.policy, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("reseed platform kernel: %v", err)
 	}
 	reloadedRequest, err := reloaded.models.Get("leave_request", request.ID)
