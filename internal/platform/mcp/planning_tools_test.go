@@ -310,6 +310,9 @@ func TestPlanningReplenishmentToolsSupportInsightAndDraftExecution(t *testing.T)
 	if got := line["quantity"]; got != float64(6) {
 		t.Fatalf("expected selected quantity 6, got %+v", got)
 	}
+	if got := textValue(line["line_id"]); got == "" {
+		t.Fatal("expected generated line_id on selected draft line")
+	}
 
 	draftResp := server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
@@ -340,6 +343,9 @@ func TestPlanningReplenishmentToolsSupportInsightAndDraftExecution(t *testing.T)
 	}
 	if got := exactLines[0]["quantity"]; got != float64(10) {
 		t.Fatalf("expected selected quantity 10, got %+v", got)
+	}
+	if got := textValue(exactLines[0]["line_id"]); got == "" {
+		t.Fatal("expected generated line_id on exact quantity draft line")
 	}
 
 	coveredResp := server.Handle(context.Background(), JSONRPCRequest{

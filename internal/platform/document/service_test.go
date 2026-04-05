@@ -186,3 +186,54 @@ func TestResolveWorkspaceOpenPathUsesNativeDocumentViewer(t *testing.T) {
 		t.Fatalf("expected native detail path, got %s", got)
 	}
 }
+
+func TestNormalizePayloadAssignsStableLineIDs(t *testing.T) {
+	first := NormalizePayload(map[string]any{
+		"lines": []map[string]any{
+			{"item_code": "ITEM-1", "quantity": 2.0},
+			{"item_code": "ITEM-2", "quantity": 1.0},
+		},
+		"estimated_lines": []map[string]any{
+			{"description": "Taxi", "amount": 12.0},
+		},
+	})
+	second := NormalizePayload(first)
+
+	lines := first["lines"].([]map[string]any)
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+	firstID := textValue(lines[0]["line_id"])
+	secondID := textValue(lines[1]["line_id"])
+	if firstID == "" || secondID == "" {
+		t.Fatalf("expected generated line ids, got %+v", lines)
+	}
+	if firstID == secondID {
+		t.Fatalf("expected distinct line ids, got %s", firstID)
+	}
+
+	secondLines := second["lines"].([]map[string]any)
+	if got := textValue(secondLines[0]["line_id"]); got != firstID {
+		t.Fatalf("expected stable first line id %s, got %s", firstID, got)
+	}
+	if got := textValue(secondLines[1]["line_id"]); got != secondID {
+		t.Fatalf("expected stable second line id %s, got %s", secondID, got)
+	}
+
+	estimated := first["estimated_lines"].([]map[string]any)
+	if got := textValue(estimated[0]["line_id"]); got == "" {
+		t.Fatal("expected estimated_lines to receive line_id")
+	}
+}
+
+func TestNormalizePayloadPromotesExistingIDToLineID(t *testing.T) {
+	normalized := NormalizePayload(map[string]any{
+		"lines": []map[string]any{
+			{"id": "row-1", "item_code": "ITEM-1"},
+		},
+	})
+	lines := normalized["lines"].([]map[string]any)
+	if got := textValue(lines[0]["line_id"]); got != "row-1" {
+		t.Fatalf("expected line_id row-1, got %s", got)
+	}
+}

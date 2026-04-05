@@ -16,6 +16,7 @@ type ProviderInfo = {
   supports_approvals?: boolean;
   supports_model_listing?: boolean;
   supports_model_selection?: boolean;
+  supports_plan_updates?: boolean;
   default_model?: string;
   error?: string;
 };
@@ -54,6 +55,12 @@ type ACPEvent = {
   payload?: Record<string, unknown>;
 };
 
+type ACPPlanEntry = {
+  content: string;
+  priority?: string;
+  status?: string;
+};
+
 type ACPSession = {
   id: string;
   provider_key: string;
@@ -70,6 +77,7 @@ type ACPSession = {
   messages?: ACPMessage[];
   approvals?: ACPApproval[];
   trace?: ACPEvent[];
+  current_plan?: ACPPlanEntry[];
 };
 
 type LiveToolCall = {
@@ -91,6 +99,8 @@ type LocalPendingTurn = {
   sessionID?: string;
   phase: LiveTurnState["phase"];
 };
+
+type ComposerMode = "ask" | "plan" | "execute";
 
 const NEW_SESSION_PENDING_ID = "__new_session__";
 
@@ -202,6 +212,7 @@ export default function AgentSurfacePage() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [mcpOnlyEnabled, setMcpOnlyEnabled] = useState(true);
   const [localPendingTurn, setLocalPendingTurn] = useState<LocalPendingTurn | null>(null);
+  const [composerMode, setComposerMode] = useState<ComposerMode>("ask");
   const [prompt, setPrompt] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -364,6 +375,7 @@ export default function AgentSurfacePage() {
     if (!selectedSessionID) {
       setSession(null);
       setLocalPendingTurn(null);
+      setComposerMode("ask");
       seenEventIDsRef.current = new Set();
       closeStream(streamRef);
       return;
@@ -499,6 +511,10 @@ export default function AgentSurfacePage() {
     };
   }, [selectedSessionID]);
 
+  useEffect(() => {
+    setComposerMode("ask");
+  }, [selectedSessionID]);
+
   const selectedProvider = useMemo(
     () =>
       providers.find((item) => item.key === providerKey) ||
@@ -506,6 +522,13 @@ export default function AgentSurfacePage() {
       null,
     [providerKey, providers],
   );
+  const selectedSessionProvider = useMemo(() => {
+    const currentProviderKey = session?.provider_key || providerKey;
+    return (
+      providers.find((item) => item.key === currentProviderKey) ||
+      selectedProvider
+    );
+  }, [providerKey, providers, selectedProvider, session?.provider_key]);
 
   const sortedSessions = useMemo(() => orderSessions(sessions), [sessions]);
 
@@ -621,6 +644,17 @@ export default function AgentSurfacePage() {
   ]);
 
   const visibleTools = useMemo(() => mcpTools.slice(0, 10), [mcpTools]);
+  const currentPlan = useMemo(() => deriveCurrentPlan(session), [session]);
+  const hasCurrentPlan = currentPlan.length > 0;
+  const providerSupportsPlanUpdates =
+    selectedSessionProvider?.supports_plan_updates ??
+    selectedProvider?.supports_plan_updates ??
+    false;
+  const inspectorVisible =
+    showInspector ||
+    typeof window === "undefined" ||
+    hasCurrentPlan ||
+    composerMode !== "ask";
 
   useEffect(() => {
     const panel = transcriptRef.current;
@@ -677,10 +711,22 @@ export default function AgentSurfacePage() {
   }
 
   async function sendPrompt() {
-    if (sendInFlightRef.current || !prompt.trim()) return;
+    if (
+      sendInFlightRef.current ||
+      (composerMode !== "execute" && !prompt.trim())
+    ) {
+      return;
+    }
+    if (composerMode === "execute" && !hasCurrentPlan) {
+      setMessage("Create a plan first before using Execute mode.");
+      return;
+    }
     sendInFlightRef.current = true;
     setMessage("");
-    const displayPrompt = prompt.trim();
+    const displayPrompt =
+      composerMode === "execute" && !prompt.trim()
+        ? "Execute the current plan."
+        : prompt.trim();
     let targetSessionID = selectedSessionID;
     let targetSession: ACPSession | null =
       selectedSessionID && session?.id === selectedSessionID ? session : null;
@@ -699,7 +745,15 @@ export default function AgentSurfacePage() {
       targetSession = created;
       setLocalPendingTurn({ sessionID: created.id, phase: "thinking" });
     }
-    const nextPrompt = buildPromptPayload(displayPrompt, mcpOnlyEnabled);
+    const nextPrompt = buildPromptPayload(
+      displayPrompt,
+      mcpOnlyEnabled,
+      composerMode,
+      currentPlan,
+    );
+    const dispatchedMode = composerMode;
+    const planSnapshot =
+      currentPlan.length > 0 ? currentPlan : session?.current_plan || [];
     const optimisticTurnID = `pending-turn-${Date.now()}`;
     const optimisticUpdatedAt = new Date().toISOString();
     setPrompt("");
@@ -710,6 +764,8 @@ export default function AgentSurfacePage() {
         displayPrompt,
         optimisticTurnID,
         optimisticUpdatedAt,
+        dispatchedMode === "plan",
+        planSnapshot,
       ),
     );
     setSessions((current) =>
@@ -720,10 +776,15 @@ export default function AgentSurfacePage() {
               displayPrompt,
               optimisticTurnID,
               optimisticUpdatedAt,
+              dispatchedMode === "plan",
+              planSnapshot,
             ) || item
           : item,
       ),
     );
+    if (dispatchedMode === "execute") {
+      setComposerMode("ask");
+    }
     try {
       const clientRequestID = optimisticTurnID;
       void mutateJson<ACPSession>(
@@ -738,11 +799,16 @@ export default function AgentSurfacePage() {
         },
       )
         .then((updated) => {
-          setSessions((current) => mergeSessionIntoList(current, updated));
+          const finalized =
+            dispatchedMode === "execute" &&
+            (!updated.current_plan || updated.current_plan.length === 0)
+              ? { ...updated, current_plan: planSnapshot }
+              : updated;
+          setSessions((current) => mergeSessionIntoList(current, finalized));
           if (!updated.turn_in_progress) {
-            setSession((current) => (current?.id === updated.id ? updated : current));
+            setSession((current) => (current?.id === finalized.id ? finalized : current));
             setLocalPendingTurn((currentTurn) =>
-              currentTurn?.sessionID === updated.id ? null : currentTurn,
+              currentTurn?.sessionID === finalized.id ? null : currentTurn,
             );
           }
           sendInFlightRef.current = false;
@@ -753,6 +819,13 @@ export default function AgentSurfacePage() {
           );
           setSession((current) =>
             markPromptFailure(current, optimisticTurnID, error),
+          );
+          setSessions((current) =>
+            current.map((item) =>
+              item.id === targetSessionID
+                ? markPromptFailure(item, optimisticTurnID, error) || item
+                : item,
+            ),
           );
           await refreshSession(targetSessionID, setSession, setSessions).catch(
             () => undefined,
@@ -834,7 +907,14 @@ export default function AgentSurfacePage() {
   function handlePromptKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
-    if (busy || !!session?.turn_in_progress || !prompt.trim()) return;
+    if (
+      busy ||
+      !!session?.turn_in_progress ||
+      (composerMode !== "execute" && !prompt.trim()) ||
+      (composerMode === "execute" && !hasCurrentPlan)
+    ) {
+      return;
+    }
     void sendPrompt();
   }
 
@@ -1114,7 +1194,7 @@ export default function AgentSurfacePage() {
               </div>
 
               <AnimatePresence initial={false}>
-                {(showInspector || typeof window === "undefined") && (
+                {inspectorVisible && (
                   <motion.aside
                     initial={{ opacity: 0, x: 16 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -1156,6 +1236,53 @@ export default function AgentSurfacePage() {
                         ) : null}
                       </section>
                       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                      <InspectorSection
+                        title="Current Plan"
+                        kicker={composerMode === "execute" ? "execution target" : "plan state"}
+                        summary={hasCurrentPlan ? `${currentPlan.length} step${currentPlan.length === 1 ? "" : "s"}` : "No active plan"}
+                      >
+                        <div className="space-y-3">
+                          {!providerSupportsPlanUpdates ? (
+                            <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
+                              This provider does not emit structured ACP plan updates.
+                              The visible plan is derived from the latest Plan-mode turn.
+                            </p>
+                          ) : null}
+                          {hasCurrentPlan ? (
+                            currentPlan.map((item, index) => (
+                              <article
+                                key={`${index}-${item.content}`}
+                                className="rounded-2xl border border-line/70 bg-surface p-3"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                                    Step {index + 1}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {item.priority ? (
+                                      <span className="rounded-full border border-line bg-shell px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+                                        {item.priority}
+                                      </span>
+                                    ) : null}
+                                    {item.status ? (
+                                      <span className="rounded-full border border-accent/20 bg-accent-soft/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+                                        {item.status}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-body">
+                                  {item.content}
+                                </p>
+                              </article>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted">
+                              Use Plan mode to generate a stepwise plan before executing.
+                            </p>
+                          )}
+                        </div>
+                      </InspectorSection>
                       <InspectorSection
                         title="Capabilities"
                         kicker={catalogSummary?.mode || "compact catalog"}
@@ -1319,6 +1446,36 @@ export default function AgentSurfacePage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-full border border-line bg-shell p-1">
+                {(["ask", "plan", "execute"] as ComposerMode[]).map((mode) => {
+                  const selected = composerMode === mode;
+                  const disabled =
+                    !!session?.turn_in_progress ||
+                    (mode === "execute" && !hasCurrentPlan);
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setComposerMode(mode);
+                        if (mode === "execute" && !hasCurrentPlan) {
+                          setMessage("Create a plan first before using Execute mode.");
+                        } else {
+                          setMessage("");
+                        }
+                      }}
+                      className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] transition ${
+                        selected
+                          ? "bg-accent text-white shadow-[0_8px_18px_rgba(29,78,216,0.22)]"
+                          : "text-muted hover:text-body"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {mode}
+                    </button>
+                  );
+                })}
+              </div>
               <label className="flex items-center gap-2 rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-body">
                 <input
                   type="checkbox"
@@ -1349,19 +1506,38 @@ export default function AgentSurfacePage() {
               onInput={handlePromptInput}
               onKeyDown={handlePromptKeyDown}
               className="min-h-[84px] w-full resize-none rounded-2xl border border-line bg-shell px-4 py-3 text-sm text-body outline-none transition focus:border-accent"
-              placeholder="Ask the agent to investigate, summarize, compare, or operate across Orbyte data."
+              placeholder={
+                composerMode === "plan"
+                  ? "Describe the goal or decision you want the agent to plan."
+                  : composerMode === "execute"
+                    ? "Describe any execution constraints or keep this aligned to the current plan."
+                    : "Ask the agent to investigate, summarize, compare, or operate across Orbyte data."
+              }
               name="agent_prompt"
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs leading-5 text-muted">
-                {mcpOnlyEnabled
-                  ? "Prompts will automatically tell the agent to use Orbyte MCP as the source of truth."
-                  : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
+                {composerMode === "plan"
+                  ? providerSupportsPlanUpdates
+                    ? "Plan mode asks the agent to gather evidence, build a stepwise plan, and stop short of execution."
+                    : "Plan mode asks the agent to gather evidence and build a stepwise plan. This provider does not emit structured ACP plan events, so the plan panel is derived from the planning answer."
+                  : composerMode === "execute"
+                    ? hasCurrentPlan
+                      ? "Execute mode tells the agent to act on the current visible plan and report created artifacts."
+                      : "Execute mode requires a current plan."
+                    : mcpOnlyEnabled
+                      ? "Prompts will automatically tell the agent to use Orbyte MCP as the source of truth."
+                      : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
               </p>
               <button
                 type="button"
                 className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(29,78,216,0.26)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={busy || !!session?.turn_in_progress || !prompt.trim()}
+                disabled={
+                  busy ||
+                  !!session?.turn_in_progress ||
+                  (composerMode !== "execute" && !prompt.trim()) ||
+                  (composerMode === "execute" && !hasCurrentPlan)
+                }
                 onClick={() => void sendPrompt()}
               >
                 {selectedSessionID ? "Send" : "Start & Send"}
@@ -1781,6 +1957,8 @@ function optimisticPromptSession(
   prompt: string,
   turnID: string,
   updatedAt: string,
+  resetPlan: boolean,
+  planSeed?: ACPPlanEntry[],
 ): ACPSession | null {
   if (!current) return current;
   return {
@@ -1789,6 +1967,12 @@ function optimisticPromptSession(
     turn_in_progress: true,
     current_turn_id: turnID,
     updated_at: updatedAt,
+    current_plan:
+      resetPlan
+        ? []
+        : planSeed && planSeed.length > 0
+          ? planSeed
+          : current.current_plan,
     messages: [
       ...(current.messages || []),
       {
@@ -1964,6 +2148,8 @@ function applyACPStreamEvent(
             ...(next.current_turn_id ? { turn_id: next.current_turn_id } : {}),
           },
         });
+      } else if (updateKind === "plan" && text) {
+        next.current_plan = [...(next.current_plan || []), { content: text }];
       } else if (text) {
         next.messages = appendChunkMessage(next.messages || [], {
           id: `stream-${event.id}`,
@@ -1983,6 +2169,9 @@ function applyACPStreamEvent(
       next.turn_in_progress = false;
       next.current_turn_id = "";
       next.status = "ready";
+      if (turnID && isExecuteTurn(next.trace || [], turnID) && next.current_plan?.length) {
+        next.current_plan = markPlanEntriesExecuted(next.current_plan);
+      }
       break;
     case "turn_failed":
       next.turn_in_progress = false;
@@ -2206,9 +2395,260 @@ function parseDateValue(value?: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function buildPromptPayload(prompt: string, mcpOnlyEnabled: boolean): string {
-  if (!mcpOnlyEnabled) return prompt;
-  return `${MCP_ONLY_PREFIX}\n\n${prompt}`;
+function buildPromptPayload(
+  prompt: string,
+  mcpOnlyEnabled: boolean,
+  mode: ComposerMode,
+  currentPlan: ACPPlanEntry[],
+): string {
+  const sections: string[] = [];
+  if (mcpOnlyEnabled) {
+    sections.push(MCP_ONLY_PREFIX);
+  }
+  if (mode === "plan") {
+    sections.push(
+      [
+        "Planning mode is active.",
+        "Gather evidence from Orbyte MCP tools before proposing actions.",
+        "Produce a concise stepwise plan and emit ACP plan updates for the current turn.",
+        "Do not execute the plan or create records unless the user explicitly asks to execute later.",
+        "When the request is about warehouse replenishment or inventory planning, call planning_core.replenishment.insight.summary first and then planning_core.replenishment.plan.summary before answering.",
+        "If those tools disagree, report the discrepancy explicitly instead of flattening all items into a healthy/no-action conclusion.",
+      ].join(" "),
+    );
+  }
+  if (mode === "execute") {
+    sections.push(
+      [
+        "Execute mode is active.",
+        "Treat the current ACP plan in this session as the execution target.",
+        "Execute the plan stepwise using Orbyte MCP tools, report created artifacts and deep links, and avoid re-planning unless a blocker forces it.",
+      ].join(" "),
+    );
+    if (currentPlan.length > 0) {
+      sections.push(
+        `Current ACP plan:\n${currentPlan
+          .map((item, index) => `${index + 1}. ${item.content}`)
+          .join("\n")}`,
+      );
+    }
+  }
+  sections.push(prompt);
+  return sections.join("\n\n");
+}
+
+function deriveCurrentPlan(session: ACPSession | null): ACPPlanEntry[] {
+  if (!session) return [];
+  const trace = session.trace || [];
+  let latestPlanTurnID = "";
+  for (const item of trace) {
+    if (
+      item.kind === "session_update" &&
+      stringValue(item.payload?.update_kind) === "plan"
+    ) {
+      const turnID = stringValue(item.payload?.turn_id);
+      if (turnID) {
+        latestPlanTurnID = turnID;
+      }
+    }
+  }
+  if (latestPlanTurnID) {
+    const planEntries = trace
+      .filter(
+        (item) =>
+          item.kind === "session_update" &&
+          stringValue(item.payload?.update_kind) === "plan" &&
+          stringValue(item.payload?.turn_id) === latestPlanTurnID,
+      )
+      .map((item) => {
+        const content = mapValue(item.payload?.content);
+        return {
+          content: stringValue(content.text),
+          priority: stringValue(content.priority) || undefined,
+          status: stringValue(content.status) || undefined,
+        };
+      })
+      .filter((item) => item.content);
+    if (planEntries.length > 0) {
+      return planEntries;
+    }
+  }
+  const fallbackPlan = deriveFallbackPlanFromPlanTurn(session);
+  if (fallbackPlan.entries.length > 0) {
+    const mergedPlan = mergeDerivedPlanStatus(
+      fallbackPlan.entries,
+      session.current_plan || [],
+    );
+    const planTurnID = latestPlanTurnID || fallbackPlan.turnID;
+    return hasCompletedExecuteTurnSincePlan(trace, planTurnID)
+      ? markPlanEntriesExecuted(mergedPlan)
+      : mergedPlan;
+  }
+  return session.current_plan || [];
+}
+
+function isExecuteTurn(trace: ACPEvent[], turnID: string): boolean {
+  return trace.some((item) => {
+    if (item.kind !== "user_message") return false;
+    if (stringValue(item.payload?.turn_id) !== turnID) return false;
+    const content = stringValue(item.payload?.content);
+    return content.includes("Execute mode is active.");
+  });
+}
+
+function markPlanEntriesExecuted(entries: ACPPlanEntry[]): ACPPlanEntry[] {
+  return entries.map((item) => ({
+    ...item,
+    status: item.status || "executed",
+  }));
+}
+
+function hasCompletedExecuteTurnSincePlan(
+  trace: ACPEvent[],
+  latestPlanTurnID: string,
+): boolean {
+  if (!latestPlanTurnID) return false;
+  let planCompletedAt = "";
+  for (const item of trace) {
+    if (
+      item.kind === "turn_completed" &&
+      stringValue(item.payload?.turn_id) === latestPlanTurnID
+    ) {
+      planCompletedAt = item.created_at || "";
+    }
+  }
+  if (!planCompletedAt) return false;
+  const executeTurnIDs = new Set<string>();
+  for (const item of trace) {
+    if (item.kind !== "user_message") continue;
+    const content = stringValue(item.payload?.content);
+    if (!content.includes("Execute mode is active.")) continue;
+    const createdAt = item.created_at || "";
+    if (createdAt < planCompletedAt) continue;
+    const turnID = stringValue(item.payload?.turn_id);
+    if (turnID) {
+      executeTurnIDs.add(turnID);
+    }
+  }
+  if (executeTurnIDs.size === 0) return false;
+  return trace.some((item) => {
+    if (item.kind !== "turn_completed") return false;
+    const turnID = stringValue(item.payload?.turn_id);
+    if (!executeTurnIDs.has(turnID)) return false;
+    const createdAt = item.created_at || "";
+    return createdAt >= planCompletedAt;
+  });
+}
+
+function mergeDerivedPlanStatus(
+  derivedEntries: ACPPlanEntry[],
+  storedEntries: ACPPlanEntry[],
+): ACPPlanEntry[] {
+  if (storedEntries.length === 0) return derivedEntries;
+  return derivedEntries.map((item, index) => {
+    const matchingStored =
+      storedEntries.find(
+        (stored) =>
+          stored.content.trim().toLowerCase() === item.content.trim().toLowerCase(),
+      ) || storedEntries[index];
+    if (!matchingStored) return item;
+    return {
+      ...item,
+      priority: item.priority || matchingStored.priority,
+      status: item.status || matchingStored.status,
+    };
+  });
+}
+
+function deriveFallbackPlanFromPlanTurn(
+  session: ACPSession,
+): { turnID: string; entries: ACPPlanEntry[] } {
+  const messages = session.messages || [];
+  const trace = session.trace || [];
+  let latestPlanTurnID = "";
+  for (const item of trace) {
+    if (item.kind !== "user_message") continue;
+    const content = stringValue(item.payload?.content);
+    if (!content.includes("Planning mode is active.")) continue;
+    const turnID = stringValue(item.payload?.turn_id);
+    if (turnID) {
+      latestPlanTurnID = turnID;
+    }
+  }
+  if (!latestPlanTurnID) {
+    return { turnID: "", entries: [] };
+  }
+  const assistantMessage = [...messages]
+    .reverse()
+    .find(
+      (item) =>
+        item.role === "assistant" &&
+        stringValue(item.meta?.turn_id) === latestPlanTurnID &&
+        item.content.trim() !== "",
+    );
+  if (!assistantMessage) {
+    return { turnID: latestPlanTurnID, entries: [] };
+  }
+  return {
+    turnID: latestPlanTurnID,
+    entries: synthesizePlanEntries(assistantMessage.content),
+  };
+}
+
+function synthesizePlanEntries(markdown: string): ACPPlanEntry[] {
+  const entries: ACPPlanEntry[] = [];
+  const seen = new Set<string>();
+  const pushEntry = (value: string) => {
+    const normalized = normalizePlanLine(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    entries.push({ content: normalized });
+  };
+
+  const lines = markdown.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^\|/.test(line)) continue;
+    if (/^[-|:\s]+$/.test(line)) continue;
+    const bulletMatch = line.match(/^(\d+\.\s+|[-*]\s+)(.+)$/);
+    if (bulletMatch) {
+      pushEntry(bulletMatch[2] || "");
+      continue;
+    }
+    const planMatch = line.match(/^\*\*?Plan:?\*?\*?\s*(.+)$/i);
+    if (planMatch) {
+      pushEntry(planMatch[1] || "");
+      continue;
+    }
+    if (/^(Step|Action|Next)\b/i.test(line)) {
+      pushEntry(line.replace(/^\*\*|\*\*$/g, ""));
+      continue;
+    }
+  }
+
+  if (entries.length > 0) {
+    return entries;
+  }
+
+  const paragraphs = markdown
+    .split(/\n\s*\n/)
+    .map((item) => normalizePlanLine(item))
+    .filter(Boolean);
+  if (paragraphs.length > 0) {
+    return paragraphs.slice(0, 3).map((content) => ({ content }));
+  }
+  return [];
+}
+
+function normalizePlanLine(value: string): string {
+  return value
+    .replace(/[*_`#>]/g, "")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function sortMcpTools(items: MCPTool[]): MCPTool[] {

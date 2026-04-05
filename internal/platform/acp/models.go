@@ -29,6 +29,7 @@ type ProviderInfo struct {
 	SupportsStreaming      bool           `json:"supports_streaming,omitempty"`
 	SupportsModelListing   bool           `json:"supports_model_listing,omitempty"`
 	SupportsModelSelection bool           `json:"supports_model_selection,omitempty"`
+	SupportsPlanUpdates    bool           `json:"supports_plan_updates,omitempty"`
 	DefaultModel           string         `json:"default_model,omitempty"`
 	SessionLifecycle       []string       `json:"session_lifecycle,omitempty"`
 	Error                  string         `json:"error,omitempty"`

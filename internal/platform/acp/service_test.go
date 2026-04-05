@@ -67,6 +67,9 @@ func TestProvidersAndEnabled(t *testing.T) {
 	if !items[0].SupportsModelListing || !items[0].SupportsModelSelection {
 		t.Fatalf("unexpected model capability flags: %#v", items[0])
 	}
+	if items[0].SupportsPlanUpdates {
+		t.Fatalf("expected opencode provider to report no structured plan support: %#v", items[0])
+	}
 }
 
 func TestProvidersInvalidConfig(t *testing.T) {

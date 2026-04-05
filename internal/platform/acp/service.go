@@ -80,6 +80,7 @@ func (s *Service) Providers() []ProviderInfo {
 			SupportsStreaming:      true,
 			SupportsModelListing:   len(models) > 0,
 			SupportsModelSelection: providerSupportsModelSelection(provider),
+			SupportsPlanUpdates:    providerSupportsPlanUpdates(provider),
 			DefaultModel:           strings.TrimSpace(provider.DefaultModel),
 			SessionLifecycle: []string{
 				"starting",
@@ -110,6 +111,7 @@ func (s *Service) ContractMetadata() map[string]any {
 		},
 		"supports_streaming": true,
 		"supports_approvals": true,
+		"supports_plan_updates": true,
 	}
 }
 
@@ -716,6 +718,16 @@ func opencodeDBPath(provider Provider) string {
 func providerSupportsModelSelection(provider Provider) bool {
 	command := strings.ToLower(strings.TrimSpace(filepath.Base(provider.Command)))
 	return command == "opencode"
+}
+
+func providerSupportsPlanUpdates(provider Provider) bool {
+	command := strings.ToLower(strings.TrimSpace(filepath.Base(provider.Command)))
+	switch command {
+	case "opencode":
+		return false
+	default:
+		return false
+	}
 }
 
 func resolveProviderModelCatalog(provider Provider) ([]ModelInfo, error) {
