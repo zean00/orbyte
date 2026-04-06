@@ -76,7 +76,7 @@ export default function AdminWorkspacePage() {
   }, [path, routes]);
 
   useEffect(() => {
-    setNavigationPending(loading);
+    setNavigationPending(loading, "admin_data");
     return () => {
       setNavigationPending(false);
     };

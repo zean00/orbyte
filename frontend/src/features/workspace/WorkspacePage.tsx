@@ -104,7 +104,8 @@ export default function WorkspacePage() {
     if (loading) return <WorkspacePanel title="Loading" status="Resolving route contract." />
     if (!route) return <WorkspacePanel title="Unavailable" status="Route could not be resolved." />
     if (route.status !== 'ok') {
-      if (useShellStore.getState().navigationPending) {
+      const pendingKind = useShellStore.getState().navigationPendingKind
+      if (pendingKind === 'surface' || pendingKind === 'command') {
         return <WorkspacePanel title="Loading" status="Switching workspace surface." />
       }
       return (

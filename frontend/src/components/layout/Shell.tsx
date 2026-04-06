@@ -11,8 +11,11 @@ export interface ShellProps {
 }
 
 export function Shell({ children, loading = false, loadingLabel }: ShellProps) {
-  const { sidebarOpen, navigationPending } = useShellStore()
-  const showLoading = loading || navigationPending
+  const { sidebarOpen, navigationPendingKind } = useShellStore()
+  const showLoading =
+    loading ||
+    navigationPendingKind === 'workspace_data' ||
+    navigationPendingKind === 'admin_data'
 
   return (
     <div className="flex min-h-screen bg-shell dark:bg-ink">

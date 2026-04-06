@@ -109,26 +109,30 @@ export function Header() {
 
   const handleSurfaceChange = async (surface: string) => {
     if (surface === currentSurface) return;
-    setNavigationPending(true);
-    const [bootstrap] = await Promise.all([
-      fetchWorkspaceBootstrap(surface),
-      preloadSurfaceModule(surface),
-    ]);
-    const target = workspaceSurfaceTarget(bootstrap, surface);
-    setRoutes(
-      toShellRoutes(
-        bootstrap.menus,
-        bootstrap.actions,
-        bootstrap.locale,
-        "workspace",
-      ),
-    );
-    setWorkspaceBootstrap(bootstrap);
-    navigate(target || "/", { replace: true });
+    setNavigationPending(true, "surface");
+    try {
+      const [bootstrap] = await Promise.all([
+        fetchWorkspaceBootstrap(surface),
+        preloadSurfaceModule(surface),
+      ]);
+      const target = workspaceSurfaceTarget(bootstrap, surface);
+      setRoutes(
+        toShellRoutes(
+          bootstrap.menus,
+          bootstrap.actions,
+          bootstrap.locale,
+          "workspace",
+        ),
+      );
+      setWorkspaceBootstrap(bootstrap);
+      navigate(target || "/", { replace: true });
+    } finally {
+      setNavigationPending(false);
+    }
   };
 
   const handleLocaleChange = async (newLocale: string) => {
-    setNavigationPending(true);
+    setNavigationPending(true, "locale");
     try {
       const activeLocale = await persistLocale(newLocale);
       setLocale(activeLocale);
@@ -180,7 +184,7 @@ export function Header() {
         ? match?.path || raw
         : `/${match?.path || raw}`,
     );
-    setNavigationPending(true);
+    setNavigationPending(true, "command");
     setCommand("");
   };
 

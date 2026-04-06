@@ -19,6 +19,14 @@ interface AuthContext {
   delegation_grant_id?: string
 }
 
+export type NavigationPendingKind =
+  | 'workspace_data'
+  | 'admin_data'
+  | 'surface'
+  | 'locale'
+  | 'command'
+  | 'shell'
+
 interface ShellState {
   sidebarOpen: boolean
   mobileNavOpen: boolean
@@ -42,6 +50,7 @@ interface ShellState {
   workspaceBootstrap: WorkspaceBootstrapResponse | null
   adminBootstrap: AdminBootstrapResponse | null
   navigationPending: boolean
+  navigationPendingKind: NavigationPendingKind | null
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   toggleMobileNav: () => void
@@ -51,7 +60,7 @@ interface ShellState {
   setAdminBootstrap: (data: AdminBootstrapResponse) => void
   setRoutes: (routes: ShellRoute[]) => void
   setLocale: (locale: string) => void
-  setNavigationPending: (pending: boolean) => void
+  setNavigationPending: (pending: boolean, kind?: NavigationPendingKind) => void
 }
 
 export const useShellStore = create<ShellState>()(
@@ -79,6 +88,7 @@ export const useShellStore = create<ShellState>()(
       workspaceBootstrap: null,
       adminBootstrap: null,
       navigationPending: false,
+      navigationPendingKind: null,
 
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -118,7 +128,11 @@ export const useShellStore = create<ShellState>()(
         }),
       setRoutes: (routes) => set({ routes }),
       setLocale: (locale) => set({ locale }),
-      setNavigationPending: (pending) => set({ navigationPending: pending }),
+      setNavigationPending: (pending, kind = 'shell') =>
+        set({
+          navigationPending: pending,
+          navigationPendingKind: pending ? kind : null,
+        }),
     }),
     {
       name: 'orbyte-shell',

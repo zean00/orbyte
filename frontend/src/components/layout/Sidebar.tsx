@@ -145,7 +145,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => {
-                setNavigationPending(true)
+                setNavigationPending(true, 'shell')
                 window.location.href = `/admin${adminPath === '/' ? '' : adminPath}`
               }}
               className="flex w-full items-center gap-3 rounded-2xl bg-transparent px-3 py-2.5 text-left text-muted transition-colors hover:bg-shell dark:hover:bg-ink/50"
@@ -158,7 +158,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => {
-                setNavigationPending(true)
+                setNavigationPending(true, 'shell')
                 window.location.href = `/ui${uiPath === '/' ? '' : uiPath}`
               }}
               className="flex w-full items-center gap-3 rounded-2xl bg-transparent px-3 py-2.5 text-left text-muted transition-colors hover:bg-shell dark:hover:bg-ink/50"
