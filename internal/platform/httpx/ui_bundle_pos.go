@@ -28,6 +28,9 @@ func POSTerminalBundle() string {
         terminalNotes: "",
         searchQuery: "",
         searchResults: [],
+        searchDetails: {},
+        searchDetailBusy: false,
+        searchDetailsVisible: false,
         cart: [],
         currentSaleID: "",
         tenders: [{ tender_type_code: "", amount: 0, reference: "", notes: "" }],
@@ -68,6 +71,9 @@ func POSTerminalBundle() string {
       };
       const clone = function(value) {
         return JSON.parse(JSON.stringify(value));
+      };
+      const catalogItemKey = function(item) {
+        return String((item || {}).item_code || "");
       };
       const parseJSONArray = function(raw) {
         if (!raw) return [];
@@ -581,13 +587,14 @@ func POSTerminalBundle() string {
         });
       }
 
-      function flushPendingDrafts() {
-        Object.keys(state.cartQuantityDrafts).forEach(function(key) {
+      async function flushPendingDrafts() {
+        const quantityKeys = Object.keys(state.cartQuantityDrafts);
+        for (const key of quantityKeys) {
           const index = number(key);
           const node = mount.querySelector("[data-line-qty='" + String(index) + "']");
           const value = node ? node.value : state.cartQuantityDrafts[key];
-          commitLineQuantity(index, value);
-        });
+          await commitLineQuantity(index, value);
+        }
         Object.keys(state.tenderAmountDrafts).forEach(function(key) {
           const index = number(key);
           const node = mount.querySelector("[data-tender-amount='" + String(index) + "']");
@@ -596,32 +603,68 @@ func POSTerminalBundle() string {
         });
       }
 
-      function commitLineQuantity(index, rawValue) {
+      async function fetchCatalogQuote(itemCode) {
+        return api("/ui/data/pos/catalog/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            store_code: state.storeCode,
+            item_code: itemCode,
+          }),
+        });
+      }
+
+      function applyCatalogQuoteToLine(line, quote, quantity) {
+        line.product_code = quote.product_code || line.product_code || "";
+        line.variant_signature = quote.variant_signature || line.variant_signature || "";
+        line.item_code = quote.item_code || line.item_code || "";
+        line.description = quote.description || quote.name || line.description || line.item_code || "";
+        line.unit_price = number(quote.unit_price);
+        line.tax_code = quote.tax_code || "";
+        line.tax_rate = number(quote.tax_rate);
+        line.tax_mode = quote.tax_mode || "exclusive";
+        line.inventory_enabled = !!quote.inventory_enabled;
+        line.available_quantity = number(quote.available_quantity);
+        line.on_hand_quantity = number(quote.on_hand_quantity);
+        if (quantity != null) {
+          line.quantity = number(quantity);
+        }
+        recalcLine(line);
+      }
+
+      async function commitLineQuantity(index, rawValue) {
         const line = state.cart[index];
         if (!line) return;
         const value = rawValue == null ? "" : String(rawValue);
         const requested = value === "" ? 0 : number(value);
-        const available = number(line.available_quantity);
-        if (line.inventory_enabled && requested > available) {
-          line.quantity = available;
+        if (value === "") {
+          line.quantity = 0;
           delete state.cartQuantityDrafts[String(index)];
           recalcLine(line);
           state.promotionValidation = null;
           persist();
           render();
-          notify(text("Insufficient available stock for this item.", "Stok tersedia untuk item ini tidak cukup."), "error");
           return;
         }
-        if (value === "") {
-          line.quantity = 0;
-        } else {
-          line.quantity = requested;
+        try {
+          const quote = await fetchCatalogQuote(line.item_code || "");
+          if (quote.inventory_enabled && requested > number(quote.available_quantity)) {
+            applyCatalogQuoteToLine(line, quote, number(quote.available_quantity));
+            delete state.cartQuantityDrafts[String(index)];
+            state.promotionValidation = null;
+            persist();
+            render();
+            notify(text("Insufficient available stock for this item.", "Stok tersedia untuk item ini tidak cukup."), "error");
+            return;
+          }
+          applyCatalogQuoteToLine(line, quote, requested);
+          delete state.cartQuantityDrafts[String(index)];
+          state.promotionValidation = null;
+          persist();
+          render();
+        } catch (error) {
+          notify(error instanceof Error ? error.message : text("Failed to refresh item availability.", "Gagal memuat ulang ketersediaan item."), "error");
         }
-        delete state.cartQuantityDrafts[String(index)];
-        recalcLine(line);
-        state.promotionValidation = null;
-        persist();
-        render();
       }
 
       function commitTenderAmount(index, rawValue) {
@@ -638,40 +681,85 @@ func POSTerminalBundle() string {
         render();
       }
 
-      function addCatalogItem(item) {
-        const existing = state.cart.find(function(line) {
-          return String(line.item_code || "") === String(item.item_code || "") && String(line.variant_signature || "") === String(item.variant_signature || "");
-        });
-        if (existing) {
-          const nextQuantity = number(existing.quantity) + 1;
-          if (existing.inventory_enabled && nextQuantity > number(existing.available_quantity)) {
+      async function enrichSearchResults() {
+        const itemCodes = state.searchResults.map(function(item) { return String(item.item_code || "").trim(); }).filter(Boolean);
+        if (!itemCodes.length) return;
+        state.searchDetailBusy = true;
+        render();
+        try {
+          const payload = await api("/ui/data/pos/catalog/enrich", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              store_code: state.storeCode,
+              item_codes: itemCodes,
+            }),
+          });
+          const nextDetails = {};
+          (payload.items || []).forEach(function(item) {
+            nextDetails[String(item.item_code || "")] = item;
+          });
+          state.searchDetails = nextDetails;
+        } finally {
+          state.searchDetailBusy = false;
+          render();
+        }
+      }
+
+      async function toggleCatalogDetails() {
+        if (!state.searchResults.length) return;
+        if (!state.searchDetailsVisible && !Object.keys(state.searchDetails || {}).length && !state.searchDetailBusy) {
+          await enrichSearchResults();
+        }
+        state.searchDetailsVisible = !state.searchDetailsVisible;
+        render();
+      }
+
+      async function addCatalogItem(item) {
+        try {
+          const quote = await fetchCatalogQuote(item.item_code || "");
+          if (quote.inventory_enabled && number(quote.available_quantity) <= 0) {
             notify(text("Insufficient available stock for this item.", "Stok tersedia untuk item ini tidak cukup."), "error");
             return;
           }
-          existing.quantity = nextQuantity;
-          recalcLine(existing);
-        } else {
-          state.cart.push(recalcLine({
-            product_code: item.product_code || "",
-            variant_signature: item.variant_signature || "",
-            item_code: item.item_code || "",
-            description: item.description || item.name || item.item_code || "",
-            quantity: 1,
-            unit_price: number(item.unit_price),
-            tax_code: item.tax_code || "",
-            tax_rate: number(item.tax_rate),
-            tax_mode: item.tax_mode || "exclusive",
-            discount_amount: 0,
-            inventory_enabled: !!item.inventory_enabled,
-            available_quantity: number(item.available_quantity),
-            line_subtotal: 0,
-            tax_amount: 0,
-            line_total: 0,
-          }));
+          const existing = state.cart.find(function(line) {
+            return String(line.item_code || "") === String(item.item_code || "") && String(line.variant_signature || "") === String(item.variant_signature || "");
+          });
+          if (existing) {
+            const nextQuantity = number(existing.quantity) + 1;
+            if (quote.inventory_enabled && nextQuantity > number(quote.available_quantity)) {
+              notify(text("Insufficient available stock for this item.", "Stok tersedia untuk item ini tidak cukup."), "error");
+              return;
+            }
+            applyCatalogQuoteToLine(existing, quote, nextQuantity);
+          } else {
+            const line = {
+              product_code: quote.product_code || item.product_code || "",
+              variant_signature: quote.variant_signature || item.variant_signature || "",
+              item_code: quote.item_code || item.item_code || "",
+              description: quote.description || quote.name || item.description || item.name || item.item_code || "",
+              quantity: 1,
+              unit_price: 0,
+              tax_code: "",
+              tax_rate: 0,
+              tax_mode: "exclusive",
+              discount_amount: 0,
+              inventory_enabled: !!quote.inventory_enabled,
+              available_quantity: number(quote.available_quantity),
+              on_hand_quantity: number(quote.on_hand_quantity),
+              line_subtotal: 0,
+              tax_amount: 0,
+              line_total: 0,
+            };
+            applyCatalogQuoteToLine(line, quote, 1);
+            state.cart.push(line);
+          }
+          state.promotionValidation = null;
+          persist();
+          render();
+        } catch (error) {
+          notify(error instanceof Error ? error.message : text("Failed to add item to cart.", "Gagal menambahkan item ke keranjang."), "error");
         }
-        state.promotionValidation = null;
-        persist();
-        render();
       }
 
       async function loadBootstrap() {
@@ -764,6 +852,8 @@ func POSTerminalBundle() string {
           query.set("q", state.searchQuery);
           const payload = await api("/ui/data/pos/catalog/search?" + query.toString());
           state.searchResults = payload.items || [];
+          state.searchDetails = {};
+          state.searchDetailsVisible = false;
           emitHardwareEvent("orbyte:pos-scanner-input", { query: state.searchQuery, matches: state.searchResults });
         } finally {
           state.searchBusy = false;
@@ -773,6 +863,7 @@ func POSTerminalBundle() string {
 
       function openCatalog() {
         state.catalogOpen = true;
+        state.searchDetailsVisible = false;
         render();
         window.requestAnimationFrame(function() {
           mount.querySelector("#pos-search")?.focus();
@@ -983,7 +1074,7 @@ func POSTerminalBundle() string {
       }
 
       async function holdSale() {
-        flushPendingDrafts();
+        await flushPendingDrafts();
         if (!terminalUnlocked()) {
           notify(text("Open a shift first.", "Buka shift terlebih dahulu."), "error");
           return;
@@ -1043,22 +1134,22 @@ func POSTerminalBundle() string {
       }
 
       async function checkout() {
-        flushPendingDrafts();
-        if (!navigator.onLine) {
-          notify(text("Checkout requires a live connection.", "Checkout membutuhkan koneksi aktif."), "error");
-          return;
-        }
-        if (!terminalUnlocked()) {
-          notify(text("Open a shift before checkout.", "Buka shift sebelum checkout."), "error");
-          return;
-        }
-        if (!payloadLines().length) {
-          notify(text("Add at least one line.", "Tambahkan minimal satu baris."), "error");
-          return;
-        }
-        state.busy = true;
-        render();
         try {
+          await flushPendingDrafts();
+          if (!navigator.onLine) {
+            notify(text("Checkout requires a live connection.", "Checkout membutuhkan koneksi aktif."), "error");
+            return;
+          }
+          if (!terminalUnlocked()) {
+            notify(text("Open a shift before checkout.", "Buka shift sebelum checkout."), "error");
+            return;
+          }
+          if (!payloadLines().length) {
+            notify(text("Add at least one line.", "Tambahkan minimal satu baris."), "error");
+            return;
+          }
+          state.busy = true;
+          render();
           const result = await api("/ui/data/pos/checkout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1249,23 +1340,30 @@ func POSTerminalBundle() string {
           +   '<section class="pos-terminal__modal" role="dialog" aria-modal="true" aria-label="' + escapeHTML(text("Catalog search", "Pencarian katalog")) + '">'
           +     '<div class="pos-terminal__modal-head">'
           +       '<div><h3 class="pos-terminal__panel-title">' + escapeHTML(text("Catalog search", "Pencarian katalog")) + '</h3><div class="pos-terminal__panel-sub">' + escapeHTML(text("Search by barcode first, then add items directly into the basket.", "Cari barcode lebih dulu, lalu tambah item langsung ke basket.")) + '</div></div>'
-          +       '<div class="pos-terminal__buttons"><button type="button" class="pos-terminal__button" data-action="close-catalog">' + escapeHTML(text("Close", "Tutup")) + '</button></div>'
+          +       '<div class="pos-terminal__buttons">'
+          +         (state.searchResults.length ? '<button type="button" class="pos-terminal__button" data-toggle-details-all>' + escapeHTML(state.searchDetailBusy ? text("Loading details…", "Memuat detail…") : (state.searchDetailsVisible ? text("Hide details", "Sembunyikan detail") : text("Show details", "Tampilkan detail"))) + '</button>' : '')
+          +         '<button type="button" class="pos-terminal__button" data-action="close-catalog">' + escapeHTML(text("Close", "Tutup")) + '</button>'
+          +       '</div>'
           +     '</div>'
           +     '<div class="pos-terminal__modal-body">'
           +     '<form class="pos-terminal__row" data-form="catalog-search">'
           +       '<div class="pos-terminal__field"><span>' + escapeHTML(text("Barcode or item", "Barcode atau item")) + '</span><input id="pos-search" name="pos_search" placeholder="' + escapeHTML(text("Scan barcode or type item name", "Scan barcode atau ketik nama barang")) + '" value="' + escapeHTML(state.searchQuery) + '"></div>'
-          +       '<div class="pos-terminal__buttons"><button type="submit" class="pos-terminal__button pos-terminal__button--primary" data-action="search">' + escapeHTML(state.searchBusy ? text("Searching…", "Mencari…") : text("Search", "Cari")) + '</button></div>'
+          +       '<div class="pos-terminal__buttons">'
+          +         '<button type="submit" class="pos-terminal__button pos-terminal__button--primary" data-action="search">' + escapeHTML(state.searchBusy ? text("Searching…", "Mencari…") : text("Search", "Cari")) + '</button>'
+          +       '</div>'
           +     '</form>'
           +     '<div class="pos-terminal__scroll">' + (state.searchBusy
               ? '<div class="pos-terminal__empty">' + escapeHTML(text("Searching catalog…", "Mencari katalog…")) + '</div>'
               : state.searchResults.length ? '<div class="pos-terminal__result-list">' + state.searchResults.map(function(item, index) {
+                const key = catalogItemKey(item);
+                const detail = state.searchDetails[key];
+                const expanded = !!state.searchDetailsVisible;
                 return ''
                   + '<article class="pos-terminal__result">'
                   +   '<div class="pos-terminal__result-head">'
-                  +     '<div><div class="pos-terminal__title">' + escapeHTML(item.name || item.item_code) + '</div><div class="pos-terminal__muted">' + escapeHTML((item.item_code || "") + (item.variant_label ? " • " + item.variant_label : "")) + '</div></div>'
-                  +     '<div><strong>' + escapeHTML(money(item.unit_price)) + '</strong></div>'
+                  +     '<div><div class="pos-terminal__title">' + escapeHTML(item.name || item.item_code) + '</div><div class="pos-terminal__muted">' + escapeHTML((item.item_code || "") + (item.variant_label ? " • " + item.variant_label : "") + (item.item_type ? " • " + item.item_type : "")) + '</div></div>'
                   +   '</div>'
-                  +   '<div class="pos-terminal__muted" style="margin-top:0.55rem">' + (item.inventory_enabled ? escapeHTML(text("Available", "Tersedia")) + ': ' + escapeHTML(String(number(item.available_quantity))) : escapeHTML(text("Non-stock item", "Item nonstok"))) + '</div>'
+                  +   (expanded && detail ? '<div class="pos-terminal__muted" style="margin-top:0.55rem">' + escapeHTML(text("Price", "Harga")) + ': ' + escapeHTML(money(detail.unit_price)) + '<br>' + (detail.inventory_enabled ? escapeHTML(text("Available", "Tersedia")) + ': ' + escapeHTML(String(number(detail.available_quantity))) : escapeHTML(text("Non-stock item", "Item nonstok"))) + '</div>' : '')
                   +   '<div class="pos-terminal__buttons" style="margin-top:0.75rem"><button type="button" class="pos-terminal__button" data-add-result="' + String(index) + '">' + escapeHTML(text("Add to cart", "Tambah ke keranjang")) + '</button></div>'
                   + '</article>';
               }).join("") + '</div>' : '<div class="pos-terminal__empty">' + escapeHTML(text("Search results appear here.", "Hasil pencarian muncul di sini.")) + '</div>') + '</div>'
@@ -1670,6 +1768,8 @@ func POSTerminalBundle() string {
           state.registerCode = "";
           state.shiftId = "";
           state.searchResults = [];
+          state.searchDetails = {};
+          state.searchDetailsVisible = false;
           resetSaleState();
           state.promotionValidation = null;
           persist();
@@ -1749,6 +1849,11 @@ func POSTerminalBundle() string {
             if (item) addCatalogItem(item);
           });
         });
+        mount.querySelector("[data-toggle-details-all]")?.addEventListener("click", function() {
+          toggleCatalogDetails().catch(function(error) {
+            notify(error instanceof Error ? error.message : "Detail lookup failed", "error");
+          });
+        });
         mount.querySelectorAll("[data-resume-held]").forEach(function(node) {
           node.addEventListener("click", function() {
             const record = state.heldSales[number(node.getAttribute("data-resume-held"))];
@@ -1790,16 +1895,20 @@ func POSTerminalBundle() string {
             const index = number(node.getAttribute("data-line-qty"));
             state.cartQuantityDrafts[String(index)] = String(node.value || "");
           });
-          node.addEventListener("blur", function() {
-            const index = number(node.getAttribute("data-line-qty"));
-            commitLineQuantity(index, node.value);
-          });
           node.addEventListener("keydown", function(event) {
             if (event.key === "Enter" || event.code === "NumpadEnter") {
               event.preventDefault();
               const index = number(node.getAttribute("data-line-qty"));
-              commitLineQuantity(index, node.value);
+              commitLineQuantity(index, node.value).catch(function(error) {
+                notify(error instanceof Error ? error.message : "Quantity update failed", "error");
+              });
             }
+          });
+          node.addEventListener("blur", function() {
+            const index = number(node.getAttribute("data-line-qty"));
+            commitLineQuantity(index, node.value).catch(function(error) {
+              notify(error instanceof Error ? error.message : "Quantity update failed", "error");
+            });
           });
         });
         mount.querySelectorAll("[data-remove-line]").forEach(function(node) {

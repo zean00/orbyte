@@ -48,6 +48,18 @@ func (s *POSCoreService) AttachWorkforceAttendance(attendance *WorkforceAttendan
 }
 
 type POSCatalogItem struct {
+	ItemCode         string `json:"item_code"`
+	ProductCode      string `json:"product_code,omitempty"`
+	Name             string `json:"name"`
+	Description      string `json:"description,omitempty"`
+	ItemType         string `json:"item_type,omitempty"`
+	VariantLabel     string `json:"variant_label,omitempty"`
+	VariantSignature string `json:"variant_signature,omitempty"`
+	UOMCode          string `json:"uom_code,omitempty"`
+	InventoryEnabled bool   `json:"inventory_enabled"`
+}
+
+type POSCatalogQuote struct {
 	ItemCode          string  `json:"item_code"`
 	ProductCode       string  `json:"product_code,omitempty"`
 	Name              string  `json:"name"`
@@ -241,11 +253,75 @@ func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, qu
 	if !ok {
 		return nil, shared.NotFound("pos store not found")
 	}
-	warehouseCode := textValue(store.Values["warehouse_code"])
-	priceListCode := textValue(store.Values["price_list_code"])
-	taxProfileCode := textValue(store.Values["tax_profile_code"])
-	defaultTaxCode := textValue(store.Values["default_tax_code"])
+	_ = store
 
+	candidates, err := s.catalogSearchCandidates(organizationID, locationID, strings.TrimSpace(query))
+	if err != nil {
+		return nil, err
+	}
+	results := make([]POSCatalogItem, 0, len(candidates))
+	seen := map[string]struct{}{}
+	for _, item := range candidates {
+		itemCode := textValue(item.Values["sku"])
+		if itemCode == "" {
+			continue
+		}
+		if _, exists := seen[itemCode]; exists {
+			continue
+		}
+		seen[itemCode] = struct{}{}
+		results = append(results, POSCatalogItem{
+			ItemCode:         itemCode,
+			ProductCode:      textValue(item.Values["product_code"]),
+			Name:             firstNonEmptyString(textValue(item.Values["name"]), itemCode),
+			Description:      textValue(item.Values["description"]),
+			ItemType:         textValue(item.Values["item_type"]),
+			VariantLabel:     textValue(item.Values["variant_label"]),
+			VariantSignature: textValue(item.Values["variant_signature"]),
+			UOMCode:          textValue(item.Values["uom_code"]),
+			InventoryEnabled: boolFieldValue(item.Values["inventory_enabled"]),
+		})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Name < results[j].Name
+	})
+	return results, nil
+}
+
+func (s *POSCoreService) EnrichCatalogItems(organizationID, locationID, storeCode string, itemCodes []string) ([]POSCatalogQuote, error) {
+	store, ok := s.findModelByField("pos_store", "code", storeCode)
+	if !ok {
+		return nil, shared.NotFound("pos store not found")
+	}
+	quotes := make([]POSCatalogQuote, 0, len(itemCodes))
+	seen := map[string]struct{}{}
+	for _, rawCode := range itemCodes {
+		itemCode := strings.TrimSpace(rawCode)
+		if itemCode == "" {
+			continue
+		}
+		if _, exists := seen[itemCode]; exists {
+			continue
+		}
+		seen[itemCode] = struct{}{}
+		quote, err := s.catalogQuote(store, organizationID, locationID, itemCode)
+		if err != nil {
+			return nil, err
+		}
+		quotes = append(quotes, quote)
+	}
+	return quotes, nil
+}
+
+func (s *POSCoreService) QuoteCatalogItem(organizationID, locationID, storeCode, itemCode string) (POSCatalogQuote, error) {
+	store, ok := s.findModelByField("pos_store", "code", storeCode)
+	if !ok {
+		return POSCatalogQuote{}, shared.NotFound("pos store not found")
+	}
+	return s.catalogQuote(store, organizationID, locationID, strings.TrimSpace(itemCode))
+}
+
+func (s *POSCoreService) catalogSearchCandidates(organizationID, locationID, query string) ([]model.Record, error) {
 	candidates := make([]model.Record, 0)
 	trimmed := strings.TrimSpace(query)
 	if trimmed != "" && s.search != nil {
@@ -275,56 +351,55 @@ func (s *POSCoreService) SearchCatalog(organizationID, locationID, storeCode, qu
 			candidates = append(candidates, item)
 		}
 	}
+	return candidates, nil
+}
 
-	results := make([]POSCatalogItem, 0, len(candidates))
-	seen := map[string]struct{}{}
-	for _, item := range candidates {
-		itemCode := textValue(item.Values["sku"])
-		if itemCode == "" {
-			continue
-		}
-		if _, exists := seen[itemCode]; exists {
-			continue
-		}
-		seen[itemCode] = struct{}{}
-		payload := s.commercial.NormalizePayload("sales_order", map[string]any{
-			"price_list_code":  priceListCode,
-			"tax_profile_code": taxProfileCode,
-			"default_tax_code": defaultTaxCode,
-			"sales_channel":    "pos",
-			"store_code":       textValue(store.Values["code"]),
-			"lines": []map[string]any{{
-				"item_code": itemCode,
-				"quantity":  1,
-			}},
-		})
-		line := firstRecord(payload["lines"])
-		stock := s.inventory.ItemStockScoped(organizationID, locationID, itemCode, time.Now().UTC())
-		available := stockSummaryForWarehouse(stock, warehouseCode, "available_quantity")
-		onHand := stockSummaryForWarehouse(stock, warehouseCode, "on_hand_quantity")
-		results = append(results, POSCatalogItem{
-			ItemCode:          itemCode,
-			ProductCode:       textValue(item.Values["product_code"]),
-			Name:              firstNonEmptyString(textValue(item.Values["name"]), textValue(line["description"])),
-			Description:       textValue(line["description"]),
-			ItemType:          textValue(item.Values["item_type"]),
-			VariantLabel:      textValue(item.Values["variant_label"]),
-			VariantSignature:  textValue(item.Values["variant_signature"]),
-			UOMCode:           firstNonEmptyString(textValue(line["uom_code"]), textValue(item.Values["uom_code"])),
-			UnitPrice:         numberValue(line["unit_price"]),
-			TaxCode:           textValue(line["tax_code"]),
-			TaxRate:           numberValue(line["tax_rate"]),
-			TaxMode:           textValue(line["tax_mode"]),
-			CurrencyCode:      firstNonEmptyString(textValue(payload["currency_code"]), "IDR"),
-			InventoryEnabled:  boolFieldValue(item.Values["inventory_enabled"]),
-			AvailableQuantity: available,
-			OnHandQuantity:    onHand,
-		})
+func (s *POSCoreService) catalogQuote(store model.Record, organizationID, locationID, itemCode string) (POSCatalogQuote, error) {
+	itemCode = strings.TrimSpace(itemCode)
+	if itemCode == "" {
+		return POSCatalogQuote{}, shared.Validation("item code is required")
 	}
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Name < results[j].Name
+	item, ok := s.findModelByField("commercial_item", "sku", itemCode)
+	if !ok {
+		return POSCatalogQuote{}, shared.NotFound("commercial item not found")
+	}
+	warehouseCode := textValue(store.Values["warehouse_code"])
+	priceListCode := textValue(store.Values["price_list_code"])
+	taxProfileCode := textValue(store.Values["tax_profile_code"])
+	defaultTaxCode := textValue(store.Values["default_tax_code"])
+	payload := s.commercial.NormalizePayload("sales_order", map[string]any{
+		"price_list_code":  priceListCode,
+		"tax_profile_code": taxProfileCode,
+		"default_tax_code": defaultTaxCode,
+		"sales_channel":    "pos",
+		"store_code":       textValue(store.Values["code"]),
+		"lines": []map[string]any{{
+			"item_code": itemCode,
+			"quantity":  1,
+		}},
 	})
-	return results, nil
+	line := firstRecord(payload["lines"])
+	stock := s.inventory.ItemStockScoped(organizationID, locationID, itemCode, time.Now().UTC())
+	available := stockSummaryForWarehouse(stock, warehouseCode, "available_quantity")
+	onHand := stockSummaryForWarehouse(stock, warehouseCode, "on_hand_quantity")
+	return POSCatalogQuote{
+		ItemCode:          itemCode,
+		ProductCode:       textValue(item.Values["product_code"]),
+		Name:              firstNonEmptyString(textValue(item.Values["name"]), textValue(line["description"]), itemCode),
+		Description:       firstNonEmptyString(textValue(line["description"]), textValue(item.Values["description"])),
+		ItemType:          textValue(item.Values["item_type"]),
+		VariantLabel:      textValue(item.Values["variant_label"]),
+		VariantSignature:  textValue(item.Values["variant_signature"]),
+		UOMCode:           firstNonEmptyString(textValue(line["uom_code"]), textValue(item.Values["uom_code"])),
+		UnitPrice:         numberValue(line["unit_price"]),
+		TaxCode:           textValue(line["tax_code"]),
+		TaxRate:           numberValue(line["tax_rate"]),
+		TaxMode:           textValue(line["tax_mode"]),
+		CurrencyCode:      firstNonEmptyString(textValue(payload["currency_code"]), "IDR"),
+		InventoryEnabled:  boolFieldValue(item.Values["inventory_enabled"]),
+		AvailableQuantity: available,
+		OnHandQuantity:    onHand,
+	}, nil
 }
 
 func (s *POSCoreService) ValidatePromotionCodes(organizationID, locationID, storeCode, partyID, partyName string, promotionCodes []string, lines []POSCartLineInput) (POSPromotionValidationResult, error) {
@@ -858,6 +933,9 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 	} else if !validation.Valid {
 		return POSCheckoutResult{}, shared.Validation(posPromotionValidationMessage(validation))
 	}
+	if err := s.validateCheckoutStock(store, organizationID, locationID, input.Lines); err != nil {
+		return POSCheckoutResult{}, err
+	}
 	orderPayload, cartSummary, err := s.buildOrderPayload(store, input.PartyID, input.PartyName, input.Notes, input.PromotionCodes, input.Lines)
 	if err != nil {
 		return POSCheckoutResult{}, err
@@ -1017,6 +1095,35 @@ func (s *POSCoreService) Checkout(organizationID, locationID string, input POSCh
 		ReceiptTitle: firstNonEmptyString(invoice.Header.Number, order.Header.Number, textValue(sale.Values["sale_number"])),
 	}
 	return result, nil
+}
+
+func (s *POSCoreService) validateCheckoutStock(store model.Record, organizationID, locationID string, lines []POSCartLineInput) error {
+	warehouseCode := textValue(store.Values["warehouse_code"])
+	requestedByItem := make(map[string]float64)
+	for _, line := range lines {
+		itemCode := strings.TrimSpace(line.ItemCode)
+		quantity := numberValue(line.Quantity)
+		if itemCode == "" || quantity <= 0 {
+			continue
+		}
+		requestedByItem[itemCode] += quantity
+	}
+	for itemCode, requestedQuantity := range requestedByItem {
+		item, ok := s.findModelByField("commercial_item", "sku", itemCode)
+		if !ok {
+			return shared.NotFound("commercial item not found")
+		}
+		if !boolFieldValue(item.Values["inventory_enabled"]) {
+			continue
+		}
+		stock := s.inventory.ItemStockScoped(organizationID, locationID, itemCode, time.Now().UTC())
+		available := stockSummaryForWarehouse(stock, warehouseCode, "available_quantity")
+		if requestedQuantity > available {
+			itemName := firstNonEmptyString(textValue(item.Values["name"]), itemCode)
+			return shared.Validation(fmt.Sprintf("insufficient stock for %s: available %.0f", itemName, available))
+		}
+	}
+	return nil
 }
 
 func (s *POSCoreService) TransactionLookup(query, cashierUserID, storeCode, registerCode string) ([]model.Record, error) {

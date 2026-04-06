@@ -129,6 +129,66 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 		respondJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 
+	mux.HandleFunc("POST /ui/data/pos/catalog/enrich", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"pos_sale.create", "item.list"}) {
+			respondError(w, shared.Forbidden("pos catalog enrich is not allowed"))
+			return
+		}
+		var req struct {
+			StoreCode string   `json:"store_code"`
+			ItemCodes []string `json:"item_codes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid request body"))
+			return
+		}
+		items, err := posSvc.EnrichCatalogItems(
+			organizationIDForPrincipal(p),
+			p.currentLocationID,
+			strings.TrimSpace(req.StoreCode),
+			req.ItemCodes,
+		)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	mux.HandleFunc("POST /ui/data/pos/catalog/quote", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"pos_sale.create", "item.list"}) {
+			respondError(w, shared.Forbidden("pos catalog quote is not allowed"))
+			return
+		}
+		var req struct {
+			StoreCode string `json:"store_code"`
+			ItemCode  string `json:"item_code"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid request body"))
+			return
+		}
+		item, err := posSvc.QuoteCatalogItem(
+			organizationIDForPrincipal(p),
+			p.currentLocationID,
+			strings.TrimSpace(req.StoreCode),
+			strings.TrimSpace(req.ItemCode),
+		)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, item)
+	})
+
 	mux.HandleFunc("GET /ui/data/pos/customers/search", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := requireInteractivePrincipal(w, r)
 		if !ok {

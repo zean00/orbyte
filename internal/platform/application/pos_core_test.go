@@ -167,6 +167,122 @@ func TestPOSCheckoutCreatesOperationalDocuments(t *testing.T) {
 	}
 }
 
+func TestPOSCheckoutRejectsDuplicateLinesThatExceedAvailableStock(t *testing.T) {
+	docs := document.NewService()
+	models := model.NewService()
+	flows := workflow.NewService()
+	auditSvc := audit.NewService()
+	eventingSvc := eventing.NewService()
+	mustRegisterPOSTestDocumentTypes(t, docs)
+	mustRegisterPOSTestModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                  "POS-DUPLICATE",
+		"name":                 "Duplicate Line Item",
+		"description":          "Stock aggregation check",
+		"kind":                 "product",
+		"uom_code":             "EA",
+		"unit_price":           12.0,
+		"tax_code":             "VAT11",
+		"revenue_account_code": "4000-REV",
+		"is_sellable":          true,
+		"inventory_enabled":    true,
+		"allow_negative_stock": false,
+		"status":               "active",
+	}); err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	if _, err := models.Create("tax_code", "user_admin", map[string]any{
+		"code":             "VAT11",
+		"rate_percent":     11.0,
+		"mode":             "exclusive",
+		"tax_account_code": "2100-VATOUT",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create tax code: %v", err)
+	}
+	if _, err := models.Create("payment_method", "user_admin", map[string]any{
+		"code":                  "CASH",
+		"name":                  "Cash",
+		"clearing_account_code": "1000-CASH",
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create payment method: %v", err)
+	}
+	if _, err := models.Create("pos_store", "user_admin", map[string]any{
+		"code":             "STORE1",
+		"name":             "Store 1",
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "VAT11",
+		"currency_code":    "IDR",
+		"checkout_mode":    "invoice_first",
+		"status":           "active",
+	}); err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	if _, err := models.Create("pos_register", "user_admin", map[string]any{
+		"code":              "REG1",
+		"name":              "Register 1",
+		"store_code":        "STORE1",
+		"checkout_mode":     "invoice_first",
+		"cash_account_code": "1000-CASH",
+		"status":            "active",
+	}); err != nil {
+		t.Fatalf("create register: %v", err)
+	}
+	if _, err := models.Create("pos_tender_type", "user_admin", map[string]any{
+		"code":                  "CASH",
+		"name":                  "Cash",
+		"kind":                  "cash",
+		"payment_method_code":   "CASH",
+		"clearing_account_code": "1000-CASH",
+		"is_cash_like":          true,
+		"status":                "active",
+	}); err != nil {
+		t.Fatalf("create tender type: %v", err)
+	}
+
+	seedPostedMovement(t, docs, "org_default", "loc_main", map[string]any{
+		"item_code":          "POS-DUPLICATE",
+		"warehouse_code":     "MAIN",
+		"quantity_delta":     5.0,
+		"movement_reason":    "seed",
+		"movement_direction": "in",
+		"movement_date":      time.Now().UTC().Format("2006-01-02"),
+	})
+
+	actions := NewDocumentActions(docs, flows, nil, nil, NewMemorySubmitStore(docs, flows, auditSvc, eventingSvc))
+	commercialSvc := NewCommercialCoreService(docs, nil, models, nil)
+	inventorySvc := NewInventoryCoreService(docs, nil, models, nil)
+	fulfillmentSvc := NewFulfillmentCoreService(docs, nil, inventorySvc)
+	returnsSvc := NewReturnsCoreService(docs, nil, inventorySvc, commercialSvc, fulfillmentSvc)
+	posSvc := NewPOSCoreService(docs, models, nil, actions, commercialSvc, inventorySvc, fulfillmentSvc, returnsSvc)
+
+	shift, err := posSvc.OpenShift("org_default", "loc_main", "STORE1", "REG1", "cashier_1", "cashier_1", 100.0, "")
+	if err != nil {
+		t.Fatalf("open shift: %v", err)
+	}
+	_, err = posSvc.Checkout("org_default", "loc_main", POSCheckoutInput{
+		StoreCode:    "STORE1",
+		RegisterCode: "REG1",
+		ShiftID:      shift.ID,
+		Lines: []POSCartLineInput{
+			{ItemCode: "POS-DUPLICATE", Quantity: 3},
+			{ItemCode: "POS-DUPLICATE", Quantity: 3},
+		},
+		Tenders: []POSTenderInput{{
+			TenderTypeCode: "CASH",
+			Amount:         100,
+		}},
+	}, "cashier_1")
+	if err == nil {
+		t.Fatalf("expected duplicate stock validation error")
+	}
+	if !strings.Contains(err.Error(), "insufficient stock") {
+		t.Fatalf("expected insufficient stock error, got %v", err)
+	}
+}
+
 func TestPOSCheckoutCreatesPromotionRedemptionFromPromoCode(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -1012,10 +1128,18 @@ func TestPOSSearchCatalogUsesWarehouseBatchInventory(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected 1 catalog item, got %d", len(items))
 	}
-	if got := items[0].OnHandQuantity; got != 7.0 {
+	if got := items[0].ItemCode; got != "POS-CATALOG" {
+		t.Fatalf("expected item code POS-CATALOG, got %q", got)
+	}
+
+	quote, err := posSvc.QuoteCatalogItem("org_default", "loc_main", "STORE1", "POS-CATALOG")
+	if err != nil {
+		t.Fatalf("quote catalog item: %v", err)
+	}
+	if got := quote.OnHandQuantity; got != 7.0 {
 		t.Fatalf("expected on-hand 7, got %v", got)
 	}
-	if got := items[0].AvailableQuantity; got != 7.0 {
+	if got := quote.AvailableQuantity; got != 7.0 {
 		t.Fatalf("expected available 7, got %v", got)
 	}
 }
