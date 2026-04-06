@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { useMemo, useState } from 'react'
+import { PaginationBar } from '@/components/ui/PaginationBar'
 import type { FormState } from './workspaceFormTypes'
 
 export function DataTable({
@@ -6,45 +8,63 @@ export function DataTable({
   rows,
   emptyText,
   renderAction,
+  localPageSize,
 }: {
   columns: Array<{ key: string; label: string }>
   rows: Array<Record<string, unknown>>
   emptyText: string
   renderAction?: (row: Record<string, unknown>) => ReactNode
+  localPageSize?: number
 }) {
+  const [page, setPage] = useState(1)
+  const pageSize = localPageSize && localPageSize > 0 ? localPageSize : 0
+  const total = rows.length
+  const pagedRows = useMemo(() => {
+    if (!pageSize) return rows
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    const currentPage = Math.min(page, totalPages)
+    const start = (currentPage - 1) * pageSize
+    return rows.slice(start, start + pageSize)
+  }, [page, pageSize, rows, total])
+
   return (
-    <div className="overflow-hidden rounded-xl border border-line">
-      <table className="min-w-full divide-y divide-line">
-        <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
-          <tr>
-            {columns.map((column) => (
-              <th key={column.key} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">
-                {column.label}
-              </th>
-            ))}
-            {renderAction ? <th className="px-4 py-3" /> : null}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line bg-surface">
-          {rows.length ? rows.map((row, index) => (
-            <tr key={index}>
-              {columns.map((column) => (
-                <td key={column.key} className="px-4 py-3 text-sm text-body">
-                  {displayValue(resolvePath(row, column.key))}
-                </td>
-              ))}
-              {renderAction ? <td className="px-4 py-3 text-right">{renderAction(row)}</td> : null}
-            </tr>
-          )) : (
+    <>
+      <div className="overflow-hidden rounded-xl border border-line">
+        <table className="min-w-full divide-y divide-line">
+          <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
             <tr>
-              <td colSpan={columns.length + (renderAction ? 1 : 0)} className="px-4 py-10 text-center text-sm text-muted">
-                {emptyText}
-              </td>
+              {columns.map((column) => (
+                <th key={column.key} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body">
+                  {column.label}
+                </th>
+              ))}
+              {renderAction ? <th className="px-4 py-3" /> : null}
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-line bg-surface">
+            {pagedRows.length ? pagedRows.map((row, index) => (
+              <tr key={index}>
+                {columns.map((column) => (
+                  <td key={column.key} className="px-4 py-3 text-sm text-body">
+                    {displayValue(resolvePath(row, column.key))}
+                  </td>
+                ))}
+                {renderAction ? <td className="px-4 py-3 text-right">{renderAction(row)}</td> : null}
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={columns.length + (renderAction ? 1 : 0)} className="px-4 py-10 text-center text-sm text-muted">
+                  {emptyText}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {pageSize && total > 0 ? (
+        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
+      ) : null}
+    </>
   )
 }
 

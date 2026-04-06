@@ -28,6 +28,7 @@ import {
   ValueCard,
 } from "./adminShared";
 import { titleForAdminPath } from "./adminRouting";
+import { adminPathSupportsPagination } from "./adminRouting";
 import { useAdminPageData } from "./useAdminPageData";
 import { mutateJson } from "./adminClient";
 import { TemplateDesignerPage } from "./TemplateDesignerPage";
@@ -41,7 +42,26 @@ export default function AdminWorkspacePage() {
   const routes = useShellStore((state) => state.routes);
   const setNavigationPending = useShellStore((state) => state.setNavigationPending);
   const path = normalizeShellPath(location.pathname || "/", "admin");
-  const { payload, loading } = useAdminPageData(path, !!bootstrap);
+  const { payload, loading } = useAdminPageData(path, location.search, !!bootstrap);
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const currentPage = Number.parseInt(searchParams.get("page") || "1", 10) || 1;
+  const currentPageSize = Number.parseInt(searchParams.get("page_size") || "20", 10) || 20;
+  const supportsPagination = adminPathSupportsPagination(path);
+  const totalItems = Number(payload?.total || 0);
+
+  function handlePageChange(page: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", String(page));
+    next.set("page_size", String(currentPageSize));
+    navigate(`${path}?${next.toString()}`);
+  }
+
+  function handlePageSizeChange(pageSize: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", "1");
+    next.set("page_size", String(pageSize));
+    navigate(`${path}?${next.toString()}`);
+  }
 
   useEffect(() => {
     if (path === "/" && defaultPath && defaultPath !== "/") {
@@ -97,7 +117,18 @@ export default function AdminWorkspacePage() {
         ) : null}
 
         <div className="mt-4">
-          <AdminContent path={path} payload={payload} bootstrap={bootstrap} />
+          <AdminContent
+            path={path}
+            payload={payload}
+            bootstrap={bootstrap}
+            pagination={supportsPagination ? {
+              page: currentPage,
+              pageSize: currentPageSize,
+              total: totalItems || asItems(payload).length,
+              onPageChange: handlePageChange,
+              onPageSizeChange: handlePageSizeChange,
+            } : undefined}
+          />
         </div>
       </PageSection>
     </Shell>
@@ -108,17 +139,30 @@ function AdminContent({
   path,
   payload,
   bootstrap,
+  pagination,
 }: {
   path: string;
   payload: Record<string, unknown> | null;
   bootstrap: ReturnType<typeof useShellStore.getState>["adminBootstrap"];
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }) {
   return (
     <AdminContentRouter
       path={path}
       payload={payload}
       bootstrap={bootstrap}
-      renderModules={(data) => <ModuleManagementPage payload={data} />}
+      renderModules={(data) => (
+        <ModuleManagementPage
+          payload={data}
+          pagination={pagination ? { ...pagination, total: pagination.total || asItems(data).length } : undefined}
+        />
+      )}
       renderModuleConsole={(data) => <AdminModuleConsolePage payload={data} />}
       renderAuth={(data) => (
         <AdminAuthSettingsPage
@@ -139,7 +183,10 @@ function AdminContent({
         />
       )}
       renderConfig={(data) => (
-        <AdminConfigManagementPage definitions={asItems(data)} />
+        <AdminConfigManagementPage
+          definitions={asItems(data)}
+          pagination={pagination ? { ...pagination, total: pagination.total || asItems(data).length } : undefined}
+        />
       )}
       renderFinance={() => (
         <AdminFinanceSettingsPage
@@ -150,26 +197,43 @@ function AdminContent({
         <AdminDefinitionsGrid
           rows={asItems(data)}
           renderDataGrid={({ columns, rows }) => (
-            <DataGrid columns={columns} rows={rows} />
+            <DataGrid
+              columns={columns}
+              rows={rows}
+              pagination={pagination ? { ...pagination, total: pagination.total || rows.length } : undefined}
+            />
           )}
         />
       )}
       renderTemplates={(data) => (
         <AdminTemplateListPage
           rows={asItems(data)}
-          renderDataGrid={(props) => <DataGrid {...props} />}
+          renderDataGrid={(props) => (
+            <DataGrid
+              {...props}
+              pagination={pagination ? { ...pagination, total: pagination.total || props.rows.length } : undefined}
+            />
+          )}
         />
       )}
       renderTemplateDesigner={() => <TemplateDesignerPage />}
       renderWorkflows={(data) => (
         <AdminWorkflowListPage
           rows={asItems(data)}
-          renderDataGrid={(props) => <DataGrid {...props} />}
+          renderDataGrid={(props) => (
+            <DataGrid
+              {...props}
+              pagination={pagination ? { ...pagination, total: pagination.total || props.rows.length } : undefined}
+            />
+          )}
         />
       )}
       renderWorkflowDesigner={() => <WorkflowDesignerPage />}
       renderSecurity={(data) => (
-        <AdminSecurityHooksPage rows={asItems(data)} />
+        <AdminSecurityHooksPage
+          rows={asItems(data)}
+          pagination={pagination ? { ...pagination, total: pagination.total || asItems(data).length } : undefined}
+        />
       )}
       renderObservability={(data) => {
         return (
@@ -180,12 +244,17 @@ function AdminContent({
               <SummaryCard label={label} value={value} />
             )}
             renderDataGrid={({ columns, rows }) => (
-              <DataGrid columns={columns} rows={rows} />
+              <DataGrid columns={columns} rows={rows} localPageSize={10} />
             )}
           />
         );
       }}
-      renderDashboards={(data) => <AdminDashboardBoardsPage payload={data} />}
+      renderDashboards={(data) => (
+        <AdminDashboardBoardsPage
+          payload={data}
+          pagination={pagination ? { ...pagination, total: pagination.total || asItems(data).length } : undefined}
+        />
+      )}
       renderFallback={(targetPath, data, adminBootstrap) => (
         <ValueCard
           label="Raw payload"
@@ -233,8 +302,16 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 
 function ModuleManagementPage({
   payload,
+  pagination,
 }: {
   payload: Record<string, unknown> | null;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }) {
   const navigate = useNavigate();
   const rows = asItems(payload);
@@ -343,6 +420,7 @@ function ModuleManagementPage({
         secondaryActionDisabledForRow={(row) =>
           busyKey === String(resolvePath(row, "manifest.key") || "")
         }
+        pagination={pagination}
       />
     </div>
   );

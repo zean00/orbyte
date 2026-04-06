@@ -70,7 +70,9 @@ func registerTemplateRoutes(mux *http.ServeMux, ident *identity.Service, templat
 		if _, ok := requireAuthorization(w, r, ident, "template.read", "", "template.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": templates.Definitions()})
+		items := templates.Definitions()
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
+		respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
 	})
 	mux.HandleFunc("GET /admin/api/template-targets", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "template.read", "", "template.read"); !ok {

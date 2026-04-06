@@ -11,8 +11,16 @@ import {
 
 export function AdminSecurityHooksPage({
   rows,
+  pagination,
 }: {
   rows: Array<Record<string, unknown>>;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }) {
   const [items, setItems] = useState(rows);
   const [selectedKey, setSelectedKey] = useState("");
@@ -101,6 +109,7 @@ export function AdminSecurityHooksPage({
         rows={items}
         actionLabel="Edit"
         onAction={openEditor}
+        pagination={pagination}
       />
       {selected ? (
         <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">

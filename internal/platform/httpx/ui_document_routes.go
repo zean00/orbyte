@@ -31,6 +31,8 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 		payableState := strings.TrimSpace(r.URL.Query().Get("payable_state"))
 		includePayload := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_payload")), "1") || strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_payload")), "true")
 		sortKey := strings.TrimSpace(r.URL.Query().Get("sort"))
+		page := intQuery(r, "page", 1)
+		pageSize := intQuery(r, "page_size", 20)
 		today := time.Now().UTC().Format("2006-01-02")
 		items := searchSvc.ListDocuments()
 		filtered := make([]map[string]any, 0, len(items))
@@ -58,7 +60,8 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 				filtered = append(filtered, documentListProjectionItem(item, record, docs))
 			}
 			sortDocumentProjectionItems(filtered, sortKey)
-			respondJSON(w, http.StatusOK, map[string]any{"items": filtered})
+			pagedItems, total := paginateSlice(filtered, page, pageSize)
+			respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
 			return
 		}
 		for _, item := range items {
@@ -112,7 +115,8 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			})
 		}
 		sortDocumentProjectionItems(filtered, sortKey)
-		respondJSON(w, http.StatusOK, map[string]any{"items": filtered})
+		pagedItems, total := paginateSlice(filtered, page, pageSize)
+		respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
 	})
 
 	mux.HandleFunc("GET /ui/data/documents/", func(w http.ResponseWriter, r *http.Request) {

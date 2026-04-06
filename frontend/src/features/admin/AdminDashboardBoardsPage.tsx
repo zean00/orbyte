@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PaginationBar } from "@/components/ui/PaginationBar";
 import { formatDateTime, mutateJson, startCase } from "./adminClient";
 
 type DashboardPayload = {
@@ -59,8 +60,16 @@ const EMPTY_BOARD: DashboardBoard = {
 
 export function AdminDashboardBoardsPage({
   payload,
+  pagination,
 }: {
   payload: Record<string, unknown> | null;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }) {
   const typed = (payload || {}) as DashboardPayload;
   const [boards, setBoards] = useState<DashboardBoard[]>(typed.items || []);
@@ -221,7 +230,7 @@ export function AdminDashboardBoardsPage({
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Boards</div>
-              <div className="mt-1 text-lg font-semibold text-body">{boards.length} configured</div>
+              <div className="mt-1 text-lg font-semibold text-body">{pagination?.total || boards.length} configured</div>
             </div>
             <button type="button" className="admin-button" onClick={resetToNew}>
               New
@@ -261,6 +270,16 @@ export function AdminDashboardBoardsPage({
               </button>
             ))}
           </div>
+          {pagination ? (
+            <PaginationBar
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={pagination.total}
+              onPageChange={pagination.onPageChange}
+              onPageSizeChange={pagination.onPageSizeChange}
+              className="mt-4"
+            />
+          ) : null}
         </div>
 
         <div className="space-y-4">

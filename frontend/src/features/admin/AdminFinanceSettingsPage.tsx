@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchJson, mutateJson } from "./adminClient";
+import { fetchAllPagedItems, fetchJson, mutateJson } from "./adminClient";
 import {
   EditableFieldSection,
   normalizeEditorPayload,
@@ -25,8 +25,8 @@ export function AdminFinanceSettingsPage({
   useEffect(() => {
     let mounted = true;
     async function load() {
-      const [definitionsPayload, effectivePayload] = await Promise.all([
-        fetchJson<{ items: Array<Record<string, unknown>> }>(
+      const [definitions, effectivePayload] = await Promise.all([
+        fetchAllPagedItems<Record<string, unknown>>(
           "/admin/api/config/definitions",
         ),
         fetchJson<{ items: Array<Record<string, unknown>> }>(
@@ -35,7 +35,7 @@ export function AdminFinanceSettingsPage({
       ]);
       if (!mounted) return;
       const financeDefinition =
-        (definitionsPayload.items || []).find(
+        definitions.find(
           (item) => String(item.key || "") === "commercial.posting",
         ) || null;
       const financeEffective =

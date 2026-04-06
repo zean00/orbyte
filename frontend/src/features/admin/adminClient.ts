@@ -30,6 +30,28 @@ export async function mutateJson<T>(url: string, init?: RequestInit): Promise<T>
   })
 }
 
+export async function fetchAllPagedItems<T>(
+  baseUrl: string,
+  pageSize = 200,
+): Promise<T[]> {
+  const items: T[] = []
+  let page = 1
+  while (true) {
+    const separator = baseUrl.includes('?') ? '&' : '?'
+    const payload = await fetchJson<{ items?: T[]; total?: number }>(
+      `${baseUrl}${separator}page=${page}&page_size=${pageSize}`,
+    )
+    const batch = Array.isArray(payload.items) ? payload.items : []
+    items.push(...batch)
+    const total = typeof payload.total === 'number' ? payload.total : undefined
+    if (batch.length === 0) break
+    if (total !== undefined && items.length >= total) break
+    if (batch.length < pageSize) break
+    page += 1
+  }
+  return items
+}
+
 export function formatDateTime(value: string | undefined): string {
   if (!value) return '-'
   const date = new Date(value)

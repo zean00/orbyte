@@ -1,3 +1,6 @@
+import { useMemo, useState } from "react";
+import { PaginationBar } from "@/components/ui/PaginationBar";
+
 export function DataGrid({
   columns,
   rows,
@@ -9,6 +12,8 @@ export function DataGrid({
   secondaryActionLabelForRow,
   onSecondaryAction,
   secondaryActionDisabledForRow,
+  pagination,
+  localPageSize,
 }: {
   columns: Array<{ key: string; label: string }>;
   rows: Array<Record<string, unknown>>;
@@ -20,80 +25,110 @@ export function DataGrid({
   secondaryActionLabelForRow?: (row: Record<string, unknown>) => string;
   onSecondaryAction?: (row: Record<string, unknown>) => void;
   secondaryActionDisabledForRow?: (row: Record<string, unknown>) => boolean;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange?: (pageSize: number) => void;
+  };
+  localPageSize?: number;
 }) {
-  if (!rows.length) {
-    return (
-      <div className="rounded-xl border border-dashed border-line p-6 text-sm text-muted">
-        No data available.
-      </div>
-    );
-  }
+  const [localPage, setLocalPage] = useState(1);
+  const pageSize = localPageSize && localPageSize > 0 ? localPageSize : 0;
+  const visibleRows = useMemo(() => {
+    if (!pageSize) return rows;
+    const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+    const currentPage = Math.min(localPage, totalPages);
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [localPage, pageSize, rows]);
 
   const rowKeyColumn = columns[0]?.key;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line">
-      <table className="min-w-full divide-y divide-line text-sm">
-        <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
-          <tr>
-            {columns.map((column) => (
-              <th
-                key={column.key}
-                className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body"
-              >
-                {column.label}
-              </th>
-            ))}
-            {actionLabel || secondaryActionLabel ? (
-              <th className="px-4 py-3" />
-            ) : null}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line bg-surface">
-          {rows.map((row, index) => (
-            <tr
-              key={`${index}-${String((rowKeyColumn && resolvePath(row, rowKeyColumn)) || index)}`}
-            >
+    <>
+      <div className="overflow-hidden rounded-xl border border-line">
+        <table className="min-w-full divide-y divide-line text-sm">
+          <thead className="border-b border-line bg-accent-soft dark:bg-ink/60">
+            <tr>
               {columns.map((column) => (
-                <td key={column.key} className="px-4 py-3 align-top text-body">
-                  {displayValue(resolvePath(row, column.key))}
-                </td>
+                <th
+                  key={column.key}
+                  className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-accent-dark dark:text-body"
+                >
+                  {column.label}
+                </th>
               ))}
               {actionLabel || secondaryActionLabel ? (
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    {actionLabel ? (
-                      <button
-                        type="button"
-                        className="admin-button admin-button-secondary"
-                        disabled={actionDisabledForRow?.(row)}
-                        onClick={() => onAction?.(row)}
-                      >
-                        {actionLabelForRow
-                          ? actionLabelForRow(row)
-                          : actionLabel}
-                      </button>
-                    ) : null}
-                    {secondaryActionLabel ? (
-                      <button
-                        type="button"
-                        className="admin-button admin-button-secondary"
-                        disabled={secondaryActionDisabledForRow?.(row)}
-                        onClick={() => onSecondaryAction?.(row)}
-                      >
-                        {secondaryActionLabelForRow
-                          ? secondaryActionLabelForRow(row)
-                          : secondaryActionLabel}
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
+                <th className="px-4 py-3" />
               ) : null}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-line bg-surface">
+            {visibleRows.length ? visibleRows.map((row, index) => (
+              <tr
+                key={`${index}-${String((rowKeyColumn && resolvePath(row, rowKeyColumn)) || index)}`}
+              >
+                {columns.map((column) => (
+                  <td key={column.key} className="px-4 py-3 align-top text-body">
+                    {displayValue(resolvePath(row, column.key))}
+                  </td>
+                ))}
+                {actionLabel || secondaryActionLabel ? (
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-2">
+                      {actionLabel ? (
+                        <button
+                          type="button"
+                          className="admin-button admin-button-secondary"
+                          disabled={actionDisabledForRow?.(row)}
+                          onClick={() => onAction?.(row)}
+                        >
+                          {actionLabelForRow
+                            ? actionLabelForRow(row)
+                            : actionLabel}
+                        </button>
+                      ) : null}
+                      {secondaryActionLabel ? (
+                        <button
+                          type="button"
+                          className="admin-button admin-button-secondary"
+                          disabled={secondaryActionDisabledForRow?.(row)}
+                          onClick={() => onSecondaryAction?.(row)}
+                        >
+                          {secondaryActionLabelForRow
+                            ? secondaryActionLabelForRow(row)
+                            : secondaryActionLabel}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            )) : (
+              <tr>
+                <td
+                  colSpan={columns.length + (actionLabel || secondaryActionLabel ? 1 : 0)}
+                  className="px-4 py-10 text-center text-sm text-muted"
+                >
+                  No data available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {(pagination || (pageSize && rows.length > 0)) ? (
+        <PaginationBar
+          page={pagination?.page || localPage}
+          pageSize={pagination?.pageSize || pageSize}
+          total={pagination?.total || rows.length}
+          onPageChange={pagination?.onPageChange || setLocalPage}
+          onPageSizeChange={pagination?.onPageSizeChange}
+        />
+      ) : null}
+    </>
   );
 }
 

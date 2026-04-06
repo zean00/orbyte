@@ -12,8 +12,16 @@ import {
 
 export function AdminConfigManagementPage({
   definitions,
+  pagination,
 }: {
   definitions: Array<Record<string, unknown>>;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }) {
   const [effective, setEffective] = useState<Array<Record<string, unknown>>>([]);
   const [selectedKey, setSelectedKey] = useState("");
@@ -146,6 +154,7 @@ export function AdminConfigManagementPage({
         rows={rows}
         actionLabel="Edit"
         onAction={openEditor}
+        pagination={pagination}
       />
       {selectedDefinition ? (
         <section className="rounded-xl border border-line bg-surface p-4 dark:bg-ink/60">

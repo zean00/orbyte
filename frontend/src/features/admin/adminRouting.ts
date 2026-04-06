@@ -41,6 +41,22 @@ export function endpointForAdminPath(path: string): string {
   }
 }
 
+export function adminPathSupportsPagination(path: string): boolean {
+  const normalizedPath = normalizeShellPath(path, 'admin')
+  switch (normalizedPath) {
+    case '/modules':
+    case '/config':
+    case '/definitions':
+    case '/security':
+    case '/dashboards':
+    case '/templates':
+    case '/workflows':
+      return true
+    default:
+      return false
+  }
+}
+
 export function titleForAdminPath(path: string): string {
   const normalizedPath = normalizeShellPath(path, 'admin')
   if (normalizedPath.startsWith('/modules/')) {

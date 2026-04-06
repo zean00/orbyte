@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { endpointForAdminPath } from './adminRouting'
+import { adminPathSupportsPagination, endpointForAdminPath } from './adminRouting'
 
-export function useAdminPageData(path: string, enabled: boolean) {
+export function useAdminPageData(path: string, search: string, enabled: boolean) {
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -18,7 +18,11 @@ export function useAdminPageData(path: string, enabled: boolean) {
           setLoading(false)
           return
         }
-        const response = await fetch(target, { credentials: 'include' })
+        const query = new URLSearchParams(search)
+        const requestTarget = adminPathSupportsPagination(path)
+          ? `${target}${query.toString() ? `?${query.toString()}` : ''}`
+          : target
+        const response = await fetch(requestTarget, { credentials: 'include' })
         const data = await response.json()
         if (!mounted) return
         setPayload(data)
@@ -33,7 +37,7 @@ export function useAdminPageData(path: string, enabled: boolean) {
     return () => {
       mounted = false
     }
-  }, [enabled, path])
+  }, [enabled, path, search])
 
   return { payload, loading }
 }

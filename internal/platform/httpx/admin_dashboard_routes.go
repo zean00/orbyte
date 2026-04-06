@@ -25,8 +25,11 @@ func registerAdminDashboardRoutes(mux *http.ServeMux, org *organization.Service,
 		if surface == "" {
 			surface = string(module.UISurfaceDashboard)
 		}
+		items := analyticsSvc.DashboardsForSurface(surface)
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
 		respondJSON(w, http.StatusOK, map[string]any{
-			"items":     analyticsSvc.DashboardsForSurface(surface),
+			"items":     pagedItems,
+			"total":     total,
 			"widgets":   modules.DashboardWidgetsForSurface(module.UISurface(surface)),
 			"roles":     ident.Roles(),
 			"locations": org.Locations(),

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { pickText, type ActionDefinition, type ViewDefinition } from '@/services/bootstrap'
+import { PaginationBar } from '@/components/ui/PaginationBar'
 import { normalizeWorkspaceRoute } from './workspaceRouteHelpers'
 
 export function WorkspaceListView({
@@ -44,6 +45,9 @@ export function WorkspaceListView({
   const activeSearch = searchParams.get('name') || ''
   const activeSort = searchParams.get('sort') || ''
   const activePageSize = searchParams.get('page_size') || ''
+  const currentPage = Number.parseInt(searchParams.get('page') || '1', 10) || 1
+  const defaultPageSize = view.default_page_size && view.default_page_size > 0 ? view.default_page_size : 20
+  const resolvedPageSize = Number.parseInt(activePageSize || String(defaultPageSize), 10) || defaultPageSize
 
   useEffect(() => {
     let mounted = true
@@ -54,6 +58,8 @@ export function WorkspaceListView({
       if (!view.model_key && documentListNeedsPayload(view)) {
         query.set('include_payload', '1')
       }
+      query.set('page', String(currentPage))
+      query.set('page_size', String(resolvedPageSize))
       const queryKeys = new Set(['name', 'sort', 'page', 'page_size'])
       for (const filter of view.filters || []) {
         queryKeys.add(filter.key)
@@ -71,7 +77,7 @@ export function WorkspaceListView({
     return () => {
       mounted = false
     }
-  }, [documentListNeedsPayload, fetchJSON, searchParams, view.document_type, view.model_key, view.filters])
+  }, [currentPage, documentListNeedsPayload, fetchJSON, resolvedPageSize, searchParams, view.document_type, view.model_key, view.filters])
 
   const columns = view.columns?.length
     ? view.columns
@@ -90,8 +96,13 @@ export function WorkspaceListView({
     })
     .filter((option, index, items) => items.findIndex((candidate) => candidate.value === option.value) === index)
   const totalItems = payload?.total ?? payload?.items?.length ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalItems / resolvedPageSize))
+  const effectivePage = Math.min(currentPage, totalPages)
+  const currentRows = payload?.items?.length ?? 0
+  const currentStart = totalItems === 0 || currentRows === 0 ? 0 : (effectivePage - 1) * resolvedPageSize + 1
+  const currentEnd = totalItems === 0 || currentRows === 0 ? 0 : Math.min(totalItems, currentStart + currentRows - 1)
   const listStatus = totalItems > 0
-    ? `Showing ${totalItems} item${totalItems === 1 ? '' : 's'}.`
+    ? `Showing ${currentStart}-${currentEnd} of ${totalItems} item${totalItems === 1 ? '' : 's'}.`
     : (pickText(view, 'empty_state', locale) || 'Standard list rendered from UI contracts.')
 
   function applyListQuery(updates: Record<string, string>) {
@@ -170,22 +181,6 @@ export function WorkspaceListView({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Page Size</span>
-              <select
-                id="list-page-size"
-                name="list_page_size"
-                value={activePageSize}
-                onChange={(e) => applyListQuery({ page_size: e.target.value })}
-                className="h-10 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-body"
-              >
-                <option value="">Default</option>
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </label>
           </div>
         </div>
         {renderDataTable({
@@ -217,6 +212,20 @@ export function WorkspaceListView({
             )
           },
         })}
+        <PaginationBar
+          page={currentPage}
+          pageSize={resolvedPageSize}
+          total={totalItems}
+          onPageChange={(page) => {
+            const next = new URLSearchParams(searchParams)
+            next.set('page', String(page))
+            if (!next.get('page_size')) {
+              next.set('page_size', String(defaultPageSize))
+            }
+            onNavigate(`${currentPath}?${next.toString()}`)
+          }}
+          onPageSizeChange={(pageSize) => applyListQuery({ page_size: String(pageSize) })}
+        />
       </>
     ),
   })

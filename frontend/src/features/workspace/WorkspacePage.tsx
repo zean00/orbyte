@@ -201,7 +201,7 @@ export default function WorkspacePage() {
       )
     }
     return <WorkspacePanel title="Unavailable" status="No renderer available for this route." />
-  }, [actions, addToast, currentSurface, defaultPath, loading, locale, navigate, pathname, route])
+  }, [actions, addToast, currentSurface, defaultPath, loading, locale, location.search, navigate, pathname, route])
 
   return (
     <Shell
@@ -270,6 +270,7 @@ function QueueView({
         ]}
         rows={items}
         emptyText="No work items."
+        localPageSize={10}
         renderAction={(row) => (
           <button
             onClick={() => {
@@ -390,7 +391,7 @@ function DetailView({
       )}
       renderMetricCard={({ label, value }) => <MetricCard label={label} value={value} />}
       renderDataTable={({ columns, rows, emptyText, renderAction }) => (
-        <DataTable columns={columns} rows={rows} emptyText={emptyText} renderAction={renderAction} />
+        <DataTable columns={columns} rows={rows} emptyText={emptyText} renderAction={renderAction} localPageSize={10} />
       )}
     />
   )
@@ -430,6 +431,7 @@ function DashboardView({
           columns={columns}
           rows={rows}
           emptyText={emptyText}
+          localPageSize={10}
           renderAction={renderAction}
         />
       )}
@@ -596,6 +598,7 @@ function NotificationsView() {
         ]}
         rows={items}
         emptyText="No notifications yet."
+        localPageSize={10}
       />
     </Panel>
   )

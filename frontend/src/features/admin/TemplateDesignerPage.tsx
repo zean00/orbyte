@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { cloneElement, isValidElement, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { fetchJson, formatDateTime, mutateJson } from './adminClient'
+import { fetchAllPagedItems, fetchJson, formatDateTime, mutateJson } from './adminClient'
 
 type TemplateDefinition = {
   key: string
@@ -511,14 +511,14 @@ export function TemplateDesignerPage() {
     let mounted = true
     async function loadDefinitions() {
       try {
-        const [payload, catalog] = await Promise.all([
-          fetchJson<{ items: TemplateDefinition[] }>('/admin/api/templates/definitions'),
+        const [items, catalog] = await Promise.all([
+          fetchAllPagedItems<TemplateDefinition>('/admin/api/templates/definitions'),
           fetchJson<TemplateTargetCatalog>('/admin/api/template-targets'),
         ])
         if (!mounted) return
-        setDefinitions(payload.items || [])
+        setDefinitions(items)
         setTargetCatalog(catalog || {})
-        setSelectedKey((current) => current || searchParams.get('key') || payload.items?.[0]?.key || '')
+        setSelectedKey((current) => current || searchParams.get('key') || items[0]?.key || '')
       } catch (error) {
         if (!mounted) return
         setMessage(messageForError(error))

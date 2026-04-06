@@ -48,8 +48,10 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 			strings.TrimSpace(r.URL.Query().Get("location_id")),
 			strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
 		)
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
 		respondJSON(w, http.StatusOK, map[string]any{
-			"items":            items,
+			"items":            pagedItems,
+			"total":            total,
 			"dependency_graph": buildAdminModuleDependencyGraph(items),
 		})
 	})
@@ -84,8 +86,11 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 		if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
 			return
 		}
+		items := policySvc.Runtimes(strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id")))
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
 		respondJSON(w, http.StatusOK, map[string]any{
-			"items": policySvc.Runtimes(strings.TrimSpace(r.URL.Query().Get("organization_id")), strings.TrimSpace(r.URL.Query().Get("location_id"))),
+			"items": pagedItems,
+			"total": total,
 		})
 	})
 
@@ -93,7 +98,9 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": workflowSvc.ListDefinitions()})
+		items := workflowSvc.ListDefinitions()
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
+		respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
 	})
 
 	mux.HandleFunc("GET /admin/api/dashboards/summary", func(w http.ResponseWriter, r *http.Request) {
@@ -105,10 +112,12 @@ func registerAdminOverviewRoutes(mux *http.ServeMux, cfg *config.Service, org *o
 			surface = string(module.UISurfaceDashboard)
 		}
 		items := analyticsSvc.DashboardsForSurface(surface)
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
 		respondJSON(w, http.StatusOK, map[string]any{
 			"surface": surface,
-			"count":   len(items),
-			"items":   items,
+			"count":   total,
+			"items":   pagedItems,
+			"total":   total,
 		})
 	})
 
