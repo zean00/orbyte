@@ -2,6 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { pickText, type ActionDefinition, type ViewDefinition } from '@/services/bootstrap'
 import { PaginationBar } from '@/components/ui/PaginationBar'
 import { normalizeWorkspaceRoute } from './workspaceRouteHelpers'
+import {
+  clearWorkspaceListCache,
+  clearWorkspaceListInFlight,
+  readWorkspaceListCache,
+  readWorkspaceListInFlight,
+  writeWorkspaceListCache,
+  writeWorkspaceListInFlight,
+} from './workspaceCache'
+
+type ListPayload = { items: Array<Record<string, unknown>>; total?: number }
 
 export function WorkspaceListView({
   view,
@@ -39,7 +49,6 @@ export function WorkspaceListView({
     renderAction: (row: Record<string, unknown>) => JSX.Element | null
   }) => JSX.Element
 }) {
-  const [payload, setPayload] = useState<{ items: Array<Record<string, unknown>>; total?: number } | null>(null)
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), [window.location.search])
   const createTarget = view.model_key ? routeForModel(view.model_key, 'form', routeActions, currentPath) : routeForCreate(currentPath, routeActions)
   const activeSearch = searchParams.get('name') || ''
@@ -48,36 +57,77 @@ export function WorkspaceListView({
   const currentPage = Number.parseInt(searchParams.get('page') || '1', 10) || 1
   const defaultPageSize = view.default_page_size && view.default_page_size > 0 ? view.default_page_size : 20
   const resolvedPageSize = Number.parseInt(activePageSize || String(defaultPageSize), 10) || defaultPageSize
+  const requestURL = useMemo(() => {
+    const query = new URLSearchParams()
+    if (view.document_type) query.set('type', view.document_type)
+    if (view.model_key) query.set('model', view.model_key)
+    if (!view.model_key && documentListNeedsPayload(view)) {
+      query.set('include_payload', '1')
+    }
+    query.set('page', String(currentPage))
+    query.set('page_size', String(resolvedPageSize))
+    const queryKeys = new Set(['name', 'sort', 'page', 'page_size'])
+    for (const filter of view.filters || []) {
+      queryKeys.add(filter.key)
+    }
+    for (const key of queryKeys) {
+      const value = searchParams.get(key)
+      if (value) query.set(key, value)
+    }
+    const base = view.model_key ? '/ui/data/models' : '/ui/data/documents'
+    return `${base}?${query}`
+  }, [
+    currentPage,
+    documentListNeedsPayload,
+    resolvedPageSize,
+    searchParams,
+    view.document_type,
+    view.filters,
+    view.model_key,
+    view,
+  ])
+  const cachedPayload = useMemo(() => readWorkspaceListCache(requestURL), [requestURL])
+  const [payload, setPayload] = useState<ListPayload | null>(cachedPayload)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshNonce, setRefreshNonce] = useState(0)
 
   useEffect(() => {
     let mounted = true
     async function load() {
-      const query = new URLSearchParams()
-      if (view.document_type) query.set('type', view.document_type)
-      if (view.model_key) query.set('model', view.model_key)
-      if (!view.model_key && documentListNeedsPayload(view)) {
-        query.set('include_payload', '1')
+      const cached = readWorkspaceListCache(requestURL)
+      if (cached) {
+        if (!mounted) return
+        setPayload(cached)
       }
-      query.set('page', String(currentPage))
-      query.set('page_size', String(resolvedPageSize))
-      const queryKeys = new Set(['name', 'sort', 'page', 'page_size'])
-      for (const filter of view.filters || []) {
-        queryKeys.add(filter.key)
+      setRefreshing(true)
+      const request =
+        readWorkspaceListInFlight(requestURL) ||
+        fetchJSON<ListPayload>(requestURL).then((result) => {
+          writeWorkspaceListCache(requestURL, result)
+          clearWorkspaceListInFlight(requestURL)
+          return result
+        }).catch((error) => {
+          clearWorkspaceListInFlight(requestURL)
+          throw error
+        })
+      writeWorkspaceListInFlight(requestURL, request)
+      try {
+        const result = await request
+        if (!mounted) return
+        setPayload(result)
+      } finally {
+        if (mounted) setRefreshing(false)
       }
-      for (const key of queryKeys) {
-        const value = searchParams.get(key)
-        if (value) query.set(key, value)
-      }
-      const base = view.model_key ? '/ui/data/models' : '/ui/data/documents'
-      const result = await fetchJSON<{ items: Array<Record<string, unknown>>; total?: number }>(`${base}?${query}`)
-      if (!mounted) return
-      setPayload(result)
     }
     void load()
     return () => {
       mounted = false
     }
-  }, [currentPage, documentListNeedsPayload, fetchJSON, resolvedPageSize, searchParams, view.document_type, view.model_key, view.filters])
+  }, [fetchJSON, refreshNonce, requestURL])
+
+  useEffect(() => {
+    setPayload(cachedPayload)
+  }, [cachedPayload, requestURL])
 
   const columns = view.columns?.length
     ? view.columns
@@ -123,12 +173,27 @@ export function WorkspaceListView({
       <>
         <div className="mb-4 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-muted">Items {totalItems}</div>
-            {createTarget ? (
-              <button onClick={() => onNavigate(createTarget)} className="rounded-lg bg-accent px-4 py-2 text-sm text-white">
-                New
+            <div className="flex items-center gap-3 text-sm text-muted">
+              <span>Items {totalItems}</span>
+              {refreshing ? <span className="text-accent">Refreshing…</span> : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  clearWorkspaceListCache(requestURL)
+                  setRefreshing(true)
+                  setRefreshNonce((current) => current + 1)
+                }}
+                className="rounded-lg border border-line px-3 py-2 text-sm text-body"
+              >
+                Refresh
               </button>
-            ) : null}
+              {createTarget ? (
+                <button onClick={() => onNavigate(createTarget)} className="rounded-lg bg-accent px-4 py-2 text-sm text-white">
+                  New
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <label className="flex flex-col gap-1">

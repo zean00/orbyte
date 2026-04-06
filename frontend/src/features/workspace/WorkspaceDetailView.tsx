@@ -84,6 +84,7 @@ export function WorkspaceDetailView({
   const [commercialSummary, setCommercialSummary] = useState<Record<string, unknown> | null>(null)
   const [procurementSummary, setProcurementSummary] = useState<Record<string, unknown> | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState('')
   const [stepUpCode, setStepUpCode] = useState('')
@@ -94,33 +95,38 @@ export function WorkspaceDetailView({
     let mounted = true
     async function load() {
       if (!documentID) return
+      setRefreshing(true)
       const base = view.model_key ? `/ui/data/models/${encodeURIComponent(view.model_key)}/${encodeURIComponent(documentID)}` : `/ui/data/documents/${encodeURIComponent(documentID)}`
-      const result = await fetchJSON<Record<string, unknown>>(base)
-      if (!mounted) return
-      setPayload(result)
-      if (view.model_key === 'party') {
-        try {
-          const summary = await fetchJSON<Record<string, unknown>>(`/ui/data/commercial/parties/${encodeURIComponent(documentID)}/summary`)
-          if (!mounted) return
-          setCommercialSummary(summary)
-        } catch {
-          if (!mounted) return
+      try {
+        const result = await fetchJSON<Record<string, unknown>>(base)
+        if (!mounted) return
+        setPayload(result)
+        if (view.model_key === 'party') {
+          try {
+            const summary = await fetchJSON<Record<string, unknown>>(`/ui/data/commercial/parties/${encodeURIComponent(documentID)}/summary`)
+            if (!mounted) return
+            setCommercialSummary(summary)
+          } catch {
+            if (!mounted) return
+            setCommercialSummary(null)
+          }
+        } else {
           setCommercialSummary(null)
         }
-      } else {
-        setCommercialSummary(null)
-      }
-      if (view.model_key === 'vendor_profile') {
-        try {
-          const summary = await fetchJSON<Record<string, unknown>>(`/ui/data/procurement/vendors/${encodeURIComponent(documentID)}/summary`)
-          if (!mounted) return
-          setProcurementSummary(summary)
-        } catch {
-          if (!mounted) return
+        if (view.model_key === 'vendor_profile') {
+          try {
+            const summary = await fetchJSON<Record<string, unknown>>(`/ui/data/procurement/vendors/${encodeURIComponent(documentID)}/summary`)
+            if (!mounted) return
+            setProcurementSummary(summary)
+          } catch {
+            if (!mounted) return
+            setProcurementSummary(null)
+          }
+        } else {
           setProcurementSummary(null)
         }
-      } else {
-        setProcurementSummary(null)
+      } finally {
+        if (mounted) setRefreshing(false)
       }
     }
     void load()
@@ -203,6 +209,9 @@ export function WorkspaceDetailView({
     children: (
       <>
         <div className="mb-4 flex flex-wrap gap-3">
+          <button onClick={() => setReloadKey((current) => current + 1)} className="rounded-lg border border-line px-4 py-2 text-sm text-body">
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
           {!hasDocumentCancelAction ? (
             <button onClick={() => onNavigate(cancelTarget)} className="rounded-lg border border-line px-4 py-2 text-sm text-body">
               Cancel

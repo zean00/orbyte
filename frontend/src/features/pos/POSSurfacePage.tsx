@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useShellStore } from '@/stores/shellStore'
 import { fetchWorkspaceBootstrap, pickText, toShellRoutes, type CustomEntryDefinition } from '@/services/bootstrap'
+import { preloadSurfaceModule } from '@/services/surfaceModules'
 
 type RouteResolution = {
   status: 'ok' | 'not_found' | 'forbidden' | 'surface_mismatch'
@@ -34,7 +35,10 @@ export default function POSSurfacePage() {
   }, [pathname, setCurrentRoute])
 
   async function switchSurface(nextSurface: string) {
-    const bootstrap = await fetchWorkspaceBootstrap(nextSurface)
+    const [bootstrap] = await Promise.all([
+      fetchWorkspaceBootstrap(nextSurface),
+      preloadSurfaceModule(nextSurface),
+    ])
     setWorkspaceBootstrap(bootstrap)
     setRoutes(toShellRoutes(bootstrap.menus, bootstrap.actions, bootstrap.locale, 'workspace'))
     navigate(useShellStore.getState().defaultPath || '/', { replace: true })

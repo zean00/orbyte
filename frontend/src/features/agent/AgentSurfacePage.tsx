@@ -13,6 +13,7 @@ import {
   useSharedDashboardData,
 } from "@/features/dashboard/runtime";
 import { fetchWorkspaceBootstrap, toShellRoutes } from "@/services/bootstrap";
+import { preloadSurfaceModule } from "@/services/surfaceModules";
 import { useShellStore } from "@/stores/shellStore";
 
 type ProviderInfo = {
@@ -315,7 +316,10 @@ export default function AgentSurfacePage() {
   }, [setRoutes, setWorkspaceBootstrap]);
 
   async function switchSurface(nextSurface: string) {
-    const bootstrap = await fetchWorkspaceBootstrap(nextSurface);
+    const [bootstrap] = await Promise.all([
+      fetchWorkspaceBootstrap(nextSurface),
+      preloadSurfaceModule(nextSurface),
+    ]);
     setWorkspaceBootstrap(bootstrap);
     setRoutes(
       toShellRoutes(

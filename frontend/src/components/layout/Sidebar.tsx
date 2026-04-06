@@ -116,9 +116,6 @@ export function Sidebar() {
                     key={item.key}
                     to={item.path}
                     onClick={() => {
-                      if (item.path !== currentRoute) {
-                        setNavigationPending(true)
-                      }
                       closeMobileNav()
                     }}
                     className={({ isActive }) =>

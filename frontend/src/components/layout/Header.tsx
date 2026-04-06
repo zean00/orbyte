@@ -14,6 +14,7 @@ import {
   toShellRoutes,
   workspaceSurfaceTarget,
 } from "@/services/bootstrap";
+import { preloadSurfaceModule } from "@/services/surfaceModules";
 
 const surfaceLabels: Record<string, string> = {
   backoffice: "Backoffice",
@@ -109,7 +110,10 @@ export function Header() {
   const handleSurfaceChange = async (surface: string) => {
     if (surface === currentSurface) return;
     setNavigationPending(true);
-    const bootstrap = await fetchWorkspaceBootstrap(surface);
+    const [bootstrap] = await Promise.all([
+      fetchWorkspaceBootstrap(surface),
+      preloadSurfaceModule(surface),
+    ]);
     const target = workspaceSurfaceTarget(bootstrap, surface);
     setRoutes(
       toShellRoutes(
@@ -205,6 +209,14 @@ export function Header() {
               <button
                 key={surface}
                 onClick={() => void handleSurfaceChange(surface)}
+                onMouseEnter={() => {
+                  void preloadSurfaceModule(surface);
+                  void fetchWorkspaceBootstrap(surface);
+                }}
+                onFocus={() => {
+                  void preloadSurfaceModule(surface);
+                  void fetchWorkspaceBootstrap(surface);
+                }}
                 className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
                   currentSurface === surface
                     ? "bg-accent text-white"

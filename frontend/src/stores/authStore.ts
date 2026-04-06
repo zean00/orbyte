@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { clearWorkspaceBootstrapCache } from '@/services/bootstrap'
+import { setWorkspaceCacheSession } from '@/features/workspace/workspaceCache'
 
 interface User {
   id: string
@@ -38,6 +39,11 @@ async function postLogout(): Promise<Response> {
   })
 }
 
+function resetWorkspaceClientCaches(sessionKey: string): void {
+  clearWorkspaceBootstrapCache()
+  setWorkspaceCacheSession(sessionKey)
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -55,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
           if (response.ok) {
             const data = await response.json()
             if (data.authenticated && data.user_id) {
+              resetWorkspaceClientCaches(String(data.user_id))
               set({
                 user: { id: data.user_id, name: data.user_id, email: '', roles: [] },
                 isAuthenticated: true,
@@ -62,6 +69,7 @@ export const useAuthStore = create<AuthState>()(
                 hasCheckedAuth: true,
               })
             } else {
+              resetWorkspaceClientCaches('anonymous')
               set({
                 user: null,
                 isAuthenticated: false,
@@ -70,6 +78,7 @@ export const useAuthStore = create<AuthState>()(
               })
             }
           } else {
+            resetWorkspaceClientCaches('anonymous')
             set({
               user: null,
               isAuthenticated: false,
@@ -78,6 +87,7 @@ export const useAuthStore = create<AuthState>()(
             })
           }
         } catch {
+          resetWorkspaceClientCaches('anonymous')
           set({
             user: null,
             isAuthenticated: false,
@@ -89,7 +99,7 @@ export const useAuthStore = create<AuthState>()(
 
       setAuthenticatedUser: (user) =>
         {
-          clearWorkspaceBootstrapCache()
+          resetWorkspaceClientCaches(user?.id || 'anonymous')
           set({
             user,
             isAuthenticated: !!user,
@@ -100,7 +110,7 @@ export const useAuthStore = create<AuthState>()(
 
       clearAuth: () =>
         {
-          clearWorkspaceBootstrapCache()
+          resetWorkspaceClientCaches('anonymous')
           set({
             user: null,
             isAuthenticated: false,
@@ -120,7 +130,7 @@ export const useAuthStore = create<AuthState>()(
         if (!response.ok && response.status !== 401) {
           throw new Error(`Logout failed: ${response.status}`)
         }
-        clearWorkspaceBootstrapCache()
+        resetWorkspaceClientCaches('anonymous')
         set({
           user: null,
           isAuthenticated: false,

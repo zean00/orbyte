@@ -58,7 +58,6 @@ export default function WorkspacePage() {
     setWorkspaceBootstrap,
     setRoutes,
     shellKind,
-    setNavigationPending,
   } = useShellStore()
   const pathname = normalizeLegacyWorkspacePath(location.pathname || '/')
   const { route, loading } = useWorkspaceRouteResolution({
@@ -84,13 +83,6 @@ export default function WorkspacePage() {
   useEffect(() => {
     useShellStore.getState().setCurrentRoute(pathname)
   }, [pathname])
-
-  useEffect(() => {
-    setNavigationPending(loading)
-    return () => {
-      setNavigationPending(false)
-    }
-  }, [loading, setNavigationPending])
 
   async function reloadBootstrap(surface = currentSurface) {
     const bootstrap = await fetchWorkspaceBootstrap(surface)

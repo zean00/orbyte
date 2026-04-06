@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchWorkspaceBootstrap, toShellRoutes, workspaceSurfaceTarget } from "@/services/bootstrap";
+import { preloadSurfaceModule } from "@/services/surfaceModules";
 import { useShellStore } from "@/stores/shellStore";
 import {
   DashboardWidgetCard,
@@ -43,7 +44,10 @@ export default function DashboardSurfacePage() {
   }, [setCurrentRoute]);
 
   async function switchSurface(nextSurface: string) {
-    const bootstrap = await fetchWorkspaceBootstrap(nextSurface);
+    const [bootstrap] = await Promise.all([
+      fetchWorkspaceBootstrap(nextSurface),
+      preloadSurfaceModule(nextSurface),
+    ]);
     setWorkspaceBootstrap(bootstrap);
     setRoutes(toShellRoutes(bootstrap.menus, bootstrap.actions, bootstrap.locale, "workspace"));
     navigate(workspaceSurfaceTarget(bootstrap, nextSurface) || "/", { replace: true });

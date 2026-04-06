@@ -11,17 +11,33 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchWorkspaceBootstrap, toShellRoutes } from "@/services/bootstrap";
+import {
+  pageModuleLoaders,
+  preloadVisibleSurfaceModules,
+} from "@/services/surfaceModules";
 import { useShellStore } from "@/stores/shellStore";
 
-const LoginPage = lazy(() => import("@/features/auth/LoginPage"));
-const AgentSurfacePage = lazy(
-  () => import("@/features/agent/AgentSurfacePage"),
-);
-const DashboardSurfacePage = lazy(
-  () => import("@/features/dashboard/DashboardSurfacePage"),
-);
-const POSSurfacePage = lazy(() => import("@/features/pos/POSSurfacePage"));
-const WorkspacePage = lazy(() => import("@/features/workspace/WorkspacePage"));
+function workspaceSurfaceFromPath(pathname: string): string {
+  if (pathname.startsWith("/pos")) return "pos";
+  if (pathname.startsWith("/agent")) return "agent";
+  if (pathname.startsWith("/dashboard")) return "dashboard";
+  if (pathname === "/worklist" || pathname.startsWith("/worklist/")) {
+    return "worklist";
+  }
+  if (
+    pathname === "/self-service" ||
+    pathname.startsWith("/self-service/")
+  ) {
+    return "self_service";
+  }
+  return "backoffice";
+}
+
+const LoginPage = lazy(pageModuleLoaders.login);
+const AgentSurfacePage = lazy(pageModuleLoaders.agent);
+const DashboardSurfacePage = lazy(pageModuleLoaders.dashboard);
+const POSSurfacePage = lazy(pageModuleLoaders.pos);
+const WorkspacePage = lazy(pageModuleLoaders.workspace);
 
 function PageLoader() {
   return (
@@ -39,6 +55,8 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
     (state) => state.setWorkspaceBootstrap,
   );
   const setRoutes = useShellStore((state) => state.setRoutes);
+  const workspaceBootstrap = useShellStore((state) => state.workspaceBootstrap);
+  const requestedSurface = workspaceSurfaceFromPath(location.pathname);
 
   useEffect(() => {
     let mounted = true;
@@ -56,25 +74,14 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        let surface: string | undefined;
-        if (location.pathname.startsWith("/pos")) {
-          surface = "pos";
-        } else if (location.pathname.startsWith("/agent")) {
-          surface = "agent";
-        } else if (location.pathname.startsWith("/dashboard")) {
-          surface = "dashboard";
-        } else if (
-          location.pathname === "/worklist" ||
-          location.pathname.startsWith("/worklist/")
-        ) {
-          surface = "worklist";
-        } else if (
-          location.pathname === "/self-service" ||
-          location.pathname.startsWith("/self-service/")
-        ) {
-          surface = "self_service";
+        if (workspaceBootstrap?.surface === requestedSurface) {
+          if (!mounted) return;
+          setReady(true);
+          return;
         }
-        const bootstrap = await fetchWorkspaceBootstrap(surface);
+        const bootstrap = await fetchWorkspaceBootstrap(
+          requestedSurface === "backoffice" ? undefined : requestedSurface,
+        );
         if (!mounted) return;
         setWorkspaceBootstrap(bootstrap);
         setRoutes(
@@ -86,6 +93,20 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
           ),
         );
         setReady(true);
+        const warm = () => {
+          void preloadVisibleSurfaceModules(bootstrap.available_surfaces || []);
+          for (const availableSurface of bootstrap.available_surfaces || []) {
+            if (availableSurface === bootstrap.surface) continue;
+            void fetchWorkspaceBootstrap(availableSurface);
+          }
+        };
+        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+          (window as Window & {
+            requestIdleCallback?: (callback: () => void) => number;
+          }).requestIdleCallback?.(warm);
+        } else {
+          setTimeout(warm, 0);
+        }
       } catch (error) {
         if (!mounted) return;
         if ((error as { status?: number }).status === 401) {
@@ -105,9 +126,10 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
     hasCheckedAuth,
     isAuthenticated,
     isLoading,
-    location.pathname,
+    requestedSurface,
     setRoutes,
     setWorkspaceBootstrap,
+    workspaceBootstrap,
   ]);
 
   if (!hasCheckedAuth || !ready) return <PageLoader />;
