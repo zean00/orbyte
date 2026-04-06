@@ -23,6 +23,7 @@ func scenarioDefinitions() []scenarioDefinition {
 		{Key: "inventory_dashboard_replenishment_execute", DomainBundle: "planning-procurement-dashboard", Description: "Dashboard-led replenishment insight artifact, stepwise replenishment plan, and draft purchase request execution.", Seed: seedInventoryDashboardReplenishmentExecuteScenario},
 		{Key: "sales_dashboard_recovery_execute", DomainBundle: "analytics-recovery", Description: "Sales dashboard insight artifact, recovery planning, and draft generic-request execution.", Seed: seedSalesDashboardRecoveryExecuteScenario},
 		{Key: "pos_promotion_strategy", DomainBundle: "retail-promotion", Description: "Retail POS sales and promotion setup seeded for campaign-design strategy and draft creation.", Seed: seedPOSPromotionStrategyScenario},
+		{Key: "retail_recovery_showcase", DomainBundle: "retail-dashboard-agent", Description: "Unified retail showcase across POS, dashboard, and agent insight-plan-execute continuity.", Seed: seedRetailRecoveryShowcaseScenario},
 		{Key: "leave_to_payroll", DomainBundle: "workforce-payroll", Description: "Approved leave reflected into payroll and payment state.", Seed: seedLeaveToPayrollScenario},
 		{Key: "payroll_remittance", DomainBundle: "payroll-treasury", Description: "Payroll remittance liabilities, batching, and remittance payment.", Seed: seedPayrollRemittanceScenario},
 		{Key: "production_costing", DomainBundle: "production-inventory", Description: "Production order, issue, output, and resulting cost summary facts.", Seed: seedProductionCostingScenario},

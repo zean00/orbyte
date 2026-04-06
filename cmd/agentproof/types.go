@@ -17,8 +17,16 @@ type scenarioManifest struct {
 	Entities            map[string]map[string]any `json:"entities,omitempty"`
 	Documents           map[string]documentFacts  `json:"documents,omitempty"`
 	GroundTruth         map[string]any            `json:"ground_truth,omitempty"`
+	Routes              map[string]string         `json:"routes,omitempty"`
+	Walkthrough         []showcaseChapter         `json:"walkthrough,omitempty"`
 	SessionInstructions string                    `json:"session_instructions,omitempty"`
 	PromptPack          []promptExpectation       `json:"prompt_pack"`
+}
+
+type showcaseChapter struct {
+	Surface string   `json:"surface"`
+	Title   string   `json:"title"`
+	Steps   []string `json:"steps"`
 }
 
 type servicePrincipalOutput struct {
@@ -70,6 +78,7 @@ type artifactExpectation struct {
 	TitleChecks []string `json:"title_checks,omitempty"`
 	WidgetKeys  []string `json:"widget_keys,omitempty"`
 	MinWidgets  int      `json:"min_widgets,omitempty"`
+	MinArtifacts int     `json:"min_artifacts,omitempty"`
 }
 
 type planExpectation struct {

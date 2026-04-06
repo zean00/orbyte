@@ -99,20 +99,23 @@ type ACPSession = {
   artifacts?: ACPArtifact[];
 };
 
-type DashboardBoardArtifact = {
-  id: string;
-  kind: "dashboard_board";
-  title: string;
-  openPath?: string;
-  widgets: DashboardResolvedWidget[];
-};
-
 type DashboardWidgetArtifact = {
   id: string;
   kind: "dashboard_widget";
   title: string;
   widget: DashboardResolvedWidget;
 };
+
+type DashboardBoardArtifact = {
+  id: string;
+  kind: "dashboard_board";
+  title: string;
+  openPath?: string;
+  boardID?: string;
+  widgets: DashboardResolvedWidget[];
+};
+
+type DashboardArtifact = DashboardWidgetArtifact | DashboardBoardArtifact;
 
 type LiveToolCall = {
   id: string;
@@ -1729,7 +1732,7 @@ function ArtifactGallery({
   dashboardArtifactData,
   compact = false,
 }: {
-  artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact>;
+  artifacts: DashboardArtifact[];
   locale: string;
   dashboardArtifactData: Record<string, WidgetDataState>;
   compact?: boolean;
@@ -1742,7 +1745,7 @@ function ArtifactGallery({
             Artifacts
           </div>
           <p className="mt-2 text-sm text-muted">
-            Ask the agent to preview or create a dashboard board to render live widgets here.
+            Ask the agent for focused dashboard widgets or an explicit board preview to render live evidence here.
           </p>
         </div>
       </div>
@@ -1750,65 +1753,57 @@ function ArtifactGallery({
   }
   return (
     <div className={`space-y-4 ${compact ? "" : "pb-24"}`}>
-      {artifacts.map((artifact) =>
-        artifact.kind === "dashboard_board" ? (
-          <article
-            key={artifact.id}
-            className="rounded-[1.5rem] border border-line/70 bg-surface/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+      {artifacts.map((artifact) => (
+        <article
+          key={artifact.id}
+          className="rounded-[1.5rem] border border-line/70 bg-surface/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+        >
+          {artifact.kind === "dashboard_widget" ? (
+            <>
+              <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                Dashboard widget
+              </div>
+              <DashboardWidgetCard
+                widget={artifact.widget}
+                locale={locale}
+                state={
+                  dashboardArtifactData[artifact.widget.definition.data_path] ||
+                  defaultWidgetDataState()
+                }
+              />
+            </>
+          ) : (
+            <>
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
                   Dashboard board
                 </div>
-                <div className="mt-1 text-base font-semibold text-body">
-                  {artifact.title}
-                </div>
+                {artifact.openPath ? (
+                  <a
+                    href={artifact.openPath}
+                    className="rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-body transition hover:border-accent/40 hover:text-accent"
+                  >
+                    Open dashboard
+                  </a>
+                ) : null}
               </div>
-              {artifact.openPath ? (
-                <a
-                  href={artifact.openPath}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-xl border border-line bg-shell px-3 py-2 text-xs font-semibold text-body transition hover:border-accent hover:text-accent"
-                >
-                  Open board
-                </a>
-              ) : null}
-            </div>
-            <div className={`mt-4 grid gap-3 ${compact ? "" : "md:grid-cols-2"}`}>
-              {artifact.widgets.map((widget) => (
-                <DashboardWidgetCard
-                  key={widget.id}
-                  widget={widget}
-                  locale={locale}
-                  state={
-                    dashboardArtifactData[widget.definition.data_path] ||
-                    defaultWidgetDataState()
-                  }
-                />
-              ))}
-            </div>
-          </article>
-        ) : (
-          <article
-            key={artifact.id}
-            className="rounded-[1.5rem] border border-line/70 bg-surface/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-          >
-            <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-              Dashboard widget
-            </div>
-            <DashboardWidgetCard
-              widget={artifact.widget}
-              locale={locale}
-              state={
-                dashboardArtifactData[artifact.widget.definition.data_path] ||
-                defaultWidgetDataState()
-              }
-            />
-          </article>
-        ),
-      )}
+              <div className="grid gap-4 md:grid-cols-2">
+                {artifact.widgets.map((widget) => (
+                  <DashboardWidgetCard
+                    key={`${artifact.id}-${widget.id}`}
+                    widget={widget}
+                    locale={locale}
+                    state={
+                      dashboardArtifactData[widget.definition.data_path] ||
+                      defaultWidgetDataState()
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </article>
+      ))}
     </div>
   );
 }
@@ -2700,14 +2695,49 @@ function buildPromptPayload(
     }
   }
   if (looksLikeDashboardPrompt(prompt)) {
+    const explicitFullBoard = looksLikeFullDashboardPrompt(prompt);
     sections.push(
       [
         "For dashboard requests, first call analytics.dashboard.widget_catalog with surface=\"dashboard\".",
-        "Then use analytics.dashboard.board.preview for a live artifact preview, or analytics.dashboard.board.create when the user explicitly asks to save the board.",
-        "If widget keys are not obvious, call the preview or create tool with title, surface, and description only so Orbyte can infer the most relevant registered widgets.",
-        "When a dashboard preview or create tool returns artifact metadata, copy the exact <orbyte-dashboard-artifact>...</orbyte-dashboard-artifact> block from the tool result into your final answer without changing the JSON.",
-        "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog.",
-        "Do not omit the artifact block when dashboard MCP tools return artifact metadata.",
+        explicitFullBoard
+          ? "For explicit full-dashboard or board-preview requests, use analytics.dashboard.board.preview so you return a full dashboard_board artifact."
+          : "For focused insight responses, use analytics.dashboard.widgets.preview so you return 2-3 of the most relevant live widgets.",
+        explicitFullBoard
+          ? "Use analytics.dashboard.board.create only when the user explicitly asks to save a board, then report the saved board link."
+          : "For general insight requests, pass intent=\"insight\" and omit widget_keys so Orbyte can infer a balanced KPI/comparison/trend set.",
+        explicitFullBoard
+          ? "If widget keys are not obvious for the full board, call the board preview tool with title, surface, and description only so Orbyte can infer the right board composition."
+          : "Only pass widget_keys when the user explicitly asked for specific widgets or a specific renderer.",
+        explicitFullBoard
+          ? "When analytics.dashboard.board.preview returns artifact metadata, copy the exact <orbyte-dashboard-artifact>...</orbyte-dashboard-artifact> block into your final answer without changing the JSON."
+          : "Use analytics.dashboard.widget.preview only when exactly one widget is enough.",
+        explicitFullBoard
+          ? "Do not replace an explicit board request with standalone widget artifacts."
+          : "Do not call analytics.dashboard.board.preview for an insight answer unless the user explicitly asked for a full dashboard, full board, or board preview.",
+        explicitFullBoard
+          ? "Mention the dashboard surface or open link for full exploration."
+          : "If the user wants the full dashboard, direct them to the dashboard surface instead of rendering a full board inline in chat.",
+        explicitFullBoard
+          ? "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog when you need explicit board composition."
+          : "Use analytics.dashboard.board.create only when the user explicitly asks to save a board, and then report the saved board link instead of embedding a full board artifact in the answer.",
+        explicitFullBoard
+          ? "Do not omit the artifact block when dashboard MCP tools return artifact metadata."
+          : "If widget keys are not obvious, call the preview or create tool with title, surface, and description only so Orbyte can infer the most relevant registered widgets.",
+        explicitFullBoard
+          ? ""
+          : "For an insight answer, prefer one KPI or gauge, one comparison chart, and one trend chart. Avoid maps and detailed tables unless the user explicitly asked for geography or tabular detail.",
+        explicitFullBoard
+          ? ""
+          : "When analytics.dashboard.widgets.preview or analytics.dashboard.widget.preview returns artifact metadata, copy each exact <orbyte-dashboard-artifact>...</orbyte-dashboard-artifact> block from the tool result into your final answer without changing the JSON.",
+        explicitFullBoard
+          ? ""
+          : "Do not include dashboard board artifact blocks in the final answer.",
+        explicitFullBoard
+          ? ""
+          : "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog.",
+        explicitFullBoard
+          ? ""
+          : "Do not omit the artifact block when dashboard MCP tools return artifact metadata.",
       ].join(" "),
     );
   }
@@ -2786,26 +2816,31 @@ function looksLikeDashboardPrompt(prompt: string): boolean {
   return explicitPhrases.some((phrase) => normalized.includes(phrase));
 }
 
+function looksLikeFullDashboardPrompt(prompt: string): boolean {
+  const normalized = prompt.trim().toLowerCase();
+  if (!normalized) return false;
+  const explicitBoardPhrases = [
+    "full dashboard",
+    "full board",
+    "board preview",
+    "preview board",
+    "dashboard board",
+    "save board",
+    "save dashboard",
+    "create board",
+    "create dashboard board",
+  ];
+  return explicitBoardPhrases.some((phrase) => normalized.includes(phrase));
+}
+
 function deriveDashboardArtifacts(
   session: ACPSession | null,
-): Array<DashboardBoardArtifact | DashboardWidgetArtifact> {
+): DashboardArtifact[] {
   const items = session?.artifacts || [];
-  const artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact> = [];
+  const artifacts: Array<DashboardArtifact> = [];
   for (const item of items) {
     const metadata = item.metadata || {};
-    if (item.kind === "dashboard_board") {
-      const widgets = asResolvedWidgets(metadata.widgets);
-      if (!widgets.length) {
-        continue;
-      }
-      artifacts.push({
-        id: item.id,
-        kind: "dashboard_board",
-        title: item.title || stringValue(metadata.title) || "Dashboard board",
-        openPath: stringValue(metadata.open_path),
-        widgets,
-      });
-    } else if (item.kind === "dashboard_widget") {
+    if (item.kind === "dashboard_widget") {
       const widget = asResolvedWidget(metadata.widget);
       if (!widget) {
         continue;
@@ -2815,6 +2850,21 @@ function deriveDashboardArtifacts(
         kind: "dashboard_widget",
         title: item.title || widget.title,
         widget,
+      });
+      continue;
+    }
+    if (item.kind === "dashboard_board") {
+      const widgets = asResolvedWidgets(metadata.widgets);
+      if (!widgets.length) {
+        continue;
+      }
+      artifacts.push({
+        id: item.id,
+        kind: "dashboard_board",
+        title: item.title || stringValue(metadata.title) || "Dashboard board",
+        openPath: stringValue(metadata.open_path) || undefined,
+        boardID: stringValue(metadata.board_id) || undefined,
+        widgets,
       });
     }
   }
@@ -2830,8 +2880,8 @@ function stripDashboardArtifactBlocks(content: string): string {
 
 function dashboardArtifactsFromMessage(
   content: string,
-): Array<DashboardBoardArtifact | DashboardWidgetArtifact> {
-  const artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact> = [];
+): DashboardArtifact[] {
+  const artifacts: Array<DashboardArtifact> = [];
   for (const match of content.matchAll(DASHBOARD_ARTIFACT_BLOCK_PATTERN)) {
     const payload = match[1]?.trim();
     if (!payload) continue;
@@ -2842,6 +2892,17 @@ function dashboardArtifactsFromMessage(
         parsed.metadata && typeof parsed.metadata === "object"
           ? (parsed.metadata as Record<string, unknown>)
           : {};
+      if (kind === "dashboard_widget") {
+        const widget = asResolvedWidget(metadata.widget);
+        if (!widget) continue;
+        artifacts.push({
+          id: stringValue(parsed.id) || `dashboard-widget-${artifacts.length}`,
+          kind: "dashboard_widget",
+          title: stringValue(parsed.title) || widget.title,
+          widget,
+        });
+        continue;
+      }
       if (kind === "dashboard_board") {
         const widgets = asResolvedWidgets(metadata.widgets);
         if (!widgets.length) continue;
@@ -2853,16 +2914,8 @@ function dashboardArtifactsFromMessage(
             stringValue(metadata.title) ||
             "Dashboard board",
           openPath: stringValue(metadata.open_path) || undefined,
+          boardID: stringValue(metadata.board_id) || undefined,
           widgets,
-        });
-      } else if (kind === "dashboard_widget") {
-        const widget = asResolvedWidget(metadata.widget);
-        if (!widget) continue;
-        artifacts.push({
-          id: stringValue(parsed.id) || `dashboard-widget-${artifacts.length}`,
-          kind: "dashboard_widget",
-          title: stringValue(parsed.title) || widget.title,
-          widget,
         });
       }
     } catch {
@@ -2873,26 +2926,17 @@ function dashboardArtifactsFromMessage(
 }
 
 function flattenArtifactWidgets(
-  artifacts: Array<DashboardBoardArtifact | DashboardWidgetArtifact>,
+  artifacts: DashboardArtifact[],
 ): DashboardResolvedWidget[] {
   const widgets: DashboardResolvedWidget[] = [];
   for (const artifact of artifacts) {
-    if (artifact.kind === "dashboard_board") {
-      widgets.push(...artifact.widgets);
-    } else {
+    if (artifact.kind === "dashboard_widget") {
       widgets.push(artifact.widget);
+      continue;
     }
+    widgets.push(...artifact.widgets);
   }
   return widgets;
-}
-
-function asResolvedWidgets(value: unknown): DashboardResolvedWidget[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((item) => asResolvedWidget(item))
-    .filter((item): item is DashboardResolvedWidget => Boolean(item));
 }
 
 function asResolvedWidget(value: unknown): DashboardResolvedWidget | null {
@@ -2913,6 +2957,15 @@ function asResolvedWidget(value: unknown): DashboardResolvedWidget | null {
     refresh_override: stringValue(record.refresh_override) || undefined,
     definition: definitionValue as DashboardWidgetDefinition,
   };
+}
+
+function asResolvedWidgets(value: unknown): DashboardResolvedWidget[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => asResolvedWidget(item))
+    .filter((item): item is DashboardResolvedWidget => item !== null);
 }
 
 function isExecuteTurn(trace: ACPEvent[], turnID: string): boolean {

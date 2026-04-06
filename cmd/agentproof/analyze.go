@@ -232,6 +232,8 @@ func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, 
 			})
 		}
 	}
+	matchedArtifacts := 0
+	combinedWidgetKeys := make([]string, 0)
 	for _, artifact := range artifacts {
 		kind := strings.TrimSpace(stringValue(artifact["kind"]))
 		if strings.TrimSpace(expected.Kind) != "" && kind != strings.TrimSpace(expected.Kind) {
@@ -243,15 +245,37 @@ func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, 
 		}
 		metadata := mapValue(artifact, "metadata")
 		widgets := anySlice(firstNonNil(artifact["widgets"], metadata["widgets"]))
+		if len(widgets) == 0 {
+			if widget := mapValue(metadata, "widget"); len(widget) > 0 {
+				widgets = []any{widget}
+			} else if widget := mapValue(artifact, "widget"); len(widget) > 0 {
+				widgets = []any{widget}
+			}
+		}
 		if expected.MinWidgets > 0 && len(widgets) < expected.MinWidgets {
 			continue
 		}
 		widgetKeys := artifactWidgetKeys(widgets)
-		if len(expected.WidgetKeys) > 0 && !allChecksMatch(strings.ToLower(strings.Join(widgetKeys, " ")), expected.WidgetKeys) {
-			continue
+		matchedArtifacts++
+		combinedWidgetKeys = append(combinedWidgetKeys, widgetKeys...)
+		result.ArtifactKind = kind
+	}
+	if matchedArtifacts > 0 {
+		if expected.MinArtifacts > 0 && matchedArtifacts < expected.MinArtifacts {
+			result.ArtifactVerified = false
+			result.Classification = "unacceptable"
+			result.MissingFacts = append(result.MissingFacts, "expected_dashboard_artifact")
+			result.Investigation = "The answer included dashboard artifacts, but not enough of them for the requested evidence set."
+			return
+		}
+		if len(expected.WidgetKeys) > 0 && !allChecksMatch(strings.ToLower(strings.Join(combinedWidgetKeys, " ")), expected.WidgetKeys) {
+			result.ArtifactVerified = false
+			result.Classification = "unacceptable"
+			result.MissingFacts = append(result.MissingFacts, "expected_dashboard_artifact")
+			result.Investigation = "The answer included dashboard artifacts, but they did not contain the required widget set."
+			return
 		}
 		result.ArtifactVerified = true
-		result.ArtifactKind = kind
 		return
 	}
 	result.ArtifactVerified = false

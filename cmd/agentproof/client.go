@@ -13,6 +13,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"orbyte/internal/platform/analytics"
 )
 
 type apiClient struct {
@@ -235,8 +237,57 @@ func (c *apiClient) posCheckout(ctx context.Context, req map[string]any) (map[st
 	return resp, nil
 }
 
+func (c *apiClient) posHoldSale(ctx context.Context, req map[string]any) (map[string]any, error) {
+	var resp struct {
+		Record map[string]any `json:"record"`
+	}
+	if err := c.doJSON(ctx, http.MethodPost, "/ui/data/pos/sales/hold", req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Record, nil
+}
+
 func (c *apiClient) captureAnalyticsSnapshot(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodPost, "/ops/analytics/snapshots", nil, nil)
+}
+
+func (c *apiClient) cashierPINState(ctx context.Context) (map[string]any, error) {
+	var resp map[string]any
+	if err := c.doJSON(ctx, http.MethodGet, "/auth/cashier-pin", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *apiClient) ensureCashierPIN(ctx context.Context, pin string) (string, bool, error) {
+	state, err := c.cashierPINState(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	if configured, _ := state["configured"].(bool); configured {
+		return "", false, nil
+	}
+	if err := c.doJSON(ctx, http.MethodPost, "/auth/cashier-pin", map[string]any{"new_pin": pin}, nil); err != nil {
+		return "", false, err
+	}
+	return pin, true, nil
+}
+
+func (c *apiClient) enterPOSTerminal(ctx context.Context, storeCode, registerCode, shiftID, pin string) error {
+	return c.doJSON(ctx, http.MethodPost, "/ui/data/pos/terminal/enter", map[string]any{
+		"store_code":    storeCode,
+		"register_code": registerCode,
+		"shift_id":      shiftID,
+		"pin":           pin,
+	}, nil)
+}
+
+func (c *apiClient) createDashboardBoard(ctx context.Context, item analytics.Dashboard) (analytics.Dashboard, error) {
+	var saved analytics.Dashboard
+	if err := c.doJSON(ctx, http.MethodPost, "/admin/api/dashboards", item, &saved); err != nil {
+		return analytics.Dashboard{}, err
+	}
+	return saved, nil
 }
 
 func (c *apiClient) doJSON(ctx context.Context, method, requestPath string, body any, out any) error {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"orbyte/internal/platform/analytics"
 	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/shared"
 )
@@ -1193,6 +1194,465 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 	return manifest, nil
 }
 
+func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "retail_recovery_showcase", "retail-dashboard-agent", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	storeCode := "SHOWCASE-STORE-" + suffix
+	registerCode := "SHOWCASE-REG-" + suffix
+	espressoCode := "SHOWCASE-ESPRESSO-" + suffix
+	croissantCode := "SHOWCASE-CROISSANT-" + suffix
+	beansCode := "SHOWCASE-BEANS-" + suffix
+	teaCode := "SHOWCASE-TEA-" + suffix
+	campaignCode := "SHOWCASE-BEANS-BOOST-" + suffix
+	promoCode := "SHOWCASE-BEANS10-" + suffix
+	ruleCode := "SHOWCASE-RULE-BEANS10-" + suffix
+	draftTitle := "Promotion Recovery Plan " + runID
+
+	paymentMethod, err := client.createModel(ctx, "payment_method", map[string]any{
+		"code":                  "CASHSHOW-" + suffix,
+		"name":                  "Cash Showcase " + runID,
+		"clearing_account_code": "1000-CASH",
+		"status":                "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create payment method: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_store", map[string]any{
+		"code":             storeCode,
+		"name":             "Retail Recovery Store " + runID,
+		"warehouse_code":   "MAIN",
+		"default_tax_code": "",
+		"currency_code":    "IDR",
+		"checkout_mode":    "invoice_first",
+		"status":           "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create pos store: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_register", map[string]any{
+		"code":              registerCode,
+		"name":              "Front Register " + runID,
+		"store_code":        storeCode,
+		"checkout_mode":     "invoice_first",
+		"cash_account_code": "1000-CASH",
+		"status":            "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create pos register: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_tender_type", map[string]any{
+		"code":                  "CASH-" + suffix,
+		"name":                  "Cash",
+		"kind":                  "cash",
+		"payment_method_code":   stringValue(mapValue(paymentMethod, "values")["code"]),
+		"clearing_account_code": "1000-CASH",
+		"is_cash_like":          true,
+		"status":                "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create pos tender type: %w", err)
+	}
+	if _, err := client.createModel(ctx, "pos_tender_type", map[string]any{
+		"code":                  "CARD-" + suffix,
+		"name":                  "Card",
+		"kind":                  "card",
+		"payment_method_code":   stringValue(mapValue(paymentMethod, "values")["code"]),
+		"clearing_account_code": "1010-BANK",
+		"is_cash_like":          false,
+		"status":                "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create card tender type: %w", err)
+	}
+	for _, item := range []map[string]any{
+		{
+			"sku":                  espressoCode,
+			"name":                 "Espresso Double " + runID,
+			"description":          "Repeat breakfast beverage",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           28000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+		{
+			"sku":                  croissantCode,
+			"name":                 "Butter Croissant " + runID,
+			"description":          "Repeat breakfast attachment",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           22000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+		{
+			"sku":                  beansCode,
+			"name":                 "House Beans 1kg " + runID,
+			"description":          "Weak current promoted product",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           95000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+		{
+			"sku":                  teaCode,
+			"name":                 "Iced Tea " + runID,
+			"description":          "Secondary beverage control item",
+			"kind":                 "product",
+			"uom_code":             "EA",
+			"unit_price":           18000.0,
+			"revenue_account_code": "4000-REV",
+			"is_sellable":          true,
+			"inventory_enabled":    false,
+			"allow_negative_stock": true,
+			"status":               "active",
+		},
+	} {
+		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+			return scenarioManifest{}, fmt.Errorf("create item %s: %w", stringValue(item["sku"]), err)
+		}
+	}
+
+	goldOne, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":        "party_showcase_gold_1_" + suffix,
+		"customer_name":   "Alya Santoso " + runID,
+		"customer_type":   "member",
+		"member_status":   "active",
+		"member_tier":     "gold",
+		"member_valid_to": "2099-12-31",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create gold customer 1: %w", err)
+	}
+	goldTwo, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":        "party_showcase_gold_2_" + suffix,
+		"customer_name":   "Bima Pratama " + runID,
+		"customer_type":   "member",
+		"member_status":   "active",
+		"member_tier":     "gold",
+		"member_valid_to": "2099-12-31",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create gold customer 2: %w", err)
+	}
+	silverCustomer, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":        "party_showcase_silver_" + suffix,
+		"customer_name":   "Citra Lestari " + runID,
+		"customer_type":   "member",
+		"member_status":   "active",
+		"member_tier":     "silver",
+		"member_valid_to": "2099-12-31",
+		"status":          "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create silver customer: %w", err)
+	}
+
+	if _, err := client.createModel(ctx, "promotion_campaign", map[string]any{
+		"code":           campaignCode,
+		"name":           "Beans Boost " + runID,
+		"trigger_mode":   "code",
+		"sales_channels": "pos",
+		"store_codes":    storeCode,
+		"status":         "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create promotion campaign: %w", err)
+	}
+	if _, err := client.createModel(ctx, "promotion_code", map[string]any{
+		"code":                    promoCode,
+		"promotion_campaign_code": campaignCode,
+		"status":                  "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create promotion code: %w", err)
+	}
+	if _, err := client.createModel(ctx, "discount_rule", map[string]any{
+		"code":                    ruleCode,
+		"name":                    "Beans 10 Percent " + runID,
+		"promotion_campaign_code": campaignCode,
+		"scope":                   "line",
+		"rule_kind":               "line_percent",
+		"item_codes":              beansCode,
+		"discount_percent":        10.0,
+		"status":                  "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create discount rule: %w", err)
+	}
+
+	shift, err := client.openPOSShift(ctx, storeCode, registerCode, 500000.0, "Retail recovery showcase seed")
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("open pos shift: %w", err)
+	}
+	shiftID := stringValue(shift["id"])
+	if shiftID == "" {
+		return scenarioManifest{}, fmt.Errorf("open pos shift: missing shift id")
+	}
+	terminalPIN, seededPIN, err := client.ensureCashierPIN(ctx, "123456")
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("ensure cashier pin: %w", err)
+	}
+	if seededPIN {
+		if err := client.enterPOSTerminal(ctx, storeCode, registerCode, shiftID, terminalPIN); err != nil {
+			return scenarioManifest{}, fmt.Errorf("enter pos terminal: %w", err)
+		}
+	}
+
+	checkout := func(party map[string]any, lines []map[string]any, promotionCodes []string, tenders []map[string]any, reference string) error {
+		req := map[string]any{
+			"store_code":      storeCode,
+			"register_code":   registerCode,
+			"shift_id":        shiftID,
+			"promotion_codes": promotionCodes,
+			"lines":           lines,
+			"tenders":         tenders,
+			"reference":       reference,
+		}
+		if party != nil {
+			req["party_id"] = stringValue(mapValue(party, "values")["party_id"])
+			req["party_name"] = stringValue(mapValue(party, "values")["customer_name"])
+		}
+		_, err := client.posCheckout(ctx, req)
+		return err
+	}
+	comboLines := []map[string]any{
+		{"item_code": espressoCode, "quantity": 1.0},
+		{"item_code": croissantCode, "quantity": 1.0},
+	}
+	for index, party := range []map[string]any{goldOne, goldOne, goldTwo, goldTwo, goldOne, goldTwo} {
+		if err := checkout(party, comboLines, nil, []map[string]any{{"tender_type_code": "CASH-" + suffix, "amount": 50000.0}}, fmt.Sprintf("SHOWCASE-COMBO-%s-%d", suffix, index+1)); err != nil {
+			return scenarioManifest{}, fmt.Errorf("seed combo sale %d: %w", index+1, err)
+		}
+	}
+	if err := checkout(goldOne, []map[string]any{{"item_code": beansCode, "quantity": 1.0}}, []string{promoCode}, []map[string]any{{"tender_type_code": "CARD-" + suffix, "amount": 85500.0, "reference": "APPROVAL-" + suffix}}, "SHOWCASE-BEANS-"+suffix); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed beans promo sale: %w", err)
+	}
+	if err := checkout(silverCustomer, []map[string]any{{"item_code": teaCode, "quantity": 1.0}}, nil, []map[string]any{{"tender_type_code": "CASH-" + suffix, "amount": 18000.0}}, "SHOWCASE-TEA-"+suffix); err != nil {
+		return scenarioManifest{}, fmt.Errorf("seed tea sale: %w", err)
+	}
+	heldSale, err := client.posHoldSale(ctx, map[string]any{
+		"store_code":    storeCode,
+		"register_code": registerCode,
+		"shift_id":      shiftID,
+		"party_id":      stringValue(mapValue(goldOne, "values")["party_id"]),
+		"party_name":    stringValue(mapValue(goldOne, "values")["customer_name"]),
+		"lines": []map[string]any{
+			{"item_code": beansCode, "quantity": 1.0},
+			{"item_code": espressoCode, "quantity": 1.0},
+		},
+		"tenders": []map[string]any{
+			{"tender_type_code": "CASH-" + suffix, "amount": 20000.0},
+		},
+		"reference": "SHOWCASE-HOLD-" + suffix,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("hold sale: %w", err)
+	}
+
+	type documentSeed struct {
+		documentType string
+		locationID   string
+		status       string
+		title        string
+	}
+	batches := [][]documentSeed{
+		{
+			{documentType: "generic_request", locationID: "loc_demo_central", status: "submitted", title: "Central soft demand " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "approved", title: "West branch sale " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East branch flagship sale " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East branch receivable " + runID},
+		},
+		{
+			{documentType: "generic_request", locationID: "loc_demo_central", status: "submitted", title: "Central recovery escalation " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "submitted", title: "West catch-up order " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "approved", title: "West branch invoice " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East expansion sale " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East branch billing " + runID},
+		},
+		{
+			{documentType: "generic_request", locationID: "loc_demo_central", status: "draft", title: "Central tentative order " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_west", status: "approved", title: "West branch renewal " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East enterprise uplift " + runID},
+			{documentType: "generic_request", locationID: "loc_demo_east", status: "approved", title: "East month-end invoice " + runID},
+		},
+	}
+	for batchIndex, batch := range batches {
+		for _, item := range batch {
+			created, err := client.createDocument(ctx, map[string]any{
+				"type":            item.documentType,
+				"organization_id": defaultOrgID,
+				"location_id":     item.locationID,
+				"payload":         map[string]any{"title": item.title},
+			})
+			if err != nil {
+				return scenarioManifest{}, fmt.Errorf("seed %s: %w", item.documentType, err)
+			}
+			switch item.status {
+			case "approved":
+				if _, err := submitApproveAndMaybeStop(ctx, client, created.ID, true); err != nil {
+					return scenarioManifest{}, fmt.Errorf("seed approved %s: %w", item.documentType, err)
+				}
+			case "submitted":
+				if _, err := submitApproveAndMaybeStop(ctx, client, created.ID, false); err != nil {
+					return scenarioManifest{}, fmt.Errorf("submit %s: %w", item.documentType, err)
+				}
+			}
+		}
+		if err := client.captureAnalyticsSnapshot(ctx); err != nil {
+			return scenarioManifest{}, fmt.Errorf("capture analytics snapshot batch %d: %w", batchIndex+1, err)
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+
+	board, err := client.createDashboardBoard(ctx, analytics.Dashboard{
+		Name:        "Retail Recovery Board " + runID,
+		Description: "Synthetic branch performance board for the retail recovery showcase across dashboard and agent surfaces.",
+		Surface:     "dashboard",
+		IsDefault:   true,
+		Visibility:  "private",
+		Status:      "active",
+		Widgets: []analytics.DashboardWidget{
+			{WidgetKey: "analytics.demo.sales.net_sales", Title: "Demo Net Sales", Kind: "metric", Width: 3, Height: 1, Order: 1},
+			{WidgetKey: "analytics.demo.sales.target_attainment", Title: "Demo Target Attainment", Kind: "gauge", Width: 3, Height: 2, Order: 2},
+			{WidgetKey: "analytics.demo.sales.daily_trend", Title: "Demo Daily Sales Trend", Kind: "chart_line", Width: 6, Height: 2, Order: 3},
+			{WidgetKey: "analytics.demo.sales.branch_mix", Title: "Demo Branch Sales Mix", Kind: "chart_bar", Width: 6, Height: 2, Order: 4},
+			{WidgetKey: "analytics.demo.sales.branch_table", Title: "Demo Branch Sales Breakdown", Kind: "table", Width: 6, Height: 2, Order: 5},
+			{WidgetKey: "analytics.demo.sales.branch_map", Title: "Demo Branch Performance", Kind: "map", Width: 6, Height: 2, Order: 6},
+		},
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create dashboard board: %w", err)
+	}
+
+	manifest.Routes = map[string]string{
+		"pos_terminal": "/ui/pos/terminal",
+		"dashboard":    "/ui/dashboard",
+		"agent":        "/ui/agent/workspace",
+	}
+	manifest.Walkthrough = []showcaseChapter{
+		{
+			Surface: "pos",
+			Title:   "POS terminal walkthrough",
+			Steps: []string{
+				fmt.Sprintf("Open /ui/pos/terminal, unlock the seeded terminal for store %s and register %s, and verify the active shift %s.", storeCode, registerCode, shiftID),
+				fmt.Sprintf("Resume the held sale %s or create a fresh basket with Espresso Double %s and Butter Croissant %s.", stringValue(heldSale["id"]), runID, runID),
+				"Complete checkout to demonstrate cashier flow, held sale recovery, and promotion-aware retail operations.",
+			},
+		},
+		{
+			Surface: "dashboard",
+			Title:   "Dashboard walkthrough",
+			Steps: []string{
+				fmt.Sprintf("Open /ui/dashboard and verify the default board %q renders all six demo sales widgets.", board.Name),
+				"Use the board to show that Loc Demo East leads, while Loc Demo Central and Loc Demo West are below the benchmark.",
+			},
+		},
+		{
+			Surface: "agent",
+			Title:   "Agent continuity walkthrough",
+			Steps: []string{
+				"Ask the seeded insight question and confirm the agent returns an inline dashboard artifact with only the most relevant evidence widgets rather than the full board.",
+				"Ask the planning question and confirm Current Plan is populated with branch, segment, and campaign actions.",
+				"Ask the execute question and confirm the agent creates a draft promotion recovery request with an open link.",
+			},
+		},
+	}
+	manifest.Entities = map[string]map[string]any{
+		"store": {
+			"code":          storeCode,
+			"register_code": registerCode,
+			"shift_id":      shiftID,
+		},
+		"central_branch": {"location_id": "loc_demo_central", "label": "Loc Demo Central"},
+		"east_branch":    {"location_id": "loc_demo_east", "label": "Loc Demo East"},
+		"west_branch":    {"location_id": "loc_demo_west", "label": "Loc Demo West"},
+		"gold_member_one": {
+			"party_id":    stringValue(mapValue(goldOne, "values")["party_id"]),
+			"name":        stringValue(mapValue(goldOne, "values")["customer_name"]),
+			"member_tier": "gold",
+		},
+		"gold_member_two": {
+			"party_id":    stringValue(mapValue(goldTwo, "values")["party_id"]),
+			"name":        stringValue(mapValue(goldTwo, "values")["customer_name"]),
+			"member_tier": "gold",
+		},
+		"silver_member": {
+			"party_id":    stringValue(mapValue(silverCustomer, "values")["party_id"]),
+			"name":        stringValue(mapValue(silverCustomer, "values")["customer_name"]),
+			"member_tier": "silver",
+		},
+		"espresso":  {"sku": espressoCode, "name": "Espresso Double " + runID},
+		"croissant": {"sku": croissantCode, "name": "Butter Croissant " + runID},
+		"beans":     {"sku": beansCode, "name": "House Beans 1kg " + runID},
+		"tea":       {"sku": teaCode, "name": "Iced Tea " + runID},
+		"campaign": {
+			"code":       campaignCode,
+			"promo_code": promoCode,
+			"name":       "Beans Boost " + runID,
+		},
+		"dashboard_board": {
+			"id":   board.ID,
+			"name": board.Name,
+			"path": "/ui/dashboard",
+		},
+		"held_sale": {
+			"id":        stringValue(heldSale["id"]),
+			"reference": "SHOWCASE-HOLD-" + suffix,
+		},
+	}
+	manifest.GroundTruth = map[string]any{
+		"underperforming_branches": []string{"Loc Demo Central", "Loc Demo West"},
+		"benchmark_branch":         "Loc Demo East",
+		"insight_widget_keys": []string{
+			"analytics.demo.sales.target_attainment",
+			"analytics.demo.sales.branch_mix",
+			"analytics.demo.sales.daily_trend",
+		},
+		"dashboard_widget_keys": []string{
+			"analytics.demo.sales.net_sales",
+			"analytics.demo.sales.target_attainment",
+			"analytics.demo.sales.daily_trend",
+			"analytics.demo.sales.branch_mix",
+			"analytics.demo.sales.branch_table",
+			"analytics.demo.sales.branch_map",
+		},
+		"recommended_campaign_kind":    "member_breakfast_bundle",
+		"recommended_products":         []string{"Espresso Double " + runID, "Butter Croissant " + runID},
+		"recommended_segment":          "gold members",
+		"supporting_pattern":           "espresso and croissant were repeatedly purchased together by gold members",
+		"underperforming_campaign":     "Beans Boost " + runID,
+		"underperforming_promo_code":   promoCode,
+		"underperforming_reason":       "only one redemption and weak demand signal compared with the breakfast bundle pattern",
+		"combo_sale_count":             6,
+		"beans_promo_redemption_count": 1,
+		"draft_title":                  draftTitle,
+		"draft_document_type":          "generic_request",
+	}
+	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("retail_recovery_showcase") + fmt.Sprintf(`
+- This is a unified retail showcase. Keep POS evidence, dashboard evidence, and the final draft request consistent with one another.
+- For insight questions, start with pos_core.sales.strategy.summary for store code %s.
+- Then call analytics.dashboard.widgets.preview with surface "dashboard" and explicit widget_keys for analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, and analytics.demo.sales.daily_trend.
+- In the first paragraph of the insight answer, explicitly state that Loc Demo Central and Loc Demo West are underperforming compared with Loc Demo East as the benchmark leader, and explicitly mention the Espresso Double + Butter Croissant pattern among gold members.
+- For the insight turn, keep the inline dashboard artifacts focused on only those most relevant widgets rather than the full six-widget board.
+- When the widgets preview tool returns the <orbyte-dashboard-artifact> blocks, copy each block exactly into your final answer unchanged.
+- For planning questions, base the plan on both the dashboard evidence and the POS sales pattern, keep the answer stepwise as a numbered list using "1.", "2.", and "3." markers, and do not execute it.
+- The recommended campaign should be a breakfast bundle for gold members focused on Loc Demo Central and Loc Demo West while using Loc Demo East as the benchmark.
+- For execute questions, do not call analytics or generic business-info tools again. Immediately call business.document.draft.create with document_type "generic_request", location_id "loc_hq", organization_id "org_default", confirm_apply true, and a payload containing title, summary, target_branches, benchmark_branch, target_products, target_segment, replace_campaign, and follow_up.
+- After creating the draft, restate it as a draft promotion recovery request including the exact draft title, draft id, open path, target branches, target products, target segment, benchmark, and next-week follow-up.`, storeCode))
+	manifest.PromptPack = retailRecoveryShowcasePromptPack(runID, storeCode, draftTitle)
+	return manifest, nil
+}
+
 func seedLeaveToPayrollScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
 	runID, suffix := newRunContext()
 	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "leave_to_payroll", "workforce-payroll", runID, suffix)
@@ -1950,17 +2410,13 @@ func salesDashboardRecoveryExecutePromptPack(runID, draftTitle string) []promptE
 			},
 			ForbiddenPhrases: []string{"all branches are performing evenly", "loc demo east is underperforming"},
 			ExpectedArtifact: &artifactExpectation{
-				Kind:        "dashboard_board",
-				TitleChecks: []string{"dashboard"},
+				Kind: "dashboard_widget",
 				WidgetKeys: []string{
-					"analytics.demo.sales.net_sales",
 					"analytics.demo.sales.target_attainment",
 					"analytics.demo.sales.daily_trend",
 					"analytics.demo.sales.branch_mix",
-					"analytics.demo.sales.branch_table",
-					"analytics.demo.sales.branch_map",
 				},
-				MinWidgets: 4,
+				MinArtifacts: 3,
 			},
 		},
 		{
@@ -2051,6 +2507,66 @@ func posPromotionStrategyPromptPack(runID, storeCode, espressoCode, croissantCod
 				DocumentType:  "generic_request",
 				TitleChecks:   []string{draftTitle},
 				PayloadChecks: []string{"espresso", "croissant", "gold", "beans boost"},
+			},
+		},
+	}
+}
+
+func retailRecoveryShowcasePromptPack(runID, storeCode, draftTitle string) []promptExpectation {
+	espressoName := "Espresso Double " + runID
+	croissantName := "Butter Croissant " + runID
+	beansCampaignName := "Beans Boost " + runID
+	return []promptExpectation{
+		{
+			ID:     "insight",
+			Prompt: fmt.Sprintf("For store %s, which branches are underperforming compared with the strongest branch, what POS sales pattern should we lean into, and show me the most relevant dashboard widgets for why?", storeCode),
+			RequiredFacts: []requiredFact{
+				{Key: "underperforming_central", Severity: "critical", Checks: []string{"loc demo central"}},
+				{Key: "underperforming_west", Severity: "critical", Checks: []string{"loc demo west"}},
+				{Key: "benchmark_east", Severity: "high", Checks: []string{"loc demo east"}},
+				{Key: "espresso_pattern", Severity: "critical", Checks: []string{espressoName}},
+				{Key: "croissant_pattern", Severity: "critical", Checks: []string{croissantName}},
+				{Key: "gold_segment", Severity: "high", Checks: []string{"gold", "member"}},
+			},
+			ForbiddenPhrases: []string{"all branches are performing evenly", "loc demo east is underperforming"},
+			ExpectedArtifact: &artifactExpectation{
+				Kind: "dashboard_widget",
+				WidgetKeys: []string{
+					"analytics.demo.sales.target_attainment",
+					"analytics.demo.sales.daily_trend",
+					"analytics.demo.sales.branch_mix",
+				},
+				MinArtifacts: 3,
+			},
+		},
+		{
+			ID:     "plan",
+			Prompt: "Based on that dashboard and POS evidence, create a stepwise recovery plan. Focus on Loc Demo Central and Loc Demo West, use Loc Demo East as the benchmark, target gold members, and do not execute it.",
+			RequiredFacts: []requiredFact{
+				{Key: "focus_central", Severity: "critical", Checks: []string{"loc demo central"}},
+				{Key: "focus_west", Severity: "critical", Checks: []string{"loc demo west"}},
+				{Key: "benchmark_east", Severity: "high", Checks: []string{"loc demo east"}},
+				{Key: "campaign_products", Severity: "critical", Checks: []string{espressoName, croissantName}},
+				{Key: "replace_campaign", Severity: "high", Checks: []string{beansCampaignName}},
+			},
+			ExpectedPlan: &planExpectation{
+				MinSteps:      3,
+				ContentChecks: []string{"loc demo central", "loc demo west", "loc demo east", "gold", "espresso", "croissant"},
+			},
+			ForbiddenPhrases: []string{"execute immediately", "submit the request now"},
+		},
+		{
+			ID:     "execute",
+			Prompt: fmt.Sprintf("Create a draft generic request titled %q from that plan. Include Loc Demo Central and Loc Demo West as the target branches, Loc Demo East as the benchmark, Espresso Double and Butter Croissant for gold members, replace Beans Boost, and add a next-week target-attainment follow-up. Do not submit it. After creating it, tell me the draft id and link.", draftTitle),
+			RequiredFacts: []requiredFact{
+				{Key: "draft_created", Severity: "critical", Checks: []string{"draft", draftTitle}},
+				{Key: "draft_type", Severity: "critical", Checks: []string{"generic request"}},
+			},
+			ForbiddenPhrases: []string{"submitted", "approved"},
+			ExpectedDraft: &draftExpectation{
+				DocumentType:  "generic_request",
+				TitleChecks:   []string{draftTitle},
+				PayloadChecks: []string{"loc demo central", "loc demo west", "loc demo east", "espresso", "croissant", "gold", "beans boost", "target-attainment"},
 			},
 		},
 	}

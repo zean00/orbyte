@@ -12,10 +12,12 @@ AGENT_SCENARIO ?= inventory_replenishment_execute
 AGENT_SEED_OUTPUT ?= /tmp/agentproof-inventory-replenishment.json
 POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
 DASHBOARD_SEED_OUTPUT ?= /tmp/orbyte-dashboard-seed.json
+SHOWCASE_SCENARIO ?= retail_recovery_showcase
+SHOWCASE_SEED_OUTPUT ?= /tmp/orbyte-showcase-retail-recovery.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-dashboard seed-all reset-and-seed demo-continuity
+.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-dashboard seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase
 
 test:
 	./scripts/test.sh
@@ -152,6 +154,15 @@ seed-dashboard:
 	DATABASE_URL="$(DATABASE_URL)" DASHBOARD_SEED=1 go test -run TestSeedDashboardSyntheticScenario -v ./internal/platform/app
 	@echo "Dashboard seed manifest is written by the test harness to $(DASHBOARD_SEED_OUTPUT)"
 
+seed-showcase-demo: app-start-postgres
+	go run ./cmd/agentproof seed \
+		--base-url "$(APP_BASE_URL)" \
+		--username admin \
+		--password "$(APP_BOOTSTRAP_ADMIN_PASSWORD)" \
+		--scenario "$(SHOWCASE_SCENARIO)" \
+		--output "$(SHOWCASE_SEED_OUTPUT)"
+	@echo "Showcase seed manifest: $(SHOWCASE_SEED_OUTPUT)"
+
 seed-all: seed-agent-continuity seed-pos seed-dashboard
 	@echo "Continuity seed manifest: $(AGENT_SEED_OUTPUT)"
 	@echo "POS seed manifest: $(POS_SEED_OUTPUT)"
@@ -162,3 +173,7 @@ reset-and-seed: db-reset-postgres app-start-postgres seed-all
 demo-continuity: seed-agent-continuity
 	@echo "Continuity manifest: $(AGENT_SEED_OUTPUT)"
 	@python3 -c 'import json; path="$(AGENT_SEED_OUTPUT)"; manifest=json.load(open(path, "r", encoding="utf-8")); warehouse=manifest.get("entities", {}).get("warehouse", {}).get("code", ""); vendor=manifest.get("entities", {}).get("vendor", {}).get("name", ""); print("Warehouse:", warehouse); print("Vendor:", vendor) if vendor else None; print(); [print("{}. {}".format(idx, text)) for idx, text in ((idx, prompt.get("prompt", "").strip()) for idx, prompt in enumerate(manifest.get("prompt_pack", []), start=1)) if text]'
+
+demo-showcase: seed-showcase-demo
+	@echo "Showcase manifest: $(SHOWCASE_SEED_OUTPUT)"
+	@python3 -c 'import json; path="$(SHOWCASE_SEED_OUTPUT)"; manifest=json.load(open(path, "r", encoding="utf-8")); base=manifest.get("base_url", "").rstrip("/"); routes=manifest.get("routes", {}); print("POS:", base + routes.get("pos_terminal", "")); print("Dashboard:", base + routes.get("dashboard", "")); print("Agent:", base + routes.get("agent", "")); print(); print("Questions to ask the agent:"); [print("{}. {}".format(idx, text)) for idx, text in ((idx, prompt.get("prompt", "").strip()) for idx, prompt in enumerate(manifest.get("prompt_pack", []), start=1)) if text]'

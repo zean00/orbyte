@@ -100,6 +100,8 @@ func TestServerListsToolsAndResourcesByPermission(t *testing.T) {
 		"analytics.snapshot.get",
 		"analytics.dashboard.list",
 		"analytics.dashboard.widget_catalog",
+		"analytics.dashboard.widget.preview",
+		"analytics.dashboard.widgets.preview",
 		"analytics.dashboard.board.preview",
 		"analytics.query.execute",
 		"analytics.report.definition.list",
@@ -3539,6 +3541,100 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	catalogContent := catalogResult["content"].([]ContentBlock)[0].Text
 	if !strings.Contains(catalogContent, "analytics.demo.submitted_documents") {
 		t.Fatalf("expected widget catalog content to list widget keys, got %q", catalogContent)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      13.15,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.widget.preview",
+			"arguments": map[string]any{
+				"title":      "Submitted Documents",
+				"surface":    "dashboard",
+				"widget_key": "analytics.demo.submitted_documents",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.widget.preview failed: %+v", resp.Error)
+	}
+	widgetPreviewResult := resp.Result.(map[string]any)
+	widgetPreview := widgetPreviewResult["structuredContent"].(map[string]any)
+	if widgetPreview["artifact"] == nil {
+		t.Fatalf("expected widget preview artifact payload, got %+v", widgetPreview)
+	}
+	widgetArtifact := widgetPreview["artifact"].(map[string]any)
+	if widgetArtifact["kind"] != "dashboard_widget" {
+		t.Fatalf("expected dashboard_widget artifact, got %+v", widgetArtifact)
+	}
+	widgetPreviewContent := widgetPreviewResult["content"].([]ContentBlock)[0].Text
+	if !strings.Contains(widgetPreviewContent, "<orbyte-dashboard-artifact>") {
+		t.Fatalf("expected widget preview content to include artifact block, got %q", widgetPreviewContent)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      13.16,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.widgets.preview",
+			"arguments": map[string]any{
+				"title":   "Submitted Approval Widgets",
+				"surface": "dashboard",
+				"widget_keys": []string{
+					"analytics.demo.submitted_documents",
+					"analytics.demo.approval_rate",
+				},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.widgets.preview failed: %+v", resp.Error)
+	}
+	widgetsPreviewResult := resp.Result.(map[string]any)
+	widgetsPreview := widgetsPreviewResult["structuredContent"].(map[string]any)
+	artifacts, _ := widgetsPreview["artifacts"].([]map[string]any)
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 widget artifacts, got %+v", widgetsPreview)
+	}
+	widgetsPreviewContent := widgetsPreviewResult["content"].([]ContentBlock)[0].Text
+	if strings.Count(widgetsPreviewContent, "<orbyte-dashboard-artifact>") != 2 {
+		t.Fatalf("expected widgets preview content to include 2 artifact blocks, got %q", widgetsPreviewContent)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      13.17,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "analytics.dashboard.widgets.preview",
+			"arguments": map[string]any{
+				"title":       "Underperforming branches versus benchmark",
+				"surface":     "dashboard",
+				"description": "compare branches against the strongest branch and show trend",
+				"intent":      "insight",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("analytics.dashboard.widgets.preview with inferred insight failed: %+v", resp.Error)
+	}
+	inferredWidgets := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["widgets"].([]module.DashboardWidgetDefinition)
+	if len(inferredWidgets) == 0 {
+		t.Fatalf("expected inferred widgets, got %+v", inferredWidgets)
+	}
+	inferredKeys := make([]string, 0, len(inferredWidgets))
+	for _, item := range inferredWidgets {
+		inferredKeys = append(inferredKeys, item.Key)
+	}
+	if len(inferredKeys) > 3 {
+		t.Fatalf("expected insight inference to stay focused, got %+v", inferredKeys)
+	}
+	for _, key := range inferredKeys {
+		if strings.Contains(key, "branch_map") {
+			t.Fatalf("did not expect geography widget for generic insight inference, got %+v", inferredKeys)
+		}
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
