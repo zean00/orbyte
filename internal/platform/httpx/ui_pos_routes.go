@@ -2,9 +2,12 @@ package httpx
 
 import (
 	"encoding/json"
+	"image/png"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/skip2/go-qrcode"
 
 	"orbyte/internal/platform/application"
 	"orbyte/internal/platform/config"
@@ -73,6 +76,35 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 			}
 		}
 		respondJSON(w, http.StatusOK, payload)
+	})
+
+	mux.HandleFunc("GET /ui/data/pos/receipt/qr", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := requireInteractivePrincipal(w, r)
+		if !ok {
+			return
+		}
+		if !principalAllowsAll(ident, p, []string{"pos_sale.create"}) {
+			respondError(w, shared.Forbidden("pos receipt qr is not allowed"))
+			return
+		}
+		value := strings.TrimSpace(r.URL.Query().Get("value"))
+		if value == "" {
+			respondError(w, shared.Validation("receipt qr value is required"))
+			return
+		}
+		if len(value) > 256 {
+			respondError(w, shared.Validation("receipt qr value is too long"))
+			return
+		}
+		code, err := qrcode.New(value, qrcode.Medium)
+		if err != nil {
+			respondError(w, shared.Validation("receipt qr value is invalid"))
+			return
+		}
+		img := code.Image(144)
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "private, no-store")
+		_ = png.Encode(w, img)
 	})
 
 	mux.HandleFunc("GET /ui/data/pos/catalog/search", func(w http.ResponseWriter, r *http.Request) {

@@ -50,6 +50,8 @@ func POSTerminalBundle() string {
         heldExpanded: false,
         transactionsExpanded: false,
         controlCollapsed: true,
+        lastCheckoutResult: null,
+        receiptPrinting: false,
       };
 
       const escapeHTML = function(value) {
@@ -67,9 +69,144 @@ func POSTerminalBundle() string {
       const clone = function(value) {
         return JSON.parse(JSON.stringify(value));
       };
+      const parseJSONArray = function(raw) {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        try {
+          const parsed = JSON.parse(String(raw));
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          return [];
+        }
+      };
+      const formatDateTime = function(value) {
+        const parsed = value ? new Date(String(value)) : null;
+        if (!parsed || Number.isNaN(parsed.getTime())) return "";
+        return new Intl.DateTimeFormat(ctx.locale === "id" ? "id-ID" : "en-US", {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(parsed);
+      };
+      const compactDocumentNumber = function(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const compacted = raw
+          .replace(/^INVOICE_NUMBER-/i, "INV-")
+          .replace(/^ORDER_NUMBER-/i, "ORD-")
+          .replace(/^PAYMENT_NUMBER-/i, "PAY-");
+        if (compacted.length <= 30) return compacted;
+        return compacted.slice(0, 12) + "…" + compacted.slice(-12);
+      };
+      const humanizeCode = function(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        return raw
+          .replace(/[-_]+/g, " ")
+          .replace(/\s+/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, function(char) { return char.toUpperCase(); });
+      };
+      const compactLabel = function(value, max) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        if (raw.length <= max) return raw;
+        return raw.slice(0, Math.max(0, max - 1)) + "…";
+      };
+      const truthy = function(value) {
+        if (typeof value === "boolean") return value;
+        const raw = String(value || "").trim().toLowerCase();
+        return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+      };
+      const splitCSV = function(value) {
+        return String(value || "").split(",").map(function(item) { return item.trim(); }).filter(Boolean);
+      };
+      const pickValue = function() {
+        for (let index = 0; index < arguments.length; index += 1) {
+          const current = arguments[index];
+          if (current == null) continue;
+          if (typeof current === "string") {
+            if (current.trim()) return current.trim();
+            continue;
+          }
+          if (typeof current === "number" && Number.isFinite(current)) return current;
+          if (typeof current === "boolean") return current;
+        }
+        return "";
+      };
+      const buildReceiptLookupBars = function(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const encoded = raw.toUpperCase();
+        const widths = [1, 1, 2, 1, 3, 1, 2, 2, 1, 3, 2, 1];
+        let x = 2;
+        const bars = [];
+        for (let index = 0; index < encoded.length; index += 1) {
+          const code = encoded.charCodeAt(index);
+          for (let bit = 0; bit < 7; bit += 1) {
+            if (((code >> bit) & 1) === 1) {
+              const width = widths[(index + bit) % widths.length];
+              const height = 18 + ((index + bit * 2) % 4) * 4;
+              const y = 28 - height;
+              bars.push('<rect x="' + x + '" y="' + y + '" width="' + width + '" height="' + height + '" rx="0.45"></rect>');
+              x += width;
+            }
+            x += ((index + bit) % 3) + 1;
+          }
+          x += 2;
+        }
+        const width = Math.max(94, x + 2);
+        return '<svg class="pos-terminal__receipt-lookup-bars" viewBox="0 0 ' + width + ' 28" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="' + width + '" height="28" fill="#fff"></rect>' + bars.join("") + '</svg>';
+      };
+      const buildReceiptLookupMatrix = function(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        let seed = 0;
+        for (let index = 0; index < raw.length; index += 1) {
+          seed = (seed * 33 + raw.charCodeAt(index)) >>> 0;
+        }
+        const size = 21;
+        const cell = 2;
+        const padding = 2;
+        const viewBox = size * cell + padding * 2;
+        const finder = function(col, row) {
+          return (col >= 0 && col < 7 && row >= 0 && row < 7)
+            || (col >= size - 7 && col < size && row >= 0 && row < 7)
+            || (col >= 0 && col < 7 && row >= size - 7 && row < size);
+        };
+        const isFinderDark = function(col, row) {
+          const localCol = col >= size - 7 ? col - (size - 7) : col;
+          const localRow = row >= size - 7 ? row - (size - 7) : row;
+          if (localCol === 0 || localCol === 6 || localRow === 0 || localRow === 6) return true;
+          if (localCol >= 2 && localCol <= 4 && localRow >= 2 && localRow <= 4) return true;
+          return false;
+        };
+        const cells = [];
+        for (let row = 0; row < size; row += 1) {
+          for (let col = 0; col < size; col += 1) {
+            let dark = false;
+            if (finder(col, row)) {
+              dark = isFinderDark(col, row);
+            } else {
+              const bit = ((seed >> ((row + col) % 24)) & 1) ^ ((row * 7 + col * 11 + raw.length) % 2);
+              dark = bit === 1;
+            }
+            if (!dark) continue;
+            cells.push('<rect x="' + (padding + col * cell) + '" y="' + (padding + row * cell) + '" width="' + cell + '" height="' + cell + '" rx="0.2"></rect>');
+          }
+        }
+        return '<svg class="pos-terminal__receipt-lookup-matrix" viewBox="0 0 ' + viewBox + ' ' + viewBox + '" aria-hidden="true"><rect x="0" y="0" width="' + viewBox + '" height="' + viewBox + '" fill="#fff"></rect>' + cells.join("") + '</svg>';
+      };
       const readCookie = function(name) {
         const match = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
         return match ? decodeURIComponent(match[1]) : "";
+      };
+      const nextFrame = function() {
+        return new Promise(function(resolve) {
+          window.requestAnimationFrame(function() { resolve(); });
+        });
       };
       const emitHardwareEvent = function(name, detail) {
         window.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
@@ -147,6 +284,32 @@ func POSTerminalBundle() string {
       };
       const currentCashier = function() {
         return ((state.bootstrap || {}).current_cashier || null);
+      };
+      const receiptConfig = function() {
+        const store = selectedStore();
+        const register = selectedRegister();
+        const storeValues = (store && store.values) || {};
+        const registerValues = (register && register.values) || {};
+        const variantCSV = pickValue(
+          registerValues.receipt_print_variants,
+          registerValues.receipt_variants,
+          storeValues.receipt_print_variants,
+          storeValues.receipt_variants,
+          "customer,merchant"
+        );
+        const variants = splitCSV(variantCSV).map(function(item) { return item.toLowerCase(); }).filter(function(item) {
+          return item === "customer" || item === "merchant";
+        });
+        return {
+          brandName: String(pickValue(registerValues.receipt_brand_name, storeValues.receipt_brand_name, registerValues.name, storeValues.name, state.storeCode || text("Store receipt", "Struk toko"))),
+          headerText: String(pickValue(registerValues.receipt_header_text, storeValues.receipt_header_text, "")),
+          footerText: String(pickValue(registerValues.receipt_footer_text, storeValues.receipt_footer_text, text("Thanks for shopping with Orbyte.", "Terima kasih sudah berbelanja dengan Orbyte."))),
+          supportText: String(pickValue(registerValues.receipt_support_text, storeValues.receipt_support_text, text("Please keep this receipt for exchange or support.", "Simpan struk ini untuk penukaran atau bantuan."))),
+          serviceText: String(pickValue(registerValues.receipt_service_text, storeValues.receipt_service_text, text("Present the lookup code at the register for faster assistance.", "Tunjukkan kode lookup di kasir untuk bantuan lebih cepat."))),
+          merchantNote: String(pickValue(registerValues.receipt_merchant_note, storeValues.receipt_merchant_note, text("Retain this copy for register balancing and operational support.", "Simpan salinan ini untuk balancing register dan dukungan operasional."))),
+          showQRCode: truthy(pickValue(registerValues.receipt_show_qr, storeValues.receipt_show_qr, true)),
+          variants: variants.length ? variants : ["customer", "merchant"],
+        };
       };
       const terminalContext = function() {
         return ((state.bootstrap || {}).terminal_context || null);
@@ -283,8 +446,55 @@ func POSTerminalBundle() string {
           + ".pos-terminal__modal-head { display:flex; justify-content:space-between; gap:0.9rem; align-items:flex-start; padding:1rem 1.1rem; border-bottom:1px solid color-mix(in srgb, var(--color-line) 86%, #12161b 14%); }"
           + ".pos-terminal__modal-body { min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); gap:0.95rem; padding:1rem 1.1rem 1.1rem; }"
           + ".pos-terminal__modal-body .pos-terminal__scroll { padding-right:0.25rem; }"
+          + ".pos-terminal__receipt-print { display:none; }"
+          + ".pos-terminal__receipt-shell { width:80mm; max-width:80mm; margin:0 auto; padding:4mm 4.5mm 6mm; background:#fff; color:#111; font-family:\"SFMono-Regular\", Menlo, Consolas, \"Liberation Mono\", monospace; }"
+          + ".pos-terminal__receipt-copy { page-break-after:always; }"
+          + ".pos-terminal__receipt-copy:last-child { page-break-after:auto; }"
+          + ".pos-terminal__receipt-head { display:grid; gap:0.22rem; padding-bottom:0.7rem; border-bottom:1px dashed #7b7b7b; text-align:center; }"
+          + ".pos-terminal__receipt-brand { font-size:1.04rem; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; }"
+          + ".pos-terminal__receipt-sub { font-size:0.69rem; line-height:1.42; color:#4b4b4b; }"
+          + ".pos-terminal__receipt-header-grid { display:grid; gap:0.14rem; margin-top:0.22rem; }"
+          + ".pos-terminal__receipt-divider { border-top:1px dashed #8b8b8b; margin:0.12rem 0; }"
+          + ".pos-terminal__receipt-cutline { display:flex; align-items:center; gap:0.45rem; margin-top:0.7rem; color:#666; font-size:0.62rem; letter-spacing:0.14em; text-transform:uppercase; }"
+          + ".pos-terminal__receipt-cutline::before, .pos-terminal__receipt-cutline::after { content:\"\"; flex:1; border-top:1px dashed #8b8b8b; }"
+          + ".pos-terminal__receipt-section { display:grid; gap:0.26rem; padding:0.62rem 0; border-bottom:1px dashed #8b8b8b; }"
+          + ".pos-terminal__receipt-section:last-child { border-bottom:0; }"
+          + ".pos-terminal__receipt-kicker { font-size:0.64rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:#666; }"
+          + ".pos-terminal__receipt-meta { display:flex; justify-content:space-between; gap:0.55rem; font-size:0.71rem; line-height:1.42; }"
+          + ".pos-terminal__receipt-meta span:first-child { color:#4b4b4b; }"
+          + ".pos-terminal__receipt-meta strong, .pos-terminal__receipt-meta span:last-child { text-align:right; }"
+          + ".pos-terminal__receipt-summaryline { display:flex; flex-wrap:wrap; justify-content:center; gap:0.28rem; padding:0.58rem 0 0.08rem; }"
+          + ".pos-terminal__receipt-summarypill { display:inline-flex; align-items:center; gap:0.22rem; padding:0.14rem 0.38rem; border:1px solid #b9b9b9; border-radius:999px; font-size:0.6rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#333; }"
+          + ".pos-terminal__receipt-summarypill--paid { border-color:#111; background:#111; color:#fff; }"
+          + ".pos-terminal__receipt-code { max-width:42mm; overflow-wrap:anywhere; word-break:break-word; }"
+          + ".pos-terminal__receipt-items { display:grid; gap:0.58rem; }"
+          + ".pos-terminal__receipt-item { display:grid; gap:0.14rem; }"
+          + ".pos-terminal__receipt-item-head { display:flex; justify-content:space-between; gap:0.55rem; align-items:flex-start; font-size:0.75rem; }"
+          + ".pos-terminal__receipt-item-name { flex:1; font-weight:800; line-height:1.35; }"
+          + ".pos-terminal__receipt-item-price { white-space:nowrap; text-align:right; font-weight:800; }"
+          + ".pos-terminal__receipt-item-sub { display:flex; justify-content:space-between; gap:0.55rem; font-size:0.68rem; color:#555; }"
+          + ".pos-terminal__receipt-item-note { font-size:0.64rem; color:#666; line-height:1.35; }"
+          + ".pos-terminal__receipt-totals { display:grid; gap:0.22rem; }"
+          + ".pos-terminal__receipt-total-row { display:flex; justify-content:space-between; gap:0.55rem; font-size:0.73rem; }"
+          + ".pos-terminal__receipt-total-row--grand { margin-top:0.22rem; padding-top:0.42rem; border-top:1px dashed #8b8b8b; font-size:0.91rem; font-weight:900; }"
+          + ".pos-terminal__receipt-total-row--change { font-weight:800; }"
+          + ".pos-terminal__receipt-settlement { margin-top:0.34rem; text-align:center; font-size:0.64rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#333; }"
+          + ".pos-terminal__receipt-payment { display:grid; gap:0.08rem; }"
+          + ".pos-terminal__receipt-payment-ref { font-size:0.64rem; color:#5d5d5d; text-align:right; }"
+          + ".pos-terminal__receipt-lookup { display:grid; gap:0.24rem; padding:0.62rem 0; text-align:center; border-bottom:1px dashed #8b8b8b; }"
+          + ".pos-terminal__receipt-lookup-visuals { display:grid; grid-template-columns:minmax(0,1fr) 18mm; align-items:end; gap:0.5rem; }"
+          + ".pos-terminal__receipt-lookup-bars { display:block; width:100%; height:1.2rem; margin:0 auto; fill:#111; }"
+          + ".pos-terminal__receipt-lookup-matrix { display:block; width:18mm; height:18mm; justify-self:end; fill:#111; }"
+          + ".pos-terminal__receipt-lookup-qr { display:block; width:18mm; height:18mm; justify-self:end; object-fit:contain; border:1px solid #d0d0d0; padding:1mm; background:#fff; }"
+          + ".pos-terminal__receipt-lookup-code { font-size:0.82rem; font-weight:900; letter-spacing:0.08em; word-break:break-all; }"
+          + ".pos-terminal__receipt-foot { display:grid; gap:0.32rem; padding-top:0.72rem; text-align:center; font-size:0.68rem; color:#4b4b4b; }"
+          + ".pos-terminal__receipt-badge { display:inline-block; margin:0 auto; padding:0.14rem 0.42rem; border:1px solid #111; font-size:0.6rem; font-weight:900; letter-spacing:0.14em; text-transform:uppercase; }"
+          + ".pos-terminal__receipt-accent { font-weight:800; color:#111; }"
+          + ".pos-terminal__receipt-policy { display:grid; gap:0.18rem; padding:0.42rem 0.6rem; border:1px dashed #8b8b8b; border-radius:0.45rem; background:#fafafa; }"
           + "@media (max-width: 1360px) { .pos-terminal { height:auto; min-height:0; } .pos-terminal__workspace { grid-template-columns:1fr; } .pos-terminal__rail { grid-template-rows:auto auto auto; } .pos-terminal__left { grid-template-rows:auto auto auto; } .pos-terminal__aux { grid-template-columns:1fr; } .pos-terminal__control-grid { grid-template-columns:1fr; } .pos-terminal__control-summary { width:100%; } }"
-          + "@media (max-width: 820px) { .pos-terminal__control-selects, .pos-terminal__statgrid { grid-template-columns:1fr; } .pos-terminal__overlay { padding:0.75rem; } .pos-terminal__modal { width:calc(100vw - 1.5rem); height:calc(100vh - 1.5rem); } }";
+          + "@media (max-width: 820px) { .pos-terminal__control-selects, .pos-terminal__statgrid { grid-template-columns:1fr; } .pos-terminal__overlay { padding:0.75rem; } .pos-terminal__modal { width:calc(100vw - 1.5rem); height:calc(100vh - 1.5rem); } }"
+          + "@media print { @page { size:80mm auto; margin:0; } html, body { margin:0 !important; padding:0 !important; background:#fff !important; } body * { visibility:hidden !important; } .pos-terminal__receipt-print, .pos-terminal__receipt-print * { visibility:visible !important; } .pos-terminal__receipt-print { display:block !important; position:fixed; inset:0; background:#fff; } .pos-terminal__receipt-shell { width:80mm; max-width:80mm; min-height:100vh; box-shadow:none; } }"
+          + "@media print and (max-width: 58mm) { @page { size:58mm auto; margin:0; } .pos-terminal__receipt-shell { width:58mm; max-width:58mm; padding:3mm 3.2mm 5mm; } .pos-terminal__receipt-brand { font-size:0.92rem; } .pos-terminal__receipt-lookup-visuals { grid-template-columns:minmax(0,1fr) 14mm; gap:0.35rem; } .pos-terminal__receipt-lookup-matrix, .pos-terminal__receipt-lookup-qr { width:14mm; height:14mm; } .pos-terminal__receipt-item-head, .pos-terminal__receipt-item-sub, .pos-terminal__receipt-meta, .pos-terminal__receipt-total-row { font-size:0.67rem; } .pos-terminal__receipt-lookup-code { font-size:0.74rem; } }";
         document.head.appendChild(style);
       };
 
@@ -862,6 +1072,7 @@ func POSTerminalBundle() string {
           });
           emitHardwareEvent("orbyte:pos-receipt-print", result);
           emitHardwareEvent("orbyte:pos-cash-drawer-open", { total: totals().total, change: totals().change });
+          state.lastCheckoutResult = result;
           state.cart = [];
           state.currentSaleID = "";
           state.tenders = [{ tender_type_code: "", amount: 0, reference: "", notes: "" }];
@@ -873,12 +1084,67 @@ func POSTerminalBundle() string {
           notify(text("Checkout completed.", "Checkout selesai."));
           render();
           if (window.confirm(text("Print receipt now?", "Cetak struk sekarang?"))) {
-            window.print();
+            await printReceipt();
+          } else {
+            state.lastCheckoutResult = null;
+            render();
           }
         } catch (error) {
           notify(error instanceof Error ? error.message : text("Checkout failed.", "Checkout gagal."), "error");
         } finally {
           state.busy = false;
+          render();
+        }
+      }
+
+      async function waitForReceiptAssets() {
+        await nextFrame();
+        await nextFrame();
+        const receipt = mount.querySelector(".pos-terminal__receipt-print");
+        if (!receipt) return;
+        const images = Array.from(receipt.querySelectorAll(".pos-terminal__receipt-lookup-qr"));
+        if (!images.length) return;
+        await Promise.all(images.map(function(image) {
+          if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+          return new Promise(function(resolve) {
+            let settled = false;
+            const finish = function() {
+              if (settled) return;
+              settled = true;
+              image.removeEventListener("load", finish);
+              image.removeEventListener("error", finish);
+              window.clearTimeout(timeoutID);
+              resolve();
+            };
+            const timeoutID = window.setTimeout(finish, 4000);
+            image.addEventListener("load", finish, { once: true });
+            image.addEventListener("error", finish, { once: true });
+          });
+        }));
+      }
+
+      async function printReceipt() {
+        if (!state.lastCheckoutResult || state.receiptPrinting) return;
+        state.receiptPrinting = true;
+        render();
+        try {
+          await waitForReceiptAssets();
+          await new Promise(function(resolve) {
+            let settled = false;
+            const finish = function() {
+              if (settled) return;
+              settled = true;
+              window.removeEventListener("afterprint", finish);
+              window.clearTimeout(timeoutID);
+              resolve();
+            };
+            const timeoutID = window.setTimeout(finish, 1500);
+            window.addEventListener("afterprint", finish, { once: true });
+            window.print();
+          });
+        } finally {
+          state.receiptPrinting = false;
+          state.lastCheckoutResult = null;
           render();
         }
       }
@@ -1259,6 +1525,135 @@ func POSTerminalBundle() string {
           + '</div>';
       }
 
+      function renderReceiptPrint() {
+        const result = state.lastCheckoutResult;
+        if (!result || !result.sale || !result.sale.values) return "";
+        const sale = result.sale;
+        const values = sale.values || {};
+        const store = selectedStore();
+        const register = selectedRegister();
+        const lines = parseJSONArray(values.lines_json);
+        const tenders = parseJSONArray(values.tenders_json);
+        const promotionCodes = parseJSONArray(values.promotion_codes_json);
+        const cashier = currentCashier();
+        const receiptNumber = String(result.receipt_title || values.invoice_number || values.order_number || values.sale_number || sale.id || "");
+        const saleNumber = String(values.sale_number || "");
+        const customerName = String(values.party_name || "");
+        const customerCode = String(values.party_id || "");
+        const printedAt = formatDateTime(sale.created_at || new Date().toISOString());
+        const currencyCode = String(values.currency_code || "IDR");
+        const cashierName = String((cashier && (cashier.name || cashier.username || cashier.user_id)) || values.cashier_user_id || "—");
+        const registerLabel = String((register && ((register.values || {}).name || (register.values || {}).code)) || state.registerCode || "");
+        const storeLabel = String((store && ((store.values || {}).name || (store.values || {}).code)) || state.storeCode || "");
+        const shiftLabel = String(values.shift_id || state.shiftId || "");
+        const lookupCode = compactDocumentNumber(saleNumber || receiptNumber || sale.id || "—");
+        const config = receiptConfig();
+        const compactReceiptNumber = compactDocumentNumber(receiptNumber);
+        const compactSaleNumber = compactDocumentNumber(saleNumber);
+        const compactInvoiceNumber = compactDocumentNumber(values.invoice_number || "");
+        const compactOrderNumber = compactDocumentNumber(values.order_number || "");
+        const showInvoiceNumber = compactInvoiceNumber && compactInvoiceNumber !== compactReceiptNumber && compactInvoiceNumber !== compactSaleNumber;
+        const showOrderNumber = compactOrderNumber && compactOrderNumber !== compactReceiptNumber && compactOrderNumber !== compactSaleNumber && compactOrderNumber !== compactInvoiceNumber;
+        const totals = {
+          subtotal: number(values.subtotal_amount),
+          tax: number(values.tax_amount),
+          total: number(values.total_amount),
+          tendered: number(values.tendered_amount),
+          change: number(values.change_due_amount),
+        };
+        const summaryPills = [
+          totals.tendered >= totals.total && totals.total > 0 ? text("paid", "lunas") : "",
+          lines.length ? String(lines.length) + " " + text("items", "item") : "",
+          tenders.length ? String(tenders.length) + " " + text("tenders", "tender") : "",
+          promotionCodes.length ? String(promotionCodes.length) + " " + text("promos", "promo") : "",
+          customerName ? text("member", "member") : text("walk-in", "umum"),
+        ].filter(Boolean);
+        const qrURL = config.showQRCode ? '/ui/data/pos/receipt/qr?value=' + encodeURIComponent(String(saleNumber || receiptNumber || sale.id || lookupCode)) : '';
+        const renderReceiptCopy = function(variant) {
+          const isMerchant = variant === "merchant";
+          const badgeLabel = isMerchant ? text("Merchant copy", "Salinan merchant") : text("Customer copy", "Salinan pelanggan");
+          const policyTitle = isMerchant ? config.merchantNote : config.supportText;
+          const policyDetail = isMerchant ? text("Use this copy for reconciliation, balancing, and audit support.", "Gunakan salinan ini untuk rekonsiliasi, balancing, dan dukungan audit.") : config.serviceText;
+          const customerLabel = customerName || text("Walk-in guest", "Tamu umum");
+          return ''
+          +   '<section class="pos-terminal__receipt-shell pos-terminal__receipt-copy" data-receipt-variant="' + escapeHTML(variant) + '">'
+          +     '<div class="pos-terminal__receipt-head">'
+          +       '<div class="pos-terminal__receipt-brand">' + escapeHTML(compactLabel(config.brandName || storeLabel || text("Store receipt", "Struk toko"), 28)) + '</div>'
+          +       '<div class="pos-terminal__receipt-header-grid">'
+          +         '<div class="pos-terminal__receipt-sub">' + escapeHTML(String((store && store.values && store.values.code) || state.storeCode || "")) + (registerLabel ? ' · ' + escapeHTML(compactLabel(registerLabel, 24)) : '') + '</div>'
+          +         '<div class="pos-terminal__receipt-sub">' + escapeHTML(text("Printed", "Dicetak")) + ': ' + escapeHTML(printedAt || "—") + '</div>'
+          +       '</div>'
+          +       (config.headerText ? '<div class="pos-terminal__receipt-sub">' + escapeHTML(config.headerText) + '</div>' : '')
+          +       (summaryPills.length ? '<div class="pos-terminal__receipt-summaryline">' + summaryPills.map(function(item, index) { return '<span class="pos-terminal__receipt-summarypill' + (index === 0 && (totals.tendered >= totals.total && totals.total > 0) ? ' pos-terminal__receipt-summarypill--paid' : '') + '">' + escapeHTML(item) + '</span>'; }).join("") + '</div>' : '')
+          +     '</div>'
+          +     '<div class="pos-terminal__receipt-section">'
+          +       '<div class="pos-terminal__receipt-kicker">' + escapeHTML(text("Transaction", "Transaksi")) + '</div>'
+          +       '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Receipt", "Struk")) + '</span><strong class="pos-terminal__receipt-code">' + escapeHTML(compactReceiptNumber || "—") + '</strong></div>'
+          +       '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Sale", "Penjualan")) + '</span><span class="pos-terminal__receipt-code">' + escapeHTML(compactSaleNumber || "—") + '</span></div>'
+          +       (showInvoiceNumber ? '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Invoice", "Invoice")) + '</span><span class="pos-terminal__receipt-code">' + escapeHTML(compactInvoiceNumber) + '</span></div>' : '')
+          +       (showOrderNumber ? '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Order", "Order")) + '</span><span class="pos-terminal__receipt-code">' + escapeHTML(compactOrderNumber) + '</span></div>' : '')
+          +       '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Cashier", "Kasir")) + '</span><span>' + escapeHTML(cashierName || "—") + '</span></div>'
+          +       (shiftLabel ? '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Shift", "Shift")) + '</span><span>' + escapeHTML(compactDocumentNumber(shiftLabel)) + '</span></div>' : '')
+          +       '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Customer", "Pelanggan")) + '</span><span>' + escapeHTML(customerLabel) + '</span></div>'
+          +       (customerCode ? '<div class="pos-terminal__receipt-meta"><span>' + escapeHTML(text("Member ID", "ID member")) + '</span><span class="pos-terminal__receipt-code">' + escapeHTML(compactDocumentNumber(customerCode)) + '</span></div>' : '')
+          +     '</div>'
+          +     '<div class="pos-terminal__receipt-lookup"><div class="pos-terminal__receipt-kicker">' + escapeHTML(text("Lookup", "Pencarian")) + '</div><div class="pos-terminal__receipt-lookup-visuals"><div>' + buildReceiptLookupBars(lookupCode) + '</div>' + (qrURL ? '<img class="pos-terminal__receipt-lookup-qr" src="' + escapeHTML(qrURL) + '" alt="' + escapeHTML(text("Receipt lookup QR", "QR lookup struk")) + '">' : buildReceiptLookupMatrix(lookupCode)) + '</div><div class="pos-terminal__receipt-lookup-code">' + escapeHTML(lookupCode) + '</div></div>'
+          +     '<div class="pos-terminal__receipt-section">'
+          +       '<div class="pos-terminal__receipt-kicker">' + escapeHTML(text("Items", "Item")) + '</div>'
+          +       '<div class="pos-terminal__receipt-items">' + (lines.length ? lines.map(function(line) {
+                    const qty = number(line.quantity);
+                    const unitPrice = number(line.unit_price);
+                    const lineTotal = number(line.line_total || line.extended_amount || line.amount);
+                    const discount = number(line.discount_amount);
+                    const note = String(line.note || "").trim();
+                    return ''
+                      + '<div class="pos-terminal__receipt-item">'
+                      +   '<div class="pos-terminal__receipt-item-head"><span class="pos-terminal__receipt-item-name">' + escapeHTML(String(line.description || line.item_name || line.item_code || "Item")) + '</span><span class="pos-terminal__receipt-item-price">' + escapeHTML(money(lineTotal)) + '</span></div>'
+                      +   '<div class="pos-terminal__receipt-item-sub"><span>' + escapeHTML(String(qty)) + ' × ' + escapeHTML(money(unitPrice)) + '</span>' + (discount > 0 ? '<span>' + escapeHTML(text("Disc", "Diskon")) + ' ' + escapeHTML(money(discount)) + '</span>' : '<span>' + escapeHTML(currencyCode) + '</span>') + '</div>'
+                      +   (note ? '<div class="pos-terminal__receipt-item-note">' + escapeHTML(note) + '</div>' : '')
+                      + '</div>';
+                  }).join("") : '<div class="pos-terminal__receipt-sub">' + escapeHTML(text("No line items.", "Tidak ada baris item.")) + '</div>') + '</div>'
+          +     '</div>'
+          +     '<div class="pos-terminal__receipt-section">'
+          +       '<div class="pos-terminal__receipt-kicker">' + escapeHTML(text("Totals", "Total")) + '</div>'
+          +       '<div class="pos-terminal__receipt-totals">'
+          +         '<div class="pos-terminal__receipt-total-row"><span>' + escapeHTML(text("Subtotal", "Subtotal")) + '</span><span>' + escapeHTML(money(totals.subtotal)) + '</span></div>'
+          +         (totals.tax > 0 ? '<div class="pos-terminal__receipt-total-row"><span>' + escapeHTML(text("Tax", "Pajak")) + '</span><span>' + escapeHTML(money(totals.tax)) + '</span></div>' : '')
+          +         '<div class="pos-terminal__receipt-total-row pos-terminal__receipt-total-row--grand"><span>' + escapeHTML(text("Total", "Total")) + '</span><span>' + escapeHTML(money(totals.total)) + '</span></div>'
+          +         '<div class="pos-terminal__receipt-total-row"><span>' + escapeHTML(text("Tendered", "Dibayar")) + '</span><span>' + escapeHTML(money(totals.tendered)) + '</span></div>'
+          +         '<div class="pos-terminal__receipt-total-row pos-terminal__receipt-total-row--change"><span>' + escapeHTML(text("Change", "Kembalian")) + '</span><span>' + escapeHTML(money(totals.change)) + '</span></div>'
+          +         (totals.total > 0 ? '<div class="pos-terminal__receipt-settlement">' + escapeHTML(totals.tendered >= totals.total ? text("Paid in full", "Lunas") : text("Payment pending", "Pembayaran belum lengkap")) + '</div>' : '')
+          +       '</div>'
+          +     '</div>'
+          +     (tenders.length ? '<div class="pos-terminal__receipt-section"><div class="pos-terminal__receipt-kicker">' + escapeHTML(text("Payment", "Pembayaran")) + '</div>' + tenders.map(function(tender) {
+                const tenderCode = String(tender.tender_type_code || tender.kind || "");
+                const tenderLabel = (function() {
+                  const tenderType = tenderTypeByCode(tenderCode);
+                  const named = String((tenderType && tenderType.values && tenderType.values.name) || "");
+                  return named || humanizeCode(tenderCode) || text("Tender", "Tender");
+                })();
+                const reference = String(tender.reference || "").trim();
+                return '<div class="pos-terminal__receipt-payment"><div class="pos-terminal__receipt-meta"><span>' + escapeHTML(tenderLabel) + '</span><span>' + escapeHTML(money(tender.amount)) + '</span></div>' + (reference ? '<div class="pos-terminal__receipt-payment-ref">' + escapeHTML(reference) + '</div>' : '') + '</div>';
+              }).join("") + '</div>' : '')
+          +     (promotionCodes.length ? '<div class="pos-terminal__receipt-section"><div class="pos-terminal__receipt-kicker">' + escapeHTML(text("Applied promos", "Promo aktif")) + '</div><div class="pos-terminal__receipt-sub"><span class="pos-terminal__receipt-accent">' + escapeHTML(promotionCodes.join(", ")) + '</span></div></div>' : '')
+          +     '<div class="pos-terminal__receipt-foot">'
+          +       '<span class="pos-terminal__receipt-badge">' + escapeHTML(badgeLabel) + '</span>'
+          +       '<div>' + escapeHTML(config.footerText) + '</div>'
+          +       '<div class="pos-terminal__receipt-policy"><div>' + escapeHTML(policyTitle) + '</div><div>' + escapeHTML(policyDetail) + '</div></div>'
+          +       '<div class="pos-terminal__receipt-divider"></div>'
+          +       '<div>' + escapeHTML(text("Operational copy only. Taxes and payments are recorded in Orbyte.", "Salinan operasional. Pajak dan pembayaran tercatat di Orbyte.")) + '</div>'
+          +       '<div>' + escapeHTML(text("Register", "Register")) + ': ' + escapeHTML(compactLabel(registerLabel || state.registerCode || "—", 28)) + '</div>'
+          +       '<div>' + escapeHTML(text("Served by", "Dilayani oleh")) + ': ' + escapeHTML(compactLabel(cashierName || "—", 28)) + '</div>'
+          +       '<div class="pos-terminal__receipt-cutline">' + escapeHTML(badgeLabel) + '</div>'
+          +     '</div>'
+          +   '</section>';
+        };
+        return ''
+          + '<aside class="pos-terminal__receipt-print" aria-hidden="true">'
+          +   config.variants.map(renderReceiptCopy).join("")
+          + '</aside>';
+      }
+
       function bindEvents() {
         mount.querySelectorAll("[data-nav]").forEach(function(node) {
           node.addEventListener("click", function() {
@@ -1612,6 +2007,7 @@ func POSTerminalBundle() string {
                 : (terminalUnlocked()
                     ? renderControlBar() + '<section class="pos-terminal__workspace"><div class="pos-terminal__left">' + renderCartPanel() + renderAuxPanel() + '</div>' + renderRail(totalsPayload) + '</section>' + renderCatalogModal() + renderCustomerModal() + renderPromoModal() + renderTenderModal()
                     : renderTerminalGate(bootstrap)))
+          +   renderReceiptPrint()
           + '</section>';
         bindEvents();
       }
