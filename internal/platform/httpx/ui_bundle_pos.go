@@ -297,8 +297,13 @@ func POSTerminalBundle() string {
           storeValues.receipt_variants,
           "customer,merchant"
         );
+        const seenVariants = {};
         const variants = splitCSV(variantCSV).map(function(item) { return item.toLowerCase(); }).filter(function(item) {
           return item === "customer" || item === "merchant";
+        }).filter(function(item) {
+          if (seenVariants[item]) return false;
+          seenVariants[item] = true;
+          return true;
         });
         return {
           brandName: String(pickValue(registerValues.receipt_brand_name, storeValues.receipt_brand_name, registerValues.name, storeValues.name, state.storeCode || text("Store receipt", "Struk toko"))),
@@ -493,7 +498,7 @@ func POSTerminalBundle() string {
           + ".pos-terminal__receipt-policy { display:grid; gap:0.18rem; padding:0.42rem 0.6rem; border:1px dashed #8b8b8b; border-radius:0.45rem; background:#fafafa; }"
           + "@media (max-width: 1360px) { .pos-terminal { height:auto; min-height:0; } .pos-terminal__workspace { grid-template-columns:1fr; } .pos-terminal__rail { grid-template-rows:auto auto auto; } .pos-terminal__left { grid-template-rows:auto auto auto; } .pos-terminal__aux { grid-template-columns:1fr; } .pos-terminal__control-grid { grid-template-columns:1fr; } .pos-terminal__control-summary { width:100%; } }"
           + "@media (max-width: 820px) { .pos-terminal__control-selects, .pos-terminal__statgrid { grid-template-columns:1fr; } .pos-terminal__overlay { padding:0.75rem; } .pos-terminal__modal { width:calc(100vw - 1.5rem); height:calc(100vh - 1.5rem); } }"
-          + "@media print { @page { size:80mm auto; margin:0; } html, body { margin:0 !important; padding:0 !important; background:#fff !important; } body * { visibility:hidden !important; } .pos-terminal__receipt-print, .pos-terminal__receipt-print * { visibility:visible !important; } .pos-terminal__receipt-print { display:block !important; position:fixed; inset:0; background:#fff; } .pos-terminal__receipt-shell { width:80mm; max-width:80mm; min-height:100vh; box-shadow:none; } }"
+          + "@media print { @page { size:80mm auto; margin:0; } html, body { margin:0 !important; padding:0 !important; background:#fff !important; } body * { visibility:hidden !important; } .pos-terminal > :not(.pos-terminal__receipt-print) { display:none !important; } .pos-terminal__receipt-print, .pos-terminal__receipt-print * { visibility:visible !important; } .pos-terminal__receipt-print { display:block !important; position:absolute !important; top:0; left:0; right:auto; bottom:auto; width:100%; background:#fff; } .pos-terminal__receipt-shell { width:80mm; max-width:80mm; min-height:auto; box-shadow:none; } }"
           + "@media print and (max-width: 58mm) { @page { size:58mm auto; margin:0; } .pos-terminal__receipt-shell { width:58mm; max-width:58mm; padding:3mm 3.2mm 5mm; } .pos-terminal__receipt-brand { font-size:0.92rem; } .pos-terminal__receipt-lookup-visuals { grid-template-columns:minmax(0,1fr) 14mm; gap:0.35rem; } .pos-terminal__receipt-lookup-matrix, .pos-terminal__receipt-lookup-qr { width:14mm; height:14mm; } .pos-terminal__receipt-item-head, .pos-terminal__receipt-item-sub, .pos-terminal__receipt-meta, .pos-terminal__receipt-total-row { font-size:0.67rem; } .pos-terminal__receipt-lookup-code { font-size:0.74rem; } }";
         document.head.appendChild(style);
       };
