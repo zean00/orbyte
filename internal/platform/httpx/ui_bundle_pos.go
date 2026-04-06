@@ -756,7 +756,7 @@ func POSTerminalBundle() string {
           }
           state.promotionValidation = null;
           persist();
-          render();
+          closeCatalog();
         } catch (error) {
           notify(error instanceof Error ? error.message : text("Failed to add item to cart.", "Gagal menambahkan item ke keranjang."), "error");
         }
