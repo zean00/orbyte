@@ -15,6 +15,7 @@ export function AdminContentRouter({
   renderWorkflows,
   renderWorkflowDesigner,
   renderSecurity,
+  renderAudit,
   renderObservability,
   renderDashboards,
   renderFallback,
@@ -35,6 +36,7 @@ export function AdminContentRouter({
   renderWorkflows: (payload: Record<string, unknown> | null) => JSX.Element
   renderWorkflowDesigner: () => JSX.Element
   renderSecurity: (payload: Record<string, unknown> | null) => JSX.Element
+  renderAudit: (payload: Record<string, unknown> | null) => JSX.Element
   renderObservability: (payload: Record<string, unknown> | null) => JSX.Element
   renderDashboards: (payload: Record<string, unknown> | null) => JSX.Element
   renderFallback: (path: string, payload: Record<string, unknown> | null, bootstrap: unknown) => JSX.Element
@@ -52,6 +54,7 @@ export function AdminContentRouter({
   if (path === '/workflows') return renderWorkflows(payload)
   if (path === '/workflows/designer') return renderWorkflowDesigner()
   if (path === '/security') return renderSecurity(payload)
+  if (path === '/audit') return renderAudit(payload)
   if (path === '/observability') return renderObservability(payload)
   if (path === '/dashboards') return renderDashboards(payload)
   return renderFallback(path, payload, bootstrap)

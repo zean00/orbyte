@@ -17,6 +17,7 @@ import {
   ModuleDependencyGraphPanel,
 } from "./AdminModuleConsolePage";
 import { AdminObservabilityContent } from "./AdminObservabilityContent";
+import { AdminAuditTrailPage } from "./AdminAuditTrailPage";
 import { AdminDashboardBoardsPage } from "./AdminDashboardBoardsPage";
 import { AdminSecurityHooksPage } from "./AdminSecurityHooksPage";
 import { AdminTemplateListPage } from "./AdminTemplateListPage";
@@ -235,6 +236,7 @@ function AdminContent({
           pagination={pagination ? { ...pagination, total: pagination.total || asItems(data).length } : undefined}
         />
       )}
+      renderAudit={(data) => <AdminAuditTrailPage payload={data} />}
       renderObservability={(data) => {
         return (
           <AdminObservabilityContent

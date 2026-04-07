@@ -24,16 +24,34 @@ type Event struct {
 }
 
 type Query struct {
-	TargetType       string
-	TargetID         string
-	ActorID          string
-	ActorKind        string
-	OnBehalfOfUserID string
-	Action           string
-	CorrelationID    string
-	OrganizationID   string
-	LocationID       string
-	OperatingUnitID  string
-	OccurredFrom     time.Time
-	OccurredTo       time.Time
+	TargetType        string
+	TargetID          string
+	ActorID           string
+	ActorKind         string
+	OnBehalfOfUserID  string
+	Action            string
+	CorrelationID     string
+	RequestID         string
+	DelegationGrantID string
+	FromState         string
+	ToState           string
+	OrganizationID    string
+	LocationID        string
+	OperatingUnitID   string
+	OccurredFrom      time.Time
+	OccurredTo        time.Time
+	Text              string
+	MetadataKey       string
+	MetadataValue     string
+	Sort              string
+	Direction         string
+	Page              int
+	PageSize          int
+}
+
+type SearchResult struct {
+	Items   []Event        `json:"items"`
+	Total   int            `json:"total"`
+	Facets  map[string]any `json:"facets,omitempty"`
+	Summary map[string]any `json:"summary,omitempty"`
 }

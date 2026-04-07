@@ -24,6 +24,8 @@ export function endpointForAdminPath(path: string): string {
       return '/admin/api/templates/definitions'
     case '/security':
       return '/admin/api/security/policy-hooks'
+    case '/audit':
+      return '/admin/api/audit-events'
     case '/observability':
       return '/admin/api/observability/contracts'
     case '/dashboards':
@@ -48,6 +50,7 @@ export function adminPathSupportsPagination(path: string): boolean {
     case '/config':
     case '/definitions':
     case '/security':
+    case '/audit':
     case '/dashboards':
     case '/templates':
     case '/workflows':
@@ -81,6 +84,8 @@ export function titleForAdminPath(path: string): string {
       return 'Definitions'
     case '/security':
       return 'Security'
+    case '/audit':
+      return 'Audit Trail'
     case '/observability':
       return 'Observability'
     case '/dashboards':

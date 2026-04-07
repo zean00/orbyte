@@ -3232,6 +3232,25 @@ func TestAuditQueryAndTimelineRoutes(t *testing.T) {
 	if list.Code != http.StatusOK || timeline.Code != http.StatusOK {
 		t.Fatalf("expected audit routes to succeed, got %d and %d", list.Code, timeline.Code)
 	}
+
+	adminList := h.request(http.MethodGet, "/admin/api/audit-events?target_type=document&target_id="+record.Header.ID+"&action=document.update&page=1&page_size=20&sort=occurred_at&direction=desc", nil, true)
+	if adminList.Code != http.StatusOK {
+		t.Fatalf("expected admin audit route to succeed, got %d body=%s", adminList.Code, adminList.Body.String())
+	}
+	if !strings.Contains(adminList.Body.String(), `"total":1`) || !strings.Contains(adminList.Body.String(), `"document.update"`) {
+		t.Fatalf("expected admin audit payload to include matching update event, got %s", adminList.Body.String())
+	}
+	invalidSort := h.request(http.MethodGet, "/admin/api/audit-events?sort=unknown", nil, true)
+	if invalidSort.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid sort to fail, got %d body=%s", invalidSort.Code, invalidSort.Body.String())
+	}
+	exported := h.request(http.MethodGet, "/admin/api/audit-events/export?target_type=document&target_id="+record.Header.ID+"&format=csv", nil, true)
+	if exported.Code != http.StatusOK {
+		t.Fatalf("expected admin audit export to succeed, got %d body=%s", exported.Code, exported.Body.String())
+	}
+	if exported.Header().Get("Content-Type") != "text/csv" {
+		t.Fatalf("expected csv export content type, got %s", exported.Header().Get("Content-Type"))
+	}
 }
 
 func TestDelegationRoutesAndDelegatedDocumentAudit(t *testing.T) {
