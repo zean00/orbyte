@@ -81,6 +81,23 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 	actorID := "user_admin"
 	suffix := time.Now().UTC().Format("20060102150405")
 
+	for _, account := range []map[string]any{
+		{"code": "1000-CASH", "name": "Cash", "account_type": "asset", "normal_balance": "debit", "status": "active"},
+		{"code": "1010-CARD", "name": "Card Clearing", "account_type": "asset", "normal_balance": "debit", "status": "active"},
+		{"code": "1020-VOUCHER", "name": "Voucher Clearing", "account_type": "asset", "normal_balance": "debit", "status": "active"},
+		{"code": "2100-VATOUT", "name": "VAT Output", "account_type": "liability", "normal_balance": "credit", "status": "active"},
+		{"code": "2250-GIFT-CARD", "name": "Gift Card Liability", "account_type": "liability", "normal_balance": "credit", "status": "active"},
+		{"code": "2260-STORE-CREDIT", "name": "Store Credit Liability", "account_type": "liability", "normal_balance": "credit", "status": "active"},
+	} {
+		ensureModelByCode(t, graph.models, "finance_account", "code", textValue(account["code"]), account, actorID)
+	}
+	ensureModelByCode(t, graph.models, "warehouse", "code", "MAIN", map[string]any{
+		"code":   "MAIN",
+		"name":   "Main Warehouse",
+		"kind":   "storage",
+		"status": "active",
+	}, actorID)
+
 	taxCode := ensureModelByCode(t, graph.models, "commercial_tax_code", "code", "VATPOS-"+suffix, map[string]any{
 		"code":             "VATPOS-" + suffix,
 		"name":             "VAT POS " + suffix,
@@ -198,7 +215,12 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 		"status":                "active",
 	}, actorID)
 
-	customerPartyID := "party_pos_" + suffix
+	partyRecord := ensureModelByCode(t, graph.models, "party", "name", "Alya Santoso "+suffix, map[string]any{
+		"party_type": "person",
+		"name":       "Alya Santoso " + suffix,
+		"status":     "active",
+	}, actorID)
+	customerPartyID := partyRecord.ID
 	customerRecord := ensureModelByCode(t, graph.models, "customer_profile", "party_id", customerPartyID, map[string]any{
 		"party_id":          customerPartyID,
 		"customer_name":     "Alya Santoso " + suffix,

@@ -58,7 +58,7 @@ func TestBuiltInValidationMetadataScopesAmbiguousFields(t *testing.T) {
 		t.Fatal("expected unrecognized policy_id owner to remain unclassified")
 	}
 
-	statuses, ok := builtInAllowedValuesForField("status")
+	statuses, ok := builtInAllowedValuesForField("party_statement_run", "status")
 	if !ok {
 		t.Fatal("expected built-in status allowlist")
 	}
@@ -66,6 +66,13 @@ func TestBuiltInValidationMetadataScopesAmbiguousFields(t *testing.T) {
 		if !containsTestString(statuses, required) {
 			t.Fatalf("expected status allowlist to include %q, got %+v", required, statuses)
 		}
+	}
+	if _, ok := builtInAllowedValuesForField("inventory_movement", "event_type"); ok {
+		t.Fatal("expected generic event_type to remain unclassified outside attendance")
+	}
+	attendanceEvents, ok := builtInAllowedValuesForField("attendance_event", "event_type")
+	if !ok || !containsTestString(attendanceEvents, "clock_in") {
+		t.Fatalf("expected attendance event_type allowlist, got %+v ok=%v", attendanceEvents, ok)
 	}
 }
 

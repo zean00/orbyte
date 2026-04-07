@@ -125,7 +125,7 @@ func posCoreKernelPackManifest() module.Manifest {
 				{Key: "expected_cash_amount", Label: "Expected Cash", LabelI18n: localize("Expected Cash", "Kas Diharapkan"), Type: "number"},
 				{Key: "actual_cash_amount", Label: "Actual Cash", LabelI18n: localize("Actual Cash", "Kas Aktual"), Type: "number"},
 				{Key: "over_short_amount", Label: "Over / Short", LabelI18n: localize("Over / Short", "Lebih / Kurang"), Type: "number"},
-				{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "draft"},
+				{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "draft", AllowedValues: []string{"draft", "opened", "closed", "cancelled"}},
 				{Key: "notes", Label: "Notes", LabelI18n: localize("Notes", "Catatan"), Type: "string"},
 			}),
 			posModelDefinition("pos_sale", "POS Sale", "pos_sale", []model.FieldDefinition{
@@ -139,7 +139,7 @@ func posCoreKernelPackManifest() module.Manifest {
 				{Key: "party_id", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Type: "string"},
 				{Key: "party_name", Label: "Customer Name", LabelI18n: localize("Customer Name", "Nama Pelanggan"), Type: "string"},
 				{Key: "checkout_mode", Label: "Checkout Mode", LabelI18n: localize("Checkout Mode", "Mode Checkout"), Type: "string"},
-				{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "held"},
+				{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "held", AllowedValues: []string{"held", "completed", "voided"}},
 				{Key: "reference", Label: "Reference", LabelI18n: localize("Reference", "Referensi"), Type: "string"},
 				{Key: "currency_code", Label: "Currency", LabelI18n: localize("Currency", "Mata Uang"), Type: "string"},
 				{Key: "subtotal_amount", Label: "Subtotal", LabelI18n: localize("Subtotal", "Subtotal"), Type: "number"},

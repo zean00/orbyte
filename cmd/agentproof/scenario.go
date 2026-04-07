@@ -316,7 +316,7 @@ func seedOrderToCashScenario(ctx context.Context, client *apiClient, baseURL, op
 		"name":                         "Field Router " + runID,
 		"kind":                         "simple",
 		"item_type":                    "product",
-		"uom_code":                     "EA",
+		"uom_code":                     "ea",
 		"unit_price":                   100.0,
 		"tax_code":                     taxCode,
 		"revenue_account_code":         "4000-REV",
@@ -335,7 +335,7 @@ func seedOrderToCashScenario(ctx context.Context, client *apiClient, baseURL, op
 			"item_code":      itemCode,
 			"description":    "Opening stock",
 			"warehouse_code": "MAIN",
-			"uom_code":       "EA",
+			"uom_code":       "ea",
 			"quantity":       12.0,
 			"unit_cost":      60.0,
 		}},
@@ -356,7 +356,7 @@ func seedOrderToCashScenario(ctx context.Context, client *apiClient, baseURL, op
 			"item_code":      itemCode,
 			"description":    "Field Router",
 			"warehouse_code": "MAIN",
-			"uom_code":       "EA",
+			"uom_code":       "ea",
 			"quantity":       5.0,
 			"unit_price":     100.0,
 			"tax_code":       taxCode,
@@ -467,7 +467,7 @@ func seedProcureToPayInventoryScenario(ctx context.Context, client *apiClient, b
 	if _, err := client.createModel(ctx, "commercial_item", map[string]any{
 		"sku":                          itemCode,
 		"name":                         "Medical Cuff " + runID,
-		"uom_code":                     "EA",
+		"uom_code":                     "ea",
 		"inventory_enabled":            true,
 		"inventory_tracking_mode":      "quantity",
 		"inventory_asset_account_code": "1200-INV-MED",
@@ -484,7 +484,7 @@ func seedProcureToPayInventoryScenario(ctx context.Context, client *apiClient, b
 			"item_code":            itemCode,
 			"description":          "Medical Cuff",
 			"warehouse_code":       "MAIN",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"ordered_qty":          15.0,
 			"quantity":             15.0,
 			"unit_price":           100.0,
@@ -618,7 +618,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"name":                                 "Cold Brew Beans 1kg " + runID,
 			"kind":                                 "item",
 			"item_type":                            "product",
-			"uom_code":                             "EA",
+			"uom_code":                             "ea",
 			"base_price":                           180000.0,
 			"inventory_enabled":                    true,
 			"inventory_tracking_mode":              "quantity",
@@ -636,7 +636,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"name":                                 "Oat Milk Barista 1L " + runID,
 			"kind":                                 "item",
 			"item_type":                            "product",
-			"uom_code":                             "EA",
+			"uom_code":                             "ea",
 			"base_price":                           42000.0,
 			"inventory_enabled":                    true,
 			"inventory_tracking_mode":              "quantity",
@@ -654,7 +654,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"name":                                 "Matcha Powder 500g " + runID,
 			"kind":                                 "item",
 			"item_type":                            "product",
-			"uom_code":                             "EA",
+			"uom_code":                             "ea",
 			"base_price":                           125000.0,
 			"inventory_enabled":                    true,
 			"inventory_tracking_mode":              "quantity",
@@ -672,7 +672,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"name":                                 "Paper Cups 16oz " + runID,
 			"kind":                                 "item",
 			"item_type":                            "product",
-			"uom_code":                             "EA",
+			"uom_code":                             "ea",
 			"base_price":                           2500.0,
 			"inventory_enabled":                    true,
 			"inventory_tracking_mode":              "quantity",
@@ -698,7 +698,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"item_code":              coldBrewCode,
 			"preferred":              true,
 			"priority":               1.0,
-			"purchase_uom_code":      "EA",
+			"purchase_uom_code":      "ea",
 			"lead_time_days":         5.0,
 			"minimum_order_quantity": 10.0,
 			"pack_size":              5.0,
@@ -711,7 +711,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"item_code":              oatMilkCode,
 			"preferred":              true,
 			"priority":               1.0,
-			"purchase_uom_code":      "EA",
+			"purchase_uom_code":      "ea",
 			"lead_time_days":         4.0,
 			"minimum_order_quantity": 4.0,
 			"pack_size":              4.0,
@@ -725,17 +725,49 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 	}
 
 	now := time.Now().UTC()
-	if _, err := createAndApproveDocument(ctx, client, "stock_receipt", map[string]any{
-		"receipt_date":   now.AddDate(0, -2, 0).Format("2006-01-02"),
-		"warehouse_code": warehouseCode,
-		"lines": []map[string]any{
-			{"item_code": coldBrewCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 46.0, "unit_cost": 172000.0},
-			{"item_code": oatMilkCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 36.0, "unit_cost": 39000.0},
-			{"item_code": matchaCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 30.0, "unit_cost": 120000.0},
-			{"item_code": cupsCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 40.0, "unit_cost": 1800.0},
-		},
-	}); err != nil {
-		return scenarioManifest{}, fmt.Errorf("seed stock receipt: %w", err)
+	for _, movement := range []map[string]any{
+		{"item_code": coldBrewCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 80.0, "unit_cost": 172000.0, "total_cost": 13760000.0},
+		{"item_code": oatMilkCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 80.0, "unit_cost": 39000.0, "total_cost": 3120000.0},
+		{"item_code": matchaCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 60.0, "unit_cost": 120000.0, "total_cost": 7200000.0},
+		{"item_code": cupsCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 100.0, "unit_cost": 1800.0, "total_cost": 180000.0},
+	} {
+		record, err := client.createDocument(ctx, map[string]any{
+			"type":            "stock_movement",
+			"organization_id": defaultOrgID,
+			"location_id":     defaultLocID,
+			"payload": map[string]any{
+				"movement_date":      now.AddDate(0, -2, 0).Format("2006-01-02"),
+				"movement_reason":    "opening_balance",
+				"movement_direction": "in",
+				"currency_code":      "IDR",
+				"item_code":          movement["item_code"],
+				"description":        movement["description"],
+				"warehouse_code":     movement["warehouse_code"],
+				"uom_code":           movement["uom_code"],
+				"quantity_delta":     movement["quantity_delta"],
+				"unit_cost":          movement["unit_cost"],
+				"total_cost":         movement["total_cost"],
+			},
+		})
+		if err != nil {
+			return scenarioManifest{}, fmt.Errorf("seed opening stock movement for %s: %w", stringValue(movement["item_code"]), err)
+		}
+		current, _, _, err := client.getDocument(ctx, record.ID)
+		if err != nil {
+			return scenarioManifest{}, fmt.Errorf("load opening stock movement for %s: %w", stringValue(movement["item_code"]), err)
+		}
+		if current.Status != "posted" {
+			_, version, etag, err := client.getDocument(ctx, record.ID)
+			if err != nil {
+				return scenarioManifest{}, fmt.Errorf("reload opening stock movement for %s: %w", stringValue(movement["item_code"]), err)
+			}
+			if _, _, _, err := client.actionDocument(ctx, record.ID, version, etag, "approve"); err != nil {
+				reloaded, _, _, reloadErr := client.getDocument(ctx, record.ID)
+				if reloadErr != nil || reloaded.Status != "posted" {
+					return scenarioManifest{}, fmt.Errorf("post opening stock movement for %s: %w", stringValue(movement["item_code"]), err)
+				}
+			}
+		}
 	}
 
 	for week := 1; week <= 6; week++ {
@@ -745,8 +777,8 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"party_name":          "Cafe Horizon " + runID,
 			"fulfillment_date":    fulfillmentDate,
 			"lines": []map[string]any{
-				{"item_code": coldBrewCode, "description": "Cold brew beans historical issue", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 7.0},
-				{"item_code": oatMilkCode, "description": "Oat milk historical issue", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 5.0},
+				{"item_code": coldBrewCode, "description": "Cold brew beans historical issue", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity": 7.0},
+				{"item_code": oatMilkCode, "description": "Oat milk historical issue", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity": 5.0},
 			},
 		}); err != nil {
 			return scenarioManifest{}, fmt.Errorf("seed historical fulfillment %d: %w", week, err)
@@ -760,8 +792,8 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 		"order_date":    now.Format("2006-01-02"),
 		"total_amount":  846000.0,
 		"lines": []map[string]any{
-			{"item_code": coldBrewCode, "description": "Cold brew beans urgent demand", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 4.0, "unit_price": 180000.0, "line_total": 720000.0},
-			{"item_code": oatMilkCode, "description": "Oat milk urgent demand", "warehouse_code": warehouseCode, "uom_code": "EA", "quantity": 3.0, "unit_price": 42000.0, "line_total": 126000.0},
+			{"item_code": coldBrewCode, "description": "Cold brew beans urgent demand", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity": 4.0, "unit_price": 180000.0, "line_total": 720000.0},
+			{"item_code": oatMilkCode, "description": "Oat milk urgent demand", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity": 3.0, "unit_price": 42000.0, "line_total": 126000.0},
 		},
 	}); err != nil {
 		return scenarioManifest{}, fmt.Errorf("seed confirmed sales order: %w", err)
@@ -940,6 +972,9 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 	beansRuleCode := "RULE-BEANS10-" + suffix
 	draftTitle := "Promotion Plan " + runID
 
+	if err := ensureSeedPOSReferences(ctx, client); err != nil {
+		return scenarioManifest{}, err
+	}
 	paymentMethod, err := client.createModel(ctx, "payment_method", map[string]any{
 		"code":                  "CASHPROMO-" + suffix,
 		"name":                  "Cash Promo " + runID,
@@ -989,7 +1024,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 			"name":                 "Espresso Double " + runID,
 			"description":          "Frequent coffee purchase",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           28000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1002,7 +1037,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 			"name":                 "Butter Croissant " + runID,
 			"description":          "Frequent pastry attachment",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           22000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1015,7 +1050,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 			"name":                 "House Beans 1kg " + runID,
 			"description":          "Higher-value packaged beans",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           95000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1028,7 +1063,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 			"name":                 "Iced Tea " + runID,
 			"description":          "Secondary beverage",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           18000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1042,8 +1077,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 		}
 	}
 
-	goldOne, err := client.createModel(ctx, "customer_profile", map[string]any{
-		"party_id":        "party_gold_1_" + suffix,
+	goldOne, err := createSeedCustomerProfile(ctx, client, "Alya Santoso "+runID, map[string]any{
 		"customer_name":   "Alya Santoso " + runID,
 		"customer_type":   "member",
 		"member_status":   "active",
@@ -1054,8 +1088,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 	if err != nil {
 		return scenarioManifest{}, fmt.Errorf("create gold customer 1: %w", err)
 	}
-	goldTwo, err := client.createModel(ctx, "customer_profile", map[string]any{
-		"party_id":        "party_gold_2_" + suffix,
+	goldTwo, err := createSeedCustomerProfile(ctx, client, "Bima Pratama "+runID, map[string]any{
 		"customer_name":   "Bima Pratama " + runID,
 		"customer_type":   "member",
 		"member_status":   "active",
@@ -1066,8 +1099,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 	if err != nil {
 		return scenarioManifest{}, fmt.Errorf("create gold customer 2: %w", err)
 	}
-	silverCustomer, err := client.createModel(ctx, "customer_profile", map[string]any{
-		"party_id":        "party_silver_" + suffix,
+	silverCustomer, err := createSeedCustomerProfile(ctx, client, "Citra Lestari "+runID, map[string]any{
 		"customer_name":   "Citra Lestari " + runID,
 		"customer_type":   "member",
 		"member_status":   "active",
@@ -1217,6 +1249,9 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 	ruleCode := "SHOWCASE-RULE-BEANS10-" + suffix
 	draftTitle := "Promotion Recovery Plan " + runID
 
+	if err := ensureSeedPOSReferences(ctx, client); err != nil {
+		return scenarioManifest{}, err
+	}
 	paymentMethod, err := client.createModel(ctx, "payment_method", map[string]any{
 		"code":                  "CASHSHOW-" + suffix,
 		"name":                  "Cash Showcase " + runID,
@@ -1276,7 +1311,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 			"name":                 "Espresso Double " + runID,
 			"description":          "Repeat breakfast beverage",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           28000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1289,7 +1324,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 			"name":                 "Butter Croissant " + runID,
 			"description":          "Repeat breakfast attachment",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           22000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1302,7 +1337,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 			"name":                 "House Beans 1kg " + runID,
 			"description":          "Weak current promoted product",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           95000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1315,7 +1350,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 			"name":                 "Iced Tea " + runID,
 			"description":          "Secondary beverage control item",
 			"kind":                 "product",
-			"uom_code":             "EA",
+			"uom_code":             "ea",
 			"unit_price":           18000.0,
 			"revenue_account_code": "4000-REV",
 			"is_sellable":          true,
@@ -1329,8 +1364,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 		}
 	}
 
-	goldOne, err := client.createModel(ctx, "customer_profile", map[string]any{
-		"party_id":        "party_showcase_gold_1_" + suffix,
+	goldOne, err := createSeedCustomerProfile(ctx, client, "Alya Santoso "+runID, map[string]any{
 		"customer_name":   "Alya Santoso " + runID,
 		"customer_type":   "member",
 		"member_status":   "active",
@@ -1341,8 +1375,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 	if err != nil {
 		return scenarioManifest{}, fmt.Errorf("create gold customer 1: %w", err)
 	}
-	goldTwo, err := client.createModel(ctx, "customer_profile", map[string]any{
-		"party_id":        "party_showcase_gold_2_" + suffix,
+	goldTwo, err := createSeedCustomerProfile(ctx, client, "Bima Pratama "+runID, map[string]any{
 		"customer_name":   "Bima Pratama " + runID,
 		"customer_type":   "member",
 		"member_status":   "active",
@@ -1353,8 +1386,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 	if err != nil {
 		return scenarioManifest{}, fmt.Errorf("create gold customer 2: %w", err)
 	}
-	silverCustomer, err := client.createModel(ctx, "customer_profile", map[string]any{
-		"party_id":        "party_showcase_silver_" + suffix,
+	silverCustomer, err := createSeedCustomerProfile(ctx, client, "Citra Lestari "+runID, map[string]any{
 		"customer_name":   "Citra Lestari " + runID,
 		"customer_type":   "member",
 		"member_status":   "active",
@@ -1936,9 +1968,9 @@ func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseU
 	componentA := "COMP-A-" + suffix
 	componentB := "COMP-B-" + suffix
 	for _, item := range []map[string]any{
-		{"sku": finishedCode, "name": "Finished Kit " + runID, "uom_code": "EA", "inventory_enabled": true, "status": "active"},
-		{"sku": componentA, "name": "Component A " + runID, "uom_code": "EA", "inventory_enabled": true, "status": "active"},
-		{"sku": componentB, "name": "Component B " + runID, "uom_code": "EA", "inventory_enabled": true, "inventory_tracking_mode": "batch", "status": "active"},
+		{"sku": finishedCode, "name": "Finished Kit " + runID, "uom_code": "ea", "inventory_enabled": true, "status": "active"},
+		{"sku": componentA, "name": "Component A " + runID, "uom_code": "ea", "inventory_enabled": true, "status": "active"},
+		{"sku": componentB, "name": "Component B " + runID, "uom_code": "ea", "inventory_enabled": true, "inventory_tracking_mode": "batch", "status": "active"},
 	} {
 		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
 			return scenarioManifest{}, err
@@ -1962,8 +1994,8 @@ func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseU
 		"is_active":      true,
 		"status":         "active",
 		"lines": []map[string]any{
-			{"component_item_code": componentA, "quantity_per_unit": 2.0, "uom_code": "EA", "warehouse_code": "MAIN"},
-			{"component_item_code": componentB, "quantity_per_unit": 1.0, "uom_code": "EA", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix},
+			{"component_item_code": componentA, "quantity_per_unit": 2.0, "uom_code": "ea", "warehouse_code": "MAIN"},
+			{"component_item_code": componentB, "quantity_per_unit": 1.0, "uom_code": "ea", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix},
 		},
 	}); err != nil {
 		return scenarioManifest{}, err
@@ -1979,7 +2011,7 @@ func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseU
 				"item_code":      seed["item_code"],
 				"warehouse_code": seed["warehouse_code"],
 				"batch_code":     seed["batch_code"],
-				"uom_code":       "EA",
+				"uom_code":       "ea",
 				"quantity":       seed["quantity"],
 				"unit_cost":      seed["unit_cost"],
 			}},
@@ -1994,8 +2026,8 @@ func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseU
 		"planned_quantity":   3.0,
 		"stages":             []map[string]any{{"code": "mix", "name": "Mix", "required": true, "status": "completed"}, {"code": "pack", "name": "Pack", "required": true, "status": "completed"}},
 		"lines": []map[string]any{
-			{"component_item_code": componentA, "item_code": componentA, "quantity": 6.0, "uom_code": "EA", "warehouse_code": "MAIN", "unit_cost": 5.0},
-			{"component_item_code": componentB, "item_code": componentB, "quantity": 3.0, "uom_code": "EA", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "unit_cost": 10.0},
+			{"component_item_code": componentA, "item_code": componentA, "quantity": 6.0, "uom_code": "ea", "warehouse_code": "MAIN", "unit_cost": 5.0},
+			{"component_item_code": componentB, "item_code": componentB, "quantity": 3.0, "uom_code": "ea", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "unit_cost": 10.0},
 		},
 	})
 	if err != nil {
@@ -2005,8 +2037,8 @@ func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseU
 		"source_production_order_id": productionOrder.ID,
 		"warehouse_code":             "MAIN",
 		"lines": []map[string]any{
-			{"item_code": componentA, "quantity": 6.0, "uom_code": "EA", "warehouse_code": "MAIN", "unit_cost": 5.0},
-			{"item_code": componentB, "quantity": 3.0, "uom_code": "EA", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "unit_cost": 10.0},
+			{"item_code": componentA, "quantity": 6.0, "uom_code": "ea", "warehouse_code": "MAIN", "unit_cost": 5.0},
+			{"item_code": componentB, "quantity": 3.0, "uom_code": "ea", "warehouse_code": "MAIN", "batch_code": "BATCH-" + suffix, "unit_cost": 10.0},
 		},
 	})
 	if err != nil {
@@ -2044,8 +2076,10 @@ func seedProductionCostingScenario(ctx context.Context, client *apiClient, baseU
 }
 
 func newRunContext() (string, string) {
-	runID := time.Now().UTC().Format("20060102-150405")
-	return runID, strings.ReplaceAll(runID, "-", "")
+	now := time.Now().UTC()
+	runID := now.Format("20060102-150405")
+	suffix := fmt.Sprintf("%s%09d", strings.ReplaceAll(runID, "-", ""), now.Nanosecond())
+	return runID, suffix
 }
 
 func createScenarioWorkingDir(scenario, runID string) (string, error) {
@@ -2616,6 +2650,9 @@ func createSeedCommercialItem(ctx context.Context, client *apiClient, values map
 		boolValue(item["is_variant"]) ||
 		kind == "variant" ||
 		(isSellable && (itemType == "product" || kind == "product" || kind == "item" || kind == "simple"))
+	if err := ensureSeedCommercialReferences(ctx, client, item); err != nil {
+		return err
+	}
 	if needsProduct {
 		if productCode == "" {
 			productCode = itemCode
@@ -2653,6 +2690,98 @@ func createSeedCommercialItem(ctx context.Context, client *apiClient, values map
 	}
 	_, err := client.createModel(ctx, "commercial_item", item)
 	return err
+}
+
+func ensureSeedPOSReferences(ctx context.Context, client *apiClient) error {
+	for _, account := range []map[string]any{
+		{"code": "1000-CASH", "name": "Cash", "account_type": "asset", "normal_balance": "debit", "status": "active"},
+		{"code": "1010-BANK", "name": "Bank Clearing", "account_type": "asset", "normal_balance": "debit", "status": "active"},
+		{"code": "4000-REV", "name": "Sales Revenue", "account_type": "revenue", "normal_balance": "credit", "status": "active"},
+		{"code": "2100-VATOUT", "name": "VAT Output", "account_type": "liability", "normal_balance": "credit", "status": "active"},
+	} {
+		if err := createModelIgnoreConflict(ctx, client, "finance_account", account); err != nil {
+			return err
+		}
+	}
+	return createModelIgnoreConflict(ctx, client, "warehouse", map[string]any{
+		"code":   "MAIN",
+		"name":   "Main Warehouse",
+		"kind":   "storage",
+		"status": "active",
+	})
+}
+
+func createSeedCustomerProfile(ctx context.Context, client *apiClient, partyName string, values map[string]any) (map[string]any, error) {
+	party, err := client.createModel(ctx, "party", map[string]any{
+		"party_type": "person",
+		"name":       partyName,
+		"status":     "active",
+	})
+	if err != nil {
+		return nil, err
+	}
+	profile := cloneScenarioValues(values)
+	profile["party_id"] = stringValue(party["id"])
+	if strings.TrimSpace(stringValue(profile["customer_name"])) == "" {
+		profile["customer_name"] = partyName
+	}
+	return client.createModel(ctx, "customer_profile", profile)
+}
+
+func ensureSeedCommercialReferences(ctx context.Context, client *apiClient, item map[string]any) error {
+	if uomCode := strings.TrimSpace(stringValue(item["uom_code"])); uomCode != "" {
+		if err := createModelIgnoreConflict(ctx, client, "commercial_uom", map[string]any{
+			"code":   uomCode,
+			"name":   strings.ToUpper(uomCode),
+			"symbol": strings.ToUpper(uomCode),
+			"status": "active",
+		}); err != nil {
+			return err
+		}
+	}
+	if taxCode := strings.TrimSpace(stringValue(item["tax_code"])); taxCode != "" {
+		if err := createModelIgnoreConflict(ctx, client, "commercial_tax_code", map[string]any{
+			"code":   taxCode,
+			"name":   taxCode,
+			"mode":   "exclusive",
+			"rate":   11,
+			"status": "active",
+		}); err != nil {
+			return err
+		}
+	}
+	accountDefaults := map[string]map[string]string{
+		"revenue_account_code":         {"account_type": "revenue", "normal_balance": "credit"},
+		"inventory_asset_account_code": {"account_type": "asset", "normal_balance": "debit"},
+		"cogs_account_code":            {"account_type": "expense", "normal_balance": "debit"},
+		"wip_account_code":             {"account_type": "asset", "normal_balance": "debit"},
+	}
+	for field, defaults := range accountDefaults {
+		code := strings.TrimSpace(stringValue(item[field]))
+		if code == "" {
+			continue
+		}
+		if err := createModelIgnoreConflict(ctx, client, "finance_account", map[string]any{
+			"code":           code,
+			"name":           code,
+			"account_type":   defaults["account_type"],
+			"normal_balance": defaults["normal_balance"],
+			"status":         "active",
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createModelIgnoreConflict(ctx context.Context, client *apiClient, key string, values map[string]any) error {
+	if _, err := client.createModel(ctx, key, values); err != nil {
+		if strings.Contains(err.Error(), "status=409") || strings.Contains(strings.ToLower(err.Error()), "duplicate key value") {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func periodID(record map[string]any) string {

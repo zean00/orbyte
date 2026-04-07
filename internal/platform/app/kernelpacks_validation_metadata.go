@@ -19,7 +19,7 @@ func applyBuiltInValidationMetadata(manifest module.Manifest) module.Manifest {
 				}
 			}
 			if len(field.AllowedValues) == 0 {
-				if values, ok := builtInAllowedValuesForField(field.Key); ok {
+				if values, ok := builtInAllowedValuesForField(def.Key, field.Key); ok {
 					field.AllowedValues = values
 				}
 			}
@@ -161,9 +161,15 @@ func builtInReferenceForField(modelKey, fieldKey string) (model.ReferenceDefinit
 	return ref, true
 }
 
-func builtInAllowedValuesForField(fieldKey string) ([]string, bool) {
+func builtInAllowedValuesForField(modelKey, fieldKey string) ([]string, bool) {
+	if fieldKey == "event_type" {
+		if modelKey == "attendance_event" {
+			return []string{"clock_in", "clock_out", "break_start", "break_end", "adjustment", "manual_adjustment"}, true
+		}
+		return nil, false
+	}
 	values := map[string][]string{
-		"status":                    {"active", "inactive", "blocked", "draft", "open", "closed", "submitted", "approved", "rejected", "cancelled", "posted", "generated", "completed", "pending", "processing", "ready", "settled", "void", "failed", "archived", "issued", "partially_paid", "paid", "refunded", "held"},
+		"status":                    {"active", "inactive", "blocked", "draft", "open", "opened", "closed", "submitted", "approved", "rejected", "cancelled", "posted", "generated", "completed", "pending", "processing", "ready", "settled", "void", "failed", "archived", "issued", "partially_paid", "paid", "refunded", "held"},
 		"approval_status":           {"draft", "pending", "submitted", "approved", "rejected", "cancelled"},
 		"employment_status":         {"active", "inactive", "terminated", "on_leave"},
 		"member_status":             {"active", "inactive", "expired", "suspended"},
@@ -176,7 +182,6 @@ func builtInAllowedValuesForField(fieldKey string) ([]string, bool) {
 		"task_type":                 {"checklist", "journal", "review", "approval"},
 		"reversal_status":           {"none", "pending", "reversed", "corrected"},
 		"obligation_class":          {"withholding", "employee_contribution", "employer_contribution", "other"},
-		"event_type":                {"clock_in", "clock_out", "break_start", "break_end", "adjustment"},
 		"pay_basis":                 {"hourly", "salary", "daily"},
 		"assignment_type":           {"primary", "secondary", "temporary"},
 		"eligibility_type":          {"pos", "warehouse", "production", "field", "general"},
@@ -200,7 +205,7 @@ func builtInAllowedValuesForField(fieldKey string) ([]string, bool) {
 		"exception_kind":            {"missing_match", "amount_mismatch", "duplicate", "timing", "other"},
 		"entry_type":                {"accrual", "usage", "adjustment", "carryover", "expiry"},
 		"run_status":                {"pending", "processing", "completed", "failed", "cancelled"},
-		"source_document_type":      {"sales_order", "sales_invoice", "purchase_order", "purchase_invoice", "fulfillment_order", "delivery_order", "production_order", "journal_posting", "pos_sale", "other"},
+		"source_document_type":      {"sales_order", "sales_invoice", "invoice", "credit_note", "customer_payment", "customer_refund", "purchase_order", "purchase_invoice", "vendor_bill", "vendor_payment", "vendor_credit", "fulfillment_order", "sales_fulfillment", "delivery_order", "production_order", "production_cost_capture", "journal_posting", "ledger_posting", "journal_template", "payroll_run", "payroll_remittance_payment", "pos_sale", "pos_tender_reconciliation", "retail_finance", "stock_movement", "stock_receipt", "stock_issue", "stock_adjustment", "stock_transfer", "goods_receipt", "treasury_transfer", "treasury_exception", "recall_case", "other"},
 		"coverage_status":           {"covered", "short", "excess", "unknown"},
 		"conversion_status":         {"pending", "converted", "rejected", "cancelled"},
 		"rate_type":                 {"labor", "machine", "overhead", "setup", "other"},
