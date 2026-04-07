@@ -220,10 +220,37 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 		"status":                  "active",
 	}, actorID)
 
+	ensureModelByCode(t, graph.models, "commercial_product", "code", "POS-ESPRESSO-"+suffix, map[string]any{
+		"code":      "POS-ESPRESSO-" + suffix,
+		"name":      "Espresso Double " + suffix,
+		"item_type": "product",
+		"uom_code":  "EA",
+		"tax_code":  textValue(taxCode.Values["code"]),
+		"status":    "active",
+	}, actorID)
+	ensureModelByCode(t, graph.models, "commercial_product", "code", "POS-CROISSANT-"+suffix, map[string]any{
+		"code":      "POS-CROISSANT-" + suffix,
+		"name":      "Butter Croissant " + suffix,
+		"item_type": "product",
+		"uom_code":  "EA",
+		"tax_code":  textValue(taxCode.Values["code"]),
+		"status":    "active",
+	}, actorID)
+	ensureModelByCode(t, graph.models, "commercial_product", "code", "POS-BEANS-"+suffix, map[string]any{
+		"code":      "POS-BEANS-" + suffix,
+		"name":      "House Beans 1kg " + suffix,
+		"item_type": "product",
+		"uom_code":  "EA",
+		"tax_code":  textValue(taxCode.Values["code"]),
+		"status":    "active",
+	}, actorID)
+
 	itemCoffee := ensureModelByCode(t, graph.models, "commercial_item", "sku", "POS-ESPRESSO-"+suffix, map[string]any{
 		"sku":                  "POS-ESPRESSO-" + suffix,
 		"name":                 "Espresso Double " + suffix,
 		"description":          "Fresh espresso for POS terminal demo",
+		"product_code":         "POS-ESPRESSO-" + suffix,
+		"item_type":            "product",
 		"kind":                 "product",
 		"uom_code":             "EA",
 		"unit_price":           28000.0,
@@ -238,6 +265,8 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 		"sku":                  "POS-CROISSANT-" + suffix,
 		"name":                 "Butter Croissant " + suffix,
 		"description":          "Counter pastry for POS terminal demo",
+		"product_code":         "POS-CROISSANT-" + suffix,
+		"item_type":            "product",
 		"kind":                 "product",
 		"uom_code":             "EA",
 		"unit_price":           22000.0,
@@ -252,6 +281,8 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 		"sku":                  "POS-BEANS-" + suffix,
 		"name":                 "House Beans 1kg " + suffix,
 		"description":          "Packaged beans for POS terminal demo",
+		"product_code":         "POS-BEANS-" + suffix,
+		"item_type":            "product",
 		"kind":                 "product",
 		"uom_code":             "EA",
 		"unit_price":           95000.0,

@@ -470,6 +470,103 @@
       }
     },
     {
+      "name": "analytics.dashboard.board.create",
+      "title": "Create Dashboard Board",
+      "description": "Create a saved dashboard board from selected widget keys. If widget_keys are omitted, Orbyte will choose relevant registered widgets from the title and description.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "scope": "analytics",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widget_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.analytics.dashboard.board.create",
+        "actionClass": "controlled_mutation",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.board.preview",
+      "title": "Preview Dashboard Board",
+      "description": "Build a live preview full dashboard board artifact from selected widget keys without saving it. Use this only when the user explicitly asks for a full dashboard or board preview. If widget_keys are omitted, Orbyte will choose relevant registered widgets from the title and description.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "scope": "analytics",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widget_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.dashboard.board.preview",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
       "name": "analytics.dashboard.delete",
       "title": "Delete Dashboard",
       "description": "Delete a runtime analytics dashboard.",
@@ -554,6 +651,10 @@
       "scope": "analytics",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -607,6 +708,135 @@
         ],
         "requiredPermissions": [
           "analytics.author"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.widget.preview",
+      "title": "Preview Dashboard Widget",
+      "description": "Build a live preview dashboard widget artifact from one selected widget key without saving it. Use this for focused insight answers where only one widget is needed. If widget_key is omitted, Orbyte will infer the best widget from the title and description.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "scope": "analytics",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widget_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.dashboard.widget.preview",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.widget_catalog",
+      "title": "List Dashboard Widgets",
+      "description": "List registered dashboard widget definitions available to the actor for a dashboard surface.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "scope": "analytics",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "surface": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.analytics.dashboard.widget_catalog",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "analytics.read"
+        ]
+      }
+    },
+    {
+      "name": "analytics.dashboard.widgets.preview",
+      "title": "Preview Dashboard Widgets",
+      "description": "Build 2-3 live preview dashboard widget artifacts for a focused insight answer without saving a full board. Prefer omitting widget_keys for general insight requests so Orbyte can infer a balanced KPI/comparison/trend set from the title, description, and intent. Supply widget_keys only when the user explicitly asked for specific widgets.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "scope": "analytics",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widget_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.analytics.dashboard.widgets.preview",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "analytics.read"
         ]
       }
     },
@@ -695,6 +925,10 @@
       "scope": "analytics",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -878,6 +1112,10 @@
       "scope": "analytics",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -1022,6 +1260,10 @@
       "scope": "analytics",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -1165,6 +1407,10 @@
       "scope": "analytics",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -1410,6 +1656,10 @@
       "compactEligible": true,
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -2350,6 +2600,10 @@
       "compactEligible": true,
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -3282,6 +3536,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -3557,6 +3815,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -3673,6 +3935,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -4687,6 +4953,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -5815,6 +6085,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -5964,6 +6238,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -6484,6 +6762,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -6564,6 +6846,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -7275,6 +7561,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -7452,6 +7742,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -7759,6 +8053,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -7829,6 +8127,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -8010,6 +8312,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -8353,6 +8659,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -8425,6 +8735,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -8598,6 +8912,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -8731,6 +9049,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -8855,6 +9177,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -9490,6 +9816,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -9620,6 +9950,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -9680,6 +10014,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -9739,6 +10077,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -9798,6 +10140,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -10362,6 +10708,178 @@
       }
     },
     {
+      "name": "planning_core.purchase_requests.draft.create",
+      "title": "Planning Core Create Draft Purchase Requests",
+      "description": "Create draft purchase requests from replenishment selections. Use this only after confirming the recommended items and quantities.",
+      "moduleKey": "planning_core",
+      "sourceType": "synthetic",
+      "scope": "planning_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "selections": {
+            "items": {
+              "properties": {
+                "item_code": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "warehouse_code": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "item_code",
+                "warehouse_code",
+                "quantity"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.planning_core.purchase_requests.draft.create",
+        "actionClass": "draft",
+        "riskClass": "medium",
+        "draftOnly": true,
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "draft-first",
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "document.create"
+        ]
+      }
+    },
+    {
+      "name": "planning_core.replenishment.insight.summary",
+      "title": "Planning Core Replenishment Insight Summary",
+      "description": "Summarize replenishment risk, healthy items, shortage pressure, and vendor readiness for a warehouse. Use this first when deciding what needs replenishment now.",
+      "moduleKey": "planning_core",
+      "sourceType": "synthetic",
+      "scope": "planning_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "category_code": {
+            "type": "string"
+          },
+          "coverage_status": {
+            "type": "string"
+          },
+          "has_inbound_only": {
+            "type": "boolean"
+          },
+          "has_preferred_vendor_only": {
+            "type": "boolean"
+          },
+          "item_code": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "shortage_only": {
+            "type": "boolean"
+          },
+          "warehouse_code": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.planning_core.replenishment.insight.summary",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "planning_core.replenishment.plan.summary",
+      "title": "Planning Core Replenishment Plan Summary",
+      "description": "Recommend replenishment quantities and vendor grouping based on current shortage rows. Use this after the insight summary to turn risk signals into an executable replenishment plan.",
+      "moduleKey": "planning_core",
+      "sourceType": "synthetic",
+      "scope": "planning_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "category_code": {
+            "type": "string"
+          },
+          "coverage_status": {
+            "type": "string"
+          },
+          "has_inbound_only": {
+            "type": "boolean"
+          },
+          "has_preferred_vendor_only": {
+            "type": "boolean"
+          },
+          "item_code": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "shortage_only": {
+            "type": "boolean"
+          },
+          "warehouse_code": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.planning_core.replenishment.plan.summary",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
       "name": "platform.core.business.info.get",
       "title": "Platform Core Business Info",
       "description": "Get business metadata and capabilities for platform.core.",
@@ -10579,7 +11097,7 @@
     {
       "name": "pos_core.business.records.search",
       "title": "POS Core Business Records",
-      "description": "Search business records owned by pos_core.",
+      "description": "Search business records owned by pos_core. For campaign planning, prefer pos_core.sales.strategy.summary over generic record search.",
       "moduleKey": "pos_core",
       "sourceType": "synthetic",
       "scope": "pos_core",
@@ -10623,6 +11141,54 @@
         "sideEffectClass": "operation",
         "idempotency": "best-effort",
         "auditAction": "mcp.tool.pos_core.business.records.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "pos_core.sales.strategy.summary",
+      "title": "POS Core Sales Strategy Summary",
+      "description": "Summarize POS sales, best-selling items, repeat bundle patterns, and member segment behavior for campaign planning. Use this before recommending a promotion strategy.",
+      "moduleKey": "pos_core",
+      "sourceType": "synthetic",
+      "scope": "pos_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "date_from": {
+            "type": "string"
+          },
+          "date_to": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "register_code": {
+            "type": "string"
+          },
+          "store_code": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.pos_core.sales.strategy.summary",
         "actionClass": "analyze",
         "riskClass": "low",
         "governanceTags": [
@@ -11358,7 +11924,7 @@
     {
       "name": "promotion_core.business.records.search",
       "title": "Promotion Core Business Records",
-      "description": "Search business records owned by promotion_core.",
+      "description": "Search business records owned by promotion_core. For replacement analysis, prefer promotion_core.performance.summary over generic record search.",
       "moduleKey": "promotion_core",
       "sourceType": "synthetic",
       "scope": "promotion_core",
@@ -11416,6 +11982,115 @@
       }
     },
     {
+      "name": "promotion_core.performance.summary",
+      "title": "Promotion Core Promotion Performance Summary",
+      "description": "Summarize promotion campaigns, codes, redemptions, and likely underperforming offers. Use this when deciding which current promotion to replace.",
+      "moduleKey": "promotion_core",
+      "sourceType": "synthetic",
+      "scope": "promotion_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "store_code": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.promotion_core.performance.summary",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "promotion_core.strategy.plan.draft.create",
+      "title": "Promotion Core Create Promotion Plan Draft",
+      "description": "Create a draft generic_request promotion strategy plan. Use this when asked to create a draft recommendation or promotion plan artifact.",
+      "moduleKey": "promotion_core",
+      "sourceType": "synthetic",
+      "scope": "promotion_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "campaign_kind": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "replaced_campaign": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "target_products": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target_segment": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.promotion_core.strategy.plan.draft.create",
+        "actionClass": "draft",
+        "riskClass": "medium",
+        "draftOnly": true,
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "draft-first",
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "document.create"
+        ]
+      }
+    },
+    {
       "name": "readiness.get",
       "title": "Get Implementation Readiness",
       "description": "Get readiness for applying customer configuration.",
@@ -11423,6 +12098,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -11832,6 +12511,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -12507,6 +13190,10 @@
       "sourceType": "built_in",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -13014,6 +13701,10 @@
       "scope": "template",
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",
@@ -13399,6 +14090,10 @@
       ],
       "policyState": "allowed",
       "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
       "contract": {
         "version": "2026-03-23",
         "stability": "stable",

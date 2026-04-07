@@ -311,7 +311,7 @@ func seedOrderToCashScenario(ctx context.Context, client *apiClient, baseURL, op
 		return scenarioManifest{}, fmt.Errorf("create tax code: %w", err)
 	}
 	itemCode := "OTC-ITEM-" + suffix
-	if _, err := client.createModel(ctx, "commercial_item", map[string]any{
+	if err := createSeedCommercialItem(ctx, client, map[string]any{
 		"sku":                          itemCode,
 		"name":                         "Field Router " + runID,
 		"kind":                         "simple",
@@ -320,6 +320,7 @@ func seedOrderToCashScenario(ctx context.Context, client *apiClient, baseURL, op
 		"unit_price":                   100.0,
 		"tax_code":                     taxCode,
 		"revenue_account_code":         "4000-REV",
+		"is_sellable":                  true,
 		"inventory_enabled":            true,
 		"inventory_tracking_mode":      "quantity",
 		"inventory_asset_account_code": "1200-INV",
@@ -685,7 +686,7 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 			"status":                               "active",
 		},
 	} {
-		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+		if err := createSeedCommercialItem(ctx, client, item); err != nil {
 			return scenarioManifest{}, fmt.Errorf("create item %s: %w", stringValue(item["sku"]), err)
 		}
 	}
@@ -862,8 +863,11 @@ func seedSalesDashboardRecoveryExecuteScenario(ctx context.Context, client *apiC
 			created, err := client.createDocument(ctx, map[string]any{
 				"type":            item.documentType,
 				"organization_id": defaultOrgID,
-				"location_id":     item.locationID,
-				"payload":         map[string]any{"title": item.title},
+				"location_id":     defaultLocID,
+				"payload": map[string]any{
+					"title":              item.title,
+					"branch_location_id": item.locationID,
+				},
 			})
 			if err != nil {
 				return scenarioManifest{}, fmt.Errorf("seed %s: %w", item.documentType, err)
@@ -1032,7 +1036,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 			"status":               "active",
 		},
 	} {
-		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+		if err := createSeedCommercialItem(ctx, client, item); err != nil {
 			return scenarioManifest{}, fmt.Errorf("create item %s: %w", stringValue(item["sku"]), err)
 		}
 	}
@@ -1318,7 +1322,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 			"status":               "active",
 		},
 	} {
-		if _, err := client.createModel(ctx, "commercial_item", item); err != nil {
+		if err := createSeedCommercialItem(ctx, client, item); err != nil {
 			return scenarioManifest{}, fmt.Errorf("create item %s: %w", stringValue(item["sku"]), err)
 		}
 	}
@@ -1402,8 +1406,11 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 	if err != nil {
 		return scenarioManifest{}, fmt.Errorf("ensure cashier pin: %w", err)
 	}
-	if seededPIN {
+	if terminalPIN != "" {
 		if err := client.enterPOSTerminal(ctx, storeCode, registerCode, shiftID, terminalPIN); err != nil {
+			if !seededPIN && strings.Contains(strings.ToLower(err.Error()), "invalid") {
+				return scenarioManifest{}, fmt.Errorf("enter pos terminal: existing cashier PIN does not match showcase default 123456: %w", err)
+			}
 			return scenarioManifest{}, fmt.Errorf("enter pos terminal: %w", err)
 		}
 	}
@@ -1491,8 +1498,11 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 			created, err := client.createDocument(ctx, map[string]any{
 				"type":            item.documentType,
 				"organization_id": defaultOrgID,
-				"location_id":     item.locationID,
-				"payload":         map[string]any{"title": item.title},
+				"location_id":     defaultLocID,
+				"payload": map[string]any{
+					"title":              item.title,
+					"branch_location_id": item.locationID,
+				},
 			})
 			if err != nil {
 				return scenarioManifest{}, fmt.Errorf("seed %s: %w", item.documentType, err)
@@ -2580,6 +2590,59 @@ func mustJSONString(value any) string {
 	return string(data)
 }
 
+func createSeedCommercialItem(ctx context.Context, client *apiClient, values map[string]any) error {
+	item := cloneScenarioValues(values)
+	itemCode := strings.TrimSpace(stringValue(item["sku"]))
+	productCode := strings.TrimSpace(stringValue(item["product_code"]))
+	kind := strings.ToLower(strings.TrimSpace(stringValue(item["kind"])))
+	itemType := strings.ToLower(strings.TrimSpace(stringValue(item["item_type"])))
+	isSellable := true
+	if raw, ok := item["is_sellable"]; ok {
+		isSellable = boolValue(raw)
+	}
+	needsProduct := strings.TrimSpace(stringValue(item["variant_signature"])) != "" ||
+		boolValue(item["is_variant"]) ||
+		kind == "variant" ||
+		(isSellable && (itemType == "product" || kind == "product" || kind == "item" || kind == "simple"))
+	if needsProduct {
+		if productCode == "" {
+			productCode = itemCode
+			item["product_code"] = productCode
+		}
+		if itemType == "" {
+			item["item_type"] = "product"
+		}
+		if _, err := client.createModel(ctx, "commercial_product", map[string]any{
+			"code":                                 productCode,
+			"name":                                 stringValue(item["name"]),
+			"item_type":                            stringValue(item["item_type"]),
+			"category_code":                        stringValue(item["category_code"]),
+			"uom_code":                             stringValue(item["uom_code"]),
+			"currency_code":                        stringValue(item["currency_code"]),
+			"tax_code":                             stringValue(item["tax_code"]),
+			"revenue_account_code":                 stringValue(item["revenue_account_code"]),
+			"inventory_asset_account_code":         stringValue(item["inventory_asset_account_code"]),
+			"cogs_account_code":                    stringValue(item["cogs_account_code"]),
+			"wip_account_code":                     stringValue(item["wip_account_code"]),
+			"inventory_enabled":                    item["inventory_enabled"],
+			"inventory_tracking_mode":              item["inventory_tracking_mode"],
+			"expiry_tracking_enabled":              item["expiry_tracking_enabled"],
+			"allow_negative_stock":                 item["allow_negative_stock"],
+			"default_issue_strategy":               item["default_issue_strategy"],
+			"replenishment_enabled":                item["replenishment_enabled"],
+			"replenishment_mode":                   item["replenishment_mode"],
+			"reorder_point_quantity":               item["reorder_point_quantity"],
+			"target_stock_quantity":                item["target_stock_quantity"],
+			"default_replenishment_warehouse_code": item["default_replenishment_warehouse_code"],
+			"status":                               firstNonEmptyString(stringValue(item["status"]), "active"),
+		}); err != nil {
+			return err
+		}
+	}
+	_, err := client.createModel(ctx, "commercial_item", item)
+	return err
+}
+
 func periodID(record map[string]any) string {
 	return stringValue(record["id"])
 }
@@ -2600,6 +2663,32 @@ func numberValue(value any) float64 {
 	default:
 		return 0
 	}
+}
+
+func boolValue(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	default:
+		return false
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func cloneScenarioValues(values map[string]any) map[string]any {
+	cloned := map[string]any{}
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func agentproofMCPOperations() []string {

@@ -14,7 +14,7 @@ func TestKnownProfiles(t *testing.T) {
 
 func TestProfileHelpers(t *testing.T) {
 	all, err := ForProfile(ProfileAll)
-	if err != nil || len(all) != 0 {
+	if err != nil || len(all) == 0 {
 		t.Fatalf("expected all profile manifests, got len=%d err=%v", len(all), err)
 	}
 	clinic, err := ForProfile(ProfileClinic)
@@ -33,7 +33,7 @@ func TestProfileHelpers(t *testing.T) {
 	if clinicManifests()[0].Key == "changed" {
 		t.Fatal("expected cloneManifests to copy slice values")
 	}
-	if len(allManifests()) != 0 || len(omsManifests()) != 0 {
+	if len(allManifests()) == 0 || len(omsManifests()) != 0 {
 		t.Fatal("expected manifest helper behavior")
 	}
 	if _, err := requireConfiguredProfile("empty", nil); err == nil {

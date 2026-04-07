@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/analytics"
+	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
@@ -595,6 +596,7 @@ func brokerTopic(prefix, topic string) string {
 }
 
 func seedModelRules(modelSvc *model.Service) {
+	application.RegisterCommercialModelRules(modelSvc)
 	modelSvc.SetDefaultEvaluator("party.status.default", func(_ model.RuleInput) (any, error) {
 		return "active", nil
 	})

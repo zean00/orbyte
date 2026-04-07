@@ -1379,6 +1379,91 @@ func TestNormalizeCommercialLinesFallsBackToProductDefaultsForVariant(t *testing
 	}
 }
 
+func TestCommercialItemValidationRequiresProductForSellableMerchandise(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":         "SELLABLE-ITEM",
+		"name":        "Sellable Item",
+		"kind":        "product",
+		"item_type":   "product",
+		"is_sellable": true,
+		"status":      "active",
+	}); err == nil {
+		t.Fatal("expected sellable product item without product_code to fail")
+	}
+}
+
+func TestCommercialItemValidationAllowsStandaloneService(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":         "SERVICE-ITEM",
+		"name":        "Standalone Service",
+		"kind":        "service",
+		"item_type":   "service",
+		"is_sellable": true,
+		"status":      "active",
+	}); err != nil {
+		t.Fatalf("expected standalone service item to remain allowed: %v", err)
+	}
+}
+
+func TestCommercialItemValidationRejectsUnknownProductCode(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+
+	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":          "UNKNOWN-PRODUCT-ITEM",
+		"name":         "Unknown Product Item",
+		"kind":         "product",
+		"item_type":    "product",
+		"is_sellable":  true,
+		"product_code": "MISSING-PRODUCT",
+		"status":       "active",
+	}); err == nil {
+		t.Fatal("expected unknown product_code to fail")
+	}
+}
+
+func TestCommercialItemValidationAllowsVariantSKURename(t *testing.T) {
+	models := model.NewService()
+	mustRegisterCommercialModels(t, models)
+
+	if _, err := models.Create("commercial_product", "user_admin", map[string]any{
+		"code":      "VARIANT-PARENT",
+		"name":      "Variant Parent",
+		"item_type": "product",
+		"status":    "active",
+	}); err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+	item, err := models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":               "VARIANT-OLD",
+		"name":              "Variant Item",
+		"kind":              "variant",
+		"item_type":         "product",
+		"is_sellable":       true,
+		"product_code":      "VARIANT-PARENT",
+		"variant_signature": "color=black|size=m",
+		"status":            "active",
+	})
+	if err != nil {
+		t.Fatalf("create variant item: %v", err)
+	}
+
+	updatedValues := map[string]any{}
+	for key, value := range item.Values {
+		updatedValues[key] = value
+	}
+	updatedValues["sku"] = "VARIANT-NEW"
+	if _, err := models.Update("commercial_item", item.ID, "user_admin", updatedValues, item.Version); err != nil {
+		t.Fatalf("expected SKU-only variant rename to pass: %v", err)
+	}
+}
+
 func TestNormalizeCommercialLinesSupportsHeaderDefaultAndInclusiveTax(t *testing.T) {
 	docs := document.NewService()
 	models := model.NewService()
@@ -2364,6 +2449,7 @@ func TestCommercialValidateApproveRejectsUnknownReferences(t *testing.T) {
 
 func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 	t.Helper()
+	RegisterCommercialModelRules(models)
 	for _, def := range []model.Definition{
 		{
 			Key:         "party",
@@ -2410,6 +2496,8 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 			Fields: []model.FieldDefinition{
 				{Key: "code", Type: "string", Required: true},
 				{Key: "name", Type: "string", Required: true},
+				{Key: "item_type", Type: "string"},
+				{Key: "category_code", Type: "string"},
 				{Key: "uom_code", Type: "string"},
 				{Key: "base_price", Type: "number"},
 				{Key: "unit_price", Type: "number"},
@@ -2426,9 +2514,11 @@ func mustRegisterCommercialModels(t *testing.T, models *model.Service) {
 				{Key: "sku", Type: "string", Required: true},
 				{Key: "name", Type: "string", Required: true},
 				{Key: "description", Type: "string"},
-				{Key: "product_code", Type: "string"},
+				{Key: "product_code", Type: "string", ConstraintRuleKeys: []string{"commercial.item.product_link"}},
 				{Key: "is_variant", Type: "bool"},
-				{Key: "variant_signature", Type: "string"},
+				{Key: "variant_signature", Type: "string", ConstraintRuleKeys: []string{"commercial.item.variant_signature.unique"}},
+				{Key: "variant_label", Type: "string"},
+				{Key: "variant_values", Type: "string"},
 				{Key: "category_code", Type: "string"},
 				{Key: "item_type", Type: "string"},
 				{Key: "kind", Type: "string", Required: true},

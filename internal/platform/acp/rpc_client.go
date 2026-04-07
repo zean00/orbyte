@@ -169,7 +169,11 @@ func (c *acpClient) newSession(cwd string) (newSessionResult, error) {
 			cwd = abs
 		}
 	}
-	if err := c.call("session/new", map[string]any{"cwd": cwd, "mcpServers": c.mcpServers}, &result); err != nil {
+	mcpServers := c.mcpServers
+	if mcpServers == nil {
+		mcpServers = []map[string]any{}
+	}
+	if err := c.call("session/new", map[string]any{"cwd": cwd, "mcpServers": mcpServers}, &result); err != nil {
 		return newSessionResult{}, err
 	}
 	if strings.TrimSpace(result.SessionID) == "" {
@@ -338,6 +342,13 @@ func opencodeConfigPath(provider Provider) string {
 
 func (c *acpClient) prompt(sessionID string, content []map[string]any) error {
 	return c.call("session/prompt", map[string]any{"sessionId": sessionID, "prompt": content}, nil)
+}
+
+func (c *acpClient) setSessionMode(sessionID, modeID string) error {
+	return c.call("session/set_mode", map[string]any{
+		"sessionId": sessionID,
+		"modeId":    modeID,
+	}, nil)
 }
 
 func (c *acpClient) setSessionModel(sessionID, modelID string) (string, error) {

@@ -23,7 +23,7 @@ func TestPOSCheckoutCreatesOperationalDocuments(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-TSHIRT",
 		"name":                 "POS T-Shirt",
 		"description":          "Cashier stocked shirt",
@@ -36,9 +36,7 @@ func TestPOSCheckoutCreatesOperationalDocuments(t *testing.T) {
 		"inventory_enabled":    true,
 		"allow_negative_stock": false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -176,7 +174,7 @@ func TestPOSCheckoutRejectsDuplicateLinesThatExceedAvailableStock(t *testing.T) 
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-DUPLICATE",
 		"name":                 "Duplicate Line Item",
 		"description":          "Stock aggregation check",
@@ -189,9 +187,7 @@ func TestPOSCheckoutRejectsDuplicateLinesThatExceedAvailableStock(t *testing.T) 
 		"inventory_enabled":    true,
 		"allow_negative_stock": false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -292,7 +288,7 @@ func TestPOSCheckoutCreatesPromotionRedemptionFromPromoCode(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-PROMO",
 		"name":                 "Promo Tee",
 		"description":          "Promo POS item",
@@ -305,9 +301,7 @@ func TestPOSCheckoutCreatesPromotionRedemptionFromPromoCode(t *testing.T) {
 		"inventory_enabled":    true,
 		"allow_negative_stock": false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -447,7 +441,7 @@ func TestPOSValidatePromotionCodesReportsAppliedAndRejectsInvalid(t *testing.T) 
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-PROMO",
 		"name":                 "Promo Tee",
 		"description":          "Promo POS item",
@@ -460,9 +454,7 @@ func TestPOSValidatePromotionCodesReportsAppliedAndRejectsInvalid(t *testing.T) 
 		"inventory_enabled":    true,
 		"allow_negative_stock": false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -603,7 +595,7 @@ func TestPOSBuildOrderPayloadUsesBusinessTimezoneTimestamp(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-TIME",
 		"name":                 "POS Time Item",
 		"description":          "Timezone test item",
@@ -615,9 +607,7 @@ func TestPOSBuildOrderPayloadUsesBusinessTimezoneTimestamp(t *testing.T) {
 		"is_sellable":          true,
 		"inventory_enabled":    false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -680,16 +670,14 @@ func TestPOSBuildOrderPayloadRejectsUnknownCustomer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create store: %v", err)
 	}
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":               "POS-KOPI",
 		"name":              "POS Kopi",
 		"kind":              "product",
 		"uom_code":          "EA",
 		"inventory_enabled": true,
 		"status":            "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 
 	posSvc := &POSCoreService{models: models}
 	_, _, err = posSvc.buildOrderPayload(store, "party-missing", "Ghost Customer", "", nil, []POSCartLineInput{{
@@ -726,16 +714,14 @@ func TestPOSBuildOrderPayloadAllowsGenericPartyID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create store: %v", err)
 	}
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":               "POS-KOPI",
 		"name":              "POS Kopi",
 		"kind":              "product",
 		"uom_code":          "EA",
 		"inventory_enabled": true,
 		"status":            "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	party, err := models.Create("party", "user_admin", map[string]any{"name": "Walk-in Customer"})
 	if err != nil {
 		t.Fatalf("create party: %v", err)
@@ -766,7 +752,7 @@ func TestPOSRefundSaleCreatesReturnFlow(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-DRUG",
 		"name":                 "POS Drug",
 		"description":          "Counter medicine",
@@ -779,9 +765,7 @@ func TestPOSRefundSaleCreatesReturnFlow(t *testing.T) {
 		"inventory_enabled":    true,
 		"allow_negative_stock": false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -942,7 +926,7 @@ func TestPOSCheckoutAppliesBuyXGetYDiscount(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                     "POS-SODA",
 		"name":                    "POS Soda",
 		"description":             "Promo soda",
@@ -956,9 +940,7 @@ func TestPOSCheckoutAppliesBuyXGetYDiscount(t *testing.T) {
 		"inventory_tracking_mode": "quantity",
 		"allow_negative_stock":    false,
 		"status":                  "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -1071,7 +1053,7 @@ func TestPOSSearchCatalogUsesWarehouseBatchInventory(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-CATALOG",
 		"name":                 "POS Catalog Item",
 		"description":          "Catalog visibility test",
@@ -1084,9 +1066,7 @@ func TestPOSSearchCatalogUsesWarehouseBatchInventory(t *testing.T) {
 		"inventory_enabled":    true,
 		"allow_negative_stock": false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -1264,7 +1244,7 @@ func TestPOSValidateSaleContextRejectsMismatchedStoreRegisterAndShift(t *testing
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":               "POS-CONTEXT",
 		"name":              "POS Context Item",
 		"kind":              "product",
@@ -1273,9 +1253,7 @@ func TestPOSValidateSaleContextRejectsMismatchedStoreRegisterAndShift(t *testing
 		"is_sellable":       true,
 		"inventory_enabled": true,
 		"status":            "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("pos_store", "user_admin", map[string]any{
 		"code":             "STORE1",
 		"name":             "Store 1",
@@ -1421,7 +1399,7 @@ func TestPOSCheckoutFinalizesHeldSaleAndRemovesItFromHeldList(t *testing.T) {
 	mustRegisterPOSTestDocumentTypes(t, docs)
 	mustRegisterPOSTestModels(t, models)
 
-	if _, err := models.Create("commercial_item", "user_admin", map[string]any{
+	mustCreatePOSTestProductItem(t, models, map[string]any{
 		"sku":                  "POS-HOLD",
 		"name":                 "Held Item",
 		"description":          "Held POS item",
@@ -1433,9 +1411,7 @@ func TestPOSCheckoutFinalizesHeldSaleAndRemovesItFromHeldList(t *testing.T) {
 		"is_sellable":          true,
 		"inventory_enabled":    false,
 		"status":               "active",
-	}); err != nil {
-		t.Fatalf("create item: %v", err)
-	}
+	})
 	if _, err := models.Create("tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
 		"rate_percent":     11.0,
@@ -1563,7 +1539,22 @@ func mustRegisterPOSTestDocumentTypes(t *testing.T, docs *document.Service) {
 
 func mustRegisterPOSTestModels(t *testing.T, models *model.Service) {
 	t.Helper()
+	RegisterCommercialModelRules(models)
 	for _, def := range []model.Definition{
+		{
+			Key:         "commercial_product",
+			DisplayName: "Commercial Product",
+			DefaultSort: "code",
+			Fields: []model.FieldDefinition{
+				{Key: "code", Type: "string", Required: true},
+				{Key: "name", Type: "string", Required: true},
+				{Key: "item_type", Type: "string"},
+				{Key: "uom_code", Type: "string"},
+				{Key: "tax_code", Type: "string"},
+				{Key: "category_code", Type: "string"},
+				{Key: "status", Type: "string"},
+			},
+		},
 		{
 			Key:         "commercial_item",
 			DisplayName: "Commercial Item",
@@ -1572,9 +1563,11 @@ func mustRegisterPOSTestModels(t *testing.T, models *model.Service) {
 				{Key: "sku", Type: "string", Required: true},
 				{Key: "name", Type: "string", Required: true},
 				{Key: "description", Type: "string"},
-				{Key: "product_code", Type: "string"},
+				{Key: "product_code", Type: "string", ConstraintRuleKeys: []string{"commercial.item.product_link"}},
 				{Key: "is_variant", Type: "bool"},
-				{Key: "variant_signature", Type: "string"},
+				{Key: "variant_signature", Type: "string", ConstraintRuleKeys: []string{"commercial.item.variant_signature.unique"}},
+				{Key: "variant_label", Type: "string"},
+				{Key: "variant_values", Type: "string"},
 				{Key: "item_type", Type: "string"},
 				{Key: "kind", Type: "string", Required: true},
 				{Key: "uom_code", Type: "string"},
@@ -1832,5 +1825,31 @@ func mustRegisterPOSTestModels(t *testing.T, models *model.Service) {
 		if err := models.Register(def); err != nil {
 			t.Fatalf("register model %s: %v", def.Key, err)
 		}
+	}
+}
+
+func mustCreatePOSTestProductItem(t *testing.T, models *model.Service, itemValues map[string]any) {
+	t.Helper()
+	productCode := strings.TrimSpace(textValue(itemValues["product_code"]))
+	if productCode == "" {
+		productCode = strings.TrimSpace(textValue(itemValues["sku"]))
+		itemValues["product_code"] = productCode
+	}
+	if strings.TrimSpace(textValue(itemValues["item_type"])) == "" {
+		itemValues["item_type"] = "product"
+	}
+	if _, err := models.Create("commercial_product", "user_admin", map[string]any{
+		"code":          productCode,
+		"name":          textValue(itemValues["name"]),
+		"item_type":     textValue(itemValues["item_type"]),
+		"uom_code":      textValue(itemValues["uom_code"]),
+		"tax_code":      textValue(itemValues["tax_code"]),
+		"category_code": textValue(itemValues["category_code"]),
+		"status":        firstNonEmptyString(textValue(itemValues["status"]), "active"),
+	}); err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+	if _, err := models.Create("commercial_item", "user_admin", itemValues); err != nil {
+		t.Fatalf("create item: %v", err)
 	}
 }

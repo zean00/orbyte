@@ -2,7 +2,8 @@ APP_ADDRESS ?= 127.0.0.1:18110
 APP_BASE_URL ?= http://$(APP_ADDRESS)
 APP_JWT_SECRET ?= dev-secret
 APP_BOOTSTRAP_ADMIN_PASSWORD ?= admin123!
-DATABASE_URL ?= postgres://orbyte:orbyte@127.0.0.1:5432/orbyte?sslmode=disable
+POSTGRES_HOST_PORT ?= 55432
+DATABASE_URL ?= postgres://orbyte:orbyte@127.0.0.1:$(POSTGRES_HOST_PORT)/orbyte?sslmode=disable
 
 RUN_DIR ?= .run
 APP_PID_FILE ?= $(RUN_DIR)/orbyte-postgres.pid
@@ -147,11 +148,11 @@ seed-agent-continuity: app-start-postgres
 		--output "$(AGENT_SEED_OUTPUT)"
 
 seed-pos:
-	DATABASE_URL="$(DATABASE_URL)" POS_SEED=1 go test -run TestSeedPOSTerminalSyntheticScenario -v ./internal/platform/app
+	DATABASE_URL="$(DATABASE_URL)" POS_SEED=1 go test -count=1 -run TestSeedPOSTerminalSyntheticScenario -v ./internal/platform/app
 	@echo "POS seed manifest is written by the test harness to $(POS_SEED_OUTPUT)"
 
 seed-dashboard:
-	DATABASE_URL="$(DATABASE_URL)" DASHBOARD_SEED=1 go test -run TestSeedDashboardSyntheticScenario -v ./internal/platform/app
+	DATABASE_URL="$(DATABASE_URL)" DASHBOARD_SEED=1 go test -count=1 -run TestSeedDashboardSyntheticScenario -v ./internal/platform/app
 	@echo "Dashboard seed manifest is written by the test harness to $(DASHBOARD_SEED_OUTPUT)"
 
 seed-showcase-demo: app-start-postgres

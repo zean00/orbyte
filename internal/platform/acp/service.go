@@ -39,6 +39,14 @@ var providerModelCatalogResolver = resolveProviderModelCatalog
 var acpClientStarter = startACPClient
 var dashboardArtifactBlockPattern = regexp.MustCompile(`(?s)<orbyte-dashboard-artifact>\s*(\{.*?\})\s*</orbyte-dashboard-artifact>`)
 
+var sessionLifecycle = []string{
+	"starting",
+	"ready",
+	"running",
+	"awaiting_input",
+	"error",
+}
+
 func NewService(cfg *config.Service, instr *Instrumentation) *Service {
 	return &Service{
 		config:          cfg,
@@ -53,18 +61,13 @@ func (s *Service) Providers() []ProviderInfo {
 	providers, err := s.providerConfigs()
 	if err != nil {
 		return []ProviderInfo{{
-			Key:             "invalid",
-			Name:            "Invalid ACP Configuration",
-			Available:       false,
-			ContractVersion: "2026-03-23",
-			Stability:       "experimental",
-			SessionLifecycle: []string{
-				"starting",
-				"ready",
-				"running",
-				"error",
-			},
-			Error: err.Error(),
+			Key:              "invalid",
+			Name:             "Invalid ACP Configuration",
+			Available:        false,
+			ContractVersion:  "2026-03-23",
+			Stability:        "experimental",
+			SessionLifecycle: append([]string(nil), sessionLifecycle...),
+			Error:            err.Error(),
 		}}
 	}
 	items := make([]ProviderInfo, 0, len(providers))
@@ -83,12 +86,7 @@ func (s *Service) Providers() []ProviderInfo {
 			SupportsModelSelection: providerSupportsModelSelection(provider),
 			SupportsPlanUpdates:    providerSupportsPlanUpdates(provider),
 			DefaultModel:           strings.TrimSpace(provider.DefaultModel),
-			SessionLifecycle: []string{
-				"starting",
-				"ready",
-				"running",
-				"error",
-			},
+			SessionLifecycle:       append([]string(nil), sessionLifecycle...),
 		})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
@@ -97,14 +95,9 @@ func (s *Service) Providers() []ProviderInfo {
 
 func (s *Service) ContractMetadata() map[string]any {
 	return map[string]any{
-		"contract_version": "2026-03-23",
-		"stability":        "experimental",
-		"session_lifecycle": []string{
-			"starting",
-			"ready",
-			"running",
-			"error",
-		},
+		"contract_version":  "2026-03-23",
+		"stability":         "experimental",
+		"session_lifecycle": append([]string(nil), sessionLifecycle...),
 		"approval_lifecycle": []string{
 			"pending",
 			"approved",
@@ -293,12 +286,18 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 	if content == "" {
 		return Session{}, shared.Validation("content is required")
 	}
+	mode := strings.TrimSpace(strings.ToLower(req.Mode))
 	displayContent := strings.TrimSpace(req.DisplayContent)
 	if displayContent == "" {
 		displayContent = content
 	}
 	clientRequestID := strings.TrimSpace(req.ClientRequestID)
 	turnID := shared.NewID("acp-turn")
+	resolvedQuestionSetID := ""
+	hadPendingClarification := false
+	var previousPendingQuestions []ClarificationQuestion
+	previousPendingQuestionSetID := ""
+	previousAwaitingInputKind := ""
 	s.mu.Lock()
 	session, ok := s.sessions[sessionID]
 	runtime := s.runtimes[sessionID]
@@ -312,6 +311,13 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 		session.TurnInProgress = true
 		session.CurrentTurnID = turnID
 		session.Status = "running"
+		if session.PendingQuestionSetID != "" || len(session.PendingQuestions) > 0 {
+			hadPendingClarification = true
+			resolvedQuestionSetID = session.PendingQuestionSetID
+			previousPendingQuestions = append([]ClarificationQuestion(nil), session.PendingQuestions...)
+			previousPendingQuestionSetID = session.PendingQuestionSetID
+			previousAwaitingInputKind = session.AwaitingInputKind
+		}
 		session.UpdatedAt = time.Now().UTC()
 		req.ContextBlocks = mergeContextBlocks(session.ContextBlocks, req.ContextBlocks)
 		msg := Message{
@@ -331,12 +337,41 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 	}
 	s.publish(sessionID, "turn_started", map[string]any{"turn_id": turnID})
 	s.publish(sessionID, "user_message", map[string]any{"content": content, "turn_id": turnID})
+	if mode != "" {
+		if err := runtime.client.setSessionMode(session.RemoteSession, mode); err != nil {
+			s.mu.Lock()
+			if session := s.sessions[sessionID]; session != nil {
+				session.TurnInProgress = false
+				session.CurrentTurnID = ""
+				if hadPendingClarification {
+					session.Status = "awaiting_input"
+					session.PendingQuestions = append([]ClarificationQuestion(nil), previousPendingQuestions...)
+					session.PendingQuestionSetID = previousPendingQuestionSetID
+					session.AwaitingInputKind = previousAwaitingInputKind
+				} else {
+					session.Status = "error"
+				}
+				session.LastError = err.Error()
+				session.UpdatedAt = time.Now().UTC()
+			}
+			s.mu.Unlock()
+			s.publish(sessionID, "turn_failed", map[string]any{"error": err.Error(), "turn_id": turnID})
+			return Session{}, err
+		}
+	}
 	if err := runtime.client.prompt(session.RemoteSession, promptBlocks(content, req.ContextBlocks)); err != nil {
 		s.mu.Lock()
 		if session := s.sessions[sessionID]; session != nil {
 			session.TurnInProgress = false
 			session.CurrentTurnID = ""
-			session.Status = "error"
+			if hadPendingClarification {
+				session.Status = "awaiting_input"
+				session.PendingQuestions = append([]ClarificationQuestion(nil), previousPendingQuestions...)
+				session.PendingQuestionSetID = previousPendingQuestionSetID
+				session.AwaitingInputKind = previousAwaitingInputKind
+			} else {
+				session.Status = "error"
+			}
 			session.LastError = err.Error()
 			session.UpdatedAt = time.Now().UTC()
 		}
@@ -344,11 +379,45 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 		s.publish(sessionID, "turn_failed", map[string]any{"error": err.Error(), "turn_id": turnID})
 		return Session{}, err
 	}
+	if resolvedQuestionSetID != "" {
+		s.mu.Lock()
+		if session := s.sessions[sessionID]; session != nil {
+			session.PendingQuestions = nil
+			session.PendingQuestionSetID = ""
+			session.AwaitingInputKind = ""
+			session.UpdatedAt = time.Now().UTC()
+		}
+		s.mu.Unlock()
+		s.publish(sessionID, "clarification_resolved", map[string]any{
+			"question_set_id": resolvedQuestionSetID,
+			"turn_id":         turnID,
+		})
+	}
 	s.mu.Lock()
 	if session := s.sessions[sessionID]; session != nil {
 		s.promoteDashboardArtifactsFromTurn(session, turnID)
 		session.TurnInProgress = false
 		session.CurrentTurnID = ""
+		if questions, sourceMessageID := deriveClarificationQuestionsForTurn(session, turnID); len(questions) > 0 {
+			session.Status = "awaiting_input"
+			session.AwaitingInputKind = "clarification"
+			session.PendingQuestionSetID = shared.NewID("clarification")
+			session.PendingQuestions = questions
+			session.UpdatedAt = time.Now().UTC()
+			payload := map[string]any{
+				"turn_id":             turnID,
+				"question_set_id":     session.PendingQuestionSetID,
+				"awaiting_input_kind": session.AwaitingInputKind,
+				"source_message_id":   sourceMessageID,
+				"questions":           clarificationQuestionsPayload(questions),
+			}
+			s.mu.Unlock()
+			s.publish(sessionID, "clarification_requested", payload)
+			s.publish(sessionID, "turn_completed", map[string]any{"turn_id": turnID})
+			s.syncCurrentModel(sessionID)
+			updated, _ := s.GetSession(sessionID)
+			return updated, nil
+		}
 		session.Status = "ready"
 		session.UpdatedAt = time.Now().UTC()
 	}
@@ -1149,6 +1218,7 @@ func cloneSession(in *Session) *Session {
 	out.Artifacts = append([]Artifact(nil), in.Artifacts...)
 	out.Trace = append([]Event(nil), in.Trace...)
 	out.CurrentPlan = append([]PlanEntry(nil), in.CurrentPlan...)
+	out.PendingQuestions = append([]ClarificationQuestion(nil), in.PendingQuestions...)
 	out.ProviderInfo = cloneMap(in.ProviderInfo)
 	return &out
 }
@@ -1167,6 +1237,129 @@ func cloneMap(input map[string]any) map[string]any {
 func stringValue(raw any) string {
 	value, _ := raw.(string)
 	return strings.TrimSpace(value)
+}
+
+func clarificationQuestionsPayload(items []ClarificationQuestion) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, map[string]any{
+			"id":                item.ID,
+			"content":           item.Content,
+			"source_message_id": item.SourceMessageID,
+		})
+	}
+	return out
+}
+
+func deriveClarificationQuestionsForTurn(session *Session, turnID string) ([]ClarificationQuestion, string) {
+	if session == nil || strings.TrimSpace(turnID) == "" {
+		return nil, ""
+	}
+	for index := len(session.Messages) - 1; index >= 0; index-- {
+		message := session.Messages[index]
+		if message.Role != "assistant" {
+			continue
+		}
+		if stringValue(message.Meta["turn_id"]) != turnID {
+			continue
+		}
+		questions := extractClarificationQuestions(message.Content, message.ID)
+		if len(questions) == 0 {
+			return nil, ""
+		}
+		return questions, message.ID
+	}
+	return nil, ""
+}
+
+func extractClarificationQuestions(markdown, sourceMessageID string) []ClarificationQuestion {
+	text := strings.TrimSpace(dashboardArtifactBlockPattern.ReplaceAllString(markdown, ""))
+	if text == "" {
+		return nil
+	}
+	lines := strings.Split(text, "\n")
+	heading := false
+	intro := false
+	questions := make([]ClarificationQuestion, 0, 5)
+	seen := map[string]struct{}{}
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		normalizedLine := normalizeClarificationLine(line)
+		lower := strings.ToLower(normalizedLine)
+		switch {
+		case lower == "clarification needed",
+			lower == "clarifications needed",
+			lower == "need your input",
+			lower == "need more input":
+			heading = true
+			continue
+		case strings.HasPrefix(lower, "before finalizing"),
+			strings.HasPrefix(lower, "before i finalize"),
+			strings.HasPrefix(lower, "before we finalize"),
+			strings.HasPrefix(lower, "before moving ahead"),
+			strings.HasPrefix(lower, "before proceeding"),
+			strings.HasPrefix(lower, "to finalize this plan"):
+			intro = true
+			continue
+		}
+		questionText := candidateClarificationQuestion(normalizedLine)
+		if questionText == "" {
+			continue
+		}
+		key := strings.ToLower(questionText)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		questions = append(questions, ClarificationQuestion{
+			ID:              shared.NewID("question"),
+			Content:         questionText,
+			SourceMessageID: sourceMessageID,
+		})
+		if len(questions) == 5 {
+			break
+		}
+	}
+	if len(questions) == 0 {
+		return nil
+	}
+	if heading || intro {
+		return questions
+	}
+	return nil
+}
+
+func normalizeClarificationLine(line string) string {
+	value := strings.TrimSpace(line)
+	value = strings.TrimLeft(value, "-*• \t")
+	if matches := regexp.MustCompile(`^\d+[\).\:]?\s+`).FindString(value); matches != "" {
+		value = strings.TrimSpace(strings.TrimPrefix(value, matches))
+	}
+	return strings.TrimSpace(value)
+}
+
+func candidateClarificationQuestion(line string) string {
+	value := strings.TrimSpace(line)
+	if value == "" {
+		return ""
+	}
+	if !strings.Contains(value, "?") {
+		return ""
+	}
+	question := strings.TrimSpace(value)
+	if strings.HasPrefix(strings.ToLower(question), "clarification needed") {
+		return ""
+	}
+	if len(question) > 280 {
+		return ""
+	}
+	if idx := strings.Index(question, "?"); idx >= 0 {
+		question = strings.TrimSpace(question[:idx+1])
+	}
+	return question
 }
 
 func extractToolActivity(updateKind string, content map[string]any) (map[string]any, bool) {

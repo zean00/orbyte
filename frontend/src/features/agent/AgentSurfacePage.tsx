@@ -70,6 +70,12 @@ type ACPPlanEntry = {
   status?: string;
 };
 
+type ACPClarificationQuestion = {
+  id: string;
+  content: string;
+  source_message_id?: string;
+};
+
 type ACPArtifact = {
   id: string;
   kind: string;
@@ -98,6 +104,9 @@ type ACPSession = {
   trace?: ACPEvent[];
   current_plan?: ACPPlanEntry[];
   artifacts?: ACPArtifact[];
+  pending_questions?: ACPClarificationQuestion[];
+  pending_question_set_id?: string;
+  awaiting_input_kind?: string;
 };
 
 type DashboardWidgetArtifact = {
@@ -139,6 +148,10 @@ type LocalPendingTurn = {
 };
 
 type ComposerMode = "ask" | "plan" | "execute";
+
+function acpModeForComposerMode(mode: ComposerMode): "build" | "plan" {
+  return mode === "plan" ? "plan" : "build";
+}
 type AgentContentTab = "conversation" | "artifacts";
 
 const NEW_SESSION_PENDING_ID = "__new_session__";
@@ -168,6 +181,7 @@ type MCPToolCatalog = {
   mode?: string;
   returned_tools?: number;
   hidden_tools?: number;
+  total_matching_tools?: number;
 };
 
 type StreamEventName =
@@ -183,6 +197,8 @@ type StreamEventName =
   | "approval_requested"
   | "approval_approved"
   | "approval_rejected"
+  | "clarification_requested"
+  | "clarification_resolved"
   | "notification";
 
 type TranscriptItem = ACPMessage & {
@@ -225,12 +241,14 @@ const STREAM_EVENT_NAMES: StreamEventName[] = [
   "approval_requested",
   "approval_approved",
   "approval_rejected",
+  "clarification_requested",
+  "clarification_resolved",
   "notification",
 ];
 
 const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
 const MCP_ONLY_PREFIX =
-  "Use Orbyte MCP tools as the source of truth for this answer.";
+  "Use Orbyte MCP tools as the source of truth for this answer. If the correct tool is not already obvious, call tools/list first, discover the relevant tool family, and then use only the relevant tool or tools. Use the exact discovered tool name, including any MCP server prefix. Do not guess tool names, prefixes, or parameter schemas.";
 
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
@@ -257,12 +275,18 @@ export default function AgentSurfacePage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
+  const [fullCatalogTools, setFullCatalogTools] = useState<MCPTool[]>([]);
   const [activeCapabilities, setActiveCapabilities] = useState<string[]>(
     DEFAULT_AGENT_CAPABILITIES,
   );
   const [catalogSummary, setCatalogSummary] = useState<MCPToolCatalog | null>(
     null,
   );
+  const [fullCatalogSummary, setFullCatalogSummary] =
+    useState<MCPToolCatalog | null>(null);
+  const [fullCatalogLoading, setFullCatalogLoading] = useState(false);
+  const [showFullCatalog, setShowFullCatalog] = useState(false);
+  const [fullCatalogQuery, setFullCatalogQuery] = useState("");
   const [suggestedExpansions, setSuggestedExpansions] = useState<
     MCPCapability[]
   >([]);
@@ -412,6 +436,38 @@ export default function AgentSurfacePage() {
       mounted = false;
     };
   }, [activeCapabilities]);
+
+  useEffect(() => {
+    let mounted = true;
+    setFullCatalogLoading(true);
+    void callMcp<{
+      tools?: MCPTool[];
+      catalog?: MCPToolCatalog;
+    }>("tools/list", {
+      catalog_mode: "full",
+      include_summary: true,
+      include_hidden_counts: true,
+      max_tools: 250,
+    })
+      .then((payload) => {
+        if (!mounted) return;
+        setFullCatalogTools(sortMcpTools(payload.tools || []));
+        setFullCatalogSummary(payload.catalog || null);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setFullCatalogTools([]);
+        setFullCatalogSummary(null);
+      })
+      .finally(() => {
+        if (mounted) {
+          setFullCatalogLoading(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -709,8 +765,35 @@ export default function AgentSurfacePage() {
   ]);
 
   const visibleTools = useMemo(() => mcpTools.slice(0, 10), [mcpTools]);
+  const filteredFullCatalogTools = useMemo(() => {
+    const query = fullCatalogQuery.trim().toLowerCase();
+    if (!query) {
+      return fullCatalogTools;
+    }
+    return fullCatalogTools.filter((item) => {
+      const haystack = [
+        item.name,
+        item.title,
+        item.description,
+        item.moduleKey,
+        item.sourceType,
+        item.contract?.actionClass,
+        item.contract?.riskClass,
+        ...(item.contract?.businessDomains || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [fullCatalogQuery, fullCatalogTools]);
   const currentPlan = useMemo(() => deriveCurrentPlan(session), [session]);
   const hasCurrentPlan = currentPlan.length > 0;
+  const pendingClarificationQuestions = session?.pending_questions || [];
+  const hasPendingClarification =
+    session?.status === "awaiting_input" &&
+    session?.awaiting_input_kind === "clarification" &&
+    pendingClarificationQuestions.length > 0;
   const dashboardArtifacts = useMemo(
     () => deriveDashboardArtifacts(session),
     [session],
@@ -886,6 +969,7 @@ export default function AgentSurfacePage() {
             content: nextPrompt,
             display_content: displayPrompt,
             client_request_id: clientRequestID,
+            mode: acpModeForComposerMode(dispatchedMode),
           }),
         },
       )
@@ -1220,7 +1304,7 @@ export default function AgentSurfacePage() {
                   </h2>
                   <p className="mt-1 text-sm text-muted">
                     {session
-                      ? `${session.provider_name} · ${session.status}`
+                      ? `${session.provider_name} · ${humanizeSessionStatus(session.status)}`
                       : "Send a message to start a new ACP session automatically."}
                   </p>
                 </div>
@@ -1237,8 +1321,8 @@ export default function AgentSurfacePage() {
                     </div>
                   ) : null}
                   <div className="rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                    {catalogSummary?.returned_tools || mcpTools.length} tools
-                    visible
+                    {catalogSummary?.returned_tools || mcpTools.length} starter
+                    tools
                   </div>
                   {effectiveLivePhase ? (
                     <div className="rounded-full border border-accent/20 bg-accent-soft/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
@@ -1294,6 +1378,35 @@ export default function AgentSurfacePage() {
                   className="h-[calc(100svh-14rem)] overflow-auto px-4 py-6 md:px-8 md:py-8"
                 >
                   <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 pb-52">
+                    {contentTab === "conversation" && hasPendingClarification ? (
+                      <div className="rounded-[1.5rem] border border-amber-200/80 bg-[linear-gradient(180deg,rgba(255,250,235,0.95)_0%,rgba(255,244,214,0.92)_100%)] p-5 shadow-[0_16px_36px_rgba(180,83,9,0.08)]">
+                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-700">
+                          Clarification needed
+                        </div>
+                        <h3 className="mt-2 text-lg font-black tracking-tight text-body">
+                          Reply with the missing details to continue this session.
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-muted">
+                          You can answer in one message or point by point. The
+                          agent will continue from the same ACP session.
+                        </p>
+                        <div className="mt-4 space-y-3">
+                          {pendingClarificationQuestions.map((item, index) => (
+                            <article
+                              key={item.id}
+                              className="rounded-2xl border border-amber-300/50 bg-white/70 px-4 py-3"
+                            >
+                              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">
+                                Question {index + 1}
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-body">
+                                {item.content}
+                              </p>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {contentTab === "conversation" ? (
                       renderedTranscriptMessages.length === 0 ? (
                         <EmptyTranscript />
@@ -1421,7 +1534,7 @@ export default function AgentSurfacePage() {
                         title="Capabilities"
                         kicker={catalogSummary?.mode || "compact catalog"}
                         summary={[
-                          `${catalogSummary?.returned_tools || mcpTools.length} visible`,
+                          `${catalogSummary?.returned_tools || mcpTools.length} starter tools`,
                           typeof catalogSummary?.hidden_tools === "number"
                             ? `${catalogSummary.hidden_tools} hidden`
                             : "",
@@ -1429,7 +1542,13 @@ export default function AgentSurfacePage() {
                           .filter(Boolean)
                           .join(" · ")}
                       >
-                        <div className="space-y-2">
+                        <div className="space-y-3">
+                          <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
+                            This panel is only a starter slice. The agent can
+                            and should call <code>tools/list</code> to discover
+                            additional MCP tools whenever the right tool is not
+                            obvious here.
+                          </p>
                           {visibleTools.map((item) => (
                             <div
                               key={item.name}
@@ -1455,6 +1574,87 @@ export default function AgentSurfacePage() {
                               ) : null}
                             </div>
                           ))}
+                          <div className="rounded-2xl border border-line/70 bg-surface p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-body">
+                                  Full MCP catalog
+                                </div>
+                                <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                  {fullCatalogLoading
+                                    ? "Loading full catalog"
+                                    : `${fullCatalogSummary?.total_matching_tools || fullCatalogTools.length} tools indexed`}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowFullCatalog((current) => !current)
+                                }
+                                className="rounded-xl border border-line bg-shell px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted transition hover:border-accent hover:text-accent"
+                              >
+                                {showFullCatalog ? "Hide catalog" : "Browse catalog"}
+                              </button>
+                            </div>
+                            {showFullCatalog ? (
+                              <div className="mt-3 space-y-3">
+                                <input
+                                  type="search"
+                                  value={fullCatalogQuery}
+                                  onChange={(event) =>
+                                    setFullCatalogQuery(event.target.value)
+                                  }
+                                  placeholder="Search tool name, title, domain, or description"
+                                  className="w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body outline-none transition focus:border-accent"
+                                />
+                                <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                                  {filteredFullCatalogTools
+                                    .slice(0, 40)
+                                    .map((item) => (
+                                      <div
+                                        key={item.name}
+                                        className="rounded-2xl border border-line/70 bg-shell px-3 py-3"
+                                      >
+                                        <div className="text-sm font-semibold text-body">
+                                          {item.title || item.name}
+                                        </div>
+                                        <div className="mt-1 break-all font-mono text-[11px] text-muted">
+                                          {item.name}
+                                        </div>
+                                        <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                          {[
+                                            item.moduleKey,
+                                            item.sourceType,
+                                            item.contract?.actionClass,
+                                            ...(item.contract?.businessDomains || []),
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                        </div>
+                                        {item.description ? (
+                                          <p className="mt-2 text-xs leading-5 text-muted">
+                                            {item.description}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  {!fullCatalogLoading &&
+                                  filteredFullCatalogTools.length === 0 ? (
+                                    <p className="text-sm text-muted">
+                                      No tools matched this search.
+                                    </p>
+                                  ) : null}
+                                </div>
+                                {!fullCatalogLoading &&
+                                filteredFullCatalogTools.length > 40 ? (
+                                  <p className="text-xs leading-5 text-muted">
+                                    Showing the first 40 matching tools. Narrow
+                                    the search to inspect a smaller slice.
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </InspectorSection>
 
@@ -1568,7 +1768,9 @@ export default function AgentSurfacePage() {
                 Composer
               </div>
               <div className="mt-1 text-sm text-body">
-                {effectiveLivePhase === "tooling"
+                {hasPendingClarification
+                  ? "Answer the clarification questions to continue this session."
+                  : effectiveLivePhase === "tooling"
                   ? "Assistant is using tools right now."
                   : effectiveLivePhase === "streaming"
                     ? "Assistant is streaming the response."
@@ -1641,7 +1843,9 @@ export default function AgentSurfacePage() {
               onKeyDown={handlePromptKeyDown}
               className="min-h-[84px] w-full resize-none rounded-2xl border border-line bg-shell px-4 py-3 text-sm text-body outline-none transition focus:border-accent"
               placeholder={
-                composerMode === "plan"
+                hasPendingClarification
+                  ? "Reply with the missing details to continue."
+                  : composerMode === "plan"
                   ? "Describe the goal or decision you want the agent to plan."
                   : composerMode === "execute"
                     ? "Describe any execution constraints or keep this aligned to the current plan."
@@ -1651,7 +1855,9 @@ export default function AgentSurfacePage() {
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs leading-5 text-muted">
-                {composerMode === "plan"
+                {hasPendingClarification
+                  ? "Clarification is pending. Your next reply will resolve it and continue the same ACP session."
+                  : composerMode === "plan"
                   ? providerSupportsPlanUpdates
                     ? "Plan mode asks the agent to gather evidence, build a stepwise plan, and stop short of execution."
                     : "Plan mode asks the agent to gather evidence and build a stepwise plan. This provider does not emit structured ACP plan events, so the plan panel is derived from the planning answer."
@@ -1660,7 +1866,7 @@ export default function AgentSurfacePage() {
                       ? "Execute mode tells the agent to act on the current visible plan and report created artifacts."
                       : "Execute mode requires a current plan."
                     : mcpOnlyEnabled
-                      ? "Prompts will automatically tell the agent to use Orbyte MCP as the source of truth."
+                      ? "Prompts will automatically tell the agent to use Orbyte MCP as the source of truth, discover the exact tool with tools/list when needed, and only use the relevant discovered tool."
                       : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
               </p>
               <button
@@ -1696,12 +1902,19 @@ function sessionPreview(session: ACPSession): string {
 
 function sessionModelSummary(session: ACPSession): string {
   if (session.current_model) {
-    return `${session.current_model} · ${session.status}`;
+    return `${session.current_model} · ${humanizeSessionStatus(session.status)}`;
   }
   if (session.requested_model) {
-    return `Requested ${session.requested_model} · ${session.status}`;
+    return `Requested ${session.requested_model} · ${humanizeSessionStatus(session.status)}`;
   }
-  return session.status;
+  return humanizeSessionStatus(session.status);
+}
+
+function humanizeSessionStatus(status: string): string {
+  const value = status.trim().toLowerCase();
+  if (!value) return "unknown";
+  if (value === "awaiting_input") return "awaiting input";
+  return value.replace(/_/g, " ");
 }
 
 function shortSessionID(value: string): string {
@@ -2407,7 +2620,7 @@ function applyACPStreamEvent(
     case "turn_completed":
       next.turn_in_progress = false;
       next.current_turn_id = "";
-      next.status = "ready";
+      next.status = next.status === "awaiting_input" ? next.status : "ready";
       if (turnID && isExecuteTurn(next.trace || [], turnID) && next.current_plan?.length) {
         next.current_plan = markPlanEntriesExecuted(next.current_plan);
       }
@@ -2417,10 +2630,48 @@ function applyACPStreamEvent(
       next.current_turn_id = "";
       next.status = "error";
       break;
+    case "clarification_requested": {
+      next.turn_in_progress = false;
+      next.current_turn_id = "";
+      next.status = "awaiting_input";
+      next.awaiting_input_kind =
+        stringValue(event.payload?.awaiting_input_kind) || "clarification";
+      next.pending_question_set_id =
+        stringValue(event.payload?.question_set_id) || next.pending_question_set_id;
+      next.pending_questions = clarificationQuestionsFromPayload(
+        event.payload?.questions,
+      );
+      break;
+    }
+    case "clarification_resolved":
+      next.pending_questions = [];
+      next.pending_question_set_id = "";
+      next.awaiting_input_kind = "";
+      if (!next.turn_in_progress) {
+        next.status = "running";
+      }
+      break;
     default:
       break;
   }
   return next;
+}
+
+function clarificationQuestionsFromPayload(
+  value: unknown,
+): ACPClarificationQuestion[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => mapValue(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((item, index) => ({
+      id: stringValue(item.id) || `clarification-${index}`,
+      content: stringValue(item.content),
+      source_message_id: stringValue(item.source_message_id) || undefined,
+    }))
+    .filter((item) => item.content);
 }
 
 function appendChunkMessage(
@@ -2669,6 +2920,9 @@ function buildPromptPayload(
   const sections: string[] = [];
   if (mcpOnlyEnabled) {
     sections.push(MCP_ONLY_PREFIX);
+    sections.push(
+      "Treat the visible MCP tool list in the UI as only a starter slice. When the relevant Orbyte tool is not obvious, call tools/list to discover the right tool family before proceeding.",
+    );
   }
   if (mode === "plan") {
     sections.push(
@@ -2702,6 +2956,7 @@ function buildPromptPayload(
     const explicitFullBoard = looksLikeFullDashboardPrompt(prompt);
     sections.push(
       [
+        "Use tools/list discovery if the dashboard tool family is not already obvious from the current visible MCP slice.",
         "For dashboard requests, first call analytics.dashboard.widget_catalog with surface=\"dashboard\".",
         explicitFullBoard
           ? "For explicit full-dashboard or board-preview requests, use analytics.dashboard.board.preview so you return a full dashboard_board artifact."

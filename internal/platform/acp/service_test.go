@@ -269,6 +269,189 @@ func TestSendPromptValidationNotFoundAndSuccess(t *testing.T) {
 	}
 }
 
+func TestSendPromptSetsModeBeforePrompt(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	session := &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	svc.sessions["session-1"] = session
+	calls := make([]string, 0, 2)
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		calls = append(calls, method)
+		switch method {
+		case "session/set_mode":
+			params := message["params"].(map[string]any)
+			if params["sessionId"] != "remote-1" || params["modeId"] != "plan" {
+				t.Fatalf("unexpected set_mode params: %#v", params)
+			}
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/prompt":
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "hello", Mode: "plan"}); err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(calls) != 2 || calls[0] != "session/set_mode" || calls[1] != "session/prompt" {
+		t.Fatalf("unexpected method order: %#v", calls)
+	}
+}
+
+func TestSendPromptPromotesClarificationToAwaitingInput(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+		Status:        "ready",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+			"text": "Clarification Needed\n\n1. What defines underperforming for your branches?\n2. Should I search all branches first or use specific branch codes?\n3. What's the timeframe for recovery?",
+		})
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Create a recovery plan."})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if updated.Status != "awaiting_input" {
+		t.Fatalf("expected awaiting_input status, got %#v", updated.Status)
+	}
+	if updated.AwaitingInputKind != "clarification" {
+		t.Fatalf("expected clarification kind, got %#v", updated.AwaitingInputKind)
+	}
+	if len(updated.PendingQuestions) != 3 {
+		t.Fatalf("expected three clarification questions, got %#v", updated.PendingQuestions)
+	}
+	if updated.PendingQuestionSetID == "" {
+		t.Fatal("expected pending question set id")
+	}
+}
+
+func TestSendPromptClearsPendingClarificationOnReply(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:                   "session-1",
+		UserID:               "user-1",
+		RemoteSession:        "remote-1",
+		Status:               "awaiting_input",
+		AwaitingInputKind:    "clarification",
+		PendingQuestionSetID: "clarification-1",
+		PendingQuestions: []ClarificationQuestion{{
+			ID:      "question-1",
+			Content: "What defines underperforming for your branches?",
+		}},
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+			"text": "1. Compare all branches over the last 30 days.\n2. Benchmark against the top branch.\n3. Recommend a recovery sequence.",
+		})
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Use sales volume, search all branches, and plan for 30 days."})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if updated.Status != "ready" {
+		t.Fatalf("expected ready status, got %#v", updated.Status)
+	}
+	if updated.AwaitingInputKind != "" || updated.PendingQuestionSetID != "" || len(updated.PendingQuestions) != 0 {
+		t.Fatalf("expected clarification state cleared, got %#v", updated)
+	}
+}
+
+func TestSendPromptPreservesPendingClarificationWhenFollowupFails(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:                   "session-1",
+		UserID:               "user-1",
+		RemoteSession:        "remote-1",
+		Status:               "awaiting_input",
+		AwaitingInputKind:    "clarification",
+		PendingQuestionSetID: "clarification-1",
+		PendingQuestions: []ClarificationQuestion{{
+			ID:      "question-1",
+			Content: "What defines underperforming for your branches?",
+		}},
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		return errors.New("write failed")
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "Use sales volume over 30 days."}); err == nil {
+		t.Fatal("expected prompt error")
+	}
+	session, _ := svc.GetSession("session-1")
+	if session.Status != "awaiting_input" {
+		t.Fatalf("expected awaiting_input status, got %#v", session.Status)
+	}
+	if session.PendingQuestionSetID != "clarification-1" || session.AwaitingInputKind != "clarification" {
+		t.Fatalf("expected clarification metadata preserved, got %#v", session)
+	}
+	if len(session.PendingQuestions) != 1 || session.PendingQuestions[0].Content != "What defines underperforming for your branches?" {
+		t.Fatalf("expected pending questions preserved, got %#v", session.PendingQuestions)
+	}
+}
+
+func TestExtractClarificationQuestionsRequiresExplicitMarker(t *testing.T) {
+	questions := extractClarificationQuestions(`Final recommendation:
+
+- What changed?
+- Why now?
+
+We should proceed with the branch reset.`, "msg-1")
+	if len(questions) != 0 {
+		t.Fatalf("expected no clarification questions without explicit marker, got %#v", questions)
+	}
+
+	questions = extractClarificationQuestions(`Clarification Needed
+
+1. What changed?
+2. Why now?`, "msg-1")
+	if len(questions) != 2 {
+		t.Fatalf("expected clarification questions with explicit marker, got %#v", questions)
+	}
+}
+
 func TestSendPromptStoresDisplayContentSeparately(t *testing.T) {
 	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{
@@ -933,13 +1116,18 @@ func TestCloneMapSessionAndStringValue(t *testing.T) {
 		Artifacts:     []Artifact{{ID: "art"}},
 		Trace:         []Event{{ID: "evt"}},
 		CurrentPlan:   []PlanEntry{{Content: "step"}},
+		PendingQuestions: []ClarificationQuestion{{ID: "q1", Content: "Need more detail?"}},
 		ProviderInfo:  map[string]any{"agent": "codex"},
 	}
 	cloned := cloneSession(original)
 	cloned.Messages[0].ID = "changed"
 	cloned.ProviderInfo["agent"] = "other"
+	cloned.PendingQuestions[0].Content = "changed"
 	if original.Messages[0].ID != "msg" || original.ProviderInfo["agent"] != "codex" {
 		t.Fatalf("expected deep clone, got %#v", original)
+	}
+	if original.PendingQuestions[0].Content != "Need more detail?" {
+		t.Fatalf("expected clarification questions cloned, got %#v", original.PendingQuestions)
 	}
 	if cloneMap(nil) != nil {
 		t.Fatal("expected nil cloneMap for nil input")

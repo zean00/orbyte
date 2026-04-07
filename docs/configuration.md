@@ -86,7 +86,7 @@ export APP_ADDRESS=":8080"
 ### PostgreSQL Runtime
 
 ```bash
-export DATABASE_URL="postgres://orbyte:orbyte@127.0.0.1:5432/orbyte?sslmode=disable"
+export DATABASE_URL="postgres://orbyte:orbyte@127.0.0.1:55432/orbyte?sslmode=disable"
 ```
 
 ### Production JWT Secret

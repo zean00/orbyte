@@ -265,7 +265,7 @@ func (c *apiClient) ensureCashierPIN(ctx context.Context, pin string) (string, b
 		return "", false, err
 	}
 	if configured, _ := state["configured"].(bool); configured {
-		return "", false, nil
+		return pin, false, nil
 	}
 	if err := c.doJSON(ctx, http.MethodPost, "/auth/cashier-pin", map[string]any{"new_pin": pin}, nil); err != nil {
 		return "", false, err

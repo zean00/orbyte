@@ -193,6 +193,12 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"sessionId":"remote-1","models":{"currentModelId":"opencode/big-pickle","availableModels":[{"modelId":"opencode/big-pickle","name":"Big Pickle"},{"modelId":"opencode/gpt-5-nano","name":"GPT-5 Nano"}]}}`)}
 		case "session/prompt":
 			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/set_mode":
+			params := message["params"].(map[string]any)
+			if params["sessionId"] != "remote-1" || params["modeId"] != "plan" {
+				t.Fatalf("unexpected set_mode params: %#v", params)
+			}
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
 		case "session/set_model":
 			params := message["params"].(map[string]any)
 			if params["sessionId"] != "remote-1" || params["modelId"] != "opencode/minimax-m2.5-free" {
@@ -242,8 +248,45 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 	if modelID != "opencode/minimax-m2.5-free" {
 		t.Fatalf("unexpected selected model: %q", modelID)
 	}
+	if err := client.setSessionMode("remote-1", "plan"); err != nil {
+		t.Fatalf("setSessionMode failed: %v", err)
+	}
 	if err := client.prompt("remote-1", []map[string]any{{"type": "text", "text": "hello"}}); err != nil {
 		t.Fatalf("prompt failed: %v", err)
+	}
+}
+
+func TestNewSessionSendsEmptyMCPServerArrayWhenDiscoveryIsEmpty(t *testing.T) {
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		switch method {
+		case "session/new":
+			params := message["params"].(map[string]any)
+			got, ok := params["mcpServers"].([]any)
+			if !ok {
+				t.Fatalf("expected mcpServers array, got %#v", params["mcpServers"])
+			}
+			if len(got) != 0 {
+				t.Fatalf("expected empty mcpServers array, got %#v", got)
+			}
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"sessionId":"remote-empty","models":{"currentModelId":"opencode/big-pickle","availableModels":[]}}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+
+	sessionInfo, err := client.newSession(".")
+	if err != nil {
+		t.Fatalf("newSession failed: %v", err)
+	}
+	if sessionInfo.SessionID != "remote-empty" {
+		t.Fatalf("unexpected session id: %q", sessionInfo.SessionID)
 	}
 }
 

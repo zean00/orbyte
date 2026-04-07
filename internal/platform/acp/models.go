@@ -78,12 +78,21 @@ type Session struct {
 	Artifacts      []Artifact     `json:"artifacts,omitempty"`
 	Trace          []Event        `json:"trace,omitempty"`
 	CurrentPlan    []PlanEntry    `json:"current_plan,omitempty"`
+	PendingQuestions []ClarificationQuestion `json:"pending_questions,omitempty"`
+	PendingQuestionSetID string `json:"pending_question_set_id,omitempty"`
+	AwaitingInputKind string `json:"awaiting_input_kind,omitempty"`
 	ProviderInfo   map[string]any `json:"provider_info,omitempty"`
 	LastError      string         `json:"last_error,omitempty"`
 	RemoteSession  string         `json:"remote_session_id,omitempty"`
 	CurrentTurnID  string         `json:"current_turn_id,omitempty"`
 	TurnInProgress bool           `json:"turn_in_progress"`
 	recentPromptIDs map[string]time.Time
+}
+
+type ClarificationQuestion struct {
+	ID              string `json:"id"`
+	Content         string `json:"content"`
+	SourceMessageID string `json:"source_message_id,omitempty"`
 }
 
 type Message struct {
@@ -142,8 +151,9 @@ type StartSessionRequest struct {
 }
 
 type PromptRequest struct {
-	Content        string         `json:"content"`
-	DisplayContent string         `json:"display_content,omitempty"`
-	ClientRequestID string        `json:"client_request_id,omitempty"`
-	ContextBlocks  []ContextBlock `json:"context_blocks,omitempty"`
+	Content         string         `json:"content"`
+	DisplayContent  string         `json:"display_content,omitempty"`
+	ClientRequestID string         `json:"client_request_id,omitempty"`
+	ContextBlocks   []ContextBlock `json:"context_blocks,omitempty"`
+	Mode            string         `json:"mode,omitempty"`
 }

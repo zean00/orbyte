@@ -11,10 +11,12 @@
         "starting",
         "ready",
         "running",
+        "awaiting_input",
         "error"
       ],
       "stability": "experimental",
       "supports_approvals": true,
+      "supports_plan_updates": true,
       "supports_streaming": true
     },
     "enabled": false,
@@ -5980,6 +5982,36 @@
       "view_key": "promotion.codes.list"
     },
     {
+      "key": "promotion.plans.detail",
+      "kind": "navigate",
+      "label": "Promotion Plan Detail",
+      "label_i18n": {
+        "en": "Promotion Plan Detail",
+        "id": "Detail Rencana Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.read"
+      ],
+      "route_path": "/promotion/plans/detail",
+      "view_key": "promotion.plans.detail"
+    },
+    {
+      "key": "promotion.plans.form",
+      "kind": "navigate",
+      "label": "Promotion Plan Form",
+      "label_i18n": {
+        "en": "Promotion Plan Form",
+        "id": "Form Rencana Promosi"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "route_path": "/promotion/plans/form",
+      "view_key": "promotion.plans.form"
+    },
+    {
       "key": "promotion.redemptions.detail",
       "kind": "navigate",
       "label": "Promotion Redemption Detail",
@@ -6767,6 +6799,246 @@
       ],
       "route_path": "/supplier-returns/returns/new",
       "view_key": "supplier_returns.returns.form"
+    },
+    {
+      "key": "workforce.assignments.detail",
+      "kind": "navigate",
+      "label": "Employee Assignment Detail",
+      "label_i18n": {
+        "en": "Employee Assignment Detail",
+        "id": "Employee Assignment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/assignments/detail",
+      "view_key": "workforce.assignments.detail"
+    },
+    {
+      "key": "workforce.assignments.form",
+      "kind": "navigate",
+      "label": "Employee Assignment Form",
+      "label_i18n": {
+        "en": "Employee Assignment Form",
+        "id": "Employee Assignment Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/assignments/form",
+      "view_key": "workforce.assignments.form"
+    },
+    {
+      "key": "workforce.assignments.list",
+      "kind": "navigate",
+      "label": "Employee Assignments",
+      "label_i18n": {
+        "en": "Employee Assignments",
+        "id": "Employee Assignments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/assignments",
+      "view_key": "workforce.assignments.list"
+    },
+    {
+      "key": "workforce.assignments.new",
+      "kind": "navigate",
+      "label": "New Employee Assignments",
+      "label_i18n": {
+        "en": "New Employee Assignments",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/assignments/new",
+      "view_key": "workforce.assignments.form"
+    },
+    {
+      "key": "workforce.compensation.detail",
+      "kind": "navigate",
+      "label": "Compensation Profile Detail",
+      "label_i18n": {
+        "en": "Compensation Profile Detail",
+        "id": "Compensation Profile Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/compensation/detail",
+      "view_key": "workforce.compensation.detail"
+    },
+    {
+      "key": "workforce.compensation.form",
+      "kind": "navigate",
+      "label": "Compensation Profile Form",
+      "label_i18n": {
+        "en": "Compensation Profile Form",
+        "id": "Compensation Profile Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/compensation/form",
+      "view_key": "workforce.compensation.form"
+    },
+    {
+      "key": "workforce.compensation.list",
+      "kind": "navigate",
+      "label": "Compensation Profiles",
+      "label_i18n": {
+        "en": "Compensation Profiles",
+        "id": "Compensation Profiles"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/compensation",
+      "view_key": "workforce.compensation.list"
+    },
+    {
+      "key": "workforce.compensation.new",
+      "kind": "navigate",
+      "label": "New Compensation Profiles",
+      "label_i18n": {
+        "en": "New Compensation Profiles",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/compensation/new",
+      "view_key": "workforce.compensation.form"
+    },
+    {
+      "key": "workforce.eligibility.detail",
+      "kind": "navigate",
+      "label": "Eligibility Detail",
+      "label_i18n": {
+        "en": "Eligibility Detail",
+        "id": "Eligibility Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/eligibility/detail",
+      "view_key": "workforce.eligibility.detail"
+    },
+    {
+      "key": "workforce.eligibility.form",
+      "kind": "navigate",
+      "label": "Eligibility Form",
+      "label_i18n": {
+        "en": "Eligibility Form",
+        "id": "Eligibility Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/eligibility/form",
+      "view_key": "workforce.eligibility.form"
+    },
+    {
+      "key": "workforce.eligibility.list",
+      "kind": "navigate",
+      "label": "Role Eligibility",
+      "label_i18n": {
+        "en": "Role Eligibility",
+        "id": "Role Eligibility"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/eligibility",
+      "view_key": "workforce.eligibility.list"
+    },
+    {
+      "key": "workforce.eligibility.new",
+      "kind": "navigate",
+      "label": "New Role Eligibility",
+      "label_i18n": {
+        "en": "New Role Eligibility",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/eligibility/new",
+      "view_key": "workforce.eligibility.form"
+    },
+    {
+      "key": "workforce.employees.detail",
+      "kind": "navigate",
+      "label": "Employee Detail",
+      "label_i18n": {
+        "en": "Employee Detail",
+        "id": "Employee Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "route_path": "/workforce/employees/detail",
+      "view_key": "workforce.employees.detail"
+    },
+    {
+      "key": "workforce.employees.form",
+      "kind": "navigate",
+      "label": "Employee Form",
+      "label_i18n": {
+        "en": "Employee Form",
+        "id": "Employee Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/employees/form",
+      "view_key": "workforce.employees.form"
+    },
+    {
+      "key": "workforce.employees.list",
+      "kind": "navigate",
+      "label": "Employees",
+      "label_i18n": {
+        "en": "Employees",
+        "id": "Employees"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.list"
+      ],
+      "route_path": "/workforce/employees",
+      "view_key": "workforce.employees.list"
+    },
+    {
+      "key": "workforce.employees.new",
+      "kind": "navigate",
+      "label": "New Employees",
+      "label_i18n": {
+        "en": "New Employees",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "route_path": "/workforce/employees/new",
+      "view_key": "workforce.employees.form"
     }
   ],
   "admin_access": true,
@@ -6782,7 +7054,8 @@
     "worklist",
     "self_service",
     "agent",
-    "pos"
+    "pos",
+    "dashboard"
   ],
   "capabilities": {
     "column_preferences": true,
@@ -6800,6 +7073,7 @@
   "fallback_paths": {
     "agent": "/agent/workspace",
     "backoffice": "/sdk/items",
+    "dashboard": "/dashboard",
     "pos": "/pos/terminal",
     "self_service": "/self-service/requests",
     "worklist": "/worklist"
@@ -7260,6 +7534,19 @@
       ]
     },
     {
+      "action_key": "workforce.employees.list",
+      "key": "workforce.employees",
+      "label": "Employees",
+      "label_i18n": {
+        "en": "Employees",
+        "id": "Karyawan"
+      },
+      "order": 15,
+      "required_permissions": [
+        "employee.list"
+      ]
+    },
+    {
       "action_key": "employee_spend.cash_advances.list",
       "key": "employee_spend.cash_advances",
       "label": "Cash Advances",
@@ -7270,6 +7557,19 @@
       "order": 16,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "workforce.assignments.list",
+      "key": "workforce.assignments",
+      "label": "Employee Assignments",
+      "label_i18n": {
+        "en": "Employee Assignments",
+        "id": "Penugasan Karyawan"
+      },
+      "order": 16,
+      "required_permissions": [
+        "employee.read"
       ]
     },
     {
@@ -7286,6 +7586,19 @@
       ]
     },
     {
+      "action_key": "workforce.eligibility.list",
+      "key": "workforce.eligibility",
+      "label": "Role Eligibility",
+      "label_i18n": {
+        "en": "Role Eligibility",
+        "id": "Kelayakan Peran"
+      },
+      "order": 17,
+      "required_permissions": [
+        "employee.read"
+      ]
+    },
+    {
       "action_key": "employee_spend.liquidations.list",
       "key": "employee_spend.liquidations",
       "label": "Advance Liquidations",
@@ -7296,6 +7609,19 @@
       "order": 18,
       "required_permissions": [
         "document.list"
+      ]
+    },
+    {
+      "action_key": "workforce.compensation.list",
+      "key": "workforce.compensation",
+      "label": "Compensation Profiles",
+      "label_i18n": {
+        "en": "Compensation Profiles",
+        "id": "Profil Kompensasi"
+      },
+      "order": 18,
+      "required_permissions": [
+        "employee.read"
       ]
     },
     {
@@ -36523,6 +36849,96 @@
               "type": "string"
             },
             {
+              "key": "receipt_template_key",
+              "label": "Receipt Template",
+              "label_i18n": {
+                "en": "Receipt Template",
+                "id": "Template Struk"
+              },
+              "path": "values.receipt_template_key",
+              "type": "string"
+            },
+            {
+              "key": "receipt_variants",
+              "label": "Receipt Variants",
+              "label_i18n": {
+                "en": "Receipt Variants",
+                "id": "Varian Struk"
+              },
+              "path": "values.receipt_variants",
+              "type": "string"
+            },
+            {
+              "key": "receipt_brand_name",
+              "label": "Receipt Brand Name",
+              "label_i18n": {
+                "en": "Receipt Brand Name",
+                "id": "Nama Brand Struk"
+              },
+              "path": "values.receipt_brand_name",
+              "type": "string"
+            },
+            {
+              "key": "receipt_header_text",
+              "label": "Receipt Header Text",
+              "label_i18n": {
+                "en": "Receipt Header Text",
+                "id": "Teks Header Struk"
+              },
+              "path": "values.receipt_header_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_footer_text",
+              "label": "Receipt Footer Text",
+              "label_i18n": {
+                "en": "Receipt Footer Text",
+                "id": "Teks Footer Struk"
+              },
+              "path": "values.receipt_footer_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_support_text",
+              "label": "Receipt Support Text",
+              "label_i18n": {
+                "en": "Receipt Support Text",
+                "id": "Teks Bantuan Struk"
+              },
+              "path": "values.receipt_support_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_service_text",
+              "label": "Receipt Service Text",
+              "label_i18n": {
+                "en": "Receipt Service Text",
+                "id": "Teks Layanan Struk"
+              },
+              "path": "values.receipt_service_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_merchant_note",
+              "label": "Receipt Merchant Note",
+              "label_i18n": {
+                "en": "Receipt Merchant Note",
+                "id": "Catatan Merchant Struk"
+              },
+              "path": "values.receipt_merchant_note",
+              "type": "string"
+            },
+            {
+              "key": "receipt_show_qr",
+              "label": "Receipt Show QR",
+              "label_i18n": {
+                "en": "Receipt Show QR",
+                "id": "Tampilkan QR di Struk"
+              },
+              "path": "values.receipt_show_qr",
+              "type": "bool"
+            },
+            {
               "key": "status",
               "label": "Status",
               "label_i18n": {
@@ -36651,6 +37067,98 @@
               "path": "values.receipt_template_key",
               "type": "string",
               "widget": "text"
+            },
+            {
+              "key": "receipt_variants",
+              "label": "Receipt Variants",
+              "label_i18n": {
+                "en": "Receipt Variants",
+                "id": "Varian Struk"
+              },
+              "path": "values.receipt_variants",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receipt_brand_name",
+              "label": "Receipt Brand Name",
+              "label_i18n": {
+                "en": "Receipt Brand Name",
+                "id": "Nama Brand Struk"
+              },
+              "path": "values.receipt_brand_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receipt_header_text",
+              "label": "Receipt Header Text",
+              "label_i18n": {
+                "en": "Receipt Header Text",
+                "id": "Teks Header Struk"
+              },
+              "path": "values.receipt_header_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_footer_text",
+              "label": "Receipt Footer Text",
+              "label_i18n": {
+                "en": "Receipt Footer Text",
+                "id": "Teks Footer Struk"
+              },
+              "path": "values.receipt_footer_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_support_text",
+              "label": "Receipt Support Text",
+              "label_i18n": {
+                "en": "Receipt Support Text",
+                "id": "Teks Bantuan Struk"
+              },
+              "path": "values.receipt_support_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_service_text",
+              "label": "Receipt Service Text",
+              "label_i18n": {
+                "en": "Receipt Service Text",
+                "id": "Teks Layanan Struk"
+              },
+              "path": "values.receipt_service_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_merchant_note",
+              "label": "Receipt Merchant Note",
+              "label_i18n": {
+                "en": "Receipt Merchant Note",
+                "id": "Catatan Merchant Struk"
+              },
+              "path": "values.receipt_merchant_note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_show_qr",
+              "label": "Receipt Show QR",
+              "label_i18n": {
+                "en": "Receipt Show QR",
+                "id": "Tampilkan QR di Struk"
+              },
+              "options": [
+                "true",
+                "false"
+              ],
+              "path": "values.receipt_show_qr",
+              "type": "string",
+              "widget": "select"
             },
             {
               "key": "status",
@@ -37668,6 +38176,86 @@
               "type": "string"
             },
             {
+              "key": "receipt_variants",
+              "label": "Receipt Variants",
+              "label_i18n": {
+                "en": "Receipt Variants",
+                "id": "Varian Struk"
+              },
+              "path": "values.receipt_variants",
+              "type": "string"
+            },
+            {
+              "key": "receipt_brand_name",
+              "label": "Receipt Brand Name",
+              "label_i18n": {
+                "en": "Receipt Brand Name",
+                "id": "Nama Brand Struk"
+              },
+              "path": "values.receipt_brand_name",
+              "type": "string"
+            },
+            {
+              "key": "receipt_header_text",
+              "label": "Receipt Header Text",
+              "label_i18n": {
+                "en": "Receipt Header Text",
+                "id": "Teks Header Struk"
+              },
+              "path": "values.receipt_header_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_footer_text",
+              "label": "Receipt Footer Text",
+              "label_i18n": {
+                "en": "Receipt Footer Text",
+                "id": "Teks Footer Struk"
+              },
+              "path": "values.receipt_footer_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_support_text",
+              "label": "Receipt Support Text",
+              "label_i18n": {
+                "en": "Receipt Support Text",
+                "id": "Teks Bantuan Struk"
+              },
+              "path": "values.receipt_support_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_service_text",
+              "label": "Receipt Service Text",
+              "label_i18n": {
+                "en": "Receipt Service Text",
+                "id": "Teks Layanan Struk"
+              },
+              "path": "values.receipt_service_text",
+              "type": "string"
+            },
+            {
+              "key": "receipt_merchant_note",
+              "label": "Receipt Merchant Note",
+              "label_i18n": {
+                "en": "Receipt Merchant Note",
+                "id": "Catatan Merchant Struk"
+              },
+              "path": "values.receipt_merchant_note",
+              "type": "string"
+            },
+            {
+              "key": "receipt_show_qr",
+              "label": "Receipt Show QR",
+              "label_i18n": {
+                "en": "Receipt Show QR",
+                "id": "Tampilkan QR di Struk"
+              },
+              "path": "values.receipt_show_qr",
+              "type": "bool"
+            },
+            {
               "key": "status",
               "label": "Status",
               "label_i18n": {
@@ -37805,6 +38393,98 @@
                 "sales_order_first"
               ],
               "path": "values.checkout_mode",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "receipt_variants",
+              "label": "Receipt Variants",
+              "label_i18n": {
+                "en": "Receipt Variants",
+                "id": "Varian Struk"
+              },
+              "path": "values.receipt_variants",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receipt_brand_name",
+              "label": "Receipt Brand Name",
+              "label_i18n": {
+                "en": "Receipt Brand Name",
+                "id": "Nama Brand Struk"
+              },
+              "path": "values.receipt_brand_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "receipt_header_text",
+              "label": "Receipt Header Text",
+              "label_i18n": {
+                "en": "Receipt Header Text",
+                "id": "Teks Header Struk"
+              },
+              "path": "values.receipt_header_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_footer_text",
+              "label": "Receipt Footer Text",
+              "label_i18n": {
+                "en": "Receipt Footer Text",
+                "id": "Teks Footer Struk"
+              },
+              "path": "values.receipt_footer_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_support_text",
+              "label": "Receipt Support Text",
+              "label_i18n": {
+                "en": "Receipt Support Text",
+                "id": "Teks Bantuan Struk"
+              },
+              "path": "values.receipt_support_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_service_text",
+              "label": "Receipt Service Text",
+              "label_i18n": {
+                "en": "Receipt Service Text",
+                "id": "Teks Layanan Struk"
+              },
+              "path": "values.receipt_service_text",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_merchant_note",
+              "label": "Receipt Merchant Note",
+              "label_i18n": {
+                "en": "Receipt Merchant Note",
+                "id": "Catatan Merchant Struk"
+              },
+              "path": "values.receipt_merchant_note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "receipt_show_qr",
+              "label": "Receipt Show QR",
+              "label_i18n": {
+                "en": "Receipt Show QR",
+                "id": "Tampilkan QR di Struk"
+              },
+              "options": [
+                "true",
+                "false"
+              ],
+              "path": "values.receipt_show_qr",
               "type": "string",
               "widget": "select"
             },
@@ -44019,6 +44699,277 @@
       }
     },
     {
+      "allowed_actions": [
+        "submit",
+        "approve",
+        "reject",
+        "reopen",
+        "cancel"
+      ],
+      "document_type": "generic_request",
+      "key": "promotion.plans.detail",
+      "kind": "detail",
+      "required_permissions": [
+        "document.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "doc_id",
+              "label": "Document ID",
+              "label_i18n": {
+                "en": "Document ID",
+                "id": "ID Dokumen"
+              },
+              "path": "header.id",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "path": "header.status",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Judul"
+              },
+              "path": "body.payload.title",
+              "read_only": true,
+              "type": "string"
+            }
+          ],
+          "key": "promotion_plan_header",
+          "title": "Header",
+          "title_i18n": {
+            "en": "Header",
+            "id": "Header"
+          }
+        },
+        {
+          "fields": [
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Judul"
+              },
+              "path": "body.payload.title",
+              "type": "string"
+            },
+            {
+              "key": "summary",
+              "label": "Summary",
+              "label_i18n": {
+                "en": "Summary",
+                "id": "Ringkasan"
+              },
+              "path": "body.payload.summary",
+              "type": "string"
+            },
+            {
+              "key": "campaign_kind",
+              "label": "Campaign Kind",
+              "label_i18n": {
+                "en": "Campaign Kind",
+                "id": "Jenis Kampanye"
+              },
+              "path": "body.payload.campaign_kind",
+              "type": "string"
+            },
+            {
+              "key": "target_products",
+              "label": "Target Products",
+              "label_i18n": {
+                "en": "Target Products",
+                "id": "Produk Target"
+              },
+              "path": "body.payload.target_products",
+              "type": "string"
+            },
+            {
+              "key": "target_segment",
+              "label": "Target Segment",
+              "label_i18n": {
+                "en": "Target Segment",
+                "id": "Segmen Target"
+              },
+              "path": "body.payload.target_segment",
+              "type": "string"
+            },
+            {
+              "key": "replaced_campaign",
+              "label": "Replaced Campaign",
+              "label_i18n": {
+                "en": "Replaced Campaign",
+                "id": "Kampanye Diganti"
+              },
+              "path": "body.payload.replaced_campaign",
+              "type": "string"
+            },
+            {
+              "key": "request_kind",
+              "label": "Request Kind",
+              "label_i18n": {
+                "en": "Request Kind",
+                "id": "Jenis Permintaan"
+              },
+              "path": "body.payload.request_kind",
+              "read_only": true,
+              "type": "string"
+            },
+            {
+              "key": "viewer_hint",
+              "label": "Viewer Hint",
+              "label_i18n": {
+                "en": "Viewer Hint",
+                "id": "Hint Viewer"
+              },
+              "path": "body.payload.viewer_hint",
+              "read_only": true,
+              "type": "string"
+            }
+          ],
+          "key": "promotion_plan_payload",
+          "title": "Promotion Plan",
+          "title_i18n": {
+            "en": "Promotion Plan",
+            "id": "Rencana Promosi"
+          }
+        }
+      ],
+      "title": "Promotion Plan Detail",
+      "title_i18n": {
+        "en": "Promotion Plan Detail",
+        "id": "Detail Rencana Promosi"
+      }
+    },
+    {
+      "document_type": "generic_request",
+      "key": "promotion.plans.form",
+      "kind": "form",
+      "required_permissions": [
+        "document.update_draft"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Judul"
+              },
+              "path": "body.payload.title",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "summary",
+              "label": "Summary",
+              "label_i18n": {
+                "en": "Summary",
+                "id": "Ringkasan"
+              },
+              "path": "body.payload.summary",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "campaign_kind",
+              "label": "Campaign Kind",
+              "label_i18n": {
+                "en": "Campaign Kind",
+                "id": "Jenis Kampanye"
+              },
+              "path": "body.payload.campaign_kind",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "target_products",
+              "label": "Target Products",
+              "label_i18n": {
+                "en": "Target Products",
+                "id": "Produk Target"
+              },
+              "path": "body.payload.target_products",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "target_segment",
+              "label": "Target Segment",
+              "label_i18n": {
+                "en": "Target Segment",
+                "id": "Segmen Target"
+              },
+              "path": "body.payload.target_segment",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "replaced_campaign",
+              "label": "Replaced Campaign",
+              "label_i18n": {
+                "en": "Replaced Campaign",
+                "id": "Kampanye Diganti"
+              },
+              "path": "body.payload.replaced_campaign",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "request_kind",
+              "label": "Request Kind",
+              "label_i18n": {
+                "en": "Request Kind",
+                "id": "Jenis Permintaan"
+              },
+              "path": "body.payload.request_kind",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "viewer_hint",
+              "label": "Viewer Hint",
+              "label_i18n": {
+                "en": "Viewer Hint",
+                "id": "Hint Viewer"
+              },
+              "path": "body.payload.viewer_hint",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "promotion_plan_fields",
+          "title": "Promotion Plan",
+          "title_i18n": {
+            "en": "Promotion Plan",
+            "id": "Rencana Promosi"
+          }
+        }
+      ],
+      "title": "Promotion Plan Form",
+      "title_i18n": {
+        "en": "Promotion Plan Form",
+        "id": "Form Rencana Promosi"
+      }
+    },
+    {
       "key": "promotion.redemptions.detail",
       "kind": "detail",
       "model_key": "promotion_redemption",
@@ -47572,6 +48523,1601 @@
       "title_i18n": {
         "en": "Supplier Returns",
         "id": "Supplier Returns"
+      }
+    },
+    {
+      "key": "workforce.assignments.detail",
+      "kind": "detail",
+      "model_key": "employee_assignment",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "label_i18n": {
+                "en": "Employee",
+                "id": "Karyawan"
+              },
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "label_i18n": {
+                "en": "Cost Center",
+                "id": "Pusat Biaya"
+              },
+              "path": "values.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "manager_user_id",
+              "label": "Manager User",
+              "label_i18n": {
+                "en": "Manager User",
+                "id": "Pengguna Manajer"
+              },
+              "path": "values.manager_user_id",
+              "type": "string"
+            },
+            {
+              "key": "manager_employee_id",
+              "label": "Manager Employee",
+              "label_i18n": {
+                "en": "Manager Employee",
+                "id": "Karyawan Manajer"
+              },
+              "path": "values.manager_employee_id",
+              "type": "string"
+            },
+            {
+              "key": "assignment_type",
+              "label": "Assignment Type",
+              "label_i18n": {
+                "en": "Assignment Type",
+                "id": "Tipe Penugasan"
+              },
+              "options": [
+                "primary",
+                "secondary",
+                "temporary"
+              ],
+              "path": "values.assignment_type",
+              "type": "string"
+            },
+            {
+              "key": "effective_from",
+              "label": "Effective From",
+              "label_i18n": {
+                "en": "Effective From",
+                "id": "Berlaku Dari"
+              },
+              "path": "values.effective_from",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "effective_to",
+              "label": "Effective To",
+              "label_i18n": {
+                "en": "Effective To",
+                "id": "Berlaku Sampai"
+              },
+              "path": "values.effective_to",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Employee Assignment Detail",
+      "title_i18n": {
+        "en": "Employee Assignment Detail",
+        "id": "Employee Assignment Detail"
+      }
+    },
+    {
+      "key": "workforce.assignments.form",
+      "kind": "form",
+      "model_key": "employee_assignment",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "label_i18n": {
+                "en": "Employee",
+                "id": "Karyawan"
+              },
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "label_i18n": {
+                "en": "Cost Center",
+                "id": "Pusat Biaya"
+              },
+              "path": "values.cost_center_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "manager_user_id",
+              "label": "Manager User",
+              "label_i18n": {
+                "en": "Manager User",
+                "id": "Pengguna Manajer"
+              },
+              "path": "values.manager_user_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "manager_employee_id",
+              "label": "Manager Employee",
+              "label_i18n": {
+                "en": "Manager Employee",
+                "id": "Karyawan Manajer"
+              },
+              "path": "values.manager_employee_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "assignment_type",
+              "label": "Assignment Type",
+              "label_i18n": {
+                "en": "Assignment Type",
+                "id": "Tipe Penugasan"
+              },
+              "options": [
+                "primary",
+                "secondary",
+                "temporary"
+              ],
+              "path": "values.assignment_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "effective_from",
+              "label": "Effective From",
+              "label_i18n": {
+                "en": "Effective From",
+                "id": "Berlaku Dari"
+              },
+              "path": "values.effective_from",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "effective_to",
+              "label": "Effective To",
+              "label_i18n": {
+                "en": "Effective To",
+                "id": "Berlaku Sampai"
+              },
+              "path": "values.effective_to",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Employee Assignment Form",
+          "title_i18n": {
+            "en": "Employee Assignment Form",
+            "id": "Employee Assignment Form"
+          }
+        }
+      ],
+      "title": "Employee Assignment Form",
+      "title_i18n": {
+        "en": "Employee Assignment Form",
+        "id": "Employee Assignment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "label_i18n": {
+            "en": "Employee",
+            "id": "Karyawan"
+          },
+          "path": "values.employee_id"
+        },
+        {
+          "key": "assignment_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.assignment_type"
+        },
+        {
+          "key": "location_id",
+          "label": "Location",
+          "label_i18n": {
+            "en": "Location",
+            "id": "Lokasi"
+          },
+          "path": "values.location_id"
+        },
+        {
+          "key": "department_id",
+          "label": "Department",
+          "label_i18n": {
+            "en": "Department",
+            "id": "Departemen"
+          },
+          "path": "values.department_id"
+        },
+        {
+          "key": "effective_from",
+          "label": "Effective From",
+          "label_i18n": {
+            "en": "Effective From",
+            "id": "Berlaku Dari"
+          },
+          "path": "values.effective_from"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "workforce.assignments.list",
+      "kind": "list",
+      "model_key": "employee_assignment",
+      "required_permissions": [
+        "employee.list"
+      ],
+      "title": "Employee Assignments",
+      "title_i18n": {
+        "en": "Employee Assignments",
+        "id": "Employee Assignments"
+      }
+    },
+    {
+      "key": "workforce.compensation.detail",
+      "kind": "detail",
+      "model_key": "employee_compensation_profile",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "label_i18n": {
+                "en": "Employee",
+                "id": "Karyawan"
+              },
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "pay_basis",
+              "label": "Pay Basis",
+              "label_i18n": {
+                "en": "Pay Basis",
+                "id": "Basis Bayar"
+              },
+              "options": [
+                "hourly",
+                "monthly",
+                "daily"
+              ],
+              "path": "values.pay_basis",
+              "type": "string"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string"
+            },
+            {
+              "key": "standard_hourly_rate",
+              "label": "Standard Hourly Rate",
+              "label_i18n": {
+                "en": "Standard Hourly Rate",
+                "id": "Tarif Jam Standar"
+              },
+              "path": "values.standard_hourly_rate",
+              "type": "number"
+            },
+            {
+              "key": "overtime_hourly_rate",
+              "label": "Overtime Hourly Rate",
+              "label_i18n": {
+                "en": "Overtime Hourly Rate",
+                "id": "Tarif Jam Lembur"
+              },
+              "path": "values.overtime_hourly_rate",
+              "type": "number"
+            },
+            {
+              "key": "labor_cost_center_id",
+              "label": "Labor Cost Center",
+              "label_i18n": {
+                "en": "Labor Cost Center",
+                "id": "Pusat Biaya Tenaga Kerja"
+              },
+              "path": "values.labor_cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "payable_party_id",
+              "label": "Payable Party",
+              "label_i18n": {
+                "en": "Payable Party",
+                "id": "Pihak Pembayaran"
+              },
+              "path": "values.payable_party_id",
+              "type": "string"
+            },
+            {
+              "key": "external_payroll_reference",
+              "label": "Payroll Reference",
+              "label_i18n": {
+                "en": "Payroll Reference",
+                "id": "Referensi Payroll"
+              },
+              "path": "values.external_payroll_reference",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Compensation Profile Detail",
+      "title_i18n": {
+        "en": "Compensation Profile Detail",
+        "id": "Compensation Profile Detail"
+      }
+    },
+    {
+      "key": "workforce.compensation.form",
+      "kind": "form",
+      "model_key": "employee_compensation_profile",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "label_i18n": {
+                "en": "Employee",
+                "id": "Karyawan"
+              },
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "pay_basis",
+              "label": "Pay Basis",
+              "label_i18n": {
+                "en": "Pay Basis",
+                "id": "Basis Bayar"
+              },
+              "options": [
+                "hourly",
+                "monthly",
+                "daily"
+              ],
+              "path": "values.pay_basis",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "currency_code",
+              "label": "Currency",
+              "label_i18n": {
+                "en": "Currency",
+                "id": "Mata Uang"
+              },
+              "path": "values.currency_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "standard_hourly_rate",
+              "label": "Standard Hourly Rate",
+              "label_i18n": {
+                "en": "Standard Hourly Rate",
+                "id": "Tarif Jam Standar"
+              },
+              "path": "values.standard_hourly_rate",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "overtime_hourly_rate",
+              "label": "Overtime Hourly Rate",
+              "label_i18n": {
+                "en": "Overtime Hourly Rate",
+                "id": "Tarif Jam Lembur"
+              },
+              "path": "values.overtime_hourly_rate",
+              "type": "number",
+              "widget": "text"
+            },
+            {
+              "key": "labor_cost_center_id",
+              "label": "Labor Cost Center",
+              "label_i18n": {
+                "en": "Labor Cost Center",
+                "id": "Pusat Biaya Tenaga Kerja"
+              },
+              "path": "values.labor_cost_center_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "payable_party_id",
+              "label": "Payable Party",
+              "label_i18n": {
+                "en": "Payable Party",
+                "id": "Pihak Pembayaran"
+              },
+              "path": "values.payable_party_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "external_payroll_reference",
+              "label": "Payroll Reference",
+              "label_i18n": {
+                "en": "Payroll Reference",
+                "id": "Referensi Payroll"
+              },
+              "path": "values.external_payroll_reference",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Compensation Profile Form",
+          "title_i18n": {
+            "en": "Compensation Profile Form",
+            "id": "Compensation Profile Form"
+          }
+        }
+      ],
+      "title": "Compensation Profile Form",
+      "title_i18n": {
+        "en": "Compensation Profile Form",
+        "id": "Compensation Profile Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "label_i18n": {
+            "en": "Employee",
+            "id": "Karyawan"
+          },
+          "path": "values.employee_id"
+        },
+        {
+          "key": "pay_basis",
+          "label": "Pay Basis",
+          "label_i18n": {
+            "en": "Pay Basis",
+            "id": "Basis Bayar"
+          },
+          "path": "values.pay_basis"
+        },
+        {
+          "key": "standard_hourly_rate",
+          "label": "Standard Rate",
+          "label_i18n": {
+            "en": "Standard Rate",
+            "id": "Tarif Standar"
+          },
+          "path": "values.standard_hourly_rate"
+        },
+        {
+          "key": "currency_code",
+          "label": "Currency",
+          "label_i18n": {
+            "en": "Currency",
+            "id": "Mata Uang"
+          },
+          "path": "values.currency_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "workforce.compensation.list",
+      "kind": "list",
+      "model_key": "employee_compensation_profile",
+      "required_permissions": [
+        "employee.list"
+      ],
+      "title": "Compensation Profiles",
+      "title_i18n": {
+        "en": "Compensation Profiles",
+        "id": "Compensation Profiles"
+      }
+    },
+    {
+      "key": "workforce.eligibility.detail",
+      "kind": "detail",
+      "model_key": "employee_role_eligibility",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "label_i18n": {
+                "en": "Employee",
+                "id": "Karyawan"
+              },
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "eligibility_type",
+              "label": "Eligibility Type",
+              "label_i18n": {
+                "en": "Eligibility Type",
+                "id": "Tipe Kelayakan"
+              },
+              "options": [
+                "cashier",
+                "store_supervisor",
+                "warehouse_operator",
+                "production_operator",
+                "approver_eligible",
+                "asset_custodian"
+              ],
+              "path": "values.eligibility_type",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string"
+            },
+            {
+              "key": "register_code",
+              "label": "Register",
+              "label_i18n": {
+                "en": "Register",
+                "id": "Register"
+              },
+              "path": "values.register_code",
+              "type": "string"
+            },
+            {
+              "key": "warehouse_code",
+              "label": "Warehouse",
+              "label_i18n": {
+                "en": "Warehouse",
+                "id": "Gudang"
+              },
+              "path": "values.warehouse_code",
+              "type": "string"
+            },
+            {
+              "key": "work_center_code",
+              "label": "Work Center",
+              "label_i18n": {
+                "en": "Work Center",
+                "id": "Pusat Kerja"
+              },
+              "path": "values.work_center_code",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Eligibility Detail",
+      "title_i18n": {
+        "en": "Eligibility Detail",
+        "id": "Eligibility Detail"
+      }
+    },
+    {
+      "key": "workforce.eligibility.form",
+      "kind": "form",
+      "model_key": "employee_role_eligibility",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "employee_id",
+              "label": "Employee",
+              "label_i18n": {
+                "en": "Employee",
+                "id": "Karyawan"
+              },
+              "path": "values.employee_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "eligibility_type",
+              "label": "Eligibility Type",
+              "label_i18n": {
+                "en": "Eligibility Type",
+                "id": "Tipe Kelayakan"
+              },
+              "options": [
+                "cashier",
+                "store_supervisor",
+                "warehouse_operator",
+                "production_operator",
+                "approver_eligible",
+                "asset_custodian"
+              ],
+              "path": "values.eligibility_type",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "store_code",
+              "label": "Store",
+              "label_i18n": {
+                "en": "Store",
+                "id": "Toko"
+              },
+              "path": "values.store_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "register_code",
+              "label": "Register",
+              "label_i18n": {
+                "en": "Register",
+                "id": "Register"
+              },
+              "path": "values.register_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "warehouse_code",
+              "label": "Warehouse",
+              "label_i18n": {
+                "en": "Warehouse",
+                "id": "Gudang"
+              },
+              "path": "values.warehouse_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "work_center_code",
+              "label": "Work Center",
+              "label_i18n": {
+                "en": "Work Center",
+                "id": "Pusat Kerja"
+              },
+              "path": "values.work_center_code",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Eligibility Form",
+          "title_i18n": {
+            "en": "Eligibility Form",
+            "id": "Eligibility Form"
+          }
+        }
+      ],
+      "title": "Eligibility Form",
+      "title_i18n": {
+        "en": "Eligibility Form",
+        "id": "Eligibility Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_id",
+          "label": "Employee",
+          "label_i18n": {
+            "en": "Employee",
+            "id": "Karyawan"
+          },
+          "path": "values.employee_id"
+        },
+        {
+          "key": "eligibility_type",
+          "label": "Eligibility",
+          "label_i18n": {
+            "en": "Eligibility",
+            "id": "Kelayakan"
+          },
+          "path": "values.eligibility_type"
+        },
+        {
+          "key": "store_code",
+          "label": "Store",
+          "label_i18n": {
+            "en": "Store",
+            "id": "Toko"
+          },
+          "path": "values.store_code"
+        },
+        {
+          "key": "work_center_code",
+          "label": "Work Center",
+          "label_i18n": {
+            "en": "Work Center",
+            "id": "Pusat Kerja"
+          },
+          "path": "values.work_center_code"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "workforce.eligibility.list",
+      "kind": "list",
+      "model_key": "employee_role_eligibility",
+      "required_permissions": [
+        "employee.list"
+      ],
+      "title": "Role Eligibility",
+      "title_i18n": {
+        "en": "Role Eligibility",
+        "id": "Role Eligibility"
+      }
+    },
+    {
+      "key": "workforce.employees.detail",
+      "kind": "detail",
+      "model_key": "employee_profile",
+      "required_permissions": [
+        "employee.read"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "user_id",
+              "label": "User",
+              "label_i18n": {
+                "en": "User",
+                "id": "Pengguna"
+              },
+              "path": "values.user_id",
+              "type": "string"
+            },
+            {
+              "key": "employee_code",
+              "label": "Employee Code",
+              "label_i18n": {
+                "en": "Employee Code",
+                "id": "Kode Karyawan"
+              },
+              "path": "values.employee_code",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "key": "employment_type",
+              "label": "Employment Type",
+              "label_i18n": {
+                "en": "Employment Type",
+                "id": "Tipe Karyawan"
+              },
+              "options": [
+                "permanent",
+                "contract",
+                "part_time",
+                "temporary"
+              ],
+              "path": "values.employment_type",
+              "type": "string"
+            },
+            {
+              "key": "employment_status",
+              "label": "Employment Status",
+              "label_i18n": {
+                "en": "Employment Status",
+                "id": "Status Karyawan"
+              },
+              "options": [
+                "active",
+                "inactive",
+                "leave",
+                "terminated"
+              ],
+              "path": "values.employment_status",
+              "type": "string"
+            },
+            {
+              "key": "hire_date",
+              "label": "Hire Date",
+              "label_i18n": {
+                "en": "Hire Date",
+                "id": "Tanggal Masuk"
+              },
+              "path": "values.hire_date",
+              "type": "string"
+            },
+            {
+              "key": "termination_date",
+              "label": "Termination Date",
+              "label_i18n": {
+                "en": "Termination Date",
+                "id": "Tanggal Berhenti"
+              },
+              "path": "values.termination_date",
+              "type": "string"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "label_i18n": {
+                "en": "Cost Center",
+                "id": "Pusat Biaya"
+              },
+              "path": "values.cost_center_id",
+              "type": "string"
+            },
+            {
+              "key": "manager_user_id",
+              "label": "Manager User",
+              "label_i18n": {
+                "en": "Manager User",
+                "id": "Pengguna Manajer"
+              },
+              "path": "values.manager_user_id",
+              "type": "string"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string"
+            }
+          ],
+          "key": "summary",
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Employee Detail",
+      "title_i18n": {
+        "en": "Employee Detail",
+        "id": "Employee Detail"
+      }
+    },
+    {
+      "key": "workforce.employees.form",
+      "kind": "form",
+      "model_key": "employee_profile",
+      "required_permissions": [
+        "employee.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "party_id",
+              "label": "Party",
+              "label_i18n": {
+                "en": "Party",
+                "id": "Pihak"
+              },
+              "path": "values.party_id",
+              "required": true,
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "user_id",
+              "label": "User",
+              "label_i18n": {
+                "en": "User",
+                "id": "Pengguna"
+              },
+              "path": "values.user_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employee_code",
+              "label": "Employee Code",
+              "label_i18n": {
+                "en": "Employee Code",
+                "id": "Kode Karyawan"
+              },
+              "path": "values.employee_code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "employment_type",
+              "label": "Employment Type",
+              "label_i18n": {
+                "en": "Employment Type",
+                "id": "Tipe Karyawan"
+              },
+              "options": [
+                "permanent",
+                "contract",
+                "part_time",
+                "temporary"
+              ],
+              "path": "values.employment_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "employment_status",
+              "label": "Employment Status",
+              "label_i18n": {
+                "en": "Employment Status",
+                "id": "Status Karyawan"
+              },
+              "options": [
+                "active",
+                "inactive",
+                "leave",
+                "terminated"
+              ],
+              "path": "values.employment_status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "hire_date",
+              "label": "Hire Date",
+              "label_i18n": {
+                "en": "Hire Date",
+                "id": "Tanggal Masuk"
+              },
+              "path": "values.hire_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "termination_date",
+              "label": "Termination Date",
+              "label_i18n": {
+                "en": "Termination Date",
+                "id": "Tanggal Berhenti"
+              },
+              "path": "values.termination_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_id",
+              "label": "Organization",
+              "label_i18n": {
+                "en": "Organization",
+                "id": "Organisasi"
+              },
+              "path": "values.organization_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "location_id",
+              "label": "Location",
+              "label_i18n": {
+                "en": "Location",
+                "id": "Lokasi"
+              },
+              "path": "values.location_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "operating_unit_id",
+              "label": "Operating Unit",
+              "label_i18n": {
+                "en": "Operating Unit",
+                "id": "Unit Operasi"
+              },
+              "path": "values.operating_unit_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "organization_unit_id",
+              "label": "Organization Unit",
+              "label_i18n": {
+                "en": "Organization Unit",
+                "id": "Unit Organisasi"
+              },
+              "path": "values.organization_unit_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "department_id",
+              "label": "Department",
+              "label_i18n": {
+                "en": "Department",
+                "id": "Departemen"
+              },
+              "path": "values.department_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "cost_center_id",
+              "label": "Cost Center",
+              "label_i18n": {
+                "en": "Cost Center",
+                "id": "Pusat Biaya"
+              },
+              "path": "values.cost_center_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "manager_user_id",
+              "label": "Manager User",
+              "label_i18n": {
+                "en": "Manager User",
+                "id": "Pengguna Manajer"
+              },
+              "path": "values.manager_user_id",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Employee Form",
+          "title_i18n": {
+            "en": "Employee Form",
+            "id": "Employee Form"
+          }
+        }
+      ],
+      "title": "Employee Form",
+      "title_i18n": {
+        "en": "Employee Form",
+        "id": "Employee Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "employee_code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.employee_code"
+        },
+        {
+          "key": "party_id",
+          "label": "Party",
+          "label_i18n": {
+            "en": "Party",
+            "id": "Pihak"
+          },
+          "path": "values.party_id"
+        },
+        {
+          "key": "user_id",
+          "label": "User",
+          "label_i18n": {
+            "en": "User",
+            "id": "Pengguna"
+          },
+          "path": "values.user_id"
+        },
+        {
+          "key": "department_id",
+          "label": "Department",
+          "label_i18n": {
+            "en": "Department",
+            "id": "Departemen"
+          },
+          "path": "values.department_id"
+        },
+        {
+          "key": "employment_status",
+          "label": "Employment",
+          "label_i18n": {
+            "en": "Employment",
+            "id": "Ketenagakerjaan"
+          },
+          "path": "values.employment_status"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 10,
+      "empty_state": "No records available yet.",
+      "empty_state_i18n": {
+        "en": "No records available yet.",
+        "id": "Belum ada data."
+      },
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "enum"
+        }
+      ],
+      "key": "workforce.employees.list",
+      "kind": "list",
+      "model_key": "employee_profile",
+      "required_permissions": [
+        "employee.list"
+      ],
+      "title": "Employees",
+      "title_i18n": {
+        "en": "Employees",
+        "id": "Employees"
       }
     }
   ]

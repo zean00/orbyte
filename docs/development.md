@@ -44,7 +44,7 @@ go run ./cmd/migrate up
 docker compose up --build
 ```
 
-- `postgres` exposes `localhost:5432`
+- `postgres` exposes `localhost:55432`
 - `app` exposes `localhost:8080`
 
 ## Delivery Baseline

@@ -53,7 +53,7 @@ make run-postgres
 ## Default Local Addresses
 
 - app: `http://localhost:8080`
-- postgres: `localhost:5432`
+- postgres: `localhost:55432`
 
 ## Authentication Bootstrap
 
