@@ -379,6 +379,12 @@ func (s *Service) prepareRecord(def Definition, record *Record, existing *Record
 		if field.Required && strings.TrimSpace(stringValue(record.Values[field.Key])) == "" {
 			return shared.Validation("required model field is missing: " + field.Key)
 		}
+		if err := s.validateAllowedValues(field, record.Values[field.Key]); err != nil {
+			return err
+		}
+		if err := s.validateReference(field, record.Values[field.Key]); err != nil {
+			return err
+		}
 		for _, key := range field.ConstraintRuleKeys {
 			if eval, ok := s.constraints[key]; ok {
 				if err := eval(RuleInput{ModelKey: def.Key, FieldKey: field.Key, Values: cloneMap(record.Values), Existing: existingValues(existing), ActorID: actorID}); err != nil {
@@ -388,6 +394,53 @@ func (s *Service) prepareRecord(def Definition, record *Record, existing *Record
 		}
 	}
 	return nil
+}
+
+func (s *Service) validateAllowedValues(field FieldDefinition, value any) error {
+	if len(field.AllowedValues) == 0 {
+		return nil
+	}
+	current := strings.TrimSpace(stringValue(value))
+	if current == "" {
+		return nil
+	}
+	for _, allowed := range field.AllowedValues {
+		if strings.EqualFold(current, strings.TrimSpace(allowed)) {
+			return nil
+		}
+	}
+	return shared.Validation("model field " + field.Key + " must be one of: " + strings.Join(field.AllowedValues, ", "))
+}
+
+func (s *Service) validateReference(field FieldDefinition, value any) error {
+	if field.Reference == nil {
+		return nil
+	}
+	targetModelKey := strings.TrimSpace(field.Reference.ModelKey)
+	if targetModelKey == "" {
+		return shared.Validation("model field " + field.Key + " has an invalid reference definition")
+	}
+	current := strings.TrimSpace(stringValue(value))
+	if current == "" {
+		return nil
+	}
+	if _, ok := s.repo.GetDefinition(targetModelKey); !ok {
+		return shared.Validation("model field " + field.Key + " references unknown model " + targetModelKey)
+	}
+	lookupField := strings.TrimSpace(field.Reference.LookupField)
+	if lookupField == "" || strings.EqualFold(lookupField, "id") {
+		if _, ok := s.repo.GetRecord(targetModelKey, current); ok {
+			return nil
+		}
+		return shared.Validation("model field " + field.Key + " references missing " + targetModelKey + " record")
+	}
+	lookupField = strings.TrimPrefix(lookupField, "values.")
+	for _, item := range s.repo.ListRecords(targetModelKey) {
+		if strings.EqualFold(strings.TrimSpace(stringValue(item.Values[lookupField])), current) {
+			return nil
+		}
+	}
+	return shared.Validation("model field " + field.Key + " references missing " + targetModelKey + " record")
 }
 
 func relationDefinition(def Definition, relationKey string) (RelationDefinition, bool) {
@@ -452,6 +505,9 @@ func fallbackActor(actorID string) string {
 }
 
 func stringValue(value any) string {
+	if value == nil {
+		return ""
+	}
 	switch typed := value.(type) {
 	case string:
 		return strings.TrimSpace(typed)

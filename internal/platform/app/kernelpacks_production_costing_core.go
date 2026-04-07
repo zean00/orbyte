@@ -11,12 +11,12 @@ func productionCostingCoreKernelPackManifests() []module.Manifest {
 
 func productionCostingCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "production_costing_core",
-		Name:         "Production Costing Core",
-		NameI18n:     localize("Production Costing Core", "Inti Costing Produksi"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"production_core", "inventory_core", "finance_reporting_core"},
+		Key:                    "production_costing_core",
+		Name:                   "Production Costing Core",
+		NameI18n:               localize("Production Costing Core", "Inti Costing Produksi"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("production_core", "inventory_core", "finance_reporting_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Production Costing Console",
 			TitleI18n:       localize("Production Costing Console", "Konsol Costing Produksi"),

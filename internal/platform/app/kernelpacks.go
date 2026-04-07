@@ -80,8 +80,20 @@ func collectModuleManifests(packs []modulePack) []module.Manifest {
 				panic(fmt.Sprintf("built-in module pack contains duplicate manifest key %q", manifest.Key))
 			}
 			seen[manifest.Key] = struct{}{}
-			manifests = append(manifests, manifest)
+			manifests = append(manifests, applyBuiltInValidationMetadata(manifest))
 		}
 	}
 	return manifests
+}
+
+func requiredModuleDependencies(keys ...string) []module.DependencyRequirement {
+	requirements := make([]module.DependencyRequirement, 0, len(keys))
+	for _, key := range keys {
+		requirements = append(requirements, module.DependencyRequirement{
+			ModuleKey:    key,
+			VersionRange: ">=1.0.0,<2.0.0",
+			Kind:         module.DependencyKindRequired,
+		})
+	}
+	return requirements
 }

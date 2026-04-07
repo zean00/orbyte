@@ -96,6 +96,7 @@ func TestGenerateInvoiceFromOrderPreservesDiscountedLines(t *testing.T) {
 	}
 	if _, err := models.Create("commercial_tax_code", "user_admin", map[string]any{
 		"code":             "VAT11",
+		"name":             "VAT 11%",
 		"rate_percent":     11.0,
 		"mode":             "exclusive",
 		"tax_account_code": "2100-VATOUT",

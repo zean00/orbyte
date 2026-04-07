@@ -66,8 +66,14 @@ func (a *ModelActions) UpdateComposite(modelKey, id string, acting ActingContext
 }
 
 func (a *ModelActions) PatchRelation(modelKey, id, relationKey string, acting ActingContext, mutations []model.ChildMutation) (model.Record, map[string][]model.Record, error) {
+	current, err := a.models.Get(modelKey, id)
+	if err != nil {
+		return model.Record{}, nil, err
+	}
 	return a.UpdateComposite(modelKey, id, acting, model.CompositeMutation{
-		Relations: map[string][]model.ChildMutation{relationKey: mutations},
+		ExpectedVersion: current.Version,
+		Values:          current.Values,
+		Relations:       map[string][]model.ChildMutation{relationKey: mutations},
 	})
 }
 

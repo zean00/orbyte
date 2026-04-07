@@ -93,30 +93,35 @@ func TestSeedPOSTerminalSyntheticScenario(t *testing.T) {
 	paymentCash := ensureModelByCode(t, graph.models, "payment_method", "code", "CASHPOS-"+suffix, map[string]any{
 		"code":                  "CASHPOS-" + suffix,
 		"name":                  "Cash POS " + suffix,
+		"kind":                  "cash",
 		"clearing_account_code": "1000-CASH",
 		"status":                "active",
 	}, actorID)
 	paymentCard := ensureModelByCode(t, graph.models, "payment_method", "code", "CARDPOS-"+suffix, map[string]any{
 		"code":                  "CARDPOS-" + suffix,
 		"name":                  "Card POS " + suffix,
+		"kind":                  "card",
 		"clearing_account_code": "1010-CARD",
 		"status":                "active",
 	}, actorID)
 	paymentVoucher := ensureModelByCode(t, graph.models, "payment_method", "code", "VOUCHERPOS-"+suffix, map[string]any{
 		"code":                  "VOUCHERPOS-" + suffix,
 		"name":                  "Voucher POS " + suffix,
+		"kind":                  "other",
 		"clearing_account_code": "1020-VOUCHER",
 		"status":                "active",
 	}, actorID)
 	paymentGiftCard := ensureModelByCode(t, graph.models, "payment_method", "code", "GIFTPOS-"+suffix, map[string]any{
 		"code":                  "GIFTPOS-" + suffix,
 		"name":                  "Gift Card POS " + suffix,
+		"kind":                  "other",
 		"clearing_account_code": "2250-GIFT-CARD",
 		"status":                "active",
 	}, actorID)
 	paymentStoreCredit := ensureModelByCode(t, graph.models, "payment_method", "code", "STORECREDITPOS-"+suffix, map[string]any{
 		"code":                  "STORECREDITPOS-" + suffix,
 		"name":                  "Store Credit POS " + suffix,
+		"kind":                  "other",
 		"clearing_account_code": "2260-STORE-CREDIT",
 		"status":                "active",
 	}, actorID)

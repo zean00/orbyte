@@ -11,12 +11,12 @@ func retailFinanceCoreKernelPackManifests() []module.Manifest {
 
 func retailFinanceCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "retail_finance_core",
-		Name:         "Retail Finance Core",
-		NameI18n:     localize("Retail Finance Core", "Inti Keuangan Retail"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"pos_core", "finance_reporting_core", "commercial_core"},
+		Key:                    "retail_finance_core",
+		Name:                   "Retail Finance Core",
+		NameI18n:               localize("Retail Finance Core", "Inti Keuangan Retail"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("pos_core", "finance_reporting_core", "commercial_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Retail Finance Console",
 			TitleI18n:       localize("Retail Finance Console", "Konsol Keuangan Retail"),

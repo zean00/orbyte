@@ -11,12 +11,12 @@ func treasuryCoreKernelPackManifests() []module.Manifest {
 
 func treasuryCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "treasury_core",
-		Name:         "Treasury Core",
-		NameI18n:     localize("Treasury Core", "Inti Treasury"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"finance_reporting_core", "retail_finance_core", "commercial_core", "procurement_core"},
+		Key:                    "treasury_core",
+		Name:                   "Treasury Core",
+		NameI18n:               localize("Treasury Core", "Inti Treasury"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("finance_reporting_core", "retail_finance_core", "commercial_core", "procurement_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Treasury Console",
 			TitleI18n:       localize("Treasury Console", "Konsol Treasury"),

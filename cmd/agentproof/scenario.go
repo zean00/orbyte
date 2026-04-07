@@ -943,6 +943,7 @@ func seedPOSPromotionStrategyScenario(ctx context.Context, client *apiClient, ba
 	paymentMethod, err := client.createModel(ctx, "payment_method", map[string]any{
 		"code":                  "CASHPROMO-" + suffix,
 		"name":                  "Cash Promo " + runID,
+		"kind":                  "cash",
 		"clearing_account_code": "1000-CASH",
 		"status":                "active",
 	})
@@ -1219,6 +1220,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 	paymentMethod, err := client.createModel(ctx, "payment_method", map[string]any{
 		"code":                  "CASHSHOW-" + suffix,
 		"name":                  "Cash Showcase " + runID,
+		"kind":                  "cash",
 		"clearing_account_code": "1000-CASH",
 		"status":                "active",
 	})

@@ -8,12 +8,12 @@ func financeManualJournalCoreKernelPackManifests() []module.Manifest {
 
 func financeManualJournalCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "finance_manual_journal_core",
-		Name:         "Finance Manual Journal Core",
-		NameI18n:     localize("Finance Manual Journal Core", "Inti Jurnal Manual Keuangan"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"platform.core", "commercial_core", "finance_reporting_core"},
+		Key:                    "finance_manual_journal_core",
+		Name:                   "Finance Manual Journal Core",
+		NameI18n:               localize("Finance Manual Journal Core", "Inti Jurnal Manual Keuangan"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("platform.core", "commercial_core", "finance_reporting_core"),
 		Frontend: module.FrontendDefinition{
 			Menus: []module.MenuDefinition{
 				{Key: "finance.manual_journals", Label: "Manual Journals", LabelI18n: localize("Manual Journals", "Jurnal Manual"), ActionKey: "finance.manual_journals.list", Order: 102, RequiredPermissions: []string{"finance.journal.read"}},

@@ -11,12 +11,12 @@ func financeCollectionsCoreKernelPackManifests() []module.Manifest {
 
 func financeCollectionsCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "finance_collections_core",
-		Name:         "Finance Collections Core",
-		NameI18n:     localize("Finance Collections Core", "Inti Koleksi Keuangan"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"finance_reporting_core", "commercial_core", "procurement_core"},
+		Key:                    "finance_collections_core",
+		Name:                   "Finance Collections Core",
+		NameI18n:               localize("Finance Collections Core", "Inti Koleksi Keuangan"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("finance_reporting_core", "commercial_core", "procurement_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Finance Collections Console",
 			TitleI18n:       localize("Finance Collections Console", "Konsol Koleksi Keuangan"),

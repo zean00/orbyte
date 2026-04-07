@@ -200,6 +200,52 @@ func TestCreateAndUpdateValidationErrors(t *testing.T) {
 	}
 }
 
+func TestReferenceAndAllowedValueValidation(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Definition{
+		Key:         "party",
+		DisplayName: "Party",
+		Version:     "v1",
+		Fields: []FieldDefinition{
+			{Key: "code", Type: "string"},
+			{Key: "name", Type: "string", Required: true},
+		},
+	}); err != nil {
+		t.Fatalf("register party failed: %v", err)
+	}
+	if err := svc.Register(Definition{
+		Key:         "customer_profile",
+		DisplayName: "Customer Profile",
+		Version:     "v1",
+		Fields: []FieldDefinition{
+			{Key: "party_id", Type: "string", Reference: &ReferenceDefinition{ModelKey: "party"}},
+			{Key: "party_code", Type: "string", Reference: &ReferenceDefinition{ModelKey: "party", LookupField: "values.code"}},
+			{Key: "status", Type: "string", AllowedValues: []string{"active", "inactive"}},
+		},
+	}); err != nil {
+		t.Fatalf("register customer failed: %v", err)
+	}
+	party, err := svc.Create("party", "u1", map[string]any{"code": "P-001", "name": "Alice"})
+	if err != nil {
+		t.Fatalf("create party failed: %v", err)
+	}
+	if _, err := svc.Create("customer_profile", "u1", map[string]any{"party_id": party.ID, "status": "active"}); err != nil {
+		t.Fatalf("expected id reference to pass, got %v", err)
+	}
+	if _, err := svc.Create("customer_profile", "u1", map[string]any{"party_code": "P-001", "status": "inactive"}); err != nil {
+		t.Fatalf("expected code reference to pass, got %v", err)
+	}
+	if _, err := svc.Create("customer_profile", "u1", map[string]any{"party_id": "missing"}); err == nil {
+		t.Fatal("expected missing reference validation")
+	}
+	if _, err := svc.Create("customer_profile", "u1", map[string]any{"party_code": "missing"}); err == nil {
+		t.Fatal("expected missing code reference validation")
+	}
+	if _, err := svc.Create("customer_profile", "u1", map[string]any{"status": "blocked"}); err == nil {
+		t.Fatal("expected allowed value validation")
+	}
+}
+
 func TestApplyRelationsDeleteAndNestedChildren(t *testing.T) {
 	svc := NewService()
 	_ = svc.Register(Definition{

@@ -11,12 +11,12 @@ func inventoryFinanceCoreKernelPackManifests() []module.Manifest {
 
 func inventoryFinanceCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "inventory_finance_core",
-		Name:         "Inventory Finance Core",
-		NameI18n:     localize("Inventory Finance Core", "Inti Keuangan Inventori"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"inventory_core", "finance_reporting_core"},
+		Key:                    "inventory_finance_core",
+		Name:                   "Inventory Finance Core",
+		NameI18n:               localize("Inventory Finance Core", "Inti Keuangan Inventori"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("inventory_core", "finance_reporting_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Inventory Finance Console",
 			TitleI18n:       localize("Inventory Finance Console", "Konsol Keuangan Inventori"),

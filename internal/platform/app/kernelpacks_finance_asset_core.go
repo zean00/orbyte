@@ -11,12 +11,12 @@ func financeAssetCoreKernelPackManifests() []module.Manifest {
 
 func financeAssetCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "finance_asset_core",
-		Name:         "Finance Asset Core",
-		NameI18n:     localize("Finance Asset Core", "Inti Aset Keuangan"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"finance_reporting_core", "procurement_core"},
+		Key:                    "finance_asset_core",
+		Name:                   "Finance Asset Core",
+		NameI18n:               localize("Finance Asset Core", "Inti Aset Keuangan"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("finance_reporting_core", "procurement_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Assets and Prepaids Console",
 			TitleI18n:       localize("Assets and Prepaids Console", "Konsol Aset dan Biaya Dibayar Dimuka"),

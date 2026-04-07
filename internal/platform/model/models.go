@@ -22,24 +22,31 @@ type Definition struct {
 }
 
 type FieldDefinition struct {
-	Key                string             `json:"key"`
-	Label              string             `json:"label"`
-	LabelI18n          i18n.LocalizedText `json:"label_i18n,omitempty"`
-	Type               string             `json:"type"`
-	Required           bool               `json:"required,omitempty"`
-	ReadOnly           bool               `json:"read_only,omitempty"`
-	Indexed            bool               `json:"indexed,omitempty"`
-	Sensitive          bool               `json:"sensitive,omitempty"`
-	SecurityClass      string             `json:"security_class,omitempty"`
-	DefaultMask        string             `json:"default_mask,omitempty"`
-	SearchVisible      *bool              `json:"search_visible,omitempty"`
-	ExportVisible      *bool              `json:"export_visible,omitempty"`
-	ReadPermissionKey  string             `json:"read_permission_key,omitempty"`
-	WritePermissionKey string             `json:"write_permission_key,omitempty"`
-	DefaultValue       any                `json:"default_value,omitempty"`
-	DefaultRuleKey     string             `json:"default_rule_key,omitempty"`
-	ComputeRuleKey     string             `json:"compute_rule_key,omitempty"`
-	ConstraintRuleKeys []string           `json:"constraint_rule_keys,omitempty"`
+	Key                string               `json:"key"`
+	Label              string               `json:"label"`
+	LabelI18n          i18n.LocalizedText   `json:"label_i18n,omitempty"`
+	Type               string               `json:"type"`
+	Required           bool                 `json:"required,omitempty"`
+	ReadOnly           bool                 `json:"read_only,omitempty"`
+	Indexed            bool                 `json:"indexed,omitempty"`
+	Sensitive          bool                 `json:"sensitive,omitempty"`
+	SecurityClass      string               `json:"security_class,omitempty"`
+	DefaultMask        string               `json:"default_mask,omitempty"`
+	SearchVisible      *bool                `json:"search_visible,omitempty"`
+	ExportVisible      *bool                `json:"export_visible,omitempty"`
+	ReadPermissionKey  string               `json:"read_permission_key,omitempty"`
+	WritePermissionKey string               `json:"write_permission_key,omitempty"`
+	DefaultValue       any                  `json:"default_value,omitempty"`
+	DefaultRuleKey     string               `json:"default_rule_key,omitempty"`
+	ComputeRuleKey     string               `json:"compute_rule_key,omitempty"`
+	ConstraintRuleKeys []string             `json:"constraint_rule_keys,omitempty"`
+	Reference          *ReferenceDefinition `json:"reference,omitempty"`
+	AllowedValues      []string             `json:"allowed_values,omitempty"`
+}
+
+type ReferenceDefinition struct {
+	ModelKey    string `json:"model_key"`
+	LookupField string `json:"lookup_field,omitempty"`
 }
 
 type Record struct {

@@ -8,12 +8,12 @@ import (
 
 func financeReportingCoreKernelPackManifest() module.Manifest {
 	return module.Manifest{
-		Key:          "finance_reporting_core",
-		Name:         "Finance Reporting Core",
-		NameI18n:     localize("Finance Reporting Core", "Inti Pelaporan Keuangan"),
-		Version:      "1.0.0",
-		DomainFamily: "business",
-		Dependencies: []string{"platform.core", "commercial_core", "procurement_core", "inventory_core", "production_core"},
+		Key:                    "finance_reporting_core",
+		Name:                   "Finance Reporting Core",
+		NameI18n:               localize("Finance Reporting Core", "Inti Pelaporan Keuangan"),
+		Version:                "1.0.0",
+		DomainFamily:           "business",
+		DependencyRequirements: requiredModuleDependencies("platform.core", "commercial_core", "procurement_core", "inventory_core", "production_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "Finance Console",
 			TitleI18n:       localize("Finance Console", "Konsol Keuangan"),
