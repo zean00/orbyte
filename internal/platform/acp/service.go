@@ -287,6 +287,9 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 		return Session{}, shared.Validation("content is required")
 	}
 	mode := strings.TrimSpace(strings.ToLower(req.Mode))
+	if mode != "plan" {
+		mode = ""
+	}
 	displayContent := strings.TrimSpace(req.DisplayContent)
 	if displayContent == "" {
 		displayContent = content
@@ -337,8 +340,14 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 	}
 	s.publish(sessionID, "turn_started", map[string]any{"turn_id": turnID})
 	s.publish(sessionID, "user_message", map[string]any{"content": content, "turn_id": turnID})
-	if mode != "" {
-		if err := runtime.client.setSessionMode(session.RemoteSession, mode); err != nil {
+	modeToApply := ""
+	if mode == "plan" {
+		modeToApply = "plan"
+	} else if strings.EqualFold(strings.TrimSpace(session.remoteMode), "plan") {
+		modeToApply = "build"
+	}
+	if modeToApply != "" {
+		if err := runtime.client.setSessionMode(session.RemoteSession, modeToApply); err != nil {
 			s.mu.Lock()
 			if session := s.sessions[sessionID]; session != nil {
 				session.TurnInProgress = false
@@ -358,6 +367,12 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 			s.publish(sessionID, "turn_failed", map[string]any{"error": err.Error(), "turn_id": turnID})
 			return Session{}, err
 		}
+		s.mu.Lock()
+		if session := s.sessions[sessionID]; session != nil {
+			session.remoteMode = modeToApply
+			session.UpdatedAt = time.Now().UTC()
+		}
+		s.mu.Unlock()
 	}
 	if err := runtime.client.prompt(session.RemoteSession, promptBlocks(content, req.ContextBlocks)); err != nil {
 		s.mu.Lock()

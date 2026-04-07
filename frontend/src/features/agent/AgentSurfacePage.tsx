@@ -149,8 +149,8 @@ type LocalPendingTurn = {
 
 type ComposerMode = "ask" | "plan" | "execute";
 
-function acpModeForComposerMode(mode: ComposerMode): "build" | "plan" {
-  return mode === "plan" ? "plan" : "build";
+function acpModeForComposerMode(mode: ComposerMode): "plan" | undefined {
+  return mode === "plan" ? "plan" : undefined;
 }
 type AgentContentTab = "conversation" | "artifacts";
 

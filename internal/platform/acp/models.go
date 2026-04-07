@@ -13,6 +13,7 @@ type Provider struct {
 	Transport     string            `json:"transport,omitempty"`
 	DefaultModel  string            `json:"default_model,omitempty"`
 	AllowedModels []string          `json:"allowed_models,omitempty"`
+	MCPServers    []map[string]any  `json:"mcp_servers,omitempty"`
 }
 
 type ProviderInfo struct {
@@ -86,6 +87,7 @@ type Session struct {
 	RemoteSession  string         `json:"remote_session_id,omitempty"`
 	CurrentTurnID  string         `json:"current_turn_id,omitempty"`
 	TurnInProgress bool           `json:"turn_in_progress"`
+	remoteMode     string
 	recentPromptIDs map[string]time.Time
 }
 

@@ -327,6 +327,34 @@ func TestDiscoverMCPServersFallsBackToProcessHome(t *testing.T) {
 	}
 }
 
+func TestDiscoverMCPServersPrefersProviderConfig(t *testing.T) {
+	got := discoverMCPServers(Provider{
+		MCPServers: []map[string]any{{
+			"name":    "orbyte-inline",
+			"type":    "http",
+			"url":     "http://127.0.0.1:18110/mcp",
+			"enabled": true,
+			"headers": []map[string]any{{
+				"name":  "Authorization",
+				"value": "Bearer inline",
+			}},
+		}},
+		Env: map[string]string{
+			"HOME": t.TempDir(),
+		},
+	})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 inline mcp server, got %#v", got)
+	}
+	if got[0]["name"] != "orbyte-inline" || got[0]["type"] != "http" || got[0]["url"] != "http://127.0.0.1:18110/mcp" {
+		t.Fatalf("unexpected inline mcp server %#v", got[0])
+	}
+	headers, _ := got[0]["headers"].([]map[string]string)
+	if len(headers) != 1 || headers[0]["name"] != "Authorization" || headers[0]["value"] != "Bearer inline" {
+		t.Fatalf("unexpected inline headers %#v", got[0]["headers"])
+	}
+}
+
 func TestCallReturnsRemoteErrorAndConnectionClosed(t *testing.T) {
 	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
 		id := int64(message["id"].(float64))

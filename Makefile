@@ -11,6 +11,7 @@ APP_LOG_FILE ?= $(RUN_DIR)/orbyte-postgres.log
 
 AGENT_SCENARIO ?= inventory_replenishment_execute
 AGENT_SEED_OUTPUT ?= /tmp/agentproof-inventory-replenishment.json
+AGENT_RUNTIME_OUTPUT ?= /tmp/agentproof-runtime.json
 POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
 DASHBOARD_SEED_OUTPUT ?= /tmp/orbyte-dashboard-seed.json
 SHOWCASE_SCENARIO ?= retail_recovery_showcase
@@ -18,7 +19,7 @@ SHOWCASE_SEED_OUTPUT ?= /tmp/orbyte-showcase-retail-recovery.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-continuity seed-pos seed-dashboard seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase
+.PHONY: db-reset-postgres seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase
 
 test:
 	./scripts/test.sh
@@ -139,6 +140,13 @@ db-reset-postgres: app-stop-postgres
 	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
 	@$(MAKE) migrate-up
 
+seed-agent-runtime: app-start-postgres
+	go run ./cmd/agentproof configure-runtime \
+		--base-url "$(APP_BASE_URL)" \
+		--username admin \
+		--password "$(APP_BOOTSTRAP_ADMIN_PASSWORD)" \
+		--output "$(AGENT_RUNTIME_OUTPUT)"
+
 seed-agent-continuity: app-start-postgres
 	go run ./cmd/agentproof seed \
 		--base-url "$(APP_BASE_URL)" \
@@ -164,7 +172,8 @@ seed-showcase-demo: app-start-postgres
 		--output "$(SHOWCASE_SEED_OUTPUT)"
 	@echo "Showcase seed manifest: $(SHOWCASE_SEED_OUTPUT)"
 
-seed-all: seed-agent-continuity seed-pos seed-dashboard
+seed-all: seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard
+	@echo "Agent runtime config report: $(AGENT_RUNTIME_OUTPUT)"
 	@echo "Continuity seed manifest: $(AGENT_SEED_OUTPUT)"
 	@echo "POS seed manifest: $(POS_SEED_OUTPUT)"
 	@echo "Dashboard seed manifest: $(DASHBOARD_SEED_OUTPUT)"

@@ -228,7 +228,6 @@ function firstPathSegment(path: string): string {
 function groupLabelForSegment(segment: string): string {
   const labels: Record<string, string> = {
     analytics: 'Analytics',
-    clinic: 'Clinic',
     commercial: 'Commercial',
     delivery: 'Delivery',
     documents: 'Documents',

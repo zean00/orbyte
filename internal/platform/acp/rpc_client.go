@@ -183,6 +183,9 @@ func (c *acpClient) newSession(cwd string) (newSessionResult, error) {
 }
 
 func discoverMCPServers(provider Provider) []map[string]any {
+	if servers := normalizeProvidedMCPServers(provider.MCPServers); len(servers) > 0 {
+		return servers
+	}
 	configPath := opencodeConfigPath(provider)
 	if strings.TrimSpace(configPath) == "" {
 		return nil
@@ -207,13 +210,38 @@ func discoverMCPServers(provider Provider) []map[string]any {
 	return servers
 }
 
+func normalizeProvidedMCPServers(items []map[string]any) []map[string]any {
+	if len(items) == 0 {
+		return nil
+	}
+	servers := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		normalized, ok := normalizeMCPServer("", mustRawMessage(item))
+		if ok {
+			servers = append(servers, normalized)
+		}
+	}
+	return servers
+}
+
+func mustRawMessage(payload map[string]any) json.RawMessage {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return raw
+}
+
 func normalizeMCPServer(name string, raw json.RawMessage) (map[string]any, bool) {
 	trimmedName := strings.TrimSpace(name)
-	if trimmedName == "" {
-		return nil, false
-	}
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, false
+	}
+	if trimmedName == "" {
+		trimmedName = strings.TrimSpace(stringValue(payload["name"]))
+	}
+	if trimmedName == "" {
 		return nil, false
 	}
 	if enabled, ok := payload["enabled"].(bool); ok && !enabled {
@@ -271,23 +299,45 @@ func normalizeMCPServer(name string, raw json.RawMessage) (map[string]any, bool)
 }
 
 func normalizeHeaderList(value any) []map[string]string {
-	headers, ok := value.(map[string]any)
-	if !ok || len(headers) == 0 {
+	switch headers := value.(type) {
+	case map[string]any:
+		if len(headers) == 0 {
+			return []map[string]string{}
+		}
+		out := make([]map[string]string, 0, len(headers))
+		for key, rawValue := range headers {
+			name := strings.TrimSpace(key)
+			headerValue := strings.TrimSpace(stringValue(rawValue))
+			if name == "" || headerValue == "" {
+				continue
+			}
+			out = append(out, map[string]string{
+				"name":  name,
+				"value": headerValue,
+			})
+		}
+		return out
+	case []any:
+		out := make([]map[string]string, 0, len(headers))
+		for _, rawHeader := range headers {
+			item, ok := rawHeader.(map[string]any)
+			if !ok {
+				continue
+			}
+			name := strings.TrimSpace(stringValue(item["name"]))
+			headerValue := strings.TrimSpace(stringValue(item["value"]))
+			if name == "" || headerValue == "" {
+				continue
+			}
+			out = append(out, map[string]string{
+				"name":  name,
+				"value": headerValue,
+			})
+		}
+		return out
+	default:
 		return []map[string]string{}
 	}
-	out := make([]map[string]string, 0, len(headers))
-	for key, rawValue := range headers {
-		name := strings.TrimSpace(key)
-		headerValue := strings.TrimSpace(stringValue(rawValue))
-		if name == "" || headerValue == "" {
-			continue
-		}
-		out = append(out, map[string]string{
-			"name":  name,
-			"value": headerValue,
-		})
-	}
-	return out
 }
 
 func normalizeStringList(value any) []string {

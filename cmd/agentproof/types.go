@@ -157,3 +157,12 @@ type analysisSummary struct {
 	ReasonableCount   int `json:"reasonable_count"`
 	UnacceptableCount int `json:"unacceptable_count"`
 }
+
+type runtimeConfigReport struct {
+	Version          string                 `json:"version"`
+	RunID            string                 `json:"run_id"`
+	GeneratedAt      time.Time              `json:"generated_at"`
+	BaseURL          string                 `json:"base_url"`
+	ServicePrincipal servicePrincipalOutput `json:"service_principal"`
+	OpencodeConfig   opencodeConfigOutput   `json:"opencode_config"`
+}

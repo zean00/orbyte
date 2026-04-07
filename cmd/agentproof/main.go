@@ -14,13 +14,17 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: go run ./cmd/agentproof <list-scenarios|seed|analyze> [flags]")
+		fatalf("usage: go run ./cmd/agentproof <list-scenarios|seed|configure-runtime|analyze> [flags]")
 	}
 	switch strings.TrimSpace(os.Args[1]) {
 	case "list-scenarios":
 		runListScenarios()
 	case "seed":
 		if err := runSeed(os.Args[2:]); err != nil {
+			fatalf("%v", err)
+		}
+	case "configure-runtime":
+		if err := runConfigureRuntime(os.Args[2:]); err != nil {
 			fatalf("%v", err)
 		}
 	case "analyze":
@@ -127,6 +131,49 @@ func runAnalyze(args []string) error {
 	return nil
 }
 
+func runConfigureRuntime(args []string) error {
+	fs := flag.NewFlagSet("configure-runtime", flag.ContinueOnError)
+	baseURL := fs.String("base-url", "http://127.0.0.1:18110", "Running Orbyte base URL")
+	username := fs.String("username", "admin", "Bootstrap admin username")
+	password := fs.String("password", "admin123!", "Bootstrap admin password")
+	opencodeCommand := fs.String("opencode-command", "opencode", "ACP provider command for opencode")
+	output := fs.String("output", "", "Path to write the runtime config JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	client, err := newAPIClient(*baseURL)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := client.login(ctx, *username, *password); err != nil {
+		return fmt.Errorf("login failed: %w", err)
+	}
+	runID, suffix := newRunContext()
+	servicePrincipal, opencodeConfig, err := configureAgentAccess(ctx, client, *baseURL, *opencodeCommand, suffix)
+	if err != nil {
+		return err
+	}
+	report := runtimeConfigReport{
+		Version:          "2026-04-07",
+		RunID:            runID,
+		GeneratedAt:      time.Now().UTC(),
+		BaseURL:          *baseURL,
+		ServicePrincipal: servicePrincipal,
+		OpencodeConfig:   opencodeConfig,
+	}
+	outPath := strings.TrimSpace(*output)
+	if outPath == "" {
+		outPath = defaultOutputPath(".", "agentproof-runtime", runID)
+	}
+	if err := writeJSONFile(outPath, report); err != nil {
+		return err
+	}
+	printRuntimeConfigSummary(outPath, report)
+	return nil
+}
+
 func loadManifest(path string) (scenarioManifest, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -187,6 +234,14 @@ func printAnalysisSummary(path string, report analysisReport) {
 			fmt.Printf("  contradictions: %s\n", strings.Join(item.Contradictions, ", "))
 		}
 	}
+}
+
+func printRuntimeConfigSummary(path string, report runtimeConfigReport) {
+	fmt.Printf("Wrote runtime config report: %s\n", path)
+	fmt.Printf("Run ID: %s\n", report.RunID)
+	fmt.Printf("Base URL: %s\n", report.BaseURL)
+	fmt.Printf("Service principal: %s\n", report.ServicePrincipal.Key)
+	fmt.Printf("Opencode MCP URL: %s\n", report.OpencodeConfig.URL)
 }
 
 func fatalf(format string, args ...any) {

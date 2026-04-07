@@ -2156,6 +2156,16 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 		"command":     opencodeCommand,
 		"args":        []string{"acp", "--print-logs"},
 		"transport":   "jsonl",
+		"mcp_servers": []map[string]any{{
+			"name":    serverName,
+			"type":    "http",
+			"url":     mcpURL,
+			"enabled": true,
+			"headers": []map[string]any{{
+				"name":  "Authorization",
+				"value": "Bearer " + token,
+			}},
+		}},
 		"env": map[string]any{
 			"HOME":            opencodeHome,
 			"XDG_CONFIG_HOME": filepath.Join(opencodeHome, ".config"),

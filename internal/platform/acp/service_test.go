@@ -310,6 +310,86 @@ func TestSendPromptSetsModeBeforePrompt(t *testing.T) {
 	}
 }
 
+func TestSendPromptSkipsModeSwitchForAsk(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	session := &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	svc.sessions["session-1"] = session
+	calls := make([]string, 0, 2)
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		calls = append(calls, method)
+		if method != "session/prompt" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "hello", Mode: "ask"}); err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(calls) != 1 || calls[0] != "session/prompt" {
+		t.Fatalf("unexpected method order: %#v", calls)
+	}
+}
+
+func TestSendPromptResetsModeToBuildAfterPlan(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	session := &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	svc.sessions["session-1"] = session
+	calls := make([]string, 0, 4)
+	modes := make([]string, 0, 2)
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		calls = append(calls, method)
+		switch method {
+		case "session/set_mode":
+			params := message["params"].(map[string]any)
+			modeID, _ := params["modeId"].(string)
+			modes = append(modes, modeID)
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/prompt":
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "plan it", Mode: "plan"}); err != nil {
+		t.Fatalf("plan SendPrompt failed: %v", err)
+	}
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "execute it", Mode: "execute"}); err != nil {
+		t.Fatalf("execute SendPrompt failed: %v", err)
+	}
+	if len(modes) != 2 || modes[0] != "plan" || modes[1] != "build" {
+		t.Fatalf("unexpected mode sequence: %#v", modes)
+	}
+	if got := svc.sessions["session-1"].remoteMode; got != "build" {
+		t.Fatalf("expected remoteMode build after reset, got %q", got)
+	}
+}
+
 func TestSendPromptPromotesClarificationToAwaitingInput(t *testing.T) {
 	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{
