@@ -64,6 +64,7 @@ export default function WorkspacePage() {
     pathname,
     currentSurface,
   })
+  const autoSwitchKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const currentPath = location.pathname || '/'
@@ -94,10 +95,33 @@ export default function WorkspacePage() {
     }
   }
 
-  async function handleSwitchSurface(surface: string, fallback?: string) {
+  async function handleSwitchSurface(surface: string, fallback?: string, targetPath?: string) {
     const bootstrap = await reloadBootstrap(surface)
-    navigate(fallback || bootstrap.default_path || '/', { replace: true })
+    navigate(targetPath || fallback || bootstrap.default_path || '/', { replace: true })
   }
+
+  useEffect(() => {
+    if (loading || !route || route.status !== 'surface_mismatch' || !route.suggested_surface) {
+      autoSwitchKeyRef.current = null
+      return
+    }
+    if (route.suggested_surface === currentSurface) {
+      return
+    }
+    const autoSwitchKey = `${currentSurface}:${route.suggested_surface}:${pathname}:${location.search}:${location.hash}`
+    if (autoSwitchKeyRef.current === autoSwitchKey) {
+      return
+    }
+    autoSwitchKeyRef.current = autoSwitchKey
+    useShellStore.getState().setNavigationPending(true, 'surface')
+    void handleSwitchSurface(
+      route.suggested_surface,
+      route.fallback_path,
+      `${pathname}${location.search}${location.hash}`
+    ).finally(() => {
+      useShellStore.getState().setNavigationPending(false)
+    })
+  }, [currentSurface, loading, location.hash, location.search, pathname, route])
 
   const content = useMemo(() => {
     if (pathname === '/settings') return <SettingsPage />
@@ -105,14 +129,24 @@ export default function WorkspacePage() {
     if (!route) return <WorkspacePanel title="Unavailable" status="Route could not be resolved." />
     if (route.status !== 'ok') {
       const pendingKind = useShellStore.getState().navigationPendingKind
-      if (pendingKind === 'surface' || pendingKind === 'command') {
+      const autoSurfaceSwitching =
+        route.status === 'surface_mismatch' &&
+        Boolean(route.suggested_surface) &&
+        route.suggested_surface !== currentSurface
+      if (pendingKind === 'surface' || pendingKind === 'command' || autoSurfaceSwitching) {
         return <WorkspacePanel title="Loading" status="Switching workspace surface." />
       }
       return (
         <WorkspaceRecoveryPanel
           route={route}
           onDefault={() => navigate(route.fallback_path || defaultPath || '/', { replace: true })}
-          onSwitchSurface={() => void handleSwitchSurface(route.suggested_surface || currentSurface, route.fallback_path)}
+          onSwitchSurface={() =>
+            void handleSwitchSurface(
+              route.suggested_surface || currentSurface,
+              route.fallback_path,
+              `${pathname}${location.search}${location.hash}`
+            )
+          }
         />
       )
     }

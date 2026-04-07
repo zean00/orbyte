@@ -12,7 +12,7 @@ import {
   defaultWidgetDataState,
   useSharedDashboardData,
 } from "@/features/dashboard/runtime";
-import { fetchWorkspaceBootstrap, toShellRoutes } from "@/services/bootstrap";
+import { fetchWorkspaceBootstrap, toShellRoutes, workspaceSurfaceTarget } from "@/services/bootstrap";
 import { preloadSurfaceModule } from "@/services/surfaceModules";
 import { useShellStore } from "@/stores/shellStore";
 
@@ -344,16 +344,7 @@ export default function AgentSurfacePage() {
       fetchWorkspaceBootstrap(nextSurface),
       preloadSurfaceModule(nextSurface),
     ]);
-    setWorkspaceBootstrap(bootstrap);
-    setRoutes(
-      toShellRoutes(
-        bootstrap.menus,
-        bootstrap.actions,
-        bootstrap.locale,
-        "workspace",
-      ),
-    );
-    navigate(useShellStore.getState().defaultPath || defaultPath || "/", {
+    navigate(workspaceSurfaceTarget(bootstrap, nextSurface) || defaultPath || "/", {
       replace: true,
     });
   }

@@ -11,16 +11,13 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchWorkspaceBootstrap, toShellRoutes } from "@/services/bootstrap";
-import {
-  pageModuleLoaders,
-  preloadVisibleSurfaceModules,
-} from "@/services/surfaceModules";
+import { pageModuleLoaders } from "@/services/surfaceModules";
 import { useShellStore } from "@/stores/shellStore";
 
 function workspaceSurfaceFromPath(pathname: string): string {
-  if (pathname.startsWith("/pos")) return "pos";
-  if (pathname.startsWith("/agent")) return "agent";
-  if (pathname.startsWith("/dashboard")) return "dashboard";
+  if (pathname === "/pos/terminal") return "pos";
+  if (pathname === "/agent/workspace") return "agent";
+  if (pathname === "/dashboard") return "dashboard";
   if (pathname === "/worklist" || pathname.startsWith("/worklist/")) {
     return "worklist";
   }
@@ -57,6 +54,8 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
   const setRoutes = useShellStore((state) => state.setRoutes);
   const workspaceBootstrap = useShellStore((state) => state.workspaceBootstrap);
   const requestedSurface = workspaceSurfaceFromPath(location.pathname);
+  const workspaceSurfaceReady =
+    !isAuthenticated || workspaceBootstrap?.surface === requestedSurface;
 
   useEffect(() => {
     let mounted = true;
@@ -79,6 +78,9 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
           setReady(true);
           return;
         }
+        if (mounted) {
+          setReady(false);
+        }
         const bootstrap = await fetchWorkspaceBootstrap(
           requestedSurface === "backoffice" ? undefined : requestedSurface,
         );
@@ -93,20 +95,6 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
           ),
         );
         setReady(true);
-        const warm = () => {
-          void preloadVisibleSurfaceModules(bootstrap.available_surfaces || []);
-          for (const availableSurface of bootstrap.available_surfaces || []) {
-            if (availableSurface === bootstrap.surface) continue;
-            void fetchWorkspaceBootstrap(availableSurface);
-          }
-        };
-        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-          (window as Window & {
-            requestIdleCallback?: (callback: () => void) => number;
-          }).requestIdleCallback?.(warm);
-        } else {
-          setTimeout(warm, 0);
-        }
       } catch (error) {
         if (!mounted) return;
         if ((error as { status?: number }).status === 401) {
@@ -132,7 +120,7 @@ function BootstrapLoader({ children }: { children: React.ReactNode }) {
     workspaceBootstrap,
   ]);
 
-  if (!hasCheckedAuth || !ready) return <PageLoader />;
+  if (!hasCheckedAuth || !ready || !workspaceSurfaceReady) return <PageLoader />;
   return <>{children}</>;
 }
 

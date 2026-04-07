@@ -22,6 +22,15 @@ export function Sidebar() {
   const [routeFilter, setRouteFilter] = useState('')
   const groupedRoutes = useMemo(() => groupRoutesByPath(routes, routeFilter), [routeFilter, routes])
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const resolvedCollapsedGroups = useMemo(() => {
+    const next: Record<string, boolean> = { ...collapsedGroups }
+    for (const group of groupedRoutes) {
+      if (!(group.key in next)) {
+        next[group.key] = !groupContainsRoute(group, currentRoute)
+      }
+    }
+    return next
+  }, [collapsedGroups, currentRoute, groupedRoutes])
 
   useEffect(() => {
     setCollapsedGroups((current) => {
@@ -30,7 +39,7 @@ export function Sidebar() {
         if (groupContainsRoute(group, currentRoute)) {
           next[group.key] = false
         } else if (!(group.key in next)) {
-          next[group.key] = false
+          next[group.key] = true
         }
       }
       return next
@@ -101,16 +110,16 @@ export function Sidebar() {
                   onClick={() =>
                     setCollapsedGroups((current) => ({
                       ...current,
-                      [group.key]: !current[group.key],
+                      [group.key]: !resolvedCollapsedGroups[group.key],
                     }))
                   }
                   className="mb-1 flex w-full items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/75 transition-colors hover:text-body"
                 >
                   <span>{group.label}</span>
-                  <ChevronIcon className={cn('h-4 w-4 transition-transform', collapsedGroups[group.key] ? '-rotate-90' : 'rotate-0')} />
+                  <ChevronIcon className={cn('h-4 w-4 transition-transform', resolvedCollapsedGroups[group.key] ? '-rotate-90' : 'rotate-0')} />
                 </button>
               )}
-              <div className={cn('space-y-1', sidebarOpen && collapsedGroups[group.key] ? 'hidden' : '')}>
+              <div className={cn('space-y-1', sidebarOpen && resolvedCollapsedGroups[group.key] ? 'hidden' : '')}>
                 {group.items.map((item) => (
                   <NavLink
                     key={item.key}

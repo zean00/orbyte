@@ -116,15 +116,6 @@ export function Header() {
         preloadSurfaceModule(surface),
       ]);
       const target = workspaceSurfaceTarget(bootstrap, surface);
-      setRoutes(
-        toShellRoutes(
-          bootstrap.menus,
-          bootstrap.actions,
-          bootstrap.locale,
-          "workspace",
-        ),
-      );
-      setWorkspaceBootstrap(bootstrap);
       navigate(target || "/", { replace: true });
     } finally {
       setNavigationPending(false);

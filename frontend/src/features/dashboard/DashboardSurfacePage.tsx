@@ -48,8 +48,6 @@ export default function DashboardSurfacePage() {
       fetchWorkspaceBootstrap(nextSurface),
       preloadSurfaceModule(nextSurface),
     ]);
-    setWorkspaceBootstrap(bootstrap);
-    setRoutes(toShellRoutes(bootstrap.menus, bootstrap.actions, bootstrap.locale, "workspace"));
     navigate(workspaceSurfaceTarget(bootstrap, nextSurface) || "/", { replace: true });
   }
 

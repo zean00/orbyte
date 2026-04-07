@@ -39,6 +39,9 @@ export function useWorkspaceRouteResolution({
         setLoading(false)
         return
       }
+      if (mounted) {
+        setRoute(null)
+      }
       setLoading(true)
       try {
         const request =
