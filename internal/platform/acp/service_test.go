@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -434,6 +435,51 @@ func TestSendPromptPromotesClarificationToAwaitingInput(t *testing.T) {
 	}
 }
 
+func TestSendPromptPromotesPlanConfirmationToAwaitingInput(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+		Status:        "ready",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		switch method {
+		case "session/set_mode":
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/prompt":
+			svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+				"text": "Plan:\n\n1. Validate the branch signal.\n2. Draft the recovery request.\n\nWould you like me to proceed with creating the draft?",
+			})
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Create a recovery plan.", Mode: "plan"})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if updated.Status != "awaiting_input" {
+		t.Fatalf("expected awaiting_input status, got %#v", updated.Status)
+	}
+	if updated.AwaitingInputKind != "confirmation" {
+		t.Fatalf("expected confirmation kind, got %#v", updated.AwaitingInputKind)
+	}
+	if len(updated.PendingQuestions) != 1 || !strings.Contains(updated.PendingQuestions[0].Content, "proceed") {
+		t.Fatalf("expected confirmation question, got %#v", updated.PendingQuestions)
+	}
+}
+
 func TestSendPromptClearsPendingClarificationOnReply(t *testing.T) {
 	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{
@@ -529,6 +575,15 @@ We should proceed with the branch reset.`, "msg-1")
 2. Why now?`, "msg-1")
 	if len(questions) != 2 {
 		t.Fatalf("expected clarification questions with explicit marker, got %#v", questions)
+	}
+
+	questions = extractClarificationQuestions(`Clarifying Questions
+
+Do you have specific sales targets?
+Should I pull detailed branch sales figures from the analytics dashboard?
+What time period should I measure recovery over?`, "msg-1")
+	if len(questions) != 3 {
+		t.Fatalf("expected clarifying questions heading to be detected, got %#v", questions)
 	}
 }
 
@@ -1189,15 +1244,15 @@ func TestAppendChunkMessageMergesByTurnAcrossInterleavedUpdates(t *testing.T) {
 
 func TestCloneMapSessionAndStringValue(t *testing.T) {
 	original := &Session{
-		ID:            "session-1",
-		Messages:      []Message{{ID: "msg"}},
-		ContextBlocks: []ContextBlock{{Key: "ctx"}},
-		Approvals:     []Approval{{ID: "appr"}},
-		Artifacts:     []Artifact{{ID: "art"}},
-		Trace:         []Event{{ID: "evt"}},
-		CurrentPlan:   []PlanEntry{{Content: "step"}},
+		ID:               "session-1",
+		Messages:         []Message{{ID: "msg"}},
+		ContextBlocks:    []ContextBlock{{Key: "ctx"}},
+		Approvals:        []Approval{{ID: "appr"}},
+		Artifacts:        []Artifact{{ID: "art"}},
+		Trace:            []Event{{ID: "evt"}},
+		CurrentPlan:      []PlanEntry{{Content: "step"}},
 		PendingQuestions: []ClarificationQuestion{{ID: "q1", Content: "Need more detail?"}},
-		ProviderInfo:  map[string]any{"agent": "codex"},
+		ProviderInfo:     map[string]any{"agent": "codex"},
 	}
 	cloned := cloneSession(original)
 	cloned.Messages[0].ID = "changed"

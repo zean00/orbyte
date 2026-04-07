@@ -413,18 +413,18 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 		s.promoteDashboardArtifactsFromTurn(session, turnID)
 		session.TurnInProgress = false
 		session.CurrentTurnID = ""
-		if questions, sourceMessageID := deriveClarificationQuestionsForTurn(session, turnID); len(questions) > 0 {
+		if pendingInput := derivePendingInputForTurn(session, turnID, mode == "plan"); len(pendingInput.Questions) > 0 {
 			session.Status = "awaiting_input"
-			session.AwaitingInputKind = "clarification"
+			session.AwaitingInputKind = pendingInput.Kind
 			session.PendingQuestionSetID = shared.NewID("clarification")
-			session.PendingQuestions = questions
+			session.PendingQuestions = pendingInput.Questions
 			session.UpdatedAt = time.Now().UTC()
 			payload := map[string]any{
 				"turn_id":             turnID,
 				"question_set_id":     session.PendingQuestionSetID,
 				"awaiting_input_kind": session.AwaitingInputKind,
-				"source_message_id":   sourceMessageID,
-				"questions":           clarificationQuestionsPayload(questions),
+				"source_message_id":   pendingInput.SourceMessageID,
+				"questions":           clarificationQuestionsPayload(pendingInput.Questions),
 			}
 			s.mu.Unlock()
 			s.publish(sessionID, "clarification_requested", payload)
@@ -1266,9 +1266,15 @@ func clarificationQuestionsPayload(items []ClarificationQuestion) []map[string]a
 	return out
 }
 
-func deriveClarificationQuestionsForTurn(session *Session, turnID string) ([]ClarificationQuestion, string) {
+type pendingInputDerivation struct {
+	Kind            string
+	Questions       []ClarificationQuestion
+	SourceMessageID string
+}
+
+func derivePendingInputForTurn(session *Session, turnID string, allowConfirmation bool) pendingInputDerivation {
 	if session == nil || strings.TrimSpace(turnID) == "" {
-		return nil, ""
+		return pendingInputDerivation{}
 	}
 	for index := len(session.Messages) - 1; index >= 0; index-- {
 		message := session.Messages[index]
@@ -1279,12 +1285,18 @@ func deriveClarificationQuestionsForTurn(session *Session, turnID string) ([]Cla
 			continue
 		}
 		questions := extractClarificationQuestions(message.Content, message.ID)
-		if len(questions) == 0 {
-			return nil, ""
+		if len(questions) > 0 {
+			return pendingInputDerivation{Kind: "clarification", Questions: questions, SourceMessageID: message.ID}
 		}
-		return questions, message.ID
+		if allowConfirmation {
+			questions = extractConfirmationQuestions(message.Content, message.ID)
+			if len(questions) > 0 {
+				return pendingInputDerivation{Kind: "confirmation", Questions: questions, SourceMessageID: message.ID}
+			}
+		}
+		return pendingInputDerivation{}
 	}
-	return nil, ""
+	return pendingInputDerivation{}
 }
 
 func extractClarificationQuestions(markdown, sourceMessageID string) []ClarificationQuestion {
@@ -1307,6 +1319,8 @@ func extractClarificationQuestions(markdown, sourceMessageID string) []Clarifica
 		switch {
 		case lower == "clarification needed",
 			lower == "clarifications needed",
+			lower == "clarifying questions",
+			lower == "clarification questions",
 			lower == "need your input",
 			lower == "need more input":
 			heading = true
@@ -1375,6 +1389,51 @@ func candidateClarificationQuestion(line string) string {
 		question = strings.TrimSpace(question[:idx+1])
 	}
 	return question
+}
+
+func extractConfirmationQuestions(markdown, sourceMessageID string) []ClarificationQuestion {
+	text := strings.TrimSpace(dashboardArtifactBlockPattern.ReplaceAllString(markdown, ""))
+	if text == "" {
+		return nil
+	}
+	lines := strings.Split(text, "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		question := candidateConfirmationQuestion(normalizeClarificationLine(lines[index]))
+		if question == "" {
+			continue
+		}
+		return []ClarificationQuestion{{
+			ID:              shared.NewID("question"),
+			Content:         question,
+			SourceMessageID: sourceMessageID,
+		}}
+	}
+	return nil
+}
+
+func candidateConfirmationQuestion(line string) string {
+	question := candidateClarificationQuestion(line)
+	if question == "" {
+		return ""
+	}
+	lower := strings.ToLower(question)
+	for _, marker := range []string{
+		"would you like me to",
+		"do you want me to",
+		"should i proceed",
+		"should we proceed",
+		"shall i proceed",
+		"shall we proceed",
+		"may i proceed",
+		"can i proceed",
+		"confirm that you want",
+		"please confirm",
+	} {
+		if strings.Contains(lower, marker) {
+			return question
+		}
+	}
+	return ""
 }
 
 func extractToolActivity(updateKind string, content map[string]any) (map[string]any, bool) {

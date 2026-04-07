@@ -780,11 +780,13 @@ export default function AgentSurfacePage() {
   }, [fullCatalogQuery, fullCatalogTools]);
   const currentPlan = useMemo(() => deriveCurrentPlan(session), [session]);
   const hasCurrentPlan = currentPlan.length > 0;
-  const pendingClarificationQuestions = session?.pending_questions || [];
-  const hasPendingClarification =
+  const pendingInputQuestions = session?.pending_questions || [];
+  const pendingInputKind = session?.awaiting_input_kind || "clarification";
+  const hasPendingInput =
     session?.status === "awaiting_input" &&
-    session?.awaiting_input_kind === "clarification" &&
-    pendingClarificationQuestions.length > 0;
+    pendingInputQuestions.length > 0;
+  const hasPendingConfirmation =
+    hasPendingInput && pendingInputKind === "confirmation";
   const dashboardArtifacts = useMemo(
     () => deriveDashboardArtifacts(session),
     [session],
@@ -910,13 +912,15 @@ export default function AgentSurfacePage() {
       targetSession = created;
       setLocalPendingTurn({ sessionID: created.id, phase: "thinking" });
     }
+    const effectiveComposerMode =
+      hasPendingConfirmation ? "ask" : composerMode;
     const nextPrompt = buildPromptPayload(
       displayPrompt,
       mcpOnlyEnabled,
-      composerMode,
+      effectiveComposerMode,
       currentPlan,
     );
-    const dispatchedMode = composerMode;
+    const dispatchedMode = effectiveComposerMode;
     const planSnapshot =
       currentPlan.length > 0 ? currentPlan : session?.current_plan || [];
     const optimisticTurnID = `pending-turn-${Date.now()}`;
@@ -1369,26 +1373,32 @@ export default function AgentSurfacePage() {
                   className="h-[calc(100svh-14rem)] overflow-auto px-4 py-6 md:px-8 md:py-8"
                 >
                   <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 pb-52">
-                    {contentTab === "conversation" && hasPendingClarification ? (
+                    {contentTab === "conversation" && hasPendingInput ? (
                       <div className="rounded-[1.5rem] border border-amber-200/80 bg-[linear-gradient(180deg,rgba(255,250,235,0.95)_0%,rgba(255,244,214,0.92)_100%)] p-5 shadow-[0_16px_36px_rgba(180,83,9,0.08)]">
                         <div className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-700">
-                          Clarification needed
+                          {hasPendingConfirmation
+                            ? "Confirmation needed"
+                            : "Clarification needed"}
                         </div>
                         <h3 className="mt-2 text-lg font-black tracking-tight text-body">
-                          Reply with the missing details to continue this session.
+                          {hasPendingConfirmation
+                            ? "Confirm how the agent should proceed in this session."
+                            : "Reply with the missing details to continue this session."}
                         </h3>
                         <p className="mt-2 text-sm leading-6 text-muted">
                           You can answer in one message or point by point. The
                           agent will continue from the same ACP session.
                         </p>
                         <div className="mt-4 space-y-3">
-                          {pendingClarificationQuestions.map((item, index) => (
+                          {pendingInputQuestions.map((item, index) => (
                             <article
                               key={item.id}
                               className="rounded-2xl border border-amber-300/50 bg-white/70 px-4 py-3"
                             >
                               <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">
-                                Question {index + 1}
+                                {hasPendingConfirmation
+                                  ? "Confirmation"
+                                  : `Question ${index + 1}`}
                               </div>
                               <p className="mt-2 text-sm leading-6 text-body">
                                 {item.content}
@@ -1759,8 +1769,10 @@ export default function AgentSurfacePage() {
                 Composer
               </div>
               <div className="mt-1 text-sm text-body">
-                {hasPendingClarification
-                  ? "Answer the clarification questions to continue this session."
+                {hasPendingInput
+                  ? hasPendingConfirmation
+                    ? "Answer the confirmation question to continue this session."
+                    : "Answer the clarification questions to continue this session."
                   : effectiveLivePhase === "tooling"
                   ? "Assistant is using tools right now."
                   : effectiveLivePhase === "streaming"
@@ -1834,8 +1846,10 @@ export default function AgentSurfacePage() {
               onKeyDown={handlePromptKeyDown}
               className="min-h-[84px] w-full resize-none rounded-2xl border border-line bg-shell px-4 py-3 text-sm text-body outline-none transition focus:border-accent"
               placeholder={
-                hasPendingClarification
-                  ? "Reply with the missing details to continue."
+                hasPendingInput
+                  ? hasPendingConfirmation
+                    ? "Reply yes/no or describe how to proceed."
+                    : "Reply with the missing details to continue."
                   : composerMode === "plan"
                   ? "Describe the goal or decision you want the agent to plan."
                   : composerMode === "execute"
@@ -1846,8 +1860,10 @@ export default function AgentSurfacePage() {
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs leading-5 text-muted">
-                {hasPendingClarification
-                  ? "Clarification is pending. Your next reply will resolve it and continue the same ACP session."
+                {hasPendingInput
+                  ? hasPendingConfirmation
+                    ? "Confirmation is pending. Your next reply will continue the same ACP session without re-entering Plan mode."
+                    : "Clarification is pending. Your next reply will resolve it and continue the same ACP session."
                   : composerMode === "plan"
                   ? providerSupportsPlanUpdates
                     ? "Plan mode asks the agent to gather evidence, build a stepwise plan, and stop short of execution."
