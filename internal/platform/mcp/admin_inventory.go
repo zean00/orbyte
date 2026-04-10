@@ -60,6 +60,7 @@ type AppInventoryItem struct {
 
 type runtimeConfig struct {
 	Enabled                    bool
+	ExposureMode               string
 	ToolStates                 map[string]bool
 	GovernanceEnabled          bool
 	DefaultActionMode          string
@@ -68,10 +69,12 @@ type runtimeConfig struct {
 	BlockedDocumentTypes       []string
 	AllowedSubmitDocumentTypes []string
 	DomainOverrides            map[string]domainGovernanceOverride
+	Playbooks                  []PlaybookDefinition
 }
 
 type RuntimeConfigSnapshot struct {
 	Enabled                    bool
+	ExposureMode               string
 	GovernanceEnabled          bool
 	DefaultActionMode          string
 	BlockedActionClasses       []string
@@ -88,6 +91,7 @@ func (s *Server) MCPRuntimeConfig() RuntimeConfigSnapshot {
 	cfg := s.mcpRuntimeConfig()
 	return RuntimeConfigSnapshot{
 		Enabled:                    cfg.Enabled,
+		ExposureMode:               cfg.ExposureMode,
 		GovernanceEnabled:          cfg.GovernanceEnabled,
 		DefaultActionMode:          cfg.DefaultActionMode,
 		BlockedActionClasses:       append([]string(nil), cfg.BlockedActionClasses...),
@@ -326,6 +330,7 @@ func (s *Server) toolDefined(name string) bool {
 func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	cfg := runtimeConfig{
 		Enabled:                    true,
+		ExposureMode:               MCPExposureModeFull,
 		ToolStates:                 map[string]bool{},
 		GovernanceEnabled:          false,
 		DefaultActionMode:          "draft_only",
@@ -334,6 +339,7 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 		BlockedDocumentTypes:       []string{},
 		AllowedSubmitDocumentTypes: []string{},
 		DomainOverrides:            map[string]domainGovernanceOverride{},
+		Playbooks:                  []PlaybookDefinition{},
 	}
 	if s == nil || s.config == nil {
 		return cfg
@@ -348,6 +354,9 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	}
 	if rawEnabled, ok := value.Value["governance_enabled"].(bool); ok {
 		cfg.GovernanceEnabled = rawEnabled
+	}
+	if rawMode, ok := value.Value["exposure_mode"].(string); ok {
+		cfg.ExposureMode = normalizeExposureMode(rawMode)
 	}
 	if rawMode, ok := value.Value["default_action_mode"].(string); ok && strings.TrimSpace(rawMode) != "" {
 		cfg.DefaultActionMode = strings.TrimSpace(rawMode)
@@ -372,5 +381,6 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	cfg.BlockedDocumentTypes = parseStringList(value.Value["blocked_document_types_json"])
 	cfg.AllowedSubmitDocumentTypes = parseStringList(value.Value["allowed_submit_document_types_json"])
 	cfg.DomainOverrides = parseDomainOverrides(value.Value["domain_policy_overrides_json"])
+	cfg.Playbooks = parsePlaybooks(value.Value["playbooks_json"])
 	return cfg
 }

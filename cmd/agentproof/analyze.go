@@ -13,6 +13,7 @@ import (
 
 var dashboardArtifactPattern = regexp.MustCompile(`(?s)<orbyte-dashboard-artifact>\s*(\{.*?\})\s*</orbyte-dashboard-artifact>`)
 var planStepPattern = regexp.MustCompile(`(?m)^\s*(?:[-*]|\d+[.)])\s+`)
+var draftDocumentIDPattern = regexp.MustCompile(`\bdoc_[A-Za-z0-9]+\b`)
 
 func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioManifest, sessionID, titlePrefix string) (analysisReport, error) {
 	session, err := findSession(ctx, client, sessionID, titlePrefix)
@@ -152,6 +153,16 @@ func classifyPrompt(result *promptAnalysisResult, prompt promptExpectation, trac
 }
 
 func verifyDraft(ctx context.Context, client *apiClient, result *promptAnalysisResult, expected draftExpectation) {
+	for _, documentID := range extractDraftDocumentIDs(result.Answer) {
+		record, _, _, err := client.getDocument(ctx, documentID)
+		if err != nil {
+			continue
+		}
+		if verifyDraftDocument(result, expected, record) {
+			return
+		}
+	}
+
 	items, err := client.listUIDocuments(ctx, expected.DocumentType, true)
 	if err != nil {
 		result.Classification = "unacceptable"
@@ -165,39 +176,21 @@ func verifyDraft(ctx context.Context, client *apiClient, result *promptAnalysisR
 		if strings.ToLower(strings.TrimSpace(item.Header.Status)) != "draft" {
 			continue
 		}
-		title := strings.ToLower(strings.TrimSpace(stringValue(item.Body.Payload["title"])))
-		if len(expected.TitleChecks) > 0 && !allChecksMatch(title, expected.TitleChecks) {
-			continue
-		}
 		payloadText := strings.ToLower(strings.TrimSpace(flattenPayloadText(item.Body.Payload)))
 		combinedPayloadText += " " + payloadText
-		if !allChecksMatch(payloadText, expected.PayloadChecks) {
-			continue
+		combinedMatched = combinedMatched || allChecksMatch(payloadText, expected.PayloadChecks)
+		if verifyDraftDocument(result, expected, documentFacts{
+			ID:      item.Header.ID,
+			Number:  item.Header.Number,
+			Status:  item.Header.Status,
+			Payload: item.Body.Payload,
+		}) {
+			return
 		}
-		combinedMatched = true
-		result.DraftVerified = true
-		result.DraftDocumentID = strings.TrimSpace(item.Header.ID)
-		result.MissingFacts = removeFactKey(result.MissingFacts, "draft_title")
-		if len(result.Contradictions) == 0 {
-			criticalMissing := false
-			for _, missing := range result.MissingFacts {
-				if missing == "draft_created" || missing == "draft_title" {
-					criticalMissing = true
-					break
-				}
-			}
-			switch {
-			case !criticalMissing && len(result.MissingFacts) == 0:
-				result.Classification = "exact"
-			case !criticalMissing:
-				result.Classification = "reasonable"
-			}
-		}
-		return
 	}
 	if !combinedMatched && len(expected.PayloadChecks) > 0 && allChecksMatch(strings.ToLower(strings.TrimSpace(combinedPayloadText)), expected.PayloadChecks) {
 		result.DraftVerified = true
-		result.MissingFacts = removeFactKey(result.MissingFacts, "draft_title")
+		clearDraftFacts(result)
 		if len(result.Contradictions) == 0 {
 			criticalMissing := false
 			for _, missing := range result.MissingFacts {
@@ -219,6 +212,39 @@ func verifyDraft(ctx context.Context, client *apiClient, result *promptAnalysisR
 	result.Classification = "unacceptable"
 	result.MissingFacts = append(result.MissingFacts, "expected_draft_document")
 	result.Investigation = "The answer did not result in the expected draft artifact, or the created draft did not contain the required recommendation details."
+}
+
+func verifyDraftDocument(result *promptAnalysisResult, expected draftExpectation, record documentFacts) bool {
+	if strings.ToLower(strings.TrimSpace(record.Status)) != "draft" {
+		return false
+	}
+	title := strings.ToLower(strings.TrimSpace(stringValue(record.Payload["title"])))
+	if len(expected.TitleChecks) > 0 && !allChecksMatch(title, expected.TitleChecks) {
+		return false
+	}
+	payloadText := strings.ToLower(strings.TrimSpace(flattenPayloadText(record.Payload)))
+	if !allChecksMatch(payloadText, expected.PayloadChecks) {
+		return false
+	}
+	result.DraftVerified = true
+	result.DraftDocumentID = strings.TrimSpace(record.ID)
+	clearDraftFacts(result)
+	if len(result.Contradictions) == 0 {
+		criticalMissing := false
+		for _, missing := range result.MissingFacts {
+			if missing == "draft_created" || missing == "draft_title" {
+				criticalMissing = true
+				break
+			}
+		}
+		switch {
+		case !criticalMissing && len(result.MissingFacts) == 0:
+			result.Classification = "exact"
+		case !criticalMissing:
+			result.Classification = "reasonable"
+		}
+	}
+	return true
 }
 
 func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, session sessionTranscript) {
@@ -603,4 +629,28 @@ func removeFactKey(items []string, key string) []string {
 		return nil
 	}
 	return filtered
+}
+
+func clearDraftFacts(result *promptAnalysisResult) {
+	result.MissingFacts = removeFactKey(result.MissingFacts, "draft_title")
+	result.MissingFacts = removeFactKey(result.MissingFacts, "draft_created")
+	result.MissingFacts = removeFactKey(result.MissingFacts, "draft_type")
+	result.MissingFacts = removeFactKey(result.MissingFacts, "expected_draft_document")
+}
+
+func extractDraftDocumentIDs(answer string) []string {
+	matches := draftDocumentIDPattern.FindAllString(answer, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(matches))
+	ids := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if _, ok := seen[match]; ok {
+			continue
+		}
+		seen[match] = struct{}{}
+		ids = append(ids, match)
+	}
+	return ids
 }

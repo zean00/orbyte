@@ -136,6 +136,343 @@ func TestServerListsToolsAndResourcesByPermission(t *testing.T) {
 	}
 }
 
+func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json": `[
+				{
+					"id":"retail_recovery_dashboard",
+					"name":"Retail Recovery Dashboard",
+					"description":"Use dashboard widgets to explain branch recovery priorities.",
+					"domains":["analytics","retail"],
+					"labels":["dashboard","recovery"],
+					"keywords":["store","branch","performance"],
+					"use_when":"The user asks about branch underperformance and wants dashboard evidence.",
+					"workflow_steps":["Search the widget catalog","Preview the most relevant widgets","Cite the widget artifact in the answer"],
+					"tool_sequence":[
+						{"step":"discover_widgets","tool_id":"analytics.dashboard.widget_catalog","required":true,"output":"Candidate widgets"},
+						{"step":"preview_widgets","tool_id":"analytics.dashboard.widgets.preview","required":true,"output":"Dashboard artifacts"}
+					],
+					"tool_ids":["analytics.dashboard.widget_catalog","analytics.dashboard.widgets.preview"],
+					"required_final_facts":["benchmark branch","underperforming branches"],
+					"required_artifacts":["dashboard_widget artifact blocks"],
+					"required_draft_outputs":["generic_request draft id"],
+					"guardrails":["do not submit"],
+					"success_checks":["names benchmark branch explicitly"],
+					"pitfalls":["do not summarize widgets without artifact blocks"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params:  mustJSON(t, map[string]any{"exposure_mode": "minimal", "include_summary": true}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	names := make([]string, 0, len(tools))
+	for _, item := range tools {
+		names = append(names, item.Name)
+	}
+	for _, name := range []string{
+		"tools.list",
+		"tools.search",
+		"tools.describe",
+		"tools.call",
+		"playbooks.list",
+		"playbooks.search",
+		"playbooks.describe",
+	} {
+		if !contains(names, name) {
+			t.Fatalf("expected meta tool %q in %+v", name, names)
+		}
+	}
+	if contains(names, "analytics.dashboard.widget_catalog") {
+		t.Fatalf("did not expect direct dashboard tool in minimal exposure: %+v", names)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/search",
+		Params:  mustJSON(t, map[string]any{"query": "dashboard widget"}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/search failed: %+v", resp.Error)
+	}
+	searchItems := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]toolSummary)
+	if len(searchItems) == 0 || searchItems[0].ToolID == "" {
+		t.Fatalf("expected discoverable tool summaries, got %+v", searchItems)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "playbooks/list",
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks/list failed: %+v", resp.Error)
+	}
+	playbookItems := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]PlaybookSummary)
+	if len(playbookItems) != 1 || playbookItems[0].ID != "retail_recovery_dashboard" {
+		t.Fatalf("expected configured playbook, got %+v", playbookItems)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      31,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "playbooks.describe",
+			"arguments": map[string]any{
+				"playbook_id": "retail_recovery_dashboard",
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks.describe failed: %+v", resp.Error)
+	}
+	detail := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	playbook := detail["playbook"].(PlaybookDefinition)
+	if len(playbook.ToolSequence) != 2 || playbook.ToolSequence[0].ToolID != "analytics.dashboard.widget_catalog" {
+		t.Fatalf("expected structured tool sequence, got %+v", playbook.ToolSequence)
+	}
+	if !contains(playbook.RequiredFinalFacts, "benchmark branch") {
+		t.Fatalf("expected required final facts, got %+v", playbook.RequiredFinalFacts)
+	}
+	if !contains(playbook.RequiredArtifacts, "dashboard_widget artifact blocks") {
+		t.Fatalf("expected required artifacts, got %+v", playbook.RequiredArtifacts)
+	}
+	if !contains(playbook.RequiredDraftOutputs, "generic_request draft id") {
+		t.Fatalf("expected required draft outputs, got %+v", playbook.RequiredDraftOutputs)
+	}
+	if !contains(playbook.Guardrails, "do not submit") {
+		t.Fatalf("expected guardrails, got %+v", playbook.Guardrails)
+	}
+	if !contains(playbook.SuccessChecks, "names benchmark branch explicitly") {
+		t.Fatalf("expected success checks, got %+v", playbook.SuccessChecks)
+	}
+	if !contains(playbook.Pitfalls, "do not summarize widgets without artifact blocks") {
+		t.Fatalf("expected pitfalls, got %+v", playbook.Pitfalls)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "tools.call",
+			"arguments": map[string]any{
+				"tool_id": "analytics.dashboard.widget_catalog",
+				"payload": map[string]any{"surface": "dashboard"},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools.call meta failed: %+v", resp.Error)
+	}
+	if resp.Result.(map[string]any)["structuredContent"] == nil {
+		t.Fatalf("expected structured content from delegated tools.call, got %+v", resp.Result)
+	}
+}
+
+func TestServerMinimalExposureKeepsMetaToolsVisibleForCapabilityFilteredCompactRequests(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"catalog_mode":          "compact",
+			"exposure_mode":         "minimal",
+			"capabilities":          []string{"cross_domain_analytics"},
+			"include_summary":       true,
+			"include_hidden_counts": true,
+			"max_tools":             8,
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("minimal tools/list failed: %+v", resp.Error)
+	}
+	tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	if len(tools) == 0 {
+		t.Fatal("expected discovery meta-tools to remain visible in minimal mode")
+	}
+	if !containsToolNamed(tools, "tools.search") || !containsToolNamed(tools, "tools.call") {
+		t.Fatalf("expected discovery meta-tools in %+v", tools)
+	}
+}
+
+func TestServerMinimalExposureCatalogSummaryUsesUnderlyingDiscoverableToolCount(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			switch permissionKey {
+			case "module.read", "analytics.read", "document.list", "document.read", "document.create", "document.update_draft":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"catalog_mode":          "compact",
+			"exposure_mode":         "minimal",
+			"capabilities":          []string{"cross_domain_analytics"},
+			"include_summary":       true,
+			"include_hidden_counts": true,
+			"max_tools":             8,
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("minimal tools/list failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	catalog := payload["catalog"].(map[string]any)
+	totalMatching := int(catalog["total_matching_tools"].(int))
+	hiddenTools := int(catalog["hidden_tools"].(int))
+	if totalMatching == 0 {
+		t.Fatal("expected underlying discoverable catalog count to be non-zero")
+	}
+	if hiddenTools == 0 {
+		t.Fatalf("expected hidden tools count to reflect underlying discoverable tools, got %+v", catalog)
+	}
+	if hiddenTools != totalMatching {
+		t.Fatalf("expected hidden_tools to match the underlying discoverable count in minimal mode, got %+v", catalog)
+	}
+}
+
+func TestServerFullAndCompactExposureAdvertiseDiscoveryMetaTools(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "full",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return true
+		},
+	}
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+	}{
+		{name: "full", params: map[string]any{"exposure_mode": "full"}},
+		{name: "compact", params: map[string]any{"exposure_mode": "compact", "catalog_mode": "compact", "capabilities": []string{"discovery"}, "include_summary": true}},
+	} {
+		resp := server.Handle(context.Background(), JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/list",
+			Params:  mustJSON(t, tc.params),
+		}, actor)
+		if resp.Error != nil {
+			t.Fatalf("%s tools/list failed: %+v", tc.name, resp.Error)
+		}
+		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+		for _, name := range []string{"tools.search", "tools.describe", "tools.call", "playbooks.search", "playbooks.describe"} {
+			if !containsToolNamed(tools, name) {
+				t.Fatalf("%s expected discovery meta-tool %q in catalog", tc.name, name)
+			}
+		}
+	}
+}
+
 func TestServerAnalyticsAuthoringAndAdHocQueryFlow(t *testing.T) {
 	server := newTestServer(t)
 	actor := ActorContext{

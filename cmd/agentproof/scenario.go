@@ -726,8 +726,8 @@ func seedInventoryReplenishmentExecuteScenario(ctx context.Context, client *apiC
 
 	now := time.Now().UTC()
 	for _, movement := range []map[string]any{
-		{"item_code": coldBrewCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 80.0, "unit_cost": 172000.0, "total_cost": 13760000.0},
-		{"item_code": oatMilkCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 80.0, "unit_cost": 39000.0, "total_cost": 3120000.0},
+		{"item_code": coldBrewCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 46.0, "unit_cost": 172000.0, "total_cost": 7912000.0},
+		{"item_code": oatMilkCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 36.0, "unit_cost": 39000.0, "total_cost": 1404000.0},
 		{"item_code": matchaCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 60.0, "unit_cost": 120000.0, "total_cost": 7200000.0},
 		{"item_code": cupsCode, "description": "Opening stock", "warehouse_code": warehouseCode, "uom_code": "ea", "quantity_delta": 100.0, "unit_cost": 1800.0, "total_cost": 180000.0},
 	} {
@@ -2213,6 +2213,7 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 	}
 	if err := client.putConfig(ctx, "platform.mcp", map[string]any{
 		"enabled":                            true,
+		"exposure_mode":                      "full",
 		"governance_enabled":                 true,
 		"default_action_mode":                "draft_only",
 		"tool_states_json":                   "{}",
@@ -2221,6 +2222,7 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 		"blocked_document_types_json":        "[]",
 		"allowed_submit_document_types_json": "[]",
 		"domain_policy_overrides_json":       "{}",
+		"playbooks_json":                     defaultMCPPlaybooksJSON(),
 	}); err != nil {
 		return servicePrincipalOutput{}, opencodeConfigOutput{}, fmt.Errorf("enable mcp: %w", err)
 	}
@@ -2231,6 +2233,123 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 		Snippet:    snippet,
 		Provider:   acpProvider,
 	}, nil
+}
+
+func defaultMCPPlaybooksJSON() string {
+	return mustJSONString([]map[string]any{
+		{
+			"id":          "retail_recovery_dashboard",
+			"name":        "Retail Recovery Dashboard",
+			"description": "Diagnose underperforming branches, compare the strongest branch, surface POS patterns, and preview dashboard widgets that explain the gap.",
+			"domains":     []string{"analytics", "retail", "promotion"},
+			"labels":      []string{"dashboard", "recovery", "showcase"},
+			"keywords":    []string{"store", "branch", "underperforming", "widgets", "sales pattern"},
+			"use_when":    "The user asks why some branches are underperforming and wants dashboard evidence or a dashboard-backed recovery plan.",
+			"workflow_steps": []string{
+				"Use tools.search or tools.describe to confirm the dashboard and POS insight tools relevant to the question.",
+				"Inspect the strongest branch and weaker branches with the dashboard widget catalog and widget preview tools, using surface dashboard and widget_keys analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, and analytics.demo.sales.daily_trend for retail recovery evidence.",
+				"Name the strongest benchmark branch plus each underperforming branch explicitly in the final answer.",
+				"Use POS sales pattern tools to identify the strongest repeatable bundle or pairing.",
+				"If the user asks for a recovery plan, explicitly state that the weaker branches should replace Beans Boost with the recommended bundle campaign.",
+				"Return the relevant dashboard artifact blocks verbatim in the final answer. Do not answer a widget request with text-only widget names.",
+			},
+			"tool_sequence": []map[string]any{
+				{"step": "discover_dashboard_widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": true, "description": "Find dashboard widgets that explain branch performance, branch mix, target attainment, and daily sales trend.", "output": "Candidate dashboard widget keys and titles."},
+				{"step": "preview_dashboard_widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": true, "description": "Preview the exact retail recovery widgets for surface dashboard.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"analytics.demo.sales.target_attainment", "analytics.demo.sales.branch_mix", "analytics.demo.sales.daily_trend"}}, "output": "Dashboard widget artifacts that must be copied verbatim into the final answer."},
+				{"step": "summarize_pos_pattern", "tool_id": "pos_core.sales.strategy.summary", "required": true, "description": "Identify the strongest basket or product pairing and target customer segment.", "output": "Recommended bundle products and target segment."},
+				{"step": "check_promotion_replacement", "tool_id": "promotion_core.performance.summary", "required": false, "when": "Use when the user asks for a recovery plan or campaign replacement.", "description": "Identify weak promotion performance and replacement candidates.", "output": "Promotion that should be replaced and why."},
+			},
+			"tool_ids": []string{
+				"analytics.dashboard.widget_catalog",
+				"analytics.dashboard.widgets.preview",
+				"pos_core.sales.strategy.summary",
+				"promotion_core.performance.summary",
+			},
+			"required_final_facts": []string{
+				"Strongest benchmark branch name.",
+				"Each underperforming branch name.",
+				"POS pattern to lean into, including Espresso Double and Butter Croissant.",
+				"Target segment, especially gold members.",
+				"Whether Beans Boost should be replaced when planning recovery.",
+			},
+			"required_artifacts": []string{
+				"dashboard_widget artifact block for analytics.demo.sales.target_attainment",
+				"dashboard_widget artifact block for analytics.demo.sales.branch_mix",
+				"dashboard_widget artifact block for analytics.demo.sales.daily_trend",
+			},
+			"guardrails": []string{
+				"Do not create or submit promotion documents unless the user explicitly asks to execute.",
+				"Do not invent branch names when dashboard or POS data is insufficient; call the relevant tools instead.",
+				"If the user asks to show dashboard widgets, do not produce the final answer until the dashboard widget artifact blocks are included verbatim.",
+			},
+			"success_checks": []string{
+				"Final answer names Loc Demo East as benchmark when it is the strongest branch.",
+				"Final answer names Loc Demo Central and Loc Demo West as underperforming branches when those are the weak branches.",
+				"Insight answer includes dashboard artifacts for target attainment, daily trend, and branch mix when widgets are requested.",
+				"Plan answer says Beans Boost should be replaced by the breakfast bundle campaign.",
+			},
+			"pitfalls": []string{
+				"Do not say only that the gold segment is strongest; the user asked for branch comparison.",
+				"Do not summarize widgets without copying the artifact blocks verbatim.",
+			},
+			"examples": []string{
+				"Which branches are underperforming compared with the strongest branch, and what dashboard widgets explain why?",
+			},
+		},
+		{
+			"id":          "inventory_replenishment_execute",
+			"name":        "Inventory Replenishment Execute",
+			"description": "Review inventory replenishment signals, inspect plan recommendations, and prepare or execute the replenishment follow-up flow.",
+			"domains":     []string{"inventory", "planning", "procurement"},
+			"labels":      []string{"replenishment", "planning", "execute"},
+			"keywords":    []string{"warehouse", "replenishment", "shortage", "vendor", "purchase"},
+			"use_when":    "The user asks for replenishment analysis or wants the system to execute a replenishment workflow.",
+			"workflow_steps": []string{
+				"Inspect replenishment insights first to understand shortages and vendor context.",
+				"Summarize replenishment plan outputs before taking action.",
+				"Only create or execute follow-up documents when the user explicitly asks to proceed.",
+			},
+			"tool_sequence": []map[string]any{
+				{"step": "inspect_replenishment_risk", "tool_id": "planning_core.replenishment.insight.summary", "required": true, "description": "Identify at-risk and healthy items for the requested warehouse.", "output": "At-risk item names and healthy skip items."},
+				{"step": "summarize_replenishment_plan", "tool_id": "planning_core.replenishment.plan.summary", "required": true, "description": "Get exact recommended quantities, warehouse, and vendor grouping.", "output": "Recommended item quantities and vendor."},
+				{"step": "create_purchase_request_draft", "tool_id": "planning_core.purchase_requests.draft.create", "required": false, "when": "Only when the user explicitly asks to create drafts or execute the plan.", "description": "Create draft purchase request documents for recommended replenishment lines.", "output": "Draft document ids and review links."},
+			},
+			"tool_ids": []string{
+				"planning_core.replenishment.insight.summary",
+				"planning_core.replenishment.plan.summary",
+				"planning_core.purchase_requests.draft.create",
+			},
+			"required_final_facts": []string{
+				"At-risk item names.",
+				"Healthy items to skip.",
+				"Exact recommended quantities.",
+				"Recommended vendor.",
+			},
+			"required_draft_outputs": []string{
+				"purchase_request draft ids",
+				"vendor name",
+				"item names and quantities",
+				"review links when available",
+			},
+			"guardrails": []string{
+				"Do not submit purchase requests during validation or when the user says draft only.",
+				"Do not create drafts unless the user explicitly asks to create or execute.",
+				"Do not include healthy skip items in purchase request drafts.",
+			},
+			"success_checks": []string{
+				"Plan output includes Cold Brew quantity 20 and Oat Milk quantity 16 when those are the current recommendations.",
+				"Draft output names North Roast as vendor when it is the selected vendor.",
+				"Execute output says the documents are draft and not submitted.",
+			},
+			"pitfalls": []string{
+				"Do not reuse an old plan if the warehouse code changed; call the replenishment tools for the current warehouse.",
+				"Do not treat zero recommendations as success when the tool output includes at-risk lines.",
+			},
+			"examples": []string{
+				"Review the inventory replenishment situation and prepare the next steps for execution.",
+			},
+		},
+	})
 }
 
 func createAndApproveDocument(ctx context.Context, client *apiClient, documentType string, payload map[string]any) (documentFacts, error) {

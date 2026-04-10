@@ -166,3 +166,26 @@ type runtimeConfigReport struct {
 	ServicePrincipal servicePrincipalOutput `json:"service_principal"`
 	OpencodeConfig   opencodeConfigOutput   `json:"opencode_config"`
 }
+
+type mcpValidationReport struct {
+	Version     string                    `json:"version"`
+	RunID       string                    `json:"run_id"`
+	GeneratedAt time.Time                 `json:"generated_at"`
+	BaseURL     string                    `json:"base_url"`
+	Modes       []mcpValidationModeResult `json:"modes"`
+}
+
+type mcpValidationModeResult struct {
+	ExposureMode string                    `json:"exposure_mode"`
+	ScenarioRuns []mcpValidationScenarioRun `json:"scenario_runs"`
+}
+
+type mcpValidationScenarioRun struct {
+	Scenario      string         `json:"scenario"`
+	ManifestPath  string         `json:"manifest_path"`
+	SessionID     string         `json:"session_id"`
+	SessionTitle  string         `json:"session_title"`
+	Analysis      analysisReport `json:"analysis"`
+	Success       bool           `json:"success"`
+	FailureReason string         `json:"failure_reason,omitempty"`
+}

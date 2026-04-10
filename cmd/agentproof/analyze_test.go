@@ -137,3 +137,45 @@ func TestVerifyDraftClearsDraftTitleRequirementWhenArtifactVerified(t *testing.T
 		t.Fatalf("expected no missing facts after verified draft, got %+v", result.MissingFacts)
 	}
 }
+
+func TestVerifyDraftUsesDirectDocumentIDFromAnswer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/documents/doc_123":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"header":{"id":"doc_123","number":"PR-1","status":"draft","version":1,"etag":"etag"},"body":{"payload":{"vendor_name":"North Roast Supply","lines":[{"item_code":"cold-brew","quantity":20},{"item_code":"oat-milk","quantity":16}]}}}`))
+		case "/ui/data/documents":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"items":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := newAPIClient(server.URL)
+	if err != nil {
+		t.Fatalf("newAPIClient: %v", err)
+	}
+	result := promptAnalysisResult{
+		Classification: "unacceptable",
+		Answer:         "Draft ID: doc_123",
+		MissingFacts:   []string{"draft_created", "expected_draft_document"},
+	}
+	verifyDraft(context.Background(), client, &result, draftExpectation{
+		DocumentType:  "purchase_request",
+		PayloadChecks: []string{"north roast", "cold brew", "20", "oat milk", "16"},
+	})
+	if !result.DraftVerified {
+		t.Fatalf("expected direct draft id to verify, got %+v", result)
+	}
+	if result.DraftDocumentID != "doc_123" {
+		t.Fatalf("draft document id = %q, want doc_123", result.DraftDocumentID)
+	}
+	if result.Classification != "exact" {
+		t.Fatalf("classification = %q, want exact", result.Classification)
+	}
+	if len(result.MissingFacts) != 0 {
+		t.Fatalf("expected missing facts to clear, got %+v", result.MissingFacts)
+	}
+}

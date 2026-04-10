@@ -171,6 +171,25 @@ type MCPTool = {
   };
 };
 
+type MCPToolSummary = {
+  tool_id: string;
+  name: string;
+  title?: string;
+  description?: string;
+  module_key?: string;
+  source_type?: string;
+  domains?: string[];
+  labels?: string[];
+};
+
+type MCPPlaybookSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  domains?: string[];
+  labels?: string[];
+};
+
 type MCPCapability = {
   key: string;
   title: string;
@@ -248,7 +267,7 @@ const STREAM_EVENT_NAMES: StreamEventName[] = [
 
 const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
 const MCP_ONLY_PREFIX =
-  "Use Orbyte MCP tools as the source of truth for this answer. If the correct tool is not already obvious, call tools/list first, discover the relevant tool family, and then use only the relevant tool or tools. Use the exact discovered tool name, including any MCP server prefix. Do not guess tool names, prefixes, or parameter schemas.";
+  "Use Orbyte MCP tools as the source of truth for this answer. Start with playbooks/search when the request matches a business workflow. If no playbook fits, use tool discovery next with tools.search or tools.list, then call tools.describe for the relevant tool ids before using tools.call. Use exact discovered tool ids and do not guess tool names, prefixes, or schemas.";
 
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
@@ -275,15 +294,16 @@ export default function AgentSurfacePage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
-  const [fullCatalogTools, setFullCatalogTools] = useState<MCPTool[]>([]);
+  const [discoverableTools, setDiscoverableTools] = useState<MCPToolSummary[]>(
+    [],
+  );
+  const [playbooks, setPlaybooks] = useState<MCPPlaybookSummary[]>([]);
   const [activeCapabilities, setActiveCapabilities] = useState<string[]>(
     DEFAULT_AGENT_CAPABILITIES,
   );
   const [catalogSummary, setCatalogSummary] = useState<MCPToolCatalog | null>(
     null,
   );
-  const [fullCatalogSummary, setFullCatalogSummary] =
-    useState<MCPToolCatalog | null>(null);
   const [fullCatalogLoading, setFullCatalogLoading] = useState(false);
   const [showFullCatalog, setShowFullCatalog] = useState(false);
   const [fullCatalogQuery, setFullCatalogQuery] = useState("");
@@ -403,18 +423,16 @@ export default function AgentSurfacePage() {
         const payload = await callMcp<{
           tools?: MCPTool[];
           catalog?: MCPToolCatalog;
-          suggested_expansions?: MCPCapability[];
         }>("tools/list", {
-          catalog_mode: "compact",
+          exposure_mode: "minimal",
           capabilities: activeCapabilities,
           include_summary: true,
           include_hidden_counts: true,
-          max_tools: 32,
         });
         if (!mounted) return;
         setMcpTools(sortMcpTools(payload.tools || []));
         setCatalogSummary(payload.catalog || null);
-        setSuggestedExpansions(payload.suggested_expansions || []);
+        setSuggestedExpansions([]);
       } catch {
         if (!mounted) return;
         setMcpTools([]);
@@ -431,24 +449,29 @@ export default function AgentSurfacePage() {
   useEffect(() => {
     let mounted = true;
     setFullCatalogLoading(true);
-    void callMcp<{
-      tools?: MCPTool[];
-      catalog?: MCPToolCatalog;
-    }>("tools/list", {
-      catalog_mode: "full",
-      include_summary: true,
-      include_hidden_counts: true,
-      max_tools: 250,
-    })
-      .then((payload) => {
+    Promise.all([
+      callMcp<{ structuredContent?: { items?: MCPToolSummary[] } }>(
+        "tools/search",
+        {},
+      ),
+      callMcp<{ structuredContent?: { items?: MCPPlaybookSummary[] } }>(
+        "playbooks/list",
+        {},
+      ),
+    ])
+      .then(([toolsPayload, playbooksPayload]) => {
         if (!mounted) return;
-        setFullCatalogTools(sortMcpTools(payload.tools || []));
-        setFullCatalogSummary(payload.catalog || null);
+        setDiscoverableTools(
+          sortMcpToolSummaries(toolsPayload.structuredContent?.items || []),
+        );
+        setPlaybooks(
+          sortPlaybooks(playbooksPayload.structuredContent?.items || []),
+        );
       })
       .catch(() => {
         if (!mounted) return;
-        setFullCatalogTools([]);
-        setFullCatalogSummary(null);
+        setDiscoverableTools([]);
+        setPlaybooks([]);
       })
       .finally(() => {
         if (mounted) {
@@ -759,25 +782,25 @@ export default function AgentSurfacePage() {
   const filteredFullCatalogTools = useMemo(() => {
     const query = fullCatalogQuery.trim().toLowerCase();
     if (!query) {
-      return fullCatalogTools;
+      return discoverableTools;
     }
-    return fullCatalogTools.filter((item) => {
+    return discoverableTools.filter((item) => {
       const haystack = [
+        item.tool_id,
         item.name,
         item.title,
         item.description,
-        item.moduleKey,
-        item.sourceType,
-        item.contract?.actionClass,
-        item.contract?.riskClass,
-        ...(item.contract?.businessDomains || []),
+        item.module_key,
+        item.source_type,
+        ...(item.domains || []),
+        ...(item.labels || []),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [fullCatalogQuery, fullCatalogTools]);
+  }, [discoverableTools, fullCatalogQuery]);
   const currentPlan = useMemo(() => deriveCurrentPlan(session), [session]);
   const hasCurrentPlan = currentPlan.length > 0;
   const pendingInputQuestions = session?.pending_questions || [];
@@ -1316,7 +1339,7 @@ export default function AgentSurfacePage() {
                     </div>
                   ) : null}
                   <div className="rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                    {catalogSummary?.returned_tools || mcpTools.length} starter
+                    {catalogSummary?.returned_tools || mcpTools.length} minimal
                     tools
                   </div>
                   {effectiveLivePhase ? (
@@ -1545,10 +1568,11 @@ export default function AgentSurfacePage() {
                       >
                         <div className="space-y-3">
                           <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
-                            This panel is only a starter slice. The agent can
-                            and should call <code>tools/list</code> to discover
-                            additional MCP tools whenever the right tool is not
-                            obvious here.
+                            This surface is running in minimal MCP mode. The
+                            agent should search playbooks first, then use
+                            <code>tools.search</code>, <code>tools.describe</code>,
+                            and <code>tools.call</code> to reach the relevant
+                            underlying MCP tools.
                           </p>
                           {visibleTools.map((item) => (
                             <div
@@ -1579,12 +1603,12 @@ export default function AgentSurfacePage() {
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="text-sm font-semibold text-body">
-                                  Full MCP catalog
+                                  Playbooks
                                 </div>
                                 <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
                                   {fullCatalogLoading
-                                    ? "Loading full catalog"
-                                    : `${fullCatalogSummary?.total_matching_tools || fullCatalogTools.length} tools indexed`}
+                                    ? "Loading playbooks"
+                                    : `${playbooks.length} workflow playbooks`}
                                 </div>
                               </div>
                               <button
@@ -1594,7 +1618,7 @@ export default function AgentSurfacePage() {
                                 }
                                 className="rounded-xl border border-line bg-shell px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted transition hover:border-accent hover:text-accent"
                               >
-                                {showFullCatalog ? "Hide catalog" : "Browse catalog"}
+                                {showFullCatalog ? "Hide details" : "Browse"}
                               </button>
                             </div>
                             {showFullCatalog ? (
@@ -1605,29 +1629,62 @@ export default function AgentSurfacePage() {
                                   onChange={(event) =>
                                     setFullCatalogQuery(event.target.value)
                                   }
-                                  placeholder="Search tool name, title, domain, or description"
+                                  placeholder="Search playbooks, tools, domains, or descriptions"
                                   className="w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body outline-none transition focus:border-accent"
                                 />
+                                <div className="space-y-2">
+                                  {playbooks.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="rounded-2xl border border-line/70 bg-shell px-3 py-3"
+                                    >
+                                      <div className="text-sm font-semibold text-body">
+                                        {item.name}
+                                      </div>
+                                      <div className="mt-1 break-all font-mono text-[11px] text-muted">
+                                        {item.id}
+                                      </div>
+                                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                        {[
+                                          ...(item.domains || []),
+                                          ...(item.labels || []),
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" · ")}
+                                      </div>
+                                      {item.description ? (
+                                        <p className="mt-2 text-xs leading-5 text-muted">
+                                          {item.description}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                  {!fullCatalogLoading && playbooks.length === 0 ? (
+                                    <p className="text-sm text-muted">
+                                      No playbooks are configured.
+                                    </p>
+                                  ) : null}
+                                </div>
                                 <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                                   {filteredFullCatalogTools
                                     .slice(0, 40)
                                     .map((item) => (
                                       <div
-                                        key={item.name}
+                                        key={item.tool_id}
                                         className="rounded-2xl border border-line/70 bg-shell px-3 py-3"
                                       >
                                         <div className="text-sm font-semibold text-body">
-                                          {item.title || item.name}
+                                          {item.title || item.name || item.tool_id}
                                         </div>
                                         <div className="mt-1 break-all font-mono text-[11px] text-muted">
-                                          {item.name}
+                                          {item.tool_id}
                                         </div>
                                         <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
                                           {[
-                                            item.moduleKey,
-                                            item.sourceType,
-                                            item.contract?.actionClass,
-                                            ...(item.contract?.businessDomains || []),
+                                            item.module_key,
+                                            item.source_type,
+                                            ...(item.domains || []),
+                                            ...(item.labels || []),
                                           ]
                                             .filter(Boolean)
                                             .join(" · ")}
@@ -1873,7 +1930,7 @@ export default function AgentSurfacePage() {
                       ? "Execute mode tells the agent to act on the current visible plan and report created artifacts."
                       : "Execute mode requires a current plan."
                     : mcpOnlyEnabled
-                      ? "Prompts will automatically tell the agent to use Orbyte MCP as the source of truth, discover the exact tool with tools/list when needed, and only use the relevant discovered tool."
+                      ? "Prompts will automatically tell the agent to search playbooks first, then use MCP tool discovery and exact tool ids before any tools.call execution."
                       : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
               </p>
               <button
@@ -2928,7 +2985,7 @@ function buildPromptPayload(
   if (mcpOnlyEnabled) {
     sections.push(MCP_ONLY_PREFIX);
     sections.push(
-      "Treat the visible MCP tool list in the UI as only a starter slice. When the relevant Orbyte tool is not obvious, call tools/list to discover the right tool family before proceeding.",
+      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search playbooks first when the request matches a known workflow. If no playbook fits, use tool discovery before any tools.call execution.",
     );
   }
   if (mode === "plan") {
@@ -2963,7 +3020,8 @@ function buildPromptPayload(
     const explicitFullBoard = looksLikeFullDashboardPrompt(prompt);
     sections.push(
       [
-        "Use tools/list discovery if the dashboard tool family is not already obvious from the current visible MCP slice.",
+        "Search playbooks first if a dashboard insight workflow exists for the current request.",
+        "If the dashboard tool family is still not obvious, use tools.search and tools.describe before calling tools.call.",
         "For dashboard requests, first call analytics.dashboard.widget_catalog with surface=\"dashboard\".",
         explicitFullBoard
           ? "For explicit full-dashboard or board-preview requests, use analytics.dashboard.board.preview so you return a full dashboard_board artifact."
@@ -3403,6 +3461,20 @@ function sortMcpTools(items: MCPTool[]): MCPTool[] {
     String(left.title || left.name).localeCompare(
       String(right.title || right.name),
     ),
+  );
+}
+
+function sortMcpToolSummaries(items: MCPToolSummary[]): MCPToolSummary[] {
+  return [...items].sort((left, right) =>
+    String(left.title || left.name || left.tool_id).localeCompare(
+      String(right.title || right.name || right.tool_id),
+    ),
+  );
+}
+
+function sortPlaybooks(items: MCPPlaybookSummary[]): MCPPlaybookSummary[] {
+  return [...items].sort((left, right) =>
+    String(left.name || left.id).localeCompare(String(right.name || right.id)),
   );
 }
 

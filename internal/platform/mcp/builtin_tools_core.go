@@ -1,6 +1,57 @@
 package mcp
 
 func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegistration) []builtInToolRegistration {
+	registry = append(registry,
+		mustBuiltInToolRegistration((*Server).toolsListMeta, builtInTool{
+			name:        "tools.list",
+			title:       "List Available Tools",
+			description: "List lightweight summaries of discoverable MCP tools.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsSearchMeta, builtInTool{
+			name:        "tools.search",
+			title:       "Search Tools",
+			description: "Search discoverable MCP tools by title, description, domains, and labels.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsDescribeMeta, builtInTool{
+			name:        "tools.describe",
+			title:       "Describe Tools",
+			description: "Get detailed tool descriptions, schemas, and contracts in bulk.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"tool_ids"}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsCallMeta, builtInTool{
+			name:        "tools.call",
+			title:       "Call Tool",
+			description: "Call a discoverable MCP tool by id using a dynamic payload.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_id": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "catalog_context": map[string]any{"type": "object"}}, "required": []string{"tool_id"}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksListMeta, builtInTool{
+			name:        "playbooks.list",
+			title:       "List Playbooks",
+			description: "List available workflow playbooks for common business use cases.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksSearchMeta, builtInTool{
+			name:        "playbooks.search",
+			title:       "Search Playbooks",
+			description: "Search workflow playbooks by name, description, domains, labels, and keywords.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksDescribeMeta, builtInTool{
+			name:        "playbooks.describe",
+			title:       "Describe Playbook",
+			description: "Load one workflow playbook with its steps and relevant tools.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}}, "required": []string{"playbook_id"}},
+		}),
+	)
 	if s != nil && s.templates != nil {
 		registry = append(registry,
 			mustBuiltInToolRegistration(func(s *Server, actor ActorContext, _ map[string]any) (map[string]any, bool, error) {

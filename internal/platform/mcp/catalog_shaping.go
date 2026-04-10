@@ -8,6 +8,7 @@ import (
 
 type ToolCatalogOptions struct {
 	CatalogMode         string   `json:"catalog_mode,omitempty"`
+	ExposureMode        string   `json:"exposure_mode,omitempty"`
 	Capabilities        []string `json:"capabilities,omitempty"`
 	Domains             []string `json:"domains,omitempty"`
 	SourceTypes         []string `json:"source_types,omitempty"`
@@ -78,7 +79,7 @@ func (s *Server) toolCapabilities() []toolCapabilityRuntimeDescriptor {
 			},
 			Matcher: func(item ToolDescriptor) bool {
 				switch strings.TrimSpace(item.Name) {
-				case "business.module.list", "business.module.get", "business.module.search", "business.capability.search", "business.document.type.list", "business.dataset.list", "business.reference.type.list":
+				case "business.module.list", "business.module.get", "business.module.search", "business.capability.search", "business.document.type.list", "business.dataset.list", "business.reference.type.list", "tools.list", "tools.search", "tools.describe", "tools.call", "playbooks.list", "playbooks.search", "playbooks.describe":
 					return true
 				default:
 					return false
@@ -293,6 +294,7 @@ func parseToolCatalogOptions(raw json.RawMessage) ToolCatalogOptions {
 	}
 	_ = json.Unmarshal(raw, &options)
 	options.CatalogMode = strings.TrimSpace(options.CatalogMode)
+	options.ExposureMode = strings.TrimSpace(strings.ToLower(options.ExposureMode))
 	options.Capabilities = mergeUniqueStrings(nil, options.Capabilities)
 	options.Domains = mergeUniqueStrings(nil, options.Domains)
 	options.SourceTypes = mergeUniqueStrings(nil, options.SourceTypes)
@@ -304,11 +306,25 @@ func parseToolCatalogOptions(raw json.RawMessage) ToolCatalogOptions {
 }
 
 func (s *Server) toolsListResult(actor ActorContext, options ToolCatalogOptions) map[string]any {
+	exposureMode := s.effectiveExposureMode(options)
+	discoverable := s.nonMetaToolDescriptors(actor)
 	full := s.listTools(actor)
+	if exposureMode == MCPExposureModeMinimal {
+		full = s.minimalExposedTools(actor)
+	}
 	tools, catalog, groups, suggested := s.filterToolCatalog(full, options)
+	if exposureMode == MCPExposureModeMinimal {
+		discoverableFiltered, activeCapabilities := s.filterToolCatalogScope(discoverable, options)
+		catalog["capabilities"] = activeCapabilities
+		catalog["total_matching_tools"] = len(discoverableFiltered)
+		catalog["hidden_tools"] = len(discoverableFiltered)
+		groups = s.groupToolCatalog(discoverableFiltered)
+		suggested = s.suggestedCapabilityExpansions(activeCapabilities)
+	}
 	result := map[string]any{
 		"tools": tools,
 	}
+	catalog["exposure_mode"] = exposureMode
 	if options.IncludeSummary || strings.TrimSpace(options.CatalogMode) == "compact" {
 		result["catalog"] = catalog
 		result["groups"] = groups
@@ -318,9 +334,47 @@ func (s *Server) toolsListResult(actor ActorContext, options ToolCatalogOptions)
 }
 
 func (s *Server) FilterToolCatalogForPreview(options ToolCatalogOptions) ([]ToolDescriptor, map[string]any, []map[string]any, []ToolCapabilityDescriptor) {
-	return s.filterToolCatalog(s.listTools(ActorContext{
+	actor := ActorContext{
 		PermissionChecker: func(string) bool { return true },
-	}), options)
+	}
+	discoverable := s.nonMetaToolDescriptors(actor)
+	items := s.listTools(actor)
+	if s.effectiveExposureMode(options) == MCPExposureModeMinimal {
+		items = s.minimalExposedTools(actor)
+	}
+	tools, catalog, groups, suggested := s.filterToolCatalog(items, options)
+	if s.effectiveExposureMode(options) == MCPExposureModeMinimal {
+		discoverableFiltered, activeCapabilities := s.filterToolCatalogScope(discoverable, options)
+		catalog["capabilities"] = activeCapabilities
+		catalog["total_matching_tools"] = len(discoverableFiltered)
+		catalog["hidden_tools"] = len(discoverableFiltered)
+		groups = s.groupToolCatalog(discoverableFiltered)
+		suggested = s.suggestedCapabilityExpansions(activeCapabilities)
+	}
+	return tools, catalog, groups, suggested
+}
+
+func (s *Server) effectiveExposureMode(options ToolCatalogOptions) string {
+	if mode := normalizeExposureMode(options.ExposureMode); mode != "" {
+		return mode
+	}
+	cfg := s.mcpRuntimeConfig()
+	if mode := normalizeExposureMode(cfg.ExposureMode); mode != "" {
+		return mode
+	}
+	return MCPExposureModeFull
+}
+
+func (s *Server) nonMetaToolDescriptors(actor ActorContext) []ToolDescriptor {
+	all := s.listTools(actor)
+	items := make([]ToolDescriptor, 0, len(all))
+	for _, item := range all {
+		if isMetaToolName(item.Name) {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
 func hasExplicitCompactFilters(options ToolCatalogOptions) bool {
@@ -340,8 +394,13 @@ func normalizeCompactCapabilities(options ToolCatalogOptions) []string {
 
 func (s *Server) filterToolCatalogScope(items []ToolDescriptor, options ToolCatalogOptions) ([]ToolDescriptor, []string) {
 	activeCapabilities := normalizeCompactCapabilities(options)
+	minimalExposure := s.effectiveExposureMode(options) == MCPExposureModeMinimal
 	filtered := make([]ToolDescriptor, 0, len(items))
 	for _, item := range items {
+		if minimalExposure && isMetaToolName(item.Name) {
+			filtered = append(filtered, item)
+			continue
+		}
 		if len(activeCapabilities) > 0 && !intersectsStrings(item.CapabilityKeys, activeCapabilities) {
 			continue
 		}

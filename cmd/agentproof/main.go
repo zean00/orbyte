@@ -14,7 +14,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: go run ./cmd/agentproof <list-scenarios|seed|configure-runtime|analyze> [flags]")
+		fatalf("usage: go run ./cmd/agentproof <list-scenarios|seed|configure-runtime|analyze|validate-mcp> [flags]")
 	}
 	switch strings.TrimSpace(os.Args[1]) {
 	case "list-scenarios":
@@ -29,6 +29,10 @@ func main() {
 		}
 	case "analyze":
 		if err := runAnalyze(os.Args[2:]); err != nil {
+			fatalf("%v", err)
+		}
+	case "validate-mcp":
+		if err := runValidateMCP(os.Args[2:]); err != nil {
 			fatalf("%v", err)
 		}
 	default:

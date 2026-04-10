@@ -107,7 +107,12 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 					"supportedMethods": []string{
 						"initialize",
 						"tools/list",
+						"tools/search",
+						"tools/describe",
 						"tools/call",
+						"playbooks/list",
+						"playbooks/search",
+						"playbooks/describe",
 						"resources/list",
 						"resources/read",
 					},
@@ -118,6 +123,22 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{}}
 	case "tools/list":
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: s.toolsListResult(actor, parseToolCatalogOptions(req.Params))}
+	case "tools/search":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.toolsSearchMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "tools/describe":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.toolsDescribeMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 	case "resources/list":
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"resources": s.listResources(actor)}}
 	case "resources/read":
@@ -138,6 +159,30 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 		}
 		_ = json.Unmarshal(req.Params, &params)
 		result, err := s.callTool(ctx, actor, params.Name, params.Arguments, params.CatalogContext)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "playbooks/list":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksListMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "playbooks/search":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksSearchMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "playbooks/describe":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksDescribeMeta(actor, params)
 		if err != nil {
 			return errorResponse(req.ID, http.StatusBadRequest, err)
 		}

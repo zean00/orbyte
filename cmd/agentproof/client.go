@@ -48,6 +48,17 @@ type uiDocumentListItem struct {
 	} `json:"body"`
 }
 
+type acpSession struct {
+	ID             string              `json:"id"`
+	Title          string              `json:"title"`
+	Status         string              `json:"status"`
+	TurnInProgress bool                `json:"turn_in_progress"`
+	Messages       []sessionMessage    `json:"messages"`
+	Trace          []sessionTraceEvent `json:"trace"`
+	Artifacts      []sessionArtifact   `json:"artifacts,omitempty"`
+	CurrentPlan    []sessionPlanEntry  `json:"current_plan,omitempty"`
+}
+
 func newAPIClient(baseURL string) (*apiClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -57,7 +68,7 @@ func newAPIClient(baseURL string) (*apiClient, error) {
 		baseURL: strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{
 			Jar:     jar,
-			Timeout: 60 * time.Second,
+			Timeout: 180 * time.Second,
 		},
 	}, nil
 }
@@ -188,6 +199,30 @@ func (c *apiClient) getSession(ctx context.Context, id string) (sessionTranscrip
 	var resp sessionTranscript
 	if err := c.doJSON(ctx, http.MethodGet, "/agent/api/sessions/"+id, nil, &resp); err != nil {
 		return sessionTranscript{}, err
+	}
+	return resp, nil
+}
+
+func (c *apiClient) getLiveSession(ctx context.Context, id string) (acpSession, error) {
+	var resp acpSession
+	if err := c.doJSON(ctx, http.MethodGet, "/agent/api/sessions/"+id, nil, &resp); err != nil {
+		return acpSession{}, err
+	}
+	return resp, nil
+}
+
+func (c *apiClient) startSession(ctx context.Context, req map[string]any) (acpSession, error) {
+	var resp acpSession
+	if err := c.doJSON(ctx, http.MethodPost, "/agent/api/sessions", req, &resp); err != nil {
+		return acpSession{}, err
+	}
+	return resp, nil
+}
+
+func (c *apiClient) promptSession(ctx context.Context, sessionID string, req map[string]any) (acpSession, error) {
+	var resp acpSession
+	if err := c.doJSON(ctx, http.MethodPost, "/agent/api/sessions/"+sessionID+"/prompt", req, &resp); err != nil {
+		return acpSession{}, err
 	}
 	return resp, nil
 }

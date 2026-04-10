@@ -152,6 +152,7 @@ func BuiltInDefinitions() []Definition {
 		AllowedScopes:   []string{"deployment"},
 		DefaultValue: map[string]any{
 			"enabled":                            true,
+			"exposure_mode":                      "full",
 			"governance_enabled":                 true,
 			"default_action_mode":                "draft_only",
 			"tool_states_json":                   "{}",
@@ -160,9 +161,11 @@ func BuiltInDefinitions() []Definition {
 			"blocked_document_types_json":        "[]",
 			"allowed_submit_document_types_json": "[]",
 			"domain_policy_overrides_json":       "{}",
+			"playbooks_json":                     "[]",
 		},
 		Fields: []FieldDefinition{
 			{Key: "enabled", Label: "Enabled", LabelI18n: i18n.LocalizedText{"en": "Enabled", "id": "Aktif"}, Type: "bool"},
+			{Key: "exposure_mode", Label: "Exposure Mode", LabelI18n: i18n.LocalizedText{"en": "Exposure Mode", "id": "Mode Eksposur"}, Type: "string"},
 			{Key: "governance_enabled", Label: "Governance Enabled", LabelI18n: i18n.LocalizedText{"en": "Governance Enabled", "id": "Governance Aktif"}, Type: "bool"},
 			{Key: "default_action_mode", Label: "Default Action Mode", LabelI18n: i18n.LocalizedText{"en": "Default Action Mode", "id": "Mode Aksi Default"}, Type: "string"},
 			{Key: "tool_states_json", Label: "Tool States JSON", LabelI18n: i18n.LocalizedText{"en": "Tool States JSON", "id": "JSON Status Tool"}, Type: "string"},
@@ -171,6 +174,7 @@ func BuiltInDefinitions() []Definition {
 			{Key: "blocked_document_types_json", Label: "Blocked Document Types JSON", LabelI18n: i18n.LocalizedText{"en": "Blocked Document Types JSON", "id": "JSON Tipe Dokumen Diblokir"}, Type: "string"},
 			{Key: "allowed_submit_document_types_json", Label: "Allowed Submit Document Types JSON", LabelI18n: i18n.LocalizedText{"en": "Allowed Submit Document Types JSON", "id": "JSON Tipe Dokumen Submit Diizinkan"}, Type: "string"},
 			{Key: "domain_policy_overrides_json", Label: "Domain Policy Overrides JSON", LabelI18n: i18n.LocalizedText{"en": "Domain Policy Overrides JSON", "id": "JSON Override Kebijakan Domain"}, Type: "string"},
+			{Key: "playbooks_json", Label: "Playbooks JSON", LabelI18n: i18n.LocalizedText{"en": "Playbooks JSON", "id": "JSON Playbook"}, Type: "string"},
 		},
 	}, {
 		Key:             "platform.db",
