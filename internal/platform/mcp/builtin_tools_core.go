@@ -47,9 +47,9 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 		mustBuiltInToolRegistration((*Server).playbooksDescribeMeta, builtInTool{
 			name:        "playbooks.describe",
 			title:       "Describe Playbook",
-			description: "Get the full playbook with its ordered tool sequence, guardrails, and success checks. Follow the tool_sequence steps in order to complete the workflow.",
+			description: "Get one or more full playbook workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched playbook ids in one bulk call.",
 			permission:  "module.read",
-			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}}, "required": []string{"playbook_id"}},
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}},
 		}),
 	)
 	if s != nil && s.templates != nil {

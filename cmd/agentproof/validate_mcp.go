@@ -146,10 +146,13 @@ func validateScenarioWithMode(ctx context.Context, client *apiClient, baseURL, o
 		} else if prompt.ExpectedPlan != nil {
 			mode = "plan"
 		}
+		clientRequestID := fmt.Sprintf("%s-%s-%s", runID, scenarioKey, prompt.ID)
+		displayContent := prompt.Prompt
 		if _, err := promptSessionWithRetry(ctx, client, session.ID, map[string]any{
-			"content":         composeValidationPrompt(prompt.Prompt, mode, exposureMode, manifest.SessionInstructions),
-			"display_content": prompt.Prompt,
-			"mode":            mode,
+			"content":           composeValidationPrompt(prompt.Prompt, mode, exposureMode, manifest.SessionInstructions),
+			"display_content":   displayContent,
+			"client_request_id": clientRequestID,
+			"mode":              mode,
 		}); err != nil {
 			return mcpValidationScenarioRun{}, fmt.Errorf("prompt %s: %w", prompt.ID, err)
 		}
@@ -188,7 +191,7 @@ func validateScenarioWithMode(ctx context.Context, client *apiClient, baseURL, o
 }
 
 func waitForSessionTurn(ctx context.Context, client *apiClient, sessionID string) error {
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timeout waiting for session turn")
@@ -213,12 +216,16 @@ func waitForSessionTurn(ctx context.Context, client *apiClient, sessionID string
 
 func promptSessionWithRetry(ctx context.Context, client *apiClient, sessionID string, req map[string]any) (acpSession, error) {
 	var lastErr error
+	requestID := strings.TrimSpace(stringValue(req["client_request_id"]))
 	for attempt := 0; attempt < 3; attempt++ {
 		item, err := client.promptSession(ctx, sessionID, req)
 		if err == nil {
 			return item, nil
 		}
 		lastErr = err
+		if accepted, session, acceptErr := awaitAcceptedPrompt(ctx, client, sessionID, requestID); acceptErr == nil && accepted {
+			return session, nil
+		}
 		if !isRetryablePromptError(err) || attempt == 2 {
 			break
 		}
@@ -239,7 +246,48 @@ func isRetryablePromptError(err error) bool {
 		return true
 	}
 	message := strings.ToLower(strings.TrimSpace(err.Error()))
-	return strings.Contains(message, " eof") || strings.HasSuffix(message, "eof")
+	return strings.Contains(message, " eof") ||
+		strings.HasSuffix(message, "eof") ||
+		strings.Contains(message, "context deadline exceeded") ||
+		strings.Contains(message, "awaiting headers")
+}
+
+func awaitAcceptedPrompt(ctx context.Context, client *apiClient, sessionID, requestID string) (bool, acpSession, error) {
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		if time.Now().After(deadline) {
+			return false, acpSession{}, nil
+		}
+		session, err := client.getLiveSession(ctx, sessionID)
+		if err != nil {
+			return false, acpSession{}, err
+		}
+		if promptAccepted(session, requestID) {
+			return true, session, nil
+		}
+		select {
+		case <-ctx.Done():
+			return false, acpSession{}, ctx.Err()
+		case <-time.After(1200 * time.Millisecond):
+		}
+	}
+}
+
+func promptAccepted(session acpSession, requestID string) bool {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return false
+	}
+	for index := len(session.Messages) - 1; index >= 0; index-- {
+		item := session.Messages[index]
+		if !strings.EqualFold(strings.TrimSpace(item.Role), "user") {
+			continue
+		}
+		if strings.TrimSpace(stringValue(item.Meta["client_request_id"])) == requestID {
+			return true
+		}
+	}
+	return false
 }
 
 func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions string) string {
@@ -249,7 +297,7 @@ func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions str
 	}
 	if exposureMode == "minimal" {
 		sections = append(sections,
-			"Use Orbyte MCP as the source of truth. Search playbooks first when the request matches a business workflow. If no playbook fits, use tools.search or tools.list, then tools.describe, then tools.call. Use exact discovered tool ids only.",
+			"Use Orbyte MCP as the source of truth. Search or list playbooks first when the request matches a business workflow. If multiple playbooks look relevant, call playbooks.describe once with all candidate playbook ids. Only if no playbook fits should you use tools.search or tools.list, then one bulk tools.describe call, then tools.call. Use exact discovered ids only.",
 		)
 	} else {
 		sections = append(sections,
@@ -269,7 +317,8 @@ func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions str
 	lower := strings.ToLower(prompt)
 	if strings.Contains(lower, "dashboard widget") || strings.Contains(lower, "dashboard widgets") {
 		sections = append(sections,
-			"For dashboard requests, if widget tools are needed, include every returned <orbyte-dashboard-artifact> block verbatim in the final answer.",
+			"For dashboard requests, rely on returned widget/session artifacts as the rendering path. Mention the relevant widget titles or why they matter in the final answer, but do not wait for literal XML artifact blocks.",
+			"Once dashboard widget or board preview returns successfully, treat that preview plus the emitted session artifacts as sufficient dashboard evidence. Do not repeat preview calls or chase hidden raw chart values.",
 		)
 	}
 	if strings.Contains(lower, "crm") && strings.Contains(lower, "widget") {

@@ -260,6 +260,9 @@ func normalizeMCPServer(name string, raw json.RawMessage) (map[string]any, bool)
 			"url":     url,
 			"headers": normalizeHeaderList(payload["headers"]),
 		}
+		if timeout, ok := normalizeNumericValue(payload["timeout"]); ok {
+			server["timeout"] = timeout
+		}
 		if enabled, ok := payload["enabled"].(bool); ok {
 			server["enabled"] = enabled
 		}
@@ -273,6 +276,9 @@ func normalizeMCPServer(name string, raw json.RawMessage) (map[string]any, bool)
 			"type":    "sse",
 			"url":     url,
 			"headers": normalizeHeaderList(payload["headers"]),
+		}
+		if timeout, ok := normalizeNumericValue(payload["timeout"]); ok {
+			server["timeout"] = timeout
 		}
 		if enabled, ok := payload["enabled"].(bool); ok {
 			server["enabled"] = enabled
@@ -372,6 +378,30 @@ func normalizeEnvList(value any) []map[string]string {
 		})
 	}
 	return out
+}
+
+func normalizeNumericValue(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case json.Number:
+		if parsed, err := typed.Float64(); err == nil {
+			return parsed, true
+		}
+	case string:
+		if parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64); err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
 }
 
 func opencodeConfigPath(provider Provider) string {

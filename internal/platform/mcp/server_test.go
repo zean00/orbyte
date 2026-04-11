@@ -285,6 +285,30 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
+		ID:      31.1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "playbooks.describe",
+			"arguments": map[string]any{
+				"playbook_ids": []string{"retail_recovery_dashboard"},
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks.describe bulk failed: %+v", resp.Error)
+	}
+	bulkDetail := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	items := bulkDetail["items"].([]PlaybookDefinition)
+	if len(items) != 1 || items[0].ID != "retail_recovery_dashboard" {
+		t.Fatalf("expected one bulk-described playbook, got %+v", items)
+	}
+	toolsByPlaybook := bulkDetail["tools_by_playbook"].(map[string][]ToolDescriptor)
+	if len(toolsByPlaybook["retail_recovery_dashboard"]) == 0 {
+		t.Fatalf("expected tools_by_playbook for bulk describe, got %+v", toolsByPlaybook)
+	}
+
+	resp = server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
 		ID:      4,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{

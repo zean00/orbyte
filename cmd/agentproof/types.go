@@ -96,9 +96,10 @@ type sessionTranscript struct {
 }
 
 type sessionMessage struct {
-	ID      string `json:"id"`
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	ID      string         `json:"id"`
+	Role    string         `json:"role"`
+	Content string         `json:"content"`
+	Meta    map[string]any `json:"meta,omitempty"`
 }
 
 type sessionTraceEvent struct {

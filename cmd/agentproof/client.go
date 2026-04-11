@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
 	"orbyte/internal/platform/analytics"
 )
@@ -67,8 +66,7 @@ func newAPIClient(baseURL string) (*apiClient, error) {
 	return &apiClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{
-			Jar:     jar,
-			Timeout: 180 * time.Second,
+			Jar: jar,
 		},
 	}, nil
 }

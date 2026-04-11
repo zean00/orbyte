@@ -25,7 +25,7 @@ func minimalToolDescriptors(actor ActorContext) []ToolDescriptor {
 	return []ToolDescriptor{
 		{Name: "playbooks.list", Title: "List Playbooks", Description: "First step: list workflow playbooks to find one matching your current use case. If a playbook matches, follow its tool sequence. Only fall back to tools.search when no playbook fits.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
 		{Name: "playbooks.search", Title: "Search Playbooks", Description: "First step: search playbooks by your use case keywords. If a playbook matches, call playbooks.describe and follow its tool sequence. Only fall back to tools.search when no playbook fits.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
-		{Name: "playbooks.describe", Title: "Describe Playbook", Description: "Get the full playbook with its ordered tool sequence, guardrails, and success checks. Follow the tool_sequence steps in order to complete the workflow.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}}, "required": []string{"playbook_id"}}},
+		{Name: "playbooks.describe", Title: "Describe Playbook", Description: "Get one or more full playbook workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched playbook ids in one bulk call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}}},
 		{Name: "tools.search", Title: "Search Tools", Description: "Only use when no playbook matches your use case. Search discoverable MCP tools by title, description, business domain, and labels. Pass ALL candidate IDs to tools.describe in a single call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
 		{Name: "tools.list", Title: "List Available Tools", Description: "Only use when no playbook matches your use case. List lightweight summaries of discoverable MCP tools. For details, pass ALL candidate IDs to tools.describe in a single call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
 		{Name: "tools.describe", Title: "Describe Tools", Description: "Get detailed descriptions, schemas, and governance metadata for one or more tools. Always pass ALL candidate tool IDs from tools/search in a single call — do not describe tools one at a time.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"tool_ids"}}},
@@ -422,27 +422,47 @@ func (s *Server) playbooksSearchMeta(_ ActorContext, arguments map[string]any) (
 }
 
 func (s *Server) playbooksDescribeMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
-	playbookID := stringArg(arguments, "playbook_id")
-	if playbookID == "" {
-		return nil, true, shared.Validation("playbook_id is required")
-	}
-	for _, item := range s.playbooks() {
-		if item.ID != playbookID {
-			continue
+	playbookIDs := stringArrayArg(arguments, "playbook_ids")
+	if len(playbookIDs) == 0 {
+		if playbookID := stringArg(arguments, "playbook_id"); playbookID != "" {
+			playbookIDs = []string{playbookID}
 		}
+	}
+	if len(playbookIDs) == 0 {
+		return nil, true, shared.Validation("playbook_id or playbook_ids is required")
+	}
+	index := make(map[string]PlaybookDefinition)
+	for _, item := range s.playbooks() {
+		index[item.ID] = item
+	}
+	items := make([]PlaybookDefinition, 0, len(playbookIDs))
+	toolsByPlaybook := make(map[string][]ToolDescriptor, len(playbookIDs))
+	for _, playbookID := range mergeUniqueStrings(nil, playbookIDs) {
+		item, ok := index[playbookID]
+		if !ok {
+			return nil, true, shared.Validation("playbook_id not found: " + playbookID)
+		}
+		items = append(items, item)
 		describedTools := make([]ToolDescriptor, 0, len(item.ToolIDs))
 		for _, toolID := range item.ToolIDs {
 			if descriptor, ok := s.toolDescriptorByName(actor, toolID); ok {
 				describedTools = append(describedTools, descriptor)
 			}
 		}
-		return map[string]any{
-			"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded playbook %s.", item.Name)}},
-			"structuredContent": map[string]any{
-				"playbook": item,
-				"tools":    describedTools,
-			},
-		}, true, nil
+		toolsByPlaybook[item.ID] = describedTools
 	}
-	return nil, true, shared.Validation("playbook_id not found")
+	content := fmt.Sprintf("Loaded %d playbook workflow contract(s).", len(items))
+	structured := map[string]any{
+		"items":             items,
+		"tools_by_playbook": toolsByPlaybook,
+	}
+	if len(items) == 1 {
+		content = fmt.Sprintf("Loaded playbook %s.", items[0].Name)
+		structured["playbook"] = items[0]
+		structured["tools"] = toolsByPlaybook[items[0].ID]
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: content}},
+		"structuredContent": structured,
+	}, true, nil
 }

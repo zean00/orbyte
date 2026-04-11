@@ -186,6 +186,9 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 			if server["name"] != "orbyte" || server["type"] != "http" || server["url"] != "http://127.0.0.1:18110/mcp" {
 				t.Fatalf("unexpected normalized mcp server %#v", got[0])
 			}
+			if server["timeout"] != float64(120000) {
+				t.Fatalf("expected normalized timeout, got %#v", server["timeout"])
+			}
 			headers, _ := server["headers"].([]any)
 			if len(headers) != 1 {
 				t.Fatalf("expected one normalized header, got %#v", server["headers"])
@@ -215,6 +218,7 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 		"name": "orbyte",
 		"type": "http",
 		"url":  "http://127.0.0.1:18110/mcp",
+		"timeout": float64(120000),
 		"headers": []map[string]string{{
 			"name":  "Authorization",
 			"value": "Bearer test",
@@ -297,7 +301,7 @@ func TestDiscoverMCPServersFromProviderEnv(t *testing.T) {
 		t.Fatalf("mkdir failed: %v", err)
 	}
 	configPath := filepath.Join(configDir, "opencode.json")
-	if err := os.WriteFile(configPath, []byte(`{"mcp":{"orbyte":{"type":"remote","url":"http://127.0.0.1:18110/mcp","headers":{"Authorization":"Bearer test"}},"other":{"type":"local","command":"tool","args":["serve"],"env":{"MODE":"dev"}},"disabled":{"enabled":false,"type":"remote","url":"http://127.0.0.1:18110/mcp"}}}`), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"mcp":{"orbyte":{"type":"remote","url":"http://127.0.0.1:18110/mcp","timeout":120000,"headers":{"Authorization":"Bearer test"}},"other":{"type":"local","command":"tool","args":["serve"],"env":{"MODE":"dev"}},"disabled":{"enabled":false,"type":"remote","url":"http://127.0.0.1:18110/mcp"}}}`), 0o644); err != nil {
 		t.Fatalf("write config failed: %v", err)
 	}
 	got := discoverMCPServers(Provider{Env: map[string]string{"HOME": temp}})
@@ -306,6 +310,11 @@ func TestDiscoverMCPServersFromProviderEnv(t *testing.T) {
 	}
 	if got[0]["name"] != "orbyte" && got[1]["name"] != "orbyte" {
 		t.Fatalf("expected remote mcp server to be normalized, got %#v", got)
+	}
+	for _, item := range got {
+		if item["name"] == "orbyte" && item["timeout"] != float64(120000) {
+			t.Fatalf("expected discovered timeout on remote server, got %#v", item["timeout"])
+		}
 	}
 }
 
@@ -334,6 +343,7 @@ func TestDiscoverMCPServersPrefersProviderConfig(t *testing.T) {
 			"type":    "http",
 			"url":     "http://127.0.0.1:18110/mcp",
 			"enabled": true,
+			"timeout": 120000,
 			"headers": []map[string]any{{
 				"name":  "Authorization",
 				"value": "Bearer inline",
@@ -348,6 +358,9 @@ func TestDiscoverMCPServersPrefersProviderConfig(t *testing.T) {
 	}
 	if got[0]["name"] != "orbyte-inline" || got[0]["type"] != "http" || got[0]["url"] != "http://127.0.0.1:18110/mcp" {
 		t.Fatalf("unexpected inline mcp server %#v", got[0])
+	}
+	if got[0]["timeout"] != float64(120000) {
+		t.Fatalf("unexpected inline timeout %#v", got[0]["timeout"])
 	}
 	headers, _ := got[0]["headers"].([]map[string]string)
 	if len(headers) != 1 || headers[0]["name"] != "Authorization" || headers[0]["value"] != "Bearer inline" {

@@ -331,6 +331,9 @@ func (s *Service) SendPrompt(sessionID string, req PromptRequest) (Session, erro
 			CreatedAt: time.Now().UTC(),
 			Meta:      map[string]any{"turn_id": turnID},
 		}
+		if clientRequestID != "" {
+			msg.Meta["client_request_id"] = clientRequestID
+		}
 		session.Messages = append(session.Messages, msg)
 		recordPromptRequestID(session, clientRequestID)
 	}

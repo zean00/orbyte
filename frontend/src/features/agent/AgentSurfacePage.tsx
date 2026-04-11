@@ -273,7 +273,7 @@ const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
 const MCP_EXPOSURE_MODE_STORAGE_KEY = "orbyte.agent.mcp_exposure_mode";
 type MCPExposureMode = "minimal" | "compact" | "full";
 const MCP_ONLY_PREFIX =
-  "Use Orbyte MCP tools as the source of truth for this answer. Start with playbooks/search when the request matches a business workflow. If no playbook fits, use tool discovery next with tools.search or tools.list, then call tools.describe for the relevant tool ids before using tools.call. Use exact discovered tool ids and do not guess tool names, prefixes, or schemas.";
+  "Use Orbyte MCP tools as the source of truth for this answer. First search or list playbooks to find a workflow matching the use case. If more than one playbook looks relevant, load all candidate playbooks in one bulk playbooks.describe call. Only if no playbook matches should you fall back to tool discovery with tools.search or tools.list, then use one bulk tools.describe call for the relevant tool ids before tools.call. Use exact discovered ids and do not guess tool names, prefixes, or schemas.";
 
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
@@ -3089,7 +3089,7 @@ function buildPromptPayload(
   if (mcpOnlyEnabled) {
     sections.push(MCP_ONLY_PREFIX);
     sections.push(
-      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search playbooks first when the request matches a known workflow. If no playbook fits, use tool discovery before any tools.call execution.",
+      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search playbooks first when the request matches a known workflow. If multiple playbooks look relevant, load them together with one bulk playbooks.describe call. If no playbook fits, use tool discovery and one bulk tools.describe call before any tools.call execution.",
     );
   }
   if (mode === "plan") {
@@ -3124,6 +3124,7 @@ function buildPromptPayload(
     sections.push(
       [
         "Search playbooks first for CRM requests and prefer the best-matching CRM workflow before raw tool search.",
+        "If more than one CRM playbook looks relevant, load them together with one bulk playbooks.describe call before choosing the workflow.",
         "Use crm.ticket.summary for backlog facts, crm.customer.summary or crm.customer.timeline for named customers, crm.customer.health for at-risk customer review, and crm.opportunity.pipeline.summary for pipeline review before answering.",
         "Do not stop at generic business search wrappers when dedicated CRM summary tools exist.",
       ].join(" "),
@@ -3134,7 +3135,8 @@ function buildPromptPayload(
     sections.push(
       [
         "Search playbooks first if a dashboard insight workflow exists for the current request.",
-        "If the dashboard tool family is still not obvious, use tools.search and tools.describe before calling tools.call.",
+        "If multiple dashboard playbooks look relevant, load them together with one bulk playbooks.describe call before choosing the workflow.",
+        "If the dashboard tool family is still not obvious, use tools.search and one bulk tools.describe call before calling tools.call.",
         'For dashboard requests, first call analytics.dashboard.widget_catalog with surface="dashboard".',
         explicitFullBoard
           ? "For explicit full-dashboard or board-preview requests, use analytics.dashboard.board.preview so you return a full dashboard_board artifact."

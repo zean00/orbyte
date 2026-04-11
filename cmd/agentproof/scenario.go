@@ -843,7 +843,7 @@ func seedInventoryDashboardReplenishmentExecuteScenario(ctx context.Context, cli
 - For this replenishment dashboard scenario, use the planning.replenishment widget family and do not use unrelated sales or demo widgets in the dashboard artifact.
 - Do not hand-pick dashboard widget keys for the insight turn. Let analytics.dashboard.board.preview infer the planning widget set from the title and description.
 - In the first paragraph of the insight answer, explicitly identify the at-risk items and the healthy items to skip for warehouse %s when the dashboard evidence supports it.
-- When the dashboard preview tool returns the <orbyte-dashboard-artifact> block, copy that block exactly into your final answer unchanged.
+- When the dashboard preview tool returns widget/session artifacts, rely on those artifacts for rendering and briefly explain which widgets matter in the final answer.
 - For planning questions, base the plan on the dashboard evidence, keep the answer stepwise as a numbered list using "1.", "2.", and "3." style markers, and do not execute the plan.
 - For execute questions, do not call dashboard or analytics tools again. Immediately call planning_core.purchase_requests.draft.create with the recommended selections for warehouse %s, do not submit the drafts, and restate the created purchase request draft ids, vendor, and line quantities.`, warehouseCode, warehouseCode, warehouseCode))
 	manifest.GroundTruth["dashboard_widget_keys"] = []string{
@@ -926,7 +926,7 @@ func seedSalesDashboardRecoveryExecuteScenario(ctx context.Context, client *apiC
 - Then call analytics.dashboard.board.preview with title "Sales Performance Dashboard", surface "dashboard", and explicit widget_keys from the analytics.demo.sales widget family.
 - Use the analytics.demo.sales widget family for this synthetic scenario and do not mix in other widget families.
 - In the first paragraph of the insight answer, explicitly state that Loc Demo Central and Loc Demo West are underperforming compared with Loc Demo East as the benchmark leader when the data supports it.
-- When the dashboard preview tool returns the <orbyte-dashboard-artifact> block, copy that block exactly into your final answer unchanged.
+- When the dashboard preview tool returns widget/session artifacts, rely on those artifacts for rendering and briefly explain which widgets matter in the final answer.
 - Name Loc Demo Central and Loc Demo West explicitly as underperforming when they trail the benchmark, and explicitly name Loc Demo East as the benchmark when it leads.
 - For planning questions, base the plan on the dashboard evidence, keep the answer stepwise as a numbered list using "1.", "2.", and "3." style markers, and do not execute the plan.
 - For execute questions, do not call analytics or business-info tools again. Immediately call business.document.draft.create with document_type "generic_request", location_id "loc_hq", organization_id "org_default", confirm_apply true, and a payload containing title, summary, branches, benchmark, and follow_up.
@@ -1688,7 +1688,7 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 - Then call analytics.dashboard.widgets.preview with surface "dashboard" and explicit widget_keys for analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, and analytics.demo.sales.daily_trend.
 - In the first paragraph of the insight answer, explicitly state that Loc Demo Central and Loc Demo West are underperforming compared with Loc Demo East as the benchmark leader, and explicitly mention the Espresso Double + Butter Croissant pattern among gold members.
 - For the insight turn, keep the inline dashboard artifacts focused on only those most relevant widgets rather than the full six-widget board.
-- When the widgets preview tool returns the <orbyte-dashboard-artifact> blocks, copy each block exactly into your final answer unchanged.
+- When the widgets preview tool returns widget/session artifacts, rely on those artifacts for rendering and briefly explain which widgets matter in the final answer.
 - For planning questions, base the plan on both the dashboard evidence and the POS sales pattern, keep the answer stepwise as a numbered list using "1.", "2.", and "3." markers, and do not execute it.
 - The recommended campaign should be a breakfast bundle for gold members focused on Loc Demo Central and Loc Demo West while using Loc Demo East as the benchmark.
 - For execute questions, do not call analytics or generic business-info tools again. Immediately call business.document.draft.create with document_type "generic_request", location_id "loc_hq", organization_id "org_default", confirm_apply true, and a payload containing title, summary, target_branches, benchmark_branch, target_products, target_segment, replace_campaign, and follow_up.
@@ -2540,7 +2540,7 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 				"type":    "remote",
 				"url":     mcpURL,
 				"enabled": true,
-				"timeout": 20000,
+				"timeout": 120000,
 				"headers": map[string]any{
 					"Authorization": "Bearer " + token,
 				},
@@ -2563,6 +2563,7 @@ func configureAgentAccess(ctx context.Context, client *apiClient, baseURL, openc
 			"type":    "http",
 			"url":     mcpURL,
 			"enabled": true,
+			"timeout": 120000,
 			"headers": []map[string]any{{
 				"name":  "Authorization",
 				"value": "Bearer " + token,
@@ -2619,11 +2620,11 @@ func defaultMCPPlaybooksJSON() string {
 				"Name the strongest benchmark branch plus each underperforming branch explicitly in the final answer.",
 				"Use POS sales pattern tools to identify the strongest repeatable bundle or pairing.",
 				"If the user asks for a recovery plan, explicitly state that the weaker branches should replace Beans Boost with the recommended bundle campaign.",
-				"Return the relevant dashboard artifact blocks verbatim in the final answer. Do not answer a widget request with text-only widget names.",
+				"Preview the relevant dashboard widgets and rely on the returned session artifacts for rendering. Do not answer a widget request with text-only widget names.",
 			},
 			"tool_sequence": []map[string]any{
 				{"step": "discover_dashboard_widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": true, "description": "Find dashboard widgets that explain branch performance, branch mix, target attainment, and daily sales trend.", "output": "Candidate dashboard widget keys and titles."},
-				{"step": "preview_dashboard_widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": true, "description": "Preview the exact retail recovery widgets for surface dashboard.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"analytics.demo.sales.target_attainment", "analytics.demo.sales.branch_mix", "analytics.demo.sales.daily_trend"}}, "output": "Dashboard widget artifacts that must be copied verbatim into the final answer."},
+				{"step": "preview_dashboard_widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": true, "description": "Preview the exact retail recovery widgets for surface dashboard.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"analytics.demo.sales.target_attainment", "analytics.demo.sales.branch_mix", "analytics.demo.sales.daily_trend"}}, "output": "Dashboard widget/session artifacts for the relevant widgets, plus titles the final answer should reference."},
 				{"step": "summarize_pos_pattern", "tool_id": "pos_core.sales.strategy.summary", "required": true, "description": "Identify the strongest basket or product pairing and target customer segment.", "output": "Recommended bundle products and target segment."},
 				{"step": "check_promotion_replacement", "tool_id": "promotion_core.performance.summary", "required": false, "when": "Use when the user asks for a recovery plan or campaign replacement.", "description": "Identify weak promotion performance and replacement candidates.", "output": "Promotion that should be replaced and why."},
 			},
@@ -2641,14 +2642,14 @@ func defaultMCPPlaybooksJSON() string {
 				"Whether Beans Boost should be replaced when planning recovery.",
 			},
 			"required_artifacts": []string{
-				"dashboard_widget artifact block for analytics.demo.sales.target_attainment",
-				"dashboard_widget artifact block for analytics.demo.sales.branch_mix",
-				"dashboard_widget artifact block for analytics.demo.sales.daily_trend",
+				"dashboard widget/session artifact for analytics.demo.sales.target_attainment",
+				"dashboard widget/session artifact for analytics.demo.sales.branch_mix",
+				"dashboard widget/session artifact for analytics.demo.sales.daily_trend",
 			},
 			"guardrails": []string{
 				"Do not create or submit promotion documents unless the user explicitly asks to execute.",
 				"Do not invent branch names when dashboard or POS data is insufficient; call the relevant tools instead.",
-				"If the user asks to show dashboard widgets, do not produce the final answer until the dashboard widget artifact blocks are included verbatim.",
+				"If the user asks to show dashboard widgets, do not finish with text-only widget names; ensure the widget/session artifacts were actually produced.",
 			},
 			"success_checks": []string{
 				"Final answer names Loc Demo East as benchmark when it is the strongest branch.",
@@ -2658,7 +2659,7 @@ func defaultMCPPlaybooksJSON() string {
 			},
 			"pitfalls": []string{
 				"Do not say only that the gold segment is strongest; the user asked for branch comparison.",
-				"Do not summarize widgets without copying the artifact blocks verbatim.",
+				"Do not summarize widgets as text-only names without actually producing the preview artifacts.",
 			},
 			"examples": []string{
 				"Which branches are underperforming compared with the strongest branch, and what dashboard widgets explain why?",
@@ -2746,9 +2747,9 @@ func defaultMCPPlaybooksJSON() string {
 				"Overdue ticket or SLA risk context.",
 			},
 			"required_artifacts": []string{
-				"dashboard_widget artifact for crm.ticketing.open_tickets when widgets are requested",
-				"dashboard_widget artifact for crm.ticketing.overdue_tickets when widgets are requested",
-				"dashboard_widget artifact for crm.ticketing.queue_backlog when widgets are requested",
+				"dashboard widget/session artifact for crm.ticketing.open_tickets when widgets are requested",
+				"dashboard widget/session artifact for crm.ticketing.overdue_tickets when widgets are requested",
+				"dashboard widget/session artifact for crm.ticketing.queue_backlog when widgets are requested",
 			},
 			"guardrails": []string{
 				"Do not answer a service backlog question from generic business search when crm.ticket.summary is available.",
