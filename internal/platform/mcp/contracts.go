@@ -318,7 +318,7 @@ func (s *Server) mcpCatalogResource(actor ActorContext) (map[string]any, error) 
 	if s == nil {
 		return nil, fmt.Errorf("mcp server is unavailable")
 	}
-	tools := s.listTools(actor)
+	tools := s.nonPlaybookToolDescriptors(actor, s.listTools(actor))
 	resources := s.listResources(actor)
 	apps := s.listMCPApps(actor)
 	return map[string]any{

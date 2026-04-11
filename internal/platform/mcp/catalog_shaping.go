@@ -343,6 +343,8 @@ func (s *Server) toolsListResult(actor ActorContext, options ToolCatalogOptions)
 	full := s.listTools(actor)
 	if exposureMode == MCPExposureModeMinimal {
 		full = s.minimalExposedTools(actor)
+	} else {
+		full = s.nonPlaybookToolDescriptors(actor, full)
 	}
 	tools, catalog, groups, suggested := s.filterToolCatalog(full, options)
 	if exposureMode == MCPExposureModeMinimal {
@@ -402,6 +404,17 @@ func (s *Server) nonMetaToolDescriptors(actor ActorContext) []ToolDescriptor {
 	items := make([]ToolDescriptor, 0, len(all))
 	for _, item := range all {
 		if isMetaToolName(item.Name) {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func (s *Server) nonPlaybookToolDescriptors(actor ActorContext, tools []ToolDescriptor) []ToolDescriptor {
+	items := make([]ToolDescriptor, 0, len(tools))
+	for _, item := range tools {
+		if strings.HasPrefix(item.Name, "playbooks.") {
 			continue
 		}
 		items = append(items, item)

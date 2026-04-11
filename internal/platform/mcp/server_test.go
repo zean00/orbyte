@@ -465,9 +465,62 @@ func TestServerFullAndCompactExposureAdvertiseDiscoveryMetaTools(t *testing.T) {
 			t.Fatalf("%s tools/list failed: %+v", tc.name, resp.Error)
 		}
 		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
-		for _, name := range []string{"tools.search", "tools.describe", "tools.call", "playbooks.search", "playbooks.describe"} {
+		for _, name := range []string{"tools.search", "tools.describe", "tools.call"} {
 			if !containsToolNamed(tools, name) {
 				t.Fatalf("%s expected discovery meta-tool %q in catalog", tc.name, name)
+			}
+		}
+	}
+}
+
+func TestServerFullAndCompactModesHidePlaybookTools(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "full",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return true
+		},
+	}
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+	}{
+		{name: "full", params: map[string]any{"exposure_mode": "full"}},
+		{name: "compact", params: map[string]any{"exposure_mode": "compact", "catalog_mode": "compact", "capabilities": []string{"discovery"}}},
+	} {
+		resp := server.Handle(context.Background(), JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/list",
+			Params:  mustJSON(t, tc.params),
+		}, actor)
+		if resp.Error != nil {
+			t.Fatalf("%s tools/list failed: %+v", tc.name, resp.Error)
+		}
+		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+		for _, name := range []string{"playbooks.list", "playbooks.search", "playbooks.describe"} {
+			if containsToolNamed(tools, name) {
+				t.Fatalf("%s should not expose playbook tool %q", tc.name, name)
 			}
 		}
 	}
