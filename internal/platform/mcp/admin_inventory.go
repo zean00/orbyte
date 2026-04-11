@@ -69,6 +69,7 @@ type runtimeConfig struct {
 	BlockedDocumentTypes       []string
 	AllowedSubmitDocumentTypes []string
 	DomainOverrides            map[string]domainGovernanceOverride
+	DefaultCapabilities        []string
 	Playbooks                  []PlaybookDefinition
 }
 
@@ -381,6 +382,7 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	cfg.BlockedDocumentTypes = parseStringList(value.Value["blocked_document_types_json"])
 	cfg.AllowedSubmitDocumentTypes = parseStringList(value.Value["allowed_submit_document_types_json"])
 	cfg.DomainOverrides = parseDomainOverrides(value.Value["domain_policy_overrides_json"])
+	cfg.DefaultCapabilities = parseStringList(value.Value["default_capabilities_json"])
 	cfg.Playbooks = parsePlaybooks(value.Value["playbooks_json"])
 	return cfg
 }

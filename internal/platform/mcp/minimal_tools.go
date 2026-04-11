@@ -67,8 +67,9 @@ func listArg(arguments map[string]any, singular, plural string) []string {
 	return []string{value}
 }
 
-func (s *Server) filterToolSummaries(actor ActorContext, arguments map[string]any, search bool) []toolSummary {
+func (s *Server) filterToolSummaries(actor ActorContext, arguments map[string]any, search bool, catalogOpts ToolCatalogOptions) []toolSummary {
 	descriptors := s.discoverableTools(actor)
+	activeCapabilities := s.normalizeCompactCapabilities(catalogOpts)
 	domains := listArg(arguments, "domain", "domains")
 	labels := listArg(arguments, "label", "labels")
 	sourceType := stringArg(arguments, "source_type")
@@ -77,6 +78,9 @@ func (s *Server) filterToolSummaries(actor ActorContext, arguments map[string]an
 	items := make([]toolSummary, 0, len(descriptors))
 	scores := map[string]int{}
 	for _, item := range descriptors {
+		if len(activeCapabilities) > 0 && !intersectsStrings(item.CapabilityKeys, activeCapabilities) {
+			continue
+		}
 		summary := toToolSummary(item)
 		if len(domains) > 0 && !intersectsStrings(summary.Domains, domains) {
 			continue
@@ -217,7 +221,8 @@ func toolSearchScore(item toolSummary, query string, terms []string) int {
 }
 
 func (s *Server) toolsListMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
-	items := s.filterToolSummaries(actor, arguments, false)
+	catalogOpts := s.catalogOptionsFromExposureMode()
+	items := s.filterToolSummaries(actor, arguments, false, catalogOpts)
 	return map[string]any{
 		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d discoverable tools.", len(items))}},
 		"structuredContent": map[string]any{"items": items},
@@ -225,7 +230,8 @@ func (s *Server) toolsListMeta(actor ActorContext, arguments map[string]any) (ma
 }
 
 func (s *Server) toolsSearchMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
-	items := s.filterToolSummaries(actor, arguments, true)
+	catalogOpts := s.catalogOptionsFromExposureMode()
+	items := s.filterToolSummaries(actor, arguments, true, catalogOpts)
 	return map[string]any{
 		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Matched %d tools.", len(items))}},
 		"structuredContent": map[string]any{"items": items},
@@ -237,11 +243,16 @@ func (s *Server) toolsDescribeMeta(actor ActorContext, arguments map[string]any)
 	if len(toolIDs) == 0 {
 		return nil, true, shared.Validation("tool_ids is required")
 	}
+	catalogOpts := s.catalogOptionsFromExposureMode()
+	activeCapabilities := s.normalizeCompactCapabilities(catalogOpts)
 	items := make([]ToolDescriptor, 0, len(toolIDs))
 	for _, toolID := range toolIDs {
 		descriptor, ok := s.toolDescriptorByName(actor, toolID)
 		if !ok {
 			return nil, true, shared.Validation("tool_id not found: " + toolID)
+		}
+		if len(activeCapabilities) > 0 && !intersectsStrings(descriptor.CapabilityKeys, activeCapabilities) {
+			continue
 		}
 		items = append(items, descriptor)
 	}

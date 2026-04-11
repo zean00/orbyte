@@ -44,11 +44,12 @@ type PlaybookToolStep struct {
 }
 
 type PlaybookSummary struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Domains     []string `json:"domains,omitempty"`
-	Labels      []string `json:"labels,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description,omitempty"`
+	Domains          []string `json:"domains,omitempty"`
+	Labels           []string `json:"labels,omitempty"`
+	RecommendedTools []string `json:"recommended_tools,omitempty"`
 }
 
 func normalizeExposureMode(mode string) string {
@@ -139,13 +140,51 @@ func (s *Server) playbooks() []PlaybookDefinition {
 }
 
 func playbookSummary(item PlaybookDefinition) PlaybookSummary {
+	recommended := playbookRecommendedTools(item)
 	return PlaybookSummary{
-		ID:          item.ID,
-		Name:        item.Name,
-		Description: item.Description,
-		Domains:     append([]string(nil), item.Domains...),
-		Labels:      append([]string(nil), item.Labels...),
+		ID:               item.ID,
+		Name:             item.Name,
+		Description:      item.Description,
+		Domains:          append([]string(nil), item.Domains...),
+		Labels:           append([]string(nil), item.Labels...),
+		RecommendedTools: recommended,
 	}
+}
+
+func playbookRecommendedTools(item PlaybookDefinition) []string {
+	seen := make(map[string]struct{})
+	recommended := make([]string, 0, 5)
+	for _, step := range item.ToolSequence {
+		toolID := strings.TrimSpace(step.ToolID)
+		if toolID == "" {
+			continue
+		}
+		if _, ok := seen[toolID]; ok {
+			continue
+		}
+		seen[toolID] = struct{}{}
+		recommended = append(recommended, toolID)
+		if len(recommended) >= 5 {
+			break
+		}
+	}
+	if len(recommended) == 0 {
+		for _, toolID := range item.ToolIDs {
+			toolID = strings.TrimSpace(toolID)
+			if toolID == "" {
+				continue
+			}
+			if _, ok := seen[toolID]; ok {
+				continue
+			}
+			seen[toolID] = struct{}{}
+			recommended = append(recommended, toolID)
+			if len(recommended) >= 5 {
+				break
+			}
+		}
+	}
+	return recommended
 }
 
 func (s *Server) discoverableTools(actor ActorContext) []ToolDescriptor {

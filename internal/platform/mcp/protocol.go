@@ -104,6 +104,7 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 					"supportedEndpointScopes": []string{EndpointScopeAll, EndpointScopeAnalytics},
 					"capabilityResourceURI":   mcpCatalogResourceURI,
 					"errorSemanticsVersion":   "2026-03-23",
+					"activeCapabilities":      s.activeCapabilitiesForInit(),
 					"supportedMethods": []string{
 						"initialize",
 						"tools/list",

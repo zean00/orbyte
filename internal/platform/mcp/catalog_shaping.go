@@ -277,7 +277,11 @@ func (s *Server) CapabilityInventory(items []ToolDescriptor) []ToolCapabilityDes
 	return output
 }
 
-func defaultCompactAgentCapabilities() []string {
+func (s *Server) defaultCompactCapabilities() []string {
+	cfg := s.mcpRuntimeConfig()
+	if len(cfg.DefaultCapabilities) > 0 {
+		return mergeUniqueStrings(nil, cfg.DefaultCapabilities)
+	}
 	return []string{
 		"discovery",
 		"business_overview",
@@ -285,6 +289,34 @@ func defaultCompactAgentCapabilities() []string {
 		"relationships_timeline",
 		"governed_drafts",
 	}
+}
+
+func (s *Server) activeCapabilitiesForInit() []string {
+	mode := s.effectiveExposureMode(ToolCatalogOptions{})
+	switch mode {
+	case MCPExposureModeMinimal:
+		return []string{}
+	case MCPExposureModeCompact:
+		return s.defaultCompactCapabilities()
+	default:
+		return []string{}
+	}
+}
+
+func (s *Server) catalogOptionsFromExposureMode() ToolCatalogOptions {
+	mode := s.effectiveExposureMode(ToolCatalogOptions{})
+	if mode == MCPExposureModeCompact {
+		return ToolCatalogOptions{CatalogMode: MCPExposureModeCompact}
+	}
+	return ToolCatalogOptions{}
+}
+
+func (s *Server) normalizeCompactCapabilities(options ToolCatalogOptions) []string {
+	activeCapabilities := append([]string(nil), options.Capabilities...)
+	if strings.TrimSpace(options.CatalogMode) == "compact" && len(activeCapabilities) == 0 && !hasExplicitCompactFilters(options) {
+		activeCapabilities = s.defaultCompactCapabilities()
+	}
+	return activeCapabilities
 }
 
 func parseToolCatalogOptions(raw json.RawMessage) ToolCatalogOptions {
@@ -384,16 +416,8 @@ func hasExplicitCompactFilters(options ToolCatalogOptions) bool {
 		len(options.ActionClasses) > 0
 }
 
-func normalizeCompactCapabilities(options ToolCatalogOptions) []string {
-	activeCapabilities := append([]string(nil), options.Capabilities...)
-	if strings.TrimSpace(options.CatalogMode) == "compact" && len(activeCapabilities) == 0 && !hasExplicitCompactFilters(options) {
-		activeCapabilities = defaultCompactAgentCapabilities()
-	}
-	return activeCapabilities
-}
-
 func (s *Server) filterToolCatalogScope(items []ToolDescriptor, options ToolCatalogOptions) ([]ToolDescriptor, []string) {
-	activeCapabilities := normalizeCompactCapabilities(options)
+	activeCapabilities := s.normalizeCompactCapabilities(options)
 	minimalExposure := s.effectiveExposureMode(options) == MCPExposureModeMinimal
 	filtered := make([]ToolDescriptor, 0, len(items))
 	for _, item := range items {
@@ -441,7 +465,7 @@ func (s *Server) filterToolCatalog(items []ToolDescriptor, options ToolCatalogOp
 	totalMatching := len(filtered)
 	maxTools := options.MaxTools
 	if mode == "compact" && maxTools <= 0 {
-		maxTools = 32
+		maxTools = 16
 	}
 	if maxTools > 0 && len(filtered) > maxTools {
 		filtered = filtered[:maxTools]

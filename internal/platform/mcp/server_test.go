@@ -5249,6 +5249,269 @@ func TestHelpers(t *testing.T) {
 	}
 }
 
+func TestMCPDefaultCapabilitiesFromConfig(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "compact",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"default_capabilities_json":          `["inventory_health","pricing_promotion"]`,
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"catalog_mode":    "compact",
+			"include_summary": true,
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	catalog := payload["catalog"].(map[string]any)
+	caps := catalog["capabilities"].([]string)
+	if len(caps) != 2 {
+		t.Fatalf("expected 2 active capabilities from config, got %d", len(caps))
+	}
+	if caps[0] != "inventory_health" {
+		t.Fatalf("expected first capability to be inventory_health, got %s", caps[0])
+	}
+	if caps[1] != "pricing_promotion" {
+		t.Fatalf("expected second capability to be pricing_promotion, got %s", caps[1])
+	}
+}
+
+func TestMCPInitializeResponseIncludesActiveCapabilities(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "compact",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"default_capabilities_json":          `["discovery","inventory_health"]`,
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	actor := ActorContext{
+		ActorID:            "user_admin",
+		EffectiveUserID:    "user_admin",
+		PermissionChecker:  func(string) bool { return true },
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "initialize",
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("initialize failed: %+v", resp.Error)
+	}
+	result := resp.Result.(map[string]any)
+	capabilities := result["capabilities"].(map[string]any)
+	orbyte := capabilities["orbyte"].(map[string]any)
+	activeCaps, ok := orbyte["activeCapabilities"].([]string)
+	if !ok {
+		t.Fatalf("expected activeCapabilities in initialize response")
+	}
+	if len(activeCaps) != 2 {
+		t.Fatalf("expected 2 active capabilities, got %d", len(activeCaps))
+	}
+}
+
+func TestMCPSearchFiltersByActiveCapabilitiesInCompactMode(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "compact",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"default_capabilities_json":          `["discovery"]`,
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/search",
+		Params: mustJSON(t, map[string]any{
+			"query": "business",
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/search failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	structuredContent := payload["structuredContent"].(map[string]any)
+	items := structuredContent["items"].([]toolSummary)
+	for _, item := range items {
+		if item.Name == "business.health.summary" {
+			// This tool has business_overview capability, should be filtered out
+			t.Fatalf("expected tools/search to filter out tools outside active capabilities, but found %s", item.Name)
+		}
+	}
+}
+
+func TestMCPMaxToolsForCompactModeIsSixteen(t *testing.T) {
+	server := newTestServer(t)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"catalog_mode":    "compact",
+			"capabilities":    []string{"discovery"},
+			"include_summary": true,
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	catalog := payload["catalog"].(map[string]any)
+	maxTools := catalog["max_tools"]
+	maxToolsInt := 0
+	switch v := maxTools.(type) {
+	case float64:
+		maxToolsInt = int(v)
+	case int:
+		maxToolsInt = v
+	}
+	if maxToolsInt != 16 {
+		t.Fatalf("expected default max_tools to be 16 for compact mode, got %v", catalog["max_tools"])
+	}
+}
+
+func TestPlaybookSummaryIncludesRecommendedTools(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "full",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json": `[
+				{
+					"id": "test_inventory_replenish",
+					"name": "Inventory Replenishment",
+					"description": "Replenish inventory based on shortage signals.",
+					"domains": ["inventory"],
+					"labels": ["replenishment"],
+					"tool_sequence": [
+						{"step": "1", "tool_id": "planning_core.replenishment.insight.summary"},
+						{"step": "2", "tool_id": "planning_core.replenishment.plan.summary"},
+						{"step": "3", "tool_id": "planning_core.purchase_requests.draft.create"}
+					],
+					"tool_ids": ["planning_core.business.info.get"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "playbooks/list",
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks/list failed: %+v", resp.Error)
+	}
+	payload := resp.Result.(map[string]any)
+	structuredContent := payload["structuredContent"].(map[string]any)
+	items := structuredContent["items"].([]PlaybookSummary)
+	if len(items) == 0 {
+		t.Fatalf("expected at least one playbook in playbooks/list")
+	}
+	if len(items[0].RecommendedTools) != 3 {
+		t.Fatalf("expected 3 recommended tools from tool_sequence, got %d", len(items[0].RecommendedTools))
+	}
+	if items[0].RecommendedTools[0] != "planning_core.replenishment.insight.summary" {
+		t.Fatalf("expected first recommended tool to be insight.summary, got %s", items[0].RecommendedTools[0])
+	}
+}
+
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	modules := newTestModules(t)

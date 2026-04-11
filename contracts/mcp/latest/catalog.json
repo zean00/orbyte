@@ -3424,14 +3424,26 @@
       "policyState": "allowed",
       "effectiveVisibility": "listed",
       "inputSchema": {
+        "anyOf": [
+          {
+            "required": [
+              "party_id"
+            ]
+          },
+          {
+            "required": [
+              "query"
+            ]
+          }
+        ],
         "properties": {
           "party_id": {
             "type": "string"
+          },
+          "query": {
+            "type": "string"
           }
         },
-        "required": [
-          "party_id"
-        ],
         "type": "object"
       },
       "contract": {
@@ -3471,14 +3483,26 @@
       "policyState": "allowed",
       "effectiveVisibility": "listed",
       "inputSchema": {
+        "anyOf": [
+          {
+            "required": [
+              "party_id"
+            ]
+          },
+          {
+            "required": [
+              "query"
+            ]
+          }
+        ],
         "properties": {
           "party_id": {
             "type": "string"
+          },
+          "query": {
+            "type": "string"
           }
         },
-        "required": [
-          "party_id"
-        ],
         "type": "object"
       },
       "contract": {

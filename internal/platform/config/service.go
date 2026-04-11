@@ -162,6 +162,7 @@ func BuiltInDefinitions() []Definition {
 			"allowed_submit_document_types_json": "[]",
 			"domain_policy_overrides_json":       "{}",
 			"playbooks_json":                     "[]",
+			"default_capabilities_json":          "[]",
 		},
 		Fields: []FieldDefinition{
 			{Key: "enabled", Label: "Enabled", LabelI18n: i18n.LocalizedText{"en": "Enabled", "id": "Aktif"}, Type: "bool"},
@@ -175,6 +176,7 @@ func BuiltInDefinitions() []Definition {
 			{Key: "allowed_submit_document_types_json", Label: "Allowed Submit Document Types JSON", LabelI18n: i18n.LocalizedText{"en": "Allowed Submit Document Types JSON", "id": "JSON Tipe Dokumen Submit Diizinkan"}, Type: "string"},
 			{Key: "domain_policy_overrides_json", Label: "Domain Policy Overrides JSON", LabelI18n: i18n.LocalizedText{"en": "Domain Policy Overrides JSON", "id": "JSON Override Kebijakan Domain"}, Type: "string"},
 			{Key: "playbooks_json", Label: "Playbooks JSON", LabelI18n: i18n.LocalizedText{"en": "Playbooks JSON", "id": "JSON Playbook"}, Type: "string"},
+			{Key: "default_capabilities_json", Label: "Default Capabilities JSON", LabelI18n: i18n.LocalizedText{"en": "Default Capabilities JSON", "id": "JSON Kapabilitas Default"}, Type: "string"},
 		},
 	}, {
 		Key:             "platform.db",
