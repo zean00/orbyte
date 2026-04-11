@@ -16,13 +16,13 @@ type crmSeedManifest struct {
 	SeededAt       string `json:"seeded_at"`
 	OrganizationID string `json:"organization_id"`
 	Routes         struct {
-		Tickets      string `json:"tickets"`
-		Queues       string `json:"queues"`
-		Leads        string `json:"leads"`
+		Tickets       string `json:"tickets"`
+		Queues        string `json:"queues"`
+		Leads         string `json:"leads"`
 		Opportunities string `json:"opportunities"`
-		Customer360  string `json:"customer_360"`
-		Dashboard    string `json:"dashboard"`
-		Agent        string `json:"agent"`
+		Customer360   string `json:"customer_360"`
+		Dashboard     string `json:"dashboard"`
+		Agent         string `json:"agent"`
 	} `json:"routes"`
 	Queue struct {
 		Code string `json:"code"`
@@ -95,6 +95,13 @@ func TestSeedCRMSyntheticScenario(t *testing.T) {
 		"resolution_sla_hours": 12,
 		"status":               "active",
 	}, actorID)
+	successQueue := ensureModelByCode(t, graph.models, "crm_queue", "code", "CRM-SUCCESS-"+suffix, map[string]any{
+		"code":                 "CRM-SUCCESS-" + suffix,
+		"name":                 "CRM Success " + suffix,
+		"triage_sla_hours":     4,
+		"resolution_sla_hours": 24,
+		"status":               "active",
+	}, actorID)
 	sla := ensureModelByCode(t, graph.models, "crm_sla_policy", "code", "CRM-SLA-"+suffix, map[string]any{
 		"code":                 "CRM-SLA-" + suffix,
 		"name":                 "CRM Priority SLA " + suffix,
@@ -129,14 +136,52 @@ func TestSeedCRMSyntheticScenario(t *testing.T) {
 		"status":           "active",
 	}, actorID)
 	contact := ensureModelByCode(t, graph.models, "party_contact", "party_id", party.ID, map[string]any{
-		"party_id":      party.ID,
-		"name":          "Alya CRM " + suffix,
-		"contact_kind":  "person",
-		"email":         "alya+" + suffix + "@example.com",
-		"status":        "active",
-		"is_primary":    true,
+		"party_id":     party.ID,
+		"name":         "Alya CRM " + suffix,
+		"contact_kind": "person",
+		"email":        "alya+" + suffix + "@example.com",
+		"status":       "active",
+		"is_primary":   true,
+	}, actorID)
+	healthyParty := ensureModelByCode(t, graph.models, "party", "name", "Healthy CRM Customer "+suffix, map[string]any{
+		"party_type": "organization",
+		"name":       "Healthy CRM Customer " + suffix,
+		"status":     "active",
+	}, actorID)
+	_ = ensureModelByCode(t, graph.models, "customer_profile", "party_id", healthyParty.ID, map[string]any{
+		"party_id":         healthyParty.ID,
+		"customer_name":    "Healthy CRM Customer " + suffix,
+		"customer_type":    "member",
+		"customer_segment": "growth",
+		"member_status":    "active",
+		"member_tier":      "silver",
+		"status":           "active",
+	}, actorID)
+	healthyContact := ensureModelByCode(t, graph.models, "party_contact", "email", "bima+"+suffix+"@example.com", map[string]any{
+		"party_id":     healthyParty.ID,
+		"name":         "Bima CRM " + suffix,
+		"contact_kind": "person",
+		"email":        "bima+" + suffix + "@example.com",
+		"status":       "active",
+		"is_primary":   true,
 	}, actorID)
 
+	overdueTicket, err := graph.crmCore.CreateTicket(actorID, map[string]any{
+		"title":          "Refund follow-up",
+		"description":    "Customer still waiting for refund confirmation.",
+		"party_id":       party.ID,
+		"party_name":     textValue(party.Values["name"]),
+		"queue_code":     textValue(queue.Values["code"]),
+		"priority":       "urgent",
+		"severity":       "high",
+		"source_channel": "email",
+		"issue_category": "refund",
+		"opened_at":      now.Add(-72 * time.Hour).Format(time.RFC3339),
+		"due_at":         now.Add(-24 * time.Hour).Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatalf("create overdue crm ticket: %v", err)
+	}
 	ticket, err := graph.crmCore.CreateTicket(actorID, map[string]any{
 		"title":          "Damaged shipment replacement",
 		"description":    "Customer reports damaged cartons on arrival.",
@@ -205,6 +250,51 @@ func TestSeedCRMSyntheticScenario(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create crm activity: %v", err)
 	}
+	healthyLead, err := graph.crmCore.CreateLead(actorID, map[string]any{
+		"title":               "Loyalty bundle expansion",
+		"party_id":            healthyParty.ID,
+		"party_name":          textValue(healthyParty.Values["name"]),
+		"contact_id":          healthyContact.ID,
+		"owner_user_id":       actorID,
+		"source_channel":      "web",
+		"status":              "qualified",
+		"rating":              "warm",
+		"estimated_value":     12000000,
+		"expected_close_date": now.AddDate(0, 2, 0).Format("2006-01-02"),
+		"next_action_at":      now.Add(48 * time.Hour).Format(time.RFC3339),
+		"notes":               "Healthy account with expansion potential.",
+	})
+	if err != nil {
+		t.Fatalf("create healthy crm lead: %v", err)
+	}
+	if _, err := graph.crmCore.CreateOpportunity(actorID, map[string]any{
+		"title":               "Loyalty bundle expansion",
+		"party_id":            healthyParty.ID,
+		"party_name":          textValue(healthyParty.Values["name"]),
+		"contact_id":          healthyContact.ID,
+		"owner_user_id":       actorID,
+		"source_lead_id":      healthyLead.ID,
+		"stage":               "qualified",
+		"estimated_value":     12000000,
+		"expected_close_date": now.AddDate(0, 2, 10).Format("2006-01-02"),
+		"next_action_at":      now.Add(48 * time.Hour).Format(time.RFC3339),
+		"notes":               "Healthy account expansion next quarter.",
+	}); err != nil {
+		t.Fatalf("create healthy crm opportunity: %v", err)
+	}
+	if _, err := graph.crmCore.CreateTicket(actorID, map[string]any{
+		"title":          "Welcome package follow-up",
+		"description":    "Member activation package delivered.",
+		"party_id":       healthyParty.ID,
+		"party_name":     textValue(healthyParty.Values["name"]),
+		"queue_code":     textValue(successQueue.Values["code"]),
+		"priority":       "medium",
+		"severity":       "low",
+		"source_channel": "chat",
+		"issue_category": "onboarding",
+	}); err != nil {
+		t.Fatalf("create healthy crm ticket: %v", err)
+	}
 
 	board, err := graph.analytics.SaveDashboard(analytics.Dashboard{
 		Name:        "CRM Operations Board " + suffix,
@@ -219,10 +309,12 @@ func TestSeedCRMSyntheticScenario(t *testing.T) {
 		Widgets: []analytics.DashboardWidget{
 			{WidgetKey: "crm.ticketing.open_tickets", Title: "Open Tickets", Kind: "metric", Width: 3, Height: 1, Order: 1},
 			{WidgetKey: "crm.ticketing.overdue_tickets", Title: "Overdue Tickets", Kind: "metric", Width: 3, Height: 1, Order: 2},
-			{WidgetKey: "crm.ticketing.queue_backlog", Title: "Queue Backlog", Kind: "chart_bar", Width: 6, Height: 2, Order: 3},
-			{WidgetKey: "crm.sales.pipeline_value", Title: "Pipeline Value", Kind: "metric", Width: 3, Height: 1, Order: 4},
-			{WidgetKey: "crm.sales.pipeline_by_stage", Title: "Pipeline by Stage", Kind: "chart_bar", Width: 6, Height: 2, Order: 5},
-			{WidgetKey: "crm.customers.at_risk", Title: "At-Risk Customers", Kind: "table", Width: 6, Height: 2, Order: 6},
+			{WidgetKey: "crm.ticketing.first_response_hours", Title: "First Response Hours", Kind: "metric", Width: 3, Height: 1, Order: 3},
+			{WidgetKey: "crm.ticketing.queue_backlog", Title: "Queue Backlog", Kind: "chart_bar", Width: 6, Height: 2, Order: 4},
+			{WidgetKey: "crm.sales.pipeline_value", Title: "Pipeline Value", Kind: "metric", Width: 3, Height: 1, Order: 5},
+			{WidgetKey: "crm.sales.stale_opportunities", Title: "Stale Opportunities", Kind: "metric", Width: 3, Height: 1, Order: 6},
+			{WidgetKey: "crm.sales.pipeline_by_stage", Title: "Pipeline by Stage", Kind: "chart_bar", Width: 6, Height: 2, Order: 7},
+			{WidgetKey: "crm.customers.at_risk", Title: "At-Risk Customers", Kind: "table", Width: 6, Height: 2, Order: 8},
 		},
 	})
 	if err != nil {
@@ -233,9 +325,10 @@ func TestSeedCRMSyntheticScenario(t *testing.T) {
 		SeededAt:       time.Now().UTC().Format(time.RFC3339),
 		OrganizationID: "org_default",
 		AgentPrompts: []string{
-			"Summarize the CRM service backlog, customer health, and active pipeline for the seeded CRM demo customer. Show me the most relevant dashboard widgets too.",
-			"Create a CRM service recovery plan for the seeded customer, then propose the best next sales opportunity action without executing anything.",
-			"Open the CRM customer 360 context for the seeded customer and explain the link between the open ticket and the current opportunity.",
+			"Review the CRM service backlog, identify the highest-risk queue and customer, and show me the most relevant CRM dashboard widgets.",
+			"Open the CRM customer 360 context for the seeded CRM demo customer and explain the link between the open ticket and the current proposal-stage opportunity.",
+			"Summarize the CRM sales pipeline, highlight the stale opportunity, and tell me the best next internal action.",
+			"Give me a combined CRM service and sales overview that contrasts the at-risk CRM demo customer with the healthier CRM customer.",
 		},
 	}
 	manifest.Routes.Tickets = "/ui/crm/tickets"
@@ -252,6 +345,7 @@ func TestSeedCRMSyntheticScenario(t *testing.T) {
 	manifest.Customer.PartyID = party.ID
 	manifest.Customer.Name = textValue(party.Values["name"])
 	manifest.Customer.Tier = "gold"
+	_ = overdueTicket
 	manifest.Ticket.ID = ticket.ID
 	manifest.Ticket.TicketNumber = textValue(ticket.Values["ticket_number"])
 	manifest.Ticket.Status = textValue(ticket.Values["status"])

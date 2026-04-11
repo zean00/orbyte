@@ -925,6 +925,50 @@ func TestHandleNotificationAndSessionUpdate(t *testing.T) {
 	}
 }
 
+func TestHandleSessionUpdatePromotesDashboardArtifactsFromToolCompletion(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{ID: "session-1", CurrentTurnID: "turn-1"}
+
+	svc.handleSessionUpdate("session-1", "tool_call_completed", map[string]any{
+		"tool_name": "orbyte_analytics_dashboard_widgets_preview",
+		"status":    "completed",
+		"rawOutput": map[string]any{
+			"structuredContent": map[string]any{
+				"artifacts": []any{
+					map[string]any{
+						"id":    "artifact-widget-1",
+						"kind":  "dashboard_widget",
+						"title": "Open Tickets",
+						"metadata": map[string]any{
+							"kind":  "dashboard_widget",
+							"title": "Open Tickets",
+							"widget": map[string]any{
+								"id":         "widget-1",
+								"title":      "Open Tickets",
+								"definition": map[string]any{"key": "crm.ticketing.open_tickets"},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	session, _ := svc.GetSession("session-1")
+	if len(session.Artifacts) != 1 || session.Artifacts[0].ID != "artifact-widget-1" {
+		t.Fatalf("expected promoted tool artifact, got %#v", session.Artifacts)
+	}
+	artifactUpdates := 0
+	for _, item := range session.Trace {
+		if item.Kind == "session_update" && stringValue(item.Payload["update_kind"]) == "artifact" {
+			artifactUpdates++
+		}
+	}
+	if artifactUpdates != 1 {
+		t.Fatalf("expected one artifact session update, got %#v", session.Trace)
+	}
+}
+
 func TestSendPromptPromotesDashboardArtifactsFromAssistantMessage(t *testing.T) {
 	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{

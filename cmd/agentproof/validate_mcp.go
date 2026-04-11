@@ -163,13 +163,27 @@ func validateScenarioWithMode(ctx context.Context, client *apiClient, baseURL, o
 		return mcpValidationScenarioRun{}, fmt.Errorf("analyze session: %w", err)
 	}
 	success := analysis.Summary.UnacceptableCount == 0
+	matchedPlaybooks := collectMatchedPlaybookIDs(analysis.Results)
+	requiredArtifactsMet := true
+	artifactEventCount := 0
+	for _, item := range analysis.Results {
+		if item.ArtifactEventCount > artifactEventCount {
+			artifactEventCount = item.ArtifactEventCount
+		}
+		if !item.RequiredArtifactsPresent {
+			requiredArtifactsMet = false
+		}
+	}
 	return mcpValidationScenarioRun{
-		Scenario:     scenarioKey,
-		ManifestPath: filepath.Clean(manifestPath),
-		SessionID:    session.ID,
-		SessionTitle: sessionTitle,
-		Analysis:     analysis,
-		Success:      success,
+		Scenario:             scenarioKey,
+		ManifestPath:         filepath.Clean(manifestPath),
+		SessionID:            session.ID,
+		SessionTitle:         sessionTitle,
+		Analysis:             analysis,
+		Success:              success,
+		MatchedPlaybookIDs:   matchedPlaybooks,
+		RequiredArtifactsMet: requiredArtifactsMet,
+		ArtifactEventCount:   artifactEventCount,
 	}, nil
 }
 
@@ -256,6 +270,31 @@ func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions str
 	if strings.Contains(lower, "dashboard widget") || strings.Contains(lower, "dashboard widgets") {
 		sections = append(sections,
 			"For dashboard requests, if widget tools are needed, include every returned <orbyte-dashboard-artifact> block verbatim in the final answer.",
+		)
+	}
+	if strings.Contains(lower, "crm") && strings.Contains(lower, "widget") {
+		sections = append(sections,
+			"For CRM widget requests, call analytics dashboard widget tools with surface set to dashboard. Prefer widget keys crm.ticketing.open_tickets, crm.ticketing.overdue_tickets, and crm.ticketing.queue_backlog for service backlog evidence.",
+		)
+	}
+	if strings.Contains(lower, "crm service backlog") || (strings.Contains(lower, "queue") && strings.Contains(lower, "customer need the most attention")) {
+		sections = append(sections,
+			"For CRM service backlog questions, call crm.ticket.summary first and include the exact priority queue code and overdue ticket title in the final answer before showing widgets.",
+		)
+	}
+	if strings.Contains(lower, "crm") && strings.Contains(lower, "pipeline") {
+		sections = append(sections,
+			"For CRM pipeline review, include the stale opportunity title and its specific prioritized value, not only the total portfolio or open-opportunity count.",
+		)
+	}
+	if strings.Contains(lower, "customer 360") {
+		sections = append(sections,
+			"For CRM customer 360 questions, call crm.customer.summary with query set to the exact customer name from the prompt, then name the current ticket title, active opportunity title, and opportunity stage explicitly.",
+		)
+	}
+	if strings.Contains(lower, "combined crm service and sales overview") {
+		sections = append(sections,
+			"For combined CRM overview questions, call crm.ticket.summary, crm.customer.summary for each named customer, and crm.opportunity.pipeline.summary. Include the exact backlog queue code and explicitly mention the pipeline in the final answer.",
 		)
 	}
 	if strings.Contains(lower, "underperforming compared with the strongest branch") || (strings.Contains(lower, "underperforming") && strings.Contains(lower, "strongest branch")) {

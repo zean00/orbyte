@@ -631,6 +631,15 @@ func (s *Server) analyticsDashboardGet(actor ActorContext, arguments map[string]
 	}, true, nil
 }
 
+func normalizeDashboardToolSurface(surface string) module.UISurface {
+	switch strings.ToLower(strings.TrimSpace(surface)) {
+	case "", string(module.UISurfaceDashboard), "crm", "service", "sales", "customer_360", "customer-360":
+		return module.UISurfaceDashboard
+	default:
+		return module.UISurface(strings.TrimSpace(surface))
+	}
+}
+
 func (s *Server) analyticsDashboardWidgetCatalog(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
 	if s == nil || s.modules == nil {
 		return nil, false, nil
@@ -638,9 +647,9 @@ func (s *Server) analyticsDashboardWidgetCatalog(actor ActorContext, arguments m
 	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
 		return nil, true, fmt.Errorf("tool is not allowed")
 	}
-	surface := firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard))
+	surface := normalizeDashboardToolSurface(firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard)))
 	items := make([]module.DashboardWidgetDefinition, 0)
-	for _, item := range s.modules.DashboardWidgetsForSurface(module.UISurface(surface)) {
+	for _, item := range s.modules.DashboardWidgetsForSurface(surface) {
 		if !allowsAll(actor.PermissionChecker, item.RequiredPermissions) {
 			continue
 		}
@@ -656,7 +665,7 @@ func (s *Server) analyticsDashboardWidgetCatalog(actor ActorContext, arguments m
 	}
 	return map[string]any{
 		"content":           []ContentBlock{{Type: "text", Text: summary}},
-		"structuredContent": map[string]any{"surface": surface, "items": items},
+		"structuredContent": map[string]any{"surface": string(surface), "items": items},
 	}, true, nil
 }
 
@@ -667,19 +676,19 @@ func (s *Server) analyticsDashboardWidgetPreview(actor ActorContext, arguments m
 	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
 		return nil, true, fmt.Errorf("tool is not allowed")
 	}
-	surface := firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard))
+	surface := normalizeDashboardToolSurface(firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard)))
 	title := strings.TrimSpace(stringArg(arguments, "title"))
 	description := strings.TrimSpace(stringArg(arguments, "description"))
 	intent := strings.TrimSpace(stringArg(arguments, "intent"))
 	widgetKey := strings.TrimSpace(stringArg(arguments, "widget_key"))
 	if widgetKey == "" {
-		candidates := s.recommendedDashboardWidgetKeys(actor, module.UISurface(surface), title, description, intent, 1)
+		candidates := s.recommendedDashboardWidgetKeys(actor, surface, title, description, intent, 1)
 		if len(candidates) == 0 {
 			return nil, true, shared.Validation("widget_key is required or the title/description must match at least one dashboard widget")
 		}
 		widgetKey = candidates[0]
 	}
-	definition, ok := s.modules.DashboardWidgetForSurface(widgetKey, module.UISurface(surface))
+	definition, ok := s.modules.DashboardWidgetForSurface(widgetKey, surface)
 	if !ok {
 		return nil, true, shared.Validation("dashboard widget not found for the requested surface")
 	}
@@ -705,7 +714,7 @@ func (s *Server) analyticsDashboardWidgetsPreview(actor ActorContext, arguments 
 	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
 		return nil, true, fmt.Errorf("tool is not allowed")
 	}
-	surface := firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard))
+	surface := normalizeDashboardToolSurface(firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard)))
 	title := strings.TrimSpace(stringArg(arguments, "title"))
 	description := strings.TrimSpace(stringArg(arguments, "description"))
 	intent := strings.TrimSpace(stringArg(arguments, "intent"))
@@ -718,14 +727,14 @@ func (s *Server) analyticsDashboardWidgetsPreview(actor ActorContext, arguments 
 	}
 	widgetKeys := stringSliceArg(arguments, "widget_keys")
 	if len(widgetKeys) == 0 {
-		widgetKeys = s.recommendedDashboardWidgetKeys(actor, module.UISurface(surface), title, description, intent, limit)
+		widgetKeys = s.recommendedDashboardWidgetKeys(actor, surface, title, description, intent, limit)
 	}
 	selected := make([]module.DashboardWidgetDefinition, 0, limit)
 	for _, key := range widgetKeys {
 		if len(selected) >= limit {
 			break
 		}
-		definition, ok := s.modules.DashboardWidgetForSurface(strings.TrimSpace(key), module.UISurface(surface))
+		definition, ok := s.modules.DashboardWidgetForSurface(strings.TrimSpace(key), surface)
 		if !ok || !allowsAll(actor.PermissionChecker, definition.RequiredPermissions) {
 			continue
 		}

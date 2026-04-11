@@ -74,11 +74,11 @@ type draftExpectation struct {
 }
 
 type artifactExpectation struct {
-	Kind        string   `json:"kind"`
-	TitleChecks []string `json:"title_checks,omitempty"`
-	WidgetKeys  []string `json:"widget_keys,omitempty"`
-	MinWidgets  int      `json:"min_widgets,omitempty"`
-	MinArtifacts int     `json:"min_artifacts,omitempty"`
+	Kind         string   `json:"kind"`
+	TitleChecks  []string `json:"title_checks,omitempty"`
+	WidgetKeys   []string `json:"widget_keys,omitempty"`
+	MinWidgets   int      `json:"min_widgets,omitempty"`
+	MinArtifacts int      `json:"min_artifacts,omitempty"`
 }
 
 type planExpectation struct {
@@ -133,23 +133,26 @@ type analysisReport struct {
 }
 
 type promptAnalysisResult struct {
-	PromptID           string   `json:"prompt_id"`
-	Prompt             string   `json:"prompt"`
-	UserMessageID      string   `json:"user_message_id,omitempty"`
-	AssistantMessageID string   `json:"assistant_message_id,omitempty"`
-	Answer             string   `json:"answer"`
-	Classification     string   `json:"classification"`
-	MatchedFacts       []string `json:"matched_facts"`
-	MissingFacts       []string `json:"missing_facts"`
-	Contradictions     []string `json:"contradictions"`
-	Investigation      string   `json:"investigation"`
-	ToolCallCount      int      `json:"tool_call_count"`
-	ArtifactVerified   bool     `json:"artifact_verified,omitempty"`
-	ArtifactKind       string   `json:"artifact_kind,omitempty"`
-	PlanVerified       bool     `json:"plan_verified,omitempty"`
-	PlanStepCount      int      `json:"plan_step_count,omitempty"`
-	DraftVerified      bool     `json:"draft_verified,omitempty"`
-	DraftDocumentID    string   `json:"draft_document_id,omitempty"`
+	PromptID                 string   `json:"prompt_id"`
+	Prompt                   string   `json:"prompt"`
+	UserMessageID            string   `json:"user_message_id,omitempty"`
+	AssistantMessageID       string   `json:"assistant_message_id,omitempty"`
+	Answer                   string   `json:"answer"`
+	Classification           string   `json:"classification"`
+	MatchedFacts             []string `json:"matched_facts"`
+	MissingFacts             []string `json:"missing_facts"`
+	Contradictions           []string `json:"contradictions"`
+	Investigation            string   `json:"investigation"`
+	ToolCallCount            int      `json:"tool_call_count"`
+	MatchedPlaybookID        string   `json:"matched_playbook_id,omitempty"`
+	RequiredArtifactsPresent bool     `json:"required_artifacts_present,omitempty"`
+	ArtifactEventCount       int      `json:"artifact_event_count,omitempty"`
+	ArtifactVerified         bool     `json:"artifact_verified,omitempty"`
+	ArtifactKind             string   `json:"artifact_kind,omitempty"`
+	PlanVerified             bool     `json:"plan_verified,omitempty"`
+	PlanStepCount            int      `json:"plan_step_count,omitempty"`
+	DraftVerified            bool     `json:"draft_verified,omitempty"`
+	DraftDocumentID          string   `json:"draft_document_id,omitempty"`
 }
 
 type analysisSummary struct {
@@ -176,16 +179,19 @@ type mcpValidationReport struct {
 }
 
 type mcpValidationModeResult struct {
-	ExposureMode string                    `json:"exposure_mode"`
+	ExposureMode string                     `json:"exposure_mode"`
 	ScenarioRuns []mcpValidationScenarioRun `json:"scenario_runs"`
 }
 
 type mcpValidationScenarioRun struct {
-	Scenario      string         `json:"scenario"`
-	ManifestPath  string         `json:"manifest_path"`
-	SessionID     string         `json:"session_id"`
-	SessionTitle  string         `json:"session_title"`
-	Analysis      analysisReport `json:"analysis"`
-	Success       bool           `json:"success"`
-	FailureReason string         `json:"failure_reason,omitempty"`
+	Scenario             string         `json:"scenario"`
+	ManifestPath         string         `json:"manifest_path"`
+	SessionID            string         `json:"session_id"`
+	SessionTitle         string         `json:"session_title"`
+	Analysis             analysisReport `json:"analysis"`
+	Success              bool           `json:"success"`
+	MatchedPlaybookIDs   []string       `json:"matched_playbook_ids,omitempty"`
+	RequiredArtifactsMet bool           `json:"required_artifacts_met,omitempty"`
+	ArtifactEventCount   int            `json:"artifact_event_count,omitempty"`
+	FailureReason        string         `json:"failure_reason,omitempty"`
 }

@@ -2874,6 +2874,9 @@ function artifactFromEventContent(content: Record<string, unknown>): ACPArtifact
 }
 
 function mergeArtifacts(items: ACPArtifact[], artifact: ACPArtifact): ACPArtifact[] {
+  if (!artifact.id) {
+    return [...items, artifact];
+  }
   let replaced = false;
   const next = items.map((item) => {
     if (item.id !== artifact.id) return item;
@@ -3016,6 +3019,15 @@ function buildPromptPayload(
       );
     }
   }
+  if (looksLikeCRMPrompt(prompt)) {
+    sections.push(
+      [
+        "Search playbooks first for CRM requests. Prefer crm_service_backlog_triage for ticket backlog, crm_customer_360_review for named-customer context, crm_sales_pipeline_review for pipeline questions, and crm_service_sales_overview for blended CRM questions.",
+        "Use crm.ticket.summary for backlog facts, crm.customer.summary or crm.customer.timeline for named customers, crm.customer.health for at-risk customer review, and crm.opportunity.pipeline.summary for pipeline review before answering.",
+        "Do not stop at generic business search wrappers when dedicated CRM summary tools exist.",
+      ].join(" "),
+    );
+  }
   if (looksLikeDashboardPrompt(prompt)) {
     const explicitFullBoard = looksLikeFullDashboardPrompt(prompt);
     sections.push(
@@ -3117,6 +3129,20 @@ function deriveCurrentPlan(session: ACPSession | null): ACPPlanEntry[] {
       : mergedPlan;
   }
   return session.current_plan || [];
+}
+
+function looksLikeCRMPrompt(prompt: string): boolean {
+  const lower = prompt.trim().toLowerCase();
+  if (!lower) return false;
+  return [
+    "crm",
+    "customer 360",
+    "customer health",
+    "ticket backlog",
+    "service backlog",
+    "pipeline",
+    "opportunity",
+  ].some((token) => lower.includes(token));
 }
 
 function looksLikeDashboardPrompt(prompt: string): boolean {

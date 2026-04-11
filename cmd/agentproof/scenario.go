@@ -1697,6 +1697,374 @@ func seedRetailRecoveryShowcaseScenario(ctx context.Context, client *apiClient, 
 	return manifest, nil
 }
 
+func seedCRMServiceSalesOverviewScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
+	runID, suffix := newRunContext()
+	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "crm_service_sales_overview", "crm-service-sales", runID, suffix)
+	if err != nil {
+		return scenarioManifest{}, err
+	}
+
+	now := time.Now().UTC()
+	queueSupportCode := "CRM-SUPPORT-" + suffix
+	queueSuccessCode := "CRM-SUCCESS-" + suffix
+	customerName := "CRM Demo Customer " + runID
+	healthyCustomerName := "Healthy Beans Co " + runID
+	contactName := "Alya CRM " + runID
+	healthyContactName := "Bima CRM " + runID
+	ticketTitle := "Damaged shipment replacement"
+	overdueTicketTitle := "Refund follow-up"
+	opportunityTitle := "Quarterly catering contract"
+	healthyOpportunityTitle := "Loyalty bundle expansion"
+
+	queueSupport, err := client.createModel(ctx, "crm_queue", map[string]any{
+		"code":                 queueSupportCode,
+		"name":                 "CRM Support " + runID,
+		"triage_sla_hours":     2,
+		"resolution_sla_hours": 12,
+		"status":               "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create support queue: %w", err)
+	}
+	queueSuccess, err := client.createModel(ctx, "crm_queue", map[string]any{
+		"code":                 queueSuccessCode,
+		"name":                 "CRM Success " + runID,
+		"triage_sla_hours":     4,
+		"resolution_sla_hours": 24,
+		"status":               "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create success queue: %w", err)
+	}
+	if _, err := client.createModel(ctx, "crm_sla_policy", map[string]any{
+		"code":                 "CRM-SLA-HIGH-" + suffix,
+		"name":                 "CRM High Priority SLA " + runID,
+		"queue_code":           queueSupportCode,
+		"priority":             "high",
+		"first_response_hours": 1,
+		"resolution_hours":     8,
+		"status":               "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm sla policy: %w", err)
+	}
+	if _, err := client.createModel(ctx, "crm_assignment_rule", map[string]any{
+		"code":              "CRM-ASSIGN-" + suffix,
+		"name":              "Support Queue Default " + runID,
+		"queue_code":        queueSupportCode,
+		"assign_queue_code": queueSupportCode,
+		"assign_user_id":    "user_admin",
+		"rank":              10,
+		"status":            "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm assignment rule: %w", err)
+	}
+
+	party, err := client.createModel(ctx, "party", map[string]any{
+		"party_type": "organization",
+		"name":       customerName,
+		"status":     "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm customer party: %w", err)
+	}
+	healthyParty, err := client.createModel(ctx, "party", map[string]any{
+		"party_type": "organization",
+		"name":       healthyCustomerName,
+		"status":     "active",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create healthy crm party: %w", err)
+	}
+	if _, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":         stringValue(party["id"]),
+		"customer_name":    customerName,
+		"customer_type":    "member",
+		"customer_segment": "strategic",
+		"member_status":    "active",
+		"member_tier":      "gold",
+		"status":           "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm customer profile: %w", err)
+	}
+	if _, err := client.createModel(ctx, "customer_profile", map[string]any{
+		"party_id":         stringValue(healthyParty["id"]),
+		"customer_name":    healthyCustomerName,
+		"customer_type":    "member",
+		"customer_segment": "growth",
+		"member_status":    "active",
+		"member_tier":      "silver",
+		"status":           "active",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create healthy customer profile: %w", err)
+	}
+	contact, err := client.createModel(ctx, "party_contact", map[string]any{
+		"party_id":     stringValue(party["id"]),
+		"name":         contactName,
+		"contact_kind": "person",
+		"email":        "alya+" + suffix + "@example.com",
+		"status":       "active",
+		"is_primary":   true,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm contact: %w", err)
+	}
+	healthyContact, err := client.createModel(ctx, "party_contact", map[string]any{
+		"party_id":     stringValue(healthyParty["id"]),
+		"name":         healthyContactName,
+		"contact_kind": "person",
+		"email":        "bima+" + suffix + "@example.com",
+		"status":       "active",
+		"is_primary":   true,
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create healthy crm contact: %w", err)
+	}
+
+	overdueTicket, err := client.createModel(ctx, "crm_ticket", map[string]any{
+		"ticket_number":         "CRM-TKT-OD-" + suffix,
+		"title":                 overdueTicketTitle,
+		"description":           "Customer still waiting for refund confirmation.",
+		"party_id":              stringValue(party["id"]),
+		"party_name":            customerName,
+		"queue_code":            queueSupportCode,
+		"priority":              "urgent",
+		"severity":              "high",
+		"status":                "open",
+		"assignee_user_id":      "user_admin",
+		"opened_at":             now.Add(-72 * time.Hour).Format(time.RFC3339),
+		"first_response_due_at": now.Add(-48 * time.Hour).Format(time.RFC3339),
+		"first_response_at":     now.Add(-47 * time.Hour).Format(time.RFC3339),
+		"due_at":                now.Add(-24 * time.Hour).Format(time.RFC3339),
+		"source_channel":        "email",
+		"issue_category":        "refund",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create overdue crm ticket: %w", err)
+	}
+	currentTicket, err := client.createModel(ctx, "crm_ticket", map[string]any{
+		"ticket_number":         "CRM-TKT-OP-" + suffix,
+		"title":                 ticketTitle,
+		"description":           "Customer reports damaged cartons on arrival.",
+		"party_id":              stringValue(party["id"]),
+		"party_name":            customerName,
+		"queue_code":            queueSupportCode,
+		"priority":              "high",
+		"severity":              "high",
+		"status":                "open",
+		"assignee_user_id":      "user_admin",
+		"opened_at":             now.Add(-18 * time.Hour).Format(time.RFC3339),
+		"first_response_due_at": now.Add(-16 * time.Hour).Format(time.RFC3339),
+		"first_response_at":     now.Add(-15 * time.Hour).Format(time.RFC3339),
+		"due_at":                now.Add(24 * time.Hour).Format(time.RFC3339),
+		"source_channel":        "email",
+		"issue_category":        "logistics",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create current crm ticket: %w", err)
+	}
+	if _, err := client.createModel(ctx, "crm_ticket", map[string]any{
+		"ticket_number":         "CRM-TKT-RS-" + suffix,
+		"title":                 "Welcome package follow-up",
+		"description":           "Member activation package delivered.",
+		"party_id":              stringValue(healthyParty["id"]),
+		"party_name":            healthyCustomerName,
+		"queue_code":            queueSuccessCode,
+		"priority":              "medium",
+		"severity":              "low",
+		"status":                "resolved",
+		"assignee_user_id":      "user_admin",
+		"opened_at":             now.Add(-96 * time.Hour).Format(time.RFC3339),
+		"first_response_due_at": now.Add(-90 * time.Hour).Format(time.RFC3339),
+		"first_response_at":     now.Add(-92 * time.Hour).Format(time.RFC3339),
+		"due_at":                now.Add(-72 * time.Hour).Format(time.RFC3339),
+		"resolved_at":           now.Add(-48 * time.Hour).Format(time.RFC3339),
+		"resolution_notes":      "Package resent and confirmed delivered.",
+		"source_channel":        "chat",
+		"issue_category":        "onboarding",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create resolved crm ticket: %w", err)
+	}
+	for extra := 0; extra < 10; extra++ {
+		if _, err := client.createModel(ctx, "crm_ticket", map[string]any{
+			"ticket_number":         fmt.Sprintf("CRM-TKT-EX-%d-%s", extra+1, suffix),
+			"title":                 fmt.Sprintf("Backlog escalation %d", extra+1),
+			"description":           "Extra seeded support backlog to make the scenario queue dominant.",
+			"party_id":              stringValue(party["id"]),
+			"party_name":            customerName,
+			"queue_code":            queueSupportCode,
+			"priority":              "medium",
+			"severity":              "low",
+			"status":                "open",
+			"assignee_user_id":      "user_admin",
+			"opened_at":             now.Add(time.Duration(-10-extra) * time.Hour).Format(time.RFC3339),
+			"first_response_due_at": now.Add(time.Duration(-9-extra) * time.Hour).Format(time.RFC3339),
+			"first_response_at":     now.Add(time.Duration(-8-extra) * time.Hour).Format(time.RFC3339),
+			"due_at":                now.Add(time.Duration(12-extra) * time.Hour).Format(time.RFC3339),
+			"source_channel":        "email",
+			"issue_category":        "service_recovery",
+		}); err != nil {
+			return scenarioManifest{}, fmt.Errorf("create extra crm backlog ticket: %w", err)
+		}
+	}
+
+	if _, err := client.createModel(ctx, "crm_ticket_comment", map[string]any{
+		"ticket_id":      stringValue(currentTicket["id"]),
+		"ticket_number":  stringValue(mapValue(currentTicket, "values")["ticket_number"]),
+		"comment_type":   "internal_note",
+		"body":           "Replacement review started.",
+		"author_user_id": "user_admin",
+		"created_at":     now.Add(-14 * time.Hour).Format(time.RFC3339),
+		"party_id":       stringValue(party["id"]),
+		"party_name":     customerName,
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm ticket comment: %w", err)
+	}
+	if _, err := client.createModel(ctx, "crm_ticket_activity", map[string]any{
+		"ticket_id":         stringValue(currentTicket["id"]),
+		"ticket_number":     stringValue(mapValue(currentTicket, "values")["ticket_number"]),
+		"activity_type":     "assignment_note",
+		"actor_user_id":     "user_admin",
+		"assignee_user_id":  "user_admin",
+		"queue_code":        queueSupportCode,
+		"from_status":       "new",
+		"to_status":         "open",
+		"occurred_at":       now.Add(-14 * time.Hour).Format(time.RFC3339),
+		"note":              "Assigned to support lead for recovery follow-up.",
+		"party_id":          stringValue(party["id"]),
+		"party_name":        customerName,
+		"severity":          "high",
+		"priority":          "high",
+		"source_channel":    "email",
+		"issue_category":    "logistics",
+		"ticket_status_key": "open",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm ticket activity: %w", err)
+	}
+
+	lead, err := client.createModel(ctx, "crm_lead", map[string]any{
+		"lead_number":         "CRM-LEAD-" + suffix,
+		"title":               "Upsell catering program",
+		"party_id":            stringValue(party["id"]),
+		"party_name":          customerName,
+		"contact_id":          stringValue(contact["id"]),
+		"owner_user_id":       "user_admin",
+		"source_channel":      "referral",
+		"status":              "qualified",
+		"rating":              "hot",
+		"estimated_value":     18000000,
+		"expected_close_date": now.AddDate(0, 1, 0).Format("2006-01-02"),
+		"next_action_at":      now.Add(-24 * time.Hour).Format(time.RFC3339),
+		"notes":               "Customer open to quarterly contract.",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm lead: %w", err)
+	}
+	opportunity, err := client.createModel(ctx, "crm_opportunity", map[string]any{
+		"opportunity_number":  "CRM-OPP-" + suffix,
+		"title":               opportunityTitle,
+		"party_id":            stringValue(party["id"]),
+		"party_name":          customerName,
+		"contact_id":          stringValue(contact["id"]),
+		"owner_user_id":       "user_admin",
+		"source_lead_id":      stringValue(lead["id"]),
+		"stage":               "proposal",
+		"status":              "open",
+		"estimated_value":     24000000,
+		"expected_close_date": now.AddDate(0, 1, 15).Format("2006-01-02"),
+		"next_action_at":      now.Add(-48 * time.Hour).Format(time.RFC3339),
+		"notes":               "Proposal draft in review.",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm opportunity: %w", err)
+	}
+	if _, err := client.createModel(ctx, "crm_activity", map[string]any{
+		"activity_type": "meeting",
+		"subject":       "Review service recovery and catering proposal",
+		"related_kind":  "opportunity",
+		"related_id":    stringValue(opportunity["id"]),
+		"party_id":      stringValue(party["id"]),
+		"party_name":    customerName,
+		"owner_user_id": "user_admin",
+		"status":        "open",
+		"due_at":        now.Add(72 * time.Hour).Format(time.RFC3339),
+		"note":          "Prepare both service recovery and upsell summary.",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create crm activity: %w", err)
+	}
+	healthyLead, err := client.createModel(ctx, "crm_lead", map[string]any{
+		"lead_number":         "CRM-LEAD-HEALTHY-" + suffix,
+		"title":               "Loyalty bundle expansion",
+		"party_id":            stringValue(healthyParty["id"]),
+		"party_name":          healthyCustomerName,
+		"contact_id":          stringValue(healthyContact["id"]),
+		"owner_user_id":       "user_admin",
+		"source_channel":      "web",
+		"status":              "qualified",
+		"rating":              "warm",
+		"estimated_value":     12000000,
+		"expected_close_date": now.AddDate(0, 2, 0).Format("2006-01-02"),
+		"next_action_at":      now.Add(48 * time.Hour).Format(time.RFC3339),
+		"notes":               "Healthy account with expansion potential.",
+	})
+	if err != nil {
+		return scenarioManifest{}, fmt.Errorf("create healthy crm lead: %w", err)
+	}
+	if _, err := client.createModel(ctx, "crm_opportunity", map[string]any{
+		"opportunity_number":  "CRM-OPP-HEALTHY-" + suffix,
+		"title":               healthyOpportunityTitle,
+		"party_id":            stringValue(healthyParty["id"]),
+		"party_name":          healthyCustomerName,
+		"contact_id":          stringValue(healthyContact["id"]),
+		"owner_user_id":       "user_admin",
+		"source_lead_id":      stringValue(healthyLead["id"]),
+		"stage":               "qualified",
+		"status":              "open",
+		"estimated_value":     12000000,
+		"expected_close_date": now.AddDate(0, 2, 10).Format("2006-01-02"),
+		"next_action_at":      now.Add(72 * time.Hour).Format(time.RFC3339),
+		"notes":               "Healthy account expansion next quarter.",
+	}); err != nil {
+		return scenarioManifest{}, fmt.Errorf("create healthy crm opportunity: %w", err)
+	}
+
+	manifest.Routes = map[string]string{
+		"tickets":       "/ui/crm/tickets",
+		"queues":        "/ui/crm/queues",
+		"leads":         "/ui/crm/leads",
+		"opportunities": "/ui/crm/opportunities",
+		"customer_360":  "/ui/crm/customers/360?party_id=" + stringValue(party["id"]),
+		"dashboard":     "/ui/dashboard",
+		"agent":         "/ui/agent/workspace",
+	}
+	manifest.Entities = map[string]map[string]any{
+		"queue_support":    {"code": queueSupportCode, "name": stringValue(mapValue(queueSupport, "values")["name"])},
+		"queue_success":    {"code": queueSuccessCode, "name": stringValue(mapValue(queueSuccess, "values")["name"])},
+		"customer":         {"party_id": stringValue(party["id"]), "name": customerName, "contact_name": contactName},
+		"healthy_customer": {"party_id": stringValue(healthyParty["id"]), "name": healthyCustomerName, "contact_name": healthyContactName},
+		"overdue_ticket":   {"id": stringValue(overdueTicket["id"]), "title": overdueTicketTitle},
+		"ticket":           {"id": stringValue(currentTicket["id"]), "title": ticketTitle},
+		"opportunity":      {"id": stringValue(opportunity["id"]), "title": opportunityTitle},
+	}
+	manifest.GroundTruth = map[string]any{
+		"priority_queue_code":       queueSupportCode,
+		"priority_customer_name":    customerName,
+		"overdue_ticket_title":      overdueTicketTitle,
+		"open_ticket_title":         ticketTitle,
+		"stale_opportunity_title":   opportunityTitle,
+		"stale_pipeline_value":      24000000,
+		"healthy_customer_name":     healthyCustomerName,
+		"healthy_opportunity_title": healthyOpportunityTitle,
+	}
+	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("crm_service_sales_overview") + fmt.Sprintf(`
+- This CRM scenario validates service backlog, customer 360, and sales pipeline reasoning for %s and %s.
+- Prefer CRM playbooks before raw tool search. Use crm.ticket.summary for backlog, crm.customer.summary or crm.customer.timeline for named customers, crm.customer.health for at-risk summaries, and crm.opportunity.pipeline.summary for pipeline review.
+- For CRM backlog questions, name the exact queue code and mention the overdue ticket that makes the queue risky.
+- For CRM pipeline questions, include the stale opportunity title and the prioritized opportunity value, not only aggregate pipeline totals.
+- When asked to show dashboard widgets, preview CRM widgets on the dashboard surface and rely on the returned artifacts instead of substituting plain text widget names.`, customerName, healthyCustomerName))
+	manifest.PromptPack = crmServiceSalesOverviewPromptPack(customerName, healthyCustomerName, queueSupportCode, ticketTitle, overdueTicketTitle, opportunityTitle)
+	return manifest, nil
+}
+
 func seedLeaveToPayrollScenario(ctx context.Context, client *apiClient, baseURL, opencodeCommand string) (scenarioManifest, error) {
 	runID, suffix := newRunContext()
 	manifest, err := newScenarioManifest(ctx, client, baseURL, opencodeCommand, "leave_to_payroll", "workforce-payroll", runID, suffix)
@@ -2350,6 +2718,124 @@ func defaultMCPPlaybooksJSON() string {
 			},
 		},
 		{
+			"id":          "crm_service_backlog_triage",
+			"name":        "CRM Service Backlog Triage",
+			"description": "Review CRM service backlog, identify the highest-risk customer or queue, and show the best service widgets when the user asks for dashboard evidence.",
+			"domains":     []string{"crm", "service"},
+			"labels":      []string{"crm", "service", "backlog", "sla"},
+			"keywords":    []string{"crm backlog", "ticket backlog", "overdue tickets", "sla", "queue health"},
+			"use_when":    "The user asks about CRM service backlog, ticket pressure, overdue tickets, queue health, or asks for widget evidence for service operations.",
+			"workflow_steps": []string{
+				"Use crm.ticket.summary first for the factual service backlog picture.",
+				"If the user asks for widgets or dashboard evidence, call analytics.dashboard.widget_catalog and then preview the relevant CRM service widgets.",
+				"Name the most at-risk queue or customer explicitly in the final answer.",
+			},
+			"tool_sequence": []map[string]any{
+				{"step": "summarize_service_backlog", "tool_id": "crm.ticket.summary", "required": true, "description": "Load CRM service backlog, overdue tickets, and queue health.", "output": "Open tickets, overdue tickets, queue backlog, and SLA context."},
+				{"step": "discover_crm_widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": false, "when": "Use when the user asks for widgets or dashboard evidence.", "arguments": map[string]any{"surface": "dashboard"}, "description": "Discover CRM dashboard widgets for service backlog.", "output": "Relevant CRM service widget keys."},
+				{"step": "preview_crm_widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": false, "when": "Use when the user asks for widgets or dashboard evidence.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"crm.ticketing.open_tickets", "crm.ticketing.overdue_tickets", "crm.ticketing.queue_backlog"}}, "description": "Preview the CRM service widgets that explain the backlog.", "output": "Dashboard widget artifacts for CRM service backlog."},
+			},
+			"tool_ids": []string{
+				"crm.ticket.summary",
+				"analytics.dashboard.widget_catalog",
+				"analytics.dashboard.widgets.preview",
+			},
+			"required_final_facts": []string{
+				"Most pressured queue or backlog area.",
+				"Most at-risk customer or open-ticket cluster when identifiable.",
+				"Overdue ticket or SLA risk context.",
+			},
+			"required_artifacts": []string{
+				"dashboard_widget artifact for crm.ticketing.open_tickets when widgets are requested",
+				"dashboard_widget artifact for crm.ticketing.overdue_tickets when widgets are requested",
+				"dashboard_widget artifact for crm.ticketing.queue_backlog when widgets are requested",
+			},
+			"guardrails": []string{
+				"Do not answer a service backlog question from generic business search when crm.ticket.summary is available.",
+				"Do not claim dashboard evidence unless widget preview artifacts were actually returned.",
+			},
+			"success_checks": []string{
+				"Final answer names the priority queue or at-risk customer explicitly.",
+				"Widget requests produce CRM service widget artifacts instead of text-only widget names.",
+			},
+			"pitfalls": []string{
+				"Do not stop at queue counts without identifying the customer or overdue pressure point when the user asks who needs attention most.",
+			},
+		},
+		{
+			"id":          "crm_customer_360_review",
+			"name":        "CRM Customer 360 Review",
+			"description": "Load a single customer’s CRM 360 summary or timeline and explain how service issues, activities, and opportunities connect.",
+			"domains":     []string{"crm", "service", "sales"},
+			"labels":      []string{"crm", "customer-360", "timeline"},
+			"keywords":    []string{"customer 360", "customer timeline", "crm customer", "service issue", "opportunity link"},
+			"use_when":    "The user names one customer or asks for CRM customer 360 context, history, timeline, or service-to-sales linkage.",
+			"workflow_steps": []string{
+				"Use crm.customer.summary first for one named customer.",
+				"Use crm.customer.timeline when the request is explicitly about chronology or follow-up history.",
+				"Explain how the current ticket, customer health, and active opportunity relate to each other.",
+			},
+			"tool_sequence": []map[string]any{
+				{"step": "load_customer_summary", "tool_id": "crm.customer.summary", "required": true, "description": "Load customer 360 summary for the named party.", "output": "Customer service, profile, and opportunity summary."},
+				{"step": "load_customer_timeline", "tool_id": "crm.customer.timeline", "required": false, "when": "Use when the user asks for sequence, history, or follow-up details.", "description": "Load timeline entries for the named customer.", "output": "Activity chronology across service and sales."},
+			},
+			"tool_ids": []string{
+				"crm.customer.summary",
+				"crm.customer.timeline",
+			},
+			"required_final_facts": []string{
+				"Customer name.",
+				"Open ticket or service issue summary.",
+				"Active opportunity and stage when present.",
+				"Clear explanation of how service and sales context connect.",
+			},
+			"guardrails": []string{
+				"Do not answer a named-customer question with only aggregate backlog metrics.",
+				"Do not use crm.customer.health as the sole source when the user explicitly asked for one customer’s 360 context.",
+			},
+			"success_checks": []string{
+				"Final answer names the customer and the linked ticket/opportunity records or summaries.",
+			},
+			"pitfalls": []string{
+				"Do not ignore the active opportunity when the ticket and pipeline are linked in the customer summary.",
+			},
+		},
+		{
+			"id":          "crm_sales_pipeline_review",
+			"name":        "CRM Sales Pipeline Review",
+			"description": "Summarize the CRM sales pipeline, highlight stale opportunities, and recommend the next internal sales action.",
+			"domains":     []string{"crm", "sales"},
+			"labels":      []string{"crm", "sales", "pipeline"},
+			"keywords":    []string{"crm pipeline", "stale opportunity", "sales pipeline", "next action"},
+			"use_when":    "The user asks for a CRM pipeline review, stale opportunities, or the next action for active opportunities.",
+			"workflow_steps": []string{
+				"Use crm.opportunity.pipeline.summary first for pipeline value and stage mix.",
+				"If one stale opportunity is called out, name it explicitly and recommend the next internal action.",
+			},
+			"tool_sequence": []map[string]any{
+				{"step": "summarize_pipeline", "tool_id": "crm.opportunity.pipeline.summary", "required": true, "description": "Load CRM sales pipeline value, stale opportunities, and activity coverage.", "output": "Pipeline value, stage mix, stale opportunities, and recommended focus."},
+			},
+			"tool_ids": []string{
+				"crm.opportunity.pipeline.summary",
+				"crm.opportunity.search",
+				"crm.lead.search",
+			},
+			"required_final_facts": []string{
+				"Current pipeline value or stage concentration.",
+				"Stale opportunity name when present.",
+				"Recommended next internal action.",
+			},
+			"guardrails": []string{
+				"Do not infer pipeline health from customer health alone; use crm.opportunity.pipeline.summary.",
+			},
+			"success_checks": []string{
+				"Final answer names the stale opportunity explicitly when one exists.",
+			},
+			"pitfalls": []string{
+				"Do not stop at total pipeline value without calling out stale or overdue next-action pressure.",
+			},
+		},
+		{
 			"id":          "crm_service_sales_overview",
 			"name":        "CRM Service and Sales Overview",
 			"description": "Summarize CRM service backlog, customer health, customer 360 context, and active sales pipeline for internal CRM review.",
@@ -2803,6 +3289,58 @@ func retailRecoveryShowcasePromptPack(runID, storeCode, draftTitle string) []pro
 	}
 }
 
+func crmServiceSalesOverviewPromptPack(customerName, healthyCustomerName, queueSupportCode, ticketTitle, overdueTicketTitle, opportunityTitle string) []promptExpectation {
+	return []promptExpectation{
+		{
+			ID:     "service_backlog_widgets",
+			Prompt: "Review the CRM service backlog. Which queue and customer need the most attention right now, and show me the most relevant dashboard widgets for why?",
+			RequiredFacts: []requiredFact{
+				{Key: "priority_queue", Severity: "critical", Checks: []string{queueSupportCode}},
+				{Key: "priority_customer", Severity: "critical", Checks: []string{customerName}},
+				{Key: "overdue_ticket", Severity: "high", Checks: []string{overdueTicketTitle}},
+			},
+			ExpectedArtifact: &artifactExpectation{
+				Kind: "dashboard_widget",
+				WidgetKeys: []string{
+					"crm.ticketing.open_tickets",
+					"crm.ticketing.overdue_tickets",
+					"crm.ticketing.queue_backlog",
+				},
+				MinArtifacts: 3,
+			},
+		},
+		{
+			ID:     "customer_360",
+			Prompt: fmt.Sprintf("Open the CRM customer 360 context for %s and explain the link between the current service issue and the active opportunity.", customerName),
+			RequiredFacts: []requiredFact{
+				{Key: "customer_name", Severity: "critical", Checks: []string{customerName}},
+				{Key: "ticket_title", Severity: "critical", Checks: []string{ticketTitle}},
+				{Key: "opportunity_title", Severity: "critical", Checks: []string{opportunityTitle}},
+				{Key: "proposal_stage", Severity: "high", Checks: []string{"proposal"}},
+			},
+		},
+		{
+			ID:     "pipeline_review",
+			Prompt: "Summarize the active CRM sales pipeline. Which opportunity is stale, what is the pipeline value we should prioritize, and what should happen next?",
+			RequiredFacts: []requiredFact{
+				{Key: "stale_opportunity", Severity: "critical", Checks: []string{opportunityTitle}},
+				{Key: "priority_customer", Severity: "high", Checks: []string{customerName}},
+				{Key: "pipeline_value", Severity: "critical", Checks: []string{"24000000"}},
+			},
+		},
+		{
+			ID:     "service_sales_overview",
+			Prompt: fmt.Sprintf("Give me a combined CRM service and sales overview for %s and %s. Tell me who is at risk, who looks healthy, and the next internal action we should take.", customerName, healthyCustomerName),
+			RequiredFacts: []requiredFact{
+				{Key: "at_risk_customer", Severity: "critical", Checks: []string{customerName}},
+				{Key: "healthy_customer", Severity: "critical", Checks: []string{healthyCustomerName}},
+				{Key: "backlog_reference", Severity: "high", Checks: []string{queueSupportCode}},
+				{Key: "pipeline_reference", Severity: "high", Checks: []string{"pipeline"}},
+			},
+		},
+	}
+}
+
 func mustJSONString(value any) string {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -3049,8 +3587,13 @@ func agentproofMCPOperations() []string {
 		"crm_opportunity.update",
 		"crm_activity.list",
 		"crm_activity.read",
+		"party.list",
+		"party.read",
+		"party_contact.list",
+		"party_contact.read",
 		"item.list",
 		"customer.list",
+		"customer.read",
 		"pos_sale.list",
 		"promotion_campaign.list",
 		"promotion_code.list",

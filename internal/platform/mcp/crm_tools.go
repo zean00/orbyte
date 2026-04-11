@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/shared"
 )
 
@@ -17,10 +18,28 @@ func (s *Server) crmTicketSummary(actor ActorContext) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	summary := fmt.Sprintf("CRM summary loaded with %d open tickets and %d overdue tickets.", crmNestedInt(payload, "overview", "open_tickets"), crmNestedInt(payload, "overview", "overdue_tickets"))
+	if queueCode := crmNestedString(payload, "overview", "priority_queue_code"); strings.TrimSpace(queueCode) != "" {
+		summary += fmt.Sprintf(" Priority queue: %s", queueCode)
+		if count := crmNestedInt(payload, "overview", "priority_queue_open_tickets"); count > 0 {
+			summary += fmt.Sprintf(" with %d open tickets", count)
+		}
+		summary += "."
+	}
+	if customerName := crmNestedString(payload, "overview", "priority_customer_name"); strings.TrimSpace(customerName) != "" {
+		summary += fmt.Sprintf(" Priority customer: %s", customerName)
+		if count := crmNestedInt(payload, "overview", "priority_customer_open_tickets"); count > 0 {
+			summary += fmt.Sprintf(" with %d open tickets", count)
+		}
+		summary += "."
+	}
+	if overdueTitle := crmNestedString(payload, "overview", "overdue_ticket_title"); strings.TrimSpace(overdueTitle) != "" {
+		summary += fmt.Sprintf(" Overdue example ticket: %s.", overdueTitle)
+	}
 	return map[string]any{
 		"content": []ContentBlock{{
 			Type: "text",
-			Text: fmt.Sprintf("CRM summary loaded with %d open tickets and %d overdue tickets.", crmNestedInt(payload, "overview", "open_tickets"), crmNestedInt(payload, "overview", "overdue_tickets")),
+			Text: summary,
 		}},
 		"structuredContent": payload,
 	}, nil
@@ -42,10 +61,17 @@ func (s *Server) crmTicketSearch(actor ActorContext, arguments map[string]any) (
 	if err != nil {
 		return nil, err
 	}
+	summary := fmt.Sprintf("Found %d CRM tickets.", total)
+	if top := crmTopRecordSummary(anySlice(items), 3, func(record map[string]any) string {
+		values := crmRecordValues(record)
+		return fmt.Sprintf("%s (%s, %s, queue %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["party_name"]), crmToolTextValue(values["status"]), crmToolTextValue(values["queue_code"]), crmRecordID(record))
+	}); top != "" {
+		summary += " Top matches: " + top
+	}
 	return map[string]any{
 		"content": []ContentBlock{{
 			Type: "text",
-			Text: fmt.Sprintf("Found %d CRM tickets.", total),
+			Text: summary,
 		}},
 		"structuredContent": map[string]any{
 			"items":     items,
@@ -147,7 +173,7 @@ func (s *Server) crmTicketCommentCreate(actor ActorContext, arguments map[string
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Added CRM ticket comment for %s.", ticketID)}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Added CRM ticket comment for %s.", ticketID)}},
 		"structuredContent": item,
 	}, nil
 }
@@ -169,7 +195,7 @@ func (s *Server) crmTicketAssign(actor ActorContext, arguments map[string]any) (
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Assigned CRM ticket %s.", ticketID)}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Assigned CRM ticket %s.", ticketID)}},
 		"structuredContent": item,
 	}, nil
 }
@@ -190,7 +216,7 @@ func (s *Server) crmTicketResolve(actor ActorContext, arguments map[string]any) 
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Resolved CRM ticket %s.", ticketID)}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Resolved CRM ticket %s.", ticketID)}},
 		"structuredContent": item,
 	}, nil
 }
@@ -199,16 +225,38 @@ func (s *Server) crmCustomerSummary(actor ActorContext, arguments map[string]any
 	if s == nil || s.crm == nil {
 		return nil, fmt.Errorf("crm is unavailable")
 	}
-	partyID := strings.TrimSpace(stringArg(arguments, "party_id"))
+	partyID := crmResolvePartyID(s, arguments)
 	if partyID == "" {
-		return nil, shared.Validation("party_id is required")
+		return nil, shared.Validation("party_id or query is required")
 	}
 	payload, err := s.crm.Customer360(partyID, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
+	party := payload["party"]
+	query := strings.TrimSpace(stringArg(arguments, "query"))
+	partyName := crmToolTextValue(crmRecordValues(party)["name"])
+	if partyName == "" {
+		partyName = query
+	}
+	ticketItems := crmRecordSlice(payload["tickets"])
+	opportunityItems := crmRecordSlice(payload["opportunities"])
+	if len(ticketItems) == 0 {
+		ticketItems, _, _ = s.crm.SearchTickets(map[string]string{"party_id": partyID}, partyName, 1, 20)
+	}
+	if len(opportunityItems) == 0 {
+		opportunityItems, _, _ = s.crm.SearchOpportunities(map[string]string{"party_id": partyID}, partyName, 1, 20)
+	}
+	summary := fmt.Sprintf("Loaded CRM customer 360 for %s.", partyName)
+	if ticket := crmPreferredCurrentTicket(ticketItems, time.Now().UTC()); strings.TrimSpace(ticket.ID) != "" {
+		summary += fmt.Sprintf(" Current service issue: %s (%s).", crmToolTextValue(ticket.Values["title"]), crmToolTextValue(ticket.Values["status"]))
+	}
+	if len(opportunityItems) > 0 {
+		first := opportunityItems[0]
+		summary += fmt.Sprintf(" Active opportunity: %s (%s, value %s).", crmToolTextValue(first.Values["title"]), crmToolTextValue(first.Values["stage"]), crmToolTextValue(first.Values["estimated_value"]))
+	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM customer 360 for %s.", partyID)}},
+		"content":           []ContentBlock{{Type: "text", Text: summary}},
 		"structuredContent": payload,
 	}, nil
 }
@@ -217,16 +265,18 @@ func (s *Server) crmCustomerTimeline(actor ActorContext, arguments map[string]an
 	if s == nil || s.crm == nil {
 		return nil, fmt.Errorf("crm is unavailable")
 	}
-	partyID := strings.TrimSpace(stringArg(arguments, "party_id"))
+	partyID := crmResolvePartyID(s, arguments)
 	if partyID == "" {
-		return nil, shared.Validation("party_id is required")
+		return nil, shared.Validation("party_id or query is required")
 	}
 	payload, err := s.crm.Customer360(partyID, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
+	party := payload["party"]
+	summary := fmt.Sprintf("Loaded CRM customer timeline for %s.", crmToolTextValue(crmRecordValues(party)["name"]))
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM customer timeline for %s.", partyID)}},
+		"content": []ContentBlock{{Type: "text", Text: summary}},
 		"structuredContent": map[string]any{
 			"party_id":      partyID,
 			"tickets":       payload["tickets"],
@@ -245,7 +295,7 @@ func (s *Server) crmCustomerHealth(actor ActorContext) (map[string]any, error) {
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM customer health for %d at-risk customers.", crmNestedInt(payload, "overview", "customers_with_open_issues"))}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM customer health for %d at-risk customers.", crmNestedInt(payload, "overview", "customers_with_open_issues"))}},
 		"structuredContent": payload,
 	}, nil
 }
@@ -266,8 +316,15 @@ func (s *Server) crmLeadSearch(actor ActorContext, arguments map[string]any) (ma
 	if err != nil {
 		return nil, err
 	}
+	summary := fmt.Sprintf("Found %d CRM leads.", total)
+	if top := crmTopRecordSummary(anySlice(items), 3, func(record map[string]any) string {
+		values := crmRecordValues(record)
+		return fmt.Sprintf("%s (%s, rating %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["status"]), crmToolTextValue(values["rating"]), crmRecordID(record))
+	}); top != "" {
+		summary += " Top matches: " + top
+	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d CRM leads.", total)}},
+		"content":           []ContentBlock{{Type: "text", Text: summary}},
 		"structuredContent": map[string]any{"items": items, "total": total, "page": page, "page_size": pageSize},
 	}, nil
 }
@@ -285,7 +342,7 @@ func (s *Server) crmLeadGet(actor ActorContext, arguments map[string]any) (map[s
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM lead %s.", leadID)}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM lead %s.", leadID)}},
 		"structuredContent": item,
 	}, nil
 }
@@ -303,7 +360,7 @@ func (s *Server) crmLeadCreate(actor ActorContext, arguments map[string]any) (ma
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created CRM lead %s.", crmToolTextValue(item.Values["lead_number"]))}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created CRM lead %s.", crmToolTextValue(item.Values["lead_number"]))}},
 		"structuredContent": item,
 	}, nil
 }
@@ -325,7 +382,7 @@ func (s *Server) crmLeadUpdate(actor ActorContext, arguments map[string]any) (ma
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Updated CRM lead %s.", crmToolTextValue(item.Values["lead_number"]))}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Updated CRM lead %s.", crmToolTextValue(item.Values["lead_number"]))}},
 		"structuredContent": item,
 	}, nil
 }
@@ -346,8 +403,15 @@ func (s *Server) crmOpportunitySearch(actor ActorContext, arguments map[string]a
 	if err != nil {
 		return nil, err
 	}
+	summary := fmt.Sprintf("Found %d CRM opportunities.", total)
+	if top := crmTopRecordSummary(anySlice(items), 5, func(record map[string]any) string {
+		values := crmRecordValues(record)
+		return fmt.Sprintf("%s (%s, %s, value %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["party_name"]), crmToolTextValue(values["stage"]), crmToolTextValue(values["estimated_value"]), crmRecordID(record))
+	}); top != "" {
+		summary += " Top matches: " + top
+	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Found %d CRM opportunities.", total)}},
+		"content":           []ContentBlock{{Type: "text", Text: summary}},
 		"structuredContent": map[string]any{"items": items, "total": total, "page": page, "page_size": pageSize},
 	}, nil
 }
@@ -365,7 +429,7 @@ func (s *Server) crmOpportunityGet(actor ActorContext, arguments map[string]any)
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM opportunity %s.", opportunityID)}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded CRM opportunity %s.", opportunityID)}},
 		"structuredContent": item,
 	}, nil
 }
@@ -383,7 +447,7 @@ func (s *Server) crmOpportunityCreate(actor ActorContext, arguments map[string]a
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created CRM opportunity %s.", crmToolTextValue(item.Values["opportunity_number"]))}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created CRM opportunity %s.", crmToolTextValue(item.Values["opportunity_number"]))}},
 		"structuredContent": item,
 	}, nil
 }
@@ -405,7 +469,7 @@ func (s *Server) crmOpportunityUpdate(actor ActorContext, arguments map[string]a
 		return nil, err
 	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Updated CRM opportunity %s.", crmToolTextValue(item.Values["opportunity_number"]))}},
+		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Updated CRM opportunity %s.", crmToolTextValue(item.Values["opportunity_number"]))}},
 		"structuredContent": item,
 	}, nil
 }
@@ -418,8 +482,22 @@ func (s *Server) crmOpportunityPipelineSummary(actor ActorContext) (map[string]a
 	if err != nil {
 		return nil, err
 	}
+	priorityTitle := crmNestedString(payload, "overview", "priority_opportunity_title")
+	priorityCustomer := crmNestedString(payload, "overview", "priority_customer_name")
+	priorityValue := crmNestedInt(payload, "overview", "priority_pipeline_value")
+	summary := fmt.Sprintf("CRM pipeline loaded with %d open opportunities.", crmNestedInt(payload, "overview", "open_opportunities"))
+	if strings.TrimSpace(priorityTitle) != "" {
+		summary += fmt.Sprintf(" Priority stale opportunity: %s", priorityTitle)
+		if strings.TrimSpace(priorityCustomer) != "" {
+			summary += fmt.Sprintf(" for %s", priorityCustomer)
+		}
+		if priorityValue > 0 {
+			summary += fmt.Sprintf(" valued at %d", priorityValue)
+		}
+		summary += "."
+	}
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("CRM pipeline loaded with %d open opportunities.", crmNestedInt(payload, "overview", "open_opportunities"))}},
+		"content":           []ContentBlock{{Type: "text", Text: summary}},
 		"structuredContent": payload,
 	}, nil
 }
@@ -441,6 +519,176 @@ func crmMutationValues(arguments map[string]any, keys []string) map[string]any {
 		}
 	}
 	return values
+}
+
+func crmMapValue(value any, key ...string) map[string]any {
+	mapped, _ := value.(map[string]any)
+	if len(key) == 0 {
+		return mapped
+	}
+	if mapped == nil {
+		return nil
+	}
+	nested, _ := mapped[key[0]].(map[string]any)
+	return nested
+}
+
+func crmRecordValues(value any) map[string]any {
+	switch typed := value.(type) {
+	case model.Record:
+		return typed.Values
+	case *model.Record:
+		if typed == nil {
+			return nil
+		}
+		return typed.Values
+	case map[string]any:
+		if values, ok := typed["values"].(map[string]any); ok {
+			return values
+		}
+		return typed
+	default:
+		return nil
+	}
+}
+
+func crmRecordSlice(value any) []model.Record {
+	switch typed := value.(type) {
+	case []model.Record:
+		return append([]model.Record(nil), typed...)
+	case []any:
+		records := make([]model.Record, 0, len(typed))
+		for _, item := range typed {
+			switch record := item.(type) {
+			case model.Record:
+				records = append(records, record)
+			case *model.Record:
+				if record != nil {
+					records = append(records, *record)
+				}
+			}
+		}
+		return records
+	default:
+		return nil
+	}
+}
+
+func crmRecordID(value any) string {
+	switch typed := value.(type) {
+	case model.Record:
+		return typed.ID
+	case *model.Record:
+		if typed == nil {
+			return ""
+		}
+		return typed.ID
+	case map[string]any:
+		return crmToolTextValue(typed["id"])
+	default:
+		return ""
+	}
+}
+
+func crmResolvePartyID(s *Server, arguments map[string]any) string {
+	partyID := strings.TrimSpace(stringArg(arguments, "party_id"))
+	if partyID != "" {
+		return partyID
+	}
+	query := strings.TrimSpace(stringArg(arguments, "query"))
+	if query == "" || s == nil || s.crm == nil {
+		return ""
+	}
+	return s.crm.ResolveCustomerPartyID(query)
+}
+
+func crmTopRecordSummary(items []any, limit int, builder func(map[string]any) string) string {
+	parts := make([]string, 0, limit)
+	for _, item := range items {
+		if len(parts) >= limit {
+			break
+		}
+		record, _ := item.(map[string]any)
+		if len(record) == 0 {
+			continue
+		}
+		part := strings.TrimSpace(builder(record))
+		if part == "" {
+			continue
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func crmPreferredCurrentTicket(items []model.Record, now time.Time) model.Record {
+	filtered := make([]model.Record, 0, len(items))
+	for _, item := range items {
+		status := strings.TrimSpace(crmToolTextValue(item.Values["status"]))
+		if status == "open" || status == "new" || status == "in_progress" {
+			filtered = append(filtered, item)
+		}
+	}
+	if len(filtered) == 0 {
+		return model.Record{}
+	}
+	best := filtered[0]
+	for _, item := range filtered[1:] {
+		bestDue := parseRFC3339(best.Values["due_at"])
+		itemDue := parseRFC3339(item.Values["due_at"])
+		bestFuture := !bestDue.IsZero() && bestDue.After(now)
+		itemFuture := !itemDue.IsZero() && itemDue.After(now)
+		if itemFuture != bestFuture {
+			if itemFuture {
+				best = item
+			}
+			continue
+		}
+		bestPriority := crmPriorityRank(strings.TrimSpace(crmToolTextValue(best.Values["priority"])))
+		itemPriority := crmPriorityRank(strings.TrimSpace(crmToolTextValue(item.Values["priority"])))
+		if itemPriority != bestPriority {
+			if itemPriority > bestPriority {
+				best = item
+			}
+			continue
+		}
+		if item.UpdatedAt.After(best.UpdatedAt) {
+			best = item
+		}
+	}
+	return best
+}
+
+func crmPriorityRank(priority string) int {
+	switch strings.ToLower(strings.TrimSpace(priority)) {
+	case "urgent":
+		return 4
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func parseRFC3339(value any) time.Time {
+	text := strings.TrimSpace(crmToolTextValue(value))
+	if text == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339, text)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
+}
+
+func crmNestedString(payload map[string]any, outer, inner string) string {
+	section, _ := payload[outer].(map[string]any)
+	return crmToolTextValue(section[inner])
 }
 
 func crmNestedInt(payload map[string]any, outer, inner string) int {

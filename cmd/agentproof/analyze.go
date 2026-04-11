@@ -31,15 +31,24 @@ func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioMan
 		for ; messageCursor < len(session.Messages); messageCursor++ {
 			if session.Messages[messageCursor].Role == "user" && strings.TrimSpace(session.Messages[messageCursor].Content) == strings.TrimSpace(prompt.Prompt) {
 				result.UserMessageID = session.Messages[messageCursor].ID
+				parts := make([]string, 0)
 				for next := messageCursor + 1; next < len(session.Messages); next++ {
+					if session.Messages[next].Role == "user" {
+						messageCursor = next - 1
+						break
+					}
 					if session.Messages[next].Role != "assistant" {
 						continue
 					}
 					result.AssistantMessageID = session.Messages[next].ID
-					result.Answer = session.Messages[next].Content
-					messageCursor = next
-					break
+					if content := strings.TrimSpace(session.Messages[next].Content); content != "" {
+						parts = append(parts, content)
+					}
+					if next == len(session.Messages)-1 {
+						messageCursor = next
+					}
 				}
+				result.Answer = strings.TrimSpace(strings.Join(parts, "\n"))
 				break
 			}
 		}
@@ -48,6 +57,8 @@ func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioMan
 			traceCursor = nextTraceCursor
 		}
 		classifyPrompt(&result, prompt, traceWindow)
+		result.MatchedPlaybookID = matchedPlaybookID(traceWindow)
+		result.ArtifactEventCount = countArtifactEvents(traceWindow, session.Artifacts)
 		if prompt.ExpectedArtifact != nil {
 			verifyArtifact(&result, *prompt.ExpectedArtifact, session)
 		}
@@ -302,9 +313,11 @@ func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, 
 			return
 		}
 		result.ArtifactVerified = true
+		result.RequiredArtifactsPresent = true
 		return
 	}
 	result.ArtifactVerified = false
+	result.RequiredArtifactsPresent = false
 	result.Classification = "unacceptable"
 	result.MissingFacts = append(result.MissingFacts, "expected_dashboard_artifact")
 	result.Investigation = "The answer did not include the expected dashboard artifact block, or the artifact did not contain the required widget set."
@@ -394,6 +407,52 @@ func firstNonNil(values ...any) any {
 	return nil
 }
 
+func matchedPlaybookID(trace []sessionTraceEvent) string {
+	for _, event := range trace {
+		if !strings.HasPrefix(event.Kind, "tool_call") {
+			continue
+		}
+		toolName := strings.TrimSpace(tracePayloadString(event.Payload, "tool_name"))
+		if toolName == "" || !strings.Contains(strings.ToLower(toolName), "playbooks.describe") {
+			continue
+		}
+		arguments := mapValue(event.Payload, "arguments")
+		if playbookID := strings.TrimSpace(stringValue(arguments["playbook_id"])); playbookID != "" {
+			return playbookID
+		}
+	}
+	return ""
+}
+
+func collectMatchedPlaybookIDs(results []promptAnalysisResult) []string {
+	seen := map[string]struct{}{}
+	items := make([]string, 0)
+	for _, item := range results {
+		if strings.TrimSpace(item.MatchedPlaybookID) == "" {
+			continue
+		}
+		if _, ok := seen[item.MatchedPlaybookID]; ok {
+			continue
+		}
+		seen[item.MatchedPlaybookID] = struct{}{}
+		items = append(items, item.MatchedPlaybookID)
+	}
+	return items
+}
+
+func countArtifactEvents(trace []sessionTraceEvent, sessionArtifacts []sessionArtifact) int {
+	total := 0
+	for _, event := range trace {
+		if event.Kind == "session_update" && strings.TrimSpace(tracePayloadString(event.Payload, "update_kind")) == "artifact" {
+			total++
+		}
+	}
+	if total == 0 && len(sessionArtifacts) > 0 {
+		return len(sessionArtifacts)
+	}
+	return total
+}
+
 func traceWindowForPrompt(prompt string, trace []sessionTraceEvent, cursor int) ([]sessionTraceEvent, int) {
 	needle := strings.TrimSpace(prompt)
 	if needle == "" {
@@ -404,7 +463,8 @@ func traceWindowForPrompt(prompt string, trace []sessionTraceEvent, cursor int) 
 		if trace[index].Kind != "user_message" {
 			continue
 		}
-		if strings.TrimSpace(tracePayloadString(trace[index].Payload, "content")) != needle {
+		content := strings.TrimSpace(tracePayloadString(trace[index].Payload, "content"))
+		if content == "" || !strings.Contains(content, needle) {
 			continue
 		}
 		start = index
@@ -439,7 +499,7 @@ func countToolCalls(trace []sessionTraceEvent) int {
 	total := 0
 	for _, event := range trace {
 		updateKind := strings.TrimSpace(tracePayloadString(event.Payload, "update_kind"))
-		if event.Kind == "tool_call" || event.Kind == "tool_call_update" || updateKind == "tool_call" || updateKind == "tool_call_update" || strings.HasPrefix(updateKind, "tool_call_") {
+		if strings.HasPrefix(event.Kind, "tool_call") || updateKind == "tool_call" || updateKind == "tool_call_update" || strings.HasPrefix(updateKind, "tool_call_") {
 			total++
 		}
 	}

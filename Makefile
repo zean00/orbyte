@@ -13,6 +13,7 @@ AGENT_SCENARIO ?= inventory_replenishment_execute
 AGENT_SEED_OUTPUT ?= /tmp/agentproof-inventory-replenishment.json
 AGENT_RUNTIME_OUTPUT ?= /tmp/agentproof-runtime.json
 MCP_VALIDATION_OUTPUT ?= /tmp/agentproof-mcp-validation.json
+CRM_VALIDATION_OUTPUT ?= /tmp/agentproof-crm-validation.json
 POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
 DASHBOARD_SEED_OUTPUT ?= /tmp/orbyte-dashboard-seed.json
 CRM_SEED_OUTPUT ?= /tmp/orbyte-crm-seed.json
@@ -21,7 +22,7 @@ SHOWCASE_SEED_OUTPUT ?= /tmp/orbyte-showcase-retail-recovery.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard seed-crm-demo seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase validate-mcp
+.PHONY: db-reset-postgres seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard seed-crm-demo seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase validate-mcp validate-crm-agent
 
 test:
 	./scripts/test.sh
@@ -178,11 +179,12 @@ seed-showcase-demo: app-start-postgres
 		--output "$(SHOWCASE_SEED_OUTPUT)"
 	@echo "Showcase seed manifest: $(SHOWCASE_SEED_OUTPUT)"
 
-seed-all: seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard
+seed-all: seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard seed-crm-demo
 	@echo "Agent runtime config report: $(AGENT_RUNTIME_OUTPUT)"
 	@echo "Continuity seed manifest: $(AGENT_SEED_OUTPUT)"
 	@echo "POS seed manifest: $(POS_SEED_OUTPUT)"
 	@echo "Dashboard seed manifest: $(DASHBOARD_SEED_OUTPUT)"
+	@echo "CRM seed manifest: $(CRM_SEED_OUTPUT)"
 
 reset-and-seed: db-reset-postgres app-start-postgres seed-all
 
@@ -201,3 +203,13 @@ validate-mcp: app-start-postgres
 		--password "$(APP_BOOTSTRAP_ADMIN_PASSWORD)" \
 		--output "$(MCP_VALIDATION_OUTPUT)"
 	@echo "MCP validation report: $(MCP_VALIDATION_OUTPUT)"
+
+validate-crm-agent: app-start-postgres
+	go run ./cmd/agentproof validate-mcp \
+		--base-url "$(APP_BASE_URL)" \
+		--username admin \
+		--password "$(APP_BOOTSTRAP_ADMIN_PASSWORD)" \
+		--modes minimal \
+		--scenarios crm_service_sales_overview \
+		--output "$(CRM_VALIDATION_OUTPUT)"
+	@echo "CRM validation report: $(CRM_VALIDATION_OUTPUT)"

@@ -5,16 +5,17 @@ import (
 	"testing"
 )
 
-func TestDefaultMCPPlaybooksJSONIncludesCRMOverview(t *testing.T) {
+func TestDefaultMCPPlaybooksJSONIncludesCRMPlaybooks(t *testing.T) {
 	items := defaultMCPPlaybooksJSON()
-	if !strings.Contains(items, `"id":"crm_service_sales_overview"`) {
-		t.Fatalf("expected CRM playbook in default MCP playbooks json, got %s", items)
+	for _, marker := range []string{`"id":"crm_service_backlog_triage"`, `"id":"crm_customer_360_review"`, `"id":"crm_sales_pipeline_review"`, `"id":"crm_service_sales_overview"`} {
+		if !strings.Contains(items, marker) {
+			t.Fatalf("expected %s in default MCP playbooks json, got %s", marker, items)
+		}
 	}
-	if !strings.Contains(items, `"crm.ticket.summary"`) {
-		t.Fatalf("expected CRM ticket summary tool in default MCP playbooks json, got %s", items)
-	}
-	if !strings.Contains(items, `"crm.opportunity.pipeline.summary"`) {
-		t.Fatalf("expected CRM opportunity pipeline tool in default MCP playbooks json, got %s", items)
+	for _, marker := range []string{`"crm.ticket.summary"`, `"crm.customer.summary"`, `"crm.customer.timeline"`, `"crm.opportunity.pipeline.summary"`} {
+		if !strings.Contains(items, marker) {
+			t.Fatalf("expected %s in default MCP playbooks json, got %s", marker, items)
+		}
 	}
 }
 

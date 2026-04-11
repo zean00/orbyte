@@ -694,6 +694,7 @@ func (s *Service) handleSessionUpdate(sessionID, updateKind string, content map[
 	turnID := session.CurrentTurnID
 	text := strings.TrimSpace(stringValue(content["text"]))
 	meta := cloneMap(content)
+	promotedArtifacts := make([]Artifact, 0)
 	if turnID != "" {
 		if meta == nil {
 			meta = map[string]any{}
@@ -717,6 +718,12 @@ func (s *Service) handleSessionUpdate(sessionID, updateKind string, content map[
 			appendChunkMessage(session, "system", text, meta)
 		}
 	}
+	if strings.Contains(strings.ToLower(updateKind), "tool") {
+		for _, artifact := range extractArtifactsFromToolContent(updateKind, content) {
+			appendSessionArtifact(session, artifact)
+			promotedArtifacts = append(promotedArtifacts, artifact)
+		}
+	}
 	s.mu.Unlock()
 	payload := map[string]any{"update_kind": updateKind, "content": content}
 	if turnID != "" {
@@ -729,8 +736,88 @@ func (s *Service) handleSessionUpdate(sessionID, updateKind string, content map[
 		}
 		s.publish(sessionID, toolActivityEventKind(updateKind, activity), activity)
 	}
+	for _, artifact := range promotedArtifacts {
+		artifactPayload := artifactPayload(artifact)
+		payload := map[string]any{"update_kind": "artifact", "content": artifactPayload}
+		if turnID != "" {
+			payload["turn_id"] = turnID
+		}
+		s.publish(sessionID, "session_update", payload)
+	}
 	if model := firstNonEmptyString(content["modelID"], content["model_id"], nestedMapString(content, "model", "id")); model != "" {
 		s.setCurrentModel(sessionID, model)
+	}
+}
+
+func extractArtifactsFromToolContent(updateKind string, content map[string]any) []Artifact {
+	if len(content) == 0 || !strings.Contains(strings.ToLower(strings.TrimSpace(updateKind)), "tool") {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	artifacts := make([]Artifact, 0)
+	for _, candidate := range []any{
+		content,
+		content["rawOutput"],
+		content["raw_output"],
+		content["structuredContent"],
+		content["structured_content"],
+	} {
+		collectArtifactsFromValue(candidate, 0, seen, &artifacts)
+	}
+	return artifacts
+}
+
+func collectArtifactsFromValue(value any, depth int, seen map[string]struct{}, artifacts *[]Artifact) {
+	if depth > 8 || value == nil {
+		return
+	}
+	switch current := value.(type) {
+	case []any:
+		for _, item := range current {
+			collectArtifactsFromValue(item, depth+1, seen, artifacts)
+		}
+	case map[string]any:
+		if artifact, ok := artifactFromToolValue(current); ok {
+			key := strings.TrimSpace(artifact.ID) + "|" + strings.TrimSpace(artifact.Kind)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
+				*artifacts = append(*artifacts, artifact)
+			}
+			return
+		}
+		for _, item := range current {
+			collectArtifactsFromValue(item, depth+1, seen, artifacts)
+		}
+	}
+}
+
+func artifactFromToolValue(content map[string]any) (Artifact, bool) {
+	artifact, ok := artifactFromContent(content)
+	if !ok {
+		return Artifact{}, false
+	}
+	kind := strings.ToLower(strings.TrimSpace(artifact.Kind))
+	metadata := artifact.Metadata
+	if strings.HasPrefix(kind, "dashboard_") {
+		return artifact, true
+	}
+	if len(nestedMap(metadata, "widget")) > 0 {
+		return artifact, true
+	}
+	if widgets, ok := metadata["widgets"].([]any); ok && len(widgets) > 0 {
+		return artifact, true
+	}
+	return Artifact{}, false
+}
+
+func artifactPayload(artifact Artifact) map[string]any {
+	return map[string]any{
+		"id":           artifact.ID,
+		"kind":         artifact.Kind,
+		"title":        artifact.Title,
+		"content_type": artifact.ContentType,
+		"content":      artifact.Content,
+		"metadata":     cloneMap(artifact.Metadata),
 	}
 }
 

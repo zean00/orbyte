@@ -488,6 +488,31 @@ func (s *CRMCoreService) Customer360(partyID string, now time.Time) (map[string]
 	tickets, _ := s.listRecords("crm_ticket", map[string]string{"party_id": party.ID})
 	opps, _ := s.listRecords("crm_opportunity", map[string]string{"party_id": party.ID})
 	activities, _ := s.listRecords("crm_activity", map[string]string{"party_id": party.ID})
+	partyName := crmTextValue(party.Values["name"])
+	if len(tickets) == 0 && strings.TrimSpace(partyName) != "" {
+		allTickets, _ := s.listRecords("crm_ticket", nil)
+		for _, item := range allTickets {
+			if strings.EqualFold(strings.TrimSpace(crmTextValue(item.Values["party_name"])), strings.TrimSpace(partyName)) {
+				tickets = append(tickets, item)
+			}
+		}
+	}
+	if len(opps) == 0 && strings.TrimSpace(partyName) != "" {
+		allOpps, _ := s.listRecords("crm_opportunity", nil)
+		for _, item := range allOpps {
+			if strings.EqualFold(strings.TrimSpace(crmTextValue(item.Values["party_name"])), strings.TrimSpace(partyName)) {
+				opps = append(opps, item)
+			}
+		}
+	}
+	if len(activities) == 0 && strings.TrimSpace(partyName) != "" {
+		allActivities, _ := s.listRecords("crm_activity", nil)
+		for _, item := range allActivities {
+			if strings.EqualFold(strings.TrimSpace(crmTextValue(item.Values["party_name"])), strings.TrimSpace(partyName)) {
+				activities = append(activities, item)
+			}
+		}
+	}
 	sort.Slice(tickets, func(i, j int) bool { return tickets[i].UpdatedAt.After(tickets[j].UpdatedAt) })
 	sort.Slice(opps, func(i, j int) bool { return opps[i].UpdatedAt.After(opps[j].UpdatedAt) })
 	sort.Slice(activities, func(i, j int) bool { return activities[i].UpdatedAt.After(activities[j].UpdatedAt) })
@@ -508,13 +533,13 @@ func (s *CRMCoreService) Customer360(partyID string, now time.Time) (map[string]
 		}
 	}
 	return map[string]any{
-		"generated_at": now.Format(time.RFC3339),
-		"party":        party,
+		"generated_at":     now.Format(time.RFC3339),
+		"party":            party,
 		"customer_profile": firstRecordOrNil(profiles),
-		"contacts":     contacts,
-		"tickets":      tickets,
-		"opportunities": opps,
-		"activities":   activities,
+		"contacts":         contacts,
+		"tickets":          tickets,
+		"opportunities":    opps,
+		"activities":       activities,
 		"overview": map[string]any{
 			"open_tickets":           openTickets,
 			"overdue_tickets":        overdueTickets,
@@ -628,13 +653,19 @@ func (s *CRMCoreService) ServiceSummaryPayload(now time.Time) (map[string]any, e
 		return nil, err
 	}
 	overview := map[string]any{
-		"open_tickets":            0,
-		"overdue_tickets":         0,
-		"unassigned_tickets":      0,
-		"resolved_today":          0,
-		"first_response_breaches": 0,
+		"open_tickets":                   0,
+		"overdue_tickets":                0,
+		"unassigned_tickets":             0,
+		"resolved_today":                 0,
+		"first_response_breaches":        0,
+		"priority_queue_code":            "",
+		"priority_queue_open_tickets":    0,
+		"priority_customer_name":         "",
+		"priority_customer_open_tickets": 0,
+		"overdue_ticket_title":           "",
 	}
 	queueCounts := map[string]int{}
+	customerCounts := map[string]int{}
 	priorityCounts := map[string]int{}
 	channelCounts := map[string]int{}
 	statusCounts := map[string]int{}
@@ -658,11 +689,17 @@ func (s *CRMCoreService) ServiceSummaryPayload(now time.Time) (map[string]any, e
 		channelCounts[channel]++
 		if crmTicketIsOpen(status) {
 			overview["open_tickets"] = crmIntValue(overview["open_tickets"]) + 1
+			customerName := crmFirstNonEmpty(strings.TrimSpace(crmTextValue(item.Values["party_name"])), "Unknown Customer")
+			customerCounts[customerName]++
 			if strings.TrimSpace(crmTextValue(item.Values["assignee_user_id"])) == "" {
 				overview["unassigned_tickets"] = crmIntValue(overview["unassigned_tickets"]) + 1
 			}
 			if dueAt := parseRFC3339(item.Values["due_at"]); !dueAt.IsZero() && dueAt.Before(now) {
 				overview["overdue_tickets"] = crmIntValue(overview["overdue_tickets"]) + 1
+				if strings.TrimSpace(crmTextValue(overview["overdue_ticket_title"])) == "" || dueAt.Before(parseRFC3339(overview["overdue_ticket_due_at"])) {
+					overview["overdue_ticket_title"] = crmTextValue(item.Values["title"])
+					overview["overdue_ticket_due_at"] = dueAt.Format(time.RFC3339)
+				}
 			}
 			if firstResponseDueAt := parseRFC3339(item.Values["first_response_due_at"]); !firstResponseDueAt.IsZero() && firstResponseDueAt.Before(now) && strings.TrimSpace(crmTextValue(item.Values["first_response_at"])) == "" {
 				overview["first_response_breaches"] = crmIntValue(overview["first_response_breaches"]) + 1
@@ -696,6 +733,15 @@ func (s *CRMCoreService) ServiceSummaryPayload(now time.Time) (map[string]any, e
 		}
 	}
 	queueRows := sortedCountRows(queueCounts, "queue_code", "open_tickets")
+	if len(queueRows) > 0 {
+		overview["priority_queue_code"] = crmTextValue(queueRows[0]["queue_code"])
+		overview["priority_queue_open_tickets"] = crmIntValue(queueRows[0]["open_tickets"])
+	}
+	customerRows := sortedCountRows(customerCounts, "party_name", "open_tickets")
+	if len(customerRows) > 0 {
+		overview["priority_customer_name"] = crmTextValue(customerRows[0]["party_name"])
+		overview["priority_customer_open_tickets"] = crmIntValue(customerRows[0]["open_tickets"])
+	}
 	priorityRows := sortedPriorityRows(priorityCounts)
 	channelRows := sortedCountRows(channelCounts, "source_channel", "count")
 	statusRows := sortedCountRows(statusCounts, "status", "count")
@@ -703,13 +749,18 @@ func (s *CRMCoreService) ServiceSummaryPayload(now time.Time) (map[string]any, e
 	return map[string]any{
 		"generated_at": now.Format(time.RFC3339),
 		"overview": map[string]any{
-			"open_tickets":            crmIntValue(overview["open_tickets"]),
-			"overdue_tickets":         crmIntValue(overview["overdue_tickets"]),
-			"unassigned_tickets":      crmIntValue(overview["unassigned_tickets"]),
-			"resolved_today":          crmIntValue(overview["resolved_today"]),
-			"first_response_breaches": crmIntValue(overview["first_response_breaches"]),
-			"first_response_hours":    avgCRMFloat(totalResponseHours, responseSamples),
-			"resolution_hours":        avgCRMFloat(totalResolutionHours, resolutionSamples),
+			"open_tickets":                   crmIntValue(overview["open_tickets"]),
+			"overdue_tickets":                crmIntValue(overview["overdue_tickets"]),
+			"unassigned_tickets":             crmIntValue(overview["unassigned_tickets"]),
+			"resolved_today":                 crmIntValue(overview["resolved_today"]),
+			"first_response_breaches":        crmIntValue(overview["first_response_breaches"]),
+			"first_response_hours":           avgCRMFloat(totalResponseHours, responseSamples),
+			"resolution_hours":               avgCRMFloat(totalResolutionHours, resolutionSamples),
+			"priority_queue_code":            crmTextValue(overview["priority_queue_code"]),
+			"priority_queue_open_tickets":    crmIntValue(overview["priority_queue_open_tickets"]),
+			"priority_customer_name":         crmTextValue(overview["priority_customer_name"]),
+			"priority_customer_open_tickets": crmIntValue(overview["priority_customer_open_tickets"]),
+			"overdue_ticket_title":           crmTextValue(overview["overdue_ticket_title"]),
 		},
 		"tables": map[string]any{
 			"queues":   queueRows,
@@ -742,16 +793,20 @@ func (s *CRMCoreService) SalesSummaryPayload(now time.Time) (map[string]any, err
 	opps, _ := s.listRecords("crm_opportunity", nil)
 	activities, _ := s.listRecords("crm_activity", nil)
 	overview := map[string]any{
-		"open_leads":          0,
-		"open_opportunities":  0,
-		"pipeline_value":      0.0,
-		"won_value":           0.0,
-		"stale_opportunities": 0,
-		"activity_coverage":   0,
+		"open_leads":                 0,
+		"open_opportunities":         0,
+		"pipeline_value":             0.0,
+		"won_value":                  0.0,
+		"stale_opportunities":        0,
+		"activity_coverage":          0,
+		"priority_pipeline_value":    0.0,
+		"priority_customer_name":     "",
+		"priority_opportunity_title": "",
 	}
 	stageCounts := map[string]int{}
 	stageValues := map[string]float64{}
 	ownerCounts := map[string]int{}
+	staleRows := make([]map[string]any, 0)
 	trendBuckets := make(map[string]map[string]float64)
 	for index := 6; index >= 0; index-- {
 		day := now.AddDate(0, 0, -index).Format("2006-01-02")
@@ -768,9 +823,19 @@ func (s *CRMCoreService) SalesSummaryPayload(now time.Time) (map[string]any, err
 		stageValues[stage] += crmFloatValue(item.Values["estimated_value"])
 		if crmOpportunityIsOpen(stage) {
 			overview["open_opportunities"] = crmIntValue(overview["open_opportunities"]) + 1
-			overview["pipeline_value"] = roundCRMFloat(crmFloatValue(overview["pipeline_value"]) + crmFloatValue(item.Values["estimated_value"]))
+			value := crmFloatValue(item.Values["estimated_value"])
+			overview["pipeline_value"] = roundCRMFloat(crmFloatValue(overview["pipeline_value"]) + value)
 			if nextActionAt := parseRFC3339(item.Values["next_action_at"]); nextActionAt.IsZero() || nextActionAt.Before(now.Add(-48*time.Hour)) {
 				overview["stale_opportunities"] = crmIntValue(overview["stale_opportunities"]) + 1
+				staleRows = append(staleRows, map[string]any{
+					"opportunity_id":  item.ID,
+					"title":           crmTextValue(item.Values["title"]),
+					"party_id":        crmTextValue(item.Values["party_id"]),
+					"party_name":      crmTextValue(item.Values["party_name"]),
+					"stage":           stage,
+					"estimated_value": roundCRMFloat(value),
+					"next_action_at":  crmTextValue(item.Values["next_action_at"]),
+				})
 			}
 			day := item.UpdatedAt.UTC().Format("2006-01-02")
 			if bucket, ok := trendBuckets[day]; ok {
@@ -795,10 +860,10 @@ func (s *CRMCoreService) SalesSummaryPayload(now time.Time) (map[string]any, err
 	stageRows := make([]map[string]any, 0, len(stageCounts))
 	for stage, count := range stageCounts {
 		stageRows = append(stageRows, map[string]any{
-			"stage":            stage,
+			"stage":             stage,
 			"opportunity_count": count,
-			"pipeline_value":   roundCRMFloat(stageValues[stage]),
-			"value":            roundCRMFloat(stageValues[stage]),
+			"pipeline_value":    roundCRMFloat(stageValues[stage]),
+			"value":             roundCRMFloat(stageValues[stage]),
 		})
 	}
 	sort.Slice(stageRows, func(i, j int) bool {
@@ -806,6 +871,25 @@ func (s *CRMCoreService) SalesSummaryPayload(now time.Time) (map[string]any, err
 		right := crmOpportunityStageRank(crmTextValue(stageRows[j]["stage"]))
 		return left > right
 	})
+	sort.SliceStable(staleRows, func(i, j int) bool {
+		left := parseRFC3339(staleRows[i]["next_action_at"])
+		right := parseRFC3339(staleRows[j]["next_action_at"])
+		if left.Equal(right) {
+			return crmFloatValue(staleRows[i]["estimated_value"]) > crmFloatValue(staleRows[j]["estimated_value"])
+		}
+		if left.IsZero() {
+			return true
+		}
+		if right.IsZero() {
+			return false
+		}
+		return left.Before(right)
+	})
+	if len(staleRows) > 0 {
+		overview["priority_opportunity_title"] = crmTextValue(staleRows[0]["title"])
+		overview["priority_customer_name"] = crmTextValue(staleRows[0]["party_name"])
+		overview["priority_pipeline_value"] = roundCRMFloat(crmFloatValue(staleRows[0]["estimated_value"]))
+	}
 	ownerRows := sortedCountRows(ownerCounts, "owner_user_id", "count")
 	trendRows := make([]map[string]any, 0, len(trendBuckets))
 	days := make([]string, 0, len(trendBuckets))
@@ -825,7 +909,8 @@ func (s *CRMCoreService) SalesSummaryPayload(now time.Time) (map[string]any, err
 		"generated_at": now.Format(time.RFC3339),
 		"overview":     overview,
 		"tables": map[string]any{
-			"stages": stageRows,
+			"stages":              stageRows,
+			"stale_opportunities": staleRows,
 		},
 		"charts": map[string]any{
 			"pipeline_stages": stageRows,
@@ -918,10 +1003,10 @@ func (s *CRMCoreService) applySLADefaults(values map[string]any) {
 				continue
 			}
 			if strings.TrimSpace(crmTextValue(values["first_response_due_at"])) == "" {
-				values["first_response_due_at"] = now.Add(time.Duration(crmFloatValue(item.Values["first_response_hours"])*float64(time.Hour))).Format(time.RFC3339)
+				values["first_response_due_at"] = now.Add(time.Duration(crmFloatValue(item.Values["first_response_hours"]) * float64(time.Hour))).Format(time.RFC3339)
 			}
 			if strings.TrimSpace(crmTextValue(values["due_at"])) == "" {
-				values["due_at"] = now.Add(time.Duration(crmFloatValue(item.Values["resolution_hours"])*float64(time.Hour))).Format(time.RFC3339)
+				values["due_at"] = now.Add(time.Duration(crmFloatValue(item.Values["resolution_hours"]) * float64(time.Hour))).Format(time.RFC3339)
 			}
 			return
 		}
@@ -931,10 +1016,10 @@ func (s *CRMCoreService) applySLADefaults(values map[string]any) {
 		if err == nil && len(queues) > 0 {
 			queue := queues[0]
 			if strings.TrimSpace(crmTextValue(values["first_response_due_at"])) == "" {
-				values["first_response_due_at"] = now.Add(time.Duration(crmFloatValue(queue.Values["triage_sla_hours"])*float64(time.Hour))).Format(time.RFC3339)
+				values["first_response_due_at"] = now.Add(time.Duration(crmFloatValue(queue.Values["triage_sla_hours"]) * float64(time.Hour))).Format(time.RFC3339)
 			}
 			if strings.TrimSpace(crmTextValue(values["due_at"])) == "" {
-				values["due_at"] = now.Add(time.Duration(crmFloatValue(queue.Values["resolution_sla_hours"])*float64(time.Hour))).Format(time.RFC3339)
+				values["due_at"] = now.Add(time.Duration(crmFloatValue(queue.Values["resolution_sla_hours"]) * float64(time.Hour))).Format(time.RFC3339)
 			}
 		}
 	}
@@ -967,6 +1052,48 @@ func (s *CRMCoreService) createActivityRecord(actorID string, values map[string]
 		next["party_name"] = s.resolvePartyName(next["party_id"])
 	}
 	return s.models.Create("crm_activity", actorID, next)
+}
+
+func (s *CRMCoreService) ResolveCustomerPartyID(query string) string {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	if needle == "" || s == nil {
+		return ""
+	}
+	items, err := s.listRecords("party", nil)
+	if err != nil {
+		return ""
+	}
+	exactID := ""
+	exactName := ""
+	containsID := ""
+	containsName := ""
+	for _, item := range items {
+		partyID := strings.TrimSpace(item.ID)
+		name := strings.ToLower(strings.TrimSpace(crmTextValue(item.Values["name"])))
+		if partyID == "" || name == "" {
+			continue
+		}
+		if partyID == strings.TrimSpace(query) {
+			return partyID
+		}
+		if name == needle {
+			if exactName == "" || partyID > exactID {
+				exactID = partyID
+				exactName = name
+			}
+			continue
+		}
+		if strings.Contains(name, needle) {
+			if containsName == "" || partyID > containsID {
+				containsID = partyID
+				containsName = name
+			}
+		}
+	}
+	if exactID != "" {
+		return exactID
+	}
+	return containsID
 }
 
 func (s *CRMCoreService) resolvePartyName(value any) string {
