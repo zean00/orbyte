@@ -12,7 +12,11 @@ import {
   defaultWidgetDataState,
   useSharedDashboardData,
 } from "@/features/dashboard/runtime";
-import { fetchWorkspaceBootstrap, toShellRoutes, workspaceSurfaceTarget } from "@/services/bootstrap";
+import {
+  fetchWorkspaceBootstrap,
+  toShellRoutes,
+  workspaceSurfaceTarget,
+} from "@/services/bootstrap";
 import { preloadSurfaceModule } from "@/services/surfaceModules";
 import { useShellStore } from "@/stores/shellStore";
 
@@ -266,6 +270,8 @@ const STREAM_EVENT_NAMES: StreamEventName[] = [
 ];
 
 const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
+const MCP_EXPOSURE_MODE_STORAGE_KEY = "orbyte.agent.mcp_exposure_mode";
+type MCPExposureMode = "minimal" | "compact" | "full";
 const MCP_ONLY_PREFIX =
   "Use Orbyte MCP tools as the source of truth for this answer. Start with playbooks/search when the request matches a business workflow. If no playbook fits, use tool discovery next with tools.search or tools.list, then call tools.describe for the relevant tool ids before using tools.call. Use exact discovered tool ids and do not guess tool names, prefixes, or schemas.";
 
@@ -287,7 +293,10 @@ export default function AgentSurfacePage() {
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(false);
   const [mcpOnlyEnabled, setMcpOnlyEnabled] = useState(true);
-  const [localPendingTurn, setLocalPendingTurn] = useState<LocalPendingTurn | null>(null);
+  const [mcpExposureMode, setMcpExposureMode] =
+    useState<MCPExposureMode>("minimal");
+  const [localPendingTurn, setLocalPendingTurn] =
+    useState<LocalPendingTurn | null>(null);
   const [composerMode, setComposerMode] = useState<ComposerMode>("ask");
   const [contentTab, setContentTab] = useState<AgentContentTab>("conversation");
   const [prompt, setPrompt] = useState("");
@@ -328,6 +337,16 @@ export default function AgentSurfacePage() {
     if (stored === "false") {
       setMcpOnlyEnabled(false);
     }
+    const storedExposure = window.localStorage.getItem(
+      MCP_EXPOSURE_MODE_STORAGE_KEY,
+    );
+    if (
+      storedExposure === "minimal" ||
+      storedExposure === "compact" ||
+      storedExposure === "full"
+    ) {
+      setMcpExposureMode(storedExposure);
+    }
   }, []);
 
   useEffect(() => {
@@ -337,6 +356,11 @@ export default function AgentSurfacePage() {
       mcpOnlyEnabled ? "true" : "false",
     );
   }, [mcpOnlyEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(MCP_EXPOSURE_MODE_STORAGE_KEY, mcpExposureMode);
+  }, [mcpExposureMode]);
 
   useEffect(() => {
     let mounted = true;
@@ -364,9 +388,12 @@ export default function AgentSurfacePage() {
       fetchWorkspaceBootstrap(nextSurface),
       preloadSurfaceModule(nextSurface),
     ]);
-    navigate(workspaceSurfaceTarget(bootstrap, nextSurface) || defaultPath || "/", {
-      replace: true,
-    });
+    navigate(
+      workspaceSurfaceTarget(bootstrap, nextSurface) || defaultPath || "/",
+      {
+        replace: true,
+      },
+    );
   }
 
   useEffect(() => {
@@ -424,7 +451,7 @@ export default function AgentSurfacePage() {
           tools?: MCPTool[];
           catalog?: MCPToolCatalog;
         }>("tools/list", {
-          exposure_mode: "minimal",
+          exposure_mode: mcpExposureMode,
           capabilities: activeCapabilities,
           include_summary: true,
           include_hidden_counts: true,
@@ -444,7 +471,7 @@ export default function AgentSurfacePage() {
     return () => {
       mounted = false;
     };
-  }, [activeCapabilities]);
+  }, [activeCapabilities, mcpExposureMode]);
 
   useEffect(() => {
     let mounted = true;
@@ -593,7 +620,9 @@ export default function AgentSurfacePage() {
             (next) => {
               if (!next.turn_in_progress) {
                 setLocalPendingTurn((currentTurn) =>
-                  currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+                  currentTurn?.sessionID === selectedSessionID
+                    ? null
+                    : currentTurn,
                 );
               }
               seenEventIDsRef.current = new Set(
@@ -613,7 +642,9 @@ export default function AgentSurfacePage() {
             (next) => {
               if (!next.turn_in_progress) {
                 setLocalPendingTurn((currentTurn) =>
-                  currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+                  currentTurn?.sessionID === selectedSessionID
+                    ? null
+                    : currentTurn,
                 );
               }
               seenEventIDsRef.current = new Set(
@@ -630,7 +661,9 @@ export default function AgentSurfacePage() {
           (next) => {
             if (!next.turn_in_progress) {
               setLocalPendingTurn((currentTurn) =>
-                currentTurn?.sessionID === selectedSessionID ? null : currentTurn,
+                currentTurn?.sessionID === selectedSessionID
+                  ? null
+                  : currentTurn,
               );
             }
             seenEventIDsRef.current = new Set(
@@ -806,8 +839,7 @@ export default function AgentSurfacePage() {
   const pendingInputQuestions = session?.pending_questions || [];
   const pendingInputKind = session?.awaiting_input_kind || "clarification";
   const hasPendingInput =
-    session?.status === "awaiting_input" &&
-    pendingInputQuestions.length > 0;
+    session?.status === "awaiting_input" && pendingInputQuestions.length > 0;
   const hasPendingConfirmation =
     hasPendingInput && pendingInputKind === "confirmation";
   const dashboardArtifacts = useMemo(
@@ -818,7 +850,9 @@ export default function AgentSurfacePage() {
     () => flattenArtifactWidgets(dashboardArtifacts),
     [dashboardArtifacts],
   );
-  const dashboardArtifactData = useSharedDashboardData(dashboardArtifactWidgets);
+  const dashboardArtifactData = useSharedDashboardData(
+    dashboardArtifactWidgets,
+  );
   const hasDashboardArtifacts = dashboardArtifacts.length > 0;
   const providerSupportsPlanUpdates =
     selectedSessionProvider?.supports_plan_updates ??
@@ -935,8 +969,7 @@ export default function AgentSurfacePage() {
       targetSession = created;
       setLocalPendingTurn({ sessionID: created.id, phase: "thinking" });
     }
-    const effectiveComposerMode =
-      hasPendingConfirmation ? "ask" : composerMode;
+    const effectiveComposerMode = hasPendingConfirmation ? "ask" : composerMode;
     const nextPrompt = buildPromptPayload(
       displayPrompt,
       mcpOnlyEnabled,
@@ -999,7 +1032,9 @@ export default function AgentSurfacePage() {
               : updated;
           setSessions((current) => mergeSessionIntoList(current, finalized));
           if (!updated.turn_in_progress) {
-            setSession((current) => (current?.id === finalized.id ? finalized : current));
+            setSession((current) =>
+              current?.id === finalized.id ? finalized : current,
+            );
             setLocalPendingTurn((currentTurn) =>
               currentTurn?.sessionID === finalized.id ? null : currentTurn,
             );
@@ -1074,9 +1109,12 @@ export default function AgentSurfacePage() {
     setBusy(true);
     setMessage("");
     try {
-      await mutateJson<void>(`/agent/api/sessions/${encodeURIComponent(sessionID)}`, {
-        method: "DELETE",
-      });
+      await mutateJson<void>(
+        `/agent/api/sessions/${encodeURIComponent(sessionID)}`,
+        {
+          method: "DELETE",
+        },
+      );
       const remaining = orderSessions(
         sessions.filter((item) => item.id !== sessionID),
       );
@@ -1237,7 +1275,9 @@ export default function AgentSurfacePage() {
           </div>
 
           <div className="mt-6 flex min-h-0 flex-1 flex-col border-t border-line/80 pt-5">
-            <div className="shrink-0 text-sm font-semibold text-body">Sessions</div>
+            <div className="shrink-0 text-sm font-semibold text-body">
+              Sessions
+            </div>
             <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {sortedSessions.map((item) => {
                 const selected = selectedSessionID === item.id;
@@ -1360,12 +1400,18 @@ export default function AgentSurfacePage() {
                 <div className="border-b border-line/60 px-4 py-3 md:px-8">
                   <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3">
                     <div className="inline-flex rounded-full border border-line bg-shell p-1">
-                      {([
-                        ["conversation", "Conversation"],
-                        ["artifacts", `Artifacts${hasDashboardArtifacts ? ` (${dashboardArtifacts.length})` : ""}`],
-                      ] as const).map(([key, label]) => {
+                      {(
+                        [
+                          ["conversation", "Conversation"],
+                          [
+                            "artifacts",
+                            `Artifacts${hasDashboardArtifacts ? ` (${dashboardArtifacts.length})` : ""}`,
+                          ],
+                        ] as const
+                      ).map(([key, label]) => {
                         const selected = contentTab === key;
-                        const disabled = key === "artifacts" && !hasDashboardArtifacts;
+                        const disabled =
+                          key === "artifacts" && !hasDashboardArtifacts;
                         return (
                           <button
                             key={key}
@@ -1480,7 +1526,9 @@ export default function AgentSurfacePage() {
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
                           {OPTIONAL_AGENT_CAPABILITIES.map((item) => {
-                            const active = activeCapabilities.includes(item.key);
+                            const active = activeCapabilities.includes(
+                              item.key,
+                            );
                             return (
                               <button
                                 key={item.key}
@@ -1507,182 +1555,156 @@ export default function AgentSurfacePage() {
                         ) : null}
                       </section>
                       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-                      <InspectorSection
-                        title="Current Plan"
-                        kicker={composerMode === "execute" ? "execution target" : "plan state"}
-                        summary={hasCurrentPlan ? `${currentPlan.length} step${currentPlan.length === 1 ? "" : "s"}` : "No active plan"}
-                      >
-                        <div className="space-y-3">
-                          {!providerSupportsPlanUpdates ? (
-                            <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
-                              This provider does not emit structured ACP plan updates.
-                              The visible plan is derived from the latest Plan-mode turn.
-                            </p>
-                          ) : null}
-                          {hasCurrentPlan ? (
-                            currentPlan.map((item, index) => (
-                              <article
-                                key={`${index}-${item.content}`}
-                                className="rounded-2xl border border-line/70 bg-surface p-3"
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                                    Step {index + 1}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {item.priority ? (
-                                      <span className="rounded-full border border-line bg-shell px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
-                                        {item.priority}
-                                      </span>
-                                    ) : null}
-                                    {item.status ? (
-                                      <span className="rounded-full border border-accent/20 bg-accent-soft/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
-                                        {item.status}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </div>
-                                <p className="mt-2 text-sm leading-6 text-body">
-                                  {item.content}
-                                </p>
-                              </article>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted">
-                              Use Plan mode to generate a stepwise plan before executing.
-                            </p>
-                          )}
-                        </div>
-                      </InspectorSection>
-                      <InspectorSection
-                        title="Capabilities"
-                        kicker={catalogSummary?.mode || "compact catalog"}
-                        summary={[
-                          `${catalogSummary?.returned_tools || mcpTools.length} starter tools`,
-                          typeof catalogSummary?.hidden_tools === "number"
-                            ? `${catalogSummary.hidden_tools} hidden`
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      >
-                        <div className="space-y-3">
-                          <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
-                            This surface is running in minimal MCP mode. The
-                            agent should search playbooks first, then use
-                            <code>tools.search</code>, <code>tools.describe</code>,
-                            and <code>tools.call</code> to reach the relevant
-                            underlying MCP tools.
-                          </p>
-                          {visibleTools.map((item) => (
-                            <div
-                              key={item.name}
-                              className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
-                            >
-                              <div className="text-sm font-semibold text-body">
-                                {item.title || item.name}
-                              </div>
-                              <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
-                                {[
-                                  item.sourceType,
-                                  item.contract?.actionClass,
-                                  item.contract?.riskClass,
-                                  item.policyState,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </div>
-                              {item.description ? (
-                                <p className="mt-2 text-xs leading-5 text-muted">
-                                  {item.description}
-                                </p>
-                              ) : null}
-                            </div>
-                          ))}
-                          <div className="rounded-2xl border border-line/70 bg-surface p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold text-body">
-                                  Playbooks
-                                </div>
-                                <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
-                                  {fullCatalogLoading
-                                    ? "Loading playbooks"
-                                    : `${playbooks.length} workflow playbooks`}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setShowFullCatalog((current) => !current)
-                                }
-                                className="rounded-xl border border-line bg-shell px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted transition hover:border-accent hover:text-accent"
-                              >
-                                {showFullCatalog ? "Hide details" : "Browse"}
-                              </button>
-                            </div>
-                            {showFullCatalog ? (
-                              <div className="mt-3 space-y-3">
-                                <input
-                                  type="search"
-                                  value={fullCatalogQuery}
-                                  onChange={(event) =>
-                                    setFullCatalogQuery(event.target.value)
-                                  }
-                                  placeholder="Search playbooks, tools, domains, or descriptions"
-                                  className="w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body outline-none transition focus:border-accent"
-                                />
-                                <div className="space-y-2">
-                                  {playbooks.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="rounded-2xl border border-line/70 bg-shell px-3 py-3"
-                                    >
-                                      <div className="text-sm font-semibold text-body">
-                                        {item.name}
-                                      </div>
-                                      <div className="mt-1 break-all font-mono text-[11px] text-muted">
-                                        {item.id}
-                                      </div>
-                                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
-                                        {[
-                                          ...(item.domains || []),
-                                          ...(item.labels || []),
-                                        ]
-                                          .filter(Boolean)
-                                          .join(" · ")}
-                                      </div>
-                                      {item.description ? (
-                                        <p className="mt-2 text-xs leading-5 text-muted">
-                                          {item.description}
-                                        </p>
+                        <InspectorSection
+                          title="Current Plan"
+                          kicker={
+                            composerMode === "execute"
+                              ? "execution target"
+                              : "plan state"
+                          }
+                          summary={
+                            hasCurrentPlan
+                              ? `${currentPlan.length} step${currentPlan.length === 1 ? "" : "s"}`
+                              : "No active plan"
+                          }
+                        >
+                          <div className="space-y-3">
+                            {!providerSupportsPlanUpdates ? (
+                              <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
+                                This provider does not emit structured ACP plan
+                                updates. The visible plan is derived from the
+                                latest Plan-mode turn.
+                              </p>
+                            ) : null}
+                            {hasCurrentPlan ? (
+                              currentPlan.map((item, index) => (
+                                <article
+                                  key={`${index}-${item.content}`}
+                                  className="rounded-2xl border border-line/70 bg-surface p-3"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                                      Step {index + 1}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {item.priority ? (
+                                        <span className="rounded-full border border-line bg-shell px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+                                          {item.priority}
+                                        </span>
+                                      ) : null}
+                                      {item.status ? (
+                                        <span className="rounded-full border border-accent/20 bg-accent-soft/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+                                          {item.status}
+                                        </span>
                                       ) : null}
                                     </div>
-                                  ))}
-                                  {!fullCatalogLoading && playbooks.length === 0 ? (
-                                    <p className="text-sm text-muted">
-                                      No playbooks are configured.
-                                    </p>
-                                  ) : null}
+                                  </div>
+                                  <p className="mt-2 text-sm leading-6 text-body">
+                                    {item.content}
+                                  </p>
+                                </article>
+                              ))
+                            ) : (
+                              <p className="text-sm text-muted">
+                                Use Plan mode to generate a stepwise plan before
+                                executing.
+                              </p>
+                            )}
+                          </div>
+                        </InspectorSection>
+                        <InspectorSection
+                          title="Capabilities"
+                          kicker={catalogSummary?.mode || "compact catalog"}
+                          summary={[
+                            `${catalogSummary?.returned_tools || mcpTools.length} starter tools`,
+                            typeof catalogSummary?.hidden_tools === "number"
+                              ? `${catalogSummary.hidden_tools} hidden`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        >
+                          <div className="space-y-3">
+                            <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
+                              This surface is running in minimal MCP mode. The
+                              agent should search playbooks first, then use
+                              <code>tools.search</code>,{" "}
+                              <code>tools.describe</code>, and{" "}
+                              <code>tools.call</code> to reach the relevant
+                              underlying MCP tools.
+                            </p>
+                            {visibleTools.map((item) => (
+                              <div
+                                key={item.name}
+                                className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
+                              >
+                                <div className="text-sm font-semibold text-body">
+                                  {item.title || item.name}
                                 </div>
-                                <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                                  {filteredFullCatalogTools
-                                    .slice(0, 40)
-                                    .map((item) => (
+                                <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                  {[
+                                    item.sourceType,
+                                    item.contract?.actionClass,
+                                    item.contract?.riskClass,
+                                    item.policyState,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </div>
+                                {item.description ? (
+                                  <p className="mt-2 text-xs leading-5 text-muted">
+                                    {item.description}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                            <div className="rounded-2xl border border-line/70 bg-surface p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold text-body">
+                                    Playbooks
+                                  </div>
+                                  <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                    {fullCatalogLoading
+                                      ? "Loading playbooks"
+                                      : `${playbooks.length} workflow playbooks`}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setShowFullCatalog((current) => !current)
+                                  }
+                                  className="rounded-xl border border-line bg-shell px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted transition hover:border-accent hover:text-accent"
+                                >
+                                  {showFullCatalog ? "Hide details" : "Browse"}
+                                </button>
+                              </div>
+                              {showFullCatalog ? (
+                                <div className="mt-3 space-y-3">
+                                  <input
+                                    type="search"
+                                    value={fullCatalogQuery}
+                                    onChange={(event) =>
+                                      setFullCatalogQuery(event.target.value)
+                                    }
+                                    placeholder="Search playbooks, tools, domains, or descriptions"
+                                    className="w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body outline-none transition focus:border-accent"
+                                  />
+                                  <div className="space-y-2">
+                                    {playbooks.map((item) => (
                                       <div
-                                        key={item.tool_id}
+                                        key={item.id}
                                         className="rounded-2xl border border-line/70 bg-shell px-3 py-3"
                                       >
                                         <div className="text-sm font-semibold text-body">
-                                          {item.title || item.name || item.tool_id}
+                                          {item.name}
                                         </div>
                                         <div className="mt-1 break-all font-mono text-[11px] text-muted">
-                                          {item.tool_id}
+                                          {item.id}
                                         </div>
                                         <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
                                           {[
-                                            item.module_key,
-                                            item.source_type,
                                             ...(item.domains || []),
                                             ...(item.labels || []),
                                           ]
@@ -1696,117 +1718,158 @@ export default function AgentSurfacePage() {
                                         ) : null}
                                       </div>
                                     ))}
+                                    {!fullCatalogLoading &&
+                                    playbooks.length === 0 ? (
+                                      <p className="text-sm text-muted">
+                                        No playbooks are configured.
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                                    {filteredFullCatalogTools
+                                      .slice(0, 40)
+                                      .map((item) => (
+                                        <div
+                                          key={item.tool_id}
+                                          className="rounded-2xl border border-line/70 bg-shell px-3 py-3"
+                                        >
+                                          <div className="text-sm font-semibold text-body">
+                                            {item.title ||
+                                              item.name ||
+                                              item.tool_id}
+                                          </div>
+                                          <div className="mt-1 break-all font-mono text-[11px] text-muted">
+                                            {item.tool_id}
+                                          </div>
+                                          <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+                                            {[
+                                              item.module_key,
+                                              item.source_type,
+                                              ...(item.domains || []),
+                                              ...(item.labels || []),
+                                            ]
+                                              .filter(Boolean)
+                                              .join(" · ")}
+                                          </div>
+                                          {item.description ? (
+                                            <p className="mt-2 text-xs leading-5 text-muted">
+                                              {item.description}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    {!fullCatalogLoading &&
+                                    filteredFullCatalogTools.length === 0 ? (
+                                      <p className="text-sm text-muted">
+                                        No tools matched this search.
+                                      </p>
+                                    ) : null}
+                                  </div>
                                   {!fullCatalogLoading &&
-                                  filteredFullCatalogTools.length === 0 ? (
-                                    <p className="text-sm text-muted">
-                                      No tools matched this search.
+                                  filteredFullCatalogTools.length > 40 ? (
+                                    <p className="text-xs leading-5 text-muted">
+                                      Showing the first 40 matching tools.
+                                      Narrow the search to inspect a smaller
+                                      slice.
                                     </p>
                                   ) : null}
                                 </div>
-                                {!fullCatalogLoading &&
-                                filteredFullCatalogTools.length > 40 ? (
-                                  <p className="text-xs leading-5 text-muted">
-                                    Showing the first 40 matching tools. Narrow
-                                    the search to inspect a smaller slice.
+                              ) : null}
+                            </div>
+                          </div>
+                        </InspectorSection>
+
+                        <InspectorSection
+                          title="Approvals"
+                          kicker="governed actions"
+                          summary={String((session?.approvals || []).length)}
+                        >
+                          <div className="space-y-3">
+                            {(session?.approvals || []).map((item) => (
+                              <article
+                                key={item.id}
+                                className="rounded-2xl border border-line/70 bg-surface p-3"
+                              >
+                                <div className="text-sm font-semibold text-body">
+                                  {item.title}
+                                </div>
+                                {item.description ? (
+                                  <p className="mt-1 text-xs leading-5 text-muted">
+                                    {item.description}
                                   </p>
                                 ) : null}
-                              </div>
+                                <div className="mt-3 flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-body"
+                                    disabled={busy || item.status !== "pending"}
+                                    onClick={() =>
+                                      void resolveApproval(item.id, "approve")
+                                    }
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-body"
+                                    disabled={busy || item.status !== "pending"}
+                                    onClick={() =>
+                                      void resolveApproval(item.id, "reject")
+                                    }
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              </article>
+                            ))}
+                            {(session?.approvals || []).length === 0 ? (
+                              <p className="text-sm text-muted">
+                                No pending approvals.
+                              </p>
                             ) : null}
                           </div>
-                        </div>
-                      </InspectorSection>
+                        </InspectorSection>
 
-                      <InspectorSection
-                        title="Approvals"
-                        kicker="governed actions"
-                        summary={String((session?.approvals || []).length)}
-                      >
-                        <div className="space-y-3">
-                          {(session?.approvals || []).map((item) => (
-                            <article
-                              key={item.id}
-                              className="rounded-2xl border border-line/70 bg-surface p-3"
-                            >
-                              <div className="text-sm font-semibold text-body">
-                                {item.title}
-                              </div>
-                              {item.description ? (
-                                <p className="mt-1 text-xs leading-5 text-muted">
-                                  {item.description}
+                        <InspectorSection
+                          title="Activity"
+                          kicker="system + trace"
+                          summary={`${activityMessages.length} notes · ${(session?.trace || []).length} events`}
+                        >
+                          <div className="space-y-3">
+                            {activityMessages.slice(-4).map((item) => (
+                              <div
+                                key={item.id}
+                                className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
+                              >
+                                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                                  System
+                                </div>
+                                <p className="mt-2 text-xs leading-5 text-body">
+                                  {item.content}
                                 </p>
-                              ) : null}
-                              <div className="mt-3 flex gap-2">
-                                <button
-                                  type="button"
-                                  className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-body"
-                                  disabled={busy || item.status !== "pending"}
-                                  onClick={() =>
-                                    void resolveApproval(item.id, "approve")
-                                  }
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-body"
-                                  disabled={busy || item.status !== "pending"}
-                                  onClick={() =>
-                                    void resolveApproval(item.id, "reject")
-                                  }
-                                >
-                                  Reject
-                                </button>
                               </div>
-                            </article>
-                          ))}
-                          {(session?.approvals || []).length === 0 ? (
-                            <p className="text-sm text-muted">
-                              No pending approvals.
-                            </p>
-                          ) : null}
-                        </div>
-                      </InspectorSection>
-
-                      <InspectorSection
-                        title="Activity"
-                        kicker="system + trace"
-                        summary={`${activityMessages.length} notes · ${(session?.trace || []).length} events`}
-                      >
-                        <div className="space-y-3">
-                          {activityMessages.slice(-4).map((item) => (
-                            <div
-                              key={item.id}
-                              className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
-                            >
-                              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                                System
+                            ))}
+                            {(session?.trace || []).slice(-6).map((item) => (
+                              <div
+                                key={item.id}
+                                className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
+                              >
+                                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                                  {item.kind}
+                                </div>
+                                <div className="mt-1 text-xs text-muted">
+                                  {formatDate(item.created_at)}
+                                </div>
                               </div>
-                              <p className="mt-2 text-xs leading-5 text-body">
-                                {item.content}
+                            ))}
+                            {activityMessages.length === 0 &&
+                            (session?.trace || []).length === 0 ? (
+                              <p className="text-sm text-muted">
+                                Trace events will stream here.
                               </p>
-                            </div>
-                          ))}
-                          {(session?.trace || []).slice(-6).map((item) => (
-                            <div
-                              key={item.id}
-                              className="rounded-2xl border border-line/70 bg-surface px-3 py-3"
-                            >
-                              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                                {item.kind}
-                              </div>
-                              <div className="mt-1 text-xs text-muted">
-                                {formatDate(item.created_at)}
-                              </div>
-                            </div>
-                          ))}
-                          {activityMessages.length === 0 &&
-                          (session?.trace || []).length === 0 ? (
-                            <p className="text-sm text-muted">
-                              Trace events will stream here.
-                            </p>
-                          ) : null}
-                        </div>
-                      </InspectorSection>
+                            ) : null}
+                          </div>
+                        </InspectorSection>
                       </div>
                     </div>
                   </motion.aside>
@@ -1831,14 +1894,14 @@ export default function AgentSurfacePage() {
                     ? "Answer the confirmation question to continue this session."
                     : "Answer the clarification questions to continue this session."
                   : effectiveLivePhase === "tooling"
-                  ? "Assistant is using tools right now."
-                  : effectiveLivePhase === "streaming"
-                    ? "Assistant is streaming the response."
-                    : effectiveLivePhase
-                      ? "Assistant is thinking."
-                      : selectedSessionID
-                        ? "Press Enter to send, Shift+Enter for a new line."
-                        : "Press Enter to start a new session and send."}
+                    ? "Assistant is using tools right now."
+                    : effectiveLivePhase === "streaming"
+                      ? "Assistant is streaming the response."
+                      : effectiveLivePhase
+                        ? "Assistant is thinking."
+                        : selectedSessionID
+                          ? "Press Enter to send, Shift+Enter for a new line."
+                          : "Press Enter to start a new session and send."}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1856,7 +1919,9 @@ export default function AgentSurfacePage() {
                       onClick={() => {
                         setComposerMode(mode);
                         if (mode === "execute" && !hasCurrentPlan) {
-                          setMessage("Create a plan first before using Execute mode.");
+                          setMessage(
+                            "Create a plan first before using Execute mode.",
+                          );
                         } else {
                           setMessage("");
                         }
@@ -1881,16 +1946,30 @@ export default function AgentSurfacePage() {
                 />
                 Use Orbyte MCP only
               </label>
-            {effectiveLivePhase ? (
-              <div className="flex items-center gap-2 rounded-full border border-accent/30 bg-accent px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_8px_24px_rgba(29,78,216,0.25)]">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-                {effectiveLivePhase === "tooling"
-                  ? "Using tools"
-                  : effectiveLivePhase === "streaming"
-                    ? "Streaming"
-                    : "Thinking"}
-              </div>
-            ) : null}
+              <label className="flex items-center gap-2 rounded-full border border-line bg-shell px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-body">
+                <span>MCP mode</span>
+                <select
+                  value={mcpExposureMode}
+                  onChange={(event) =>
+                    setMcpExposureMode(event.target.value as MCPExposureMode)
+                  }
+                  className="rounded-full border border-line bg-shell px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-body outline-none"
+                >
+                  <option value="minimal">Minimal</option>
+                  <option value="compact">Compact</option>
+                  <option value="full">Full</option>
+                </select>
+              </label>
+              {effectiveLivePhase ? (
+                <div className="flex items-center gap-2 rounded-full border border-accent/30 bg-accent px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_8px_24px_rgba(29,78,216,0.25)]">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                  {effectiveLivePhase === "tooling"
+                    ? "Using tools"
+                    : effectiveLivePhase === "streaming"
+                      ? "Streaming"
+                      : "Thinking"}
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="px-4 py-4">
@@ -1908,10 +1987,10 @@ export default function AgentSurfacePage() {
                     ? "Reply yes/no or describe how to proceed."
                     : "Reply with the missing details to continue."
                   : composerMode === "plan"
-                  ? "Describe the goal or decision you want the agent to plan."
-                  : composerMode === "execute"
-                    ? "Describe any execution constraints or keep this aligned to the current plan."
-                    : "Ask the agent to investigate, summarize, compare, or operate across Orbyte data."
+                    ? "Describe the goal or decision you want the agent to plan."
+                    : composerMode === "execute"
+                      ? "Describe any execution constraints or keep this aligned to the current plan."
+                      : "Ask the agent to investigate, summarize, compare, or operate across Orbyte data."
               }
               name="agent_prompt"
             />
@@ -1922,16 +2001,16 @@ export default function AgentSurfacePage() {
                     ? "Confirmation is pending. Your next reply will continue the same ACP session without re-entering Plan mode."
                     : "Clarification is pending. Your next reply will resolve it and continue the same ACP session."
                   : composerMode === "plan"
-                  ? providerSupportsPlanUpdates
-                    ? "Plan mode asks the agent to gather evidence, build a stepwise plan, and stop short of execution."
-                    : "Plan mode asks the agent to gather evidence and build a stepwise plan. This provider does not emit structured ACP plan events, so the plan panel is derived from the planning answer."
-                  : composerMode === "execute"
-                    ? hasCurrentPlan
-                      ? "Execute mode tells the agent to act on the current visible plan and report created artifacts."
-                      : "Execute mode requires a current plan."
-                    : mcpOnlyEnabled
-                      ? "Prompts will automatically tell the agent to search playbooks first, then use MCP tool discovery and exact tool ids before any tools.call execution."
-                      : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
+                    ? providerSupportsPlanUpdates
+                      ? "Plan mode asks the agent to gather evidence, build a stepwise plan, and stop short of execution."
+                      : "Plan mode asks the agent to gather evidence and build a stepwise plan. This provider does not emit structured ACP plan events, so the plan panel is derived from the planning answer."
+                    : composerMode === "execute"
+                      ? hasCurrentPlan
+                        ? "Execute mode tells the agent to act on the current visible plan and report created artifacts."
+                        : "Execute mode requires a current plan."
+                      : mcpOnlyEnabled
+                        ? "Prompts will automatically tell the agent to search playbooks first, then use MCP tool discovery and exact tool ids before any tools.call execution."
+                        : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
               </p>
               <button
                 type="button"
@@ -2026,7 +2105,8 @@ function ArtifactGallery({
             Artifacts
           </div>
           <p className="mt-2 text-sm text-muted">
-            Ask the agent for focused dashboard widgets or an explicit board preview to render live evidence here.
+            Ask the agent for focused dashboard widgets or an explicit board
+            preview to render live evidence here.
           </p>
         </div>
       </div>
@@ -2105,11 +2185,16 @@ function MessageBubble({
   const isUser = item.role === "user";
   const livePhase =
     stringValue(item.meta?.live_phase) ||
-    (stringValue(item.meta?.turn_id) === liveTurn?.turnID ? liveTurn?.phase : "");
-  const isWaitingAssistant =
-    !isUser && item.streaming && !item.content.trim();
-  const inlineArtifacts = !isUser ? dashboardArtifactsFromMessage(item.content) : [];
-  const visibleContent = !isUser ? stripDashboardArtifactBlocks(item.content).trim() : item.content;
+    (stringValue(item.meta?.turn_id) === liveTurn?.turnID
+      ? liveTurn?.phase
+      : "");
+  const isWaitingAssistant = !isUser && item.streaming && !item.content.trim();
+  const inlineArtifacts = !isUser
+    ? dashboardArtifactsFromMessage(item.content)
+    : [];
+  const visibleContent = !isUser
+    ? stripDashboardArtifactBlocks(item.content).trim()
+    : item.content;
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <article
@@ -2199,7 +2284,9 @@ function MessageBubble({
 
 function LiveToolStrip({ liveTurn }: { liveTurn: LiveTurnState }) {
   const activeTool = liveTurn.activeTools[0];
-  const activeToolLabel = activeTool ? formatLiveToolLabel(activeTool.name) : "";
+  const activeToolLabel = activeTool
+    ? formatLiveToolLabel(activeTool.name)
+    : "";
   const activeSummary = activeTool ? formatLiveToolSummary(activeTool) : "";
   const completedCount = liveTurn.recentTools.filter(
     (item) => item.state === "completed",
@@ -2478,12 +2565,11 @@ function optimisticPromptSession(
     turn_in_progress: true,
     current_turn_id: turnID,
     updated_at: updatedAt,
-    current_plan:
-      resetPlan
-        ? []
-        : planSeed && planSeed.length > 0
-          ? planSeed
-          : current.current_plan,
+    current_plan: resetPlan
+      ? []
+      : planSeed && planSeed.length > 0
+        ? planSeed
+        : current.current_plan,
     messages: [
       ...(current.messages || []),
       {
@@ -2518,7 +2604,8 @@ function markPromptFailure(
     turn_in_progress: false,
     current_turn_id: "",
     messages: (current.messages || []).filter(
-      (item) => stringValue(item.meta?.turn_id) !== turnID || item.role === "user",
+      (item) =>
+        stringValue(item.meta?.turn_id) !== turnID || item.role === "user",
     ),
     trace: [
       ...(current.trace || []),
@@ -2528,7 +2615,8 @@ function markPromptFailure(
         created_at: new Date().toISOString(),
         payload: {
           turn_id: turnID,
-          error: error instanceof Error ? error.message : "Failed to send prompt.",
+          error:
+            error instanceof Error ? error.message : "Failed to send prompt.",
         },
       },
     ],
@@ -2685,7 +2773,11 @@ function applyACPStreamEvent(
       next.turn_in_progress = false;
       next.current_turn_id = "";
       next.status = next.status === "awaiting_input" ? next.status : "ready";
-      if (turnID && isExecuteTurn(next.trace || [], turnID) && next.current_plan?.length) {
+      if (
+        turnID &&
+        isExecuteTurn(next.trace || [], turnID) &&
+        next.current_plan?.length
+      ) {
         next.current_plan = markPlanEntriesExecuted(next.current_plan);
       }
       break;
@@ -2701,7 +2793,8 @@ function applyACPStreamEvent(
       next.awaiting_input_kind =
         stringValue(event.payload?.awaiting_input_kind) || "clarification";
       next.pending_question_set_id =
-        stringValue(event.payload?.question_set_id) || next.pending_question_set_id;
+        stringValue(event.payload?.question_set_id) ||
+        next.pending_question_set_id;
       next.pending_questions = clarificationQuestionsFromPayload(
         event.payload?.questions,
       );
@@ -2765,7 +2858,9 @@ function appendChunkMessage(
       if (incoming.role === "assistant") {
         next[index] = {
           ...item,
-          id: item.id.startsWith("optimistic-assistant-") ? incoming.id : item.id,
+          id: item.id.startsWith("optimistic-assistant-")
+            ? incoming.id
+            : item.id,
           content: `${item.content}${incoming.content}`,
           created_at: incoming.created_at || item.created_at,
           meta: {
@@ -2857,10 +2952,11 @@ function dedupeTrace(trace: ACPEvent[]): ACPEvent[] {
   });
 }
 
-function artifactFromEventContent(content: Record<string, unknown>): ACPArtifact | null {
+function artifactFromEventContent(
+  content: Record<string, unknown>,
+): ACPArtifact | null {
   const kind =
-    stringValue(content.kind) ||
-    stringValue(mapValue(content.metadata).kind);
+    stringValue(content.kind) || stringValue(mapValue(content.metadata).kind);
   if (!kind) return null;
   return {
     id: stringValue(content.id) || `artifact-${kind}`,
@@ -2873,7 +2969,10 @@ function artifactFromEventContent(content: Record<string, unknown>): ACPArtifact
   };
 }
 
-function mergeArtifacts(items: ACPArtifact[], artifact: ACPArtifact): ACPArtifact[] {
+function mergeArtifacts(
+  items: ACPArtifact[],
+  artifact: ACPArtifact,
+): ACPArtifact[] {
   if (!artifact.id) {
     return [...items, artifact];
   }
@@ -2922,9 +3021,11 @@ function extractDraftLinks(value: unknown, depth = 0): DraftLink[] {
       stringValue(record.title) ||
       stringValue(
         (
-          record.record as {
-            body?: { payload?: Record<string, unknown> };
-          } | undefined
+          record.record as
+            | {
+                body?: { payload?: Record<string, unknown> };
+              }
+            | undefined
         )?.body?.payload?.title,
       );
     links.push({
@@ -3022,7 +3123,7 @@ function buildPromptPayload(
   if (looksLikeCRMPrompt(prompt)) {
     sections.push(
       [
-        "Search playbooks first for CRM requests. Prefer crm_service_backlog_triage for ticket backlog, crm_customer_360_review for named-customer context, crm_sales_pipeline_review for pipeline questions, and crm_service_sales_overview for blended CRM questions.",
+        "Search playbooks first for CRM requests and prefer the best-matching CRM workflow before raw tool search.",
         "Use crm.ticket.summary for backlog facts, crm.customer.summary or crm.customer.timeline for named customers, crm.customer.health for at-risk customer review, and crm.opportunity.pipeline.summary for pipeline review before answering.",
         "Do not stop at generic business search wrappers when dedicated CRM summary tools exist.",
       ].join(" "),
@@ -3034,18 +3135,18 @@ function buildPromptPayload(
       [
         "Search playbooks first if a dashboard insight workflow exists for the current request.",
         "If the dashboard tool family is still not obvious, use tools.search and tools.describe before calling tools.call.",
-        "For dashboard requests, first call analytics.dashboard.widget_catalog with surface=\"dashboard\".",
+        'For dashboard requests, first call analytics.dashboard.widget_catalog with surface="dashboard".',
         explicitFullBoard
           ? "For explicit full-dashboard or board-preview requests, use analytics.dashboard.board.preview so you return a full dashboard_board artifact."
           : "For focused insight responses, use analytics.dashboard.widgets.preview so you return 2-3 of the most relevant live widgets.",
         explicitFullBoard
           ? "Use analytics.dashboard.board.create only when the user explicitly asks to save a board, then report the saved board link."
-          : "For general insight requests, pass intent=\"insight\" and omit widget_keys so Orbyte can infer a balanced KPI/comparison/trend set.",
+          : 'For general insight requests, pass intent="insight" and omit widget_keys so Orbyte can infer a balanced KPI/comparison/trend set.',
         explicitFullBoard
           ? "If widget keys are not obvious for the full board, call the board preview tool with title, surface, and description only so Orbyte can infer the right board composition."
           : "Only pass widget_keys when the user explicitly asked for specific widgets or a specific renderer.",
         explicitFullBoard
-          ? "When analytics.dashboard.board.preview returns artifact metadata, copy the exact <orbyte-dashboard-artifact>...</orbyte-dashboard-artifact> block into your final answer without changing the JSON."
+          ? "When analytics.dashboard.board.preview returns artifact metadata, rely on the structured dashboard artifact output rather than rewriting it manually."
           : "Use analytics.dashboard.widget.preview only when exactly one widget is enough.",
         explicitFullBoard
           ? "Do not replace an explicit board request with standalone widget artifacts."
@@ -3057,14 +3158,14 @@ function buildPromptPayload(
           ? "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog when you need explicit board composition."
           : "Use analytics.dashboard.board.create only when the user explicitly asks to save a board, and then report the saved board link instead of embedding a full board artifact in the answer.",
         explicitFullBoard
-          ? "Do not omit the artifact block when dashboard MCP tools return artifact metadata."
+          ? "Do not omit the dashboard artifact information when dashboard MCP tools return artifact metadata."
           : "If widget keys are not obvious, call the preview or create tool with title, surface, and description only so Orbyte can infer the most relevant registered widgets.",
         explicitFullBoard
           ? ""
           : "For an insight answer, prefer one KPI or gauge, one comparison chart, and one trend chart. Avoid maps and detailed tables unless the user explicitly asked for geography or tabular detail.",
         explicitFullBoard
           ? ""
-          : "When analytics.dashboard.widgets.preview or analytics.dashboard.widget.preview returns artifact metadata, copy each exact <orbyte-dashboard-artifact>...</orbyte-dashboard-artifact> block from the tool result into your final answer without changing the JSON.",
+          : "When analytics.dashboard.widgets.preview or analytics.dashboard.widget.preview returns artifact metadata, rely on the structured dashboard artifact output rather than rewriting it manually.",
         explicitFullBoard
           ? ""
           : "Do not include dashboard board artifact blocks in the final answer.",
@@ -3073,7 +3174,7 @@ function buildPromptPayload(
           : "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog.",
         explicitFullBoard
           ? ""
-          : "Do not omit the artifact block when dashboard MCP tools return artifact metadata.",
+          : "Do not omit the dashboard artifact information when dashboard MCP tools return artifact metadata.",
       ].join(" "),
     );
   }
@@ -3225,12 +3326,12 @@ const DASHBOARD_ARTIFACT_BLOCK_PATTERN =
   /<orbyte-dashboard-artifact>([\s\S]*?)<\/orbyte-dashboard-artifact>/gi;
 
 function stripDashboardArtifactBlocks(content: string): string {
-  return content.replace(DASHBOARD_ARTIFACT_BLOCK_PATTERN, "").replace(/\n{3,}/g, "\n\n");
+  return content
+    .replace(DASHBOARD_ARTIFACT_BLOCK_PATTERN, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
-function dashboardArtifactsFromMessage(
-  content: string,
-): DashboardArtifact[] {
+function dashboardArtifactsFromMessage(content: string): DashboardArtifact[] {
   const artifacts: Array<DashboardArtifact> = [];
   for (const match of content.matchAll(DASHBOARD_ARTIFACT_BLOCK_PATTERN)) {
     const payload = match[1]?.trim();
@@ -3299,9 +3400,14 @@ function asResolvedWidget(value: unknown): DashboardResolvedWidget | null {
     return null;
   }
   return {
-    id: stringValue(record.id) || `artifact-widget-${Math.random().toString(36).slice(2)}`,
+    id:
+      stringValue(record.id) ||
+      `artifact-widget-${Math.random().toString(36).slice(2)}`,
     title: stringValue(record.title) || "Dashboard widget",
-    kind: stringValue(record.kind) || stringValue((definitionValue as Record<string, unknown>).renderer_kind) || "metric",
+    kind:
+      stringValue(record.kind) ||
+      stringValue((definitionValue as Record<string, unknown>).renderer_kind) ||
+      "metric",
     width: numberValue(record.width, 4),
     height: numberValue(record.height, 1),
     refresh_override: stringValue(record.refresh_override) || undefined,
@@ -3380,7 +3486,8 @@ function mergeDerivedPlanStatus(
     const matchingStored =
       storedEntries.find(
         (stored) =>
-          stored.content.trim().toLowerCase() === item.content.trim().toLowerCase(),
+          stored.content.trim().toLowerCase() ===
+          item.content.trim().toLowerCase(),
       ) || storedEntries[index];
     if (!matchingStored) return item;
     return {
@@ -3391,9 +3498,10 @@ function mergeDerivedPlanStatus(
   });
 }
 
-function deriveFallbackPlanFromPlanTurn(
-  session: ACPSession,
-): { turnID: string; entries: ACPPlanEntry[] } {
+function deriveFallbackPlanFromPlanTurn(session: ACPSession): {
+  turnID: string;
+  entries: ACPPlanEntry[];
+} {
   const messages = session.messages || [];
   const trace = session.trace || [];
   let latestPlanTurnID = "";

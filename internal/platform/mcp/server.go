@@ -4,12 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -632,12 +629,11 @@ func (s *Server) analyticsDashboardGet(actor ActorContext, arguments map[string]
 }
 
 func normalizeDashboardToolSurface(surface string) module.UISurface {
-	switch strings.ToLower(strings.TrimSpace(surface)) {
-	case "", string(module.UISurfaceDashboard), "crm", "service", "sales", "customer_360", "customer-360":
+	trimmed := strings.TrimSpace(surface)
+	if trimmed == "" {
 		return module.UISurfaceDashboard
-	default:
-		return module.UISurface(strings.TrimSpace(surface))
 	}
+	return module.UISurface(trimmed)
 }
 
 func (s *Server) analyticsDashboardWidgetCatalog(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
@@ -697,12 +693,13 @@ func (s *Server) analyticsDashboardWidgetPreview(actor ActorContext, arguments m
 	}
 	artifact := s.dashboardWidgetArtifactPayload(definition)
 	artifactBlock := dashboardArtifactBlockText(artifact)
-	text := fmt.Sprintf("Prepared dashboard widget preview %s using %s. Include this exact dashboard artifact block in your final answer when presenting this preview: %s", firstNonEmpty(title, definition.Title, widgetKey), widgetKey, artifactBlock)
+	text := fmt.Sprintf("Prepared dashboard widget preview %s using %s. Structured artifact metadata is included for compatible clients.", firstNonEmpty(title, definition.Title, widgetKey), widgetKey)
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"widget":   definition,
-			"artifact": artifact,
+			"widget":         definition,
+			"artifact":       artifact,
+			"artifact_block": artifactBlock,
 		},
 	}, true, nil
 }
@@ -744,25 +741,23 @@ func (s *Server) analyticsDashboardWidgetsPreview(actor ActorContext, arguments 
 		return nil, true, shared.Validation("widget_keys are required or the title/description must match at least one dashboard widget")
 	}
 	artifacts := make([]map[string]any, 0, len(selected))
-	blocks := make([]string, 0, len(selected))
 	keys := make([]string, 0, len(selected))
 	for _, definition := range selected {
 		artifact := s.dashboardWidgetArtifactPayload(definition)
 		artifacts = append(artifacts, artifact)
-		blocks = append(blocks, dashboardArtifactBlockText(artifact))
 		keys = append(keys, definition.Key)
 	}
 	text := fmt.Sprintf(
-		"Prepared %d focused dashboard widget previews using %s. Include each exact dashboard artifact block in your final answer when presenting this preview: %s",
+		"Prepared %d focused dashboard widget previews using %s. Structured artifact metadata is included for compatible clients.",
 		len(artifacts),
 		strings.Join(keys, ", "),
-		strings.Join(blocks, " "),
 	)
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"widgets":   selected,
-			"artifacts": artifacts,
+			"widgets":         selected,
+			"artifacts":       artifacts,
+			"artifact_blocks": mapDashboardArtifactBlocks(artifacts),
 		},
 	}, true, nil
 }
@@ -780,17 +775,14 @@ func (s *Server) analyticsDashboardBoardPreview(actor ActorContext, arguments ma
 	}
 	artifact := s.dashboardBoardArtifactPayload(board, actor)
 	artifactBlock := dashboardArtifactBlockText(artifact)
-	insightSummary := s.dashboardBoardInsightSummary(actor, board)
 	text := fmt.Sprintf("Prepared dashboard board preview %s. Widget keys: %s.", board.Name, dashboardWidgetKeySummary(board.Widgets))
-	if strings.TrimSpace(insightSummary) != "" {
-		text += " " + insightSummary
-	}
-	text += fmt.Sprintf(" Include this exact dashboard artifact block in your final answer when presenting this preview: %s", artifactBlock)
+	text += " Structured artifact metadata is included for compatible clients."
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"dashboard": board,
-			"artifact":  artifact,
+			"dashboard":      board,
+			"artifact":       artifact,
+			"artifact_block": artifactBlock,
 		},
 	}, true, nil
 }
@@ -813,10 +805,11 @@ func (s *Server) analyticsDashboardBoardCreate(actor ActorContext, arguments map
 	artifact := s.dashboardBoardArtifactPayload(saved, actor)
 	artifactBlock := dashboardArtifactBlockText(artifact)
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Include this exact dashboard artifact block in your final answer so the workspace can render it live: %s", saved.Name, dashboardWidgetKeySummary(saved.Widgets), artifactBlock)}},
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Structured artifact metadata is included for compatible clients.", saved.Name, dashboardWidgetKeySummary(saved.Widgets))}},
 		"structuredContent": map[string]any{
-			"dashboard": saved,
-			"artifact":  artifact,
+			"dashboard":      saved,
+			"artifact":       artifact,
+			"artifact_block": artifactBlock,
 		},
 		"_meta": s.analyticsAppMeta("dashboard", saved.ID),
 	}, true, nil
@@ -833,204 +826,12 @@ func dashboardWidgetKeySummary(widgets []analytics.DashboardWidget) string {
 	return strings.Join(lines, ", ")
 }
 
-func (s *Server) dashboardBoardInsightSummary(actor ActorContext, board analytics.Dashboard) string {
-	if len(board.Widgets) == 0 {
-		return ""
+func mapDashboardArtifactBlocks(artifacts []map[string]any) []string {
+	blocks := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		blocks = append(blocks, dashboardArtifactBlockText(artifact))
 	}
-	hasSalesDemo := false
-	hasPlanningReplenishment := false
-	for _, widget := range board.Widgets {
-		key := strings.TrimSpace(widget.WidgetKey)
-		if strings.HasPrefix(key, "analytics.demo.sales.") {
-			hasSalesDemo = true
-		}
-		if strings.HasPrefix(key, "planning.replenishment.") {
-			hasPlanningReplenishment = true
-		}
-	}
-	if hasSalesDemo {
-		return s.dashboardDemoSalesSummary()
-	}
-	if hasPlanningReplenishment && s != nil && s.planning != nil {
-		return s.dashboardPlanningReplenishmentSummary(actor, board)
-	}
-	return ""
-}
-
-func (s *Server) dashboardDemoSalesSummary() string {
-	if s == nil || s.analytics == nil {
-		return ""
-	}
-	points := mcpDashboardDemoSalesRows(s.analytics.Snapshot())
-	if len(points) == 0 {
-		return ""
-	}
-	best := points[0]
-	laggards := make([]mcpDashboardDemoSalesRow, 0, 2)
-	for _, point := range points[1:] {
-		laggards = append(laggards, point)
-	}
-	sort.SliceStable(laggards, func(i, j int) bool {
-		return laggards[i].NetSales < laggards[j].NetSales
-	})
-	parts := []string{
-		fmt.Sprintf("Demo sales highlights: %s leads on net sales at %s.", best.Label, formatWholeNumber(best.NetSales)),
-	}
-	if len(laggards) > 0 {
-		names := make([]string, 0, len(laggards))
-		for _, point := range laggards {
-			names = append(names, point.Label)
-			if len(names) >= 2 {
-				break
-			}
-		}
-		if len(names) > 0 {
-			parts = append(parts, fmt.Sprintf("%s are trailing the benchmark in this demo dataset.", strings.Join(names, " and ")))
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
-type mcpDashboardDemoSalesRow struct {
-	LocationID  string
-	Label       string
-	NetSales    float64
-	TargetSales float64
-}
-
-func mcpDashboardDemoSalesRows(snapshot analytics.Snapshot) []mcpDashboardDemoSalesRow {
-	keys := make([]string, 0, len(snapshot.Segments.ByLocation))
-	for key := range snapshot.Segments.ByLocation {
-		if !strings.HasPrefix(strings.TrimSpace(key), "loc_demo_") {
-			continue
-		}
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	rows := make([]mcpDashboardDemoSalesRow, 0, len(keys))
-	for _, key := range keys {
-		kpi := snapshot.Segments.ByLocation[key]
-		netSales, targetSales := mcpSyntheticSalesForLocation(key, kpi)
-		rows = append(rows, mcpDashboardDemoSalesRow{
-			LocationID:  key,
-			Label:       mcpDashboardLocationLabel(key),
-			NetSales:    netSales,
-			TargetSales: targetSales,
-		})
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		return rows[i].NetSales > rows[j].NetSales
-	})
-	return rows
-}
-
-func mcpSyntheticSalesForLocation(locationID string, kpi analytics.DocumentKPI) (float64, float64) {
-	switch strings.TrimSpace(locationID) {
-	case "loc_demo_central":
-		return 7900000, 10800000
-	case "loc_demo_west":
-		return 9800000, 11800000
-	case "loc_demo_east":
-		return 15800000, 14900000
-	default:
-		baseSales := float64(kpi.Submitted*1250000 + kpi.Approved*1850000 + 3500000)
-		targetSales := baseSales * 1.1
-		return baseSales, targetSales
-	}
-}
-
-func mcpDashboardLocationLabel(locationID string) string {
-	switch strings.TrimSpace(locationID) {
-	case "":
-		return "Unscoped"
-	case "loc_hq":
-		return "Head Office"
-	case "loc_demo_central":
-		return "Loc Demo Central"
-	case "loc_demo_east":
-		return "Loc Demo East"
-	case "loc_demo_west":
-		return "Loc Demo West"
-	default:
-		return locationID
-	}
-}
-
-func formatWholeNumber(value float64) string {
-	return strconv.FormatFloat(math.Round(value), 'f', 0, 64)
-}
-
-func (s *Server) dashboardPlanningReplenishmentSummary(actor ActorContext, board analytics.Dashboard) string {
-	if s == nil || s.planning == nil {
-		return ""
-	}
-	warehouseCode := extractWarehouseCode(board.Description + " " + board.Name)
-	summary := s.planning.ReplenishmentSummaryScoped(
-		actor.OrganizationID,
-		actor.LocationID,
-		warehouseCode,
-		"",
-		"",
-		"",
-		false,
-		false,
-		false,
-		time.Now().UTC(),
-	)
-	if len(summary.Items) == 0 {
-		return ""
-	}
-	atRisk := make([]string, 0, 2)
-	healthy := make([]string, 0, 2)
-	for _, row := range summary.Items {
-		name := firstNonEmpty(textValue(row["item_name"]), textValue(row["item_code"]))
-		if name == "" {
-			continue
-		}
-		if roundedQuantity(numberValue(row["suggested_request_quantity"])) > 0 {
-			atRisk = append(atRisk, fmt.Sprintf("%s (%s suggested)", name, formatQuantityLabel(numberValue(row["suggested_request_quantity"]))))
-		} else {
-			healthy = append(healthy, name)
-		}
-		if len(atRisk) >= 2 && len(healthy) >= 2 {
-			break
-		}
-	}
-	parts := []string{
-		fmt.Sprintf("Replenishment highlights: %d shortage candidates and %s suggested units", summary.ShortageItemCount, formatQuantityLabel(summary.TotalSuggestedRequestQuantity)),
-	}
-	if warehouseCode != "" {
-		parts = append(parts, fmt.Sprintf("for warehouse %s", warehouseCode))
-	}
-	if len(atRisk) > 0 {
-		parts = append(parts, "At-risk items: "+strings.Join(atRisk, "; "))
-	}
-	if len(healthy) > 0 {
-		parts = append(parts, "Healthy items to skip: "+strings.Join(healthy, "; "))
-	}
-	return strings.Join(parts, ". ") + "."
-}
-
-func extractWarehouseCode(text string) string {
-	for _, token := range strings.Fields(strings.NewReplacer(",", " ", ".", " ", ";", " ", "\"", " ").Replace(text)) {
-		token = strings.TrimSpace(token)
-		if strings.HasPrefix(token, "WH-") {
-			return token
-		}
-	}
-	return ""
-}
-
-func formatQuantityLabel(value float64) string {
-	rounded := roundedQuantity(value)
-	if math.Abs(rounded-math.Round(rounded)) < 0.00001 {
-		return strconv.FormatInt(int64(math.Round(rounded)), 10)
-	}
-	return strconv.FormatFloat(rounded, 'f', -1, 64)
-}
-
-func roundedQuantity(value float64) float64 {
-	return math.Round(value*100) / 100
+	return blocks
 }
 
 func dashboardArtifactBlockText(artifact map[string]any) string {

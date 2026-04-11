@@ -4007,9 +4007,8 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if widgetArtifact["kind"] != "dashboard_widget" {
 		t.Fatalf("expected dashboard_widget artifact, got %+v", widgetArtifact)
 	}
-	widgetPreviewContent := widgetPreviewResult["content"].([]ContentBlock)[0].Text
-	if !strings.Contains(widgetPreviewContent, "<orbyte-dashboard-artifact>") {
-		t.Fatalf("expected widget preview content to include artifact block, got %q", widgetPreviewContent)
+	if strings.TrimSpace(stringValue(widgetPreview["artifact_block"])) == "" {
+		t.Fatalf("expected widget preview structured content to include artifact_block, got %+v", widgetPreview)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -4037,9 +4036,9 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if len(artifacts) != 2 {
 		t.Fatalf("expected 2 widget artifacts, got %+v", widgetsPreview)
 	}
-	widgetsPreviewContent := widgetsPreviewResult["content"].([]ContentBlock)[0].Text
-	if strings.Count(widgetsPreviewContent, "<orbyte-dashboard-artifact>") != 2 {
-		t.Fatalf("expected widgets preview content to include 2 artifact blocks, got %q", widgetsPreviewContent)
+	artifactBlocks, _ := widgetsPreview["artifact_blocks"].([]string)
+	if len(artifactBlocks) != 2 {
+		t.Fatalf("expected 2 widget artifact blocks in structured content, got %+v", widgetsPreview)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -4097,9 +4096,8 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if preview["artifact"] == nil {
 		t.Fatalf("expected preview artifact payload, got %+v", preview)
 	}
-	previewContent := previewResult["content"].([]ContentBlock)[0].Text
-	if !strings.Contains(previewContent, "<orbyte-dashboard-artifact>") {
-		t.Fatalf("expected preview content to include artifact block, got %q", previewContent)
+	if strings.TrimSpace(stringValue(preview["artifact_block"])) == "" {
+		t.Fatalf("expected preview structured content to include artifact_block, got %+v", preview)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -4123,9 +4121,8 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if createdBoard["artifact"] == nil {
 		t.Fatalf("expected created dashboard artifact payload, got %+v", createdBoard)
 	}
-	createdContent := createdResult["content"].([]ContentBlock)[0].Text
-	if !strings.Contains(createdContent, "<orbyte-dashboard-artifact>") {
-		t.Fatalf("expected created dashboard content to include artifact block, got %q", createdContent)
+	if strings.TrimSpace(stringValue(createdBoard["artifact_block"])) == "" {
+		t.Fatalf("expected created dashboard structured content to include artifact_block, got %+v", createdBoard)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
