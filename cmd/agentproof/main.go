@@ -35,6 +35,10 @@ func main() {
 		if err := runValidateMCP(os.Args[2:]); err != nil {
 			fatalf("%v", err)
 		}
+	case "measure-mcp":
+		if err := runMeasureMCP(os.Args[2:]); err != nil {
+			fatalf("%v", err)
+		}
 	default:
 		fatalf("unknown subcommand %q", os.Args[1])
 	}
