@@ -2786,276 +2786,6 @@
       }
     },
     {
-      "name": "clinic_registration.business.document.draft.create",
-      "title": "Clinic Registration Create Draft Document",
-      "description": "Create a draft document owned by clinic_registration after confirmation.",
-      "moduleKey": "clinic_registration",
-      "sourceType": "synthetic",
-      "capabilityKeys": [
-        "governed_drafts"
-      ],
-      "capabilityCategories": [
-        "core"
-      ],
-      "compactEligible": true,
-      "scope": "clinic_registration",
-      "policyState": "confirmation_required",
-      "effectiveVisibility": "listed",
-      "inputSchema": {
-        "properties": {
-          "confirm_apply": {
-            "type": "boolean"
-          },
-          "document_type": {
-            "type": "string"
-          },
-          "location_id": {
-            "type": "string"
-          },
-          "organization_id": {
-            "type": "string"
-          },
-          "payload": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "document_type",
-          "payload",
-          "confirm_apply"
-        ],
-        "type": "object"
-      },
-      "contract": {
-        "version": "2026-03-23",
-        "stability": "stable",
-        "sideEffectClass": "mutation",
-        "idempotency": "non-idempotent",
-        "auditAction": "mcp.tool.clinic_registration.business.document.draft.create",
-        "actionClass": "draft",
-        "riskClass": "medium",
-        "draftOnly": true,
-        "requiresConfirmation": true,
-        "governanceTags": [
-          "draft-first",
-          "confirm-required"
-        ],
-        "businessDomains": [
-          "platform"
-        ],
-        "requiredPermissions": [
-          "document.create"
-        ]
-      }
-    },
-    {
-      "name": "clinic_registration.business.document.draft.update",
-      "title": "Clinic Registration Update Draft Document",
-      "description": "Update a draft document owned by clinic_registration after confirmation.",
-      "moduleKey": "clinic_registration",
-      "sourceType": "synthetic",
-      "capabilityKeys": [
-        "governed_drafts"
-      ],
-      "capabilityCategories": [
-        "core"
-      ],
-      "compactEligible": true,
-      "scope": "clinic_registration",
-      "policyState": "confirmation_required",
-      "effectiveVisibility": "listed",
-      "inputSchema": {
-        "properties": {
-          "confirm_apply": {
-            "type": "boolean"
-          },
-          "document_id": {
-            "type": "string"
-          },
-          "expected_etag": {
-            "type": "string"
-          },
-          "expected_version": {
-            "type": "integer"
-          },
-          "payload": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "document_id",
-          "payload",
-          "confirm_apply"
-        ],
-        "type": "object"
-      },
-      "contract": {
-        "version": "2026-03-23",
-        "stability": "stable",
-        "sideEffectClass": "mutation",
-        "idempotency": "best-effort",
-        "auditAction": "mcp.tool.clinic_registration.business.document.draft.update",
-        "actionClass": "draft",
-        "riskClass": "medium",
-        "draftOnly": true,
-        "requiresConfirmation": true,
-        "governanceTags": [
-          "draft-first",
-          "confirm-required"
-        ],
-        "businessDomains": [
-          "platform"
-        ],
-        "requiredPermissions": [
-          "document.update_draft"
-        ]
-      }
-    },
-    {
-      "name": "clinic_registration.business.documents.search",
-      "title": "Clinic Registration Business Documents",
-      "description": "Search business documents owned by clinic_registration.",
-      "moduleKey": "clinic_registration",
-      "sourceType": "synthetic",
-      "scope": "clinic_registration",
-      "policyState": "allowed",
-      "effectiveVisibility": "listed",
-      "inputSchema": {
-        "properties": {
-          "document_type": {
-            "type": "string"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "page_size": {
-            "type": "integer"
-          },
-          "query": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "contract": {
-        "version": "2026-03-23",
-        "stability": "stable",
-        "sideEffectClass": "operation",
-        "idempotency": "best-effort",
-        "auditAction": "mcp.tool.clinic_registration.business.documents.search",
-        "actionClass": "analyze",
-        "riskClass": "low",
-        "governanceTags": [
-          "business-comprehension"
-        ],
-        "businessDomains": [
-          "platform"
-        ],
-        "requiredPermissions": [
-          "document.list"
-        ]
-      }
-    },
-    {
-      "name": "clinic_registration.business.info.get",
-      "title": "Clinic Registration Business Info",
-      "description": "Get business metadata and capabilities for clinic_registration.",
-      "moduleKey": "clinic_registration",
-      "sourceType": "synthetic",
-      "scope": "clinic_registration",
-      "policyState": "allowed",
-      "effectiveVisibility": "listed",
-      "inputSchema": {
-        "properties": {
-          "location_id": {
-            "type": "string"
-          },
-          "organization_id": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "contract": {
-        "version": "2026-03-23",
-        "stability": "stable",
-        "sideEffectClass": "read",
-        "idempotency": "read-only",
-        "auditAction": "mcp.tool.clinic_registration.business.info.get",
-        "actionClass": "read",
-        "riskClass": "low",
-        "businessDomains": [
-          "platform"
-        ],
-        "requiredPermissions": [
-          "module.read"
-        ]
-      }
-    },
-    {
-      "name": "clinic_registration.business.records.search",
-      "title": "Clinic Registration Business Records",
-      "description": "Search business records owned by clinic_registration.",
-      "moduleKey": "clinic_registration",
-      "sourceType": "synthetic",
-      "scope": "clinic_registration",
-      "policyState": "allowed",
-      "effectiveVisibility": "listed",
-      "inputSchema": {
-        "properties": {
-          "document_type": {
-            "type": "string"
-          },
-          "filters": {
-            "type": "object"
-          },
-          "include_full_payload": {
-            "type": "boolean"
-          },
-          "model_key": {
-            "type": "string"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "page_size": {
-            "type": "integer"
-          },
-          "query": {
-            "type": "string"
-          },
-          "resource_kind": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "contract": {
-        "version": "2026-03-23",
-        "stability": "stable",
-        "sideEffectClass": "operation",
-        "idempotency": "best-effort",
-        "auditAction": "mcp.tool.clinic_registration.business.records.search",
-        "actionClass": "analyze",
-        "riskClass": "low",
-        "governanceTags": [
-          "business-comprehension"
-        ],
-        "businessDomains": [
-          "platform"
-        ],
-        "requiredPermissions": [
-          "module.read"
-        ]
-      }
-    },
-    {
       "name": "commercial_core.business.document.draft.create",
       "title": "Commercial Core Create Draft Document",
       "description": "Create a draft document owned by commercial_core after confirmation.",
@@ -3641,6 +3371,1240 @@
         ],
         "requiredPermissions": [
           "configuration.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.customer.health",
+      "title": "Get CRM Customer Health",
+      "description": "Summarize customer health, at-risk accounts, service issues, and open opportunities.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.customer.health",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.list",
+          "crm_opportunity.list",
+          "crm_activity.list",
+          "party.read",
+          "customer.read",
+          "party_contact.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.customer.summary",
+      "title": "Get CRM Customer Summary",
+      "description": "Load a CRM customer 360 summary with service tickets, customer health, sales opportunities, and profile data.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "party_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "party_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.customer.summary",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.list",
+          "crm_opportunity.list",
+          "crm_activity.list",
+          "party.read",
+          "customer.read",
+          "party_contact.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.customer.timeline",
+      "title": "Get CRM Customer Timeline",
+      "description": "Load CRM activities, service ticket history, and sales follow-up for one customer.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "party_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "party_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.customer.timeline",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.list",
+          "crm_opportunity.list",
+          "crm_activity.list",
+          "party.read",
+          "customer.read",
+          "party_contact.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.lead.create",
+      "title": "Create CRM Lead",
+      "description": "Create a CRM lead after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "contact_id": {
+            "type": "string"
+          },
+          "estimated_value": {
+            "type": "string"
+          },
+          "expected_close_date": {
+            "type": "string"
+          },
+          "next_action_at": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "party_name": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "string"
+          },
+          "source_channel": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.crm.lead.create",
+        "actionClass": "create",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_lead.create"
+        ]
+      }
+    },
+    {
+      "name": "crm.lead.get",
+      "title": "Get CRM Lead",
+      "description": "Get one CRM sales lead.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "lead_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lead_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.crm.lead.get",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_lead.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.lead.search",
+      "title": "Search CRM Leads",
+      "description": "Search internal CRM sales leads by owner, customer, status, rating, and next step.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "owner_user_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.lead.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_lead.list"
+        ]
+      }
+    },
+    {
+      "name": "crm.lead.update",
+      "title": "Update CRM Lead",
+      "description": "Update a CRM lead after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "contact_id": {
+            "type": "string"
+          },
+          "estimated_value": {
+            "type": "string"
+          },
+          "expected_close_date": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "lead_id": {
+            "type": "string"
+          },
+          "next_action_at": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "party_name": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "string"
+          },
+          "source_channel": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.lead.update",
+        "actionClass": "update",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_lead.update"
+        ]
+      }
+    },
+    {
+      "name": "crm.opportunity.create",
+      "title": "Create CRM Opportunity",
+      "description": "Create a CRM opportunity after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "contact_id": {
+            "type": "string"
+          },
+          "estimated_value": {
+            "type": "string"
+          },
+          "expected_close_date": {
+            "type": "string"
+          },
+          "loss_reason": {
+            "type": "string"
+          },
+          "next_action_at": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "party_name": {
+            "type": "string"
+          },
+          "source_lead_id": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.crm.opportunity.create",
+        "actionClass": "create",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_opportunity.create"
+        ]
+      }
+    },
+    {
+      "name": "crm.opportunity.get",
+      "title": "Get CRM Opportunity",
+      "description": "Get one CRM sales opportunity.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "opportunity_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "opportunity_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.crm.opportunity.get",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_opportunity.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.opportunity.pipeline.summary",
+      "title": "Get Opportunity Pipeline Summary",
+      "description": "Summarize the active CRM sales pipeline by stage, value, stale opportunities, and activity coverage.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.opportunity.pipeline.summary",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_opportunity.list",
+          "crm_lead.list",
+          "crm_activity.list"
+        ]
+      }
+    },
+    {
+      "name": "crm.opportunity.search",
+      "title": "Search CRM Opportunities",
+      "description": "Search internal CRM sales opportunities by stage, status, customer, owner, and pipeline context.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "owner_user_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.opportunity.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_opportunity.list"
+        ]
+      }
+    },
+    {
+      "name": "crm.opportunity.update",
+      "title": "Update CRM Opportunity",
+      "description": "Update a CRM opportunity after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "contact_id": {
+            "type": "string"
+          },
+          "estimated_value": {
+            "type": "string"
+          },
+          "expected_close_date": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "loss_reason": {
+            "type": "string"
+          },
+          "next_action_at": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "opportunity_id": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "party_name": {
+            "type": "string"
+          },
+          "source_lead_id": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.opportunity.update",
+        "actionClass": "update",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_opportunity.update"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.assign",
+      "title": "Assign CRM Ticket",
+      "description": "Assign or reassign a CRM ticket after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "assignee_user_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "ticket_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "assignee_user_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.ticket.assign",
+        "actionClass": "update",
+        "riskClass": "low",
+        "requiresConfirmation": true,
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.update"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.comment.create",
+      "title": "Add CRM Ticket Comment",
+      "description": "Add a ticket comment or internal note after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "comment_type": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "ticket_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "body",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.crm.ticket.comment.create",
+        "actionClass": "create",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket_comment.create"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.create",
+      "title": "Create CRM Ticket",
+      "description": "Create a new CRM issue ticket after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "assignee_user_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "due_at": {
+            "type": "string"
+          },
+          "first_response_due_at": {
+            "type": "string"
+          },
+          "issue_category": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "party_name": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "queue_code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "source_channel": {
+            "type": "string"
+          },
+          "tags_json": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "non-idempotent",
+        "auditAction": "mcp.tool.crm.ticket.create",
+        "actionClass": "create",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.create"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.get",
+      "title": "Get CRM Ticket",
+      "description": "Get one CRM service issue ticket with its current operational state.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "ticket_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.crm.ticket.get",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.read"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.resolve",
+      "title": "Resolve CRM Ticket",
+      "description": "Resolve or close a CRM ticket after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "close": {
+            "type": "boolean"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "resolution_notes": {
+            "type": "string"
+          },
+          "ticket_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.crm.ticket.resolve",
+        "actionClass": "update",
+        "riskClass": "low",
+        "requiresConfirmation": true,
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.update"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.search",
+      "title": "Search CRM Tickets",
+      "description": "Search CRM issue tickets by query, queue, backlog status, priority, assignee, and customer.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "assignee_user_id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "queue_code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.ticket.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.list"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.summary",
+      "title": "Get CRM Ticket Summary",
+      "description": "Summarize CRM service backlog, SLA risk, open-ticket counts, and queue health for issue operations.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.ticket.summary",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.list"
+        ]
+      }
+    },
+    {
+      "name": "crm.ticket.update",
+      "title": "Update CRM Ticket",
+      "description": "Update an existing CRM ticket after explicit confirmation.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "assignee_user_id": {
+            "type": "string"
+          },
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "first_response_at": {
+            "type": "string"
+          },
+          "issue_category": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "queue_code": {
+            "type": "string"
+          },
+          "resolution_notes": {
+            "type": "string"
+          },
+          "resolved_at": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags_json": {
+            "type": "string"
+          },
+          "ticket_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "mutation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.ticket.update",
+        "actionClass": "update",
+        "riskClass": "high",
+        "requiresConfirmation": true,
+        "governanceTags": [
+          "confirm-required"
+        ],
+        "businessDomains": [
+          "crm",
+          "platform",
+          "service"
+        ],
+        "requiredPermissions": [
+          "crm_ticket.update"
+        ]
+      }
+    },
+    {
+      "name": "crm_core.business.info.get",
+      "title": "CRM Core Business Info",
+      "description": "Get business metadata and capabilities for crm_core.",
+      "moduleKey": "crm_core",
+      "sourceType": "synthetic",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.crm_core.business.info.get",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "crm_core.business.records.search",
+      "title": "CRM Core Business Records",
+      "description": "Search business records owned by crm_core.",
+      "moduleKey": "crm_core",
+      "sourceType": "synthetic",
+      "scope": "crm_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "document_type": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "object"
+          },
+          "include_full_payload": {
+            "type": "boolean"
+          },
+          "model_key": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm_core.business.records.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
         ]
       }
     },
@@ -10916,6 +11880,144 @@
       }
     },
     {
+      "name": "playbooks.describe",
+      "title": "Describe Playbook",
+      "description": "Load one workflow playbook with its steps and relevant tools.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "playbook_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "playbook_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.playbooks.describe",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "playbooks.list",
+      "title": "List Playbooks",
+      "description": "List available workflow playbooks for common business use cases.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.playbooks.list",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "playbooks.search",
+      "title": "Search Playbooks",
+      "description": "Search workflow playbooks by name, description, domains, labels, and keywords.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.playbooks.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
       "name": "policy.hook.get",
       "title": "Get Policy Hook Runtime",
       "description": "Get one policy hook runtime.",
@@ -13853,6 +14955,225 @@
         ],
         "requiredPermissions": [
           "template.render"
+        ]
+      }
+    },
+    {
+      "name": "tools.call",
+      "title": "Call Tool",
+      "description": "Call a discoverable MCP tool by id using a dynamic payload.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "catalog_context": {
+            "type": "object"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "tool_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_id"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.tools.call",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "tools.describe",
+      "title": "Describe Tools",
+      "description": "Get detailed tool descriptions, schemas, and contracts in bulk.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "tool_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tool_ids"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.tools.describe",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "tools.list",
+      "title": "List Available Tools",
+      "description": "List lightweight summaries of discoverable MCP tools.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.tools.list",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
+      "name": "tools.search",
+      "title": "Search Tools",
+      "description": "Search discoverable MCP tools by title, description, domains, and labels.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.tools.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
         ]
       }
     },

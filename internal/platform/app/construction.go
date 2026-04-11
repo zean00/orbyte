@@ -91,6 +91,7 @@ type serviceGraph struct {
 	modelActions        *application.ModelActions
 	commercialCore      *application.CommercialCoreService
 	procurementCore     *application.ProcurementCoreService
+	crmCore             *application.CRMCoreService
 	inventoryCore       *application.InventoryCoreService
 	fulfillmentCore     *application.FulfillmentCoreService
 	deliveryCore        *application.DeliveryCoreService
@@ -275,6 +276,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 	graph.docActions.AttachNotifications(graph.notifications)
 	graph.commercialCore = application.NewCommercialCoreService(graph.documents, graph.config, graph.models, graph.search)
 	graph.procurementCore = application.NewProcurementCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.crmCore = application.NewCRMCoreService(graph.models)
 	graph.inventoryCore = application.NewInventoryCoreService(graph.documents, graph.config, graph.models, graph.search)
 	graph.fulfillmentCore = application.NewFulfillmentCoreService(graph.documents, graph.search, graph.inventoryCore)
 	graph.deliveryCore = application.NewDeliveryCoreService(graph.documents, graph.search)
@@ -331,6 +333,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 		Models:                    graph.models,
 		Reference:                 graph.reference,
 		Search:                    graph.search,
+		CRM:                       graph.crmCore,
 		FieldSecurity:             graph.fieldSecurity,
 		Policy:                    graph.policy,
 		Eventing:                  graph.eventing,

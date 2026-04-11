@@ -1090,6 +1090,546 @@
       "view_key": "commercial.variant_values.list"
     },
     {
+      "key": "crm.activities.detail",
+      "kind": "navigate",
+      "label": "CRM Activity Detail",
+      "label_i18n": {
+        "en": "CRM Activity Detail",
+        "id": "CRM Activity Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_activity.read"
+      ],
+      "route_path": "/crm/activities/detail",
+      "view_key": "crm.activities.detail"
+    },
+    {
+      "key": "crm.activities.form",
+      "kind": "navigate",
+      "label": "CRM Activity Form",
+      "label_i18n": {
+        "en": "CRM Activity Form",
+        "id": "CRM Activity Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_activity.update"
+      ],
+      "route_path": "/crm/activities/form",
+      "view_key": "crm.activities.form"
+    },
+    {
+      "key": "crm.activities.list",
+      "kind": "navigate",
+      "label": "CRM Activities",
+      "label_i18n": {
+        "en": "CRM Activities",
+        "id": "CRM Activities"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_activity.list"
+      ],
+      "route_path": "/crm/activities",
+      "view_key": "crm.activities.list"
+    },
+    {
+      "key": "crm.activities.new",
+      "kind": "navigate",
+      "label": "New CRM Activities",
+      "label_i18n": {
+        "en": "New CRM Activities",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_activity.update"
+      ],
+      "route_path": "/crm/activities/new",
+      "view_key": "crm.activities.form"
+    },
+    {
+      "key": "crm.assignment-rules.detail",
+      "kind": "navigate",
+      "label": "Assignment Rule Detail",
+      "label_i18n": {
+        "en": "Assignment Rule Detail",
+        "id": "Assignment Rule Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_assignment_rule.read"
+      ],
+      "route_path": "/crm/assignment-rules/detail",
+      "view_key": "crm.assignment-rules.detail"
+    },
+    {
+      "key": "crm.assignment-rules.form",
+      "kind": "navigate",
+      "label": "Assignment Rule Form",
+      "label_i18n": {
+        "en": "Assignment Rule Form",
+        "id": "Assignment Rule Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_assignment_rule.update"
+      ],
+      "route_path": "/crm/assignment-rules/form",
+      "view_key": "crm.assignment-rules.form"
+    },
+    {
+      "key": "crm.assignment-rules.list",
+      "kind": "navigate",
+      "label": "Assignment Rules",
+      "label_i18n": {
+        "en": "Assignment Rules",
+        "id": "Assignment Rules"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_assignment_rule.list"
+      ],
+      "route_path": "/crm/assignment-rules",
+      "view_key": "crm.assignment-rules.list"
+    },
+    {
+      "key": "crm.assignment-rules.new",
+      "kind": "navigate",
+      "label": "New Assignment Rules",
+      "label_i18n": {
+        "en": "New Assignment Rules",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_assignment_rule.update"
+      ],
+      "route_path": "/crm/assignment-rules/new",
+      "view_key": "crm.assignment-rules.form"
+    },
+    {
+      "key": "crm.leads.detail",
+      "kind": "navigate",
+      "label": "Lead Detail",
+      "label_i18n": {
+        "en": "Lead Detail",
+        "id": "Lead Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_lead.read"
+      ],
+      "route_path": "/crm/leads/detail",
+      "view_key": "crm.leads.detail"
+    },
+    {
+      "key": "crm.leads.form",
+      "kind": "navigate",
+      "label": "Lead Form",
+      "label_i18n": {
+        "en": "Lead Form",
+        "id": "Lead Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_lead.update"
+      ],
+      "route_path": "/crm/leads/form",
+      "view_key": "crm.leads.form"
+    },
+    {
+      "key": "crm.leads.list",
+      "kind": "navigate",
+      "label": "Leads",
+      "label_i18n": {
+        "en": "Leads",
+        "id": "Leads"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_lead.list"
+      ],
+      "route_path": "/crm/leads",
+      "view_key": "crm.leads.list"
+    },
+    {
+      "key": "crm.leads.new",
+      "kind": "navigate",
+      "label": "New Leads",
+      "label_i18n": {
+        "en": "New Leads",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_lead.update"
+      ],
+      "route_path": "/crm/leads/new",
+      "view_key": "crm.leads.form"
+    },
+    {
+      "key": "crm.opportunities.detail",
+      "kind": "navigate",
+      "label": "Opportunity Detail",
+      "label_i18n": {
+        "en": "Opportunity Detail",
+        "id": "Opportunity Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_opportunity.read"
+      ],
+      "route_path": "/crm/opportunities/detail",
+      "view_key": "crm.opportunities.detail"
+    },
+    {
+      "key": "crm.opportunities.form",
+      "kind": "navigate",
+      "label": "Opportunity Form",
+      "label_i18n": {
+        "en": "Opportunity Form",
+        "id": "Opportunity Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_opportunity.update"
+      ],
+      "route_path": "/crm/opportunities/form",
+      "view_key": "crm.opportunities.form"
+    },
+    {
+      "key": "crm.opportunities.list",
+      "kind": "navigate",
+      "label": "Opportunities",
+      "label_i18n": {
+        "en": "Opportunities",
+        "id": "Opportunities"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_opportunity.list"
+      ],
+      "route_path": "/crm/opportunities",
+      "view_key": "crm.opportunities.list"
+    },
+    {
+      "key": "crm.opportunities.new",
+      "kind": "navigate",
+      "label": "New Opportunities",
+      "label_i18n": {
+        "en": "New Opportunities",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_opportunity.update"
+      ],
+      "route_path": "/crm/opportunities/new",
+      "view_key": "crm.opportunities.form"
+    },
+    {
+      "key": "crm.queues.detail",
+      "kind": "navigate",
+      "label": "Ticket Queue Detail",
+      "label_i18n": {
+        "en": "Ticket Queue Detail",
+        "id": "Ticket Queue Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_queue.read"
+      ],
+      "route_path": "/crm/queues/detail",
+      "view_key": "crm.queues.detail"
+    },
+    {
+      "key": "crm.queues.form",
+      "kind": "navigate",
+      "label": "Ticket Queue Form",
+      "label_i18n": {
+        "en": "Ticket Queue Form",
+        "id": "Ticket Queue Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_queue.update"
+      ],
+      "route_path": "/crm/queues/form",
+      "view_key": "crm.queues.form"
+    },
+    {
+      "key": "crm.queues.list",
+      "kind": "navigate",
+      "label": "Ticket Queues",
+      "label_i18n": {
+        "en": "Ticket Queues",
+        "id": "Ticket Queues"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_queue.list"
+      ],
+      "route_path": "/crm/queues",
+      "view_key": "crm.queues.list"
+    },
+    {
+      "key": "crm.queues.new",
+      "kind": "navigate",
+      "label": "New Ticket Queues",
+      "label_i18n": {
+        "en": "New Ticket Queues",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_queue.update"
+      ],
+      "route_path": "/crm/queues/new",
+      "view_key": "crm.queues.form"
+    },
+    {
+      "key": "crm.sla-policies.detail",
+      "kind": "navigate",
+      "label": "SLA Policy Detail",
+      "label_i18n": {
+        "en": "SLA Policy Detail",
+        "id": "SLA Policy Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_sla_policy.read"
+      ],
+      "route_path": "/crm/sla-policies/detail",
+      "view_key": "crm.sla-policies.detail"
+    },
+    {
+      "key": "crm.sla-policies.form",
+      "kind": "navigate",
+      "label": "SLA Policy Form",
+      "label_i18n": {
+        "en": "SLA Policy Form",
+        "id": "SLA Policy Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_sla_policy.update"
+      ],
+      "route_path": "/crm/sla-policies/form",
+      "view_key": "crm.sla-policies.form"
+    },
+    {
+      "key": "crm.sla-policies.list",
+      "kind": "navigate",
+      "label": "SLA Policies",
+      "label_i18n": {
+        "en": "SLA Policies",
+        "id": "SLA Policies"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_sla_policy.list"
+      ],
+      "route_path": "/crm/sla-policies",
+      "view_key": "crm.sla-policies.list"
+    },
+    {
+      "key": "crm.sla-policies.new",
+      "kind": "navigate",
+      "label": "New SLA Policies",
+      "label_i18n": {
+        "en": "New SLA Policies",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_sla_policy.update"
+      ],
+      "route_path": "/crm/sla-policies/new",
+      "view_key": "crm.sla-policies.form"
+    },
+    {
+      "key": "crm.ticket-activities.detail",
+      "kind": "navigate",
+      "label": "Ticket Activity Detail",
+      "label_i18n": {
+        "en": "Ticket Activity Detail",
+        "id": "Ticket Activity Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_activity.read"
+      ],
+      "route_path": "/crm/ticket-activities/detail",
+      "view_key": "crm.ticket-activities.detail"
+    },
+    {
+      "key": "crm.ticket-activities.form",
+      "kind": "navigate",
+      "label": "Ticket Activity Form",
+      "label_i18n": {
+        "en": "Ticket Activity Form",
+        "id": "Ticket Activity Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_activity.update"
+      ],
+      "route_path": "/crm/ticket-activities/form",
+      "view_key": "crm.ticket-activities.form"
+    },
+    {
+      "key": "crm.ticket-activities.list",
+      "kind": "navigate",
+      "label": "Ticket Activities",
+      "label_i18n": {
+        "en": "Ticket Activities",
+        "id": "Ticket Activities"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_activity.list"
+      ],
+      "route_path": "/crm/ticket-activities",
+      "view_key": "crm.ticket-activities.list"
+    },
+    {
+      "key": "crm.ticket-activities.new",
+      "kind": "navigate",
+      "label": "New Ticket Activities",
+      "label_i18n": {
+        "en": "New Ticket Activities",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_activity.update"
+      ],
+      "route_path": "/crm/ticket-activities/new",
+      "view_key": "crm.ticket-activities.form"
+    },
+    {
+      "key": "crm.ticket-comments.detail",
+      "kind": "navigate",
+      "label": "Ticket Comment Detail",
+      "label_i18n": {
+        "en": "Ticket Comment Detail",
+        "id": "Ticket Comment Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_comment.read"
+      ],
+      "route_path": "/crm/ticket-comments/detail",
+      "view_key": "crm.ticket-comments.detail"
+    },
+    {
+      "key": "crm.ticket-comments.form",
+      "kind": "navigate",
+      "label": "Ticket Comment Form",
+      "label_i18n": {
+        "en": "Ticket Comment Form",
+        "id": "Ticket Comment Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_comment.update"
+      ],
+      "route_path": "/crm/ticket-comments/form",
+      "view_key": "crm.ticket-comments.form"
+    },
+    {
+      "key": "crm.ticket-comments.list",
+      "kind": "navigate",
+      "label": "Ticket Comments",
+      "label_i18n": {
+        "en": "Ticket Comments",
+        "id": "Ticket Comments"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_comment.list"
+      ],
+      "route_path": "/crm/ticket-comments",
+      "view_key": "crm.ticket-comments.list"
+    },
+    {
+      "key": "crm.ticket-comments.new",
+      "kind": "navigate",
+      "label": "New Ticket Comments",
+      "label_i18n": {
+        "en": "New Ticket Comments",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket_comment.update"
+      ],
+      "route_path": "/crm/ticket-comments/new",
+      "view_key": "crm.ticket-comments.form"
+    },
+    {
+      "key": "crm.tickets.detail",
+      "kind": "navigate",
+      "label": "Issue Ticket Detail",
+      "label_i18n": {
+        "en": "Issue Ticket Detail",
+        "id": "Issue Ticket Detail"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket.read"
+      ],
+      "route_path": "/crm/tickets/detail",
+      "view_key": "crm.tickets.detail"
+    },
+    {
+      "key": "crm.tickets.form",
+      "kind": "navigate",
+      "label": "Issue Ticket Form",
+      "label_i18n": {
+        "en": "Issue Ticket Form",
+        "id": "Issue Ticket Form"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket.update"
+      ],
+      "route_path": "/crm/tickets/form",
+      "view_key": "crm.tickets.form"
+    },
+    {
+      "key": "crm.tickets.list",
+      "kind": "navigate",
+      "label": "Issue Tickets",
+      "label_i18n": {
+        "en": "Issue Tickets",
+        "id": "Issue Tickets"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket.list"
+      ],
+      "route_path": "/crm/tickets",
+      "view_key": "crm.tickets.list"
+    },
+    {
+      "key": "crm.tickets.new",
+      "kind": "navigate",
+      "label": "New Issue Tickets",
+      "label_i18n": {
+        "en": "New Issue Tickets",
+        "id": "Baru"
+      },
+      "render_mode": "generic",
+      "required_permissions": [
+        "crm_ticket.update"
+      ],
+      "route_path": "/crm/tickets/new",
+      "view_key": "crm.tickets.form"
+    },
+    {
       "key": "delivery.orders.detail",
       "kind": "navigate",
       "label": "Delivery",
@@ -8912,6 +9452,32 @@
       ]
     },
     {
+      "action_key": "crm.tickets.list",
+      "key": "crm.tickets",
+      "label": "Issue Tickets",
+      "label_i18n": {
+        "en": "Issue Tickets",
+        "id": "Tiket Isu"
+      },
+      "order": 86,
+      "required_permissions": [
+        "crm_ticket.list"
+      ]
+    },
+    {
+      "action_key": "crm.queues.list",
+      "key": "crm.queues",
+      "label": "Ticket Queues",
+      "label_i18n": {
+        "en": "Ticket Queues",
+        "id": "Queue Tiket"
+      },
+      "order": 87,
+      "required_permissions": [
+        "crm_queue.list"
+      ]
+    },
+    {
       "action_key": "finance.accounts.list",
       "key": "finance.accounts",
       "label": "Finance Accounts",
@@ -8925,6 +9491,19 @@
       ]
     },
     {
+      "action_key": "crm.leads.list",
+      "key": "crm.leads",
+      "label": "Leads",
+      "label_i18n": {
+        "en": "Leads",
+        "id": "Lead"
+      },
+      "order": 89,
+      "required_permissions": [
+        "crm_lead.list"
+      ]
+    },
+    {
       "action_key": "finance.periods.list",
       "key": "finance.periods",
       "label": "Accounting Periods",
@@ -8935,6 +9514,19 @@
       "order": 89,
       "required_permissions": [
         "accounting_period.list"
+      ]
+    },
+    {
+      "action_key": "crm.opportunities.list",
+      "key": "crm.opportunities",
+      "label": "Opportunities",
+      "label_i18n": {
+        "en": "Opportunities",
+        "id": "Peluang"
+      },
+      "order": 90,
+      "required_permissions": [
+        "crm_opportunity.list"
       ]
     },
     {
@@ -17946,6 +18538,3790 @@
       "title_i18n": {
         "en": "Variant Values",
         "id": "Variant Values"
+      }
+    },
+    {
+      "key": "crm.activities.detail",
+      "kind": "detail",
+      "model_key": "crm_activity",
+      "required_permissions": [
+        "crm_activity.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "activity_number",
+                  "label": "Activity Number",
+                  "label_i18n": {
+                    "en": "Activity Number",
+                    "id": "Activity Number"
+                  },
+                  "path": "values.activity_number",
+                  "read_only": true,
+                  "type": "string"
+                },
+                {
+                  "key": "activity_type",
+                  "label": "Activity Type",
+                  "label_i18n": {
+                    "en": "Activity Type",
+                    "id": "Activity Type"
+                  },
+                  "path": "values.activity_type",
+                  "type": "string"
+                },
+                {
+                  "key": "subject",
+                  "label": "Subject",
+                  "label_i18n": {
+                    "en": "Subject",
+                    "id": "Subject"
+                  },
+                  "path": "values.subject",
+                  "type": "string"
+                },
+                {
+                  "key": "related_kind",
+                  "label": "Related Kind",
+                  "label_i18n": {
+                    "en": "Related Kind",
+                    "id": "Related Kind"
+                  },
+                  "options": [
+                    "party",
+                    "lead",
+                    "opportunity",
+                    "ticket"
+                  ],
+                  "path": "values.related_kind",
+                  "type": "string"
+                },
+                {
+                  "key": "related_id",
+                  "label": "Related ID",
+                  "label_i18n": {
+                    "en": "Related ID",
+                    "id": "Related ID"
+                  },
+                  "path": "values.related_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_id",
+                  "label": "Customer",
+                  "label_i18n": {
+                    "en": "Customer",
+                    "id": "Customer"
+                  },
+                  "path": "values.party_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_name",
+                  "label": "Customer Name",
+                  "label_i18n": {
+                    "en": "Customer Name",
+                    "id": "Customer Name"
+                  },
+                  "path": "values.party_name",
+                  "type": "string"
+                },
+                {
+                  "key": "owner_user_id",
+                  "label": "Owner User",
+                  "label_i18n": {
+                    "en": "Owner User",
+                    "id": "Owner User"
+                  },
+                  "path": "values.owner_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "open",
+                    "completed",
+                    "cancelled"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                },
+                {
+                  "key": "due_at",
+                  "label": "Due At",
+                  "label_i18n": {
+                    "en": "Due At",
+                    "id": "Due At"
+                  },
+                  "path": "values.due_at",
+                  "type": "string"
+                },
+                {
+                  "key": "completed_at",
+                  "label": "Completed At",
+                  "label_i18n": {
+                    "en": "Completed At",
+                    "id": "Completed At"
+                  },
+                  "path": "values.completed_at",
+                  "type": "string"
+                },
+                {
+                  "key": "note",
+                  "label": "Note",
+                  "label_i18n": {
+                    "en": "Note",
+                    "id": "Note"
+                  },
+                  "path": "values.note",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "CRM Activity Detail",
+              "title_i18n": {
+                "en": "CRM Activity Detail",
+                "id": "CRM Activity Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "CRM Activity Detail",
+      "title_i18n": {
+        "en": "CRM Activity Detail",
+        "id": "CRM Activity Detail"
+      }
+    },
+    {
+      "key": "crm.activities.form",
+      "kind": "form",
+      "model_key": "crm_activity",
+      "required_permissions": [
+        "crm_activity.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "activity_number",
+              "label": "Activity Number",
+              "label_i18n": {
+                "en": "Activity Number",
+                "id": "Activity Number"
+              },
+              "path": "values.activity_number",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "activity_type",
+              "label": "Activity Type",
+              "label_i18n": {
+                "en": "Activity Type",
+                "id": "Activity Type"
+              },
+              "path": "values.activity_type",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "subject",
+              "label": "Subject",
+              "label_i18n": {
+                "en": "Subject",
+                "id": "Subject"
+              },
+              "path": "values.subject",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "related_kind",
+              "label": "Related Kind",
+              "label_i18n": {
+                "en": "Related Kind",
+                "id": "Related Kind"
+              },
+              "options": [
+                "party",
+                "lead",
+                "opportunity",
+                "ticket"
+              ],
+              "path": "values.related_kind",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "related_id",
+              "label": "Related ID",
+              "label_i18n": {
+                "en": "Related ID",
+                "id": "Related ID"
+              },
+              "path": "values.related_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Customer"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Customer Name"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "owner_user_id",
+              "label": "Owner User",
+              "label_i18n": {
+                "en": "Owner User",
+                "id": "Owner User"
+              },
+              "path": "values.owner_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "open",
+                "completed",
+                "cancelled"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "due_at",
+              "label": "Due At",
+              "label_i18n": {
+                "en": "Due At",
+                "id": "Due At"
+              },
+              "path": "values.due_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "completed_at",
+              "label": "Completed At",
+              "label_i18n": {
+                "en": "Completed At",
+                "id": "Completed At"
+              },
+              "path": "values.completed_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "note",
+              "label": "Note",
+              "label_i18n": {
+                "en": "Note",
+                "id": "Note"
+              },
+              "path": "values.note",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "CRM Activity Form",
+          "title_i18n": {
+            "en": "CRM Activity Form",
+            "id": "CRM Activity Form"
+          }
+        }
+      ],
+      "title": "CRM Activity Form",
+      "title_i18n": {
+        "en": "CRM Activity Form",
+        "id": "CRM Activity Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "activity_number",
+          "label": "Activity",
+          "label_i18n": {
+            "en": "Activity",
+            "id": "Aktivitas"
+          },
+          "path": "values.activity_number"
+        },
+        {
+          "key": "activity_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.activity_type"
+        },
+        {
+          "key": "subject",
+          "label": "Subject",
+          "label_i18n": {
+            "en": "Subject",
+            "id": "Subjek"
+          },
+          "path": "values.subject"
+        },
+        {
+          "key": "owner_user_id",
+          "label": "Owner",
+          "label_i18n": {
+            "en": "Owner",
+            "id": "Pemilik"
+          },
+          "path": "values.owner_user_id"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "due_at",
+          "label": "Due At",
+          "label_i18n": {
+            "en": "Due At",
+            "id": "Jatuh Tempo"
+          },
+          "path": "values.due_at"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "open",
+            "completed",
+            "cancelled"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.activities.list",
+      "kind": "list",
+      "model_key": "crm_activity",
+      "required_permissions": [
+        "crm_activity.list"
+      ],
+      "title": "CRM Activities",
+      "title_i18n": {
+        "en": "CRM Activities",
+        "id": "CRM Activities"
+      }
+    },
+    {
+      "key": "crm.assignment-rules.detail",
+      "kind": "detail",
+      "model_key": "crm_assignment_rule",
+      "required_permissions": [
+        "crm_assignment_rule.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "code",
+                  "label": "Code",
+                  "label_i18n": {
+                    "en": "Code",
+                    "id": "Code"
+                  },
+                  "path": "values.code",
+                  "type": "string"
+                },
+                {
+                  "key": "name",
+                  "label": "Name",
+                  "label_i18n": {
+                    "en": "Name",
+                    "id": "Name"
+                  },
+                  "path": "values.name",
+                  "type": "string"
+                },
+                {
+                  "key": "queue_code",
+                  "label": "Queue",
+                  "label_i18n": {
+                    "en": "Queue",
+                    "id": "Queue"
+                  },
+                  "path": "values.queue_code",
+                  "type": "string"
+                },
+                {
+                  "key": "assign_queue_code",
+                  "label": "Assign Queue",
+                  "label_i18n": {
+                    "en": "Assign Queue",
+                    "id": "Assign Queue"
+                  },
+                  "path": "values.assign_queue_code",
+                  "type": "string"
+                },
+                {
+                  "key": "assign_user_id",
+                  "label": "Assign User",
+                  "label_i18n": {
+                    "en": "Assign User",
+                    "id": "Assign User"
+                  },
+                  "path": "values.assign_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "source_channel",
+                  "label": "Source Channel",
+                  "label_i18n": {
+                    "en": "Source Channel",
+                    "id": "Source Channel"
+                  },
+                  "path": "values.source_channel",
+                  "type": "string"
+                },
+                {
+                  "key": "issue_category",
+                  "label": "Issue Category",
+                  "label_i18n": {
+                    "en": "Issue Category",
+                    "id": "Issue Category"
+                  },
+                  "path": "values.issue_category",
+                  "type": "string"
+                },
+                {
+                  "key": "priority",
+                  "label": "Priority",
+                  "label_i18n": {
+                    "en": "Priority",
+                    "id": "Priority"
+                  },
+                  "options": [
+                    "",
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "path": "values.priority",
+                  "type": "string"
+                },
+                {
+                  "key": "severity",
+                  "label": "Severity",
+                  "label_i18n": {
+                    "en": "Severity",
+                    "id": "Severity"
+                  },
+                  "options": [
+                    "",
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ],
+                  "path": "values.severity",
+                  "type": "string"
+                },
+                {
+                  "key": "rank",
+                  "label": "Rank",
+                  "label_i18n": {
+                    "en": "Rank",
+                    "id": "Rank"
+                  },
+                  "path": "values.rank",
+                  "type": "number"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "active",
+                    "inactive"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Assignment Rule Detail",
+              "title_i18n": {
+                "en": "Assignment Rule Detail",
+                "id": "Assignment Rule Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Assignment Rule Detail",
+      "title_i18n": {
+        "en": "Assignment Rule Detail",
+        "id": "Assignment Rule Detail"
+      }
+    },
+    {
+      "key": "crm.assignment-rules.form",
+      "kind": "form",
+      "model_key": "crm_assignment_rule",
+      "required_permissions": [
+        "crm_assignment_rule.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Code"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Name"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "queue_code",
+              "label": "Queue",
+              "label_i18n": {
+                "en": "Queue",
+                "id": "Queue"
+              },
+              "path": "values.queue_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assign_queue_code",
+              "label": "Assign Queue",
+              "label_i18n": {
+                "en": "Assign Queue",
+                "id": "Assign Queue"
+              },
+              "path": "values.assign_queue_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assign_user_id",
+              "label": "Assign User",
+              "label_i18n": {
+                "en": "Assign User",
+                "id": "Assign User"
+              },
+              "path": "values.assign_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_channel",
+              "label": "Source Channel",
+              "label_i18n": {
+                "en": "Source Channel",
+                "id": "Source Channel"
+              },
+              "path": "values.source_channel",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "issue_category",
+              "label": "Issue Category",
+              "label_i18n": {
+                "en": "Issue Category",
+                "id": "Issue Category"
+              },
+              "path": "values.issue_category",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Priority"
+              },
+              "options": [
+                "",
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ],
+              "path": "values.priority",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "severity",
+              "label": "Severity",
+              "label_i18n": {
+                "en": "Severity",
+                "id": "Severity"
+              },
+              "options": [
+                "",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "path": "values.severity",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "rank",
+              "label": "Rank",
+              "label_i18n": {
+                "en": "Rank",
+                "id": "Rank"
+              },
+              "path": "values.rank",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Assignment Rule Form",
+          "title_i18n": {
+            "en": "Assignment Rule Form",
+            "id": "Assignment Rule Form"
+          }
+        }
+      ],
+      "title": "Assignment Rule Form",
+      "title_i18n": {
+        "en": "Assignment Rule Form",
+        "id": "Assignment Rule Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "assign_queue_code",
+          "label": "Assign Queue",
+          "label_i18n": {
+            "en": "Assign Queue",
+            "id": "Queue Tujuan"
+          },
+          "path": "values.assign_queue_code"
+        },
+        {
+          "key": "assign_user_id",
+          "label": "Assign User",
+          "label_i18n": {
+            "en": "Assign User",
+            "id": "User Tujuan"
+          },
+          "path": "values.assign_user_id"
+        },
+        {
+          "key": "rank",
+          "label": "Rank",
+          "label_i18n": {
+            "en": "Rank",
+            "id": "Peringkat"
+          },
+          "path": "values.rank"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.assignment-rules.list",
+      "kind": "list",
+      "model_key": "crm_assignment_rule",
+      "required_permissions": [
+        "crm_assignment_rule.list"
+      ],
+      "title": "Assignment Rules",
+      "title_i18n": {
+        "en": "Assignment Rules",
+        "id": "Assignment Rules"
+      }
+    },
+    {
+      "key": "crm.leads.detail",
+      "kind": "detail",
+      "model_key": "crm_lead",
+      "required_permissions": [
+        "crm_lead.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "lead_number",
+                  "label": "Lead Number",
+                  "label_i18n": {
+                    "en": "Lead Number",
+                    "id": "Lead Number"
+                  },
+                  "path": "values.lead_number",
+                  "read_only": true,
+                  "type": "string"
+                },
+                {
+                  "key": "title",
+                  "label": "Title",
+                  "label_i18n": {
+                    "en": "Title",
+                    "id": "Title"
+                  },
+                  "path": "values.title",
+                  "type": "string"
+                },
+                {
+                  "key": "party_id",
+                  "label": "Customer",
+                  "label_i18n": {
+                    "en": "Customer",
+                    "id": "Customer"
+                  },
+                  "path": "values.party_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_name",
+                  "label": "Customer Name",
+                  "label_i18n": {
+                    "en": "Customer Name",
+                    "id": "Customer Name"
+                  },
+                  "path": "values.party_name",
+                  "type": "string"
+                },
+                {
+                  "key": "contact_id",
+                  "label": "Contact",
+                  "label_i18n": {
+                    "en": "Contact",
+                    "id": "Contact"
+                  },
+                  "path": "values.contact_id",
+                  "type": "string"
+                },
+                {
+                  "key": "owner_user_id",
+                  "label": "Owner User",
+                  "label_i18n": {
+                    "en": "Owner User",
+                    "id": "Owner User"
+                  },
+                  "path": "values.owner_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "source_channel",
+                  "label": "Source Channel",
+                  "label_i18n": {
+                    "en": "Source Channel",
+                    "id": "Source Channel"
+                  },
+                  "options": [
+                    "web",
+                    "email",
+                    "phone",
+                    "chat",
+                    "partner",
+                    "referral",
+                    "walk_in"
+                  ],
+                  "path": "values.source_channel",
+                  "type": "string"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "new",
+                    "contacted",
+                    "qualified",
+                    "disqualified",
+                    "converted",
+                    "closed"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                },
+                {
+                  "key": "rating",
+                  "label": "Rating",
+                  "label_i18n": {
+                    "en": "Rating",
+                    "id": "Rating"
+                  },
+                  "options": [
+                    "cold",
+                    "warm",
+                    "hot"
+                  ],
+                  "path": "values.rating",
+                  "type": "string"
+                },
+                {
+                  "key": "estimated_value",
+                  "label": "Estimated Value",
+                  "label_i18n": {
+                    "en": "Estimated Value",
+                    "id": "Estimated Value"
+                  },
+                  "path": "values.estimated_value",
+                  "type": "number"
+                },
+                {
+                  "key": "expected_close_date",
+                  "label": "Expected Close Date",
+                  "label_i18n": {
+                    "en": "Expected Close Date",
+                    "id": "Expected Close Date"
+                  },
+                  "path": "values.expected_close_date",
+                  "type": "string"
+                },
+                {
+                  "key": "next_action_at",
+                  "label": "Next Action At",
+                  "label_i18n": {
+                    "en": "Next Action At",
+                    "id": "Next Action At"
+                  },
+                  "path": "values.next_action_at",
+                  "type": "string"
+                },
+                {
+                  "key": "notes",
+                  "label": "Notes",
+                  "label_i18n": {
+                    "en": "Notes",
+                    "id": "Notes"
+                  },
+                  "path": "values.notes",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Lead Detail",
+              "title_i18n": {
+                "en": "Lead Detail",
+                "id": "Lead Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Lead Detail",
+      "title_i18n": {
+        "en": "Lead Detail",
+        "id": "Lead Detail"
+      }
+    },
+    {
+      "key": "crm.leads.form",
+      "kind": "form",
+      "model_key": "crm_lead",
+      "required_permissions": [
+        "crm_lead.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "lead_number",
+              "label": "Lead Number",
+              "label_i18n": {
+                "en": "Lead Number",
+                "id": "Lead Number"
+              },
+              "path": "values.lead_number",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Title"
+              },
+              "path": "values.title",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Customer"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Customer Name"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "contact_id",
+              "label": "Contact",
+              "label_i18n": {
+                "en": "Contact",
+                "id": "Contact"
+              },
+              "path": "values.contact_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "owner_user_id",
+              "label": "Owner User",
+              "label_i18n": {
+                "en": "Owner User",
+                "id": "Owner User"
+              },
+              "path": "values.owner_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_channel",
+              "label": "Source Channel",
+              "label_i18n": {
+                "en": "Source Channel",
+                "id": "Source Channel"
+              },
+              "options": [
+                "web",
+                "email",
+                "phone",
+                "chat",
+                "partner",
+                "referral",
+                "walk_in"
+              ],
+              "path": "values.source_channel",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "new",
+                "contacted",
+                "qualified",
+                "disqualified",
+                "converted",
+                "closed"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "rating",
+              "label": "Rating",
+              "label_i18n": {
+                "en": "Rating",
+                "id": "Rating"
+              },
+              "options": [
+                "cold",
+                "warm",
+                "hot"
+              ],
+              "path": "values.rating",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "estimated_value",
+              "label": "Estimated Value",
+              "label_i18n": {
+                "en": "Estimated Value",
+                "id": "Estimated Value"
+              },
+              "path": "values.estimated_value",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "expected_close_date",
+              "label": "Expected Close Date",
+              "label_i18n": {
+                "en": "Expected Close Date",
+                "id": "Expected Close Date"
+              },
+              "path": "values.expected_close_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "next_action_at",
+              "label": "Next Action At",
+              "label_i18n": {
+                "en": "Next Action At",
+                "id": "Next Action At"
+              },
+              "path": "values.next_action_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Notes"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Lead Form",
+          "title_i18n": {
+            "en": "Lead Form",
+            "id": "Lead Form"
+          }
+        }
+      ],
+      "title": "Lead Form",
+      "title_i18n": {
+        "en": "Lead Form",
+        "id": "Lead Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "lead_number",
+          "label": "Lead",
+          "label_i18n": {
+            "en": "Lead",
+            "id": "Lead"
+          },
+          "path": "values.lead_number"
+        },
+        {
+          "key": "title",
+          "label": "Title",
+          "label_i18n": {
+            "en": "Title",
+            "id": "Judul"
+          },
+          "path": "values.title"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "values.party_name"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "rating",
+          "label": "Rating",
+          "label_i18n": {
+            "en": "Rating",
+            "id": "Rating"
+          },
+          "path": "values.rating"
+        },
+        {
+          "key": "estimated_value",
+          "label": "Value",
+          "label_i18n": {
+            "en": "Value",
+            "id": "Nilai"
+          },
+          "path": "values.estimated_value"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "new",
+            "contacted",
+            "qualified",
+            "disqualified",
+            "converted",
+            "closed"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.leads.list",
+      "kind": "list",
+      "model_key": "crm_lead",
+      "required_permissions": [
+        "crm_lead.list"
+      ],
+      "title": "Leads",
+      "title_i18n": {
+        "en": "Leads",
+        "id": "Leads"
+      }
+    },
+    {
+      "key": "crm.opportunities.detail",
+      "kind": "detail",
+      "model_key": "crm_opportunity",
+      "required_permissions": [
+        "crm_opportunity.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "opportunity_number",
+                  "label": "Opportunity Number",
+                  "label_i18n": {
+                    "en": "Opportunity Number",
+                    "id": "Opportunity Number"
+                  },
+                  "path": "values.opportunity_number",
+                  "read_only": true,
+                  "type": "string"
+                },
+                {
+                  "key": "title",
+                  "label": "Title",
+                  "label_i18n": {
+                    "en": "Title",
+                    "id": "Title"
+                  },
+                  "path": "values.title",
+                  "type": "string"
+                },
+                {
+                  "key": "party_id",
+                  "label": "Customer",
+                  "label_i18n": {
+                    "en": "Customer",
+                    "id": "Customer"
+                  },
+                  "path": "values.party_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_name",
+                  "label": "Customer Name",
+                  "label_i18n": {
+                    "en": "Customer Name",
+                    "id": "Customer Name"
+                  },
+                  "path": "values.party_name",
+                  "type": "string"
+                },
+                {
+                  "key": "contact_id",
+                  "label": "Contact",
+                  "label_i18n": {
+                    "en": "Contact",
+                    "id": "Contact"
+                  },
+                  "path": "values.contact_id",
+                  "type": "string"
+                },
+                {
+                  "key": "owner_user_id",
+                  "label": "Owner User",
+                  "label_i18n": {
+                    "en": "Owner User",
+                    "id": "Owner User"
+                  },
+                  "path": "values.owner_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "source_lead_id",
+                  "label": "Source Lead",
+                  "label_i18n": {
+                    "en": "Source Lead",
+                    "id": "Source Lead"
+                  },
+                  "path": "values.source_lead_id",
+                  "type": "string"
+                },
+                {
+                  "key": "stage",
+                  "label": "Stage",
+                  "label_i18n": {
+                    "en": "Stage",
+                    "id": "Stage"
+                  },
+                  "options": [
+                    "new",
+                    "qualified",
+                    "proposal",
+                    "negotiation",
+                    "won",
+                    "lost"
+                  ],
+                  "path": "values.stage",
+                  "type": "string"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "open",
+                    "won",
+                    "lost"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                },
+                {
+                  "key": "estimated_value",
+                  "label": "Estimated Value",
+                  "label_i18n": {
+                    "en": "Estimated Value",
+                    "id": "Estimated Value"
+                  },
+                  "path": "values.estimated_value",
+                  "type": "number"
+                },
+                {
+                  "key": "expected_close_date",
+                  "label": "Expected Close Date",
+                  "label_i18n": {
+                    "en": "Expected Close Date",
+                    "id": "Expected Close Date"
+                  },
+                  "path": "values.expected_close_date",
+                  "type": "string"
+                },
+                {
+                  "key": "next_action_at",
+                  "label": "Next Action At",
+                  "label_i18n": {
+                    "en": "Next Action At",
+                    "id": "Next Action At"
+                  },
+                  "path": "values.next_action_at",
+                  "type": "string"
+                },
+                {
+                  "key": "loss_reason",
+                  "label": "Loss Reason",
+                  "label_i18n": {
+                    "en": "Loss Reason",
+                    "id": "Loss Reason"
+                  },
+                  "path": "values.loss_reason",
+                  "type": "string"
+                },
+                {
+                  "key": "notes",
+                  "label": "Notes",
+                  "label_i18n": {
+                    "en": "Notes",
+                    "id": "Notes"
+                  },
+                  "path": "values.notes",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Opportunity Detail",
+              "title_i18n": {
+                "en": "Opportunity Detail",
+                "id": "Opportunity Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Opportunity Detail",
+      "title_i18n": {
+        "en": "Opportunity Detail",
+        "id": "Opportunity Detail"
+      }
+    },
+    {
+      "key": "crm.opportunities.form",
+      "kind": "form",
+      "model_key": "crm_opportunity",
+      "required_permissions": [
+        "crm_opportunity.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "opportunity_number",
+              "label": "Opportunity Number",
+              "label_i18n": {
+                "en": "Opportunity Number",
+                "id": "Opportunity Number"
+              },
+              "path": "values.opportunity_number",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Title"
+              },
+              "path": "values.title",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Customer"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Customer Name"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "contact_id",
+              "label": "Contact",
+              "label_i18n": {
+                "en": "Contact",
+                "id": "Contact"
+              },
+              "path": "values.contact_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "owner_user_id",
+              "label": "Owner User",
+              "label_i18n": {
+                "en": "Owner User",
+                "id": "Owner User"
+              },
+              "path": "values.owner_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_lead_id",
+              "label": "Source Lead",
+              "label_i18n": {
+                "en": "Source Lead",
+                "id": "Source Lead"
+              },
+              "path": "values.source_lead_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "stage",
+              "label": "Stage",
+              "label_i18n": {
+                "en": "Stage",
+                "id": "Stage"
+              },
+              "options": [
+                "new",
+                "qualified",
+                "proposal",
+                "negotiation",
+                "won",
+                "lost"
+              ],
+              "path": "values.stage",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "open",
+                "won",
+                "lost"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "estimated_value",
+              "label": "Estimated Value",
+              "label_i18n": {
+                "en": "Estimated Value",
+                "id": "Estimated Value"
+              },
+              "path": "values.estimated_value",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "expected_close_date",
+              "label": "Expected Close Date",
+              "label_i18n": {
+                "en": "Expected Close Date",
+                "id": "Expected Close Date"
+              },
+              "path": "values.expected_close_date",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "next_action_at",
+              "label": "Next Action At",
+              "label_i18n": {
+                "en": "Next Action At",
+                "id": "Next Action At"
+              },
+              "path": "values.next_action_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "loss_reason",
+              "label": "Loss Reason",
+              "label_i18n": {
+                "en": "Loss Reason",
+                "id": "Loss Reason"
+              },
+              "path": "values.loss_reason",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "notes",
+              "label": "Notes",
+              "label_i18n": {
+                "en": "Notes",
+                "id": "Notes"
+              },
+              "path": "values.notes",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Opportunity Form",
+          "title_i18n": {
+            "en": "Opportunity Form",
+            "id": "Opportunity Form"
+          }
+        }
+      ],
+      "title": "Opportunity Form",
+      "title_i18n": {
+        "en": "Opportunity Form",
+        "id": "Opportunity Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "opportunity_number",
+          "label": "Opportunity",
+          "label_i18n": {
+            "en": "Opportunity",
+            "id": "Peluang"
+          },
+          "path": "values.opportunity_number"
+        },
+        {
+          "key": "title",
+          "label": "Title",
+          "label_i18n": {
+            "en": "Title",
+            "id": "Judul"
+          },
+          "path": "values.title"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "values.party_name"
+        },
+        {
+          "key": "stage",
+          "label": "Stage",
+          "label_i18n": {
+            "en": "Stage",
+            "id": "Stage"
+          },
+          "path": "values.stage"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        },
+        {
+          "key": "estimated_value",
+          "label": "Value",
+          "label_i18n": {
+            "en": "Value",
+            "id": "Nilai"
+          },
+          "path": "values.estimated_value"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "stage",
+          "label": "Stage",
+          "label_i18n": {
+            "en": "Stage",
+            "id": "Stage"
+          },
+          "options": [
+            "new",
+            "qualified",
+            "proposal",
+            "negotiation",
+            "won",
+            "lost"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.opportunities.list",
+      "kind": "list",
+      "model_key": "crm_opportunity",
+      "required_permissions": [
+        "crm_opportunity.list"
+      ],
+      "title": "Opportunities",
+      "title_i18n": {
+        "en": "Opportunities",
+        "id": "Opportunities"
+      }
+    },
+    {
+      "key": "crm.queues.detail",
+      "kind": "detail",
+      "model_key": "crm_queue",
+      "required_permissions": [
+        "crm_queue.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "code",
+                  "label": "Code",
+                  "label_i18n": {
+                    "en": "Code",
+                    "id": "Code"
+                  },
+                  "path": "values.code",
+                  "type": "string"
+                },
+                {
+                  "key": "name",
+                  "label": "Name",
+                  "label_i18n": {
+                    "en": "Name",
+                    "id": "Name"
+                  },
+                  "path": "values.name",
+                  "type": "string"
+                },
+                {
+                  "key": "description",
+                  "label": "Description",
+                  "label_i18n": {
+                    "en": "Description",
+                    "id": "Description"
+                  },
+                  "path": "values.description",
+                  "type": "string"
+                },
+                {
+                  "key": "manager_user_id",
+                  "label": "Manager User",
+                  "label_i18n": {
+                    "en": "Manager User",
+                    "id": "Manager User"
+                  },
+                  "path": "values.manager_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "triage_sla_hours",
+                  "label": "Triage SLA Hours",
+                  "label_i18n": {
+                    "en": "Triage SLA Hours",
+                    "id": "Triage SLA Hours"
+                  },
+                  "path": "values.triage_sla_hours",
+                  "type": "number"
+                },
+                {
+                  "key": "resolution_sla_hours",
+                  "label": "Resolution SLA Hours",
+                  "label_i18n": {
+                    "en": "Resolution SLA Hours",
+                    "id": "Resolution SLA Hours"
+                  },
+                  "path": "values.resolution_sla_hours",
+                  "type": "number"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "active",
+                    "inactive"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Ticket Queue Detail",
+              "title_i18n": {
+                "en": "Ticket Queue Detail",
+                "id": "Ticket Queue Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Ticket Queue Detail",
+      "title_i18n": {
+        "en": "Ticket Queue Detail",
+        "id": "Ticket Queue Detail"
+      }
+    },
+    {
+      "key": "crm.queues.form",
+      "kind": "form",
+      "model_key": "crm_queue",
+      "required_permissions": [
+        "crm_queue.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Code"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Name"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Description"
+              },
+              "path": "values.description",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "manager_user_id",
+              "label": "Manager User",
+              "label_i18n": {
+                "en": "Manager User",
+                "id": "Manager User"
+              },
+              "path": "values.manager_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "triage_sla_hours",
+              "label": "Triage SLA Hours",
+              "label_i18n": {
+                "en": "Triage SLA Hours",
+                "id": "Triage SLA Hours"
+              },
+              "path": "values.triage_sla_hours",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "resolution_sla_hours",
+              "label": "Resolution SLA Hours",
+              "label_i18n": {
+                "en": "Resolution SLA Hours",
+                "id": "Resolution SLA Hours"
+              },
+              "path": "values.resolution_sla_hours",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "Ticket Queue Form",
+          "title_i18n": {
+            "en": "Ticket Queue Form",
+            "id": "Ticket Queue Form"
+          }
+        }
+      ],
+      "title": "Ticket Queue Form",
+      "title_i18n": {
+        "en": "Ticket Queue Form",
+        "id": "Ticket Queue Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "triage_sla_hours",
+          "label": "Triage SLA",
+          "label_i18n": {
+            "en": "Triage SLA",
+            "id": "SLA Triase"
+          },
+          "path": "values.triage_sla_hours"
+        },
+        {
+          "key": "resolution_sla_hours",
+          "label": "Resolution SLA",
+          "label_i18n": {
+            "en": "Resolution SLA",
+            "id": "SLA Resolusi"
+          },
+          "path": "values.resolution_sla_hours"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.queues.list",
+      "kind": "list",
+      "model_key": "crm_queue",
+      "required_permissions": [
+        "crm_queue.list"
+      ],
+      "title": "Ticket Queues",
+      "title_i18n": {
+        "en": "Ticket Queues",
+        "id": "Ticket Queues"
+      }
+    },
+    {
+      "key": "crm.sla-policies.detail",
+      "kind": "detail",
+      "model_key": "crm_sla_policy",
+      "required_permissions": [
+        "crm_sla_policy.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "code",
+                  "label": "Code",
+                  "label_i18n": {
+                    "en": "Code",
+                    "id": "Code"
+                  },
+                  "path": "values.code",
+                  "type": "string"
+                },
+                {
+                  "key": "name",
+                  "label": "Name",
+                  "label_i18n": {
+                    "en": "Name",
+                    "id": "Name"
+                  },
+                  "path": "values.name",
+                  "type": "string"
+                },
+                {
+                  "key": "queue_code",
+                  "label": "Queue",
+                  "label_i18n": {
+                    "en": "Queue",
+                    "id": "Queue"
+                  },
+                  "path": "values.queue_code",
+                  "type": "string"
+                },
+                {
+                  "key": "source_channel",
+                  "label": "Source Channel",
+                  "label_i18n": {
+                    "en": "Source Channel",
+                    "id": "Source Channel"
+                  },
+                  "options": [
+                    "",
+                    "web",
+                    "email",
+                    "phone",
+                    "chat",
+                    "pos"
+                  ],
+                  "path": "values.source_channel",
+                  "type": "string"
+                },
+                {
+                  "key": "priority",
+                  "label": "Priority",
+                  "label_i18n": {
+                    "en": "Priority",
+                    "id": "Priority"
+                  },
+                  "options": [
+                    "",
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "path": "values.priority",
+                  "type": "string"
+                },
+                {
+                  "key": "severity",
+                  "label": "Severity",
+                  "label_i18n": {
+                    "en": "Severity",
+                    "id": "Severity"
+                  },
+                  "options": [
+                    "",
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ],
+                  "path": "values.severity",
+                  "type": "string"
+                },
+                {
+                  "key": "first_response_hours",
+                  "label": "First Response Hours",
+                  "label_i18n": {
+                    "en": "First Response Hours",
+                    "id": "First Response Hours"
+                  },
+                  "path": "values.first_response_hours",
+                  "type": "number"
+                },
+                {
+                  "key": "resolution_hours",
+                  "label": "Resolution Hours",
+                  "label_i18n": {
+                    "en": "Resolution Hours",
+                    "id": "Resolution Hours"
+                  },
+                  "path": "values.resolution_hours",
+                  "type": "number"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "active",
+                    "inactive"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "SLA Policy Detail",
+              "title_i18n": {
+                "en": "SLA Policy Detail",
+                "id": "SLA Policy Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "SLA Policy Detail",
+      "title_i18n": {
+        "en": "SLA Policy Detail",
+        "id": "SLA Policy Detail"
+      }
+    },
+    {
+      "key": "crm.sla-policies.form",
+      "kind": "form",
+      "model_key": "crm_sla_policy",
+      "required_permissions": [
+        "crm_sla_policy.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "code",
+              "label": "Code",
+              "label_i18n": {
+                "en": "Code",
+                "id": "Code"
+              },
+              "path": "values.code",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "label_i18n": {
+                "en": "Name",
+                "id": "Name"
+              },
+              "path": "values.name",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "queue_code",
+              "label": "Queue",
+              "label_i18n": {
+                "en": "Queue",
+                "id": "Queue"
+              },
+              "path": "values.queue_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_channel",
+              "label": "Source Channel",
+              "label_i18n": {
+                "en": "Source Channel",
+                "id": "Source Channel"
+              },
+              "options": [
+                "",
+                "web",
+                "email",
+                "phone",
+                "chat",
+                "pos"
+              ],
+              "path": "values.source_channel",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Priority"
+              },
+              "options": [
+                "",
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ],
+              "path": "values.priority",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "severity",
+              "label": "Severity",
+              "label_i18n": {
+                "en": "Severity",
+                "id": "Severity"
+              },
+              "options": [
+                "",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "path": "values.severity",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "first_response_hours",
+              "label": "First Response Hours",
+              "label_i18n": {
+                "en": "First Response Hours",
+                "id": "First Response Hours"
+              },
+              "path": "values.first_response_hours",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "resolution_hours",
+              "label": "Resolution Hours",
+              "label_i18n": {
+                "en": "Resolution Hours",
+                "id": "Resolution Hours"
+              },
+              "path": "values.resolution_hours",
+              "type": "number",
+              "widget": "number"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "active",
+                "inactive"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            }
+          ],
+          "key": "edit",
+          "title": "SLA Policy Form",
+          "title_i18n": {
+            "en": "SLA Policy Form",
+            "id": "SLA Policy Form"
+          }
+        }
+      ],
+      "title": "SLA Policy Form",
+      "title_i18n": {
+        "en": "SLA Policy Form",
+        "id": "SLA Policy Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "code",
+          "label": "Code",
+          "label_i18n": {
+            "en": "Code",
+            "id": "Kode"
+          },
+          "path": "values.code"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "label_i18n": {
+            "en": "Name",
+            "id": "Nama"
+          },
+          "path": "values.name"
+        },
+        {
+          "key": "queue_code",
+          "label": "Queue",
+          "label_i18n": {
+            "en": "Queue",
+            "id": "Queue"
+          },
+          "path": "values.queue_code"
+        },
+        {
+          "key": "first_response_hours",
+          "label": "First Response",
+          "label_i18n": {
+            "en": "First Response",
+            "id": "Respons Pertama"
+          },
+          "path": "values.first_response_hours"
+        },
+        {
+          "key": "resolution_hours",
+          "label": "Resolution",
+          "label_i18n": {
+            "en": "Resolution",
+            "id": "Resolusi"
+          },
+          "path": "values.resolution_hours"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "active",
+            "inactive"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.sla-policies.list",
+      "kind": "list",
+      "model_key": "crm_sla_policy",
+      "required_permissions": [
+        "crm_sla_policy.list"
+      ],
+      "title": "SLA Policies",
+      "title_i18n": {
+        "en": "SLA Policies",
+        "id": "SLA Policies"
+      }
+    },
+    {
+      "key": "crm.ticket-activities.detail",
+      "kind": "detail",
+      "model_key": "crm_ticket_activity",
+      "required_permissions": [
+        "crm_ticket_activity.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "ticket_id",
+                  "label": "Ticket",
+                  "label_i18n": {
+                    "en": "Ticket",
+                    "id": "Ticket"
+                  },
+                  "path": "values.ticket_id",
+                  "type": "string"
+                },
+                {
+                  "key": "ticket_number",
+                  "label": "Ticket Number",
+                  "label_i18n": {
+                    "en": "Ticket Number",
+                    "id": "Ticket Number"
+                  },
+                  "path": "values.ticket_number",
+                  "type": "string"
+                },
+                {
+                  "key": "activity_type",
+                  "label": "Activity Type",
+                  "label_i18n": {
+                    "en": "Activity Type",
+                    "id": "Activity Type"
+                  },
+                  "path": "values.activity_type",
+                  "type": "string"
+                },
+                {
+                  "key": "actor_user_id",
+                  "label": "Actor User",
+                  "label_i18n": {
+                    "en": "Actor User",
+                    "id": "Actor User"
+                  },
+                  "path": "values.actor_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "assignee_user_id",
+                  "label": "Assignee User",
+                  "label_i18n": {
+                    "en": "Assignee User",
+                    "id": "Assignee User"
+                  },
+                  "path": "values.assignee_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "queue_code",
+                  "label": "Queue",
+                  "label_i18n": {
+                    "en": "Queue",
+                    "id": "Queue"
+                  },
+                  "path": "values.queue_code",
+                  "type": "string"
+                },
+                {
+                  "key": "from_status",
+                  "label": "From Status",
+                  "label_i18n": {
+                    "en": "From Status",
+                    "id": "From Status"
+                  },
+                  "path": "values.from_status",
+                  "type": "string"
+                },
+                {
+                  "key": "to_status",
+                  "label": "To Status",
+                  "label_i18n": {
+                    "en": "To Status",
+                    "id": "To Status"
+                  },
+                  "path": "values.to_status",
+                  "type": "string"
+                },
+                {
+                  "key": "occurred_at",
+                  "label": "Occurred At",
+                  "label_i18n": {
+                    "en": "Occurred At",
+                    "id": "Occurred At"
+                  },
+                  "path": "values.occurred_at",
+                  "type": "string"
+                },
+                {
+                  "key": "note",
+                  "label": "Note",
+                  "label_i18n": {
+                    "en": "Note",
+                    "id": "Note"
+                  },
+                  "path": "values.note",
+                  "type": "string"
+                },
+                {
+                  "key": "party_id",
+                  "label": "Customer",
+                  "label_i18n": {
+                    "en": "Customer",
+                    "id": "Customer"
+                  },
+                  "path": "values.party_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_name",
+                  "label": "Customer Name",
+                  "label_i18n": {
+                    "en": "Customer Name",
+                    "id": "Customer Name"
+                  },
+                  "path": "values.party_name",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Ticket Activity Detail",
+              "title_i18n": {
+                "en": "Ticket Activity Detail",
+                "id": "Ticket Activity Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Ticket Activity Detail",
+      "title_i18n": {
+        "en": "Ticket Activity Detail",
+        "id": "Ticket Activity Detail"
+      }
+    },
+    {
+      "key": "crm.ticket-activities.form",
+      "kind": "form",
+      "model_key": "crm_ticket_activity",
+      "required_permissions": [
+        "crm_ticket_activity.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "ticket_id",
+              "label": "Ticket",
+              "label_i18n": {
+                "en": "Ticket",
+                "id": "Ticket"
+              },
+              "path": "values.ticket_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "ticket_number",
+              "label": "Ticket Number",
+              "label_i18n": {
+                "en": "Ticket Number",
+                "id": "Ticket Number"
+              },
+              "path": "values.ticket_number",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "activity_type",
+              "label": "Activity Type",
+              "label_i18n": {
+                "en": "Activity Type",
+                "id": "Activity Type"
+              },
+              "path": "values.activity_type",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "actor_user_id",
+              "label": "Actor User",
+              "label_i18n": {
+                "en": "Actor User",
+                "id": "Actor User"
+              },
+              "path": "values.actor_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "assignee_user_id",
+              "label": "Assignee User",
+              "label_i18n": {
+                "en": "Assignee User",
+                "id": "Assignee User"
+              },
+              "path": "values.assignee_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "queue_code",
+              "label": "Queue",
+              "label_i18n": {
+                "en": "Queue",
+                "id": "Queue"
+              },
+              "path": "values.queue_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "from_status",
+              "label": "From Status",
+              "label_i18n": {
+                "en": "From Status",
+                "id": "From Status"
+              },
+              "path": "values.from_status",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "to_status",
+              "label": "To Status",
+              "label_i18n": {
+                "en": "To Status",
+                "id": "To Status"
+              },
+              "path": "values.to_status",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "occurred_at",
+              "label": "Occurred At",
+              "label_i18n": {
+                "en": "Occurred At",
+                "id": "Occurred At"
+              },
+              "path": "values.occurred_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "note",
+              "label": "Note",
+              "label_i18n": {
+                "en": "Note",
+                "id": "Note"
+              },
+              "path": "values.note",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "party_id",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Customer"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Customer Name"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Ticket Activity Form",
+          "title_i18n": {
+            "en": "Ticket Activity Form",
+            "id": "Ticket Activity Form"
+          }
+        }
+      ],
+      "title": "Ticket Activity Form",
+      "title_i18n": {
+        "en": "Ticket Activity Form",
+        "id": "Ticket Activity Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "ticket_number",
+          "label": "Ticket",
+          "label_i18n": {
+            "en": "Ticket",
+            "id": "Tiket"
+          },
+          "path": "values.ticket_number"
+        },
+        {
+          "key": "activity_type",
+          "label": "Activity",
+          "label_i18n": {
+            "en": "Activity",
+            "id": "Aktivitas"
+          },
+          "path": "values.activity_type"
+        },
+        {
+          "key": "actor_user_id",
+          "label": "Actor",
+          "label_i18n": {
+            "en": "Actor",
+            "id": "Aktor"
+          },
+          "path": "values.actor_user_id"
+        },
+        {
+          "key": "to_status",
+          "label": "To Status",
+          "label_i18n": {
+            "en": "To Status",
+            "id": "Ke Status"
+          },
+          "path": "values.to_status"
+        },
+        {
+          "key": "occurred_at",
+          "label": "Occurred At",
+          "label_i18n": {
+            "en": "Occurred At",
+            "id": "Terjadi Pada"
+          },
+          "path": "values.occurred_at"
+        }
+      ],
+      "default_page_size": 20,
+      "key": "crm.ticket-activities.list",
+      "kind": "list",
+      "model_key": "crm_ticket_activity",
+      "required_permissions": [
+        "crm_ticket_activity.list"
+      ],
+      "title": "Ticket Activities",
+      "title_i18n": {
+        "en": "Ticket Activities",
+        "id": "Ticket Activities"
+      }
+    },
+    {
+      "key": "crm.ticket-comments.detail",
+      "kind": "detail",
+      "model_key": "crm_ticket_comment",
+      "required_permissions": [
+        "crm_ticket_comment.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "ticket_id",
+                  "label": "Ticket",
+                  "label_i18n": {
+                    "en": "Ticket",
+                    "id": "Ticket"
+                  },
+                  "path": "values.ticket_id",
+                  "type": "string"
+                },
+                {
+                  "key": "ticket_number",
+                  "label": "Ticket Number",
+                  "label_i18n": {
+                    "en": "Ticket Number",
+                    "id": "Ticket Number"
+                  },
+                  "path": "values.ticket_number",
+                  "type": "string"
+                },
+                {
+                  "key": "comment_type",
+                  "label": "Comment Type",
+                  "label_i18n": {
+                    "en": "Comment Type",
+                    "id": "Comment Type"
+                  },
+                  "options": [
+                    "internal_note",
+                    "public_reply",
+                    "status_update"
+                  ],
+                  "path": "values.comment_type",
+                  "type": "string"
+                },
+                {
+                  "key": "body",
+                  "label": "Body",
+                  "label_i18n": {
+                    "en": "Body",
+                    "id": "Body"
+                  },
+                  "path": "values.body",
+                  "type": "string"
+                },
+                {
+                  "key": "author_user_id",
+                  "label": "Author User",
+                  "label_i18n": {
+                    "en": "Author User",
+                    "id": "Author User"
+                  },
+                  "path": "values.author_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "created_at",
+                  "label": "Created At",
+                  "label_i18n": {
+                    "en": "Created At",
+                    "id": "Created At"
+                  },
+                  "path": "values.created_at",
+                  "type": "string"
+                },
+                {
+                  "key": "party_id",
+                  "label": "Customer",
+                  "label_i18n": {
+                    "en": "Customer",
+                    "id": "Customer"
+                  },
+                  "path": "values.party_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_name",
+                  "label": "Customer Name",
+                  "label_i18n": {
+                    "en": "Customer Name",
+                    "id": "Customer Name"
+                  },
+                  "path": "values.party_name",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Ticket Comment Detail",
+              "title_i18n": {
+                "en": "Ticket Comment Detail",
+                "id": "Ticket Comment Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Ticket Comment Detail",
+      "title_i18n": {
+        "en": "Ticket Comment Detail",
+        "id": "Ticket Comment Detail"
+      }
+    },
+    {
+      "key": "crm.ticket-comments.form",
+      "kind": "form",
+      "model_key": "crm_ticket_comment",
+      "required_permissions": [
+        "crm_ticket_comment.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "ticket_id",
+              "label": "Ticket",
+              "label_i18n": {
+                "en": "Ticket",
+                "id": "Ticket"
+              },
+              "path": "values.ticket_id",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "ticket_number",
+              "label": "Ticket Number",
+              "label_i18n": {
+                "en": "Ticket Number",
+                "id": "Ticket Number"
+              },
+              "path": "values.ticket_number",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "comment_type",
+              "label": "Comment Type",
+              "label_i18n": {
+                "en": "Comment Type",
+                "id": "Comment Type"
+              },
+              "options": [
+                "internal_note",
+                "public_reply",
+                "status_update"
+              ],
+              "path": "values.comment_type",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "body",
+              "label": "Body",
+              "label_i18n": {
+                "en": "Body",
+                "id": "Body"
+              },
+              "path": "values.body",
+              "required": true,
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "author_user_id",
+              "label": "Author User",
+              "label_i18n": {
+                "en": "Author User",
+                "id": "Author User"
+              },
+              "path": "values.author_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "created_at",
+              "label": "Created At",
+              "label_i18n": {
+                "en": "Created At",
+                "id": "Created At"
+              },
+              "path": "values.created_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_id",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Customer"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Customer Name"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            }
+          ],
+          "key": "edit",
+          "title": "Ticket Comment Form",
+          "title_i18n": {
+            "en": "Ticket Comment Form",
+            "id": "Ticket Comment Form"
+          }
+        }
+      ],
+      "title": "Ticket Comment Form",
+      "title_i18n": {
+        "en": "Ticket Comment Form",
+        "id": "Ticket Comment Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "ticket_number",
+          "label": "Ticket",
+          "label_i18n": {
+            "en": "Ticket",
+            "id": "Tiket"
+          },
+          "path": "values.ticket_number"
+        },
+        {
+          "key": "comment_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "path": "values.comment_type"
+        },
+        {
+          "key": "author_user_id",
+          "label": "Author",
+          "label_i18n": {
+            "en": "Author",
+            "id": "Penulis"
+          },
+          "path": "values.author_user_id"
+        },
+        {
+          "key": "created_at",
+          "label": "Created At",
+          "label_i18n": {
+            "en": "Created At",
+            "id": "Dibuat Pada"
+          },
+          "path": "values.created_at"
+        },
+        {
+          "key": "body",
+          "label": "Body",
+          "label_i18n": {
+            "en": "Body",
+            "id": "Isi"
+          },
+          "path": "values.body"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "comment_type",
+          "label": "Type",
+          "label_i18n": {
+            "en": "Type",
+            "id": "Tipe"
+          },
+          "options": [
+            "internal_note",
+            "public_reply",
+            "status_update"
+          ],
+          "type": "select"
+        }
+      ],
+      "key": "crm.ticket-comments.list",
+      "kind": "list",
+      "model_key": "crm_ticket_comment",
+      "required_permissions": [
+        "crm_ticket_comment.list"
+      ],
+      "title": "Ticket Comments",
+      "title_i18n": {
+        "en": "Ticket Comments",
+        "id": "Ticket Comments"
+      }
+    },
+    {
+      "key": "crm.tickets.detail",
+      "kind": "detail",
+      "model_key": "crm_ticket",
+      "required_permissions": [
+        "crm_ticket.read"
+      ],
+      "tabs": [
+        {
+          "key": "summary",
+          "sections": [
+            {
+              "fields": [
+                {
+                  "key": "ticket_number",
+                  "label": "Ticket Number",
+                  "label_i18n": {
+                    "en": "Ticket Number",
+                    "id": "Ticket Number"
+                  },
+                  "path": "values.ticket_number",
+                  "read_only": true,
+                  "type": "string"
+                },
+                {
+                  "key": "title",
+                  "label": "Title",
+                  "label_i18n": {
+                    "en": "Title",
+                    "id": "Title"
+                  },
+                  "path": "values.title",
+                  "type": "string"
+                },
+                {
+                  "key": "description",
+                  "label": "Description",
+                  "label_i18n": {
+                    "en": "Description",
+                    "id": "Description"
+                  },
+                  "path": "values.description",
+                  "type": "string"
+                },
+                {
+                  "key": "party_id",
+                  "label": "Customer",
+                  "label_i18n": {
+                    "en": "Customer",
+                    "id": "Customer"
+                  },
+                  "path": "values.party_id",
+                  "type": "string"
+                },
+                {
+                  "key": "party_name",
+                  "label": "Customer Name",
+                  "label_i18n": {
+                    "en": "Customer Name",
+                    "id": "Customer Name"
+                  },
+                  "path": "values.party_name",
+                  "type": "string"
+                },
+                {
+                  "key": "queue_code",
+                  "label": "Queue",
+                  "label_i18n": {
+                    "en": "Queue",
+                    "id": "Queue"
+                  },
+                  "path": "values.queue_code",
+                  "type": "string"
+                },
+                {
+                  "key": "source_channel",
+                  "label": "Source Channel",
+                  "label_i18n": {
+                    "en": "Source Channel",
+                    "id": "Source Channel"
+                  },
+                  "options": [
+                    "web",
+                    "email",
+                    "phone",
+                    "chat",
+                    "pos"
+                  ],
+                  "path": "values.source_channel",
+                  "type": "string"
+                },
+                {
+                  "key": "priority",
+                  "label": "Priority",
+                  "label_i18n": {
+                    "en": "Priority",
+                    "id": "Priority"
+                  },
+                  "options": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "path": "values.priority",
+                  "type": "string"
+                },
+                {
+                  "key": "severity",
+                  "label": "Severity",
+                  "label_i18n": {
+                    "en": "Severity",
+                    "id": "Severity"
+                  },
+                  "options": [
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ],
+                  "path": "values.severity",
+                  "type": "string"
+                },
+                {
+                  "key": "status",
+                  "label": "Status",
+                  "label_i18n": {
+                    "en": "Status",
+                    "id": "Status"
+                  },
+                  "options": [
+                    "new",
+                    "open",
+                    "pending_customer",
+                    "pending_internal",
+                    "resolved",
+                    "closed",
+                    "cancelled"
+                  ],
+                  "path": "values.status",
+                  "type": "string"
+                },
+                {
+                  "key": "assignee_user_id",
+                  "label": "Assignee User",
+                  "label_i18n": {
+                    "en": "Assignee User",
+                    "id": "Assignee User"
+                  },
+                  "path": "values.assignee_user_id",
+                  "type": "string"
+                },
+                {
+                  "key": "opened_at",
+                  "label": "Opened At",
+                  "label_i18n": {
+                    "en": "Opened At",
+                    "id": "Opened At"
+                  },
+                  "path": "values.opened_at",
+                  "type": "string"
+                },
+                {
+                  "key": "first_response_due_at",
+                  "label": "First Response Due At",
+                  "label_i18n": {
+                    "en": "First Response Due At",
+                    "id": "First Response Due At"
+                  },
+                  "path": "values.first_response_due_at",
+                  "type": "string"
+                },
+                {
+                  "key": "first_response_at",
+                  "label": "First Response At",
+                  "label_i18n": {
+                    "en": "First Response At",
+                    "id": "First Response At"
+                  },
+                  "path": "values.first_response_at",
+                  "type": "string"
+                },
+                {
+                  "key": "due_at",
+                  "label": "Due At",
+                  "label_i18n": {
+                    "en": "Due At",
+                    "id": "Due At"
+                  },
+                  "path": "values.due_at",
+                  "type": "string"
+                },
+                {
+                  "key": "resolved_at",
+                  "label": "Resolved At",
+                  "label_i18n": {
+                    "en": "Resolved At",
+                    "id": "Resolved At"
+                  },
+                  "path": "values.resolved_at",
+                  "type": "string"
+                },
+                {
+                  "key": "issue_category",
+                  "label": "Issue Category",
+                  "label_i18n": {
+                    "en": "Issue Category",
+                    "id": "Issue Category"
+                  },
+                  "path": "values.issue_category",
+                  "type": "string"
+                },
+                {
+                  "key": "resolution_notes",
+                  "label": "Resolution Notes",
+                  "label_i18n": {
+                    "en": "Resolution Notes",
+                    "id": "Resolution Notes"
+                  },
+                  "path": "values.resolution_notes",
+                  "type": "string"
+                },
+                {
+                  "key": "tags_json",
+                  "label": "Tags JSON",
+                  "label_i18n": {
+                    "en": "Tags JSON",
+                    "id": "Tags JSON"
+                  },
+                  "path": "values.tags_json",
+                  "type": "string"
+                }
+              ],
+              "key": "detail",
+              "title": "Issue Ticket Detail",
+              "title_i18n": {
+                "en": "Issue Ticket Detail",
+                "id": "Issue Ticket Detail"
+              }
+            }
+          ],
+          "title": "Summary",
+          "title_i18n": {
+            "en": "Summary",
+            "id": "Ringkasan"
+          }
+        }
+      ],
+      "title": "Issue Ticket Detail",
+      "title_i18n": {
+        "en": "Issue Ticket Detail",
+        "id": "Issue Ticket Detail"
+      }
+    },
+    {
+      "key": "crm.tickets.form",
+      "kind": "form",
+      "model_key": "crm_ticket",
+      "required_permissions": [
+        "crm_ticket.update"
+      ],
+      "sections": [
+        {
+          "fields": [
+            {
+              "key": "ticket_number",
+              "label": "Ticket Number",
+              "label_i18n": {
+                "en": "Ticket Number",
+                "id": "Ticket Number"
+              },
+              "path": "values.ticket_number",
+              "read_only": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "label_i18n": {
+                "en": "Title",
+                "id": "Title"
+              },
+              "path": "values.title",
+              "required": true,
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "description",
+              "label": "Description",
+              "label_i18n": {
+                "en": "Description",
+                "id": "Description"
+              },
+              "path": "values.description",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "party_id",
+              "label": "Customer",
+              "label_i18n": {
+                "en": "Customer",
+                "id": "Customer"
+              },
+              "path": "values.party_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "party_name",
+              "label": "Customer Name",
+              "label_i18n": {
+                "en": "Customer Name",
+                "id": "Customer Name"
+              },
+              "path": "values.party_name",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "queue_code",
+              "label": "Queue",
+              "label_i18n": {
+                "en": "Queue",
+                "id": "Queue"
+              },
+              "path": "values.queue_code",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "source_channel",
+              "label": "Source Channel",
+              "label_i18n": {
+                "en": "Source Channel",
+                "id": "Source Channel"
+              },
+              "options": [
+                "web",
+                "email",
+                "phone",
+                "chat",
+                "pos"
+              ],
+              "path": "values.source_channel",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "label_i18n": {
+                "en": "Priority",
+                "id": "Priority"
+              },
+              "options": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ],
+              "path": "values.priority",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "severity",
+              "label": "Severity",
+              "label_i18n": {
+                "en": "Severity",
+                "id": "Severity"
+              },
+              "options": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "path": "values.severity",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "label_i18n": {
+                "en": "Status",
+                "id": "Status"
+              },
+              "options": [
+                "new",
+                "open",
+                "pending_customer",
+                "pending_internal",
+                "resolved",
+                "closed",
+                "cancelled"
+              ],
+              "path": "values.status",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "key": "assignee_user_id",
+              "label": "Assignee User",
+              "label_i18n": {
+                "en": "Assignee User",
+                "id": "Assignee User"
+              },
+              "path": "values.assignee_user_id",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "opened_at",
+              "label": "Opened At",
+              "label_i18n": {
+                "en": "Opened At",
+                "id": "Opened At"
+              },
+              "path": "values.opened_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "first_response_due_at",
+              "label": "First Response Due At",
+              "label_i18n": {
+                "en": "First Response Due At",
+                "id": "First Response Due At"
+              },
+              "path": "values.first_response_due_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "first_response_at",
+              "label": "First Response At",
+              "label_i18n": {
+                "en": "First Response At",
+                "id": "First Response At"
+              },
+              "path": "values.first_response_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "due_at",
+              "label": "Due At",
+              "label_i18n": {
+                "en": "Due At",
+                "id": "Due At"
+              },
+              "path": "values.due_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "resolved_at",
+              "label": "Resolved At",
+              "label_i18n": {
+                "en": "Resolved At",
+                "id": "Resolved At"
+              },
+              "path": "values.resolved_at",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "issue_category",
+              "label": "Issue Category",
+              "label_i18n": {
+                "en": "Issue Category",
+                "id": "Issue Category"
+              },
+              "path": "values.issue_category",
+              "type": "string",
+              "widget": "text"
+            },
+            {
+              "key": "resolution_notes",
+              "label": "Resolution Notes",
+              "label_i18n": {
+                "en": "Resolution Notes",
+                "id": "Resolution Notes"
+              },
+              "path": "values.resolution_notes",
+              "type": "string",
+              "widget": "textarea"
+            },
+            {
+              "key": "tags_json",
+              "label": "Tags JSON",
+              "label_i18n": {
+                "en": "Tags JSON",
+                "id": "Tags JSON"
+              },
+              "path": "values.tags_json",
+              "type": "string",
+              "widget": "textarea"
+            }
+          ],
+          "key": "edit",
+          "title": "Issue Ticket Form",
+          "title_i18n": {
+            "en": "Issue Ticket Form",
+            "id": "Issue Ticket Form"
+          }
+        }
+      ],
+      "title": "Issue Ticket Form",
+      "title_i18n": {
+        "en": "Issue Ticket Form",
+        "id": "Issue Ticket Form"
+      }
+    },
+    {
+      "columns": [
+        {
+          "key": "ticket_number",
+          "label": "Ticket",
+          "label_i18n": {
+            "en": "Ticket",
+            "id": "Tiket"
+          },
+          "path": "values.ticket_number"
+        },
+        {
+          "key": "title",
+          "label": "Title",
+          "label_i18n": {
+            "en": "Title",
+            "id": "Judul"
+          },
+          "path": "values.title"
+        },
+        {
+          "key": "party_name",
+          "label": "Customer",
+          "label_i18n": {
+            "en": "Customer",
+            "id": "Pelanggan"
+          },
+          "path": "values.party_name"
+        },
+        {
+          "key": "queue_code",
+          "label": "Queue",
+          "label_i18n": {
+            "en": "Queue",
+            "id": "Queue"
+          },
+          "path": "values.queue_code"
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "label_i18n": {
+            "en": "Priority",
+            "id": "Prioritas"
+          },
+          "path": "values.priority"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "path": "values.status"
+        }
+      ],
+      "default_page_size": 20,
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "label_i18n": {
+            "en": "Status",
+            "id": "Status"
+          },
+          "options": [
+            "new",
+            "open",
+            "pending_customer",
+            "pending_internal",
+            "resolved",
+            "closed",
+            "cancelled"
+          ],
+          "type": "select"
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "label_i18n": {
+            "en": "Priority",
+            "id": "Prioritas"
+          },
+          "options": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ],
+          "type": "select"
+        },
+        {
+          "key": "queue_code",
+          "label": "Queue",
+          "label_i18n": {
+            "en": "Queue",
+            "id": "Queue"
+          },
+          "type": "text"
+        }
+      ],
+      "key": "crm.tickets.list",
+      "kind": "list",
+      "model_key": "crm_ticket",
+      "required_permissions": [
+        "crm_ticket.list"
+      ],
+      "title": "Issue Tickets",
+      "title_i18n": {
+        "en": "Issue Tickets",
+        "id": "Issue Tickets"
       }
     },
     {

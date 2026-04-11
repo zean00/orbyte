@@ -102,6 +102,7 @@ type Server struct {
 	documents                 *document.Service
 	documentActions           *application.DocumentActions
 	models                    *model.Service
+	crm                       *application.CRMCoreService
 	reference                 *reference.Service
 	search                    *search.Service
 	fieldSecurity             *securityfields.Service
@@ -137,6 +138,7 @@ type ServerDeps struct {
 	Documents                 *document.Service
 	DocumentActions           *application.DocumentActions
 	Models                    *model.Service
+	CRM                       *application.CRMCoreService
 	Reference                 *reference.Service
 	Search                    *search.Service
 	FieldSecurity             *securityfields.Service
@@ -168,6 +170,7 @@ func NewServer(deps ServerDeps) *Server {
 		documents:                 deps.Documents,
 		documentActions:           deps.DocumentActions,
 		models:                    deps.Models,
+		crm:                       deps.CRM,
 		reference:                 deps.Reference,
 		search:                    deps.Search,
 		fieldSecurity:             deps.FieldSecurity,
@@ -1421,11 +1424,11 @@ func (s *Server) dashboardWidgetArtifactPayload(def module.DashboardWidgetDefini
 			"kind":  "dashboard_widget",
 			"title": title,
 			"widget": map[string]any{
-				"id":       shared.NewID("widget"),
-				"title":    title,
-				"kind":     firstNonEmpty(def.RendererKind, "metric"),
-				"width":    widgetSizeValue(def.DefaultWidth, 4),
-				"height":   widgetSizeValue(def.DefaultHeight, 1),
+				"id":         shared.NewID("widget"),
+				"title":      title,
+				"kind":       firstNonEmpty(def.RendererKind, "metric"),
+				"width":      widgetSizeValue(def.DefaultWidth, 4),
+				"height":     widgetSizeValue(def.DefaultHeight, 1),
 				"definition": def,
 			},
 		},

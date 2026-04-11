@@ -262,6 +262,46 @@ func (s *Server) executeTool(ctx context.Context, actor ActorContext, name strin
 			}
 		}
 		return result, nil
+	case "crm.ticket.summary":
+		return s.crmTicketSummary(actor)
+	case "crm.ticket.search":
+		return s.crmTicketSearch(actor, arguments)
+	case "crm.ticket.get":
+		return s.crmTicketGet(actor, arguments)
+	case "crm.ticket.create":
+		return s.crmTicketCreate(actor, arguments)
+	case "crm.ticket.update":
+		return s.crmTicketUpdate(actor, arguments)
+	case "crm.ticket.comment.create":
+		return s.crmTicketCommentCreate(actor, arguments)
+	case "crm.ticket.assign":
+		return s.crmTicketAssign(actor, arguments)
+	case "crm.ticket.resolve":
+		return s.crmTicketResolve(actor, arguments)
+	case "crm.customer.summary":
+		return s.crmCustomerSummary(actor, arguments)
+	case "crm.customer.timeline":
+		return s.crmCustomerTimeline(actor, arguments)
+	case "crm.customer.health":
+		return s.crmCustomerHealth(actor)
+	case "crm.lead.search":
+		return s.crmLeadSearch(actor, arguments)
+	case "crm.lead.get":
+		return s.crmLeadGet(actor, arguments)
+	case "crm.lead.create":
+		return s.crmLeadCreate(actor, arguments)
+	case "crm.lead.update":
+		return s.crmLeadUpdate(actor, arguments)
+	case "crm.opportunity.search":
+		return s.crmOpportunitySearch(actor, arguments)
+	case "crm.opportunity.get":
+		return s.crmOpportunityGet(actor, arguments)
+	case "crm.opportunity.create":
+		return s.crmOpportunityCreate(actor, arguments)
+	case "crm.opportunity.update":
+		return s.crmOpportunityUpdate(actor, arguments)
+	case "crm.opportunity.pipeline.summary":
+		return s.crmOpportunityPipelineSummary(actor)
 	default:
 		_ = arguments
 		return nil, fmt.Errorf("unsupported tool operation")

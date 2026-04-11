@@ -15,12 +15,13 @@ AGENT_RUNTIME_OUTPUT ?= /tmp/agentproof-runtime.json
 MCP_VALIDATION_OUTPUT ?= /tmp/agentproof-mcp-validation.json
 POS_SEED_OUTPUT ?= /tmp/orbyte-pos-seed.json
 DASHBOARD_SEED_OUTPUT ?= /tmp/orbyte-dashboard-seed.json
+CRM_SEED_OUTPUT ?= /tmp/orbyte-crm-seed.json
 SHOWCASE_SCENARIO ?= retail_recovery_showcase
 SHOWCASE_SEED_OUTPUT ?= /tmp/orbyte-showcase-retail-recovery.json
 
 .PHONY: test lint coverage contracts frontend-build frontend-verify ui-build migrate-up migrate-status run run-postgres smoke-postgres docs-build docs-serve
 .PHONY: app-start-postgres app-stop-postgres app-status-postgres app-restart-postgres app-wait-postgres
-.PHONY: db-reset-postgres seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase validate-mcp
+.PHONY: db-reset-postgres seed-agent-runtime seed-agent-continuity seed-pos seed-dashboard seed-crm-demo seed-showcase-demo seed-all reset-and-seed demo-continuity demo-showcase validate-mcp
 
 test:
 	./scripts/test.sh
@@ -163,6 +164,10 @@ seed-pos:
 seed-dashboard:
 	DATABASE_URL="$(DATABASE_URL)" DASHBOARD_SEED=1 go test -count=1 -run TestSeedDashboardSyntheticScenario -v ./internal/platform/app
 	@echo "Dashboard seed manifest is written by the test harness to $(DASHBOARD_SEED_OUTPUT)"
+
+seed-crm-demo:
+	DATABASE_URL="$(DATABASE_URL)" CRM_SEED=1 go test -count=1 -run TestSeedCRMSyntheticScenario -v ./internal/platform/app
+	@echo "CRM seed manifest is written by the test harness to $(CRM_SEED_OUTPUT)"
 
 seed-showcase-demo: app-start-postgres
 	go run ./cmd/agentproof seed \

@@ -58,6 +58,7 @@ func routerConfig(graph *serviceGraph) httpx.RouterConfig {
 		Monitoring:        graph.monitoring,
 		Commercial:        graph.commercialCore,
 		Procurement:       graph.procurementCore,
+		CRM:               graph.crmCore,
 		Inventory:         graph.inventoryCore,
 		Fulfillment:       graph.fulfillmentCore,
 		Delivery:          graph.deliveryCore,

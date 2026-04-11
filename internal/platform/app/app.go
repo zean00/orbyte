@@ -82,6 +82,7 @@ type App struct {
 	MCP                *mcp.Server
 	DocActions         *application.DocumentActions
 	ModelActions       *application.ModelActions
+	CRM                *application.CRMCoreService
 	Dispatcher         *eventing.Dispatcher
 }
 
@@ -186,6 +187,7 @@ func New(opts Options) (*App, error) {
 		MCP:                graph.mcpServer,
 		DocActions:         graph.docActions,
 		ModelActions:       graph.modelActions,
+		CRM:                graph.crmCore,
 		Dispatcher:         runtime.dispatcher,
 	}, nil
 }

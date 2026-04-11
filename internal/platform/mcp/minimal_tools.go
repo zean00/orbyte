@@ -73,7 +73,9 @@ func (s *Server) filterToolSummaries(actor ActorContext, arguments map[string]an
 	labels := listArg(arguments, "label", "labels")
 	sourceType := stringArg(arguments, "source_type")
 	query := strings.ToLower(strings.TrimSpace(stringArg(arguments, "query")))
+	terms := searchTerms(query)
 	items := make([]toolSummary, 0, len(descriptors))
+	scores := map[string]int{}
 	for _, item := range descriptors {
 		summary := toToolSummary(item)
 		if len(domains) > 0 && !intersectsStrings(summary.Domains, domains) {
@@ -93,13 +95,22 @@ func (s *Server) filterToolSummaries(actor ActorContext, arguments map[string]an
 				strings.Join(summary.Domains, " "),
 				strings.Join(summary.Labels, " "),
 			}, " "))
-			if !strings.Contains(haystack, query) {
+			score := toolSearchScore(summary, query, terms)
+			if score <= 0 || !searchTermsMatch(haystack, terms) {
 				continue
 			}
+			scores[summary.Name] = score
 		}
 		items = append(items, summary)
 	}
 	sort.Slice(items, func(i, j int) bool {
+		if search && query != "" {
+			left := scores[items[i].Name]
+			right := scores[items[j].Name]
+			if left != right {
+				return left > right
+			}
+		}
 		if items[i].Name == items[j].Name {
 			return items[i].Title < items[j].Title
 		}
@@ -110,6 +121,99 @@ func (s *Server) filterToolSummaries(actor ActorContext, arguments map[string]an
 		items = items[:limit]
 	}
 	return items
+}
+
+func searchTerms(query string) []string {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	raw := strings.FieldsFunc(strings.ToLower(query), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+	})
+	terms := make([]string, 0, len(raw))
+	for _, term := range raw {
+		if len(term) < 3 {
+			continue
+		}
+		switch term {
+		case "the", "and", "for", "with", "that", "this", "from", "into", "show", "using":
+			continue
+		}
+		terms = append(terms, term)
+	}
+	return mergeUniqueStrings(nil, terms)
+}
+
+func searchTermsMatch(haystack string, terms []string) bool {
+	if len(terms) == 0 {
+		return true
+	}
+	for _, term := range terms {
+		if strings.Contains(haystack, term) {
+			return true
+		}
+	}
+	return false
+}
+
+func toolSearchScore(item toolSummary, query string, terms []string) int {
+	score := 0
+	lowerName := strings.ToLower(strings.TrimSpace(item.Name))
+	lowerTitle := strings.ToLower(strings.TrimSpace(item.Title))
+	lowerDescription := strings.ToLower(strings.TrimSpace(item.Description))
+	if lowerName == query {
+		score += 100
+	}
+	if lowerTitle == query {
+		score += 90
+	}
+	if strings.Contains(lowerName, query) {
+		score += 40
+	}
+	if strings.Contains(lowerTitle, query) {
+		score += 30
+	}
+	if strings.Contains(lowerDescription, query) {
+		score += 20
+	}
+	for _, domain := range item.Domains {
+		if strings.EqualFold(strings.TrimSpace(domain), strings.TrimSpace(query)) {
+			score += 25
+		}
+	}
+	for _, label := range item.Labels {
+		if strings.EqualFold(strings.TrimSpace(label), strings.TrimSpace(query)) {
+			score += 15
+		}
+	}
+	for _, term := range terms {
+		if strings.Contains(lowerName, term) {
+			score += 25
+		}
+		if strings.Contains(lowerTitle, term) {
+			score += 18
+		}
+		if strings.Contains(lowerDescription, term) {
+			score += 12
+		}
+		for _, domain := range item.Domains {
+			if strings.EqualFold(strings.TrimSpace(domain), term) {
+				score += 15
+			}
+		}
+		for _, label := range item.Labels {
+			if strings.EqualFold(strings.TrimSpace(label), term) {
+				score += 10
+			}
+		}
+	}
+	switch strings.TrimSpace(item.SourceType) {
+	case "module":
+		score += 5
+	case "built_in":
+		score += 3
+	}
+	return score
 }
 
 func (s *Server) toolsListMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
@@ -176,7 +280,9 @@ func (s *Server) filterPlaybookSummaries(arguments map[string]any, search bool) 
 	domain := strings.ToLower(strings.TrimSpace(stringArg(arguments, "domain")))
 	label := strings.ToLower(strings.TrimSpace(stringArg(arguments, "label")))
 	query := strings.ToLower(strings.TrimSpace(stringArg(arguments, "query")))
+	terms := searchTerms(query)
 	out := make([]PlaybookSummary, 0, len(items))
+	scores := map[string]int{}
 	for _, item := range items {
 		summary := playbookSummary(item)
 		if domain != "" && !containsCaseFold(summary.Domains, domain) {
@@ -195,17 +301,88 @@ func (s *Server) filterPlaybookSummaries(arguments map[string]any, search bool) 
 				strings.Join(item.Labels, " "),
 				strings.Join(item.Keywords, " "),
 			}, " "))
-			if !strings.Contains(haystack, query) {
+			score := playbookSearchScore(item, query, terms)
+			if score <= 0 || !searchTermsMatch(haystack, terms) {
 				continue
 			}
+			scores[summary.ID] = score
 		}
 		out = append(out, summary)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if search && query != "" {
+			left := scores[out[i].ID]
+			right := scores[out[j].ID]
+			if left != right {
+				return left > right
+			}
+		}
+		if out[i].Name == out[j].Name {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].Name < out[j].Name
+	})
 	limit := intArg(arguments, "limit")
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
 	return out
+}
+
+func playbookSearchScore(item PlaybookDefinition, query string, terms []string) int {
+	score := 0
+	lowerID := strings.ToLower(strings.TrimSpace(item.ID))
+	lowerName := strings.ToLower(strings.TrimSpace(item.Name))
+	lowerDescription := strings.ToLower(strings.TrimSpace(item.Description))
+	lowerUseWhen := strings.ToLower(strings.TrimSpace(item.UseWhen))
+	if lowerID == query {
+		score += 100
+	}
+	if lowerName == query {
+		score += 90
+	}
+	if strings.Contains(lowerID, query) {
+		score += 40
+	}
+	if strings.Contains(lowerName, query) {
+		score += 35
+	}
+	if strings.Contains(lowerDescription, query) {
+		score += 25
+	}
+	if strings.Contains(lowerUseWhen, query) {
+		score += 20
+	}
+	for _, term := range terms {
+		if strings.Contains(lowerID, term) {
+			score += 20
+		}
+		if strings.Contains(lowerName, term) {
+			score += 18
+		}
+		if strings.Contains(lowerDescription, term) {
+			score += 14
+		}
+		if strings.Contains(lowerUseWhen, term) {
+			score += 12
+		}
+		for _, domain := range item.Domains {
+			if strings.EqualFold(strings.TrimSpace(domain), term) {
+				score += 15
+			}
+		}
+		for _, label := range item.Labels {
+			if strings.EqualFold(strings.TrimSpace(label), term) {
+				score += 10
+			}
+		}
+		for _, keyword := range item.Keywords {
+			if strings.EqualFold(strings.TrimSpace(keyword), term) {
+				score += 12
+			}
+		}
+	}
+	return score
 }
 
 func containsCaseFold(items []string, needle string) bool {

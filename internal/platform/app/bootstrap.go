@@ -597,6 +597,18 @@ func brokerTopic(prefix, topic string) string {
 
 func seedModelRules(modelSvc *model.Service) {
 	application.RegisterCommercialModelRules(modelSvc)
+	modelSvc.SetDefaultEvaluator("crm.ticket_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMTicketNumber(time.Now().UTC()), nil
+	})
+	modelSvc.SetDefaultEvaluator("crm.lead_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMLeadNumber(time.Now().UTC()), nil
+	})
+	modelSvc.SetDefaultEvaluator("crm.opportunity_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMOpportunityNumber(time.Now().UTC()), nil
+	})
+	modelSvc.SetDefaultEvaluator("crm.activity_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMActivityNumber(time.Now().UTC()), nil
+	})
 	modelSvc.SetDefaultEvaluator("party.status.default", func(_ model.RuleInput) (any, error) {
 		return "active", nil
 	})

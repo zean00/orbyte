@@ -1115,7 +1115,12 @@ func commercialModelSearchIndex(key, title, modelKey, viewKey string, fieldKeys 
 		}
 		fields = append(fields, item)
 	}
-	sortFields := []string{"status"}
+	sortFields := make([]string, 0, 2)
+	queryFilterFields := []string{}
+	if containsString(fieldKeys, "status") {
+		sortFields = append(sortFields, "status")
+		queryFilterFields = append(queryFilterFields, "status")
+	}
 	if len(fieldKeys) > 0 {
 		sortFields = append(sortFields, fieldKeys[0])
 	}
@@ -1128,7 +1133,7 @@ func commercialModelSearchIndex(key, title, modelKey, viewKey string, fieldKeys 
 		Modes:               []string{"keyword", "vector", "hybrid"},
 		OrganizationSplit:   true,
 		RequiredPermissions: []string{modelPermissionPrefix(modelKey) + ".list"},
-		QueryFilterFields:   []string{"status"},
+		QueryFilterFields:   queryFilterFields,
 		QuerySortFields:     sortFields,
 		Fields:              fields,
 		VectorFields: []search.VectorFieldDefinition{{
@@ -1664,4 +1669,13 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func containsString(items []string, needle string) bool {
+	for _, item := range items {
+		if item == needle {
+			return true
+		}
+	}
+	return false
 }

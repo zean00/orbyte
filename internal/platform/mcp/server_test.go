@@ -623,6 +623,108 @@ func TestServerAnalyticsAuthoringAndAdHocQueryFlow(t *testing.T) {
 	}
 }
 
+func TestServerMinimalToolSearchFindsDedicatedCRMTools(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.modules.Register(module.Manifest{
+		Key: "crm_core",
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{
+				{Key: "crm.ticket.summary", Title: "Get CRM Ticket Summary", Description: "Summarize CRM service backlog and queue health.", Operation: "crm.ticket.summary", RequiredPermissions: []string{"crm_ticket.list"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "service"}}},
+				{Key: "crm.customer.health", Title: "Get CRM Customer Health", Description: "Summarize customer health and at-risk accounts.", Operation: "crm.customer.health", RequiredPermissions: []string{"crm_ticket.list"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "service", "sales"}}},
+				{Key: "crm.opportunity.pipeline.summary", Title: "Get Opportunity Pipeline Summary", Description: "Summarize the active CRM sales pipeline.", Operation: "crm.opportunity.pipeline.summary", RequiredPermissions: []string{"crm_opportunity.list"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "sales"}}},
+			},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register crm test manifest failed: %v", err)
+	}
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json": `[
+				{
+					"id":"crm_service_sales_overview",
+					"name":"CRM Service and Sales Overview",
+					"description":"Summarize CRM ticket backlog, customer health, and active pipeline.",
+					"domains":["crm","service","sales"],
+					"labels":["crm","backlog","pipeline"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "tools.search",
+			"arguments": map[string]any{
+				"query":  "crm backlog customer health active pipeline",
+				"domain": "crm",
+				"limit":  10,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools.search failed: %+v", resp.Error)
+	}
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	rawItems := structured["items"].([]toolSummary)
+	if len(rawItems) == 0 {
+		t.Fatal("expected CRM search results")
+	}
+	names := make([]string, 0, len(rawItems))
+	for _, item := range rawItems {
+		names = append(names, item.ToolID)
+	}
+	for _, name := range []string{"crm.ticket.summary", "crm.customer.health", "crm.opportunity.pipeline.summary"} {
+		if !contains(names, name) {
+			t.Fatalf("expected dedicated CRM tool %q in %+v", name, names)
+		}
+	}
+
+	playbookResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "playbooks.search",
+			"arguments": map[string]any{
+				"query": "crm backlog pipeline",
+				"limit": 5,
+			},
+		}),
+	}, actor)
+	if playbookResp.Error != nil {
+		t.Fatalf("playbooks.search failed: %+v", playbookResp.Error)
+	}
+	playbookStructured := playbookResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	playbooks := playbookStructured["items"].([]PlaybookSummary)
+	if len(playbooks) == 0 || playbooks[0].ID != "crm_service_sales_overview" {
+		t.Fatalf("expected CRM playbook search result, got %+v", playbooks)
+	}
+}
+
 func TestServerDataOpsFlow(t *testing.T) {
 	server := newTestServer(t)
 	actor := ActorContext{
