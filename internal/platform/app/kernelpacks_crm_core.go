@@ -336,7 +336,7 @@ func crmSLAPolicyModelDefinition() model.Definition {
 		Fields: []model.FieldDefinition{
 			{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Type: "string", Required: true},
 			{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
-			{Key: "queue_code", Label: "Queue", LabelI18n: localize("Queue", "Queue"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}},
+			{Key: "queue_code", Label: "Queue", LabelI18n: localize("Queue", "Queue"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}, ConstraintRuleKeys: []string{"crm.queue.active"}},
 			{Key: "source_channel", Label: "Source Channel", LabelI18n: localize("Source Channel", "Kanal Sumber"), Type: "string", AllowedValues: []string{"", "web", "email", "phone", "chat", "pos"}},
 			{Key: "priority", Label: "Priority", LabelI18n: localize("Priority", "Prioritas"), Type: "string", AllowedValues: []string{"", "low", "medium", "high", "urgent"}},
 			{Key: "severity", Label: "Severity", LabelI18n: localize("Severity", "Severity"), Type: "string", AllowedValues: []string{"", "low", "medium", "high", "critical"}},
@@ -362,8 +362,8 @@ func crmAssignmentRuleModelDefinition() model.Definition {
 		Fields: []model.FieldDefinition{
 			{Key: "code", Label: "Code", LabelI18n: localize("Code", "Kode"), Type: "string", Required: true},
 			{Key: "name", Label: "Name", LabelI18n: localize("Name", "Nama"), Type: "string", Required: true},
-			{Key: "queue_code", Label: "Queue", LabelI18n: localize("Queue", "Queue"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}},
-			{Key: "assign_queue_code", Label: "Assign Queue", LabelI18n: localize("Assign Queue", "Queue Tujuan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}},
+			{Key: "queue_code", Label: "Queue", LabelI18n: localize("Queue", "Queue"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}, ConstraintRuleKeys: []string{"crm.queue.active"}},
+			{Key: "assign_queue_code", Label: "Assign Queue", LabelI18n: localize("Assign Queue", "Queue Tujuan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}, ConstraintRuleKeys: []string{"crm.queue.active"}},
 			{Key: "assign_user_id", Label: "Assign User", LabelI18n: localize("Assign User", "User Tujuan"), Type: "string"},
 			{Key: "source_channel", Label: "Source Channel", LabelI18n: localize("Source Channel", "Kanal Sumber"), Type: "string"},
 			{Key: "issue_category", Label: "Issue Category", LabelI18n: localize("Issue Category", "Kategori Isu"), Type: "string"},
@@ -393,11 +393,11 @@ func crmTicketModelDefinition() model.Definition {
 			{Key: "description", Label: "Description", LabelI18n: localize("Description", "Deskripsi"), Type: "string"},
 			{Key: "party_id", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party"}},
 			{Key: "party_name", Label: "Customer Name", LabelI18n: localize("Customer Name", "Nama Pelanggan"), Type: "string"},
-			{Key: "queue_code", Label: "Queue", LabelI18n: localize("Queue", "Queue"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}},
+			{Key: "queue_code", Label: "Queue", LabelI18n: localize("Queue", "Queue"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_queue", LookupField: "values.code"}, ConstraintRuleKeys: []string{"crm.queue.active"}},
 			{Key: "source_channel", Label: "Source Channel", LabelI18n: localize("Source Channel", "Kanal Sumber"), Type: "string", DefaultValue: "web", AllowedValues: []string{"web", "email", "phone", "chat", "pos"}},
 			{Key: "priority", Label: "Priority", LabelI18n: localize("Priority", "Prioritas"), Type: "string", DefaultValue: "medium", AllowedValues: []string{"low", "medium", "high", "urgent"}},
 			{Key: "severity", Label: "Severity", LabelI18n: localize("Severity", "Severity"), Type: "string", DefaultValue: "medium", AllowedValues: []string{"low", "medium", "high", "critical"}},
-			{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "open", "pending_customer", "pending_internal", "resolved", "closed", "cancelled"}},
+			{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "open", "pending_customer", "pending_internal", "resolved", "closed", "cancelled"}, ConstraintRuleKeys: []string{"crm.ticket.lifecycle"}},
 			{Key: "assignee_user_id", Label: "Assignee User", LabelI18n: localize("Assignee User", "User Assignee"), Type: "string"},
 			{Key: "opened_at", Label: "Opened At", LabelI18n: localize("Opened At", "Dibuka Pada"), Type: "string"},
 			{Key: "first_response_due_at", Label: "First Response Due At", LabelI18n: localize("First Response Due At", "Batas Respons Pertama"), Type: "string"},
@@ -428,7 +428,7 @@ func crmTicketCommentModelDefinition() model.Definition {
 		UpdatePermissionKey: "crm_ticket_comment.update",
 		DefaultSort:         "created_at",
 		Fields: []model.FieldDefinition{
-			{Key: "ticket_id", Label: "Ticket", LabelI18n: localize("Ticket", "Tiket"), Type: "string", Required: true, Reference: &model.ReferenceDefinition{ModelKey: "crm_ticket"}},
+			{Key: "ticket_id", Label: "Ticket", LabelI18n: localize("Ticket", "Tiket"), Type: "string", Required: true, Reference: &model.ReferenceDefinition{ModelKey: "crm_ticket"}, ConstraintRuleKeys: []string{"crm.ticket.comment.link"}},
 			{Key: "ticket_number", Label: "Ticket Number", LabelI18n: localize("Ticket Number", "Nomor Tiket"), Type: "string"},
 			{Key: "comment_type", Label: "Comment Type", LabelI18n: localize("Comment Type", "Tipe Komentar"), Type: "string", DefaultValue: "internal_note", AllowedValues: []string{"internal_note", "public_reply", "status_update"}},
 			{Key: "body", Label: "Body", LabelI18n: localize("Body", "Isi"), Type: "string", Required: true},
@@ -453,7 +453,7 @@ func crmTicketActivityModelDefinition() model.Definition {
 		UpdatePermissionKey: "crm_ticket_activity.update",
 		DefaultSort:         "occurred_at",
 		Fields: []model.FieldDefinition{
-			{Key: "ticket_id", Label: "Ticket", LabelI18n: localize("Ticket", "Tiket"), Type: "string", Required: true, Reference: &model.ReferenceDefinition{ModelKey: "crm_ticket"}},
+			{Key: "ticket_id", Label: "Ticket", LabelI18n: localize("Ticket", "Tiket"), Type: "string", Required: true, Reference: &model.ReferenceDefinition{ModelKey: "crm_ticket"}, ConstraintRuleKeys: []string{"crm.ticket.activity.link"}},
 			{Key: "ticket_number", Label: "Ticket Number", LabelI18n: localize("Ticket Number", "Nomor Tiket"), Type: "string"},
 			{Key: "activity_type", Label: "Activity Type", LabelI18n: localize("Activity Type", "Tipe Aktivitas"), Type: "string", Required: true},
 			{Key: "actor_user_id", Label: "Actor User", LabelI18n: localize("Actor User", "User Aktor"), Type: "string"},
@@ -492,10 +492,10 @@ func crmLeadModelDefinition() model.Definition {
 			{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Type: "string", Required: true},
 			{Key: "party_id", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party"}},
 			{Key: "party_name", Label: "Customer Name", LabelI18n: localize("Customer Name", "Nama Pelanggan"), Type: "string"},
-			{Key: "contact_id", Label: "Contact", LabelI18n: localize("Contact", "Kontak"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party_contact"}},
+			{Key: "contact_id", Label: "Contact", LabelI18n: localize("Contact", "Kontak"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party_contact"}, ConstraintRuleKeys: []string{"crm.contact.party_link"}},
 			{Key: "owner_user_id", Label: "Owner User", LabelI18n: localize("Owner User", "User Pemilik"), Type: "string"},
 			{Key: "source_channel", Label: "Source Channel", LabelI18n: localize("Source Channel", "Kanal Sumber"), Type: "string", AllowedValues: []string{"web", "email", "phone", "chat", "partner", "referral", "walk_in"}},
-			{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "contacted", "qualified", "disqualified", "converted", "closed"}},
+			{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "contacted", "qualified", "disqualified", "converted", "closed"}, ConstraintRuleKeys: []string{"crm.lead.lifecycle"}},
 			{Key: "rating", Label: "Rating", LabelI18n: localize("Rating", "Rating"), Type: "string", DefaultValue: "warm", AllowedValues: []string{"cold", "warm", "hot"}},
 			{Key: "estimated_value", Label: "Estimated Value", LabelI18n: localize("Estimated Value", "Estimasi Nilai"), Type: "number"},
 			{Key: "expected_close_date", Label: "Expected Close Date", LabelI18n: localize("Expected Close Date", "Estimasi Tanggal Tutup"), Type: "string"},
@@ -522,10 +522,10 @@ func crmOpportunityModelDefinition() model.Definition {
 			{Key: "title", Label: "Title", LabelI18n: localize("Title", "Judul"), Type: "string", Required: true},
 			{Key: "party_id", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party"}},
 			{Key: "party_name", Label: "Customer Name", LabelI18n: localize("Customer Name", "Nama Pelanggan"), Type: "string"},
-			{Key: "contact_id", Label: "Contact", LabelI18n: localize("Contact", "Kontak"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party_contact"}},
+			{Key: "contact_id", Label: "Contact", LabelI18n: localize("Contact", "Kontak"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party_contact"}, ConstraintRuleKeys: []string{"crm.contact.party_link"}},
 			{Key: "owner_user_id", Label: "Owner User", LabelI18n: localize("Owner User", "User Pemilik"), Type: "string"},
-			{Key: "source_lead_id", Label: "Source Lead", LabelI18n: localize("Source Lead", "Lead Sumber"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_lead"}},
-			{Key: "stage", Label: "Stage", LabelI18n: localize("Stage", "Stage"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "qualified", "proposal", "negotiation", "won", "lost"}},
+			{Key: "source_lead_id", Label: "Source Lead", LabelI18n: localize("Source Lead", "Lead Sumber"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "crm_lead"}, ConstraintRuleKeys: []string{"crm.opportunity.source_lead_link"}},
+			{Key: "stage", Label: "Stage", LabelI18n: localize("Stage", "Stage"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "qualified", "proposal", "negotiation", "won", "lost"}, ConstraintRuleKeys: []string{"crm.opportunity.lifecycle"}},
 			{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "open", AllowedValues: []string{"open", "won", "lost"}},
 			{Key: "estimated_value", Label: "Estimated Value", LabelI18n: localize("Estimated Value", "Estimasi Nilai"), Type: "number"},
 			{Key: "expected_close_date", Label: "Expected Close Date", LabelI18n: localize("Expected Close Date", "Estimasi Tanggal Tutup"), Type: "string"},
@@ -553,7 +553,7 @@ func crmActivityModelDefinition() model.Definition {
 			{Key: "activity_type", Label: "Activity Type", LabelI18n: localize("Activity Type", "Tipe Aktivitas"), Type: "string", Required: true},
 			{Key: "subject", Label: "Subject", LabelI18n: localize("Subject", "Subjek"), Type: "string", Required: true},
 			{Key: "related_kind", Label: "Related Kind", LabelI18n: localize("Related Kind", "Jenis Terkait"), Type: "string", AllowedValues: []string{"party", "lead", "opportunity", "ticket"}},
-			{Key: "related_id", Label: "Related ID", LabelI18n: localize("Related ID", "ID Terkait"), Type: "string"},
+			{Key: "related_id", Label: "Related ID", LabelI18n: localize("Related ID", "ID Terkait"), Type: "string", ConstraintRuleKeys: []string{"crm.activity.related_link"}},
 			{Key: "party_id", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party"}},
 			{Key: "party_name", Label: "Customer Name", LabelI18n: localize("Customer Name", "Nama Pelanggan"), Type: "string"},
 			{Key: "owner_user_id", Label: "Owner User", LabelI18n: localize("Owner User", "User Pemilik"), Type: "string"},
@@ -639,8 +639,12 @@ func crmQueueListView() module.ViewDefinition {
 	}, []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "select", Options: []string{"active", "inactive"}}})
 }
 
-func crmQueueDetailView() module.ViewDefinition { return crmResourceDetailView("queues", "Ticket Queue Detail", "crm_queue", []string{"crm_queue.read"}, crmQueueFields(false)) }
-func crmQueueFormView() module.ViewDefinition   { return crmResourceFormView("queues", "Ticket Queue Form", "crm_queue", []string{"crm_queue.update"}, crmQueueFields(true)) }
+func crmQueueDetailView() module.ViewDefinition {
+	return crmResourceDetailView("queues", "Ticket Queue Detail", "crm_queue", []string{"crm_queue.read"}, crmQueueFields(false))
+}
+func crmQueueFormView() module.ViewDefinition {
+	return crmResourceFormView("queues", "Ticket Queue Form", "crm_queue", []string{"crm_queue.update"}, crmQueueFields(true))
+}
 
 func crmSLAPolicyListView() module.ViewDefinition {
 	return crmResourceListView("sla-policies", "SLA Policies", "crm_sla_policy", []string{"crm_sla_policy.list"}, []module.ColumnDefinition{
@@ -653,8 +657,12 @@ func crmSLAPolicyListView() module.ViewDefinition {
 	}, []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "select", Options: []string{"active", "inactive"}}})
 }
 
-func crmSLAPolicyDetailView() module.ViewDefinition { return crmResourceDetailView("sla-policies", "SLA Policy Detail", "crm_sla_policy", []string{"crm_sla_policy.read"}, crmSLAPolicyFields(false)) }
-func crmSLAPolicyFormView() module.ViewDefinition   { return crmResourceFormView("sla-policies", "SLA Policy Form", "crm_sla_policy", []string{"crm_sla_policy.update"}, crmSLAPolicyFields(true)) }
+func crmSLAPolicyDetailView() module.ViewDefinition {
+	return crmResourceDetailView("sla-policies", "SLA Policy Detail", "crm_sla_policy", []string{"crm_sla_policy.read"}, crmSLAPolicyFields(false))
+}
+func crmSLAPolicyFormView() module.ViewDefinition {
+	return crmResourceFormView("sla-policies", "SLA Policy Form", "crm_sla_policy", []string{"crm_sla_policy.update"}, crmSLAPolicyFields(true))
+}
 
 func crmAssignmentRuleListView() module.ViewDefinition {
 	return crmResourceListView("assignment-rules", "Assignment Rules", "crm_assignment_rule", []string{"crm_assignment_rule.list"}, []module.ColumnDefinition{
@@ -690,8 +698,12 @@ func crmTicketListView() module.ViewDefinition {
 	})
 }
 
-func crmTicketDetailView() module.ViewDefinition { return crmResourceDetailView("tickets", "Issue Ticket Detail", "crm_ticket", []string{"crm_ticket.read"}, crmTicketFields(false)) }
-func crmTicketFormView() module.ViewDefinition   { return crmResourceFormView("tickets", "Issue Ticket Form", "crm_ticket", []string{"crm_ticket.update"}, crmTicketFields(true)) }
+func crmTicketDetailView() module.ViewDefinition {
+	return crmResourceDetailView("tickets", "Issue Ticket Detail", "crm_ticket", []string{"crm_ticket.read"}, crmTicketFields(false))
+}
+func crmTicketFormView() module.ViewDefinition {
+	return crmResourceFormView("tickets", "Issue Ticket Form", "crm_ticket", []string{"crm_ticket.update"}, crmTicketFields(true))
+}
 
 func crmTicketCommentListView() module.ViewDefinition {
 	return crmResourceListView("ticket-comments", "Ticket Comments", "crm_ticket_comment", []string{"crm_ticket_comment.list"}, []module.ColumnDefinition{
@@ -740,8 +752,12 @@ func crmLeadListView() module.ViewDefinition {
 	}, []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "select", Options: []string{"new", "contacted", "qualified", "disqualified", "converted", "closed"}}})
 }
 
-func crmLeadDetailView() module.ViewDefinition { return crmResourceDetailView("leads", "Lead Detail", "crm_lead", []string{"crm_lead.read"}, crmLeadFields(false)) }
-func crmLeadFormView() module.ViewDefinition   { return crmResourceFormView("leads", "Lead Form", "crm_lead", []string{"crm_lead.update"}, crmLeadFields(true)) }
+func crmLeadDetailView() module.ViewDefinition {
+	return crmResourceDetailView("leads", "Lead Detail", "crm_lead", []string{"crm_lead.read"}, crmLeadFields(false))
+}
+func crmLeadFormView() module.ViewDefinition {
+	return crmResourceFormView("leads", "Lead Form", "crm_lead", []string{"crm_lead.update"}, crmLeadFields(true))
+}
 
 func crmOpportunityListView() module.ViewDefinition {
 	return crmResourceListView("opportunities", "Opportunities", "crm_opportunity", []string{"crm_opportunity.list"}, []module.ColumnDefinition{
@@ -773,8 +789,12 @@ func crmActivityListView() module.ViewDefinition {
 	}, []module.FilterDefinition{{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "select", Options: []string{"open", "completed", "cancelled"}}})
 }
 
-func crmActivityDetailView() module.ViewDefinition { return crmResourceDetailView("activities", "CRM Activity Detail", "crm_activity", []string{"crm_activity.read"}, crmActivityFields(false)) }
-func crmActivityFormView() module.ViewDefinition   { return crmResourceFormView("activities", "CRM Activity Form", "crm_activity", []string{"crm_activity.update"}, crmActivityFields(true)) }
+func crmActivityDetailView() module.ViewDefinition {
+	return crmResourceDetailView("activities", "CRM Activity Detail", "crm_activity", []string{"crm_activity.read"}, crmActivityFields(false))
+}
+func crmActivityFormView() module.ViewDefinition {
+	return crmResourceFormView("activities", "CRM Activity Form", "crm_activity", []string{"crm_activity.update"}, crmActivityFields(true))
+}
 
 func crmQueueFields(form bool) []module.FieldDefinition {
 	return crmViewFields(form,

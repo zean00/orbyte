@@ -19,6 +19,7 @@ func TestCRMCoreServiceSummaryPayload(t *testing.T) {
 		"title":                 "Coffee machine failure",
 		"queue_code":            "SUPPORT",
 		"priority":              "urgent",
+		"opened_at":             now.Add(-2 * time.Hour).Format(time.RFC3339),
 		"due_at":                now.Add(-time.Hour).Format(time.RFC3339),
 		"first_response_due_at": now.Add(-30 * time.Minute).Format(time.RFC3339),
 	})
@@ -26,14 +27,17 @@ func TestCRMCoreServiceSummaryPayload(t *testing.T) {
 		t.Fatalf("create open ticket: %v", err)
 	}
 	resolved, err := svc.CreateTicket("user_admin", map[string]any{
-		"title":       "Receipt paper replaced",
-		"queue_code":  "SUPPORT",
-		"priority":    "medium",
-		"status":      "resolved",
-		"resolved_at": now.Format(time.RFC3339),
+		"title":      "Receipt paper replaced",
+		"queue_code": "SUPPORT",
+		"priority":   "medium",
+		"opened_at":  now.Add(-3 * time.Hour).Format(time.RFC3339),
 	})
 	if err != nil {
 		t.Fatalf("create resolved ticket: %v", err)
+	}
+	resolved, err = svc.ResolveTicket(resolved.ID, "user_admin", "Paper roll replaced", false, resolved.Version)
+	if err != nil {
+		t.Fatalf("resolve summary ticket: %v", err)
 	}
 	open.CreatedAt = now.Add(-2 * time.Hour)
 	resolved.CreatedAt = now.Add(-3 * time.Hour)
@@ -132,11 +136,11 @@ func TestCRMCoreServiceCustomer360(t *testing.T) {
 		t.Fatalf("create customer profile: %v", err)
 	}
 	if _, err := models.Create("party_contact", "user_admin", map[string]any{
-		"party_id":      party.ID,
-		"contact_name":  "Alya",
-		"contact_kind":  "account_owner",
-		"status":        "active",
-		"is_primary":    true,
+		"party_id":     party.ID,
+		"contact_name": "Alya",
+		"contact_kind": "account_owner",
+		"status":       "active",
+		"is_primary":   true,
 	}); err != nil {
 		t.Fatalf("create party contact: %v", err)
 	}
@@ -291,6 +295,226 @@ func TestCRMCoreServiceSalesSummaryPayload(t *testing.T) {
 	}
 }
 
+func TestCRMCoreServiceRejectsLeadContactFromAnotherParty(t *testing.T) {
+	models := newCRMTestModelService(t)
+	svc := NewCRMCoreService(models)
+
+	partyA, err := models.Create("party", "user_admin", map[string]any{"name": "Acme Retail", "status": "active"})
+	if err != nil {
+		t.Fatalf("create party A: %v", err)
+	}
+	partyB, err := models.Create("party", "user_admin", map[string]any{"name": "North Roast", "status": "active"})
+	if err != nil {
+		t.Fatalf("create party B: %v", err)
+	}
+	contact, err := models.Create("party_contact", "user_admin", map[string]any{
+		"party_id":     partyB.ID,
+		"contact_name": "Bimo",
+		"status":       "active",
+	})
+	if err != nil {
+		t.Fatalf("create contact: %v", err)
+	}
+
+	if _, err := svc.CreateLead("user_admin", map[string]any{
+		"title":      "Bad lead linkage",
+		"party_id":   partyA.ID,
+		"party_name": "Acme Retail",
+		"contact_id": contact.ID,
+	}); err == nil {
+		t.Fatal("expected cross-party contact linkage to fail")
+	}
+}
+
+func TestCRMCoreServiceRejectsSecondOpenOpportunityForSameLead(t *testing.T) {
+	models := newCRMTestModelService(t)
+	svc := NewCRMCoreService(models)
+
+	party, err := models.Create("party", "user_admin", map[string]any{"name": "North Roast", "status": "active"})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	lead, err := svc.CreateLead("user_admin", map[string]any{
+		"title":      "Wholesale expansion",
+		"party_id":   party.ID,
+		"party_name": "North Roast",
+		"status":     "qualified",
+	})
+	if err != nil {
+		t.Fatalf("create lead: %v", err)
+	}
+	if _, err := svc.CreateOpportunity("user_admin", map[string]any{
+		"title":          "Quarterly supply deal",
+		"party_id":       party.ID,
+		"party_name":     "North Roast",
+		"source_lead_id": lead.ID,
+		"stage":          "proposal",
+	}); err != nil {
+		t.Fatalf("create first opportunity: %v", err)
+	}
+	if _, err := svc.CreateOpportunity("user_admin", map[string]any{
+		"title":          "Duplicate opportunity",
+		"party_id":       party.ID,
+		"party_name":     "North Roast",
+		"source_lead_id": lead.ID,
+		"stage":          "qualified",
+	}); err == nil {
+		t.Fatal("expected second open opportunity for the same lead to fail")
+	}
+}
+
+func TestCRMCoreServiceRejectsActivityWithMismatchedRelatedParty(t *testing.T) {
+	models := newCRMTestModelService(t)
+	svc := NewCRMCoreService(models)
+
+	partyA, err := models.Create("party", "user_admin", map[string]any{"name": "Acme Retail", "status": "active"})
+	if err != nil {
+		t.Fatalf("create party A: %v", err)
+	}
+	partyB, err := models.Create("party", "user_admin", map[string]any{"name": "North Roast", "status": "active"})
+	if err != nil {
+		t.Fatalf("create party B: %v", err)
+	}
+	lead, err := svc.CreateLead("user_admin", map[string]any{
+		"title":      "Wholesale expansion",
+		"party_id":   partyA.ID,
+		"party_name": "Acme Retail",
+		"status":     "qualified",
+	})
+	if err != nil {
+		t.Fatalf("create lead: %v", err)
+	}
+
+	if _, err := svc.CreateActivity("user_admin", map[string]any{
+		"activity_type": "call",
+		"subject":       "Cross-party mismatch",
+		"related_kind":  "lead",
+		"related_id":    lead.ID,
+		"party_id":      partyB.ID,
+		"party_name":    "North Roast",
+		"status":        "completed",
+		"completed_at":  time.Now().UTC().Format(time.RFC3339),
+	}); err == nil {
+		t.Fatal("expected activity with mismatched related party to fail")
+	}
+}
+
+func TestCRMCoreServiceRejectsClosingTicketWithoutResolutionDetails(t *testing.T) {
+	models := newCRMTestModelService(t)
+	svc := NewCRMCoreService(models)
+
+	if _, err := models.Create("crm_queue", "user_admin", map[string]any{"code": "SUPPORT", "name": "Support", "status": "active"}); err != nil {
+		t.Fatalf("create queue: %v", err)
+	}
+	ticket, err := svc.CreateTicket("user_admin", map[string]any{
+		"title":      "Delivery complaint",
+		"queue_code": "SUPPORT",
+	})
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+	if _, err := svc.UpdateTicket(ticket.ID, "user_admin", map[string]any{"status": "closed"}, ticket.Version); err == nil {
+		t.Fatal("expected closing without resolution details to fail")
+	}
+}
+
+func TestCRMCoreServiceAllowsEditingTicketWithArchivedUnchangedQueue(t *testing.T) {
+	models := newCRMTestModelService(t)
+	svc := NewCRMCoreService(models)
+
+	queue, err := models.Create("crm_queue", "user_admin", map[string]any{"code": "SUPPORT", "name": "Support", "status": "active"})
+	if err != nil {
+		t.Fatalf("create queue: %v", err)
+	}
+	ticket, err := svc.CreateTicket("user_admin", map[string]any{
+		"title":      "Archived queue ticket",
+		"queue_code": "SUPPORT",
+	})
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+	queue, err = models.Update("crm_queue", queue.ID, "user_admin", map[string]any{"code": "SUPPORT", "name": "Support", "status": "inactive"}, queue.Version)
+	if err != nil {
+		t.Fatalf("archive queue: %v", err)
+	}
+	if _, err := svc.UpdateTicket(ticket.ID, "user_admin", map[string]any{"status": "open"}, ticket.Version); err != nil {
+		t.Fatalf("update ticket with unchanged archived queue: %v", err)
+	}
+}
+
+func TestCRMCoreServiceAllowsEditingLegacyResolvedTicketWithoutResolutionFields(t *testing.T) {
+	models := newCRMTestModelService(t)
+
+	legacy, err := models.Create("crm_ticket", "user_admin", map[string]any{
+		"title":  "Legacy resolved ticket",
+		"status": "open",
+	})
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+	legacy.Values["status"] = "resolved"
+	legacy.Values["resolution_notes"] = ""
+	legacy.Values["resolved_at"] = ""
+	if err := models.WithRawRecordSave(legacy); err != nil {
+		t.Fatalf("save legacy resolved ticket: %v", err)
+	}
+	if _, err := models.Update("crm_ticket", legacy.ID, "user_admin", map[string]any{
+		"title":       crmTextValue(legacy.Values["title"]),
+		"description": "Backfilled note",
+		"status":      "resolved",
+	}, legacy.Version); err != nil {
+		t.Fatalf("edit legacy resolved ticket: %v", err)
+	}
+}
+
+func TestCRMCoreServiceRejectsSecondOpenOpportunityForSameLeadBeyondFirstPage(t *testing.T) {
+	models := newCRMTestModelService(t)
+	svc := NewCRMCoreService(models)
+
+	party, err := models.Create("party", "user_admin", map[string]any{"name": "North Roast", "status": "active"})
+	if err != nil {
+		t.Fatalf("create party: %v", err)
+	}
+	lead, err := svc.CreateLead("user_admin", map[string]any{
+		"title":      "Wholesale expansion",
+		"party_id":   party.ID,
+		"party_name": "North Roast",
+		"status":     "qualified",
+	})
+	if err != nil {
+		t.Fatalf("create lead: %v", err)
+	}
+	for i := 0; i <= model.MaxPageSize; i++ {
+		values := map[string]any{
+			"title":          "Historic opportunity",
+			"party_id":       party.ID,
+			"party_name":     "North Roast",
+			"source_lead_id": lead.ID,
+			"stage":          "lost",
+			"status":         "closed",
+			"loss_reason":    "not_selected",
+		}
+		if i == model.MaxPageSize {
+			values["title"] = "Still open opportunity"
+			values["stage"] = "proposal"
+			values["status"] = "open"
+			delete(values, "loss_reason")
+		}
+		if _, err := svc.CreateOpportunity("user_admin", values); err != nil {
+			t.Fatalf("create seeded opportunity %d: %v", i, err)
+		}
+	}
+	if _, err := svc.CreateOpportunity("user_admin", map[string]any{
+		"title":          "Duplicate open opportunity",
+		"party_id":       party.ID,
+		"party_name":     "North Roast",
+		"source_lead_id": lead.ID,
+		"stage":          "qualified",
+	}); err == nil {
+		t.Fatal("expected duplicate open opportunity to fail even when another open record falls outside the first page")
+	}
+}
+
 func newCRMTestModelService(t *testing.T) *model.Service {
 	t.Helper()
 	models := model.NewService()
@@ -305,7 +529,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 			UpdatePermissionKey: "party.update",
 			Fields: []model.FieldDefinition{
 				{Key: "name", Label: "Name", Type: "string", Required: true},
-				{Key: "status", Label: "Status", Type: "string"},
+				{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
 			},
 		},
 		{
@@ -353,7 +577,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 				{Key: "name", Label: "Name", Type: "string", Required: true},
 				{Key: "triage_sla_hours", Label: "Triage SLA", Type: "number"},
 				{Key: "resolution_sla_hours", Label: "Resolution SLA", Type: "number"},
-				{Key: "status", Label: "Status", Type: "string"},
+				{Key: "status", Label: "Status", Type: "string", DefaultValue: "active"},
 			},
 		},
 		{
@@ -365,7 +589,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 			ReadPermissionKey:   "crm_sla_policy.read",
 			UpdatePermissionKey: "crm_sla_policy.update",
 			Fields: []model.FieldDefinition{
-				{Key: "queue_code", Label: "Queue", Type: "string"},
+				{Key: "queue_code", Label: "Queue", Type: "string", ConstraintRuleKeys: []string{"crm.queue.active"}},
 				{Key: "source_channel", Label: "Channel", Type: "string"},
 				{Key: "priority", Label: "Priority", Type: "string"},
 				{Key: "severity", Label: "Severity", Type: "string"},
@@ -383,8 +607,8 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 			ReadPermissionKey:   "crm_assignment_rule.read",
 			UpdatePermissionKey: "crm_assignment_rule.update",
 			Fields: []model.FieldDefinition{
-				{Key: "queue_code", Label: "Queue", Type: "string"},
-				{Key: "assign_queue_code", Label: "Assign Queue", Type: "string"},
+				{Key: "queue_code", Label: "Queue", Type: "string", ConstraintRuleKeys: []string{"crm.queue.active"}},
+				{Key: "assign_queue_code", Label: "Assign Queue", Type: "string", ConstraintRuleKeys: []string{"crm.queue.active"}},
 				{Key: "assign_user_id", Label: "Assign User", Type: "string"},
 				{Key: "source_channel", Label: "Channel", Type: "string"},
 				{Key: "issue_category", Label: "Category", Type: "string"},
@@ -408,11 +632,11 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 				{Key: "description", Label: "Description", Type: "string"},
 				{Key: "party_id", Label: "Party", Type: "string"},
 				{Key: "party_name", Label: "Party Name", Type: "string"},
-				{Key: "queue_code", Label: "Queue", Type: "string"},
+				{Key: "queue_code", Label: "Queue", Type: "string", ConstraintRuleKeys: []string{"crm.queue.active"}},
 				{Key: "source_channel", Label: "Source", Type: "string"},
 				{Key: "priority", Label: "Priority", Type: "string"},
 				{Key: "severity", Label: "Severity", Type: "string"},
-				{Key: "status", Label: "Status", Type: "string"},
+				{Key: "status", Label: "Status", Type: "string", ConstraintRuleKeys: []string{"crm.ticket.lifecycle"}},
 				{Key: "assignee_user_id", Label: "Assignee", Type: "string"},
 				{Key: "opened_at", Label: "Opened", Type: "string"},
 				{Key: "first_response_due_at", Label: "First Response Due", Type: "string"},
@@ -433,7 +657,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 			ReadPermissionKey:   "crm_ticket_comment.read",
 			UpdatePermissionKey: "crm_ticket_comment.update",
 			Fields: []model.FieldDefinition{
-				{Key: "ticket_id", Label: "Ticket", Type: "string", Required: true},
+				{Key: "ticket_id", Label: "Ticket", Type: "string", Required: true, ConstraintRuleKeys: []string{"crm.ticket.comment.link"}},
 				{Key: "ticket_number", Label: "Ticket Number", Type: "string"},
 				{Key: "comment_type", Label: "Type", Type: "string"},
 				{Key: "body", Label: "Body", Type: "string", Required: true},
@@ -452,7 +676,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 			ReadPermissionKey:   "crm_ticket_activity.read",
 			UpdatePermissionKey: "crm_ticket_activity.update",
 			Fields: []model.FieldDefinition{
-				{Key: "ticket_id", Label: "Ticket", Type: "string", Required: true},
+				{Key: "ticket_id", Label: "Ticket", Type: "string", Required: true, ConstraintRuleKeys: []string{"crm.ticket.activity.link"}},
 				{Key: "ticket_number", Label: "Ticket Number", Type: "string"},
 				{Key: "activity_type", Label: "Type", Type: "string", Required: true},
 				{Key: "actor_user_id", Label: "Actor", Type: "string"},
@@ -485,10 +709,10 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 				{Key: "title", Label: "Title", Type: "string", Required: true},
 				{Key: "party_id", Label: "Party", Type: "string"},
 				{Key: "party_name", Label: "Party Name", Type: "string"},
-				{Key: "contact_id", Label: "Contact", Type: "string"},
+				{Key: "contact_id", Label: "Contact", Type: "string", ConstraintRuleKeys: []string{"crm.contact.party_link"}},
 				{Key: "owner_user_id", Label: "Owner", Type: "string"},
 				{Key: "source_channel", Label: "Source", Type: "string"},
-				{Key: "status", Label: "Status", Type: "string"},
+				{Key: "status", Label: "Status", Type: "string", ConstraintRuleKeys: []string{"crm.lead.lifecycle"}},
 				{Key: "rating", Label: "Rating", Type: "string"},
 				{Key: "estimated_value", Label: "Value", Type: "number"},
 				{Key: "expected_close_date", Label: "Expected Close", Type: "string"},
@@ -509,10 +733,10 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 				{Key: "title", Label: "Title", Type: "string", Required: true},
 				{Key: "party_id", Label: "Party", Type: "string"},
 				{Key: "party_name", Label: "Party Name", Type: "string"},
-				{Key: "contact_id", Label: "Contact", Type: "string"},
+				{Key: "contact_id", Label: "Contact", Type: "string", ConstraintRuleKeys: []string{"crm.contact.party_link"}},
 				{Key: "owner_user_id", Label: "Owner", Type: "string"},
-				{Key: "source_lead_id", Label: "Lead", Type: "string"},
-				{Key: "stage", Label: "Stage", Type: "string"},
+				{Key: "source_lead_id", Label: "Lead", Type: "string", ConstraintRuleKeys: []string{"crm.opportunity.source_lead_link"}},
+				{Key: "stage", Label: "Stage", Type: "string", ConstraintRuleKeys: []string{"crm.opportunity.lifecycle"}},
 				{Key: "status", Label: "Status", Type: "string"},
 				{Key: "estimated_value", Label: "Value", Type: "number"},
 				{Key: "expected_close_date", Label: "Expected Close", Type: "string"},
@@ -534,7 +758,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 				{Key: "activity_type", Label: "Type", Type: "string", Required: true},
 				{Key: "subject", Label: "Subject", Type: "string", Required: true},
 				{Key: "related_kind", Label: "Related Kind", Type: "string"},
-				{Key: "related_id", Label: "Related ID", Type: "string"},
+				{Key: "related_id", Label: "Related ID", Type: "string", ConstraintRuleKeys: []string{"crm.activity.related_link"}},
 				{Key: "party_id", Label: "Party", Type: "string"},
 				{Key: "party_name", Label: "Party Name", Type: "string"},
 				{Key: "owner_user_id", Label: "Owner", Type: "string"},
@@ -549,6 +773,7 @@ func newCRMTestModelService(t *testing.T) *model.Service {
 			t.Fatalf("register %s: %v", def.Key, err)
 		}
 	}
+	RegisterCRMModelRules(models)
 	return models
 }
 

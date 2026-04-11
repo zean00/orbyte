@@ -597,6 +597,7 @@ func brokerTopic(prefix, topic string) string {
 
 func seedModelRules(modelSvc *model.Service) {
 	application.RegisterCommercialModelRules(modelSvc)
+	application.RegisterCRMModelRules(modelSvc)
 	modelSvc.SetDefaultEvaluator("crm.ticket_number.default", func(_ model.RuleInput) (any, error) {
 		return application.GenerateCRMTicketNumber(time.Now().UTC()), nil
 	})
