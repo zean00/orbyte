@@ -7,12 +7,12 @@ import (
 
 func TestDefaultMCPPlaybooksJSONIncludesCRMPlaybooks(t *testing.T) {
 	items := defaultMCPPlaybooksJSON()
-	for _, marker := range []string{`"id":"crm_service_backlog_triage"`, `"id":"crm_customer_360_review"`, `"id":"crm_sales_pipeline_review"`, `"id":"crm_service_sales_overview"`} {
+	for _, marker := range []string{`"id":"crm_service_interest_lead_capture"`, `"id":"crm_customer_complaint_ticket_intake"`, `"id":"crm_service_backlog_triage"`, `"id":"crm_customer_360_review"`, `"id":"crm_sales_pipeline_review"`, `"id":"crm_service_sales_overview"`} {
 		if !strings.Contains(items, marker) {
 			t.Fatalf("expected %s in default MCP playbooks json, got %s", marker, items)
 		}
 	}
-	for _, marker := range []string{`"crm.ticket.summary"`, `"crm.customer.summary"`, `"crm.customer.timeline"`, `"crm.opportunity.pipeline.summary"`} {
+	for _, marker := range []string{`"crm.customer.summary"`, `"crm.lead.search"`, `"crm.opportunity.search"`, `"crm.lead.create"`, `"crm.activity.create"`, `"crm.ticket.search"`, `"crm.ticket.create"`, `"crm.ticket.assign"`, `"crm.ticket.comment.create"`, `"crm.ticket.summary"`, `"crm.customer.timeline"`, `"crm.opportunity.pipeline.summary"`} {
 		if !strings.Contains(items, marker) {
 			t.Fatalf("expected %s in default MCP playbooks json, got %s", marker, items)
 		}

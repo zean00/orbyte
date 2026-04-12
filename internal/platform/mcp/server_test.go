@@ -1051,6 +1051,128 @@ func TestServerMinimalPlaybookSearchFindsParaphrasedUseCase(t *testing.T) {
 	}
 }
 
+func TestServerMinimalPlaybookSearchFindsServiceInterestLeadCaptureSkill(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json": `[
+				{
+					"id":"crm_service_interest_lead_capture",
+					"name":"CRM Service Interest Lead Capture",
+					"description":"Capture a sales lead when a service interaction reveals product interest.",
+					"use_when":"Use when a support or service conversation reveals buying interest and sales should follow up.",
+					"domains":["crm","service","sales"],
+					"labels":["crm","lead-capture","handoff"],
+					"keywords":["product interest","support handoff","create lead","upsell","cross-sell"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "playbooks.find",
+			"arguments": map[string]any{
+				"query": "a support agent detected customer interest in a product and wants to create a sales lead",
+				"limit": 5,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks.find failed: %+v", resp.Error)
+	}
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	items := structured["items"].([]PlaybookSummary)
+	if len(items) == 0 || items[0].ID != "crm_service_interest_lead_capture" {
+		t.Fatalf("expected paraphrased query to find crm_service_interest_lead_capture, got %+v", items)
+	}
+}
+
+func TestServerMinimalPlaybookSearchFindsComplaintTicketIntakeSkill(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json": `[
+				{
+					"id":"crm_customer_complaint_ticket_intake",
+					"name":"CRM Customer Complaint Ticket Intake",
+					"description":"Capture a customer complaint as a CRM service ticket.",
+					"use_when":"Use when a support or customer service conversation needs to create a complaint ticket.",
+					"domains":["crm","service"],
+					"labels":["crm","ticket-intake","complaint"],
+					"keywords":["customer complaint","create ticket","refund issue","damaged shipment","support case"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "playbooks.find",
+			"arguments": map[string]any{
+				"query": "a customer complained about a damaged shipment and support wants to create a complaint ticket",
+				"limit": 5,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks.find failed: %+v", resp.Error)
+	}
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	items := structured["items"].([]PlaybookSummary)
+	if len(items) == 0 || items[0].ID != "crm_customer_complaint_ticket_intake" {
+		t.Fatalf("expected paraphrased query to find crm_customer_complaint_ticket_intake, got %+v", items)
+	}
+}
+
 func TestServerDataOpsFlow(t *testing.T) {
 	server := newTestServer(t)
 	actor := ActorContext{
