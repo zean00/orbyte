@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -20,9 +21,8 @@ type PlaybookDefinition struct {
 	Labels               []string           `json:"labels,omitempty"`
 	Keywords             []string           `json:"keywords,omitempty"`
 	UseWhen              string             `json:"use_when,omitempty"`
-	WorkflowSteps        []string           `json:"workflow_steps,omitempty"`
-	ToolSequence         []PlaybookToolStep `json:"tool_sequence,omitempty"`
-	ToolIDs              []string           `json:"tool_ids,omitempty"`
+	WorkflowSteps        []PlaybookToolStep `json:"workflow_steps,omitempty"`
+	ToolInventory        []string           `json:"tool_inventory,omitempty"`
 	RequiredFinalFacts   []string           `json:"required_final_facts,omitempty"`
 	RequiredArtifacts    []string           `json:"required_artifacts,omitempty"`
 	RequiredDraftOutputs []string           `json:"required_draft_outputs,omitempty"`
@@ -35,12 +35,95 @@ type PlaybookDefinition struct {
 
 type PlaybookToolStep struct {
 	Step        string         `json:"step"`
+	Title       string         `json:"title,omitempty"`
 	ToolID      string         `json:"tool_id"`
 	Description string         `json:"description,omitempty"`
 	Required    bool           `json:"required,omitempty"`
 	When        string         `json:"when,omitempty"`
 	Output      string         `json:"output,omitempty"`
 	Arguments   map[string]any `json:"arguments,omitempty"`
+}
+
+type playbookDefinitionAlias struct {
+	ID                   string              `json:"id"`
+	Name                 string              `json:"name"`
+	Description          string              `json:"description,omitempty"`
+	Domains              []string            `json:"domains,omitempty"`
+	Labels               []string            `json:"labels,omitempty"`
+	Keywords             []string            `json:"keywords,omitempty"`
+	UseWhen              string              `json:"use_when,omitempty"`
+	WorkflowSteps        json.RawMessage     `json:"workflow_steps,omitempty"`
+	ToolSequence         []PlaybookToolStep  `json:"tool_sequence,omitempty"`
+	ToolIDs              []string            `json:"tool_ids,omitempty"`
+	ToolInventory        []string            `json:"tool_inventory,omitempty"`
+	RequiredFinalFacts   []string            `json:"required_final_facts,omitempty"`
+	RequiredArtifacts    []string            `json:"required_artifacts,omitempty"`
+	RequiredDraftOutputs []string            `json:"required_draft_outputs,omitempty"`
+	Guardrails           []string            `json:"guardrails,omitempty"`
+	SuccessChecks        []string            `json:"success_checks,omitempty"`
+	Examples             []string            `json:"examples,omitempty"`
+	Constraints          []string            `json:"constraints,omitempty"`
+	Pitfalls             []string            `json:"pitfalls,omitempty"`
+}
+
+func (p *PlaybookDefinition) UnmarshalJSON(data []byte) error {
+	var raw playbookDefinitionAlias
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*p = PlaybookDefinition{
+		ID:                   raw.ID,
+		Name:                 raw.Name,
+		Description:          raw.Description,
+		Domains:              raw.Domains,
+		Labels:               raw.Labels,
+		Keywords:             raw.Keywords,
+		UseWhen:              raw.UseWhen,
+		RequiredFinalFacts:   raw.RequiredFinalFacts,
+		RequiredArtifacts:    raw.RequiredArtifacts,
+		RequiredDraftOutputs: raw.RequiredDraftOutputs,
+		Guardrails:           raw.Guardrails,
+		SuccessChecks:        raw.SuccessChecks,
+		Examples:             raw.Examples,
+		Constraints:          raw.Constraints,
+		Pitfalls:             raw.Pitfalls,
+	}
+	if len(raw.WorkflowSteps) > 0 {
+		var typed []PlaybookToolStep
+		if err := json.Unmarshal(raw.WorkflowSteps, &typed); err == nil {
+			p.WorkflowSteps = typed
+		} else {
+			var legacy []string
+			if err := json.Unmarshal(raw.WorkflowSteps, &legacy); err == nil {
+				p.WorkflowSteps = legacyStringsToWorkflowSteps(legacy)
+			}
+		}
+	}
+	if len(raw.ToolSequence) > 0 {
+		p.WorkflowSteps = append([]PlaybookToolStep(nil), raw.ToolSequence...)
+	}
+	if len(raw.ToolInventory) > 0 {
+		p.ToolInventory = append([]string(nil), raw.ToolInventory...)
+	} else {
+		p.ToolInventory = append([]string(nil), raw.ToolIDs...)
+	}
+	return nil
+}
+
+func legacyStringsToWorkflowSteps(items []string) []PlaybookToolStep {
+	out := make([]PlaybookToolStep, 0, len(items))
+	for index, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, PlaybookToolStep{
+			Step:        "step_" + strings.TrimSpace(strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(item, " ", "_"), "-", "_"), ".", ""))),
+			Title:       "Step " + strconv.Itoa(index+1),
+			Description: item,
+		})
+	}
+	return out
 }
 
 type PlaybookSummary struct {
@@ -75,9 +158,11 @@ func normalizePlaybookDefinition(item PlaybookDefinition) PlaybookDefinition {
 	item.Domains = mergeUniqueStrings(nil, item.Domains)
 	item.Labels = mergeUniqueStrings(nil, item.Labels)
 	item.Keywords = mergeUniqueStrings(nil, item.Keywords)
-	item.WorkflowSteps = trimNonEmptyStrings(item.WorkflowSteps)
-	item.ToolSequence = normalizePlaybookToolSteps(item.ToolSequence)
-	item.ToolIDs = mergeUniqueStrings(nil, item.ToolIDs)
+	item.WorkflowSteps = normalizePlaybookToolSteps(item.WorkflowSteps)
+	item.ToolInventory = mergeUniqueStrings(nil, item.ToolInventory)
+	if len(item.ToolInventory) == 0 {
+		item.ToolInventory = workflowToolInventory(item.WorkflowSteps)
+	}
 	item.RequiredFinalFacts = trimNonEmptyStrings(item.RequiredFinalFacts)
 	item.RequiredArtifacts = trimNonEmptyStrings(item.RequiredArtifacts)
 	item.RequiredDraftOutputs = trimNonEmptyStrings(item.RequiredDraftOutputs)
@@ -96,16 +181,31 @@ func normalizePlaybookToolSteps(items []PlaybookToolStep) []PlaybookToolStep {
 	out := make([]PlaybookToolStep, 0, len(items))
 	for _, item := range items {
 		item.Step = strings.TrimSpace(item.Step)
+		item.Title = strings.TrimSpace(item.Title)
 		item.ToolID = strings.TrimSpace(item.ToolID)
 		item.Description = strings.TrimSpace(item.Description)
 		item.When = strings.TrimSpace(item.When)
 		item.Output = strings.TrimSpace(item.Output)
-		if item.Step == "" && item.ToolID == "" && item.Description == "" {
+		if item.Step == "" && item.Title == "" && item.ToolID == "" && item.Description == "" {
 			continue
+		}
+		if item.Step == "" {
+			item.Step = strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(item.Title), " ", "_"), "-", "_"))
 		}
 		out = append(out, item)
 	}
 	return out
+}
+
+func workflowToolInventory(items []PlaybookToolStep) []string {
+	toolIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if strings.TrimSpace(item.ToolID) == "" {
+			continue
+		}
+		toolIDs = append(toolIDs, item.ToolID)
+	}
+	return mergeUniqueStrings(nil, toolIDs)
 }
 
 func trimNonEmptyStrings(items []string) []string {
@@ -154,7 +254,7 @@ func playbookSummary(item PlaybookDefinition) PlaybookSummary {
 func playbookRecommendedTools(item PlaybookDefinition) []string {
 	seen := make(map[string]struct{})
 	recommended := make([]string, 0, 5)
-	for _, step := range item.ToolSequence {
+	for _, step := range item.WorkflowSteps {
 		toolID := strings.TrimSpace(step.ToolID)
 		if toolID == "" {
 			continue
@@ -169,7 +269,7 @@ func playbookRecommendedTools(item PlaybookDefinition) []string {
 		}
 	}
 	if len(recommended) == 0 {
-		for _, toolID := range item.ToolIDs {
+	for _, toolID := range item.ToolInventory {
 			toolID = strings.TrimSpace(toolID)
 			if toolID == "" {
 				continue
@@ -201,7 +301,7 @@ func (s *Server) discoverableTools(actor ActorContext) []ToolDescriptor {
 
 func isMetaToolName(name string) bool {
 	name = strings.TrimSpace(name)
-	return strings.HasPrefix(name, "tools.") || strings.HasPrefix(name, "playbooks.")
+	return strings.HasPrefix(name, "tools.") || strings.HasPrefix(name, "playbooks.") || strings.HasPrefix(name, "skills.")
 }
 
 func parsePlaybooks(value any) []PlaybookDefinition {

@@ -61,6 +61,10 @@ type AppInventoryItem struct {
 type runtimeConfig struct {
 	Enabled                    bool
 	ExposureMode               string
+	DiscoveryMode              string
+	ToolDiscoveryMode          string
+	PlaybookDiscoveryMode      string
+	DiscoveryIndexingEnabled   bool
 	ToolStates                 map[string]bool
 	GovernanceEnabled          bool
 	DefaultActionMode          string
@@ -76,6 +80,10 @@ type runtimeConfig struct {
 type RuntimeConfigSnapshot struct {
 	Enabled                    bool
 	ExposureMode               string
+	DiscoveryMode              string
+	ToolDiscoveryMode          string
+	PlaybookDiscoveryMode      string
+	DiscoveryIndexingEnabled   bool
 	GovernanceEnabled          bool
 	DefaultActionMode          string
 	BlockedActionClasses       []string
@@ -88,11 +96,22 @@ func (s *Server) MCPEnabled() bool {
 	return s.mcpRuntimeConfig().Enabled
 }
 
+func normalizeDiscoveryModeOverride(mode string) string {
+	if strings.TrimSpace(mode) == "" {
+		return ""
+	}
+	return normalizeDiscoveryMode(mode)
+}
+
 func (s *Server) MCPRuntimeConfig() RuntimeConfigSnapshot {
 	cfg := s.mcpRuntimeConfig()
 	return RuntimeConfigSnapshot{
 		Enabled:                    cfg.Enabled,
 		ExposureMode:               cfg.ExposureMode,
+		DiscoveryMode:              cfg.DiscoveryMode,
+		ToolDiscoveryMode:          cfg.ToolDiscoveryMode,
+		PlaybookDiscoveryMode:      cfg.PlaybookDiscoveryMode,
+		DiscoveryIndexingEnabled:   cfg.DiscoveryIndexingEnabled,
 		GovernanceEnabled:          cfg.GovernanceEnabled,
 		DefaultActionMode:          cfg.DefaultActionMode,
 		BlockedActionClasses:       append([]string(nil), cfg.BlockedActionClasses...),
@@ -332,6 +351,10 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	cfg := runtimeConfig{
 		Enabled:                    true,
 		ExposureMode:               MCPExposureModeFull,
+		DiscoveryMode:              DiscoveryModeVector,
+		ToolDiscoveryMode:          "",
+		PlaybookDiscoveryMode:      "",
+		DiscoveryIndexingEnabled:   true,
 		ToolStates:                 map[string]bool{},
 		GovernanceEnabled:          false,
 		DefaultActionMode:          "draft_only",
@@ -358,6 +381,18 @@ func (s *Server) mcpRuntimeConfig() runtimeConfig {
 	}
 	if rawMode, ok := value.Value["exposure_mode"].(string); ok {
 		cfg.ExposureMode = normalizeExposureMode(rawMode)
+	}
+	if rawMode, ok := value.Value["discovery_mode"].(string); ok {
+		cfg.DiscoveryMode = normalizeDiscoveryMode(rawMode)
+	}
+	if rawMode, ok := value.Value["tool_discovery_mode"].(string); ok {
+		cfg.ToolDiscoveryMode = normalizeDiscoveryModeOverride(rawMode)
+	}
+	if rawMode, ok := value.Value["playbook_discovery_mode"].(string); ok {
+		cfg.PlaybookDiscoveryMode = normalizeDiscoveryModeOverride(rawMode)
+	}
+	if rawEnabled, ok := value.Value["discovery_indexing_enabled"].(bool); ok {
+		cfg.DiscoveryIndexingEnabled = rawEnabled
 	}
 	if rawMode, ok := value.Value["default_action_mode"].(string); ok && strings.TrimSpace(rawMode) != "" {
 		cfg.DefaultActionMode = strings.TrimSpace(rawMode)

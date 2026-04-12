@@ -14940,7 +14940,7 @@
     {
       "name": "tools.list",
       "title": "List Available Tools",
-      "description": "Only use when no playbook matches your use case. List lightweight summaries of discoverable MCP tools. For details, pass ALL candidate IDs to tools.describe in a single call.",
+      "description": "Fallback step only when no playbook matches. List lightweight summaries of discoverable MCP tools after playbook discovery fails. For details, pass ALL candidate IDs to tools.describe in a single call.",
       "moduleKey": "platform.core",
       "sourceType": "built_in",
       "capabilityKeys": [
@@ -14974,6 +14974,15 @@
           },
           "limit": {
             "type": "integer"
+          },
+          "module_key": {
+            "type": "string"
+          },
+          "module_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "source_type": {
             "type": "string"
@@ -15000,7 +15009,7 @@
     {
       "name": "tools.search",
       "title": "Search Tools",
-      "description": "Only use when no playbook matches your use case. Search discoverable MCP tools by title, description, domains, and labels. Pass ALL candidate IDs to tools.describe in a single call.",
+      "description": "Fallback step only when no playbook matches. Search discoverable MCP tools by title, description, domains, and labels after playbook discovery fails. Pass ALL candidate IDs to tools.describe in a single call.",
       "moduleKey": "platform.core",
       "sourceType": "built_in",
       "capabilityKeys": [
@@ -15034,6 +15043,15 @@
           },
           "limit": {
             "type": "integer"
+          },
+          "module_key": {
+            "type": "string"
+          },
+          "module_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "query": {
             "type": "string"

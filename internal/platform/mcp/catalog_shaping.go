@@ -11,6 +11,7 @@ type ToolCatalogOptions struct {
 	ExposureMode        string   `json:"exposure_mode,omitempty"`
 	Capabilities        []string `json:"capabilities,omitempty"`
 	Domains             []string `json:"domains,omitempty"`
+	ModuleKeys          []string `json:"module_keys,omitempty"`
 	SourceTypes         []string `json:"source_types,omitempty"`
 	ActionClasses       []string `json:"action_classes,omitempty"`
 	IncludeSummary      bool     `json:"include_summary,omitempty"`
@@ -79,7 +80,7 @@ func (s *Server) toolCapabilities() []toolCapabilityRuntimeDescriptor {
 			},
 			Matcher: func(item ToolDescriptor) bool {
 				switch strings.TrimSpace(item.Name) {
-				case "business.module.list", "business.module.get", "business.module.search", "business.capability.search", "business.document.type.list", "business.dataset.list", "business.reference.type.list", "tools.list", "tools.search", "tools.describe", "tools.call", "playbooks.list", "playbooks.search", "playbooks.describe":
+				case "business.module.list", "business.module.get", "business.module.search", "business.capability.search", "business.document.type.list", "business.dataset.list", "business.reference.type.list", "tools.list", "tools.search", "tools.describe", "tools.call", "skills.list", "skills.search", "skills.describe", "playbooks.list", "playbooks.search", "playbooks.describe":
 					return true
 				default:
 					return false
@@ -329,6 +330,7 @@ func parseToolCatalogOptions(raw json.RawMessage) ToolCatalogOptions {
 	options.ExposureMode = strings.TrimSpace(strings.ToLower(options.ExposureMode))
 	options.Capabilities = mergeUniqueStrings(nil, options.Capabilities)
 	options.Domains = mergeUniqueStrings(nil, options.Domains)
+	options.ModuleKeys = mergeUniqueStrings(nil, options.ModuleKeys)
 	options.SourceTypes = mergeUniqueStrings(nil, options.SourceTypes)
 	options.ActionClasses = mergeUniqueStrings(nil, options.ActionClasses)
 	if options.MaxTools < 0 {
@@ -344,7 +346,7 @@ func (s *Server) toolsListResult(actor ActorContext, options ToolCatalogOptions)
 	if exposureMode == MCPExposureModeMinimal {
 		full = s.minimalExposedTools(actor)
 	} else {
-		full = s.nonPlaybookToolDescriptors(actor, full)
+		full = s.nonMetaToolDescriptors(actor)
 	}
 	tools, catalog, groups, suggested := s.filterToolCatalog(full, options)
 	if exposureMode == MCPExposureModeMinimal {
@@ -375,6 +377,8 @@ func (s *Server) FilterToolCatalogForPreview(options ToolCatalogOptions) ([]Tool
 	items := s.listTools(actor)
 	if s.effectiveExposureMode(options) == MCPExposureModeMinimal {
 		items = s.minimalExposedTools(actor)
+	} else {
+		items = s.nonMetaToolDescriptors(actor)
 	}
 	tools, catalog, groups, suggested := s.filterToolCatalog(items, options)
 	if s.effectiveExposureMode(options) == MCPExposureModeMinimal {
@@ -414,7 +418,7 @@ func (s *Server) nonMetaToolDescriptors(actor ActorContext) []ToolDescriptor {
 func (s *Server) nonPlaybookToolDescriptors(actor ActorContext, tools []ToolDescriptor) []ToolDescriptor {
 	items := make([]ToolDescriptor, 0, len(tools))
 	for _, item := range tools {
-		if strings.HasPrefix(item.Name, "playbooks.") {
+		if strings.HasPrefix(item.Name, "playbooks.") || strings.HasPrefix(item.Name, "skills.") {
 			continue
 		}
 		items = append(items, item)
@@ -425,6 +429,7 @@ func (s *Server) nonPlaybookToolDescriptors(actor ActorContext, tools []ToolDesc
 func hasExplicitCompactFilters(options ToolCatalogOptions) bool {
 	return len(options.Capabilities) > 0 ||
 		len(options.Domains) > 0 ||
+		len(options.ModuleKeys) > 0 ||
 		len(options.SourceTypes) > 0 ||
 		len(options.ActionClasses) > 0
 }
@@ -442,6 +447,9 @@ func (s *Server) filterToolCatalogScope(items []ToolDescriptor, options ToolCata
 			continue
 		}
 		if len(options.Domains) > 0 && !intersectsStrings(item.Contract.BusinessDomains, options.Domains) {
+			continue
+		}
+		if len(options.ModuleKeys) > 0 && !containsString(options.ModuleKeys, item.ModuleKey) {
 			continue
 		}
 		if len(options.SourceTypes) > 0 && !containsString(options.SourceTypes, item.SourceType) {
@@ -487,6 +495,7 @@ func (s *Server) filterToolCatalog(items []ToolDescriptor, options ToolCatalogOp
 		"mode":                 firstNonEmpty(mode, "full"),
 		"capabilities":         activeCapabilities,
 		"domains":              options.Domains,
+		"module_keys":          options.ModuleKeys,
 		"source_types":         options.SourceTypes,
 		"action_classes":       options.ActionClasses,
 		"max_tools":            maxTools,

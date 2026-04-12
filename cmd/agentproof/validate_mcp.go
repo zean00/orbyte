@@ -49,19 +49,7 @@ func runValidateMCP(args []string) error {
 	modes := splitCSVOrDefault(*modeFilter, []string{"full", "minimal"})
 	scenarios := splitCSVOrDefault(*scenarioFilter, []string{"retail_recovery_showcase", "inventory_replenishment_execute"})
 	for _, mode := range modes {
-		if err := client.putConfig(ctx, "platform.mcp", map[string]any{
-			"enabled":                            true,
-			"exposure_mode":                      mode,
-			"governance_enabled":                 true,
-			"default_action_mode":                "draft_only",
-			"tool_states_json":                   "{}",
-			"blocked_action_classes_json":        "[]",
-			"blocked_tool_keys_json":             "[]",
-			"blocked_document_types_json":        "[]",
-			"allowed_submit_document_types_json": "[]",
-			"domain_policy_overrides_json":       "{}",
-			"playbooks_json":                     defaultMCPPlaybooksJSON(),
-		}); err != nil {
+		if err := applyMCPExposureMode(ctx, client, mode); err != nil {
 			return fmt.Errorf("set platform.mcp %s mode: %w", mode, err)
 		}
 		modeResult := mcpValidationModeResult{
@@ -121,6 +109,9 @@ func validateScenarioWithMode(ctx context.Context, client *apiClient, baseURL, o
 	manifest, err := def.Seed(ctx, client, baseURL, opencodeCommand)
 	if err != nil {
 		return mcpValidationScenarioRun{}, err
+	}
+	if err := applyMCPExposureMode(ctx, client, exposureMode); err != nil {
+		return mcpValidationScenarioRun{}, fmt.Errorf("re-apply platform.mcp %s mode after seed: %w", exposureMode, err)
 	}
 	manifestPath := defaultOutputPath("/tmp", "agentproof-"+scenarioKey+"-"+exposureMode, manifest.RunID)
 	if err := writeJSONFile(manifestPath, manifest); err != nil {
@@ -188,6 +179,22 @@ func validateScenarioWithMode(ctx context.Context, client *apiClient, baseURL, o
 		RequiredArtifactsMet: requiredArtifactsMet,
 		ArtifactEventCount:   artifactEventCount,
 	}, nil
+}
+
+func applyMCPExposureMode(ctx context.Context, client *apiClient, mode string) error {
+	return client.putConfig(ctx, "platform.mcp", map[string]any{
+		"enabled":                            true,
+		"exposure_mode":                      mode,
+		"governance_enabled":                 true,
+		"default_action_mode":                "draft_only",
+		"tool_states_json":                   "{}",
+		"blocked_action_classes_json":        "[]",
+		"blocked_tool_keys_json":             "[]",
+		"blocked_document_types_json":        "[]",
+		"allowed_submit_document_types_json": "[]",
+		"domain_policy_overrides_json":       "{}",
+		"playbooks_json":                     defaultMCPPlaybooksJSON(),
+	})
 }
 
 func waitForSessionTurn(ctx context.Context, client *apiClient, sessionID string) error {
@@ -297,7 +304,7 @@ func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions str
 	}
 	if exposureMode == "minimal" {
 		sections = append(sections,
-			"Use Orbyte MCP as the source of truth. Search or list playbooks first when the request matches a business workflow. If multiple playbooks look relevant, call playbooks.describe once with all candidate playbook ids. Only if no playbook fits should you use tools.search or tools.list, then one bulk tools.describe call, then tools.call. Use exact discovered ids only.",
+			"Use Orbyte MCP as the source of truth. In minimal mode, the required first step for workflow-like business tasks is skills.search or skills.list. If multiple skills look relevant, call skills.describe once with all candidate skill ids before any business tool call. Only if no skill fits should you use tools.search or tools.list, then one bulk tools.describe call, then tools.call. Do not invoke business tools from memory before discovery. Use exact discovered ids only.",
 		)
 	} else {
 		sections = append(sections,
@@ -323,38 +330,7 @@ func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions str
 	}
 	if strings.Contains(lower, "crm") && strings.Contains(lower, "widget") {
 		sections = append(sections,
-			"For CRM widget requests, call analytics dashboard widget tools with surface set to dashboard. Prefer widget keys crm.ticketing.open_tickets, crm.ticketing.overdue_tickets, and crm.ticketing.queue_backlog for service backlog evidence.",
-		)
-	}
-	if strings.Contains(lower, "crm service backlog") || (strings.Contains(lower, "queue") && strings.Contains(lower, "customer need the most attention")) {
-		sections = append(sections,
-			"For CRM service backlog questions, call crm.ticket.summary first and include the exact priority queue code and overdue ticket title in the final answer before showing widgets.",
-		)
-	}
-	if strings.Contains(lower, "crm") && strings.Contains(lower, "pipeline") {
-		sections = append(sections,
-			"For CRM pipeline review, include the stale opportunity title and its specific prioritized value, not only the total portfolio or open-opportunity count.",
-		)
-	}
-	if strings.Contains(lower, "customer 360") {
-		sections = append(sections,
-			"For CRM customer 360 questions, call crm.customer.summary with query set to the exact customer name from the prompt, then name the current ticket title, active opportunity title, and opportunity stage explicitly.",
-		)
-	}
-	if strings.Contains(lower, "combined crm service and sales overview") {
-		sections = append(sections,
-			"For combined CRM overview questions, call crm.ticket.summary, crm.customer.summary for each named customer, and crm.opportunity.pipeline.summary. Include the exact backlog queue code and explicitly mention the pipeline in the final answer.",
-		)
-	}
-	if strings.Contains(lower, "underperforming compared with the strongest branch") || (strings.Contains(lower, "underperforming") && strings.Contains(lower, "strongest branch")) {
-		sections = append(sections,
-			"Explicitly name the strongest benchmark branch and each underperforming branch in the final answer instead of referring to them generically.",
-			"For the retail recovery dashboard insight, preview exactly these dashboard widgets when available: analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, and analytics.demo.sales.daily_trend.",
-		)
-	}
-	if strings.Contains(lower, "recovery plan") && strings.Contains(lower, "loc demo central") && strings.Contains(lower, "loc demo west") {
-		sections = append(sections,
-			"For the retail recovery plan, explicitly state that Beans Boost should be replaced by the Espresso Double + Butter Croissant bundle for gold members.",
+			"For CRM widget requests, use skill or tool discovery to find the dashboard preview flow, use the dashboard surface, and rely on returned widget/session artifacts as evidence.",
 		)
 	}
 	sections = append(sections, prompt)

@@ -153,6 +153,7 @@ func (s *Service) RegisterIndex(def IndexDefinition) error {
 		if strings.TrimSpace(def.ProjectionKey) == "" {
 			return shared.Validation("projection search index requires projection_key")
 		}
+	case "runtime":
 	default:
 		return shared.Validation("search index source_kind is invalid")
 	}
@@ -431,6 +432,8 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 		if err == nil {
 			result = map[string]any{"index_key": key, "reindexed": count}
 		}
+	case "runtime":
+		err = shared.Validation("runtime search indexes must be refreshed through ReplaceRuntimeRecords")
 	default:
 		err = shared.Validation("search index source_kind is invalid")
 	}
@@ -452,6 +455,72 @@ func (s *Service) RebuildIndex(key string) (map[string]any, error) {
 		runtime.LastError = ""
 	})
 	return result, nil
+}
+
+func (s *Service) ReplaceRuntimeRecords(indexKey string, records []RuntimeSourceRecord) (map[string]any, error) {
+	def, ok := s.IndexDefinition(indexKey)
+	if !ok {
+		return nil, shared.NotFound("search index not found")
+	}
+	if def.SourceKind != "runtime" {
+		return nil, shared.Validation("search index is not a runtime index")
+	}
+	byOrganization := make(map[string][]RuntimeSourceRecord)
+	for _, record := range records {
+		organizationID := strings.TrimSpace(record.OrganizationID)
+		if organizationID == "" {
+			organizationID = "global"
+		}
+		record.OrganizationID = organizationID
+		if record.SourceID == "" {
+			record.SourceID = record.ID
+		}
+		if record.UpdatedAt.IsZero() {
+			record.UpdatedAt = time.Now().UTC()
+		}
+		byOrganization[organizationID] = append(byOrganization[organizationID], record)
+	}
+	total := 0
+	if len(byOrganization) == 0 {
+		byOrganization["global"] = nil
+	}
+	for organizationID, items := range byOrganization {
+		if err := s.backend.EnsureIndex(def, organizationID); err != nil {
+			return nil, err
+		}
+		existing, err := s.backend.List(def, organizationID)
+		if err != nil {
+			return nil, err
+		}
+		seen := make(map[string]struct{}, len(items))
+		for _, item := range items {
+			indexed, err := s.runtimeRecord(def, item)
+			if err != nil {
+				return nil, err
+			}
+			seen[indexed.ID] = struct{}{}
+			if err := s.backend.Upsert(def, organizationID, indexed); err != nil {
+				return nil, err
+			}
+			total++
+		}
+		for _, item := range existing {
+			if _, ok := seen[item.ID]; ok {
+				continue
+			}
+			if err := s.backend.Delete(def, organizationID, item.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	s.updateRuntime(indexKey, func(runtime *IndexRuntime) {
+		runtime.RuntimeStatus = "ready"
+		runtime.LastSuccessAt = time.Now().UTC()
+		runtime.LastRebuildStartedAt = time.Now().UTC()
+		runtime.LastRebuildFinishedAt = time.Now().UTC()
+		runtime.LastError = ""
+	})
+	return map[string]any{"index_key": indexKey, "reindexed": total}, nil
 }
 
 func (s *Service) Query(indexKey, organizationID, locationID string, req QueryRequest) (QueryResult, error) {
@@ -736,6 +805,33 @@ func (s *Service) matchingProjectionIndexes(projectionKey string) []IndexDefinit
 	return filtered
 }
 
+func (s *Service) runtimeRecord(def IndexDefinition, record RuntimeSourceRecord) (IndexedRecord, error) {
+	envelope := cloneAnyMap(record.Payload)
+	if envelope == nil {
+		envelope = map[string]any{}
+	}
+	envelope["id"] = record.ID
+	envelope["source_id"] = firstNonEmptyString(record.SourceID, record.ID)
+	envelope["organization_id"] = record.OrganizationID
+	envelope["location_id"] = record.LocationID
+	envelope["updated_at"] = record.UpdatedAt
+	fields, vectors, err := s.extractIndexPayload(def, envelope)
+	if err != nil {
+		return IndexedRecord{}, err
+	}
+	return IndexedRecord{
+		ID:             record.ID,
+		SourceID:       firstNonEmptyString(record.SourceID, record.ID),
+		SourceKind:     "runtime",
+		OrganizationID: record.OrganizationID,
+		LocationID:     record.LocationID,
+		Version:        record.Version,
+		UpdatedAt:      record.UpdatedAt,
+		Fields:         fields,
+		Vectors:        vectors,
+	}, nil
+}
+
 func (s *Service) indexDocument(def IndexDefinition, record document.Record) error {
 	organizationID := record.Header.OrganizationID
 	if err := s.backend.EnsureIndex(def, organizationID); err != nil {
@@ -977,6 +1073,15 @@ func stringSet(values []string) map[string]bool {
 		out[strings.TrimSpace(value)] = true
 	}
 	return out
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func selectedVectorField(def IndexDefinition, key string) VectorFieldDefinition {

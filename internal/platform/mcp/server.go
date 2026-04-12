@@ -121,6 +121,7 @@ type Server struct {
 	builtInResourceRegistry   []builtInResourceRegistration
 	builtInResourceIndex      map[string]builtInResourceRegistration
 	otelTracer                trace.Tracer
+	discoverySync             *discoverySyncState
 }
 
 type ServerDeps struct {
@@ -697,10 +698,10 @@ func (s *Server) analyticsDashboardWidgetPreview(actor ActorContext, arguments m
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"widget":         definition,
-			"artifact":       artifact,
-			"artifact_block": artifactBlock,
+			"widget":   definition,
+			"artifact": artifact,
 		},
+		"_meta": map[string]any{"compatibility": map[string]any{"artifact_block": artifactBlock}},
 	}, true, nil
 }
 
@@ -755,10 +756,10 @@ func (s *Server) analyticsDashboardWidgetsPreview(actor ActorContext, arguments 
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"widgets":         selected,
-			"artifacts":       artifacts,
-			"artifact_blocks": mapDashboardArtifactBlocks(artifacts),
+			"widgets":   selected,
+			"artifacts": artifacts,
 		},
+		"_meta": map[string]any{"compatibility": map[string]any{"artifact_blocks": mapDashboardArtifactBlocks(artifacts)}},
 	}, true, nil
 }
 
@@ -780,10 +781,10 @@ func (s *Server) analyticsDashboardBoardPreview(actor ActorContext, arguments ma
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"dashboard":      board,
-			"artifact":       artifact,
-			"artifact_block": artifactBlock,
+			"dashboard": board,
+			"artifact":  artifact,
 		},
+		"_meta": map[string]any{"compatibility": map[string]any{"artifact_block": artifactBlock}},
 	}, true, nil
 }
 
@@ -807,11 +808,13 @@ func (s *Server) analyticsDashboardBoardCreate(actor ActorContext, arguments map
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Structured artifact metadata is included for compatible clients.", saved.Name, dashboardWidgetKeySummary(saved.Widgets))}},
 		"structuredContent": map[string]any{
-			"dashboard":      saved,
-			"artifact":       artifact,
-			"artifact_block": artifactBlock,
+			"dashboard": saved,
+			"artifact":  artifact,
 		},
-		"_meta": s.analyticsAppMeta("dashboard", saved.ID),
+		"_meta": mergeMetaMaps(
+			s.analyticsAppMeta("dashboard", saved.ID),
+			map[string]any{"compatibility": map[string]any{"artifact_block": artifactBlock}},
+		),
 	}, true, nil
 }
 
@@ -840,6 +843,16 @@ func dashboardArtifactBlockText(artifact map[string]any) string {
 		return "<orbyte-dashboard-artifact>{}</orbyte-dashboard-artifact>"
 	}
 	return "<orbyte-dashboard-artifact>" + string(body) + "</orbyte-dashboard-artifact>"
+}
+
+func mergeMetaMaps(items ...map[string]any) map[string]any {
+	out := map[string]any{}
+	for _, item := range items {
+		for key, value := range item {
+			out[key] = value
+		}
+	}
+	return out
 }
 
 func (s *Server) analyticsDashboardSave(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {

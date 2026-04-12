@@ -2057,7 +2057,7 @@ func seedCRMServiceSalesOverviewScenario(ctx context.Context, client *apiClient,
 	}
 	manifest.SessionInstructions = strings.TrimSpace(defaultSessionInstructions("crm_service_sales_overview") + fmt.Sprintf(`
 - This CRM scenario validates service backlog, customer 360, and sales pipeline reasoning for %s and %s.
-- Prefer CRM playbooks before raw tool search. Use crm.ticket.summary for backlog, crm.customer.summary or crm.customer.timeline for named customers, crm.customer.health for at-risk summaries, and crm.opportunity.pipeline.summary for pipeline review.
+- In minimal mode, use CRM skill discovery first and load the matching CRM skill before any business tool call.
 - For CRM backlog questions, name the exact queue code and mention the overdue ticket that makes the queue risky.
 - For CRM pipeline questions, include the stale opportunity title and the prioritized opportunity value, not only aggregate pipeline totals.
 - When asked to show dashboard widgets, preview CRM widgets on the dashboard surface and rely on the returned artifacts instead of substituting plain text widget names.`, customerName, healthyCustomerName))
@@ -2614,21 +2614,15 @@ func defaultMCPPlaybooksJSON() string {
 			"labels":      []string{"dashboard", "recovery", "showcase"},
 			"keywords":    []string{"store", "branch", "underperforming", "widgets", "sales pattern"},
 			"use_when":    "The user asks why some branches are underperforming and wants dashboard evidence or a dashboard-backed recovery plan.",
-			"workflow_steps": []string{
-				"Use tools.search or tools.describe to confirm the dashboard and POS insight tools relevant to the question.",
-				"Inspect the strongest branch and weaker branches with the dashboard widget catalog and widget preview tools, using surface dashboard and widget_keys analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, and analytics.demo.sales.daily_trend for retail recovery evidence.",
-				"Name the strongest benchmark branch plus each underperforming branch explicitly in the final answer.",
-				"Use POS sales pattern tools to identify the strongest repeatable bundle or pairing.",
-				"If the user asks for a recovery plan, explicitly state that the weaker branches should replace Beans Boost with the recommended bundle campaign.",
-				"Preview the relevant dashboard widgets and rely on the returned session artifacts for rendering. Do not answer a widget request with text-only widget names.",
+			"workflow_steps": []map[string]any{
+				{"step": "discover_dashboard_widgets", "title": "Discover Dashboard Widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": true, "description": "Find dashboard widgets that explain branch performance, branch mix, target attainment, and daily sales trend.", "output": "Candidate dashboard widget keys and titles."},
+				{"step": "preview_dashboard_widgets", "title": "Preview Recovery Widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": true, "description": "Preview the exact retail recovery widgets for surface dashboard.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"analytics.demo.sales.target_attainment", "analytics.demo.sales.branch_mix", "analytics.demo.sales.daily_trend"}}, "output": "Dashboard widget/session artifacts for the relevant widgets, plus titles the final answer should reference."},
+				{"step": "name_branch_gaps", "title": "Name Branch Gaps", "required": true, "description": "Name the strongest benchmark branch plus each underperforming branch explicitly in the final answer."},
+				{"step": "summarize_pos_pattern", "title": "Summarize POS Pattern", "tool_id": "pos_core.sales.strategy.summary", "required": true, "description": "Identify the strongest basket or product pairing and target customer segment.", "output": "Recommended bundle products and target segment."},
+				{"step": "check_promotion_replacement", "title": "Check Promotion Replacement", "tool_id": "promotion_core.performance.summary", "required": false, "when": "Use when the user asks for a recovery plan or campaign replacement.", "description": "Identify weak promotion performance and replacement candidates.", "output": "Promotion that should be replaced and why."},
+				{"step": "return_widget_artifacts", "title": "Return Widget Artifacts", "required": false, "when": "Use when widgets were requested.", "description": "Rely on the returned session artifacts for rendering and do not answer a widget request with text-only widget names."},
 			},
-			"tool_sequence": []map[string]any{
-				{"step": "discover_dashboard_widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": true, "description": "Find dashboard widgets that explain branch performance, branch mix, target attainment, and daily sales trend.", "output": "Candidate dashboard widget keys and titles."},
-				{"step": "preview_dashboard_widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": true, "description": "Preview the exact retail recovery widgets for surface dashboard.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"analytics.demo.sales.target_attainment", "analytics.demo.sales.branch_mix", "analytics.demo.sales.daily_trend"}}, "output": "Dashboard widget/session artifacts for the relevant widgets, plus titles the final answer should reference."},
-				{"step": "summarize_pos_pattern", "tool_id": "pos_core.sales.strategy.summary", "required": true, "description": "Identify the strongest basket or product pairing and target customer segment.", "output": "Recommended bundle products and target segment."},
-				{"step": "check_promotion_replacement", "tool_id": "promotion_core.performance.summary", "required": false, "when": "Use when the user asks for a recovery plan or campaign replacement.", "description": "Identify weak promotion performance and replacement candidates.", "output": "Promotion that should be replaced and why."},
-			},
-			"tool_ids": []string{
+			"tool_inventory": []string{
 				"analytics.dashboard.widget_catalog",
 				"analytics.dashboard.widgets.preview",
 				"pos_core.sales.strategy.summary",
@@ -2673,17 +2667,13 @@ func defaultMCPPlaybooksJSON() string {
 			"labels":      []string{"replenishment", "planning", "execute"},
 			"keywords":    []string{"warehouse", "replenishment", "shortage", "vendor", "purchase"},
 			"use_when":    "The user asks for replenishment analysis or wants the system to execute a replenishment workflow.",
-			"workflow_steps": []string{
-				"Inspect replenishment insights first to understand shortages and vendor context.",
-				"Summarize replenishment plan outputs before taking action.",
-				"Only create or execute follow-up documents when the user explicitly asks to proceed.",
+			"workflow_steps": []map[string]any{
+				{"step": "inspect_replenishment_risk", "title": "Inspect Replenishment Risk", "tool_id": "planning_core.replenishment.insight.summary", "required": true, "description": "Identify at-risk and healthy items for the requested warehouse.", "output": "At-risk item names and healthy skip items."},
+				{"step": "summarize_replenishment_plan", "title": "Summarize Replenishment Plan", "tool_id": "planning_core.replenishment.plan.summary", "required": true, "description": "Get exact recommended quantities, warehouse, and vendor grouping.", "output": "Recommended item quantities and vendor."},
+				{"step": "gate_execution", "title": "Gate Execution", "required": true, "description": "Only create or execute follow-up documents when the user explicitly asks to proceed."},
+				{"step": "create_purchase_request_draft", "title": "Create Purchase Request Draft", "tool_id": "planning_core.purchase_requests.draft.create", "required": false, "when": "Only when the user explicitly asks to create drafts or execute the plan.", "description": "Create draft purchase request documents for recommended replenishment lines.", "output": "Draft document ids and review links."},
 			},
-			"tool_sequence": []map[string]any{
-				{"step": "inspect_replenishment_risk", "tool_id": "planning_core.replenishment.insight.summary", "required": true, "description": "Identify at-risk and healthy items for the requested warehouse.", "output": "At-risk item names and healthy skip items."},
-				{"step": "summarize_replenishment_plan", "tool_id": "planning_core.replenishment.plan.summary", "required": true, "description": "Get exact recommended quantities, warehouse, and vendor grouping.", "output": "Recommended item quantities and vendor."},
-				{"step": "create_purchase_request_draft", "tool_id": "planning_core.purchase_requests.draft.create", "required": false, "when": "Only when the user explicitly asks to create drafts or execute the plan.", "description": "Create draft purchase request documents for recommended replenishment lines.", "output": "Draft document ids and review links."},
-			},
-			"tool_ids": []string{
+			"tool_inventory": []string{
 				"planning_core.replenishment.insight.summary",
 				"planning_core.replenishment.plan.summary",
 				"planning_core.purchase_requests.draft.create",
@@ -2726,17 +2716,13 @@ func defaultMCPPlaybooksJSON() string {
 			"labels":      []string{"crm", "service", "backlog", "sla"},
 			"keywords":    []string{"crm backlog", "ticket backlog", "overdue tickets", "sla", "queue health"},
 			"use_when":    "The user asks about CRM service backlog, ticket pressure, overdue tickets, queue health, or asks for widget evidence for service operations.",
-			"workflow_steps": []string{
-				"Use crm.ticket.summary first for the factual service backlog picture.",
-				"If the user asks for widgets or dashboard evidence, call analytics.dashboard.widget_catalog and then preview the relevant CRM service widgets.",
-				"Name the most at-risk queue or customer explicitly in the final answer.",
+			"workflow_steps": []map[string]any{
+				{"step": "summarize_service_backlog", "title": "Summarize Service Backlog", "tool_id": "crm.ticket.summary", "required": true, "description": "Load CRM service backlog, overdue tickets, and queue health.", "output": "Open tickets, overdue tickets, queue backlog, and SLA context."},
+				{"step": "discover_crm_widgets", "title": "Discover CRM Widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": false, "when": "Use when the user asks for widgets or dashboard evidence.", "arguments": map[string]any{"surface": "dashboard"}, "description": "Discover CRM dashboard widgets for service backlog.", "output": "Relevant CRM service widget keys."},
+				{"step": "preview_crm_widgets", "title": "Preview CRM Widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": false, "when": "Use when the user asks for widgets or dashboard evidence.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"crm.ticketing.open_tickets", "crm.ticketing.overdue_tickets", "crm.ticketing.queue_backlog"}}, "description": "Preview the CRM service widgets that explain the backlog.", "output": "Dashboard widget artifacts for CRM service backlog."},
+				{"step": "name_risk_target", "title": "Name Risk Target", "required": true, "description": "Name the most at-risk queue or customer explicitly in the final answer."},
 			},
-			"tool_sequence": []map[string]any{
-				{"step": "summarize_service_backlog", "tool_id": "crm.ticket.summary", "required": true, "description": "Load CRM service backlog, overdue tickets, and queue health.", "output": "Open tickets, overdue tickets, queue backlog, and SLA context."},
-				{"step": "discover_crm_widgets", "tool_id": "analytics.dashboard.widget_catalog", "required": false, "when": "Use when the user asks for widgets or dashboard evidence.", "arguments": map[string]any{"surface": "dashboard"}, "description": "Discover CRM dashboard widgets for service backlog.", "output": "Relevant CRM service widget keys."},
-				{"step": "preview_crm_widgets", "tool_id": "analytics.dashboard.widgets.preview", "required": false, "when": "Use when the user asks for widgets or dashboard evidence.", "arguments": map[string]any{"surface": "dashboard", "widget_keys": []string{"crm.ticketing.open_tickets", "crm.ticketing.overdue_tickets", "crm.ticketing.queue_backlog"}}, "description": "Preview the CRM service widgets that explain the backlog.", "output": "Dashboard widget artifacts for CRM service backlog."},
-			},
-			"tool_ids": []string{
+			"tool_inventory": []string{
 				"crm.ticket.summary",
 				"analytics.dashboard.widget_catalog",
 				"analytics.dashboard.widgets.preview",
@@ -2771,16 +2757,12 @@ func defaultMCPPlaybooksJSON() string {
 			"labels":      []string{"crm", "customer-360", "timeline"},
 			"keywords":    []string{"customer 360", "customer timeline", "crm customer", "service issue", "opportunity link"},
 			"use_when":    "The user names one customer or asks for CRM customer 360 context, history, timeline, or service-to-sales linkage.",
-			"workflow_steps": []string{
-				"Use crm.customer.summary first for one named customer.",
-				"Use crm.customer.timeline when the request is explicitly about chronology or follow-up history.",
-				"Explain how the current ticket, customer health, and active opportunity relate to each other.",
+			"workflow_steps": []map[string]any{
+				{"step": "load_customer_summary", "title": "Load Customer Summary", "tool_id": "crm.customer.summary", "required": true, "description": "Load customer 360 summary for the named party.", "output": "Customer service, profile, and opportunity summary."},
+				{"step": "load_customer_timeline", "title": "Load Customer Timeline", "tool_id": "crm.customer.timeline", "required": false, "when": "Use when the user asks for sequence, history, or follow-up details.", "description": "Load timeline entries for the named customer.", "output": "Activity chronology across service and sales."},
+				{"step": "connect_service_and_sales", "title": "Connect Service And Sales", "required": true, "description": "Explain how the current ticket, customer health, and active opportunity relate to each other."},
 			},
-			"tool_sequence": []map[string]any{
-				{"step": "load_customer_summary", "tool_id": "crm.customer.summary", "required": true, "description": "Load customer 360 summary for the named party.", "output": "Customer service, profile, and opportunity summary."},
-				{"step": "load_customer_timeline", "tool_id": "crm.customer.timeline", "required": false, "when": "Use when the user asks for sequence, history, or follow-up details.", "description": "Load timeline entries for the named customer.", "output": "Activity chronology across service and sales."},
-			},
-			"tool_ids": []string{
+			"tool_inventory": []string{
 				"crm.customer.summary",
 				"crm.customer.timeline",
 			},
@@ -2809,14 +2791,11 @@ func defaultMCPPlaybooksJSON() string {
 			"labels":      []string{"crm", "sales", "pipeline"},
 			"keywords":    []string{"crm pipeline", "stale opportunity", "sales pipeline", "next action"},
 			"use_when":    "The user asks for a CRM pipeline review, stale opportunities, or the next action for active opportunities.",
-			"workflow_steps": []string{
-				"Use crm.opportunity.pipeline.summary first for pipeline value and stage mix.",
-				"If one stale opportunity is called out, name it explicitly and recommend the next internal action.",
+			"workflow_steps": []map[string]any{
+				{"step": "summarize_pipeline", "title": "Summarize Pipeline", "tool_id": "crm.opportunity.pipeline.summary", "required": true, "description": "Load CRM sales pipeline value, stale opportunities, and activity coverage.", "output": "Pipeline value, stage mix, stale opportunities, and recommended focus."},
+				{"step": "recommend_next_action", "title": "Recommend Next Action", "required": true, "description": "If one stale opportunity is called out, name it explicitly and recommend the next internal action."},
 			},
-			"tool_sequence": []map[string]any{
-				{"step": "summarize_pipeline", "tool_id": "crm.opportunity.pipeline.summary", "required": true, "description": "Load CRM sales pipeline value, stale opportunities, and activity coverage.", "output": "Pipeline value, stage mix, stale opportunities, and recommended focus."},
-			},
-			"tool_ids": []string{
+			"tool_inventory": []string{
 				"crm.opportunity.pipeline.summary",
 				"crm.opportunity.search",
 				"crm.lead.search",
@@ -2844,21 +2823,16 @@ func defaultMCPPlaybooksJSON() string {
 			"labels":      []string{"crm", "customer-360", "backlog", "pipeline"},
 			"keywords":    []string{"crm", "ticket", "backlog", "customer health", "customer 360", "pipeline", "opportunity", "lead"},
 			"use_when":    "The user asks about CRM ticket backlog, customer health, customer history, opportunity pipeline, or wants a combined service-and-sales overview.",
-			"workflow_steps": []string{
-				"Search playbooks first and use this playbook when the request spans ticketing, customer health, and sales pipeline in CRM.",
-				"Use the CRM ticket summary tool for service backlog and SLA/open-ticket status.",
-				"Use the CRM customer health or customer summary tool for customer risk and 360 context.",
-				"Use the CRM opportunity pipeline summary tool for sales pipeline status.",
-				"If the request is about one named customer, load the customer summary or timeline directly instead of only aggregate summaries.",
-				"Name the CRM record type or summary type you checked in the final answer.",
+			"workflow_steps": []map[string]any{
+				{"step": "select_overview_skill", "title": "Select Overview Skill", "required": true, "description": "Search skills first and use this skill when the request spans ticketing, customer health, and sales pipeline in CRM."},
+				{"step": "summarize_service_backlog", "title": "Summarize Service Backlog", "tool_id": "crm.ticket.summary", "required": true, "description": "Load CRM service backlog, queue health, and open-ticket pressure.", "output": "Open tickets, overdue tickets, queue backlog, and SLA context."},
+				{"step": "summarize_customer_health", "title": "Summarize Customer Health", "tool_id": "crm.customer.health", "required": false, "when": "Use when the request asks about customer risk, health, or at-risk customers.", "description": "Load at-risk customers and CRM service risk indicators.", "output": "Customer health indicators and at-risk accounts."},
+				{"step": "load_customer_360", "title": "Load Customer 360", "tool_id": "crm.customer.summary", "required": false, "when": "Use when the request names a customer or asks for customer-specific CRM context.", "description": "Load one customer 360 summary with tickets, opportunities, and profile context.", "output": "Customer-specific CRM summary."},
+				{"step": "summarize_pipeline", "title": "Summarize Pipeline", "tool_id": "crm.opportunity.pipeline.summary", "required": true, "description": "Load active CRM sales pipeline status.", "output": "Pipeline value, stage mix, stale opportunities, and activity coverage."},
+				{"step": "favor_named_customer_context", "title": "Favor Named Customer Context", "required": true, "description": "If the request is about one named customer, load the customer summary or timeline directly instead of only aggregate summaries."},
+				{"step": "name_checked_records", "title": "Name Checked Records", "required": true, "description": "Name the CRM record type or summary type you checked in the final answer."},
 			},
-			"tool_sequence": []map[string]any{
-				{"step": "summarize_service_backlog", "tool_id": "crm.ticket.summary", "required": true, "description": "Load CRM service backlog, queue health, and open-ticket pressure.", "output": "Open tickets, overdue tickets, queue backlog, and SLA context."},
-				{"step": "summarize_customer_health", "tool_id": "crm.customer.health", "required": false, "when": "Use when the request asks about customer risk, health, or at-risk customers.", "description": "Load at-risk customers and CRM service risk indicators.", "output": "Customer health indicators and at-risk accounts."},
-				{"step": "load_customer_360", "tool_id": "crm.customer.summary", "required": false, "when": "Use when the request names a customer or asks for customer-specific CRM context.", "description": "Load one customer 360 summary with tickets, opportunities, and profile context.", "output": "Customer-specific CRM summary."},
-				{"step": "summarize_pipeline", "tool_id": "crm.opportunity.pipeline.summary", "required": true, "description": "Load active CRM sales pipeline status.", "output": "Pipeline value, stage mix, stale opportunities, and activity coverage."},
-			},
-			"tool_ids": []string{
+			"tool_inventory": []string{
 				"crm.ticket.summary",
 				"crm.customer.health",
 				"crm.customer.summary",

@@ -153,6 +153,10 @@ func BuiltInDefinitions() []Definition {
 		DefaultValue: map[string]any{
 			"enabled":                            true,
 			"exposure_mode":                      "full",
+			"discovery_mode":                     "keyword",
+			"tool_discovery_mode":                "",
+			"playbook_discovery_mode":            "",
+			"discovery_indexing_enabled":         true,
 			"governance_enabled":                 true,
 			"default_action_mode":                "draft_only",
 			"tool_states_json":                   "{}",
@@ -167,6 +171,10 @@ func BuiltInDefinitions() []Definition {
 		Fields: []FieldDefinition{
 			{Key: "enabled", Label: "Enabled", LabelI18n: i18n.LocalizedText{"en": "Enabled", "id": "Aktif"}, Type: "bool"},
 			{Key: "exposure_mode", Label: "Exposure Mode", LabelI18n: i18n.LocalizedText{"en": "Exposure Mode", "id": "Mode Eksposur"}, Type: "string"},
+			{Key: "discovery_mode", Label: "Discovery Mode", LabelI18n: i18n.LocalizedText{"en": "Discovery Mode", "id": "Mode Discovery"}, Type: "string"},
+			{Key: "tool_discovery_mode", Label: "Tool Discovery Mode", LabelI18n: i18n.LocalizedText{"en": "Tool Discovery Mode", "id": "Mode Discovery Tool"}, Type: "string"},
+			{Key: "playbook_discovery_mode", Label: "Playbook Discovery Mode", LabelI18n: i18n.LocalizedText{"en": "Playbook Discovery Mode", "id": "Mode Discovery Playbook"}, Type: "string"},
+			{Key: "discovery_indexing_enabled", Label: "Discovery Indexing Enabled", LabelI18n: i18n.LocalizedText{"en": "Discovery Indexing Enabled", "id": "Indexing Discovery Aktif"}, Type: "bool"},
 			{Key: "governance_enabled", Label: "Governance Enabled", LabelI18n: i18n.LocalizedText{"en": "Governance Enabled", "id": "Governance Aktif"}, Type: "bool"},
 			{Key: "default_action_mode", Label: "Default Action Mode", LabelI18n: i18n.LocalizedText{"en": "Default Action Mode", "id": "Mode Aksi Default"}, Type: "string"},
 			{Key: "tool_states_json", Label: "Tool States JSON", LabelI18n: i18n.LocalizedText{"en": "Tool States JSON", "id": "JSON Status Tool"}, Type: "string"},

@@ -206,9 +206,9 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 		"tools.search",
 		"tools.describe",
 		"tools.call",
-		"playbooks.list",
-		"playbooks.search",
-		"playbooks.describe",
+		"skills.list",
+		"skills.search",
+		"skills.describe",
 	} {
 		if !contains(names, name) {
 			t.Fatalf("expected meta tool %q in %+v", name, names)
@@ -235,10 +235,10 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      3,
-		Method:  "playbooks/list",
+		Method:  "skills/list",
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("playbooks/list failed: %+v", resp.Error)
+		t.Fatalf("skills/list failed: %+v", resp.Error)
 	}
 	playbookItems := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]PlaybookSummary)
 	if len(playbookItems) != 1 || playbookItems[0].ID != "retail_recovery_dashboard" {
@@ -250,19 +250,19 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 		ID:      31,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
-			"name": "playbooks.describe",
+			"name": "skills.describe",
 			"arguments": map[string]any{
 				"playbook_id": "retail_recovery_dashboard",
 			},
 		}),
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("playbooks.describe failed: %+v", resp.Error)
+		t.Fatalf("skills.describe failed: %+v", resp.Error)
 	}
 	detail := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	playbook := detail["playbook"].(PlaybookDefinition)
-	if len(playbook.ToolSequence) != 2 || playbook.ToolSequence[0].ToolID != "analytics.dashboard.widget_catalog" {
-		t.Fatalf("expected structured tool sequence, got %+v", playbook.ToolSequence)
+	if len(playbook.WorkflowSteps) != 2 || playbook.WorkflowSteps[0].ToolID != "analytics.dashboard.widget_catalog" {
+		t.Fatalf("expected structured workflow steps, got %+v", playbook.WorkflowSteps)
 	}
 	if !contains(playbook.RequiredFinalFacts, "benchmark branch") {
 		t.Fatalf("expected required final facts, got %+v", playbook.RequiredFinalFacts)
@@ -288,14 +288,14 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 		ID:      31.1,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
-			"name": "playbooks.describe",
+			"name": "skills.describe",
 			"arguments": map[string]any{
 				"playbook_ids": []string{"retail_recovery_dashboard"},
 			},
 		}),
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("playbooks.describe bulk failed: %+v", resp.Error)
+		t.Fatalf("skills.describe bulk failed: %+v", resp.Error)
 	}
 	bulkDetail := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	items := bulkDetail["items"].([]PlaybookDefinition)
@@ -324,6 +324,100 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 	}
 	if resp.Result.(map[string]any)["structuredContent"] == nil {
 		t.Fatalf("expected structured content from delegated tools.call, got %+v", resp.Result)
+	}
+}
+
+func TestDiscoveryModeDowngradesToKeywordWithoutSemanticEmbedder(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                    true,
+			"discovery_mode":             "vector",
+			"discovery_indexing_enabled": true,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	if got := server.toolDiscoveryMode(); got != DiscoveryModeKeyword {
+		t.Fatalf("expected keyword discovery mode with non-semantic embedder, got %q", got)
+	}
+	if got := server.playbookDiscoveryMode(); got != DiscoveryModeKeyword {
+		t.Fatalf("expected keyword playbook discovery mode with non-semantic embedder, got %q", got)
+	}
+}
+
+func TestBlankDiscoveryOverridesInheritGlobalDiscoveryMode(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                    true,
+			"discovery_mode":             "keyword",
+			"tool_discovery_mode":        "",
+			"playbook_discovery_mode":    "",
+			"discovery_indexing_enabled": true,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	cfg := server.MCPRuntimeConfig()
+	if cfg.ToolDiscoveryMode != "" {
+		t.Fatalf("expected blank tool discovery override to remain blank, got %q", cfg.ToolDiscoveryMode)
+	}
+	if cfg.PlaybookDiscoveryMode != "" {
+		t.Fatalf("expected blank playbook discovery override to remain blank, got %q", cfg.PlaybookDiscoveryMode)
+	}
+	if got := server.toolDiscoveryMode(); got != DiscoveryModeKeyword {
+		t.Fatalf("expected inherited keyword tool discovery mode, got %q", got)
+	}
+	if got := server.playbookDiscoveryMode(); got != DiscoveryModeKeyword {
+		t.Fatalf("expected inherited keyword playbook discovery mode, got %q", got)
+	}
+}
+
+func TestPlaybookSearchFallsBackWhenIndexingDisabledAfterWarmup(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                    true,
+			"discovery_mode":             "keyword",
+			"discovery_indexing_enabled": true,
+			"playbooks_json": `[
+				{
+					"id":"warm_skill",
+					"name":"Warm Skill",
+					"description":"Used to warm the playbook index.",
+					"domains":["crm"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	items, ok := server.searchPlaybookSummaries(map[string]any{"query": "warm"})
+	if !ok || len(items) != 1 || items[0].ID != "warm_skill" {
+		t.Fatalf("expected warmed indexed playbook result, got ok=%v items=%+v", ok, items)
+	}
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                    true,
+			"discovery_mode":             "keyword",
+			"discovery_indexing_enabled": false,
+			"playbooks_json":             `[]`,
+		},
+	}); err != nil {
+		t.Fatalf("save disabled platform.mcp config failed: %v", err)
+	}
+	items, ok = server.searchPlaybookSummaries(map[string]any{"query": "warm"})
+	if ok {
+		t.Fatalf("expected indexed playbook search to be skipped when indexing disabled, got items=%+v", items)
 	}
 }
 
@@ -444,7 +538,7 @@ func TestServerMinimalExposureCatalogSummaryUsesUnderlyingDiscoverableToolCount(
 	}
 }
 
-func TestServerFullAndCompactExposureAdvertiseDiscoveryMetaTools(t *testing.T) {
+func TestServerFullAndCompactExposureHideDiscoveryMetaTools(t *testing.T) {
 	server := newTestServer(t)
 	if err := server.config.Save(config.Entry{
 		Key:   "platform.mcp",
@@ -490,14 +584,14 @@ func TestServerFullAndCompactExposureAdvertiseDiscoveryMetaTools(t *testing.T) {
 		}
 		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
 		for _, name := range []string{"tools.search", "tools.describe", "tools.call"} {
-			if !containsToolNamed(tools, name) {
-				t.Fatalf("%s expected discovery meta-tool %q in catalog", tc.name, name)
+			if containsToolNamed(tools, name) {
+				t.Fatalf("%s should not expose discovery meta-tool %q in catalog", tc.name, name)
 			}
 		}
 	}
 }
 
-func TestServerFullAndCompactModesHidePlaybookTools(t *testing.T) {
+func TestServerFullAndCompactModesHideMinimalMetaTools(t *testing.T) {
 	server := newTestServer(t)
 	if err := server.config.Save(config.Entry{
 		Key:   "platform.mcp",
@@ -542,9 +636,20 @@ func TestServerFullAndCompactModesHidePlaybookTools(t *testing.T) {
 			t.Fatalf("%s tools/list failed: %+v", tc.name, resp.Error)
 		}
 		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
-		for _, name := range []string{"playbooks.list", "playbooks.search", "playbooks.describe"} {
+		for _, name := range []string{
+			"skills.list",
+			"skills.search",
+			"skills.describe",
+			"tools.list",
+			"tools.search",
+			"tools.describe",
+			"tools.call",
+			"playbooks.list",
+			"playbooks.search",
+			"playbooks.describe",
+		} {
 			if containsToolNamed(tools, name) {
-				t.Fatalf("%s should not expose playbook tool %q", tc.name, name)
+				t.Fatalf("%s should not expose minimal meta tool %q", tc.name, name)
 			}
 		}
 	}
@@ -799,6 +904,144 @@ func TestServerMinimalToolSearchFindsDedicatedCRMTools(t *testing.T) {
 	playbooks := playbookStructured["items"].([]PlaybookSummary)
 	if len(playbooks) == 0 || playbooks[0].ID != "crm_service_sales_overview" {
 		t.Fatalf("expected CRM playbook search result, got %+v", playbooks)
+	}
+}
+
+func TestServerMinimalToolSearchRespectsModuleKeyFilter(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.modules.Register(module.Manifest{
+		Key: "crm_core",
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{
+				{Key: "crm.ticket.summary", Title: "Get CRM Ticket Summary", Description: "Summarize CRM service backlog and queue health.", Operation: "crm.ticket.summary", RequiredPermissions: []string{"crm_ticket.list"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "service"}}},
+			},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register crm test manifest failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key: "analytics",
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{
+				{Key: "analytics.dashboard.widget_catalog", Title: "List Dashboard Widgets", Description: "List dashboard widgets for analytics.", Operation: "analytics.dashboard.widget_catalog", RequiredPermissions: []string{"analytics.read"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"analytics"}}},
+			},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register analytics test manifest failed: %v", err)
+	}
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json":                     "[]",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "tools.search",
+			"arguments": map[string]any{
+				"query":      "service backlog summary",
+				"module_key": "crm_core",
+				"limit":      10,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("tools.search failed: %+v", resp.Error)
+	}
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	items := structured["items"].([]toolSummary)
+	if len(items) == 0 {
+		t.Fatal("expected filtered CRM search results")
+	}
+	for _, item := range items {
+		if item.ModuleKey != "crm_core" {
+			t.Fatalf("expected crm_core-only results, got %+v", items)
+		}
+	}
+}
+
+func TestServerMinimalPlaybookSearchFindsParaphrasedUseCase(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.config.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"exposure_mode":                      "minimal",
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+			"playbooks_json": `[
+				{
+					"id":"crm_customer_360_review",
+					"name":"CRM Customer 360 Review",
+					"description":"Review customer health, open service issues, and active sales pipeline.",
+					"use_when":"Use when the user asks for a full customer account review across service and sales.",
+					"domains":["crm","service","sales"],
+					"labels":["crm","customer","health"],
+					"keywords":["customer 360","account review","service risk","pipeline"]
+				}
+			]`,
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "playbooks.search",
+			"arguments": map[string]any{
+				"query": "give me a full account review with service risk and sales pipeline context",
+				"limit": 5,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("playbooks.search failed: %+v", resp.Error)
+	}
+	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	items := structured["items"].([]PlaybookSummary)
+	if len(items) == 0 || items[0].ID != "crm_customer_360_review" {
+		t.Fatalf("expected paraphrased query to find crm_customer_360_review, got %+v", items)
 	}
 }
 
@@ -4084,8 +4327,10 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if widgetArtifact["kind"] != "dashboard_widget" {
 		t.Fatalf("expected dashboard_widget artifact, got %+v", widgetArtifact)
 	}
-	if strings.TrimSpace(stringValue(widgetPreview["artifact_block"])) == "" {
-		t.Fatalf("expected widget preview structured content to include artifact_block, got %+v", widgetPreview)
+	widgetMeta := widgetPreviewResult["_meta"].(map[string]any)
+	widgetCompat := widgetMeta["compatibility"].(map[string]any)
+	if strings.TrimSpace(stringValue(widgetCompat["artifact_block"])) == "" {
+		t.Fatalf("expected widget preview compatibility artifact_block, got %+v", widgetPreviewResult)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -4113,9 +4358,11 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if len(artifacts) != 2 {
 		t.Fatalf("expected 2 widget artifacts, got %+v", widgetsPreview)
 	}
-	artifactBlocks, _ := widgetsPreview["artifact_blocks"].([]string)
+	widgetsMeta := widgetsPreviewResult["_meta"].(map[string]any)
+	widgetsCompat := widgetsMeta["compatibility"].(map[string]any)
+	artifactBlocks, _ := widgetsCompat["artifact_blocks"].([]string)
 	if len(artifactBlocks) != 2 {
-		t.Fatalf("expected 2 widget artifact blocks in structured content, got %+v", widgetsPreview)
+		t.Fatalf("expected 2 widget artifact blocks in compatibility metadata, got %+v", widgetsPreviewResult)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -4173,8 +4420,10 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if preview["artifact"] == nil {
 		t.Fatalf("expected preview artifact payload, got %+v", preview)
 	}
-	if strings.TrimSpace(stringValue(preview["artifact_block"])) == "" {
-		t.Fatalf("expected preview structured content to include artifact_block, got %+v", preview)
+	previewMeta := previewResult["_meta"].(map[string]any)
+	previewCompat := previewMeta["compatibility"].(map[string]any)
+	if strings.TrimSpace(stringValue(previewCompat["artifact_block"])) == "" {
+		t.Fatalf("expected preview compatibility artifact_block, got %+v", previewResult)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -4198,8 +4447,10 @@ func TestServerRuntimeCatalogListsAndGets(t *testing.T) {
 	if createdBoard["artifact"] == nil {
 		t.Fatalf("expected created dashboard artifact payload, got %+v", createdBoard)
 	}
-	if strings.TrimSpace(stringValue(createdBoard["artifact_block"])) == "" {
-		t.Fatalf("expected created dashboard structured content to include artifact_block, got %+v", createdBoard)
+	createdMeta := createdResult["_meta"].(map[string]any)
+	createdCompat := createdMeta["compatibility"].(map[string]any)
+	if strings.TrimSpace(stringValue(createdCompat["artifact_block"])) == "" {
+		t.Fatalf("expected created dashboard compatibility artifact_block, got %+v", createdResult)
 	}
 
 	resp = server.Handle(context.Background(), JSONRPCRequest{
@@ -5407,9 +5658,9 @@ func TestMCPInitializeResponseIncludesActiveCapabilities(t *testing.T) {
 	}
 
 	actor := ActorContext{
-		ActorID:            "user_admin",
-		EffectiveUserID:    "user_admin",
-		PermissionChecker:  func(string) bool { return true },
+		ActorID:           "user_admin",
+		EffectiveUserID:   "user_admin",
+		PermissionChecker: func(string) bool { return true },
 	}
 
 	resp := server.Handle(context.Background(), JSONRPCRequest{

@@ -41,6 +41,7 @@ func TestCRMCoreServiceSummaryPayload(t *testing.T) {
 	}
 	open.CreatedAt = now.Add(-2 * time.Hour)
 	resolved.CreatedAt = now.Add(-3 * time.Hour)
+	resolved.Values["resolved_at"] = now.Add(-time.Hour).Format(time.RFC3339)
 	if err := models.WithRawRecordSave(open); err != nil {
 		t.Fatalf("save open ticket timestamps: %v", err)
 	}

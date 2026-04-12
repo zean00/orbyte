@@ -273,7 +273,7 @@ const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
 const MCP_EXPOSURE_MODE_STORAGE_KEY = "orbyte.agent.mcp_exposure_mode";
 type MCPExposureMode = "minimal" | "compact" | "full";
 const MCP_ONLY_PREFIX =
-  "Use Orbyte MCP tools as the source of truth for this answer. First search or list playbooks to find a workflow matching the use case. If more than one playbook looks relevant, load all candidate playbooks in one bulk playbooks.describe call. Only if no playbook matches should you fall back to tool discovery with tools.search or tools.list, then use one bulk tools.describe call for the relevant tool ids before tools.call. Use exact discovered ids and do not guess tool names, prefixes, or schemas.";
+  "Use Orbyte MCP tools as the source of truth for this answer. In minimal mode, the required first step for any workflow-like business task is skills.search or skills.list. If one or more skills match, call one bulk skills.describe before any business tool call. Only if no skill matches should you fall back to tool discovery with tools.search or tools.list, then use one bulk tools.describe call for the relevant tool ids before tools.call. Do not invoke business tools from memory before discovery. Use exact discovered ids and do not guess tool names, prefixes, or schemas.";
 
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
@@ -482,7 +482,7 @@ export default function AgentSurfacePage() {
         {},
       ),
       callMcp<{ structuredContent?: { items?: MCPPlaybookSummary[] } }>(
-        "playbooks/list",
+        "skills/list",
         {},
       ),
     ])
@@ -1627,7 +1627,7 @@ export default function AgentSurfacePage() {
                           <div className="space-y-3">
                             <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
                               This surface is running in minimal MCP mode. The
-                              agent should search playbooks first, then use
+                              agent should search skills first, then use
                               <code>tools.search</code>,{" "}
                               <code>tools.describe</code>, and{" "}
                               <code>tools.call</code> to reach the relevant
@@ -1666,8 +1666,8 @@ export default function AgentSurfacePage() {
                                   </div>
                                   <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
                                     {fullCatalogLoading
-                                      ? "Loading playbooks"
-                                      : `${playbooks.length} workflow playbooks`}
+                                      ? "Loading skills"
+                                      : `${playbooks.length} workflow skills`}
                                   </div>
                                 </div>
                                 <button
@@ -1688,7 +1688,7 @@ export default function AgentSurfacePage() {
                                     onChange={(event) =>
                                       setFullCatalogQuery(event.target.value)
                                     }
-                                    placeholder="Search playbooks, tools, domains, or descriptions"
+                                    placeholder="Search skills, tools, domains, or descriptions"
                                     className="w-full rounded-xl border border-line bg-shell px-3 py-2 text-sm text-body outline-none transition focus:border-accent"
                                   />
                                   <div className="space-y-2">
@@ -1721,7 +1721,7 @@ export default function AgentSurfacePage() {
                                     {!fullCatalogLoading &&
                                     playbooks.length === 0 ? (
                                       <p className="text-sm text-muted">
-                                        No playbooks are configured.
+                                        No skills are configured.
                                       </p>
                                     ) : null}
                                   </div>
@@ -2009,7 +2009,7 @@ export default function AgentSurfacePage() {
                         ? "Execute mode tells the agent to act on the current visible plan and report created artifacts."
                         : "Execute mode requires a current plan."
                       : mcpOnlyEnabled
-                        ? "Prompts will automatically tell the agent to search playbooks first, then use MCP tool discovery and exact tool ids before any tools.call execution."
+                        ? "Prompts will automatically tell the agent to search skills first, then use MCP tool discovery and exact tool ids before any tools.call execution."
                         : "Markdown responses stream into the transcript as the ACP provider emits chunk updates."}
               </p>
               <button
@@ -3089,7 +3089,7 @@ function buildPromptPayload(
   if (mcpOnlyEnabled) {
     sections.push(MCP_ONLY_PREFIX);
     sections.push(
-      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search playbooks first when the request matches a known workflow. If multiple playbooks look relevant, load them together with one bulk playbooks.describe call. If no playbook fits, use tool discovery and one bulk tools.describe call before any tools.call execution.",
+      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search skills first when the request matches a known workflow. If multiple skills look relevant, load them together with one bulk skills.describe call. If no skill fits, use tool discovery and one bulk tools.describe call before any tools.call execution.",
     );
   }
   if (mode === "plan") {
@@ -3123,10 +3123,10 @@ function buildPromptPayload(
   if (looksLikeCRMPrompt(prompt)) {
     sections.push(
       [
-        "Search playbooks first for CRM requests and prefer the best-matching CRM workflow before raw tool search.",
-        "If more than one CRM playbook looks relevant, load them together with one bulk playbooks.describe call before choosing the workflow.",
-        "Use crm.ticket.summary for backlog facts, crm.customer.summary or crm.customer.timeline for named customers, crm.customer.health for at-risk customer review, and crm.opportunity.pipeline.summary for pipeline review before answering.",
-        "Do not stop at generic business search wrappers when dedicated CRM summary tools exist.",
+        "CRM requests are workflow-like business tasks, so the required first step in minimal mode is skills.search or skills.list.",
+        "If more than one CRM skill looks relevant, load them together with one bulk skills.describe call before choosing the workflow.",
+        "Do not call CRM business tools from memory before discovery.",
+        "After you load the chosen CRM skill, follow its recommended workflow and use exact discovered tool ids only.",
       ].join(" "),
     );
   }
@@ -3134,49 +3134,22 @@ function buildPromptPayload(
     const explicitFullBoard = looksLikeFullDashboardPrompt(prompt);
     sections.push(
       [
-        "Search playbooks first if a dashboard insight workflow exists for the current request.",
-        "If multiple dashboard playbooks look relevant, load them together with one bulk playbooks.describe call before choosing the workflow.",
+        "Dashboard requests are workflow-like business tasks, so search skills first if a dashboard insight workflow exists for the current request.",
+        "If multiple dashboard skills look relevant, load them together with one bulk skills.describe call before choosing the workflow.",
         "If the dashboard tool family is still not obvious, use tools.search and one bulk tools.describe call before calling tools.call.",
-        'For dashboard requests, first call analytics.dashboard.widget_catalog with surface="dashboard".',
         explicitFullBoard
-          ? "For explicit full-dashboard or board-preview requests, use analytics.dashboard.board.preview so you return a full dashboard_board artifact."
-          : "For focused insight responses, use analytics.dashboard.widgets.preview so you return 2-3 of the most relevant live widgets.",
+          ? "For explicit full-dashboard or board-preview requests, prefer the discovered workflow that returns a dashboard_board artifact."
+          : "For focused insight responses, prefer the discovered workflow that returns a small set of relevant dashboard_widget artifacts rather than a full board.",
         explicitFullBoard
-          ? "Use analytics.dashboard.board.create only when the user explicitly asks to save a board, then report the saved board link."
-          : 'For general insight requests, pass intent="insight" and omit widget_keys so Orbyte can infer a balanced KPI/comparison/trend set.',
-        explicitFullBoard
-          ? "If widget keys are not obvious for the full board, call the board preview tool with title, surface, and description only so Orbyte can infer the right board composition."
-          : "Only pass widget_keys when the user explicitly asked for specific widgets or a specific renderer.",
-        explicitFullBoard
-          ? "When analytics.dashboard.board.preview returns artifact metadata, rely on the structured dashboard artifact output rather than rewriting it manually."
-          : "Use analytics.dashboard.widget.preview only when exactly one widget is enough.",
+          ? "Only save a dashboard when the user explicitly asks to save one, and then report the saved board link."
+          : "Only request explicit widget keys when the user asks for specific widgets or renderers; otherwise let the discovered workflow infer them.",
         explicitFullBoard
           ? "Do not replace an explicit board request with standalone widget artifacts."
-          : "Do not call analytics.dashboard.board.preview for an insight answer unless the user explicitly asked for a full dashboard, full board, or board preview.",
+          : "For an insight answer, prefer a balanced mix of KPI, comparison, and trend evidence unless the user asks for a different shape.",
+        "When dashboard tools return structured artifact metadata, rely on that artifact output instead of rewriting compatibility blocks manually.",
         explicitFullBoard
-          ? "Mention the dashboard surface or open link for full exploration."
-          : "If the user wants the full dashboard, direct them to the dashboard surface instead of rendering a full board inline in chat.",
-        explicitFullBoard
-          ? "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog when you need explicit board composition."
-          : "Use analytics.dashboard.board.create only when the user explicitly asks to save a board, and then report the saved board link instead of embedding a full board artifact in the answer.",
-        explicitFullBoard
-          ? "Do not omit the dashboard artifact information when dashboard MCP tools return artifact metadata."
-          : "If widget keys are not obvious, call the preview or create tool with title, surface, and description only so Orbyte can infer the most relevant registered widgets.",
-        explicitFullBoard
-          ? ""
-          : "For an insight answer, prefer one KPI or gauge, one comparison chart, and one trend chart. Avoid maps and detailed tables unless the user explicitly asked for geography or tabular detail.",
-        explicitFullBoard
-          ? ""
-          : "When analytics.dashboard.widgets.preview or analytics.dashboard.widget.preview returns artifact metadata, rely on the structured dashboard artifact output rather than rewriting it manually.",
-        explicitFullBoard
-          ? ""
-          : "Do not include dashboard board artifact blocks in the final answer.",
-        explicitFullBoard
-          ? ""
-          : "Do not guess widget keys. Use the exact widget_key values returned by analytics.dashboard.widget_catalog.",
-        explicitFullBoard
-          ? ""
-          : "Do not omit the dashboard artifact information when dashboard MCP tools return artifact metadata.",
+          ? "Mention the dashboard surface or open link for deeper exploration."
+          : "If the user wants the full dashboard, direct them to the dashboard surface instead of embedding a full board inline in chat.",
       ].join(" "),
     );
   }

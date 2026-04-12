@@ -413,7 +413,8 @@ func matchedPlaybookID(trace []sessionTraceEvent) string {
 			continue
 		}
 		toolName := strings.TrimSpace(tracePayloadString(event.Payload, "tool_name"))
-		if toolName == "" || !strings.Contains(strings.ToLower(toolName), "playbooks.describe") {
+		lowerToolName := strings.ToLower(toolName)
+		if toolName == "" || (!strings.Contains(lowerToolName, "playbooks.describe") && !strings.Contains(lowerToolName, "skills.describe")) {
 			continue
 		}
 		arguments := mapValue(event.Payload, "arguments")
