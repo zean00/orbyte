@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Orbyte">
-  <rect width="256" height="256" rx="48" fill="#12202f"/>
-  <path d="M54 128c0-41 33-74 74-74h32v34h-32c-22 0-40 18-40 40s18 40 40 40h32v34h-32c-41 0-74-33-74-74z" fill="#f5f7fa"/>
-  <circle cx="172" cy="128" r="30" fill="#c98619"/>
-</svg>

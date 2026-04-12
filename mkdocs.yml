@@ -3,6 +3,7 @@ site_description: Product documentation for the Orbyte enterprise application ke
 site_url: https://example.com/orbyte
 repo_name: orbyte
 docs_dir: docs
+use_directory_urls: false
 exclude_docs: |
   README.md
 theme:
@@ -27,13 +28,17 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Configuration: configuration.md
+  - Architecture: architecture.md
+  - Features: features.md
+  - Modules: modules.md
+  - Surfaces: surfaces.md
+  - Agent Integration: agent-integration.md
+  - Module Development: module-development.md
   - Concepts: concepts.md
   - Use Cases: use-cases.md
-  - Architecture: architecture.md
   - MCP Target Architecture: mcp-target-architecture.md
-  - Features: features.md
   - Components: components.md
-  - Configuration: configuration.md
   - Glossary: glossary.md
   - Security and Governance: security-and-governance.md
   - Product Packaging: product-packaging.md
@@ -57,7 +62,11 @@ markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -68,3 +77,7 @@ markdown_extensions:
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/vendor/mermaid.min.js
+  - javascripts/mermaid-init.js

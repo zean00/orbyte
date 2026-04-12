@@ -1,298 +1,320 @@
 # Architecture
 
-This guide describes the runtime architecture of Orbyte.
+<p class="page-intro">
+This guide describes the current runtime architecture in the codebase, including the service graph, module composition, storage modes, and machine-facing surfaces.
+</p>
 
-## High-Level View
+## In One Sentence
 
-At a high level, Orbyte is a modular Go application with:
+Orbyte is a modular Go runtime that composes platform services, manifest-driven business capability, and multiple delivery surfaces over either in-memory or PostgreSQL-backed repositories.
 
-- a bootstrapped kernel
-- a bootstrap/container composition layer
-- manifest-driven business modules
-- generic HTTP and MCP runtime surfaces
-- optional external infrastructure such as PostgreSQL, Typesense, NATS, SMTP, and object storage
+## High-Level Shape
 
-For the target-state engineering role of MCP and its relationship to ACP and the agent workspace, see [MCP Target Architecture](./mcp-target-architecture.md).
+Orbyte is a modular Go application composed from:
 
-## Reference Diagram
+- a core service graph
+- kernel-pack manifests
+- optional profile-provided business manifests
+- HTTP, UI, MCP, and ACP runtime surfaces
+- in-memory or PostgreSQL-backed repositories
 
-![Architecture Overview](./assets/architecture-overview.svg)
+## Current Runtime Diagram
 
-```text
-                    +-----------------------------+
-                    |  External Users and Systems |
-                    +-------------+---------------+
-                                  |
-              +-------------------+-------------------+
-              |                                       |
-       +------+-------+                       +-------+------+
-       | Browser Apps |                       | AI / Services |
-       +------+-------+                       +-------+------+
-              |                                       |
-              +-------------------+-------------------+
-                                  |
-                          +-------+--------+
-                          |  Orbyte Server  |
-                          |-----------------|
-                          | HTTP APIs       |
-                          | UI contracts    |
-                          | Admin APIs      |
-                          | MCP endpoints   |
-                          +-------+--------+
-                                  |
-          +-----------------------+-----------------------+
-          |                       |                       |
-   +------+-------+       +-------+------+       +--------+------+
-   | Kernel Svcs  |       | Business Mods |       | Async Runtime |
-   |--------------|       |---------------|       |---------------|
-   | identity     |       | models        |       | jobs          |
-   | config       |       | documents     |       | outbox        |
-   | policy       |       | workflows     |       | retries       |
-   | integration  |       | views         |       | projections   |
-   | search       |       | tools         |       | deliveries    |
-   +------+-------+       +-------+------+       +--------+------+
-          |                       |                       |
-          +-----------------------+-----------------------+
-                                  |
-        +------------+------------+------------+------------+
-        |            |                         |            |
- +------+-----+ +----+------+           +------+----+ +-----+------+
- | PostgreSQL | | Typesense |           |   NATS    | | SMTP/Object |
- +------------+ +-----------+           +-----------+ +------------+
+```mermaid
+flowchart TB
+    subgraph Clients
+        Browser[Browser UI]
+        Admin[Admin UI]
+        Agent[ACP Provider / Agent]
+        APIClient[HTTP / Service Client]
+    end
+
+    subgraph Surfaces
+        HTTP[HTTP + UI Route Layer]
+        MCP[MCP JSON-RPC]
+        ACP[ACP Session Service]
+    end
+
+    subgraph Kernel
+        Config[Config + Feature Flags]
+        Identity[Identity + Organization]
+        Modules[Module Registry]
+        Models[Model Service]
+        Docs[Document Service]
+        Workflow[Workflow Service]
+        Search[Search Service]
+        Analytics[Analytics + Reporting]
+        Audit[Audit + Eventing + Jobs]
+        Policy[Policy + Field Security]
+        AppActions[Application Services]
+    end
+
+    subgraph Persistence
+        PG[(PostgreSQL)]
+        Mem[(In-Memory Repositories)]
+    end
+
+    Browser --> HTTP
+    Admin --> HTTP
+    APIClient --> HTTP
+    Agent --> ACP
+    Agent --> MCP
+
+    HTTP --> Config
+    HTTP --> Identity
+    HTTP --> Modules
+    HTTP --> AppActions
+    MCP --> Modules
+    MCP --> AppActions
+    MCP --> Search
+    ACP --> Config
+    ACP --> MCP
+
+    AppActions --> Models
+    AppActions --> Docs
+    AppActions --> Workflow
+    AppActions --> Audit
+    Search --> PG
+    Search --> Mem
+    Models --> PG
+    Models --> Mem
+    Docs --> PG
+    Docs --> Mem
 ```
 
-Diagram source files for future rendering:
+## Read This Page By Question
 
-- `docs/assets/architecture-overview.mmd`
-- `docs/assets/request-flow.mmd`
+<div class="quick-links" markdown>
 
-## Runtime Layers
+- [**How does startup work?**](#boot-process)
+  See the bootstrap sequence and runtime assembly order.
+- [**What are the main layers?**](#core-runtime-layers)
+  Review the kernel, application services, and manifest contributions.
+- [**Where does state live?**](#storage-model)
+  Compare in-memory and PostgreSQL-backed modes.
+- [**How do agents fit in?**](#mcp-and-acp-positioning)
+  Understand the current MCP and ACP split.
 
-### 1. Storage Layer
+</div>
 
-The storage layer persists platform state.
+## Boot Process
 
-Primary storage options:
+The current bootstrap path lives mainly in `internal/platform/app/construction.go`.
 
-- PostgreSQL
-- in-memory repositories for local development and tests
+At startup the app:
 
-The schema includes:
+1. creates the core service graph
+2. registers built-in config definitions and built-in entries
+3. initializes identity, config, modules, models, documents, workflows, audit, search, analytics, MCP, and ACP
+4. installs PostgreSQL-backed repositories if `DATABASE_URL` is set
+5. loads kernel packs and profile-selected business manifests
+6. seeds platform kernel metadata, permissions, references, views, workflows, and related runtime contracts
+7. registers HTTP, UI, MCP, and admin routes
 
-- organizations and locations
-- users, roles, sessions, service principals
-- configuration entries
-- model definitions and records
-- document definitions and records
-- installed modules
-- workflow state
-- audit and eventing data
+<div class="orbyte-note">
+The current bootstrap boundary is deliberate: service construction lives in <code>internal/platform/app/</code>, while HTTP transport and surface wiring live in <code>internal/platform/httpx/</code>.
+</div>
 
-### 2. Platform Services
+## Core Runtime Layers
 
-The kernel is composed from a set of services, including:
+### 1. Platform kernel services
 
-- configuration
+The current service graph includes:
+
+- config
 - feature flags
-- organization and identity
+- organization
+- identity
 - module registry
-- model and document services
-- workflow engine
-- audit and eventing
+- model service
+- document service
+- workflow service
+- audit service
+- reporting and analytics
 - search
-- analytics and reporting
-- policy
-- integration
-- idempotency
+- policy and field security
+- integration and eventing
 - jobs
 - template output
-- runtime health and monitoring
+- idempotency
+- ACP service
+- MCP server
 
-These services are assembled during app startup and validated before the server begins accepting requests.
+### 2. Application services
 
-### Bootstrap Boundary
+The current codebase also assembles higher-level application services for business areas such as:
 
-The current runtime is intentionally split into two responsibilities:
+- CRM
+- commercial
+- procurement
+- inventory
+- fulfillment
+- delivery
+- returns
+- planning
+- production
+- POS
+- finance
+- workforce and payroll
 
-- bootstrap/container assembly creates repositories, services, runtime adapters, MCP server wiring, and application dependencies
-- `httpx` remains transport-focused and consumes already-built dependencies to register HTTP routes and middleware
+These are the services that MCP tools and custom UI routes often call directly.
 
-This separation keeps delivery concerns out of service construction and makes runtime assembly easier to test and reason about.
+### 3. Module manifests
 
-### 3. Runtime Actions
+Business behavior is not defined only by route handlers. Much of the platform shape comes from manifests that contribute:
 
-On top of the services, Orbyte defines higher-order application actions such as:
-
-- document actions
-- model actions
-- kernel command execution through unit-of-work patterns
-
-These actions handle:
-
-- optimistic concurrency
-- transactional writes
-- audit recording
-- domain event emission
-- outbox creation
-
-### 4. Delivery Surfaces
-
-Orbyte exposes multiple surfaces:
-
-- HTTP APIs
-- UI contract endpoints for generic shells
-- admin APIs
-- MCP JSON-RPC endpoints
-- analytics event streams
-
-These surfaces are intended for:
-
-- browser-based operators
-- external applications
-- automation clients
-- service principals
-- external AI agents
-
-MCP should be treated as the canonical machine-facing business contract for external agents, while ACP remains the runtime/session bridge to external providers. The detailed target-state model is defined in [MCP Target Architecture](./mcp-target-architecture.md).
-
-## Extension Model
-
-The platform is extended by module manifests. There are two main sources of manifests at startup:
-
-- built-in kernel packs, which provide the platform's core capability base
-- profile-provided business manifests, which add domain-specific modules selected by `APP_DOMAIN_PROFILE`
-
-A module can contribute:
-
+- permissions
+- roles
 - models
 - documents
 - workflows
-- config definitions
-- permissions and role templates
-- policy hooks
-- search indexes
-- datasets and reports
-- templates
-- UI views and actions
-- offline capabilities
-- MCP tools and resources
+- views
+- actions
+- datasets
+- widgets
+- self-service APIs
+- MCP-related metadata
 
-This allows the kernel to stay stable while business capabilities evolve independently.
+Current manifest sources:
 
-The target direction is for modules to be broadly discoverable and operable through MCP in business terms, using a mix of generic platform tools, synthetic module wrappers, and specialized hand-authored tools. See [MCP Target Architecture](./mcp-target-architecture.md).
+- kernel packs under `internal/platform/app/kernelpacks_*.go`
+- profile modules under `internal/modules/`
 
-## Runtime Configuration and Identity Helpers
+## Storage Model
 
-Process-level runtime settings are centralized through typed runtime configuration instead of being read ad hoc throughout the codebase. Runtime-generated identifiers are also standardized through a shared ID service.
+The platform currently supports two persistence modes.
 
-This gives the platform:
+### In-memory repositories
 
-- consistent startup behavior
-- cleaner operational configuration boundaries
-- deterministic contract generation
-- more uniform IDs across jobs, submissions, sessions, and runtime-created records
+Used for:
 
-## Request Flow
+- fast local development
+- many tests
+- quick feature work without PostgreSQL
 
-A typical runtime request follows this path:
+### PostgreSQL repositories
 
-1. authentication and principal resolution
-2. authorization and policy checks
-3. service or action execution
-4. persistence
-5. audit and event recording
-6. asynchronous follow-up through jobs, outbox, or integration processing
+Used for:
 
-![Request Flow](./assets/request-flow.svg)
+- realistic local development
+- seeded demos
+- MCP/agent validation
+- production-style persistence
 
-### Example Synchronous Flow
+The service graph swaps repository implementations depending on whether `DATABASE_URL` is present.
 
-```text
-client -> auth -> permission check -> policy check -> document/model action
-       -> transaction -> audit/event/outbox -> response
-```
+## Search And Discovery
 
-### Example Asynchronous Flow
+The current search stack supports:
 
-```text
-business write -> domain event -> outbox/job -> integration adapter
-               -> retry/dead letter if needed -> downstream system
-```
+- repository-backed search service
+- source attachment from documents and models
+- field-security-aware search behavior
+- Typesense integration configuration
+- embedding configuration
+- MCP discovery modes for keyword, vector, and hybrid retrieval
 
-## Event and Integration Flow
+## MCP And ACP Positioning
 
-Business writes can generate:
+The current architecture separates:
 
-- audit events
-- domain events
-- outbox records
-- search projection updates
-- analytics snapshots
-- integration submissions
+- ACP
+  - session/runtime bridge to external agent providers
+- MCP
+  - governed business-facing JSON-RPC interface
 
-This allows Orbyte to support both synchronous APIs and asynchronous enterprise integration patterns.
+Current HTTP registration exposes:
 
-## Configuration and Policy Flow
+- `POST /mcp`
+- `POST /mcp/analytics`
+- optional analytics event streams
 
-Configuration is resolved using scope inheritance:
+ACP is configured through `platform.acp`, while MCP is configured through `platform.mcp`.
 
-- deployment
-- organization
-- location
+## UI And Surface Model
 
-Policies can be defined through:
+The workspace shell is surface-aware and bootstrap-driven.
 
-- built-in evaluators
-- Rego modules
-- scoped configuration-backed rules
+Current declared surfaces in code:
 
-This allows governance to change without patching business code.
+- `user`
+- `admin`
+- `both`
+- `backoffice`
+- `worklist`
+- `self_service`
+- `agent`
+- `pos`
+- `dashboard`
+- `mobile`
 
-## AI and Agent Connectivity
+Surface-specific menus, actions, views, custom entries, flows, and dashboard widgets are resolved through the module service and UI bootstrap resolver.
 
-Orbyte is intentionally designed so AI interaction happens through governed surfaces, not hidden internal shortcuts.
+## Request Lifecycle
 
-The preferred connection patterns are:
+Typical synchronous flow:
 
-- HTTP APIs for application integration
-- MCP tools and resources for agent tooling
-- events and integration contracts for asynchronous workflows
-- service principal and delegation models for controlled non-human access
+1. route and auth resolution
+2. principal construction
+3. permission/policy checks
+4. application service or action execution
+5. repository writes
+6. audit and event capture
+7. response serialization
 
-### Recommended Responsibility Split
+Typical asynchronous follow-up:
 
-```text
-External AI runtime:
-- planning
-- reasoning
-- user interaction
-- multi-step orchestration
+1. business write completes
+2. audit/domain events or outbox entries are recorded
+3. jobs/integration/eventing continue downstream work
 
-Orbyte:
-- source of truth
-- approved actions
-- policy and permission enforcement
-- audit trail
-- integration state
-```
+## Module Composition Model
 
-## Deployment Topology
+The current repo uses two composition layers:
 
-Typical topology:
+- built-in kernel packs
+  - always available foundation modules
+- profile-specific business manifests
+  - selected through `APP_DOMAIN_PROFILE`
 
-- Orbyte application server
-- PostgreSQL
-- optional Typesense
-- optional NATS
-- optional SMTP and object storage
-- external clients, business apps, and AI agents connected through API and MCP surfaces
+Known profiles today:
 
-## Architecture Outcomes
+- `all`
+- `clinic`
+- `oms`
 
-This architecture is optimized for:
+`clinic` is the only non-empty example profile in `internal/modules` today.
 
-- modularity
-- governance
-- operational traceability
-- machine integration
-- long-lived enterprise evolution
+## Current Design Characteristics
+
+What the architecture optimizes for today:
+
+- manifest-driven expansion
+- governed machine access
+- metadata-driven UI and business contracts
+- profile-aware startup
+- runtime-configurable MCP/ACP behavior
+
+What it does not do:
+
+- embed a hard-wired autonomous agent into the kernel
+- depend on a single persistence backend
+- model every business workflow as a custom hand-written UI flow
+
+## Recommended Next Pages
+
+<div class="next-steps" markdown>
+
+- [Modules](./modules.md) for the current capability inventory
+- [Surfaces](./surfaces.md) for UI, MCP, ACP, and dashboard-facing delivery paths
+- [Agent Integration](./agent-integration.md) for the runtime machine-access model
+
+</div>
+
+## Related Guides
+
+- [Features](./features.md)
+- [Modules](./modules.md)
+- [Agent Integration](./agent-integration.md)
+- [Surfaces](./surfaces.md)
+- [Configuration](./configuration.md)
