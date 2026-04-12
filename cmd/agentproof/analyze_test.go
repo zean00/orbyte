@@ -179,3 +179,111 @@ func TestVerifyDraftUsesDirectDocumentIDFromAnswer(t *testing.T) {
 		t.Fatalf("expected missing facts to clear, got %+v", result.MissingFacts)
 	}
 }
+
+func TestVerifyArtifactAcceptsSuccessfulDashboardPreviewTraceWhenProviderDropsArtifacts(t *testing.T) {
+	result := promptAnalysisResult{Classification: "exact", Answer: "Referenced the relevant widgets."}
+	session := sessionTranscript{}
+	trace := []sessionTraceEvent{
+		{
+			ID:   "1",
+			Kind: "session_update",
+			Payload: map[string]any{
+				"update_kind": "tool_call_update",
+				"content": map[string]any{
+					"status": "completed",
+					"rawInput": map[string]any{
+						"tool_id": "analytics.dashboard.widgets.preview",
+						"payload": map[string]any{
+							"widget_keys": []any{
+								"analytics.demo.sales.target_attainment",
+								"analytics.demo.sales.branch_mix",
+								"analytics.demo.sales.daily_trend",
+							},
+						},
+					},
+					"rawOutput": map[string]any{
+						"output": "Prepared 3 focused dashboard widget previews.",
+					},
+				},
+			},
+		},
+	}
+	verifyArtifact(&result, artifactExpectation{
+		Kind:         "dashboard_widget",
+		WidgetKeys:   []string{"target_attainment", "branch_mix", "daily_trend"},
+		MinArtifacts: 3,
+	}, session, trace)
+	if !result.ArtifactVerified {
+		t.Fatalf("expected artifact verification from preview trace, got %+v", result)
+	}
+	if !result.RequiredArtifactsPresent {
+		t.Fatalf("expected required artifacts to be present, got %+v", result)
+	}
+	if result.Classification != "exact" {
+		t.Fatalf("classification = %q, want exact", result.Classification)
+	}
+}
+
+func TestVerifyArtifactRejectsBoardPreviewForWidgetExpectation(t *testing.T) {
+	result := promptAnalysisResult{Classification: "exact", Answer: "Referenced the board."}
+	trace := []sessionTraceEvent{
+		{
+			ID:   "1",
+			Kind: "session_update",
+			Payload: map[string]any{
+				"update_kind": "tool_call_update",
+				"content": map[string]any{
+					"status": "completed",
+					"rawInput": map[string]any{
+						"tool_id": "analytics.dashboard.board.preview",
+						"payload": map[string]any{},
+					},
+					"rawOutput": map[string]any{
+						"output": "Prepared dashboard board preview Sales Dashboard. Widget keys: analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, analytics.demo.sales.daily_trend.",
+					},
+				},
+			},
+		},
+	}
+	verifyArtifact(&result, artifactExpectation{
+		Kind:         "dashboard_widget",
+		WidgetKeys:   []string{"target_attainment", "branch_mix", "daily_trend"},
+		MinArtifacts: 3,
+	}, sessionTranscript{}, trace)
+	if result.ArtifactVerified {
+		t.Fatalf("expected board preview not to satisfy widget expectation, got %+v", result)
+	}
+}
+
+func TestVerifyArtifactAcceptsInferredDashboardPreviewFromOutputText(t *testing.T) {
+	result := promptAnalysisResult{Classification: "exact", Answer: "Referenced the relevant widgets."}
+	trace := []sessionTraceEvent{
+		{
+			ID:   "1",
+			Kind: "session_update",
+			Payload: map[string]any{
+				"update_kind": "tool_call_update",
+				"content": map[string]any{
+					"status": "completed",
+					"rawInput": map[string]any{
+						"tool_id": "analytics.dashboard.widgets.preview",
+						"payload": map[string]any{
+							"surface": "dashboard",
+						},
+					},
+					"rawOutput": map[string]any{
+						"output": "Prepared 3 focused dashboard widget previews using analytics.demo.sales.target_attainment, analytics.demo.sales.branch_mix, analytics.demo.sales.daily_trend. Artifact emission succeeded.",
+					},
+				},
+			},
+		},
+	}
+	verifyArtifact(&result, artifactExpectation{
+		Kind:         "dashboard_widget",
+		WidgetKeys:   []string{"target_attainment", "branch_mix", "daily_trend"},
+		MinArtifacts: 3,
+	}, sessionTranscript{}, trace)
+	if !result.ArtifactVerified {
+		t.Fatalf("expected inferred preview output text to satisfy artifact verification, got %+v", result)
+	}
+}

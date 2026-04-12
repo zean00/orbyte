@@ -80,7 +80,7 @@ func (s *Server) toolCapabilities() []toolCapabilityRuntimeDescriptor {
 			},
 			Matcher: func(item ToolDescriptor) bool {
 				switch strings.TrimSpace(item.Name) {
-				case "business.module.list", "business.module.get", "business.module.search", "business.capability.search", "business.document.type.list", "business.dataset.list", "business.reference.type.list", "tools.list", "tools.search", "tools.describe", "tools.call", "skills.list", "skills.search", "skills.describe", "playbooks.list", "playbooks.search", "playbooks.describe":
+				case "business.module.list", "business.module.get", "business.module.search", "business.capability.search", "business.document.type.list", "business.dataset.list", "business.reference.type.list", "tools.find", "tools.list", "tools.search", "tools.describe", "tools.call", "skills.find", "skills.list", "skills.search", "skills.describe", "playbooks.find", "playbooks.list", "playbooks.search", "playbooks.describe":
 					return true
 				default:
 					return false

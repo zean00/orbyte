@@ -202,16 +202,19 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 		names = append(names, item.Name)
 	}
 	for _, name := range []string{
-		"tools.list",
-		"tools.search",
+		"tools.find",
 		"tools.describe",
 		"tools.call",
-		"skills.list",
-		"skills.search",
+		"skills.find",
 		"skills.describe",
 	} {
 		if !contains(names, name) {
 			t.Fatalf("expected meta tool %q in %+v", name, names)
+		}
+	}
+	for _, name := range []string{"tools.list", "tools.search", "skills.list", "skills.search"} {
+		if contains(names, name) {
+			t.Fatalf("did not expect compatibility alias %q in minimal exposure %+v", name, names)
 		}
 	}
 	if contains(names, "analytics.dashboard.widget_catalog") {
@@ -221,11 +224,11 @@ func TestServerMinimalExposureListsOnlyMetaToolsAndSupportsPlaybooks(t *testing.
 	resp = server.Handle(context.Background(), JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      2,
-		Method:  "tools/search",
+		Method:  "tools/find",
 		Params:  mustJSON(t, map[string]any{"query": "dashboard widget"}),
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("tools/search failed: %+v", resp.Error)
+		t.Fatalf("tools/find failed: %+v", resp.Error)
 	}
 	searchItems := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]toolSummary)
 	if len(searchItems) == 0 || searchItems[0].ToolID == "" {
@@ -469,7 +472,7 @@ func TestServerMinimalExposureKeepsMetaToolsVisibleForCapabilityFilteredCompactR
 	if len(tools) == 0 {
 		t.Fatal("expected discovery meta-tools to remain visible in minimal mode")
 	}
-	if !containsToolNamed(tools, "tools.search") || !containsToolNamed(tools, "tools.call") {
+	if !containsToolNamed(tools, "tools.find") || !containsToolNamed(tools, "tools.call") {
 		t.Fatalf("expected discovery meta-tools in %+v", tools)
 	}
 }
@@ -583,7 +586,7 @@ func TestServerFullAndCompactExposureHideDiscoveryMetaTools(t *testing.T) {
 			t.Fatalf("%s tools/list failed: %+v", tc.name, resp.Error)
 		}
 		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
-		for _, name := range []string{"tools.search", "tools.describe", "tools.call"} {
+		for _, name := range []string{"tools.find", "tools.describe", "tools.call"} {
 			if containsToolNamed(tools, name) {
 				t.Fatalf("%s should not expose discovery meta-tool %q in catalog", tc.name, name)
 			}
@@ -637,9 +640,12 @@ func TestServerFullAndCompactModesHideMinimalMetaTools(t *testing.T) {
 		}
 		tools := resp.Result.(map[string]any)["tools"].([]ToolDescriptor)
 		for _, name := range []string{
+			"skills.find",
 			"skills.list",
 			"skills.search",
 			"skills.describe",
+			"playbooks.find",
+			"tools.find",
 			"tools.list",
 			"tools.search",
 			"tools.describe",
@@ -859,7 +865,7 @@ func TestServerMinimalToolSearchFindsDedicatedCRMTools(t *testing.T) {
 		ID:      1,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
-			"name": "tools.search",
+			"name": "tools.find",
 			"arguments": map[string]any{
 				"query":  "crm backlog customer health active pipeline",
 				"domain": "crm",
@@ -868,7 +874,7 @@ func TestServerMinimalToolSearchFindsDedicatedCRMTools(t *testing.T) {
 		}),
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("tools.search failed: %+v", resp.Error)
+		t.Fatalf("tools.find failed: %+v", resp.Error)
 	}
 	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	rawItems := structured["items"].([]toolSummary)
@@ -890,7 +896,7 @@ func TestServerMinimalToolSearchFindsDedicatedCRMTools(t *testing.T) {
 		ID:      2,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
-			"name": "playbooks.search",
+			"name": "playbooks.find",
 			"arguments": map[string]any{
 				"query": "crm backlog pipeline",
 				"limit": 5,
@@ -898,7 +904,7 @@ func TestServerMinimalToolSearchFindsDedicatedCRMTools(t *testing.T) {
 		}),
 	}, actor)
 	if playbookResp.Error != nil {
-		t.Fatalf("playbooks.search failed: %+v", playbookResp.Error)
+		t.Fatalf("playbooks.find failed: %+v", playbookResp.Error)
 	}
 	playbookStructured := playbookResp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	playbooks := playbookStructured["items"].([]PlaybookSummary)
@@ -961,7 +967,7 @@ func TestServerMinimalToolSearchRespectsModuleKeyFilter(t *testing.T) {
 		ID:      1,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
-			"name": "tools.search",
+			"name": "tools.find",
 			"arguments": map[string]any{
 				"query":      "service backlog summary",
 				"module_key": "crm_core",
@@ -970,7 +976,7 @@ func TestServerMinimalToolSearchRespectsModuleKeyFilter(t *testing.T) {
 		}),
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("tools.search failed: %+v", resp.Error)
+		t.Fatalf("tools.find failed: %+v", resp.Error)
 	}
 	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	items := structured["items"].([]toolSummary)
@@ -1028,7 +1034,7 @@ func TestServerMinimalPlaybookSearchFindsParaphrasedUseCase(t *testing.T) {
 		ID:      1,
 		Method:  "tools/call",
 		Params: mustJSON(t, map[string]any{
-			"name": "playbooks.search",
+			"name": "playbooks.find",
 			"arguments": map[string]any{
 				"query": "give me a full account review with service risk and sales pipeline context",
 				"limit": 5,
@@ -1036,7 +1042,7 @@ func TestServerMinimalPlaybookSearchFindsParaphrasedUseCase(t *testing.T) {
 		}),
 	}, actor)
 	if resp.Error != nil {
-		t.Fatalf("playbooks.search failed: %+v", resp.Error)
+		t.Fatalf("playbooks.find failed: %+v", resp.Error)
 	}
 	structured := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
 	items := structured["items"].([]PlaybookSummary)

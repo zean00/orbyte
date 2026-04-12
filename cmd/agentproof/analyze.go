@@ -60,7 +60,7 @@ func analyzeSession(ctx context.Context, client *apiClient, manifest scenarioMan
 		result.MatchedPlaybookID = matchedPlaybookID(traceWindow)
 		result.ArtifactEventCount = countArtifactEvents(traceWindow, session.Artifacts)
 		if prompt.ExpectedArtifact != nil {
-			verifyArtifact(&result, *prompt.ExpectedArtifact, session)
+			verifyArtifact(&result, *prompt.ExpectedArtifact, session, traceWindow)
 		}
 		if prompt.ExpectedPlan != nil {
 			verifyPlan(&result, *prompt.ExpectedPlan, session)
@@ -258,7 +258,7 @@ func verifyDraftDocument(result *promptAnalysisResult, expected draftExpectation
 	return true
 }
 
-func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, session sessionTranscript) {
+func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, session sessionTranscript, trace []sessionTraceEvent) {
 	artifacts := extractArtifactsFromAnswer(result.Answer)
 	if len(artifacts) == 0 && len(session.Artifacts) > 0 {
 		for _, item := range session.Artifacts {
@@ -316,11 +316,222 @@ func verifyArtifact(result *promptAnalysisResult, expected artifactExpectation, 
 		result.RequiredArtifactsPresent = true
 		return
 	}
+	if dashboardPreviewSatisfied(expected, trace) {
+		result.ArtifactVerified = true
+		result.RequiredArtifactsPresent = true
+		result.ArtifactKind = strings.TrimSpace(expected.Kind)
+		return
+	}
 	result.ArtifactVerified = false
 	result.RequiredArtifactsPresent = false
 	result.Classification = "unacceptable"
 	result.MissingFacts = append(result.MissingFacts, "expected_dashboard_artifact")
 	result.Investigation = "The answer did not include the expected dashboard artifact block, or the artifact did not contain the required widget set."
+}
+
+func dashboardPreviewSatisfied(expected artifactExpectation, trace []sessionTraceEvent) bool {
+	if strings.TrimSpace(expected.Kind) != "dashboard_widget" && strings.TrimSpace(expected.Kind) != "dashboard_board" {
+		return false
+	}
+	for _, item := range trace {
+		payload := item.Payload
+		updateKind := strings.ToLower(strings.TrimSpace(stringValue(payload["update_kind"])))
+		if item.Kind != "session_update" || !strings.Contains(updateKind, "tool") {
+			continue
+		}
+		content := mapValue(payload, "content")
+		if len(content) == 0 {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(stringValue(content["status"])), "completed") {
+			continue
+		}
+		rawInput := mapValue(content, "rawInput")
+		toolID := strings.TrimSpace(stringValue(rawInput["tool_id"]))
+		evidence, ok := dashboardPreviewEvidence(toolID, content)
+		if !ok {
+			continue
+		}
+		if evidence.kind != strings.TrimSpace(expected.Kind) {
+			continue
+		}
+		if expected.MinArtifacts > 0 && evidence.artifactCount < expected.MinArtifacts {
+			continue
+		}
+		if expected.MinWidgets > 0 && evidence.widgetCount < expected.MinWidgets {
+			continue
+		}
+		if len(expected.WidgetKeys) > 0 {
+			combined := strings.ToLower(strings.Join(evidence.widgetKeys, " "))
+			if !allChecksMatch(combined, expected.WidgetKeys) {
+				continue
+			}
+		}
+		return true
+	}
+	return false
+}
+
+type dashboardPreviewEvidenceResult struct {
+	kind          string
+	artifactCount int
+	widgetCount   int
+	widgetKeys    []string
+}
+
+func dashboardPreviewEvidence(toolID string, content map[string]any) (dashboardPreviewEvidenceResult, bool) {
+	toolID = strings.TrimSpace(toolID)
+	rawInput := mapValue(content, "rawInput")
+	rawPayload := mapValue(rawInput, "payload")
+	rawOutput := mapValue(content, "rawOutput")
+	outputText := strings.TrimSpace(firstNonEmptyString(
+		stringValue(rawOutput["output"]),
+		stringValue(rawOutput["text"]),
+	))
+	textContent := strings.TrimSpace(stringValue(mapValue(content, "content")["text"]))
+	combinedText := strings.TrimSpace(strings.Join([]string{outputText, textContent}, "\n"))
+	evidence := dashboardPreviewEvidenceResult{}
+	switch toolID {
+	case "analytics.dashboard.widget.preview":
+		evidence.kind = "dashboard_widget"
+		evidence.artifactCount = 1
+		evidence.widgetCount = 1
+	case "analytics.dashboard.widgets.preview":
+		evidence.kind = "dashboard_widget"
+	case "analytics.dashboard.board.preview":
+		evidence.kind = "dashboard_board"
+		evidence.artifactCount = 1
+	default:
+		return dashboardPreviewEvidenceResult{}, false
+	}
+	evidence.widgetKeys = mergeUniqueStringsLocal(nil,
+		append(
+			stringArray(rawPayload["widget_keys"]),
+			strings.TrimSpace(stringValue(rawPayload["widget_key"])),
+		),
+	)
+	evidence.widgetKeys = mergeUniqueStringsLocal(evidence.widgetKeys, dashboardWidgetKeysFromText(combinedText))
+	if evidence.kind == "dashboard_widget" {
+		if count := intValue(rawPayload["limit"]); count > 0 {
+			evidence.artifactCount = count
+		}
+		if len(evidence.widgetKeys) > 0 {
+			evidence.artifactCount = maxInt(evidence.artifactCount, len(evidence.widgetKeys))
+		}
+		if evidence.artifactCount == 0 {
+			if count := dashboardPreviewCountFromText(combinedText); count > 0 {
+				evidence.artifactCount = count
+			}
+		}
+		if evidence.artifactCount == 0 {
+			return dashboardPreviewEvidenceResult{}, false
+		}
+		evidence.widgetCount = maxInt(len(evidence.widgetKeys), evidence.artifactCount)
+		return evidence, true
+	}
+	if len(evidence.widgetKeys) > 0 {
+		evidence.widgetCount = len(evidence.widgetKeys)
+	} else if count := dashboardPreviewCountFromText(combinedText); count > 0 {
+		evidence.widgetCount = count
+	}
+	return evidence, true
+}
+
+func dashboardWidgetKeysFromText(text string) []string {
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+	matches := regexp.MustCompile(`analytics\.[a-z0-9._-]+`).FindAllString(strings.ToLower(text), -1)
+	return mergeUniqueStringsLocal(nil, matches)
+}
+
+func dashboardPreviewCountFromText(text string) int {
+	if strings.TrimSpace(text) == "" {
+		return 0
+	}
+	matches := regexp.MustCompile(`prepared\s+(\d+)\s+focused dashboard widget previews`).FindStringSubmatch(strings.ToLower(text))
+	if len(matches) != 2 {
+		return 0
+	}
+	value, _ := strconv.Atoi(matches[1])
+	return value
+}
+
+func stringArray(value any) []string {
+	items := anySlice(value)
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		text := strings.TrimSpace(stringValue(item))
+		if text == "" {
+			continue
+		}
+		out = append(out, text)
+	}
+	return out
+}
+
+func intValue(value any) int {
+	switch current := value.(type) {
+	case int:
+		return current
+	case int64:
+		return int(current)
+	case float64:
+		return int(current)
+	case json.Number:
+		parsed, _ := current.Int64()
+		return int(parsed)
+	case string:
+		parsed, _ := strconv.Atoi(strings.TrimSpace(current))
+		return parsed
+	default:
+		return 0
+	}
+}
+
+func maxInt(values ...int) int {
+	best := 0
+	for _, value := range values {
+		if value > best {
+			best = value
+		}
+	}
+	return best
+}
+
+func mergeUniqueStringsLocal(base []string, groups ...[]string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	for _, item := range base {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if _, exists := seen[lower]; exists {
+			continue
+		}
+		seen[lower] = struct{}{}
+		out = append(out, trimmed)
+	}
+	for _, group := range groups {
+		for _, item := range group {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				continue
+			}
+			lower := strings.ToLower(trimmed)
+			if _, exists := seen[lower]; exists {
+				continue
+			}
+			seen[lower] = struct{}{}
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func verifyPlan(result *promptAnalysisResult, expected planExpectation, session sessionTranscript) {

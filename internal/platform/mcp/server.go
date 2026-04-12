@@ -694,7 +694,7 @@ func (s *Server) analyticsDashboardWidgetPreview(actor ActorContext, arguments m
 	}
 	artifact := s.dashboardWidgetArtifactPayload(definition)
 	artifactBlock := dashboardArtifactBlockText(artifact)
-	text := fmt.Sprintf("Prepared dashboard widget preview %s using %s. Structured artifact metadata is included for compatible clients.", firstNonEmpty(title, definition.Title, widgetKey), widgetKey)
+	text := fmt.Sprintf("Prepared dashboard widget preview %s using %s. Artifact emitted successfully. In the final answer, cite the widget title %q and why it matters, but rely on the emitted artifact metadata for rendering.", firstNonEmpty(title, definition.Title, widgetKey), widgetKey, definition.Title)
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
@@ -749,15 +749,20 @@ func (s *Server) analyticsDashboardWidgetsPreview(actor ActorContext, arguments 
 		keys = append(keys, definition.Key)
 	}
 	text := fmt.Sprintf(
-		"Prepared %d focused dashboard widget previews using %s. Structured artifact metadata is included for compatible clients.",
+		"Prepared %d focused dashboard widget previews using %s. Artifact emission succeeded. In the final answer, cite the most relevant widget titles and why they matter, but rely on the emitted artifact metadata for rendering.",
 		len(artifacts),
 		strings.Join(keys, ", "),
 	)
+	widgetTitles := make([]string, 0, len(selected))
+	for _, definition := range selected {
+		widgetTitles = append(widgetTitles, firstNonEmpty(definition.Title, definition.Key))
+	}
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
-			"widgets":   selected,
-			"artifacts": artifacts,
+			"widgets":       selected,
+			"artifacts":     artifacts,
+			"widget_titles": widgetTitles,
 		},
 		"_meta": map[string]any{"compatibility": map[string]any{"artifact_blocks": mapDashboardArtifactBlocks(artifacts)}},
 	}, true, nil
@@ -776,8 +781,7 @@ func (s *Server) analyticsDashboardBoardPreview(actor ActorContext, arguments ma
 	}
 	artifact := s.dashboardBoardArtifactPayload(board, actor)
 	artifactBlock := dashboardArtifactBlockText(artifact)
-	text := fmt.Sprintf("Prepared dashboard board preview %s. Widget keys: %s.", board.Name, dashboardWidgetKeySummary(board.Widgets))
-	text += " Structured artifact metadata is included for compatible clients."
+	text := fmt.Sprintf("Prepared dashboard board preview %s. Widget keys: %s. Artifact emitted successfully. In the final answer, reference the board name and the most relevant widget titles, but rely on emitted artifact metadata for rendering.", board.Name, dashboardWidgetKeySummary(board.Widgets))
 	return map[string]any{
 		"content": []ContentBlock{{Type: "text", Text: text}},
 		"structuredContent": map[string]any{
@@ -806,7 +810,7 @@ func (s *Server) analyticsDashboardBoardCreate(actor ActorContext, arguments map
 	artifact := s.dashboardBoardArtifactPayload(saved, actor)
 	artifactBlock := dashboardArtifactBlockText(artifact)
 	return map[string]any{
-		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Structured artifact metadata is included for compatible clients.", saved.Name, dashboardWidgetKeySummary(saved.Widgets))}},
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Artifact emitted successfully. In the final answer, reference the board name or open link, but rely on emitted artifact metadata for rendering.", saved.Name, dashboardWidgetKeySummary(saved.Widgets))}},
 		"structuredContent": map[string]any{
 			"dashboard": saved,
 			"artifact":  artifact,

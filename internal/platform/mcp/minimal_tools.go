@@ -23,12 +23,10 @@ type toolSummary struct {
 
 func minimalToolDescriptors(actor ActorContext) []ToolDescriptor {
 	return []ToolDescriptor{
-		{Name: "skills.list", Title: "List Skills", Description: "Required first step for workflow-like business tasks in minimal mode. List workflow skills to find one matching the current use case before searching individual tools. Only fall back to tools.search or tools.list when no skill fits.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
-		{Name: "skills.search", Title: "Search Skills", Description: "Required first step for workflow-like business tasks in minimal mode. Search skills by use case or intent, try to find a matching skill first before searching individual tools, then call skills.describe and follow the matched workflow.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
+		{Name: "skills.find", Title: "Find Skills", Description: "Required first step for workflow-like business tasks in minimal mode. Find workflow skills by use case or intent. With a query, search matching skills. Without a query, browse available skills. Then call skills.describe and follow the matched workflow.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
 		{Name: "skills.describe", Title: "Describe Skill", Description: "Get one or more full skill workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched skill ids in one bulk call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"skill_id": map[string]any{"type": "string"}, "skill_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"skill_id"}}, {"required": []string{"skill_ids"}}, {"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}}},
-		{Name: "tools.search", Title: "Search Tools", Description: "Fallback step only when no playbook matches. Search discoverable MCP tools by title, description, business domain, and labels after playbook discovery fails. Pass ALL candidate IDs to tools.describe in a single call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
-		{Name: "tools.list", Title: "List Available Tools", Description: "Fallback step only when no playbook matches. List lightweight summaries of discoverable MCP tools after playbook discovery fails. For details, pass ALL candidate IDs to tools.describe in a single call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
-		{Name: "tools.describe", Title: "Describe Tools", Description: "Get detailed descriptions, schemas, and governance metadata for one or more tools. Always pass ALL candidate tool IDs from tools/search in a single call — do not describe tools one at a time.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"tool_ids"}}},
+		{Name: "tools.find", Title: "Find Tools", Description: "Fallback step only when no skill matches. Find discoverable MCP tools by title, description, business domain, module, and labels. With a query, search matching tools. Without a query, browse available tools. Pass ALL candidate IDs to tools.describe in a single call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
+		{Name: "tools.describe", Title: "Describe Tools", Description: "Get detailed descriptions, schemas, and governance metadata for one or more tools. Always pass ALL candidate tool IDs from tools.find in a single call — do not describe tools one at a time.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"tool_ids"}}},
 		{Name: "tools.call", Title: "Call Tool", Description: "Call one discoverable MCP tool by id with a validated payload.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_id": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "catalog_context": map[string]any{"type": "object"}}, "required": []string{"tool_id"}}},
 	}
 }
@@ -99,7 +97,76 @@ func summarizePlaybookMatches(items []PlaybookSummary, noun string) string {
 	if len(items) > limit {
 		lines = append(lines, fmt.Sprintf("- ... %d more skills in structuredContent.items", len(items)-limit))
 	}
-	lines = append(lines, "Next step: pass one or more exact skill_id values to skills.describe.")
+	lines = append(lines, "Next step: pass one or more exact skill_id values to skills.describe. Treat the returned required_final_facts, required_artifacts, success_checks, and guardrails as the final-answer checklist.")
+	return strings.Join(lines, "\n")
+}
+
+func playbookDescribeChecklist(item PlaybookDefinition, tools []ToolDescriptor) string {
+	lines := []string{
+		fmt.Sprintf("Loaded skill %s (%s).", firstNonEmpty(item.Name, item.ID), item.ID),
+	}
+	if item.UseWhen != "" {
+		lines = append(lines, fmt.Sprintf("Use when: %s", item.UseWhen))
+	}
+	if len(item.WorkflowSteps) > 0 {
+		lines = append(lines, "Workflow steps:")
+		for index, step := range item.WorkflowSteps {
+			line := fmt.Sprintf("%d. %s", index+1, firstNonEmpty(step.Title, step.Step, step.ToolID, step.Description))
+			if step.ToolID != "" {
+				line += fmt.Sprintf(" | tool_id: %s", step.ToolID)
+			}
+			if step.Required {
+				line += " | required"
+			}
+			if step.Output != "" {
+				line += fmt.Sprintf(" | output: %s", step.Output)
+			}
+			lines = append(lines, line)
+		}
+	}
+	if len(item.RequiredFinalFacts) > 0 {
+		lines = append(lines, "Required final facts:")
+		for _, fact := range item.RequiredFinalFacts {
+			lines = append(lines, "- "+fact)
+		}
+	}
+	if len(item.RequiredArtifacts) > 0 {
+		lines = append(lines, "Required artifacts:")
+		for _, artifact := range item.RequiredArtifacts {
+			lines = append(lines, "- "+artifact)
+		}
+	}
+	if len(item.RequiredDraftOutputs) > 0 {
+		lines = append(lines, "Required draft outputs:")
+		for _, output := range item.RequiredDraftOutputs {
+			lines = append(lines, "- "+output)
+		}
+	}
+	if len(item.SuccessChecks) > 0 {
+		lines = append(lines, "Success checks:")
+		for _, check := range item.SuccessChecks {
+			lines = append(lines, "- "+check)
+		}
+	}
+	if len(item.Guardrails) > 0 {
+		lines = append(lines, "Guardrails:")
+		for _, rule := range item.Guardrails {
+			lines = append(lines, "- "+rule)
+		}
+	}
+	if len(item.Pitfalls) > 0 {
+		lines = append(lines, "Common pitfalls:")
+		for _, pitfall := range item.Pitfalls {
+			lines = append(lines, "- "+pitfall)
+		}
+	}
+	if len(tools) > 0 {
+		lines = append(lines, "Referenced tools:")
+		for _, tool := range tools {
+			lines = append(lines, fmt.Sprintf("- tool_id: %s | title: %s", tool.Name, firstNonEmpty(tool.Title, tool.Name)))
+		}
+	}
+	lines = append(lines, "Final-answer rule: do not stop at a general summary. Check every required fact, artifact, draft output, guardrail, and success check before answering.")
 	return strings.Join(lines, "\n")
 }
 
@@ -277,22 +344,21 @@ func toolSearchScore(item toolSummary, query string, terms []string) int {
 	return score
 }
 
-func (s *Server) toolsListMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+func (s *Server) toolsFindMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
 	catalogOpts := s.catalogOptionsFromExposureMode()
-	items := s.filterToolSummaries(actor, arguments, false, catalogOpts)
+	items := s.filterToolSummaries(actor, arguments, strings.TrimSpace(stringArg(arguments, "query")) != "", catalogOpts)
 	return map[string]any{
 		"content":           []ContentBlock{{Type: "text", Text: summarizeToolMatches(items, "discoverable tools")}},
 		"structuredContent": map[string]any{"items": items},
 	}, true, nil
 }
 
+func (s *Server) toolsListMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	return s.toolsFindMeta(actor, arguments)
+}
+
 func (s *Server) toolsSearchMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
-	catalogOpts := s.catalogOptionsFromExposureMode()
-	items := s.filterToolSummaries(actor, arguments, true, catalogOpts)
-	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: summarizeToolMatches(items, "tools")}},
-		"structuredContent": map[string]any{"items": items},
-	}, true, nil
+	return s.toolsFindMeta(actor, arguments)
 }
 
 func (s *Server) toolsDescribeMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
@@ -467,20 +533,20 @@ func containsCaseFold(items []string, needle string) bool {
 	return false
 }
 
-func (s *Server) playbooksListMeta(_ ActorContext, arguments map[string]any) (map[string]any, bool, error) {
-	items := s.filterPlaybookSummaries(arguments, false)
+func (s *Server) playbooksFindMeta(_ ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	items := s.filterPlaybookSummaries(arguments, strings.TrimSpace(stringArg(arguments, "query")) != "")
 	return map[string]any{
 		"content":           []ContentBlock{{Type: "text", Text: summarizePlaybookMatches(items, "skills")}},
 		"structuredContent": map[string]any{"items": items},
 	}, true, nil
 }
 
-func (s *Server) playbooksSearchMeta(_ ActorContext, arguments map[string]any) (map[string]any, bool, error) {
-	items := s.filterPlaybookSummaries(arguments, true)
-	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: summarizePlaybookMatches(items, "skills")}},
-		"structuredContent": map[string]any{"items": items},
-	}, true, nil
+func (s *Server) playbooksListMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	return s.playbooksFindMeta(actor, arguments)
+}
+
+func (s *Server) playbooksSearchMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	return s.playbooksFindMeta(actor, arguments)
 }
 
 func (s *Server) playbooksDescribeMeta(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
@@ -524,9 +590,26 @@ func (s *Server) playbooksDescribeMeta(actor ActorContext, arguments map[string]
 		"tools_by_playbook": toolsByPlaybook,
 	}
 	if len(items) == 1 {
-		content = fmt.Sprintf("Loaded playbook %s.", items[0].Name)
+		content = playbookDescribeChecklist(items[0], toolsByPlaybook[items[0].ID])
 		structured["playbook"] = items[0]
 		structured["tools"] = toolsByPlaybook[items[0].ID]
+		structured["checklist"] = map[string]any{
+			"required_final_facts":    items[0].RequiredFinalFacts,
+			"required_artifacts":      items[0].RequiredArtifacts,
+			"required_draft_outputs":  items[0].RequiredDraftOutputs,
+			"success_checks":          items[0].SuccessChecks,
+			"guardrails":              items[0].Guardrails,
+			"pitfalls":                items[0].Pitfalls,
+			"workflow_steps":          items[0].WorkflowSteps,
+			"tool_inventory":          items[0].ToolInventory,
+		}
+	} else {
+		lines := []string{fmt.Sprintf("Loaded %d skill workflow contracts.", len(items))}
+		for _, item := range items {
+			lines = append(lines, fmt.Sprintf("- skill_id: %s | name: %s | required_final_facts: %d | required_artifacts: %d | success_checks: %d", item.ID, firstNonEmpty(item.Name, item.ID), len(item.RequiredFinalFacts), len(item.RequiredArtifacts), len(item.SuccessChecks)))
+		}
+		lines = append(lines, "Next step: choose the best-matching skill, then satisfy its required_final_facts, required_artifacts, required_draft_outputs, success_checks, and guardrails before answering.")
+		content = strings.Join(lines, "\n")
 	}
 	return map[string]any{
 		"content":           []ContentBlock{{Type: "text", Text: content}},

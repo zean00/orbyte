@@ -14895,7 +14895,7 @@
     {
       "name": "tools.describe",
       "title": "Describe Tools",
-      "description": "Only use when no playbook matches your use case. Get detailed tool descriptions, schemas, and contracts in bulk. Always pass ALL candidate tool IDs from tools/search in a single call — do not describe tools one at a time.",
+      "description": "Only use when no skill matches your use case. Get detailed tool descriptions, schemas, and contracts in bulk. Always pass ALL candidate tool IDs from tools.find in a single call — do not describe tools one at a time.",
       "moduleKey": "platform.core",
       "sourceType": "built_in",
       "capabilityKeys": [
@@ -14938,9 +14938,81 @@
       }
     },
     {
+      "name": "tools.find",
+      "title": "Find Tools",
+      "description": "Fallback step only when no skill matches. Find discoverable MCP tools by title, description, domains, module, and labels. With a query, search matching tools. Without a query, browse available tools. Pass ALL candidate IDs to tools.describe in a single call.",
+      "moduleKey": "platform.core",
+      "sourceType": "built_in",
+      "capabilityKeys": [
+        "discovery"
+      ],
+      "capabilityCategories": [
+        "core"
+      ],
+      "compactEligible": true,
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "module_key": {
+            "type": "string"
+          },
+          "module_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "query": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.tools.find",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "platform"
+        ],
+        "requiredPermissions": [
+          "module.read"
+        ]
+      }
+    },
+    {
       "name": "tools.list",
       "title": "List Available Tools",
-      "description": "Fallback step only when no playbook matches. List lightweight summaries of discoverable MCP tools after playbook discovery fails. For details, pass ALL candidate IDs to tools.describe in a single call.",
+      "description": "Compatibility alias for tools.find. Browse discoverable MCP tools when no skill matches.",
       "moduleKey": "platform.core",
       "sourceType": "built_in",
       "capabilityKeys": [
@@ -15009,7 +15081,7 @@
     {
       "name": "tools.search",
       "title": "Search Tools",
-      "description": "Fallback step only when no playbook matches. Search discoverable MCP tools by title, description, domains, and labels after playbook discovery fails. Pass ALL candidate IDs to tools.describe in a single call.",
+      "description": "Compatibility alias for tools.find. Search discoverable MCP tools when no skill matches.",
       "moduleKey": "platform.core",
       "sourceType": "built_in",
       "capabilityKeys": [

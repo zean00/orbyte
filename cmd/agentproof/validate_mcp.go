@@ -304,7 +304,7 @@ func composeValidationPrompt(prompt, mode, exposureMode, sessionInstructions str
 	}
 	if exposureMode == "minimal" {
 		sections = append(sections,
-			"Use Orbyte MCP as the source of truth. In minimal mode, the required first step for workflow-like business tasks is skills.search or skills.list. If multiple skills look relevant, call skills.describe once with all candidate skill ids before any business tool call. Only if no skill fits should you use tools.search or tools.list, then one bulk tools.describe call, then tools.call. Do not invoke business tools from memory before discovery. Use exact discovered ids only.",
+			"Use Orbyte MCP as the source of truth. In minimal mode, the required first step for workflow-like business tasks is skills.find. If multiple skills look relevant, call skills.describe once with all candidate skill ids before any business tool call. Only if no skill fits should you use tools.find, then one bulk tools.describe call, then tools.call. Do not invoke business tools from memory before discovery. Use exact discovered ids only.",
 		)
 	} else {
 		sections = append(sections,

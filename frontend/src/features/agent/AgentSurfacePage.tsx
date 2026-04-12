@@ -273,7 +273,7 @@ const MCP_ONLY_STORAGE_KEY = "orbyte.agent.mcp_only";
 const MCP_EXPOSURE_MODE_STORAGE_KEY = "orbyte.agent.mcp_exposure_mode";
 type MCPExposureMode = "minimal" | "compact" | "full";
 const MCP_ONLY_PREFIX =
-  "Use Orbyte MCP tools as the source of truth for this answer. In minimal mode, the required first step for any workflow-like business task is skills.search or skills.list. If one or more skills match, call one bulk skills.describe before any business tool call. Only if no skill matches should you fall back to tool discovery with tools.search or tools.list, then use one bulk tools.describe call for the relevant tool ids before tools.call. Do not invoke business tools from memory before discovery. Use exact discovered ids and do not guess tool names, prefixes, or schemas.";
+  "Use Orbyte MCP tools as the source of truth for this answer. In minimal mode, the required first step for any workflow-like business task is skills.find. If one or more skills match, call one bulk skills.describe before any business tool call. Only if no skill matches should you fall back to tool discovery with tools.find, then use one bulk tools.describe call for the relevant tool ids before tools.call. Do not invoke business tools from memory before discovery. Use exact discovered ids and do not guess tool names, prefixes, or schemas.";
 
 export default function AgentSurfacePage() {
   const navigate = useNavigate();
@@ -478,11 +478,11 @@ export default function AgentSurfacePage() {
     setFullCatalogLoading(true);
     Promise.all([
       callMcp<{ structuredContent?: { items?: MCPToolSummary[] } }>(
-        "tools/search",
+        "tools/find",
         {},
       ),
       callMcp<{ structuredContent?: { items?: MCPPlaybookSummary[] } }>(
-        "skills/list",
+        "skills/find",
         {},
       ),
     ])
@@ -1628,7 +1628,7 @@ export default function AgentSurfacePage() {
                             <p className="rounded-2xl border border-line/70 bg-shell px-3 py-2 text-xs leading-5 text-muted">
                               This surface is running in minimal MCP mode. The
                               agent should search skills first, then use
-                              <code>tools.search</code>,{" "}
+                              <code>tools.find</code>,{" "}
                               <code>tools.describe</code>, and{" "}
                               <code>tools.call</code> to reach the relevant
                               underlying MCP tools.
@@ -3089,7 +3089,7 @@ function buildPromptPayload(
   if (mcpOnlyEnabled) {
     sections.push(MCP_ONLY_PREFIX);
     sections.push(
-      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search skills first when the request matches a known workflow. If multiple skills look relevant, load them together with one bulk skills.describe call. If no skill fits, use tool discovery and one bulk tools.describe call before any tools.call execution.",
+      "Treat the visible MCP tool list in the UI as the minimal MCP surface only. Search skills first when the request matches a known workflow. If multiple skills look relevant, load them together with one bulk skills.describe call. If no skill fits, use tool discovery and one bulk tools.describe call before any tools.call execution. After skills.describe, treat required_final_facts, required_artifacts, required_draft_outputs, success_checks, and guardrails as a mandatory checklist for the final answer.",
     );
   }
   if (mode === "plan") {
@@ -3123,10 +3123,10 @@ function buildPromptPayload(
   if (looksLikeCRMPrompt(prompt)) {
     sections.push(
       [
-        "CRM requests are workflow-like business tasks, so the required first step in minimal mode is skills.search or skills.list.",
+        "CRM requests are workflow-like business tasks, so the required first step in minimal mode is skills.find.",
         "If more than one CRM skill looks relevant, load them together with one bulk skills.describe call before choosing the workflow.",
         "Do not call CRM business tools from memory before discovery.",
-        "After you load the chosen CRM skill, follow its recommended workflow and use exact discovered tool ids only.",
+        "After you load the chosen CRM skill, follow its workflow_steps, use exact discovered tool ids only, and do not answer until the skill checklist is satisfied.",
       ].join(" "),
     );
   }
@@ -3134,9 +3134,9 @@ function buildPromptPayload(
     const explicitFullBoard = looksLikeFullDashboardPrompt(prompt);
     sections.push(
       [
-        "Dashboard requests are workflow-like business tasks, so search skills first if a dashboard insight workflow exists for the current request.",
+        "Dashboard requests are workflow-like business tasks, so use skills.find first if a dashboard insight workflow exists for the current request.",
         "If multiple dashboard skills look relevant, load them together with one bulk skills.describe call before choosing the workflow.",
-        "If the dashboard tool family is still not obvious, use tools.search and one bulk tools.describe call before calling tools.call.",
+        "If the dashboard tool family is still not obvious, use tools.find and one bulk tools.describe call before calling tools.call.",
         explicitFullBoard
           ? "For explicit full-dashboard or board-preview requests, prefer the discovered workflow that returns a dashboard_board artifact."
           : "For focused insight responses, prefer the discovered workflow that returns a small set of relevant dashboard_widget artifacts rather than a full board.",
@@ -3147,6 +3147,7 @@ function buildPromptPayload(
           ? "Do not replace an explicit board request with standalone widget artifacts."
           : "For an insight answer, prefer a balanced mix of KPI, comparison, and trend evidence unless the user asks for a different shape.",
         "When dashboard tools return structured artifact metadata, rely on that artifact output instead of rewriting compatibility blocks manually.",
+        "If a chosen skill includes required_artifacts or required_final_facts, treat them as mandatory output obligations, not optional hints.",
         explicitFullBoard
           ? "Mention the dashboard surface or open link for deeper exploration."
           : "If the user wants the full dashboard, direct them to the dashboard surface instead of embedding a full board inline in chat.",
