@@ -37,20 +37,12 @@ flowchart TB
 
 ## Getting Started
 
-### Fastest local run
-
 ```bash
 make test
 make run
 ```
 
-Default local values from the `Makefile`:
-
-- app URL: `http://127.0.0.1:18110`
-- bootstrap admin password: `admin123!`
-- JWT secret: `dev-secret`
-
-### PostgreSQL-backed run
+For PostgreSQL-backed development:
 
 ```bash
 docker compose up -d postgres
@@ -58,73 +50,42 @@ make migrate-up
 make run-postgres
 ```
 
-For a background app lifecycle:
-
-```bash
-make app-start-postgres
-make app-status-postgres
-make app-stop-postgres
-```
-
-### Useful local commands
+Common commands:
 
 ```bash
 make test
-make lint
-make coverage
 make contracts
 make frontend-verify
 make docs-build
-```
-
-### Demo and validation flows
-
-```bash
-make seed-pos
-make seed-dashboard
 make seed-crm-demo
-make seed-agent-runtime
-make validate-mcp
 make validate-crm-agent
 ```
 
+Default local values:
+
+- app URL: `http://127.0.0.1:18110`
+- bootstrap admin password: `admin123!`
+- JWT secret: `dev-secret`
+
+See [docs/getting-started.md](docs/getting-started.md) for prerequisites, install steps, runtime modes, seed flows, and validation commands.
+
 ## Installation
 
-### Prerequisites
+Prerequisites:
 
 - Go `1.25`
 - Node.js and npm
-- Docker and Docker Compose for local PostgreSQL
-- `psql` if you use the reset helpers
+- Docker and Docker Compose
+- `psql` for local reset helpers
 
-### Application entry points
+Main entry points:
 
-- server: `go run ./cmd/server`
-- migrations: `go run ./cmd/migrate`
-- contracts: `go run ./cmd/contractsgen`
-- agent validation: `go run ./cmd/agentproof ...`
+- `go run ./cmd/server`
+- `go run ./cmd/migrate`
+- `go run ./cmd/contractsgen`
+- `go run ./cmd/agentproof ...`
 
-### Frontend build
-
-```bash
-cd frontend
-npm ci
-npm run typecheck
-npm run build
-```
-
-## Runtime Modes
-
-Orbyte supports two main runtime modes:
-
-- in-memory mode
-  - fastest local development path
-  - no PostgreSQL required
-  - process-local state only
-- PostgreSQL mode
-  - persistent repositories
-  - migrations required
-  - recommended for realistic development, MCP validation, and demo seeds
+See [docs/getting-started.md](docs/getting-started.md) for the full setup flow.
 
 ## Configuration
 
@@ -167,22 +128,21 @@ The most important current MCP runtime settings are under `platform.mcp`:
 - `default_action_mode`
 - `playbooks_json`
 
-See [docs/configuration.md](docs/configuration.md) for the full runtime/config model.
+See [docs/configuration.md](docs/configuration.md) for the full runtime and environment model.
 
 ## Current Platform Shape
 
-### Core platform areas
+Core platform areas:
 
 - identity, roles, sessions, service principals, delegated execution
 - configuration definitions and scoped runtime entries
-- generic models and records
-- documents and workflows
-- analytics, dashboards, datasets, report delivery
+- generic models, documents, and workflows
+- analytics, dashboards, datasets, and reporting
 - search and indexing
 - audit, jobs, eventing, integrations, idempotency
 - ACP session runtime and MCP server
 
-### Current business modules
+Current business modules:
 
 The repo currently includes kernel packs for:
 
@@ -194,7 +154,7 @@ The repo currently includes kernel packs for:
 - finance reporting, manual journals, collections, treasury, fixed assets, retail finance, inventory finance
 - workforce, attendance, leave, payroll, payroll remittance, employee spend
 - masterdata, reference masterdata, organization structure
-- analytics, documents, workflow approval policy, monitoring/integration
+- analytics, documents, workflow approval policy, monitoring, integration
 
 There is also a profile-driven example business module under `internal/modules/clinic.go`.
 
@@ -202,7 +162,7 @@ See [docs/modules.md](docs/modules.md) for the current module inventory and capa
 
 ## Surfaces
 
-Declared UI/runtime surfaces in the current codebase:
+Current surfaces:
 
 - `backoffice`
 - `admin`
@@ -213,7 +173,7 @@ Declared UI/runtime surfaces in the current codebase:
 - `dashboard`
 - `mobile`
 
-Operationally relevant routes include:
+Key routes:
 
 - `/ui`
 - `/admin`
@@ -228,12 +188,12 @@ See [docs/surfaces.md](docs/surfaces.md) for the current surface model.
 
 ## Agent Integration
 
-Orbyte currently supports:
+Current agent support:
 
 - ACP provider-backed agent sessions
 - MCP JSON-RPC endpoints
 - switchable MCP exposure modes
-- minimal MCP discovery using:
+- minimal MCP discovery with:
   - `skills.find`
   - `skills.describe`
   - `tools.find`
@@ -246,7 +206,7 @@ See [docs/agent-integration.md](docs/agent-integration.md) for the current agent
 
 ## Module Development
 
-Modules are defined through manifests and kernel packs, not ad hoc route-only extensions. The current codebase supports:
+Modules are defined through manifests and kernel packs, not ad hoc route-only extensions. Current development hooks include:
 
 - manifest registration
 - permissions and role templates
@@ -259,15 +219,32 @@ See [docs/module-development.md](docs/module-development.md) for current develop
 
 ## Documentation
 
+The repository documentation is authored in `docs/` and built into a static site with MkDocs Material.
+
+Primary docs entry pages:
+
 - [Documentation Home](docs/index.md)
 - [Getting Started](docs/getting-started.md)
 - [Configuration](docs/configuration.md)
 - [Architecture](docs/architecture.md)
 - [Features](docs/features.md)
 - [Modules](docs/modules.md)
+- [Surfaces](docs/surfaces.md)
 - [Agent Integration](docs/agent-integration.md)
 - [Module Development](docs/module-development.md)
-- [Surfaces](docs/surfaces.md)
+
+Build the rendered docs site with:
+
+```bash
+make docs-build
+```
+
+Current docs behavior:
+
+- `docs/` is the maintained source
+- `site/` is generated output
+- generated pages are built as `site/*.html` so they can be opened directly from disk
+- Mermaid diagrams are supported in the generated site with a vendored local script
 
 ## Contracts
 
@@ -276,14 +253,10 @@ Published contract artifacts are generated into:
 - `contracts/openapi/<version>/openapi.json`
 - `contracts/mcp/<version>/catalog.json`
 
-Generate them with:
-
-```bash
-make contracts
-```
+Generate them with `make contracts`.
 
 ## Notes
 
 - Startup requires `APP_JWT_SECRET`.
 - In non-PostgreSQL local development, `APP_AUTH_DEV_MODE=true` allows a seeded ephemeral dev auth path.
-- The default docs site is built with MkDocs Material from `docs/`.
+- The default docs site is built with MkDocs Material from `docs/` into `site/`.
