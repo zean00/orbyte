@@ -34,6 +34,8 @@ func TestProductionCostingPostgresActualVarianceAndAllocation(t *testing.T) {
 	ensureFinanceAccountRecord(t, graph.models, actorID, "1200-RM-"+suffix, "Raw Materials "+suffix, "asset", "inventory", "debit")
 	ensureFinanceAccountRecord(t, graph.models, actorID, "1300-WIP-"+suffix, "Work In Progress "+suffix, "asset", "inventory", "debit")
 	ensureWarehouseRecord(t, graph.models, actorID, "MAIN", orgID, locID)
+	ensureProductionWorkCenterRecord(t, graph.models, actorID, "CUT")
+	ensureProductionWorkCenterRecord(t, graph.models, actorID, "COOK")
 	for _, item := range []map[string]any{
 		{"sku": "FGP-" + suffix, "name": "Finished Good " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-FG-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
 		{"sku": "BYP-" + suffix, "name": "Byproduct " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1201-BY-" + suffix, "wip_account_code": "1300-WIP-" + suffix},

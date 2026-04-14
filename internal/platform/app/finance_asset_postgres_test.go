@@ -193,7 +193,6 @@ func TestFinanceAssetPostgresLifecycleEvents(t *testing.T) {
 
 	if _, err := graph.financeAssets.TransferFixedAsset(asset.ID, orgID, locID, "user_admin", map[string]any{
 		"effective_date":      "2099-11-01",
-		"to_location_id":      locID,
 		"to_cost_center_code": "FIN",
 	}); err != nil {
 		t.Fatalf("transfer asset: %v", err)

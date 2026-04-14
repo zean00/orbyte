@@ -28,6 +28,7 @@ func TestRetailFinancePostgresShiftReconciliationAndGiftCard(t *testing.T) {
 	ensureWarehouseRecord(t, graph.models, "user_admin", "MAIN", "org_default", "loc_hq")
 	ensureFinanceAccountRecord(t, graph.models, "user_admin", "1000-CASH", "Cash", "asset", "cash_and_bank", "debit")
 	ensureFinanceAccountRecord(t, graph.models, "user_admin", "1010-CARD", "Card Clearing", "asset", "cash_and_bank", "debit")
+	ensureFinanceAccountRecord(t, graph.models, "user_admin", "2250-GIFT-CARD", "Gift Card Liability", "liability", "current_liabilities", "credit")
 	ensurePOSTenderTypeRecord(t, graph.models, "user_admin", "CASH", "cash")
 	ensurePOSTenderTypeRecord(t, graph.models, "user_admin", "CARD", "card")
 	if _, err := graph.models.Create("pos_store", "user_admin", map[string]any{
@@ -106,11 +107,12 @@ func TestRetailFinancePostgresShiftReconciliationAndGiftCard(t *testing.T) {
 	}
 
 	giftCardPayload := map[string]any{
-		"code":                 "GC-" + suffix,
-		"store_code":           "STORE-" + suffix,
-		"original_amount":      75.0,
-		"amount":               75.0,
-		"payment_account_code": "1000-CASH",
+		"code":                   "GC-" + suffix,
+		"store_code":             "STORE-" + suffix,
+		"original_amount":        75.0,
+		"amount":                 75.0,
+		"payment_account_code":   "1000-CASH",
+		"liability_account_code": "2250-GIFT-CARD",
 	}
 	issued, err := graph.retailFinance.IssueGiftCard("org_default", "loc_hq", "user_admin", giftCardPayload)
 	if err != nil {

@@ -46,9 +46,9 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	rosterStartDate := rosterStart.Format("2006-01-02")
 	rosterEndDate := rosterEnd.Format("2006-01-02")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_leave_pg_"+suffix, "Leave Party "+suffix)
-	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_leave", "org_default", "loc_hq")
-	ensureDepartmentRecord(t, graph.models, "user_admin", "dept_leave", "org_default", "loc_hq", "ou_leave")
-	ensureCostCenterRecord(t, graph.models, "user_admin", "cc_leave", "org_default", "loc_hq", "ou_leave", "dept_leave")
+	unit := ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_leave", "org_default", "loc_hq")
+	department := ensureDepartmentRecord(t, graph.models, "user_admin", "dept_leave", "org_default", "loc_hq", unit.ID)
+	costCenter := ensureCostCenterRecord(t, graph.models, "user_admin", "cc_leave", "org_default", "loc_hq", unit.ID, department.ID)
 
 	employee, err := graph.models.Create("employee_profile", "user_admin", map[string]any{
 		"party_id":          party.ID,
@@ -64,9 +64,9 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"employee_id":          employee.ID,
 		"organization_id":      "org_default",
 		"location_id":          "loc_hq",
-		"organization_unit_id": "ou_leave",
-		"department_id":        "dept_leave",
-		"cost_center_id":       "cc_leave",
+		"organization_unit_id": unit.ID,
+		"department_id":        department.ID,
+		"cost_center_id":       costCenter.ID,
 		"effective_from":       "2000-01-01",
 		"status":               "active",
 	}); err != nil {
@@ -113,7 +113,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"document_type": "leave_request",
 		"workflow_key":  "leave_request_flow",
 		"action":        "submit",
-		"department_id": "dept_leave",
+		"department_id": department.ID,
 		"status":        "active",
 	})
 	if err != nil {

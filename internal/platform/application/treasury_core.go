@@ -404,7 +404,7 @@ func (s *TreasuryCoreService) ApproveBankReconciliation(reconciliationID, actorI
 		PageSize: 1,
 		Filters: map[string]string{
 			"bank_statement_id": textValue(reconciliation.Values["bank_statement_id"]),
-			"status":            "open",
+			"status":            "pending",
 		},
 	})
 	if err != nil && !isMissingModelDefinitionError(err) {
@@ -592,7 +592,7 @@ func (s *TreasuryCoreService) BankReconciliation(organizationID, locationID, sta
 	}
 	report.OutstandingBookAmount = roundMoney(report.BookBalance - report.MatchedAmount)
 	report.Difference = roundMoney(report.StatementBalance - report.BookBalance)
-	exceptions, _, err := s.models.List("treasury_exception", model.Query{Page: 1, PageSize: 500, Filters: map[string]string{"bank_statement_id": statement.ID, "status": "open"}})
+	exceptions, _, err := s.models.List("treasury_exception", model.Query{Page: 1, PageSize: 500, Filters: map[string]string{"bank_statement_id": statement.ID, "status": "pending"}})
 	if err == nil {
 		report.Exceptions = exceptions
 	}
@@ -744,6 +744,9 @@ func (s *TreasuryCoreService) ExceptionReport(organizationID, locationID, asOfDa
 	report := TreasuryExceptionReport{OrganizationID: organizationID, LocationID: locationID, AsOfDate: asOfDate, Items: []model.Record{}, Totals: map[string]float64{}}
 	filters := map[string]string{"organization_id": organizationID, "location_id": locationID}
 	if status != "" {
+		if status == "open" {
+			status = "pending"
+		}
 		filters["status"] = status
 	}
 	items, _, err := s.models.List("treasury_exception", model.Query{Page: 1, PageSize: 500, Filters: filters})
@@ -879,14 +882,14 @@ func (s *TreasuryCoreService) syncStatementExceptions(reconciliation, statement 
 				"description":            textValue(line.Values["description"]),
 				"reference":              textValue(line.Values["reference"]),
 				"amount":                 remaining,
-				"status":                 "open",
+				"status":                 "pending",
 			})
 			if err != nil {
 				return err
 			}
 			continue
 		}
-		if current, ok := s.findTreasuryModelByFields("treasury_exception", map[string]string{"bank_statement_line_id": line.ID}); ok && textValue(current.Values["status"]) == "open" {
+		if current, ok := s.findTreasuryModelByFields("treasury_exception", map[string]string{"bank_statement_line_id": line.ID}); ok && textValue(current.Values["status"]) == "pending" {
 			if _, err := s.models.Update("treasury_exception", current.ID, actorID, mergeModelValues(current.Values, map[string]any{"status": "resolved", "resolved_at": time.Now().UTC().Format(time.RFC3339), "resolved_by": actorID}), current.Version); err != nil {
 				return err
 			}

@@ -244,7 +244,7 @@ func TestTreasuryApproveBankReconciliationBlocksDifferencesAndOpenExceptions(t *
 		"bank_statement_id": "stmt_1",
 		"exception_kind":    "unmatched_statement_line",
 		"amount":            15.0,
-		"status":            "open",
+		"status":            "pending",
 	}); err != nil {
 		t.Fatalf("create exception: %v", err)
 	}

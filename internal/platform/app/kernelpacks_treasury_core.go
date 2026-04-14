@@ -210,7 +210,7 @@ func treasuryCoreKernelPackManifest() module.Manifest {
 				{Key: "statement_date", Type: "string"},
 				{Key: "description", Type: "string"},
 				{Key: "amount", Type: "number"},
-				{Key: "status", Type: "string", DefaultValue: "open"},
+				{Key: "status", Type: "string", DefaultValue: "pending"},
 				{Key: "note", Type: "string"},
 				{Key: "resolved_at", Type: "string"},
 				{Key: "resolved_by", Type: "string"},

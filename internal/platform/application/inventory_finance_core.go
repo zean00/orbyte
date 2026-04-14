@@ -335,7 +335,7 @@ func (s *InventoryFinanceCoreService) GenerateAdjustmentFromCountSession(session
 	updatedValues := mergeModelValues(session.Values, map[string]any{
 		"generated_adjustment_id":     record.Header.ID,
 		"generated_adjustment_number": firstNonEmptyString(record.Header.Number, record.Header.ID),
-		"status":                      "adjustment_generated",
+		"status":                      "generated",
 	})
 	if _, err := s.models.Update("inventory_count_session", session.ID, actorID, updatedValues, session.Version); err != nil {
 		return document.Record{}, err
@@ -361,7 +361,7 @@ func (s *InventoryFinanceCoreService) OpenReconciliationCase(organizationID, loc
 		"inventory_value":  roundMoney(inventoryValue),
 		"gl_value":         roundMoney(glValue),
 		"difference":       roundMoney(inventoryValue - glValue),
-		"status":           "open",
+		"status":           "pending",
 		"assignee_user_id": actorID,
 		"note":             reason,
 	})

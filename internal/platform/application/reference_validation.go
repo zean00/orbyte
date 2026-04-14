@@ -117,6 +117,9 @@ func validateCommercialTaxCode(models *model.Service, taxCode string) error {
 }
 
 func validateLocationID(models *model.Service, locationID string) error {
+	if !modelRegistered(models, "location") {
+		return nil
+	}
 	if _, ok := resolveExistingModelRecord(models, "location", locationID); ok {
 		return nil
 	}

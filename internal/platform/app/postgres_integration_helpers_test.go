@@ -128,6 +128,16 @@ func ensurePOSTenderTypeRecord(t *testing.T, models *model.Service, actorID, cod
 	}, actorID)
 }
 
+func ensureProductionWorkCenterRecord(t *testing.T, models *model.Service, actorID, code string) model.Record {
+	t.Helper()
+	return ensureModelByCode(t, models, "production_work_center", "code", code, map[string]any{
+		"code":   code,
+		"name":   code,
+		"kind":   "general",
+		"status": "active",
+	}, actorID)
+}
+
 func ensureAccountingPeriodForDate(t *testing.T, models *model.Service, actorID, organizationID, locationID, postingDate string) model.Record {
 	t.Helper()
 	parsed, err := time.Parse("2006-01-02", postingDate)
