@@ -357,7 +357,7 @@ func (s *InventoryFinanceCoreService) OpenReconciliationCase(organizationID, loc
 		"as_of_date":       normalizeAsOfDate(asOfDate),
 		"account_code":     accountCode,
 		"account_name":     s.financeAccountName(accountIndex, accountCode),
-		"mismatch_type":    "inventory_gl",
+		"mismatch_type":    "valuation",
 		"inventory_value":  roundMoney(inventoryValue),
 		"gl_value":         roundMoney(glValue),
 		"difference":       roundMoney(inventoryValue - glValue),

@@ -70,7 +70,7 @@ func (s *LeavePolicyCoreService) ExecuteAccrualRun(runID, actorID string) (model
 	if !strings.EqualFold(textValue(run.Values["status"]), "active") {
 		return model.Record{}, shared.Validation("leave accrual run is not active")
 	}
-	if strings.EqualFold(textValue(run.Values["run_status"]), "processed") {
+	if strings.EqualFold(textValue(run.Values["run_status"]), "completed") {
 		return run, nil
 	}
 	runMode := strings.TrimSpace(textValue(run.Values["run_mode"]))
@@ -158,7 +158,7 @@ func (s *LeavePolicyCoreService) ExecuteAccrualRun(runID, actorID string) (model
 	}
 
 	values := cloneMap(run.Values)
-	values["run_status"] = "processed"
+	values["run_status"] = "completed"
 	values["processed_at"] = time.Now().UTC().Format(time.RFC3339)
 	values["processed_by"] = strings.TrimSpace(actorID)
 	return s.models.Update("leave_accrual_run", run.ID, actorID, values, run.Version)

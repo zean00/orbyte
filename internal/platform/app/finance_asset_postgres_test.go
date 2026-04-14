@@ -185,6 +185,7 @@ func TestFinanceAssetPostgresLifecycleEvents(t *testing.T) {
 		t.Fatalf("create fixed asset: %v", err)
 	}
 	asset := assetResult["asset"].(model.Record)
+	transferCostCenter := ensureCostCenterRecord(t, graph.models, "user_admin", "FIN", orgID, locID, "", "")
 	templateID := textValue(asset.Values["linked_journal_template_id"])
 	posting := mustCreatePostedJournalForPostgres(t, graph, templateID, "2099-10-31", 100)
 	if err := graph.financeAssets.HandleApprovedLedgerPosting(posting, "user_admin"); err != nil {
@@ -193,7 +194,7 @@ func TestFinanceAssetPostgresLifecycleEvents(t *testing.T) {
 
 	if _, err := graph.financeAssets.TransferFixedAsset(asset.ID, orgID, locID, "user_admin", map[string]any{
 		"effective_date":      "2099-11-01",
-		"to_cost_center_code": "FIN",
+		"to_cost_center_code": textValue(transferCostCenter.Values["code"]),
 	}); err != nil {
 		t.Fatalf("transfer asset: %v", err)
 	}
@@ -224,8 +225,8 @@ func TestFinanceAssetPostgresLifecycleEvents(t *testing.T) {
 	if got := textValue(updated.Values["current_location_id"]); got != locID {
 		t.Fatalf("expected current location %s, got %q", locID, got)
 	}
-	if got := textValue(updated.Values["current_cost_center_code"]); got != "FIN" {
-		t.Fatalf("expected current cost center FIN, got %q", got)
+	if got := textValue(updated.Values["current_cost_center_code"]); got != textValue(transferCostCenter.Values["code"]) {
+		t.Fatalf("expected current cost center %s, got %q", textValue(transferCostCenter.Values["code"]), got)
 	}
 	if got := textValue(updated.Values["status"]); got != "disposed" {
 		t.Fatalf("expected disposed status, got %q", got)

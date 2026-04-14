@@ -83,7 +83,7 @@ func inventoryFinanceCoreKernelPackManifest() module.Manifest {
 					{Key: "as_of_date", Label: "As Of", LabelI18n: localize("As Of", "Per Tanggal"), Type: "string"},
 					{Key: "account_code", Label: "Account", LabelI18n: localize("Account", "Akun"), Type: "string"},
 					{Key: "account_name", Label: "Account Name", LabelI18n: localize("Account Name", "Nama Akun"), Type: "string"},
-					{Key: "mismatch_type", Label: "Mismatch Type", LabelI18n: localize("Mismatch Type", "Tipe Selisih"), Type: "string", DefaultValue: "inventory_gl"},
+					{Key: "mismatch_type", Label: "Mismatch Type", LabelI18n: localize("Mismatch Type", "Tipe Selisih"), Type: "string", DefaultValue: "valuation"},
 					{Key: "inventory_value", Label: "Inventory Value", LabelI18n: localize("Inventory Value", "Nilai Inventori"), Type: "number"},
 					{Key: "gl_value", Label: "GL Value", LabelI18n: localize("GL Value", "Nilai GL"), Type: "number"},
 					{Key: "difference", Label: "Difference", LabelI18n: localize("Difference", "Selisih"), Type: "number"},

@@ -100,7 +100,7 @@ func TestUILeaveSelfServiceRoutesAreEmployeeScoped(t *testing.T) {
 		"run_mode":        "annual_grant",
 		"effective_date":  "2099-01-01",
 		"status":          "active",
-		"run_status":      "draft",
+		"run_status":      "pending",
 	}); err != nil {
 		t.Fatalf("create accrual run: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestUIAttendanceLeaveApprovalRoutesRequireAssignment(t *testing.T) {
 	if _, err := h.models.Create("employee_leave_profile", "user_admin", map[string]any{"employee_id": employee.ID, "leave_policy_id": policyRecord.ID, "effective_from": "2000-01-01", "status": "active"}); err != nil {
 		t.Fatalf("create leave profile: %v", err)
 	}
-	if _, err := h.models.Create("leave_accrual_run", "user_admin", map[string]any{"code": "ACC-SELF", "name": "Self Grant", "leave_policy_id": policyRecord.ID, "run_mode": "annual_grant", "effective_date": "2099-01-01", "status": "active", "run_status": "draft"}); err != nil {
+	if _, err := h.models.Create("leave_accrual_run", "user_admin", map[string]any{"code": "ACC-SELF", "name": "Self Grant", "leave_policy_id": policyRecord.ID, "run_mode": "annual_grant", "effective_date": "2099-01-01", "status": "active", "run_status": "pending"}); err != nil {
 		t.Fatalf("create accrual run: %v", err)
 	}
 	createBody, _ := json.Marshal(map[string]any{"leave_policy_id": policyRecord.ID, "start_date": "2099-02-01", "end_date": "2099-02-01"})
@@ -282,7 +282,7 @@ func TestUILeaveAmendmentRoutesEnforcePermissionsAndUpdateInPlace(t *testing.T) 
 	if _, err := h.models.Create("employee_leave_profile", "user_admin", map[string]any{"employee_id": employee.ID, "leave_policy_id": policyRecord.ID, "effective_from": "2000-01-01", "status": "active"}); err != nil {
 		t.Fatalf("create leave profile: %v", err)
 	}
-	if _, err := h.models.Create("leave_accrual_run", "user_admin", map[string]any{"code": "ACC-AMD", "name": "Grant", "leave_policy_id": policyRecord.ID, "run_mode": "annual_grant", "effective_date": "2099-01-01", "status": "active", "run_status": "draft"}); err != nil {
+	if _, err := h.models.Create("leave_accrual_run", "user_admin", map[string]any{"code": "ACC-AMD", "name": "Grant", "leave_policy_id": policyRecord.ID, "run_mode": "annual_grant", "effective_date": "2099-01-01", "status": "active", "run_status": "pending"}); err != nil {
 		t.Fatalf("create accrual run: %v", err)
 	}
 

@@ -307,7 +307,7 @@ func treasuryCoreKernelPackManifest() module.Manifest {
 					{Key: "statement_date", Label: "Date", Path: "values.statement_date"},
 					{Key: "closing_balance", Label: "Closing", Path: "values.closing_balance"},
 					{Key: "status", Label: "Status", Path: "values.status"},
-				}, []string{"draft", "imported", "reconciling", "reconciled"}),
+				}, []string{"draft", "imported", "processing", "completed"}),
 				commercialModelListView("finance.bank_import_templates.list", "Bank Import Templates", "bank_import_template", []module.ColumnDefinition{
 					{Key: "template_code", Label: "Code", Path: "values.template_code"},
 					{Key: "name", Label: "Name", Path: "values.name"},

@@ -12,28 +12,28 @@ import (
 )
 
 type ProductionCostingSummaryRow struct {
-	ProductionOrderID       string  `json:"production_order_id"`
-	OrderNumber             string  `json:"order_number"`
-	Status                  string  `json:"status"`
-	FinishedItemCode        string  `json:"finished_item_code"`
-	FinishedItemName        string  `json:"finished_item_name"`
-	PlannedQuantity         float64 `json:"planned_quantity"`
-	ActualOutputQuantity    float64 `json:"actual_output_quantity"`
-	StandardMaterialCost    float64 `json:"standard_material_cost_total"`
-	StandardLaborCost       float64 `json:"standard_labor_cost_total"`
-	StandardOverheadCost    float64 `json:"standard_overhead_cost_total"`
-	StandardTotalCost       float64 `json:"standard_total_cost"`
-	ActualMaterialCost      float64 `json:"actual_material_cost_total"`
-	ActualLaborCost         float64 `json:"actual_labor_cost_total"`
-	ActualOverheadCost      float64 `json:"actual_overhead_cost_total"`
-	ActualTotalCost         float64 `json:"actual_total_cost"`
-	UnitStandardCost        float64 `json:"unit_standard_cost"`
-	UnitActualCost          float64 `json:"unit_actual_cost"`
-	MaterialVarianceAmount  float64 `json:"material_variance_amount"`
-	LaborVarianceAmount     float64 `json:"labor_variance_amount"`
-	OverheadVarianceAmount  float64 `json:"overhead_variance_amount"`
-	YieldVarianceAmount     float64 `json:"yield_variance_amount"`
-	TotalVarianceAmount     float64 `json:"total_variance_amount"`
+	ProductionOrderID      string  `json:"production_order_id"`
+	OrderNumber            string  `json:"order_number"`
+	Status                 string  `json:"status"`
+	FinishedItemCode       string  `json:"finished_item_code"`
+	FinishedItemName       string  `json:"finished_item_name"`
+	PlannedQuantity        float64 `json:"planned_quantity"`
+	ActualOutputQuantity   float64 `json:"actual_output_quantity"`
+	StandardMaterialCost   float64 `json:"standard_material_cost_total"`
+	StandardLaborCost      float64 `json:"standard_labor_cost_total"`
+	StandardOverheadCost   float64 `json:"standard_overhead_cost_total"`
+	StandardTotalCost      float64 `json:"standard_total_cost"`
+	ActualMaterialCost     float64 `json:"actual_material_cost_total"`
+	ActualLaborCost        float64 `json:"actual_labor_cost_total"`
+	ActualOverheadCost     float64 `json:"actual_overhead_cost_total"`
+	ActualTotalCost        float64 `json:"actual_total_cost"`
+	UnitStandardCost       float64 `json:"unit_standard_cost"`
+	UnitActualCost         float64 `json:"unit_actual_cost"`
+	MaterialVarianceAmount float64 `json:"material_variance_amount"`
+	LaborVarianceAmount    float64 `json:"labor_variance_amount"`
+	OverheadVarianceAmount float64 `json:"overhead_variance_amount"`
+	YieldVarianceAmount    float64 `json:"yield_variance_amount"`
+	TotalVarianceAmount    float64 `json:"total_variance_amount"`
 }
 
 type ProductionCostSummaryReport struct {
@@ -104,20 +104,20 @@ func (s *ProductionCostingCoreService) HandleApprovedProductionOutput(record doc
 	outputDate := firstNonEmptyString(textValue(payload["output_date"]), time.Now().UTC().Format("2006-01-02"))
 	for _, allocation := range allocations {
 		values := map[string]any{
-			"organization_id":         record.Header.OrganizationID,
-			"location_id":             record.Header.LocationID,
+			"organization_id":             record.Header.OrganizationID,
+			"location_id":                 record.Header.LocationID,
 			"source_production_output_id": record.Header.ID,
-			"production_order_id":     order.Header.ID,
-			"output_item_code":        textValue(allocation["output_item_code"]),
-			"output_item_name":        textValue(allocation["output_item_name"]),
-			"warehouse_code":          textValue(allocation["warehouse_code"]),
-			"output_quantity":         roundMoney(numberValue(allocation["output_quantity"])),
-			"allocation_basis":        firstNonEmptyString(textValue(allocation["allocation_basis"]), "quantity_share"),
-			"allocation_share_percent": roundMoney(numberValue(allocation["allocation_share_percent"])),
-			"allocated_total_cost":    roundMoney(numberValue(allocation["allocated_total_cost"])),
-			"allocated_unit_cost":     roundMoney(numberValue(allocation["allocated_unit_cost"])),
-			"output_date":             outputDate,
-			"status":                  "posted",
+			"production_order_id":         order.Header.ID,
+			"output_item_code":            textValue(allocation["output_item_code"]),
+			"output_item_name":            textValue(allocation["output_item_name"]),
+			"warehouse_code":              textValue(allocation["warehouse_code"]),
+			"output_quantity":             roundMoney(numberValue(allocation["output_quantity"])),
+			"allocation_basis":            firstNonEmptyString(textValue(allocation["allocation_basis"]), "quantity_share"),
+			"allocation_share_percent":    roundMoney(numberValue(allocation["allocation_share_percent"])),
+			"allocated_total_cost":        roundMoney(numberValue(allocation["allocated_total_cost"])),
+			"allocated_unit_cost":         roundMoney(numberValue(allocation["allocated_unit_cost"])),
+			"output_date":                 outputDate,
+			"status":                      "posted",
 		}
 		if _, err := s.models.Create("production_output_allocation", actorID, values); err != nil && !isConflict(err) {
 			return err
@@ -221,8 +221,8 @@ func (s *ProductionCostingCoreService) resolveRouting(record document.Record) (m
 	}
 	items, _, err := s.models.List("production_routing", model.Query{
 		Filters: map[string]string{
-			"organization_id": record.Header.OrganizationID,
-			"status":          "active",
+			"organization_id":    record.Header.OrganizationID,
+			"status":             "active",
 			"produced_item_code": itemCode,
 		},
 		Page:     1,
@@ -299,10 +299,10 @@ func (s *ProductionCostingCoreService) lookupCostRate(organizationID, locationID
 	}
 	items, _, err := s.models.List("production_cost_rate", model.Query{
 		Filters: map[string]string{
-			"organization_id": organizationID,
+			"organization_id":  organizationID,
 			"work_center_code": strings.TrimSpace(workCenterCode),
-			"rate_type":       strings.TrimSpace(rateType),
-			"status":          "active",
+			"rate_type":        strings.TrimSpace(rateType),
+			"status":           "active",
 		},
 		Page:     1,
 		PageSize: 100,
@@ -574,7 +574,7 @@ func (s *ProductionCostingCoreService) syncVarianceCase(record document.Record, 
 		"production_order_id": record.Header.ID,
 		"order_number":        firstNonEmptyString(record.Header.Number, record.Header.ID),
 		"finished_item_code":  textValue(payload["finished_item_code"]),
-		"variance_type":       "total",
+		"variance_type":       "other",
 		"amount":              totalVariance,
 		"status":              "open",
 		"notes":               "Auto-synced from production costing",

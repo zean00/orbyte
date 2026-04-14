@@ -155,7 +155,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"run_mode":        "annual_grant",
 		"effective_date":  grantDate,
 		"status":          "active",
-		"run_status":      "draft",
+		"run_status":      "pending",
 	})
 	if err != nil {
 		t.Fatalf("create leave accrual run: %v", err)
@@ -232,7 +232,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list attendance days after amendment: %v", err)
 	}
-	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "on_leave" {
+	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "leave" {
 		t.Fatalf("expected old attendance leave to clear after amendment, got %+v", days)
 	}
 	request, err = graph.leavePolicies.ApproveLeaveRequest(request.ID, "user_admin")
@@ -250,8 +250,8 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list attendance days after reapproval: %v", err)
 	}
-	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "on_leave" {
-		t.Fatalf("expected amended attendance day on_leave, got %+v", days)
+	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "leave" {
+		t.Fatalf("expected amended attendance day leave, got %+v", days)
 	}
 
 	account, err := graph.models.Get("leave_balance_account", textValue(request.Values["balance_account_id"]))
@@ -321,6 +321,30 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		t.Fatalf("expected counted roster dates [%s,%s], got %+v", rosterStartDate, rosterEndDate, countedDates)
 	}
 
+	ensurePaymentMethodRecord(t, graph.models, "user_admin", "BANK", "bank_transfer", "1010-BANK-LEAVE-"+suffix)
+	treasuryAccount, err := graph.models.Create("treasury_account", "user_admin", map[string]any{
+		"account_code":    "TR-LEAVE-" + suffix,
+		"name":            "Leave Treasury " + suffix,
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"currency_code":   "IDR",
+		"gl_account_code": "1010-BANK-LEAVE-" + suffix,
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create leave treasury account: %v", err)
+	}
+	if _, err := graph.models.Create("salary_structure", "user_admin", map[string]any{
+		"id":              "struct_leave_pg_" + suffix,
+		"code":            "SAL-LEAVE-" + suffix,
+		"name":            "Leave Payroll Structure",
+		"organization_id": "org_default",
+		"location_id":     "loc_hq",
+		"currency_code":   "IDR",
+		"status":          "active",
+	}); err != nil {
+		t.Fatalf("create leave salary structure: %v", err)
+	}
 	if _, err := graph.models.Create("employee_compensation_profile", "user_admin", map[string]any{
 		"employee_id":          employee.ID,
 		"currency_code":        "IDR",
@@ -335,7 +359,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"salary_structure_id":        "struct_leave_pg_" + suffix,
 		"currency_code":              "IDR",
 		"payment_method_code":        "BANK",
-		"treasury_account_id":        "treasury_leave_pg_" + suffix,
+		"treasury_account_id":        treasuryAccount.ID,
 		"leave_deduction_daily_rate": 20.0,
 		"status":                     "active",
 	}); err != nil {
@@ -448,7 +472,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"run_mode":        "annual_grant",
 		"effective_date":  grantDate,
 		"status":          "active",
-		"run_status":      "draft",
+		"run_status":      "pending",
 	})
 	if err != nil {
 		t.Fatalf("create carry forward accrual run: %v", err)
@@ -477,7 +501,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"run_mode":        "monthly_accrual",
 		"effective_date":  expiryTriggerDate,
 		"status":          "active",
-		"run_status":      "draft",
+		"run_status":      "pending",
 	})
 	if err != nil {
 		t.Fatalf("create carry forward expiry trigger run: %v", err)
@@ -533,7 +557,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"run_mode":        "monthly_accrual",
 		"effective_date":  monthlyRunDate,
 		"status":          "active",
-		"run_status":      "draft",
+		"run_status":      "pending",
 	})
 	if err != nil {
 		t.Fatalf("create monthly accrual run: %v", err)
@@ -582,8 +606,8 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload attendance days: %v", err)
 	}
-	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "on_leave" {
-		t.Fatalf("expected persisted attendance day on_leave after approved amendment, got %+v", days)
+	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "leave" {
+		t.Fatalf("expected persisted attendance day leave after approved amendment, got %+v", days)
 	}
 }
 

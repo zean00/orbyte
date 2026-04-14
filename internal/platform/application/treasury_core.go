@@ -315,7 +315,7 @@ func (s *TreasuryCoreService) SyncBankReconciliation(organizationID, locationID,
 	if err := s.syncStatementExceptions(reconciliation, statement, actorID); err != nil {
 		return model.Record{}, err
 	}
-	if updated, err := s.models.Update("bank_statement", statement.ID, actorID, mergeModelValues(statement.Values, map[string]any{"status": "reconciling"}), statement.Version); err == nil {
+	if updated, err := s.models.Update("bank_statement", statement.ID, actorID, mergeModelValues(statement.Values, map[string]any{"status": "processing"}), statement.Version); err == nil {
 		statement = updated
 	}
 	_ = statement
@@ -424,7 +424,7 @@ func (s *TreasuryCoreService) ApproveBankReconciliation(reconciliationID, actorI
 	statementID := textValue(updated.Values["bank_statement_id"])
 	if statementID != "" {
 		if statement, err := s.models.Get("bank_statement", statementID); err == nil {
-			_, _ = s.models.Update("bank_statement", statement.ID, actorID, mergeModelValues(statement.Values, map[string]any{"status": "reconciled"}), statement.Version)
+			_, _ = s.models.Update("bank_statement", statement.ID, actorID, mergeModelValues(statement.Values, map[string]any{"status": "completed"}), statement.Version)
 		}
 	}
 	return updated, nil

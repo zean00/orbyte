@@ -70,6 +70,19 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 	if err != nil {
 		t.Fatalf("create expense category: %v", err)
 	}
+	ensurePaymentMethodRecord(t, graph.models, "user_admin", "BANK", "bank_transfer", "1010-BANK")
+	treasuryAccount, err := graph.models.Create("treasury_account", "user_admin", map[string]any{
+		"account_code":    "TRAVEL-" + suffix,
+		"name":            "Travel Treasury " + suffix,
+		"organization_id": orgID,
+		"location_id":     locID,
+		"currency_code":   "IDR",
+		"gl_account_code": "1010-BANK",
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create expense treasury account: %v", err)
+	}
 	policyRecord, err := graph.models.Create("expense_policy", "user_admin", map[string]any{
 		"code":                         "POL-" + suffix,
 		"name":                         "Travel Policy",
@@ -79,7 +92,7 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 		"default_payment_method_code":  "BANK",
 		"default_payable_account_code": "2100-EMP",
 		"default_expense_account_code": "6100-TRAVEL",
-		"default_treasury_account_id":  "treasury_main_" + suffix,
+		"default_treasury_account_id":  treasuryAccount.ID,
 		"status":                       "active",
 	})
 	if err != nil {
@@ -102,7 +115,7 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 		"default_payment_method_code": "BANK",
 		"payable_account_code":        "2100-EMP",
 		"expense_account_code":        "6100-TRAVEL",
-		"treasury_account_id":         "treasury_main_" + suffix,
+		"treasury_account_id":         treasuryAccount.ID,
 		"status":                      "active",
 	}); err != nil {
 		t.Fatalf("create employee spend profile: %v", err)

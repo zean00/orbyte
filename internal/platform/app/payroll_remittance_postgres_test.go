@@ -34,6 +34,7 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	unit := ensureOrganizationUnitRecord(t, graph.models, "user_admin", unitID, orgID, locID)
 	department := ensureDepartmentRecord(t, graph.models, "user_admin", departmentID, orgID, locID, unit.ID)
 	costCenter := ensureCostCenterRecord(t, graph.models, "user_admin", costCenterID, orgID, locID, unit.ID, department.ID)
+	ensurePaymentMethodRecord(t, graph.models, "user_admin", "BANK", "bank_transfer", "1010-BANK-REM")
 	approverUser, err := graph.identity.CreateUser("remittance-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)

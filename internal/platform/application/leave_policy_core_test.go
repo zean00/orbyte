@@ -88,8 +88,8 @@ func TestLeavePolicyExecuteAccrualAndApproveLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list attendance days: %v", err)
 	}
-	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "on_leave" {
-		t.Fatalf("expected attendance day on_leave, got %+v", days)
+	if len(days) == 0 || textValue(days[0].Values["attendance_status"]) != "leave" {
+		t.Fatalf("expected attendance day leave, got %+v", days)
 	}
 }
 
@@ -763,8 +763,8 @@ func TestLeavePolicyApprovedCancellationRestoresBalanceAndClearsAttendance(t *te
 	if err != nil {
 		t.Fatalf("list attendance day: %v", err)
 	}
-	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "on_leave" {
-		t.Fatalf("expected leave cancellation to clear on_leave attendance, got %+v", days[0].Values)
+	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "leave" {
+		t.Fatalf("expected leave cancellation to clear leave attendance, got %+v", days[0].Values)
 	}
 }
 
@@ -1098,7 +1098,7 @@ func TestLeavePolicyManagerAmendApprovedRequestRequiresReapproval(t *testing.T) 
 	if err != nil {
 		t.Fatalf("list attendance day: %v", err)
 	}
-	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "on_leave" {
+	if len(days) > 0 && textValue(days[0].Values["attendance_status"]) == "leave" {
 		t.Fatalf("expected old approved attendance to clear after amendment, got %+v", days[0].Values)
 	}
 	record, err = service.ApproveLeaveRequest(record.ID, "dept_manager")
@@ -1648,4 +1648,3 @@ func TestPrepareLeaveRequestValuesDoesNotMaskApplicableContextErrors(t *testing.
 		t.Fatalf("expected underlying lookup failure, got fallback validation error: %v", err)
 	}
 }
-

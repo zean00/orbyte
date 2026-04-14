@@ -143,8 +143,8 @@ func TestWorkforceAttendanceSyncDayPrefersApprovedLeave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync attendance day: %v", err)
 	}
-	if got := textValue(day.Values["attendance_status"]); got != "on_leave" {
-		t.Fatalf("expected on_leave, got %s", got)
+	if got := textValue(day.Values["attendance_status"]); got != "leave" {
+		t.Fatalf("expected leave, got %s", got)
 	}
 }
 
@@ -383,7 +383,7 @@ func TestWorkforceAttendanceIgnoresInactiveApprovedLeaveAndOvertime(t *testing.T
 	if err != nil {
 		t.Fatalf("record clock out: %v", err)
 	}
-	if got := textValue(day.Values["attendance_status"]); got == "on_leave" {
+	if got := textValue(day.Values["attendance_status"]); got == "leave" {
 		t.Fatalf("expected inactive leave to be ignored, got %s", got)
 	}
 	if got := numberValue(day.Values["overtime_hours"]); got >= 5.0 {

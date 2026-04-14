@@ -195,11 +195,11 @@ func (s *WorkforceAttendanceCoreService) syncAttendanceDayForDate(employeeID, da
 	lateMinutes := 0
 	earlyOutMinutes := 0
 	overtimeHours := 0.0
-	status := "unscheduled"
+	status := "absent"
 	if hasLeave {
-		status = "on_leave"
+		status = "leave"
 	} else if !actualIn.IsZero() && actualOut.IsZero() {
-		status = "partial"
+		status = "incomplete"
 	} else if !actualIn.IsZero() {
 		status = "present"
 	} else if slot.ID != "" {

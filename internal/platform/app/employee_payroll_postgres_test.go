@@ -34,6 +34,19 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 	unit := ensureOrganizationUnitRecord(t, graph.models, "user_admin", unitID, orgID, locID)
 	department := ensureDepartmentRecord(t, graph.models, "user_admin", departmentID, orgID, locID, unit.ID)
 	costCenter := ensureCostCenterRecord(t, graph.models, "user_admin", costCenterID, orgID, locID, unit.ID, department.ID)
+	ensurePaymentMethodRecord(t, graph.models, "user_admin", "BANK", "bank_transfer", "1010-BANK-"+suffix)
+	treasuryAccount, err := graph.models.Create("treasury_account", "user_admin", map[string]any{
+		"account_code":    "TR-PAY-" + suffix,
+		"name":            "Payroll Treasury " + suffix,
+		"organization_id": orgID,
+		"location_id":     locID,
+		"currency_code":   "IDR",
+		"gl_account_code": "1010-BANK-" + suffix,
+		"status":          "active",
+	})
+	if err != nil {
+		t.Fatalf("create treasury account: %v", err)
+	}
 	approverUser, err := graph.identity.CreateUser("payroll-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
@@ -121,7 +134,7 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 		"attendance_date":   "2099-10-06",
 		"organization_id":   orgID,
 		"location_id":       locID,
-		"attendance_status": "on_leave",
+		"attendance_status": "leave",
 		"leave_request_id":  leave.ID,
 		"status":            "active",
 	}); err != nil {
@@ -164,7 +177,7 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 		"salary_structure_id":        structure.ID,
 		"currency_code":              "IDR",
 		"payment_method_code":        "BANK",
-		"treasury_account_id":        "treasury_payroll_" + suffix,
+		"treasury_account_id":        treasuryAccount.ID,
 		"reimbursement_in_payroll":   true,
 		"leave_deduction_daily_rate": 20.0,
 		"status":                     "active",
