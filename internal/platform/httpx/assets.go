@@ -1,8 +1,8 @@
 package httpx
 
 import (
-	_ "embed"
 	"embed"
+	_ "embed"
 	"io/fs"
 	"net/http"
 )
@@ -26,44 +26,19 @@ var serviceWorkerJS []byte
 //go:embed assets/platform.css
 var legacyPlatformCSS []byte
 
-//go:embed assets/ui-shell-inline.css
-var legacyUIShellInlineCSS []byte
-
-//go:embed assets/ui-shell-body.html
-var legacyUIShellBody string
-
-//go:embed assets/platform-shell-shared.js
-var legacyPlatformShellShared string
-
-//go:embed assets/ui-shell-core.js
-var legacyUIShellCore string
-
-//go:embed assets/ui-shell-offline.js
-var legacyUIShellOffline string
-
-//go:embed assets/ui-shell-routes.js
-var legacyUIShellRoutes string
-
-//go:embed assets/ui-shell-runtime.js
-var legacyUIShellRuntime string
-
-//go:embed assets/ui-service-worker.js
-var legacyUIServiceWorker string
-
-//go:embed assets/admin-console-body.html
-var legacyAdminConsoleBody string
-
-//go:embed assets/admin-console-core.js
-var legacyAdminConsoleCore string
-
-//go:embed assets/admin-console-runtime.js
-var legacyAdminConsoleRuntime string
-
-//go:embed assets/admin-console-operations.js
-var legacyAdminConsoleOperations string
-
-//go:embed assets/admin-console-governance.js
-var legacyAdminConsoleGovernance string
+var legacyUIShellInlineCSS = mustReadEmbeddedAsset("assets/ui-shell-inline.css")
+var legacyUIShellBody = readEmbeddedAssetString("assets/ui-shell-body.html")
+var legacyPlatformShellShared = readEmbeddedAssetString("assets/platform-shell-shared.js")
+var legacyUIShellCore = readEmbeddedAssetString("assets/ui-shell-core.js")
+var legacyUIShellOffline = readEmbeddedAssetString("assets/ui-shell-offline.js")
+var legacyUIShellRoutes = readEmbeddedAssetString("assets/ui-shell-routes.js")
+var legacyUIShellRuntime = readEmbeddedAssetString("assets/ui-shell-runtime.js")
+var legacyUIServiceWorker = readEmbeddedAssetString("assets/ui-service-worker.js")
+var legacyAdminConsoleBody = readEmbeddedAssetString("assets/admin-console-body.html")
+var legacyAdminConsoleCore = readEmbeddedAssetString("assets/admin-console-core.js")
+var legacyAdminConsoleRuntime = readEmbeddedAssetString("assets/admin-console-runtime.js")
+var legacyAdminConsoleOperations = readEmbeddedAssetString("assets/admin-console-operations.js")
+var legacyAdminConsoleGovernance = readEmbeddedAssetString("assets/admin-console-governance.js")
 
 func assetFileServer() http.FileSystem {
 	return http.FS(assetsFS)
@@ -92,4 +67,16 @@ func legacyAdminConsoleScript() []byte {
 // assetsFS returns the embed.FS for direct access
 func getAssetsFS() fs.FS {
 	return assetsFS
+}
+
+func readEmbeddedAssetString(path string) string {
+	return string(mustReadEmbeddedAsset(path))
+}
+
+func mustReadEmbeddedAsset(path string) []byte {
+	content, err := assetsFS.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	return content
 }
