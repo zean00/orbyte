@@ -397,8 +397,11 @@ func TestFinanceAssetLifecycleDisposeTransferImpairAndRevalue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get final asset: %v", err)
 	}
-	if got := textValue(finalAsset.Values["status"]); got != "disposed" {
-		t.Fatalf("expected disposed status, got %q", got)
+	if got := textValue(finalAsset.Values["status"]); got != "completed" {
+		t.Fatalf("expected completed status, got %q", got)
+	}
+	if got := textValue(finalAsset.Values["lifecycle_status"]); got != "disposed" {
+		t.Fatalf("expected disposed lifecycle status, got %q", got)
 	}
 	if got := numberValue(finalAsset.Values["remaining_amount"]); got != 0 {
 		t.Fatalf("expected remaining amount 0 after disposal, got %v", got)

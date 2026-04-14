@@ -154,7 +154,7 @@ func TestTreasuryPostgresReconciliationAndTransfer(t *testing.T) {
 		"location_id":     "loc_hq",
 		"account_code":    "PETTY-" + suffix,
 		"name":            "Petty Cash " + suffix,
-		"treasury_type":   "petty_cash",
+		"treasury_type":   "cash",
 		"currency_code":   "IDR",
 		"gl_account_code": "1000-CASH-" + suffix,
 		"status":          "active",

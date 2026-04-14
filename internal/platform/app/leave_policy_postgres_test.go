@@ -334,7 +334,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create leave treasury account: %v", err)
 	}
-	if _, err := graph.models.Create("salary_structure", "user_admin", map[string]any{
+	structure, err := graph.models.Create("salary_structure", "user_admin", map[string]any{
 		"id":              "struct_leave_pg_" + suffix,
 		"code":            "SAL-LEAVE-" + suffix,
 		"name":            "Leave Payroll Structure",
@@ -342,7 +342,8 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		"location_id":     "loc_hq",
 		"currency_code":   "IDR",
 		"status":          "active",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("create leave salary structure: %v", err)
 	}
 	if _, err := graph.models.Create("employee_compensation_profile", "user_admin", map[string]any{
@@ -356,7 +357,7 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	}
 	if _, err := graph.models.Create("employee_payroll_profile", "user_admin", map[string]any{
 		"employee_id":                employee.ID,
-		"salary_structure_id":        "struct_leave_pg_" + suffix,
+		"salary_structure_id":        structure.ID,
 		"currency_code":              "IDR",
 		"payment_method_code":        "BANK",
 		"treasury_account_id":        treasuryAccount.ID,
@@ -374,8 +375,8 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 		}
 	}
 	for _, line := range []map[string]any{
-		{"salary_structure_id": "struct_leave_pg_" + suffix, "component_code": "BASIC-L-" + suffix, "sequence": 1, "formula_key": "fixed_amount", "fixed_amount": 1000.0, "status": "active"},
-		{"salary_structure_id": "struct_leave_pg_" + suffix, "component_code": "LEAVE-L-" + suffix, "sequence": 2, "formula_key": "leave_deduction", "status": "active"},
+		{"salary_structure_id": structure.ID, "component_code": "BASIC-L-" + suffix, "sequence": 1, "formula_key": "fixed_amount", "fixed_amount": 1000.0, "status": "active"},
+		{"salary_structure_id": structure.ID, "component_code": "LEAVE-L-" + suffix, "sequence": 2, "formula_key": "leave_deduction", "status": "active"},
 	} {
 		if _, err := graph.models.Create("salary_structure_line", "user_admin", line); err != nil {
 			t.Fatalf("create salary structure line %s: %v", line["component_code"], err)

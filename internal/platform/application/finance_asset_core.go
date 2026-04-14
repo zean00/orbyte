@@ -815,7 +815,7 @@ func (s *FinanceAssetCoreService) updateParentFromSchedule(scheduleModelKey stri
 		values["disposal_type"] = state.DisposalType
 		values["disposal_posting_id"] = state.DisposalPostingID
 		if state.LifecycleStatus == "disposed" || state.LifecycleStatus == "retired" {
-			values["status"] = state.LifecycleStatus
+			values["status"] = "completed"
 		}
 	}
 	_, err = s.models.Update(parentModelKey, parent.ID, actorID, values, parent.Version)
