@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,8 +83,12 @@ func TestNewAppFailsWhenJWTSecretMissingInDatabaseMode(t *testing.T) {
 	defer func() {
 		_ = os.Setenv("DATABASE_URL", originalOpen)
 	}()
-	if err := ensureJWTSecret(true); err == nil {
+	err := ensureJWTSecret(true)
+	if err == nil {
 		t.Fatal("expected startup error when APP_JWT_SECRET is missing in database mode")
+	}
+	if !strings.Contains(err.Error(), "APP_JWT_SECRET") {
+		t.Fatalf("expected error to mention APP_JWT_SECRET, got: %v", err)
 	}
 }
 
@@ -91,8 +96,12 @@ func TestNewAppFailsWhenJWTSecretMissingWithoutExplicitDevMode(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("APP_AUTH_DEV_MODE", "")
-	if err := ensureJWTSecret(false); err == nil {
+	err := ensureJWTSecret(false)
+	if err == nil {
 		t.Fatal("expected startup error without jwt secret outside explicit dev mode")
+	}
+	if !strings.Contains(err.Error(), "APP_JWT_SECRET") {
+		t.Fatalf("expected error to mention APP_JWT_SECRET, got: %v", err)
 	}
 }
 

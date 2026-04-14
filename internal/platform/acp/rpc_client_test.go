@@ -15,6 +15,147 @@ import (
 	"time"
 )
 
+func TestResolveACPCommandPathRejectsRelativeCommandWithPathSeparators(t *testing.T) {
+	for _, command := range []string{"./bin/whatever", "bin/helper", "..\\config\\tool"} {
+		if _, err := resolveACPCommandPath(command); err == nil {
+			t.Fatalf("expected relative command %q with path separators to be rejected", command)
+		}
+	}
+}
+
+func TestResolveACPCommandPathResolvesAllowedCommandFromPathOrLookPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("this test targets unix-style command discovery")
+	}
+	command := "sh"
+	t.Setenv("APP_ACP_ALLOWED_COMMANDS", "sh")
+	resolved, err := resolveACPCommandPath(command)
+	if err != nil {
+		t.Fatalf("resolveACPCommandPath failed: %v", err)
+	}
+	if resolved == "" {
+		t.Fatal("expected resolved command path")
+	}
+
+	tmp := t.TempDir()
+	tmpCommand := filepath.Join(tmp, "acp-helper")
+	if err := os.WriteFile(tmpCommand, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write temp command failed: %v", err)
+	}
+	allowedBase := filepath.Base(tmpCommand)
+	t.Setenv("APP_ACP_ALLOWED_COMMANDS", allowedBase)
+	if _, err := resolveACPCommandPath(tmpCommand); err != nil {
+		t.Fatalf("expected absolute allowed command path to be accepted: %v", err)
+	}
+}
+
+func TestResolveACPCommandPathRejectsDisallowedCommandName(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("this test targets unix-style command discovery")
+	}
+	command := "sh"
+	t.Setenv("APP_ACP_ALLOWED_COMMANDS", "cat")
+	if _, err := resolveACPCommandPath(command); err == nil {
+		t.Fatal("expected disallowed command to be rejected")
+	}
+}
+
+func TestResolveACPCommandPathRejectsMalformedCommand(t *testing.T) {
+	_, err := resolveACPCommandPath("command\x00with-null")
+	if err == nil {
+		t.Fatal("expected null bytes in command name to fail")
+	}
+	_, err = resolveACPCommandPath("command\nline")
+	if err == nil {
+		t.Fatal("expected newline in command name to fail")
+	}
+}
+
+func TestValidateCommandArgsRejectsMalformedArguments(t *testing.T) {
+	_, err := validateCommandArgs([]string{"good", "bad\narg"})
+	if err == nil {
+		t.Fatal("expected malformed arg to fail")
+	}
+	result, err := validateCommandArgs([]string{"  good  ", " spaced "})
+	if err != nil {
+		t.Fatalf("validateCommandArgs failed: %v", err)
+	}
+	if result[0] != "good" || result[1] != "spaced" {
+		t.Fatalf("expected trimmed args, got %#v", result)
+	}
+}
+
+func TestSanitizeEnvironmentRejectsBadVariableName(t *testing.T) {
+	_, err := sanitizeEnvironment(map[string]string{"bad-key": "1", "GOOD": "2"})
+	if err == nil {
+		t.Fatal("expected invalid environment variable key to fail")
+	}
+	values, err := sanitizeEnvironment(map[string]string{"GOOD": "2", "  AlsoOK": "3", "PATH": os.Getenv("PATH")})
+	if err != nil {
+		t.Fatalf("sanitizeEnvironment failed: %v", err)
+	}
+	found := false
+	for _, entry := range values {
+		if strings.HasPrefix(entry, "AlsoOK=") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected trimmed environment key to be included")
+	}
+}
+
+func TestEnsureExecutableRejectsNonExecutableBinaryOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix mode bits checks are unix-specific")
+	}
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "not-exec")
+	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+		t.Fatalf("write temp file failed: %v", err)
+	}
+	if err := ensureExecutable(path); err == nil {
+		t.Fatal("expected non-executable file to fail")
+	}
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatalf("chmod failed: %v", err)
+	}
+	if err := ensureExecutable(path); err != nil {
+		t.Fatalf("expected executable file after chmod to pass: %v", err)
+	}
+}
+
+func TestResolveACPCommandPathRejectsCommandWithoutPermissionOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix exec-bit checks are unix-specific")
+	}
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "acp-helper")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o644); err != nil {
+		t.Fatalf("write temp command failed: %v", err)
+	}
+	if _, err := resolveACPCommandPath(path); err == nil {
+		t.Fatal("expected non-executable absolute command path to be rejected")
+	}
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatalf("chmod failed: %v", err)
+	}
+	t.Setenv("APP_ACP_ALLOWED_COMMANDS", "")
+	if _, err := resolveACPCommandPath(path); err != nil {
+		t.Fatalf("expected executable path to be accepted: %v", err)
+	}
+}
+
+func TestResolveACPCommandPathRejectsNonExistent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("this test targets unix-style command discovery")
+	}
+	_, err := resolveACPCommandPath("nonexistent-command")
+	if err == nil {
+		t.Fatal("expected missing command to fail")
+	}
+}
+
 func framedPayload(payload string) string {
 	return fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(payload), payload)
 }
@@ -215,9 +356,9 @@ func TestInitializeNewSessionAndPromptHelpers(t *testing.T) {
 		return nil
 	})
 	client.mcpServers = []map[string]any{{
-		"name": "orbyte",
-		"type": "http",
-		"url":  "http://127.0.0.1:18110/mcp",
+		"name":    "orbyte",
+		"type":    "http",
+		"url":     "http://127.0.0.1:18110/mcp",
 		"timeout": float64(120000),
 		"headers": []map[string]string{{
 			"name":  "Authorization",

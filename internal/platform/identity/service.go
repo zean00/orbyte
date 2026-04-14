@@ -1933,12 +1933,6 @@ func (s *Service) RotateSession(sessionID string, ttl time.Duration) (Session, e
 		ttl = defaultSessionTTL
 	}
 	now := time.Now().UTC()
-	session.Status = "revoked"
-	session.RevokedAt = now
-	session.LastSeenAt = now
-	if err := s.repo.SaveSession(session); err != nil {
-		return Session{}, err
-	}
 	rotated := Session{
 		ID:                   shared.NewID("sess"),
 		UserID:               session.UserID,
@@ -1953,7 +1947,25 @@ func (s *Service) RotateSession(sessionID string, ttl time.Duration) (Session, e
 	if err := s.repo.SaveSession(rotated); err != nil {
 		return Session{}, err
 	}
+	session.Status = "revoked"
+	session.RevokedAt = now
+	session.LastSeenAt = now
+	if err := s.repo.SaveSession(session); err != nil {
+		s.deactivateRotatedSession(rotated.ID, now)
+		return Session{}, err
+	}
 	return rotated, nil
+}
+
+func (s *Service) deactivateRotatedSession(sessionID string, when time.Time) {
+	session, ok := s.repo.FindSession(sessionID)
+	if !ok {
+		return
+	}
+	session.Status = "revoked"
+	session.RevokedAt = when
+	session.LastSeenAt = when
+	_ = s.repo.SaveSession(session)
 }
 
 func (s *Service) SetUserStatus(userID, status string) (User, error) {

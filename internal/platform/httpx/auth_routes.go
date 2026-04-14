@@ -416,7 +416,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, shared.Validation("password is required"))
 			return
 		}
-		limiterKey := loginLimitKey(r, req.Username)
+		limiterKey := loginLimitKey(r, req.Username, policy.TrustedOrigins)
 		if !limiter.Allow(limiterKey) {
 			respondError(w, shared.Forbidden("login rate limit exceeded"))
 			return
@@ -751,7 +751,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 				respondError(w, shared.Unauthorized("authentication required"))
 				return
 			}
-			limiterKey = loginLimitKey(r, username)
+			limiterKey = loginLimitKey(r, username, policy.TrustedOrigins)
 			if !limiter.Allow(limiterKey) {
 				recordAudit(auditSvc, audit.Event{
 					ID:            "audit:auth:password_change:rate_limited:" + time.Now().UTC().Format("20060102150405.000000000"),
@@ -2012,20 +2012,106 @@ func principalAuditEvent(p principal, event audit.Event) audit.Event {
 	return event
 }
 
-func loginLimitKey(r *http.Request, username string) string {
-	return strings.ToLower(strings.TrimSpace(username)) + "|" + clientIP(r)
+func loginLimitKey(r *http.Request, username string, trustedOrigins []string) string {
+	return strings.ToLower(strings.TrimSpace(username)) + "|" + clientIP(r, trustedOrigins)
 }
 
-func clientIP(r *http.Request) string {
+func clientIP(r *http.Request, trustedOrigins []string) string {
+	if r == nil {
+		return ""
+	}
 	remoteAddr := strings.TrimSpace(r.RemoteAddr)
 	if remoteAddr == "" {
 		return ""
 	}
-	host, _, err := net.SplitHostPort(remoteAddr)
+	return extractClientIP(r, remoteAddr, trustedOrigins)
+}
+
+func extractClientIP(r *http.Request, fallback string, trustedOrigins []string) string {
+	if r == nil {
+		return fallback
+	}
+	if shouldTrustForwardedHeaders(r, trustedOrigins) {
+		if from := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); from != "" {
+			if host := strings.TrimSpace(strings.Split(from, ",")[0]); host != "" {
+				if ip := strings.TrimSpace(host); ip != "" {
+					return ip
+				}
+			}
+		}
+		if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
+			return ip
+		}
+		if ip := strings.TrimSpace(r.Header.Get("X-Client-IP")); ip != "" {
+			return ip
+		}
+	}
+	host, _, err := net.SplitHostPort(fallback)
 	if err == nil {
 		return host
 	}
-	return remoteAddr
+	return fallback
+}
+
+func shouldTrustForwardedHeaders(r *http.Request, trustedOrigins []string) bool {
+	if r == nil {
+		return false
+	}
+	if len(trustedOrigins) == 0 || strings.TrimSpace(r.Host) == "" {
+		return false
+	}
+	if !isTrustedProxySource(r.RemoteAddr) {
+		return false
+	}
+	requestHost := normalizeHost(r.Host)
+	if requestHost == "" {
+		return false
+	}
+	for _, raw := range trustedOrigins {
+		trustedHost := normalizeHost(raw)
+		if trustedHost == "" {
+			continue
+		}
+		if strings.EqualFold(trustedHost, requestHost) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTrustedProxySource(remoteAddr string) bool {
+	host := strings.TrimSpace(remoteAddr)
+	if host == "" {
+		return false
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = strings.TrimSpace(parsedHost)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+}
+
+func normalizeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.Contains(raw, "://") {
+		parsed, err := url.Parse(raw)
+		if err == nil {
+			raw = parsed.Host
+		}
+	}
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return strings.ToLower(host)
+	}
+	return strings.ToLower(raw)
 }
 
 func recordAudit(auditSvc *audit.Service, event audit.Event) {

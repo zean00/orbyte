@@ -265,7 +265,7 @@ func registerUIPosRoutes(mux *http.ServeMux, ident *identity.Service, posSvc *ap
 		}
 		policy := config.NewService().AuthPolicy()
 		limiter := newLoginRateLimiter(ident, policy.LoginRateLimitAttempts, policy.LoginRateLimitWindow)
-		limiterKey := loginLimitKey(r, "cashier-pin:"+principalEffectiveUserID(p))
+		limiterKey := loginLimitKey(r, "cashier-pin:"+principalEffectiveUserID(p), policy.TrustedOrigins)
 		if !limiter.Allow(limiterKey) {
 			respondError(w, shared.Forbidden("cashier PIN rate limit exceeded"))
 			return

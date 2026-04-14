@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -76,15 +77,23 @@ func startACPClient(ctx context.Context, provider Provider, onNotification func(
 	if strings.TrimSpace(provider.Command) == "" {
 		return nil, errors.New("acp provider command is required")
 	}
-	cmd := exec.CommandContext(ctx, provider.Command, provider.Args...)
+	commandPath, err := resolveACPCommandPath(provider.Command)
+	if err != nil {
+		return nil, err
+	}
+	args, err := validateCommandArgs(provider.Args)
+	if err != nil {
+		return nil, err
+	}
+	env, err := sanitizeEnvironment(provider.Env)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, commandPath, args...)
 	if provider.Cwd != "" {
 		cmd.Dir = provider.Cwd
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
-	}
-	env := os.Environ()
-	for key, value := range provider.Env {
-		env = append(env, key+"="+value)
 	}
 	cmd.Env = env
 	stdin, err := cmd.StdinPipe()
@@ -118,6 +127,112 @@ func startACPClient(ctx context.Context, provider Provider, onNotification func(
 	go client.readLoop()
 	go drainStderr(stderr)
 	return client, nil
+}
+
+func resolveACPCommandPath(command string) (string, error) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return "", errors.New("acp provider command is required")
+	}
+	if strings.Contains(command, "\x00") || strings.ContainsAny(command, "\r\n") {
+		return "", errors.New("acp provider command contains invalid characters")
+	}
+	if containsPathSeparator(command) && !filepath.IsAbs(command) {
+		return "", fmt.Errorf("acp provider command must be an absolute path or a command name: %s", command)
+	}
+	if raw := strings.TrimSpace(os.Getenv("APP_ACP_ALLOWED_COMMANDS")); raw != "" {
+		allowed := false
+		for _, item := range strings.Split(raw, ",") {
+			if strings.EqualFold(filepath.Base(command), strings.TrimSpace(item)) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return "", fmt.Errorf("acp provider command is not allowed: %s", filepath.Base(command))
+		}
+	}
+	if filepath.IsAbs(command) {
+		if err := ensureExecutable(command); err != nil {
+			return "", err
+		}
+		return command, nil
+	}
+	resolved, err := exec.LookPath(command)
+	if err != nil {
+		return "", fmt.Errorf("acp provider command not found: %s", command)
+	}
+	if err := ensureExecutable(resolved); err != nil {
+		return "", err
+	}
+	return resolved, nil
+}
+
+func containsPathSeparator(value string) bool {
+	return strings.ContainsAny(value, `/\`)
+}
+
+func validateCommandArgs(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return []string{}, nil
+	}
+	args := make([]string, len(values))
+	for idx, arg := range values {
+		if strings.Contains(arg, "\x00") || strings.ContainsAny(arg, "\r\n") {
+			return nil, errors.New("acp provider argument contains invalid characters")
+		}
+		args[idx] = strings.TrimSpace(arg)
+	}
+	return args, nil
+}
+
+func sanitizeEnvironment(env map[string]string) ([]string, error) {
+	base := os.Environ()
+	for key, value := range env {
+		key = strings.TrimSpace(key)
+		if key == "" || !isSafeEnvVarName(key) {
+			return nil, fmt.Errorf("acp provider environment key is invalid: %q", key)
+		}
+		base = append(base, key+"="+value)
+	}
+	return base, nil
+}
+
+func ensureExecutable(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("acp provider command is not executable: %s", path)
+	}
+	if runtime.GOOS == "windows" {
+		if info.IsDir() {
+			return fmt.Errorf("acp provider command is not executable: %s", path)
+		}
+		return nil
+	}
+	if info.IsDir() || info.Mode()&0111 == 0 {
+		return fmt.Errorf("acp provider command is not executable: %s", path)
+	}
+	return nil
+}
+
+func isSafeEnvVarName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i, r := range value {
+		switch {
+		case r == '_':
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (c *acpClient) close() error {

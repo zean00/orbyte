@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-func buildPostgresRecordQuery(def Definition, query Query, withPaging bool) (string, string, []any) {
+func buildPostgresRecordQuery(def Definition, query Query, withPaging bool) (string, string, []any, error) {
+	if err := assertSafeQuery(def, query); err != nil {
+		return "", "", nil, err
+	}
 	args := []any{def.Key}
 	where := []string{"model_key = $1"}
 	argPos := 2
@@ -22,8 +25,8 @@ func buildPostgresRecordQuery(def Definition, query Query, withPaging bool) (str
 	}
 	baseWhere := " WHERE " + strings.Join(where, " AND ")
 	orderBy := "record_id ASC"
-	if query.SortKey != "" {
-		orderBy = sortColumnExpression(query.SortKey)
+	if sortKey := strings.TrimSpace(query.SortKey); sortKey != "" {
+		orderBy = sortColumnExpression(sortKey)
 		if query.Desc {
 			orderBy += " DESC"
 		} else {
@@ -36,7 +39,7 @@ func buildPostgresRecordQuery(def Definition, query Query, withPaging bool) (str
 		args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
 	}
 	countQuery := `SELECT COUNT(*) FROM model_records` + baseWhere
-	return listQuery, countQuery, args
+	return listQuery, countQuery, args, nil
 }
 
 func sortColumnExpression(key string) string {

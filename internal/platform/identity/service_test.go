@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -703,6 +704,60 @@ func TestEnsureBootstrapAdminCredentialRefreshRotateAndReviewSession(t *testing.
 	}
 	if len(review.Flags) == 0 {
 		t.Fatalf("expected anomaly flags, got %+v", review)
+	}
+}
+
+type failingSaveSessionRepository struct {
+	Repository
+	callCount  int
+	failOnCall int
+	failErr    error
+}
+
+func (r *failingSaveSessionRepository) SaveSession(session Session) error {
+	if r.callCount == r.failOnCall {
+		r.callCount++
+		return r.failErr
+	}
+	r.callCount++
+	return r.Repository.SaveSession(session)
+}
+
+func TestRefreshSessionRollbackWhenUpdatingOriginalSessionFails(t *testing.T) {
+	svc := NewService(organization.NewService())
+	original, err := svc.StartSession("admin", "loc_hq", "password", map[string]any{}, time.Hour)
+	if err != nil {
+		t.Fatalf("start session failed: %v", err)
+	}
+	repo := &failingSaveSessionRepository{
+		Repository: svc.repo,
+		failOnCall: 1,
+		failErr:    errors.New("forced rollback test failure"),
+	}
+	svc.repo = repo
+
+	if _, err := svc.RefreshSession(original.ID, time.Hour); err == nil {
+		t.Fatal("expected refresh failure")
+	}
+	afterRefreshOriginal, ok := svc.FindSession(original.ID)
+	if !ok {
+		t.Fatal("expected original session to remain in repository")
+	}
+	if afterRefreshOriginal.Status != "active" {
+		t.Fatalf("expected original session to remain active after rollback, got %+v", afterRefreshOriginal)
+	}
+	if !afterRefreshOriginal.RevokedAt.IsZero() {
+		t.Fatalf("expected original session revoke timestamp to remain empty after rollback, got %+v", afterRefreshOriginal)
+	}
+	foundRotatedRevoked := false
+	for _, session := range svc.Sessions() {
+		if session.UserID == original.UserID && session.ID != original.ID && session.Status == "revoked" {
+			foundRotatedRevoked = true
+			break
+		}
+	}
+	if !foundRotatedRevoked {
+		t.Fatal("expected rotated session to be revoked during rollback")
 	}
 }
 
