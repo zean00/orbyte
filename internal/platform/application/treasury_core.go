@@ -272,7 +272,7 @@ func (s *TreasuryCoreService) CreateManualStatement(organizationID, locationID, 
 			"running_balance":     roundMoney(numberValue(line["running_balance"])),
 			"matched_amount":      0.0,
 			"remaining_amount":    roundMoney(maxFloat(resolveSignedStatementAmount(line), -resolveSignedStatementAmount(line))),
-			"match_status":        "open",
+			"match_status":        "unmatched",
 		}
 		created, err := s.models.Create("bank_statement_line", actorID, lineValues)
 		if err != nil {
@@ -1121,7 +1121,7 @@ func (s *TreasuryCoreService) parseStatementCSVRowNormalized(organizationID, loc
 		"running_balance":     roundMoney(normalizeTemplateNumber(csvString(row, header, firstNonEmptyString(textValue(template["balance_column"]), "balance")), template)),
 		"matched_amount":      0.0,
 		"remaining_amount":    roundMoney(maxFloat(signedAmount, -signedAmount)),
-		"match_status":        "open",
+		"match_status":        "unmatched",
 	}, ""
 }
 
@@ -1298,7 +1298,7 @@ func (s *TreasuryCoreService) parseStatementCSVRow(organizationID, locationID st
 		"running_balance":     roundMoney(csvNumber(row, header, "balance")),
 		"matched_amount":      0.0,
 		"remaining_amount":    roundMoney(maxFloat(signedAmount, -signedAmount)),
-		"match_status":        "open",
+		"match_status":        "unmatched",
 	}
 }
 

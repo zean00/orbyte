@@ -842,7 +842,7 @@ func (s *FinanceCollectionsCoreService) writeOffInvoice(invoiceID, postingDate s
 	payload["balance_due_amount"] = roundMoney(maxFloat(numberValue(payload["total_amount"])-paidAmount-creditedAmount-writeoffAmount, 0))
 	switch {
 	case numberValue(payload["balance_due_amount"]) == 0 && writeoffAmount > 0:
-		invoice.Header.Status = "written_off"
+		invoice.Header.Status = "closed"
 	case paidAmount > 0 || creditedAmount > 0 || refundedAmount > 0 || writeoffAmount > 0:
 		invoice.Header.Status = "partially_paid"
 	default:

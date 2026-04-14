@@ -28,6 +28,7 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_remittance_"+suffix, "Remittance Party "+suffix)
+	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_remittance_"+suffix, orgID, locID)
 	approverUser, err := graph.identity.CreateUser("remittance-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)

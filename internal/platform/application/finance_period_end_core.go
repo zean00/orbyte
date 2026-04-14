@@ -398,9 +398,9 @@ func (s *FinancePeriodEndCoreService) ensureJournalRun(period, tmpl model.Record
 		totalAmount = roundMoney(totalAmount + numberValue(line["debit"]))
 	}
 	postingDate := strings.TrimSpace(textValue(period.Values["end_date"]))
-	reversalStatus := "not_applicable"
+	reversalStatus := "none"
 	if strings.TrimSpace(textValue(tmpl.Values["journal_kind"])) == "accrual" {
-		reversalStatus = "available"
+		reversalStatus = "pending"
 	}
 	postingPayload := map[string]any{
 		"source_document_type": "journal_template",
@@ -842,7 +842,7 @@ func (s *FinancePeriodEndCoreService) syncSingleRun(run model.Record, actorID st
 		if err == nil {
 			postingStatus = normalizeGeneratedPostingStatus(posting.Header.Status)
 			postingNumber = posting.Header.Number
-			reversalStatus = strings.TrimSpace(textValue(posting.Body.Payload["reversal_status"]))
+			reversalStatus = normalizeReversalStatus(textValue(posting.Body.Payload["reversal_status"]))
 			switch posting.Header.Status {
 			case "draft":
 				status = "generated"
@@ -896,6 +896,21 @@ func normalizeGeneratedPostingStatus(status string) string {
 		return "failed"
 	default:
 		return "generated"
+	}
+}
+
+func normalizeReversalStatus(status string) string {
+	switch strings.TrimSpace(status) {
+	case "", "not_applicable":
+		return "none"
+	case "available", "generated":
+		return "pending"
+	case "reversed":
+		return "reversed"
+	case "corrected":
+		return "corrected"
+	default:
+		return "none"
 	}
 }
 

@@ -28,6 +28,7 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_emp_"+suffix, "Employee Spend Party "+suffix)
+	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_spend_"+suffix, orgID, locID)
 	approverUser, err := graph.identity.CreateUser("employee-spend-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)

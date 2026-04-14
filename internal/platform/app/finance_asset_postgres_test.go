@@ -245,6 +245,7 @@ func mustCreatePostedJournalForPostgres(t *testing.T, graph *serviceGraph, templ
 	if err != nil {
 		t.Fatalf("get template: %v", err)
 	}
+	period := ensureAccountingPeriodForDate(t, graph.models, "user_admin", textValue(template.Values["organization_id"]), textValue(template.Values["location_id"]), postingDate)
 	posting, err := graph.documents.Create("ledger_posting", textValue(template.Values["organization_id"]), textValue(template.Values["location_id"]), "user_admin", map[string]any{
 		"source_document_type": "journal_template",
 		"source_document_id":   templateID,
@@ -267,15 +268,17 @@ func mustCreatePostedJournalForPostgres(t *testing.T, graph *serviceGraph, templ
 		t.Fatalf("save posting: %v", err)
 	}
 	if _, err := graph.models.Create("journal_run", "user_admin", map[string]any{
-		"organization_id":      textValue(template.Values["organization_id"]),
-		"location_id":          textValue(template.Values["location_id"]),
-		"accounting_period_id": "period-" + postingDate,
-		"period_key":           postingDate[:7],
-		"journal_template_id":  templateID,
-		"template_code":        textValue(template.Values["code"]),
-		"template_name":        textValue(template.Values["name"]),
-		"generated_posting_id": posting.Header.ID,
-		"status":               "generated",
+		"organization_id":          textValue(template.Values["organization_id"]),
+		"location_id":              textValue(template.Values["location_id"]),
+		"accounting_period_id":     period.ID,
+		"period_key":               postingDate[:7],
+		"journal_template_id":      templateID,
+		"template_code":            textValue(template.Values["code"]),
+		"template_name":            textValue(template.Values["name"]),
+		"generated_posting_id":     posting.Header.ID,
+		"status":                   "generated",
+		"generated_posting_status": "posted",
+		"reversal_status":          "none",
 	}); err != nil {
 		t.Fatalf("create journal run: %v", err)
 	}

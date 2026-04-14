@@ -26,6 +26,8 @@ func TestRetailFinancePostgresShiftReconciliationAndGiftCard(t *testing.T) {
 
 	suffix := time.Now().UTC().Format("20060102150405")
 	ensureWarehouseRecord(t, graph.models, "user_admin", "MAIN", "org_default", "loc_hq")
+	ensurePOSTenderTypeRecord(t, graph.models, "user_admin", "CASH", "cash")
+	ensurePOSTenderTypeRecord(t, graph.models, "user_admin", "CARD", "card")
 	if _, err := graph.models.Create("pos_store", "user_admin", map[string]any{
 		"code":           "STORE-" + suffix,
 		"name":           "Retail Store " + suffix,

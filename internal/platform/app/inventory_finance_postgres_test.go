@@ -27,6 +27,7 @@ func TestInventoryFinancePostgresCountAdjustmentAndReconciliation(t *testing.T) 
 	orgID := "org_default"
 	locID := "loc_hq"
 	actorID := "user_admin"
+	ensureCommercialUOMRecord(t, graph.models, actorID, "EA")
 	approver, err := graph.identity.CreateUser("inventory-finance-"+suffix, "Complex12!", locID, "role_admin", "deployment", "")
 	if err != nil {
 		t.Fatalf("create approver: %v", err)

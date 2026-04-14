@@ -28,6 +28,7 @@ func TestProductionCostingPostgresActualVarianceAndAllocation(t *testing.T) {
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	actorID := "user_admin"
+	ensureCommercialUOMRecord(t, graph.models, actorID, "EA")
 	for _, item := range []map[string]any{
 		{"sku": "FGP-" + suffix, "name": "Finished Good " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-FG-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
 		{"sku": "BYP-" + suffix, "name": "Byproduct " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1201-BY-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
