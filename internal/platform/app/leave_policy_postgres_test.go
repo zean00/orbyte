@@ -46,7 +46,10 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	rosterStartDate := rosterStart.Format("2006-01-02")
 	rosterEndDate := rosterEnd.Format("2006-01-02")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_leave_pg_"+suffix, "Leave Party "+suffix)
+	ensureLocationRecord(t, graph.models, "user_admin", "loc_hq")
 	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_leave", "org_default", "loc_hq")
+	ensureDepartmentRecord(t, graph.models, "user_admin", "dept_leave", "org_default", "loc_hq", "ou_leave")
+	ensureCostCenterRecord(t, graph.models, "user_admin", "cc_leave", "org_default", "loc_hq", "ou_leave", "dept_leave")
 
 	employee, err := graph.models.Create("employee_profile", "user_admin", map[string]any{
 		"party_id":          party.ID,

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -25,14 +26,15 @@ func TestFinanceManualJournalPostgresWorkflowAndReversal(t *testing.T) {
 	}
 
 	suffix := time.Now().UTC().Format("20060102150405")
+	baseYear := 2200 + time.Now().UTC().Nanosecond()%200
 	orgID := "org_default"
 	locID := "loc_hq"
 	if _, err := graph.models.Create("accounting_period", "user_admin", map[string]any{
 		"organization_id": orgID,
 		"location_id":     locID,
-		"period_key":      "2099-10-" + suffix,
-		"start_date":      "2099-10-01",
-		"end_date":        "2099-10-31",
+		"period_key":      fmt.Sprintf("%04d-10-%s", baseYear, suffix),
+		"start_date":      fmt.Sprintf("%04d-10-01", baseYear),
+		"end_date":        fmt.Sprintf("%04d-10-31", baseYear),
 		"status":          "open",
 	}); err != nil {
 		t.Fatalf("create source period: %v", err)
@@ -40,9 +42,9 @@ func TestFinanceManualJournalPostgresWorkflowAndReversal(t *testing.T) {
 	if _, err := graph.models.Create("accounting_period", "user_admin", map[string]any{
 		"organization_id": orgID,
 		"location_id":     locID,
-		"period_key":      "2099-11-" + suffix,
-		"start_date":      "2099-11-01",
-		"end_date":        "2099-11-30",
+		"period_key":      fmt.Sprintf("%04d-11-%s", baseYear, suffix),
+		"start_date":      fmt.Sprintf("%04d-11-01", baseYear),
+		"end_date":        fmt.Sprintf("%04d-11-30", baseYear),
 		"status":          "open",
 	}); err != nil {
 		t.Fatalf("create reversal period: %v", err)
@@ -53,10 +55,10 @@ func TestFinanceManualJournalPostgresWorkflowAndReversal(t *testing.T) {
 	}
 
 	payload := graph.commercialCore.NormalizePayload("ledger_posting", map[string]any{
-		"posting_date":        "2099-10-31",
-		"currency_code":       "IDR",
-		"journal_source_kind": "manual",
-		"manual_journal_type": "adjusting",
+		"posting_date":         fmt.Sprintf("%04d-10-31", baseYear),
+		"currency_code":        "IDR",
+		"journal_source_kind":  "manual",
+		"manual_journal_type":  "adjusting",
 		"supporting_reference": "MJ-" + suffix,
 		"journal_lines": []map[string]any{
 			{"account_code": "6100-MJ-" + suffix, "description": "Expense", "debit": 250.0, "credit": 0.0},
@@ -98,7 +100,7 @@ func TestFinanceManualJournalPostgresWorkflowAndReversal(t *testing.T) {
 		t.Fatalf("expected approved_by %s, got %#v", approverUser.ID, got)
 	}
 
-	reversal, err := graph.financePeriodEnd.ReverseJournalPosting(posted.Header.ID, "2099-11-01", approverUser.ID, orgID, locID)
+	reversal, err := graph.financePeriodEnd.ReverseJournalPosting(posted.Header.ID, fmt.Sprintf("%04d-11-01", baseYear), approverUser.ID, orgID, locID)
 	if err != nil {
 		t.Fatalf("reverse manual journal: %v", err)
 	}

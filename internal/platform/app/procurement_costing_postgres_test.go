@@ -31,6 +31,8 @@ func TestProcurementCostingPostgresLandedCostAndVariance(t *testing.T) {
 	actorID := "user_admin"
 	ensureCommercialUOMRecord(t, graph.models, actorID, "EA")
 	itemCode := "LC-ITEM-" + suffix
+	ensureFinanceAccountRecord(t, graph.models, actorID, "1200-INV-LC-"+suffix, "Inventory Asset "+suffix, "asset", "inventory", "debit")
+	ensureFinanceAccountRecord(t, graph.models, actorID, "5000-COGS-LC-"+suffix, "COGS "+suffix, "expense", "cogs", "debit")
 	if _, err := graph.models.Create("commercial_item", actorID, map[string]any{
 		"sku":                          itemCode,
 		"name":                         "Landed Cost Item " + suffix,

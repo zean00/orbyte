@@ -781,7 +781,8 @@ func (s *TreasuryCoreService) CreateExceptionJournal(exceptionID, actorID string
 		return nil, err
 	}
 	kind := strings.TrimSpace(textValue(item.Values["exception_kind"]))
-	if kind != "bank_fee_candidate" && kind != "interest_candidate" {
+	journalKind := s.exceptionJournalKind(kind, item)
+	if journalKind == "" {
 		return nil, shared.Validation("only bank fee or interest candidates can create draft journals")
 	}
 	statementLine, err := s.models.Get("bank_statement_line", strings.TrimSpace(textValue(item.Values["bank_statement_line_id"])))
@@ -810,7 +811,7 @@ func (s *TreasuryCoreService) CreateExceptionJournal(exceptionID, actorID string
 	}
 	currencyCode := firstNonEmptyString(textValue(payload["currency_code"]), "IDR")
 	journalLines := []map[string]any{}
-	if kind == "bank_fee_candidate" {
+	if journalKind == "bank_fee" {
 		journalLines = []map[string]any{
 			{"account_code": firstNonEmptyString(textValue(payload["expense_account_code"]), postingConfig["bank_fee_expense_account_code"]), "debit": statementAmount, "credit": 0.0, "description": "Bank fee"},
 			{"account_code": firstNonEmptyString(textValue(payload["offset_account_code"]), textValue(account.Values["gl_account_code"]), postingConfig["treasury_suspense_account_code"]), "debit": 0.0, "credit": statementAmount, "description": "Bank fee offset"},
@@ -1151,14 +1152,27 @@ func (s *TreasuryCoreService) statementLineDuplicateExists(treasuryAccountID str
 }
 
 func (s *TreasuryCoreService) classifyStatementException(line model.Record) string {
+	if s.exceptionJournalKind("", line) != "" {
+		return "other"
+	}
+	return "other"
+}
+
+func (s *TreasuryCoreService) exceptionJournalKind(kind string, line model.Record) string {
+	switch strings.TrimSpace(kind) {
+	case "bank_fee_candidate":
+		return "bank_fee"
+	case "interest_candidate":
+		return "interest"
+	}
 	description := normalizeMatchText(textValue(line.Values["description"]) + " " + textValue(line.Values["reference"]))
 	switch {
 	case strings.Contains(description, "fee") || strings.Contains(description, "charge") || strings.Contains(description, "admin"):
-		return "bank_fee_candidate"
+		return "bank_fee"
 	case strings.Contains(description, "interest") || strings.Contains(description, "bunga"):
-		return "interest_candidate"
+		return "interest"
 	default:
-		return "unmatched_statement_line"
+		return ""
 	}
 }
 

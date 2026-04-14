@@ -133,7 +133,7 @@ func TestTreasuryPostgresReconciliationAndTransfer(t *testing.T) {
 	exceptions := graph.treasuryCore.ExceptionReport("org_default", "loc_hq", "2099-11-01", "open")
 	var feeException model.Record
 	for _, item := range exceptions.Items {
-		if textValue(item.Values["bank_statement_id"]) == importedStatement.ID && textValue(item.Values["exception_kind"]) == "bank_fee_candidate" {
+		if textValue(item.Values["bank_statement_id"]) == importedStatement.ID && textValue(item.Values["exception_kind"]) == "other" && textValue(item.Values["reference"]) == "FEE-"+suffix {
 			feeException = item
 			break
 		}

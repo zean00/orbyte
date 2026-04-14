@@ -28,7 +28,13 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_payroll_"+suffix, "Payroll Party "+suffix)
-	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_payroll_"+suffix, orgID, locID)
+	ensureLocationRecord(t, graph.models, "user_admin", locID)
+	unitID := "ou_payroll_" + suffix
+	departmentID := "dept_payroll_" + suffix
+	costCenterID := "cc_payroll_" + suffix
+	ensureOrganizationUnitRecord(t, graph.models, "user_admin", unitID, orgID, locID)
+	ensureDepartmentRecord(t, graph.models, "user_admin", departmentID, orgID, locID, unitID)
+	ensureCostCenterRecord(t, graph.models, "user_admin", costCenterID, orgID, locID, unitID, departmentID)
 	approverUser, err := graph.identity.CreateUser("payroll-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
@@ -47,9 +53,9 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 		"employee_id":          employee.ID,
 		"organization_id":      orgID,
 		"location_id":          locID,
-		"organization_unit_id": "ou_payroll_" + suffix,
-		"department_id":        "dept_payroll_" + suffix,
-		"cost_center_id":       "cc_payroll_" + suffix,
+		"organization_unit_id": unitID,
+		"department_id":        departmentID,
+		"cost_center_id":       costCenterID,
 		"effective_from":       "2099-10-01",
 		"status":               "active",
 	}); err != nil {

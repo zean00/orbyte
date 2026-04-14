@@ -444,7 +444,7 @@ func (s *FinanceCollectionsCoreService) WriteOffSettlementException(exceptionID,
 		return document.Record{}, err
 	}
 	values := mergeModelValues(exception.Values, map[string]any{
-		"status": "written_off",
+		"status": "closed",
 		"note":   fmt.Sprintf("Written off %.2f on %s", amount, textValue(posting.Body.Payload["posting_date"])),
 	})
 	if _, err := s.models.Update("settlement_exception", exception.ID, actorID, values, exception.Version); err != nil {

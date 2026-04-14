@@ -28,7 +28,13 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_emp_"+suffix, "Employee Spend Party "+suffix)
-	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_spend_"+suffix, orgID, locID)
+	ensureLocationRecord(t, graph.models, "user_admin", locID)
+	unitID := "ou_spend_" + suffix
+	departmentID := "dept_spend_" + suffix
+	costCenterID := "cc_spend_" + suffix
+	ensureOrganizationUnitRecord(t, graph.models, "user_admin", unitID, orgID, locID)
+	ensureDepartmentRecord(t, graph.models, "user_admin", departmentID, orgID, locID, unitID)
+	ensureCostCenterRecord(t, graph.models, "user_admin", costCenterID, orgID, locID, unitID, departmentID)
 	approverUser, err := graph.identity.CreateUser("employee-spend-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
@@ -47,9 +53,9 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 		"employee_id":          employee.ID,
 		"organization_id":      orgID,
 		"location_id":          locID,
-		"organization_unit_id": "ou_spend_" + suffix,
-		"department_id":        "dept_spend_" + suffix,
-		"cost_center_id":       "cc_spend_" + suffix,
+		"organization_unit_id": unitID,
+		"department_id":        departmentID,
+		"cost_center_id":       costCenterID,
 		"effective_from":       time.Now().UTC().Format("2006-01-02"),
 		"status":               "active",
 	}); err != nil {

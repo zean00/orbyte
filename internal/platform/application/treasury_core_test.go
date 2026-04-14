@@ -404,7 +404,7 @@ func TestTreasuryReconciliationSuggestionsAndExceptionJournal(t *testing.T) {
 	exceptions := svc.ExceptionReport("org_default", "loc_main", "2099-10-31", "open")
 	var feeException model.Record
 	for _, item := range exceptions.Items {
-		if textValue(item.Values["exception_kind"]) == "bank_fee_candidate" {
+		if textValue(item.Values["exception_kind"]) == "other" && textValue(item.Values["reference"]) == "FEE-1" {
 			feeException = item
 			break
 		}

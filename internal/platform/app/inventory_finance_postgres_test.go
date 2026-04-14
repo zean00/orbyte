@@ -28,6 +28,7 @@ func TestInventoryFinancePostgresCountAdjustmentAndReconciliation(t *testing.T) 
 	locID := "loc_hq"
 	actorID := "user_admin"
 	ensureCommercialUOMRecord(t, graph.models, actorID, "EA")
+	ensureFinanceAccountRecord(t, graph.models, actorID, "1200-INV-"+suffix, "Inventory Asset "+suffix, "asset", "inventory", "debit")
 	approver, err := graph.identity.CreateUser("inventory-finance-"+suffix, "Complex12!", locID, "role_admin", "deployment", "")
 	if err != nil {
 		t.Fatalf("create approver: %v", err)
@@ -43,17 +44,6 @@ func TestInventoryFinancePostgresCountAdjustmentAndReconciliation(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("create item: %v", err)
 	}
-	if _, err := graph.models.Create("finance_account", actorID, map[string]any{
-		"code":           "1200-INV-" + suffix,
-		"name":           "Inventory Asset " + suffix,
-		"account_type":   "asset",
-		"report_group":   "inventory",
-		"normal_balance": "debit",
-		"status":         "active",
-	}); err != nil {
-		t.Fatalf("create finance account: %v", err)
-	}
-
 	openingAdjustmentPayload := graph.inventoryCore.NormalizePayload("stock_adjustment", map[string]any{
 		"warehouse_code":          "MAIN",
 		"adjustment_account_code": "3100-OPENING-" + suffix,

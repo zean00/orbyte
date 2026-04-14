@@ -28,7 +28,13 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_remittance_"+suffix, "Remittance Party "+suffix)
-	ensureOrganizationUnitRecord(t, graph.models, "user_admin", "ou_remittance_"+suffix, orgID, locID)
+	ensureLocationRecord(t, graph.models, "user_admin", locID)
+	unitID := "ou_remittance_" + suffix
+	departmentID := "dept_remittance_" + suffix
+	costCenterID := "cc_remittance_" + suffix
+	ensureOrganizationUnitRecord(t, graph.models, "user_admin", unitID, orgID, locID)
+	ensureDepartmentRecord(t, graph.models, "user_admin", departmentID, orgID, locID, unitID)
+	ensureCostCenterRecord(t, graph.models, "user_admin", costCenterID, orgID, locID, unitID, departmentID)
 	approverUser, err := graph.identity.CreateUser("remittance-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
@@ -61,9 +67,9 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 		"employee_id":          employee.ID,
 		"organization_id":      orgID,
 		"location_id":          locID,
-		"organization_unit_id": "ou_remittance_" + suffix,
-		"department_id":        "dept_remittance_" + suffix,
-		"cost_center_id":       "cc_remittance_" + suffix,
+		"organization_unit_id": unitID,
+		"department_id":        departmentID,
+		"cost_center_id":       costCenterID,
 		"effective_from":       "2099-10-01",
 		"status":               "active",
 	}); err != nil {
