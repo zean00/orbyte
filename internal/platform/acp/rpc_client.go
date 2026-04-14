@@ -520,16 +520,16 @@ func normalizeNumericValue(value any) (float64, bool) {
 }
 
 func opencodeConfigPath(provider Provider) string {
-	if xdg := firstNonEmptyString(
-		strings.TrimSpace(provider.Env["XDG_CONFIG_HOME"]),
-		strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")),
-	); xdg != "" {
+	if xdg := strings.TrimSpace(provider.Env["XDG_CONFIG_HOME"]); xdg != "" {
 		return filepath.Join(xdg, "opencode", "opencode.json")
 	}
-	if home := firstNonEmptyString(
-		strings.TrimSpace(provider.Env["HOME"]),
-		strings.TrimSpace(os.Getenv("HOME")),
-	); home != "" {
+	if home := strings.TrimSpace(provider.Env["HOME"]); home != "" {
+		return filepath.Join(home, ".config", "opencode", "opencode.json")
+	}
+	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
+		return filepath.Join(xdg, "opencode", "opencode.json")
+	}
+	if home := strings.TrimSpace(os.Getenv("HOME")); home != "" {
 		return filepath.Join(home, ".config", "opencode", "opencode.json")
 	}
 	return ""

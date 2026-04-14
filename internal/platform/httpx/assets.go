@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"embed"
-	_ "embed"
 	"io/fs"
 	"net/http"
 )
@@ -12,21 +11,13 @@ const platformAssetVersion = "20260326-react-shell-parity"
 //go:embed assets
 var assetsFS embed.FS
 
-//go:embed assets/index.html
-var uiIndexHTML []byte
-
-//go:embed assets/admin.html
-var adminIndexHTML []byte
-
-//go:embed assets/sw.js
-var serviceWorkerJS []byte
+var uiIndexHTML = readEmbeddedAssetBytes("assets/index.html")
+var adminIndexHTML = readEmbeddedAssetBytes("assets/admin.html")
+var serviceWorkerJS = readEmbeddedAssetBytes("assets/sw.js")
 
 // Legacy compatibility assets still served on old routes.
-//
-//go:embed assets/platform.css
-var legacyPlatformCSS []byte
-
-var legacyUIShellInlineCSS = mustReadEmbeddedAsset("assets/ui-shell-inline.css")
+var legacyPlatformCSS = readEmbeddedAssetBytes("assets/platform.css")
+var legacyUIShellInlineCSS = readEmbeddedAssetBytes("assets/ui-shell-inline.css")
 var legacyUIShellBody = readEmbeddedAssetString("assets/ui-shell-body.html")
 var legacyPlatformShellShared = readEmbeddedAssetString("assets/platform-shell-shared.js")
 var legacyUIShellCore = readEmbeddedAssetString("assets/ui-shell-core.js")
@@ -70,13 +61,13 @@ func getAssetsFS() fs.FS {
 }
 
 func readEmbeddedAssetString(path string) string {
-	return string(mustReadEmbeddedAsset(path))
+	return string(readEmbeddedAssetBytes(path))
 }
 
-func mustReadEmbeddedAsset(path string) []byte {
+func readEmbeddedAssetBytes(path string) []byte {
 	content, err := assetsFS.ReadFile(path)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return content
 }
