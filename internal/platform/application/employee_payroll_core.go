@@ -239,12 +239,10 @@ func (s *EmployeePayrollCoreService) normalizePayrollRun(next map[string]any) {
 		netTotal = roundMoney(netTotal + numberValue(line["net_pay"]))
 		employerContributionTotal = roundMoney(employerContributionTotal + numberValue(line["employer_contributions_total"]))
 		employerCostTotal = roundMoney(employerCostTotal + numberValue(line["employer_cost_total"]))
-		if textValue(next["organization_id"]) == "" {
-			assignIfEmpty(next, "organization_id", line["organization_id"])
-			assignIfEmpty(next, "location_id", line["location_id"])
-			assignIfEmpty(next, "treasury_account_id", line["treasury_account_id"])
-			assignIfEmpty(next, "payment_method_code", line["payment_method_code"])
-		}
+		assignIfEmpty(next, "organization_id", line["organization_id"])
+		assignIfEmpty(next, "location_id", line["location_id"])
+		assignIfEmpty(next, "treasury_account_id", line["treasury_account_id"])
+		assignIfEmpty(next, "payment_method_code", line["payment_method_code"])
 	}
 	next["employee_ids"] = employeeIDs
 	next["employee_count"] = employeeCount

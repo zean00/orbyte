@@ -176,6 +176,9 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create remittance authority: %v", err)
 	}
+	ensureFinanceAccountRecord(t, graph.models, "user_admin", "2310-WHT", "Withholding Liability", "liability", "current_liabilities", "credit")
+	ensureFinanceAccountRecord(t, graph.models, "user_admin", "2311-EMP", "Employee Contribution Liability", "liability", "current_liabilities", "credit")
+	ensureFinanceAccountRecord(t, graph.models, "user_admin", "2312-ER", "Employer Contribution Liability", "liability", "current_liabilities", "credit")
 	withholding, err := graph.models.Create("remittance_obligation_type", "user_admin", map[string]any{
 		"remittance_authority_id": authority.ID,
 		"code":                    "WHT-" + suffix,

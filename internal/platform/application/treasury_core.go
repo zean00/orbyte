@@ -772,7 +772,7 @@ func (s *TreasuryCoreService) ResolveException(exceptionID, actorID, status, not
 		return model.Record{}, err
 	}
 	values := cloneMap(item.Values)
-	values["status"] = firstNonEmptyString(strings.TrimSpace(status), "resolved")
+	values["status"] = firstNonEmptyString(strings.TrimSpace(status), "completed")
 	values["note"] = strings.TrimSpace(note)
 	values["resolved_at"] = time.Now().UTC().Format(time.RFC3339)
 	values["resolved_by"] = actorID
@@ -890,7 +890,7 @@ func (s *TreasuryCoreService) syncStatementExceptions(reconciliation, statement 
 			continue
 		}
 		if current, ok := s.findTreasuryModelByFields("treasury_exception", map[string]string{"bank_statement_line_id": line.ID}); ok && textValue(current.Values["status"]) == "pending" {
-			if _, err := s.models.Update("treasury_exception", current.ID, actorID, mergeModelValues(current.Values, map[string]any{"status": "resolved", "resolved_at": time.Now().UTC().Format(time.RFC3339), "resolved_by": actorID}), current.Version); err != nil {
+			if _, err := s.models.Update("treasury_exception", current.ID, actorID, mergeModelValues(current.Values, map[string]any{"status": "completed", "resolved_at": time.Now().UTC().Format(time.RFC3339), "resolved_by": actorID}), current.Version); err != nil {
 				return err
 			}
 		}

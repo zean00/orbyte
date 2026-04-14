@@ -52,6 +52,24 @@ type assetLifecycleState struct {
 	CarryingAmount        float64
 }
 
+func normalizeAssetLifecycleEventType(modelKey, disposalType string) string {
+	switch strings.TrimSpace(modelKey) {
+	case "asset_transfer":
+		return "transferred"
+	case "asset_impairment":
+		return "impaired"
+	case "asset_revaluation":
+		return "revalued"
+	case "asset_disposal":
+		if strings.EqualFold(strings.TrimSpace(disposalType), "retirement") {
+			return "retired"
+		}
+		return "disposed"
+	default:
+		return strings.TrimSpace(modelKey)
+	}
+}
+
 func NewFinanceAssetCoreService(documents *document.Service, models *model.Service, configSvc *config.Service, finance *FinanceReportingCoreService) *FinanceAssetCoreService {
 	return &FinanceAssetCoreService{documents: documents, models: models, config: configSvc, finance: finance}
 }
@@ -907,7 +925,7 @@ func (s *FinanceAssetCoreService) fixedAssetLifecycleState(asset, schedule model
 		if eventDate >= lastEventDate {
 			lastEventDate = eventDate
 			state.LastEventDate = eventDate
-			state.LastEventType = event.ModelKey
+			state.LastEventType = normalizeAssetLifecycleEventType(event.ModelKey, textValue(event.Values["disposal_type"]))
 			state.LastEventID = event.ID
 		}
 	}
