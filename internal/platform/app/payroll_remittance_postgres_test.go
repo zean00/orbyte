@@ -27,13 +27,14 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	orgID := "org_default"
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
+	party := ensurePartyRecord(t, graph.models, "user_admin", "party_remittance_"+suffix, "Remittance Party "+suffix)
 	approverUser, err := graph.identity.CreateUser("remittance-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
 	}
 
 	treasuryAccount, err := graph.models.Create("treasury_account", "user_admin", map[string]any{
-		"code":            "TR-REM-" + suffix,
+		"account_code":    "TR-REM-" + suffix,
 		"name":            "Remittance Treasury",
 		"organization_id": orgID,
 		"location_id":     locID,
@@ -46,7 +47,7 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	}
 
 	employee, err := graph.models.Create("employee_profile", "user_admin", map[string]any{
-		"party_id":          "party_remittance_" + suffix,
+		"party_id":          party.ID,
 		"user_id":           "user_admin",
 		"employee_code":     "EMP-REM-" + suffix,
 		"employment_status": "active",
@@ -156,14 +157,14 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	}
 
 	authority, err := graph.models.Create("remittance_authority", "user_admin", map[string]any{
-		"code":                       "AUTH-" + suffix,
-		"name":                       "Tax Authority",
-		"organization_id":            orgID,
-		"location_id":                locID,
-		"default_currency_code":      "IDR",
+		"code":                        "AUTH-" + suffix,
+		"name":                        "Tax Authority",
+		"organization_id":             orgID,
+		"location_id":                 locID,
+		"default_currency_code":       "IDR",
 		"default_treasury_account_id": treasuryAccount.ID,
-		"payment_method_code":        "BANK",
-		"status":                     "active",
+		"payment_method_code":         "BANK",
+		"status":                      "active",
 	})
 	if err != nil {
 		t.Fatalf("create remittance authority: %v", err)

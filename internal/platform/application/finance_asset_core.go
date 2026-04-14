@@ -1244,10 +1244,7 @@ func scheduleAdvanceDueDate(currentDate, cadence string) string {
 }
 
 func scheduleTemplateKind(scheduleModelKey string) string {
-	if scheduleModelKey == "prepaid_schedule" {
-		return "prepaid_amortization"
-	}
-	return "asset_depreciation"
+	return "accrual"
 }
 
 func scheduleTemplateCode(scheduleModelKey string, parent model.Record) string {

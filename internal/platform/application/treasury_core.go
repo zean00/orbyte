@@ -249,7 +249,7 @@ func (s *TreasuryCoreService) CreateManualStatement(organizationID, locationID, 
 		"opening_balance":     roundMoney(numberValue(payload["opening_balance"])),
 		"closing_balance":     roundMoney(numberValue(payload["closing_balance"])),
 		"import_method":       "manual",
-		"status":              "imported",
+		"status":              "opened",
 	}
 	statement, err := s.models.Create("bank_statement", actorID, statementValues)
 	if err != nil {

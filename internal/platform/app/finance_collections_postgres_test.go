@@ -27,9 +27,10 @@ func TestFinanceCollectionsPostgresStatementsAndWriteoff(t *testing.T) {
 	orgID := "org_default"
 	locID := "loc_hq"
 	actorID := "user_admin"
+	party := ensurePartyRecord(t, graph.models, actorID, "party-fincol-"+suffix, "Finance Collections Party "+suffix)
 
 	invoice, err := graph.documents.Create("invoice", orgID, locID, actorID, map[string]any{
-		"party_id":                "party-fincol-" + suffix,
+		"party_id":                party.ID,
 		"party_name":              "Finance Collections Party " + suffix,
 		"invoice_date":            "2099-07-01",
 		"due_date":                "2099-07-10",
@@ -50,7 +51,7 @@ func TestFinanceCollectionsPostgresStatementsAndWriteoff(t *testing.T) {
 		t.Fatalf("save invoice: %v", err)
 	}
 
-	statementRun, err := graph.financeCollections.GenerateARStatementRun(orgID, locID, "party-fincol-"+suffix, "2099-07-31", actorID)
+	statementRun, err := graph.financeCollections.GenerateARStatementRun(orgID, locID, party.ID, "2099-07-31", actorID)
 	if err != nil {
 		t.Fatalf("generate ar statement run: %v", err)
 	}

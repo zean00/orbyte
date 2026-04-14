@@ -33,6 +33,7 @@ func TestProcurementCostingPostgresLandedCostAndVariance(t *testing.T) {
 	if _, err := graph.models.Create("commercial_item", actorID, map[string]any{
 		"sku":                          itemCode,
 		"name":                         "Landed Cost Item " + suffix,
+		"kind":                         "stocked",
 		"inventory_enabled":            true,
 		"inventory_tracking_mode":      "quantity",
 		"uom_code":                     "EA",

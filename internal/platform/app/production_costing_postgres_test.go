@@ -29,10 +29,10 @@ func TestProductionCostingPostgresActualVarianceAndAllocation(t *testing.T) {
 	suffix := time.Now().UTC().Format("20060102150405")
 	actorID := "user_admin"
 	for _, item := range []map[string]any{
-		{"sku": "FGP-" + suffix, "name": "Finished Good " + suffix, "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-FG-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
-		{"sku": "BYP-" + suffix, "name": "Byproduct " + suffix, "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1201-BY-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
-		{"sku": "RMA-" + suffix, "name": "Raw A " + suffix, "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-RM-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
-		{"sku": "RMB-" + suffix, "name": "Raw B " + suffix, "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-RM-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
+		{"sku": "FGP-" + suffix, "name": "Finished Good " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-FG-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
+		{"sku": "BYP-" + suffix, "name": "Byproduct " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1201-BY-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
+		{"sku": "RMA-" + suffix, "name": "Raw A " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-RM-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
+		{"sku": "RMB-" + suffix, "name": "Raw B " + suffix, "kind": "stocked", "uom_code": "EA", "inventory_enabled": true, "inventory_asset_account_code": "1200-RM-" + suffix, "wip_account_code": "1300-WIP-" + suffix},
 	} {
 		if _, err := graph.models.Create("commercial_item", actorID, item); err != nil {
 			t.Fatalf("create item %s: %v", item["sku"], err)

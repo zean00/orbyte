@@ -27,12 +27,13 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 	orgID := "org_default"
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
+	party := ensurePartyRecord(t, graph.models, "user_admin", "party_payroll_"+suffix, "Payroll Party "+suffix)
 	approverUser, err := graph.identity.CreateUser("payroll-approver-"+suffix, testBootstrapAdminPassword, locID, "role_admin", "location", locID)
 	if err != nil {
 		t.Fatalf("create approver user: %v", err)
 	}
 	employee, err := graph.models.Create("employee_profile", "user_admin", map[string]any{
-		"party_id":          "party_payroll_" + suffix,
+		"party_id":          party.ID,
 		"user_id":           "user_admin",
 		"employee_code":     "EMP-PAY-" + suffix,
 		"employment_status": "active",

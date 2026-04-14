@@ -47,13 +47,13 @@ type FinanceJournalRunItem struct {
 }
 
 type FinancePeriodClosePack struct {
-	PeriodID    string                  `json:"period_id"`
-	PeriodKey   string                  `json:"period_key"`
-	Status      string                  `json:"status"`
-	Ready       bool                    `json:"ready"`
-	Blockers    []string                `json:"blockers"`
-	Tasks       []FinancePeriodCloseTask`json:"tasks"`
-	JournalRuns []FinanceJournalRunItem `json:"journal_runs"`
+	PeriodID    string                   `json:"period_id"`
+	PeriodKey   string                   `json:"period_key"`
+	Status      string                   `json:"status"`
+	Ready       bool                     `json:"ready"`
+	Blockers    []string                 `json:"blockers"`
+	Tasks       []FinancePeriodCloseTask `json:"tasks"`
+	JournalRuns []FinanceJournalRunItem  `json:"journal_runs"`
 }
 
 func NewFinancePeriodEndCoreService(documents *document.Service, models *model.Service, finance *FinanceReportingCoreService) *FinancePeriodEndCoreService {
@@ -414,7 +414,7 @@ func (s *FinancePeriodEndCoreService) ensureJournalRun(period, tmpl model.Record
 		"journal_source_kind":  strings.TrimSpace(textValue(tmpl.Values["journal_kind"])),
 		"journal_template_id":  tmpl.ID,
 		"accounting_period_id": period.ID,
-		"reversal_status":     reversalStatus,
+		"reversal_status":      reversalStatus,
 	}
 	posting, err := s.documents.Create("ledger_posting", textValue(period.Values["organization_id"]), textValue(period.Values["location_id"]), actorID, postingPayload)
 	if err != nil {
@@ -757,7 +757,7 @@ func (s *FinancePeriodEndCoreService) uniqueStrings(values []string) []string {
 
 func (s *FinancePeriodEndCoreService) periodTasks(periodID string) ([]model.Record, error) {
 	items, _, err := s.models.List("accounting_period_task", model.Query{
-		Filters: map[string]string{"accounting_period_id": periodID},
+		Filters:  map[string]string{"accounting_period_id": periodID},
 		Page:     1,
 		PageSize: 1000,
 	})
@@ -769,7 +769,7 @@ func (s *FinancePeriodEndCoreService) periodTasks(periodID string) ([]model.Reco
 
 func (s *FinancePeriodEndCoreService) periodRuns(periodID string) ([]model.Record, error) {
 	items, _, err := s.models.List("journal_run", model.Query{
-		Filters: map[string]string{"accounting_period_id": periodID},
+		Filters:  map[string]string{"accounting_period_id": periodID},
 		Page:     1,
 		PageSize: 1000,
 	})
@@ -835,12 +835,12 @@ func (s *FinancePeriodEndCoreService) syncSingleRun(run model.Record, actorID st
 	postingID := strings.TrimSpace(textValue(values["generated_posting_id"]))
 	status := "generated"
 	postingNumber := ""
-	postingStatus := ""
+	postingStatus := "none"
 	reversalStatus := ""
 	if postingID != "" {
 		posting, err := s.documents.Get(postingID)
 		if err == nil {
-			postingStatus = posting.Header.Status
+			postingStatus = normalizeGeneratedPostingStatus(posting.Header.Status)
 			postingNumber = posting.Header.Number
 			reversalStatus = strings.TrimSpace(textValue(posting.Body.Payload["reversal_status"]))
 			switch posting.Header.Status {
@@ -869,7 +869,7 @@ func (s *FinancePeriodEndCoreService) syncSingleRun(run model.Record, actorID st
 		return err
 	}
 	taskItems, _, err := s.models.List("accounting_period_task", model.Query{
-		Filters: map[string]string{"journal_run_id": updated.ID},
+		Filters:  map[string]string{"journal_run_id": updated.ID},
 		Page:     1,
 		PageSize: 100,
 	})
@@ -882,6 +882,21 @@ func (s *FinancePeriodEndCoreService) syncSingleRun(run model.Record, actorID st
 		}
 	}
 	return nil
+}
+
+func normalizeGeneratedPostingStatus(status string) string {
+	switch strings.TrimSpace(status) {
+	case "", "draft":
+		return "generated"
+	case "submitted":
+		return "pending"
+	case "posted":
+		return "posted"
+	case "failed":
+		return "failed"
+	default:
+		return "generated"
+	}
 }
 
 func (s *FinancePeriodEndCoreService) syncJournalTask(task model.Record, actorID string) error {

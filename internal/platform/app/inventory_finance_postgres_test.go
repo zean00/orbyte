@@ -35,6 +35,7 @@ func TestInventoryFinancePostgresCountAdjustmentAndReconciliation(t *testing.T) 
 	if _, err := graph.models.Create("commercial_item", actorID, map[string]any{
 		"sku":                          "INVFIN-" + suffix,
 		"name":                         "Inventory Finance Item " + suffix,
+		"kind":                         "stocked",
 		"inventory_enabled":            true,
 		"uom_code":                     "EA",
 		"inventory_asset_account_code": "1200-INV-" + suffix,
