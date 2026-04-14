@@ -228,8 +228,11 @@ func TestFinanceAssetPostgresLifecycleEvents(t *testing.T) {
 	if got := textValue(updated.Values["current_cost_center_code"]); got != textValue(transferCostCenter.Values["code"]) {
 		t.Fatalf("expected current cost center %s, got %q", textValue(transferCostCenter.Values["code"]), got)
 	}
-	if got := textValue(updated.Values["status"]); got != "disposed" {
-		t.Fatalf("expected disposed status, got %q", got)
+	if got := textValue(updated.Values["status"]); got != "completed" {
+		t.Fatalf("expected completed status, got %q", got)
+	}
+	if got := textValue(updated.Values["lifecycle_status"]); got != "disposed" {
+		t.Fatalf("expected disposed lifecycle status, got %q", got)
 	}
 	if got := numberValue(updated.Values["impairment_amount_total"]); got != 150 {
 		t.Fatalf("expected impairment total 150, got %v", got)

@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -574,8 +575,24 @@ func TestLeavePolicyPostgresValidation(t *testing.T) {
 	if err != nil || len(monthlyAccounts) == 0 {
 		t.Fatalf("list monthly accrual accounts: %v", err)
 	}
-	if got := numberValue(monthlyAccounts[0].Values["available_days"]); got != 1 {
-		t.Fatalf("expected prorated monthly accrual available_days 1, got %v", got)
+	monthlyRunTime, err := time.Parse("2006-01-02", monthlyRunDate)
+	if err != nil {
+		t.Fatalf("parse monthly run date: %v", err)
+	}
+	profileStartTime, err := time.Parse("2006-01-02", monthlyEffectiveFrom)
+	if err != nil {
+		t.Fatalf("parse monthly effective from: %v", err)
+	}
+	expectedMonthlyDays := 2.0
+	monthStart := time.Date(monthlyRunTime.Year(), monthlyRunTime.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, -1)
+	if !profileStartTime.Before(monthStart) && !profileStartTime.After(monthEnd) {
+		activeDays := float64(monthEnd.Day() - profileStartTime.Day() + 1)
+		totalDays := float64(monthEnd.Day())
+		expectedMonthlyDays = math.Round(expectedMonthlyDays*activeDays/totalDays*100) / 100
+	}
+	if got := numberValue(monthlyAccounts[0].Values["available_days"]); got != expectedMonthlyDays {
+		t.Fatalf("expected prorated monthly accrual available_days %v, got %v", expectedMonthlyDays, got)
 	}
 
 	reloaded := constructServiceGraph(postgres, nil)
