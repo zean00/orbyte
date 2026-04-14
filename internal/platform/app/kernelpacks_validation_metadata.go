@@ -169,7 +169,7 @@ func builtInAllowedValuesForField(modelKey, fieldKey string) ([]string, bool) {
 		return nil, false
 	}
 	values := map[string][]string{
-		"status":                    {"active", "inactive", "blocked", "draft", "open", "opened", "closed", "submitted", "approved", "rejected", "cancelled", "posted", "generated", "completed", "pending", "processing", "ready", "settled", "void", "failed", "archived", "issued", "partially_paid", "paid", "refunded", "held"},
+		"status":                    {"active", "inactive", "blocked", "draft", "open", "opened", "closed", "submitted", "approved", "rejected", "cancelled", "posted", "generated", "completed", "pending", "processing", "ready", "settled", "void", "failed", "archived", "issued", "partially_paid", "paid", "refunded", "held", "published", "imported"},
 		"approval_status":           {"draft", "pending", "submitted", "approved", "rejected", "cancelled"},
 		"employment_status":         {"active", "inactive", "terminated", "on_leave"},
 		"member_status":             {"active", "inactive", "expired", "suspended"},
@@ -191,7 +191,7 @@ func builtInAllowedValuesForField(modelKey, fieldKey string) ([]string, bool) {
 		"customer_type":             {"retail", "business", "member", "walk_in"},
 		"unit_type":                 {"company", "division", "department", "team", "store", "warehouse", "work_center"},
 		"shipment_status":           {"draft", "ready", "dispatched", "delivered", "failed", "cancelled"},
-		"lifecycle_status":          {"draft", "active", "inactive", "disposed", "impaired", "transferred", "retired"},
+		"lifecycle_status":          {"draft", "active", "inactive", "disposed", "impaired", "revalued", "transferred", "retired"},
 		"last_lifecycle_event_type": {"created", "capitalized", "transferred", "impaired", "revalued", "disposed", "retired"},
 		"disposal_type":             {"sale", "scrap", "write_off", "donation", "other"},
 		"mismatch_type":             {"quantity", "cost", "valuation", "location", "other"},
