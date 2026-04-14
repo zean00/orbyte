@@ -96,7 +96,7 @@ func validateTrustedOrigin(r *http.Request, trustedOrigins []string) error {
 func issueCSRFToken(sessionID string) (string, error) {
 	secret := []byte(runtimeconfig.Current().JWTSecret())
 	if len(secret) == 0 {
-		return "", shared.Unauthorized("jwt secret is not configured")
+		return "", shared.Unauthorized("APP_JWT_SECRET is required")
 	}
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte("csrf:" + sessionID))
@@ -112,7 +112,7 @@ func buildCSRFCookie(sessionID string) (*http.Cookie, error) {
 		Name:     csrfCookieName,
 		Value:    token,
 		Path:     "/",
-		HttpOnly: false,
+		HttpOnly: true,
 		Secure:   runtimeconfig.Current().CookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	}, nil
@@ -123,7 +123,7 @@ func clearedCSRFCookie() *http.Cookie {
 		Name:     csrfCookieName,
 		Value:    "",
 		Path:     "/",
-		HttpOnly: false,
+		HttpOnly: true,
 		Secure:   runtimeconfig.Current().CookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(0, 0).UTC(),

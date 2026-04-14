@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,19 +83,21 @@ func TestLintModulesJSONOutput(t *testing.T) {
 	root := t.TempDir()
 	opts := modulegen.Options{Root: root, JSON: true}
 	originalStdout := os.Stdout
-	reader, writer, err := os.Pipe()
+	outputFile, err := os.CreateTemp(t.TempDir(), "modulegen-lint-*.json")
 	if err != nil {
-		t.Fatalf("os.Pipe failed: %v", err)
+		t.Fatalf("CreateTemp failed: %v", err)
 	}
-	defer reader.Close()
-	os.Stdout = writer
+	defer outputFile.Close()
+	os.Stdout = outputFile
 	defer func() { os.Stdout = originalStdout }()
 
 	if err := lintModules(opts); err != nil {
 		t.Fatalf("lintModules failed: %v", err)
 	}
-	_ = writer.Close()
-	output, err := io.ReadAll(reader)
+	if err := outputFile.Close(); err != nil {
+		t.Fatalf("close lint output file: %v", err)
+	}
+	output, err := os.ReadFile(outputFile.Name())
 	if err != nil {
 		t.Fatalf("read lint output: %v", err)
 	}

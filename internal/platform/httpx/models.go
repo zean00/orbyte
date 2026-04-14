@@ -371,9 +371,12 @@ func modelRelationPath(path string) (string, string, string, bool) {
 }
 
 func relationQuery(r *http.Request) model.Query {
-	filters := map[string]string{
-		"name":   strings.TrimSpace(r.URL.Query().Get("name")),
-		"status": strings.TrimSpace(r.URL.Query().Get("status")),
+	filters := map[string]string{}
+	if name := strings.TrimSpace(r.URL.Query().Get("name")); name != "" {
+		filters["name"] = name
+	}
+	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
+		filters["status"] = status
 	}
 	reserved := map[string]struct{}{
 		"name":       {},

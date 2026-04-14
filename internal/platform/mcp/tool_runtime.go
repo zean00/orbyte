@@ -19,6 +19,7 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 		return items
 	}
 	items = append(items, s.listBuiltInTools(actor)...)
+	items = append(items, s.listSyntheticTools(actor)...)
 	for _, detail := range s.modules.List() {
 		if !detail.Installed.Enabled {
 			continue
@@ -28,13 +29,18 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 			continue
 		}
 		for _, def := range detail.Manifest.MCP.Tools {
+			if !s.ToolEnabled(def.Key) {
+				continue
+			}
 			if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
 				continue
 			}
-			items = append(items, ToolDescriptor{
+			items = append(items, s.decorateToolDescriptorWithGovernance(ToolDescriptor{
 				Name:        def.Key,
 				Title:       def.Title,
 				Description: def.Description,
+				ModuleKey:   detail.Manifest.Key,
+				SourceType:  "module",
 				Scope:       scope,
 				InputSchema: cloneMap(def.InputSchema),
 				Contract: contractDescriptorFromModule(
@@ -44,7 +50,7 @@ func (s *Server) listTools(actor ActorContext) []ToolDescriptor {
 					defaultToolIdempotency(def.Key, def.Operation),
 					"mcp.tool."+strings.TrimSpace(def.Key),
 				),
-			})
+			}, nil))
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
@@ -139,14 +145,14 @@ func (s *Server) readResource(actor ActorContext, uri string) ([]ResourceContent
 	}
 }
 
-func (s *Server) callTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
+func (s *Server) callTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any, catalogContext ToolCatalogOptions) (map[string]any, error) {
 	ctx, span := s.startToolSpan(ctx, actor, name)
 	if span != nil {
 		defer span.End()
 	}
 
 	start := time.Now()
-	result, err := s.executeTool(ctx, actor, name, arguments)
+	result, err := s.executeTool(ctx, actor, name, arguments, catalogContext)
 	duration := time.Since(start)
 
 	status := "success"
@@ -178,12 +184,45 @@ func (s *Server) startToolSpan(ctx context.Context, actor ActorContext, name str
 	)
 }
 
-func (s *Server) executeTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any) (map[string]any, error) {
+func (s *Server) executeTool(ctx context.Context, actor ActorContext, name string, arguments map[string]any, catalogContext ToolCatalogOptions) (map[string]any, error) {
 	if s == nil || s.modules == nil {
 		return nil, fmt.Errorf("mcp tools are unavailable")
 	}
+	if strings.TrimSpace(catalogContext.CatalogMode) != "" {
+		scopeOptions := catalogContext
+		scopeOptions.MaxTools = 0
+		available, _ := s.filterToolCatalogScope(s.listTools(actor), scopeOptions)
+		visible := false
+		for _, item := range available {
+			if strings.TrimSpace(item.Name) == strings.TrimSpace(name) {
+				visible = true
+				break
+			}
+		}
+		if !visible {
+			return nil, fmt.Errorf("tool is out of scope for the active catalog context")
+		}
+	}
+	if s.toolDefined(strings.TrimSpace(name)) && !s.ToolEnabled(strings.TrimSpace(name)) {
+		return nil, fmt.Errorf("tool is disabled")
+	}
+	if descriptor, ok := s.ToolDescriptor(strings.TrimSpace(name), actor); ok {
+		evaluation := s.evaluateToolGovernance(descriptor, arguments)
+		if !evaluation.Allowed {
+			return nil, fmt.Errorf("tool is blocked by policy: %s", firstNonEmpty(evaluation.PolicyReason, "blocked"))
+		}
+	}
 	if result, ok, err := s.callBuiltInTool(actor, strings.TrimSpace(name), arguments); ok {
 		return result, err
+	}
+	if def, ok := s.syntheticToolDefinition(strings.TrimSpace(name), actor); ok {
+		if !s.ToolEnabled(def.Name) {
+			return nil, fmt.Errorf("tool is disabled")
+		}
+		if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+			return nil, fmt.Errorf("tool is not allowed")
+		}
+		return def.Handler(s, actor, arguments)
 	}
 	def, ok := s.lookupTool(actor.EndpointScope, strings.TrimSpace(name))
 	if !ok {
@@ -223,6 +262,46 @@ func (s *Server) executeTool(ctx context.Context, actor ActorContext, name strin
 			}
 		}
 		return result, nil
+	case "crm.ticket.summary":
+		return s.crmTicketSummary(actor)
+	case "crm.ticket.search":
+		return s.crmTicketSearch(actor, arguments)
+	case "crm.ticket.get":
+		return s.crmTicketGet(actor, arguments)
+	case "crm.ticket.create":
+		return s.crmTicketCreate(actor, arguments)
+	case "crm.ticket.update":
+		return s.crmTicketUpdate(actor, arguments)
+	case "crm.ticket.comment.create":
+		return s.crmTicketCommentCreate(actor, arguments)
+	case "crm.ticket.assign":
+		return s.crmTicketAssign(actor, arguments)
+	case "crm.ticket.resolve":
+		return s.crmTicketResolve(actor, arguments)
+	case "crm.customer.summary":
+		return s.crmCustomerSummary(actor, arguments)
+	case "crm.customer.timeline":
+		return s.crmCustomerTimeline(actor, arguments)
+	case "crm.customer.health":
+		return s.crmCustomerHealth(actor)
+	case "crm.lead.search":
+		return s.crmLeadSearch(actor, arguments)
+	case "crm.lead.get":
+		return s.crmLeadGet(actor, arguments)
+	case "crm.lead.create":
+		return s.crmLeadCreate(actor, arguments)
+	case "crm.lead.update":
+		return s.crmLeadUpdate(actor, arguments)
+	case "crm.opportunity.search":
+		return s.crmOpportunitySearch(actor, arguments)
+	case "crm.opportunity.get":
+		return s.crmOpportunityGet(actor, arguments)
+	case "crm.opportunity.create":
+		return s.crmOpportunityCreate(actor, arguments)
+	case "crm.opportunity.update":
+		return s.crmOpportunityUpdate(actor, arguments)
+	case "crm.opportunity.pipeline.summary":
+		return s.crmOpportunityPipelineSummary(actor)
 	default:
 		_ = arguments
 		return nil, fmt.Errorf("unsupported tool operation")

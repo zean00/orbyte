@@ -11,6 +11,7 @@ type uiWorklistTask struct {
 	TargetNumber    string         `json:"target_number,omitempty"`
 	TargetStatus    string         `json:"target_status,omitempty"`
 	TargetUpdatedAt string         `json:"target_updated_at,omitempty"`
+	OpenPath        string         `json:"open_path,omitempty"`
 	TaskType        string         `json:"task_type"`
 	Status          string         `json:"status"`
 	AssignmentMode  string         `json:"assignment_mode,omitempty"`
@@ -33,6 +34,7 @@ type uiWorklistApproval struct {
 	TargetNumber    string         `json:"target_number,omitempty"`
 	TargetStatus    string         `json:"target_status,omitempty"`
 	TargetUpdatedAt string         `json:"target_updated_at,omitempty"`
+	OpenPath        string         `json:"open_path,omitempty"`
 	Status          string         `json:"status"`
 	StageKey        string         `json:"stage_key,omitempty"`
 	RequestedBy     string         `json:"requested_by,omitempty"`

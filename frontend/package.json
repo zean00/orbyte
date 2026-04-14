@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check:generated": "node ./scripts/check-generated-client.mjs",
     "clean:embed": "rm -rf ../internal/platform/httpx/assets/assets && rm -f ../internal/platform/httpx/assets/index.html ../internal/platform/httpx/assets/admin.html ../internal/platform/httpx/assets/registerSW.js ../internal/platform/httpx/assets/manifest.webmanifest ../internal/platform/httpx/assets/sw.js ../internal/platform/httpx/assets/workbox-*.js",
     "dev": "vite",
     "build": "npm run clean:embed && tsc -b && vite build",
@@ -18,7 +19,9 @@
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.28.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.6.0",
     "zustand": "^5.0.2"
   },

@@ -21,8 +21,8 @@ func NormalizeQuery(def Definition, query Query) (Query, error) {
 	if query.SortKey == "" {
 		query.SortKey = strings.TrimSpace(def.DefaultSort)
 	}
-	if query.SortKey != "" && !allowedQueryKey(def, query.SortKey) {
-		return Query{}, shared.Validation(fmt.Sprintf("unsupported sort key: %s", query.SortKey))
+	if err := assertSafeQuery(def, query); err != nil {
+		return Query{}, err
 	}
 	cleaned := map[string]string{}
 	for key, value := range query.Filters {
@@ -31,13 +31,27 @@ func NormalizeQuery(def Definition, query Query) (Query, error) {
 		if key == "" || value == "" {
 			continue
 		}
-		if !allowedQueryKey(def, key) {
-			return Query{}, shared.Validation(fmt.Sprintf("unsupported filter key: %s", key))
-		}
 		cleaned[key] = value
 	}
 	query.Filters = cleaned
 	return query, nil
+}
+
+func assertSafeQuery(def Definition, query Query) error {
+	sortKey := strings.TrimSpace(query.SortKey)
+	if sortKey != "" && !allowedQueryKey(def, sortKey) {
+		return shared.Validation(fmt.Sprintf("unsupported sort key: %s", sortKey))
+	}
+	for key := range query.Filters {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if !allowedQueryKey(def, key) {
+			return shared.Validation(fmt.Sprintf("unsupported filter key: %s", key))
+		}
+	}
+	return nil
 }
 
 func allowedQueryKey(def Definition, key string) bool {

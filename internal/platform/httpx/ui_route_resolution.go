@@ -28,47 +28,47 @@ type uiRouteResolutionResponse struct {
 	Flow             *module.DocumentFlowDefinition `json:"flow,omitempty"`
 }
 
-func resolveUIRoute(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, path string) uiRouteResolutionResponse {
+func resolveUIRouteWithResolver(resolver *uiBootstrapResolver, surface module.UISurface, path string) uiRouteResolutionResponse {
 	response := uiRouteResolutionResponse{
 		Status:        "not_found",
 		RequestedPath: path,
 		Surface:       surface,
-		FallbackPath:  fallbackPathForSurface(ident, modules, p, surface),
+		FallbackPath:  resolver.fallbackPath(surface),
 		Message:       "route not found",
 	}
-	resolution, ok := modules.ResolveRouteForSurface(path, surface)
+	resolution, ok := resolver.resolveRoute(surface, path)
 	if !ok {
-		for _, candidate := range availableUISurfaces(ident, modules, p) {
+		for _, candidate := range resolver.availableSurfaces() {
 			candidateSurface := module.UISurface(candidate)
 			if candidateSurface == surface {
 				continue
 			}
-			if _, found := modules.ResolveRouteForSurface(path, candidateSurface); found {
+			if _, found := resolver.resolveRoute(candidateSurface, path); found {
 				response.Status = "surface_mismatch"
 				response.SuggestedSurface = candidateSurface
-				response.FallbackPath = fallbackPathForSurface(ident, modules, p, candidateSurface)
+				response.FallbackPath = resolver.fallbackPath(candidateSurface)
 				response.Message = "route belongs to a different surface"
 				return response
 			}
 		}
 		return response
 	}
-	if !principalAllowsAll(ident, p, resolution.Action.RequiredPermissions) {
+	if !resolver.allowsAll(resolution.Action.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "route is not allowed"
 		return response
 	}
-	if resolution.View != nil && !principalAllowsAll(ident, p, resolution.View.RequiredPermissions) {
+	if resolution.View != nil && !resolver.allowsAll(resolution.View.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "view is not allowed"
 		return response
 	}
-	if resolution.CustomEntry != nil && !principalAllowsAll(ident, p, resolution.CustomEntry.RequiredPermissions) {
+	if resolution.CustomEntry != nil && !resolver.allowsAll(resolution.CustomEntry.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "route is not allowed"
 		return response
 	}
-	if resolution.Flow != nil && !principalAllowsAll(ident, p, resolution.Flow.RequiredPermissions) {
+	if resolution.Flow != nil && !resolver.allowsAll(resolution.Flow.RequiredPermissions) {
 		response.Status = "forbidden"
 		response.Message = "route is not allowed"
 		return response
@@ -86,10 +86,15 @@ func resolveUIRoute(ident *identity.Service, modules *module.Service, p principa
 	return response
 }
 
+func resolveUIRoute(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface, path string) uiRouteResolutionResponse {
+	return resolveUIRouteWithResolver(newUIBootstrapResolver(ident, modules, p), surface, path)
+}
+
 func fallbackPathsForSurfaces(ident *identity.Service, modules *module.Service, p principal) map[string]string {
 	items := map[string]string{}
-	for _, surface := range availableUISurfaces(ident, modules, p) {
-		if path := fallbackPathForSurface(ident, modules, p, module.UISurface(surface)); path != "" {
+	resolver := newUIBootstrapResolver(ident, modules, p)
+	for _, surface := range resolver.availableSurfaces() {
+		if path := resolver.fallbackPath(module.UISurface(surface)); path != "" {
 			items[surface] = path
 		}
 	}
@@ -97,8 +102,7 @@ func fallbackPathsForSurfaces(ident *identity.Service, modules *module.Service, 
 }
 
 func fallbackPathForSurface(ident *identity.Service, modules *module.Service, p principal, surface module.UISurface) string {
-	menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, surface)
-	return defaultRouteForSurface(ident, p.userID, uiSurfacePreference(surface), menus, actions)
+	return newUIBootstrapResolver(ident, modules, p).fallbackPath(surface)
 }
 
 func visibleSelfServiceAPIs(ident *identity.Service, modules *module.Service, p principal) []module.SelfServiceAPIDefinition {
@@ -123,8 +127,12 @@ func requestedUISurface(r *http.Request) module.UISurface {
 		return module.UISurfaceWorklist
 	case module.UISurfaceSelfService:
 		return module.UISurfaceSelfService
+	case module.UISurfaceAgent:
+		return module.UISurfaceAgent
 	case module.UISurfacePOS:
 		return module.UISurfacePOS
+	case module.UISurfaceDashboard:
+		return module.UISurfaceDashboard
 	case module.UISurfaceMobile:
 		return module.UISurfaceMobile
 	default:
@@ -144,23 +152,7 @@ func uiSurfacePreference(surface module.UISurface) string {
 }
 
 func availableUISurfaces(ident *identity.Service, modules *module.Service, p principal) []string {
-	items := make([]string, 0, 4)
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceBackoffice); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceBackoffice))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceWorklist); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceWorklist))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfaceSelfService); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfaceSelfService))
-	}
-	if menus, actions, _, _, _ := visibleUIContracts(ident, modules, p, module.UISurfacePOS); len(menus) > 0 || len(actions) > 0 {
-		items = append(items, string(module.UISurfacePOS))
-	}
-	if len(items) == 0 {
-		items = append(items, string(module.UISurfaceBackoffice))
-	}
-	return items
+	return newUIBootstrapResolver(ident, modules, p).availableSurfaces()
 }
 
 func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, currentUserID string, r *http.Request) []uiWorklistTask {
@@ -187,7 +179,7 @@ func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, cur
 		if dueFilter == "overdue" && (item.DueAt.IsZero() || !item.DueAt.Before(now)) {
 			continue
 		}
-		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
+		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt, openPath := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
 		output = append(output, uiWorklistTask{
 			ID:              item.ID,
 			WorkflowKey:     item.WorkflowKey,
@@ -199,6 +191,7 @@ func filterWorkflowTasksForUI(docs *document.Service, items []workflow.Task, cur
 			TargetNumber:    targetNumber,
 			TargetStatus:    targetStatus,
 			TargetUpdatedAt: targetUpdatedAt,
+			OpenPath:        openPath,
 			TaskType:        item.TaskType,
 			Status:          item.Status,
 			AssignmentMode:  item.AssignmentMode,
@@ -237,7 +230,7 @@ func filterWorkflowApprovalsForUI(docs *document.Service, items []workflow.Appro
 		if dueFilter == "overdue" && (item.DueAt.IsZero() || !item.DueAt.Before(now)) {
 			continue
 		}
-		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
+		documentType, targetTitle, targetNumber, targetStatus, targetUpdatedAt, openPath := workflowTargetDocumentSummary(docs, item.TargetType, item.TargetID)
 		output = append(output, uiWorklistApproval{
 			ID:              item.ID,
 			WorkflowKey:     item.WorkflowKey,
@@ -249,6 +242,7 @@ func filterWorkflowApprovalsForUI(docs *document.Service, items []workflow.Appro
 			TargetNumber:    targetNumber,
 			TargetStatus:    targetStatus,
 			TargetUpdatedAt: targetUpdatedAt,
+			OpenPath:        openPath,
 			Status:          item.Status,
 			StageKey:        item.StageKey,
 			RequestedBy:     item.RequestedBy,
@@ -266,16 +260,16 @@ func formatOptionalTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
-func workflowTargetDocumentSummary(docs *document.Service, targetType, targetID string) (documentType, title, number, status, updatedAt string) {
+func workflowTargetDocumentSummary(docs *document.Service, targetType, targetID string) (documentType, title, number, status, updatedAt, openPath string) {
 	if docs == nil || targetType != "document" || strings.TrimSpace(targetID) == "" {
-		return "", "", "", "", ""
+		return "", "", "", "", "", ""
 	}
 	record, err := docs.Get(targetID)
 	if err != nil {
-		return "", "", "", "", ""
+		return "", "", "", "", "", ""
 	}
 	title, _ = record.Body.Payload["title"].(string)
-	return record.Header.Type, title, record.Header.Number, record.Header.Status, formatOptionalTime(record.Header.UpdatedAt)
+	return record.Header.Type, title, record.Header.Number, record.Header.Status, formatOptionalTime(record.Header.UpdatedAt), docs.ResolveWorkspaceOpenPath(record)
 }
 
 func countWorkflowItems[T interface{ GetStatus() string }](items []T, status string) int {

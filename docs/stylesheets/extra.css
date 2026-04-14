@@ -58,3 +58,66 @@
   padding: 1rem;
   background: white;
 }
+
+.page-intro {
+  font-size: 1.08rem;
+  max-width: 58rem;
+  color: #314559;
+}
+
+.orbyte-section {
+  border: 1px solid var(--orbyte-line);
+  border-radius: 1rem;
+  padding: 1rem 1.1rem;
+  background: #fbfdff;
+  margin: 1rem 0 1.25rem;
+}
+
+.orbyte-section h2,
+.orbyte-section h3,
+.orbyte-section h4 {
+  margin-top: 0;
+}
+
+.quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  margin: 1rem 0 1.2rem;
+}
+
+.quick-links > ul {
+  display: contents;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.quick-links > ul > li {
+  border: 1px solid var(--orbyte-line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, #fff, var(--orbyte-soft));
+  margin: 0;
+}
+
+.quick-links > ul > li a {
+  display: block;
+  color: var(--orbyte-ink);
+  text-decoration: none;
+}
+
+.quick-links > ul > li a strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.next-steps {
+  border-top: 1px solid var(--orbyte-line);
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+
+.next-steps ul {
+  margin-top: 0.5rem;
+}

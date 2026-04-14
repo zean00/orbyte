@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"orbyte/internal/modules"
+	"orbyte/internal/platform/app"
 	"orbyte/internal/platform/contractartifacts"
 	"orbyte/internal/platform/mcp"
 	"orbyte/internal/platform/version"
@@ -59,19 +59,15 @@ func TestGeneratedArtifactsIncludeDefaultProfileContracts(t *testing.T) {
 		t.Fatalf("generate artifacts: %v", err)
 	}
 
-	manifests, err := modules.ForProfile("")
-	if err != nil {
-		t.Fatalf("resolve default profile manifests: %v", err)
-	}
-	foundClinicModule := false
-	for _, manifest := range manifests {
-		if manifest.Key == "clinic_registration" {
-			foundClinicModule = true
+	foundCRMModule := false
+	for _, manifest := range app.BuiltInModuleManifests() {
+		if manifest.Key == "crm_core" {
+			foundCRMModule = true
 			break
 		}
 	}
-	if !foundClinicModule {
-		t.Fatalf("default profile no longer includes clinic_registration; update this regression test")
+	if !foundCRMModule {
+		t.Fatalf("default profile no longer includes crm_core; update this regression test")
 	}
 
 	openAPIRaw, err := json.Marshal(generated.OpenAPI)
@@ -79,7 +75,7 @@ func TestGeneratedArtifactsIncludeDefaultProfileContracts(t *testing.T) {
 		t.Fatalf("marshal openapi: %v", err)
 	}
 	openAPIText := string(openAPIRaw)
-	for _, token := range []string{"clinic_registration", "patient_profile", "clinic.registration.worklist"} {
+	for _, token := range []string{"crm_ticket", "crm_queue", "/crm/tickets"} {
 		if !strings.Contains(openAPIText, token) {
 			t.Fatalf("generated openapi is missing default profile contract token %q", token)
 		}

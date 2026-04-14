@@ -1,129 +1,237 @@
 # Getting Started
 
-This guide helps you run Orbyte locally and understand the minimum setup required to explore the platform.
+<p class="page-intro">
+This guide covers local installation, the supported runtime modes, the default development commands, and the fastest ways to validate that the current codebase is working.
+</p>
 
-## What You Need
+## Start Here
 
-- Go 1.25
+<div class="quick-links" markdown>
+
+- [**Install Dependencies**](#installation)
+  Set up Go, Node.js, and optional docs tooling.
+- [**Pick A Runtime Mode**](#runtime-modes)
+  Choose between in-memory speed and PostgreSQL-backed realism.
+- [**Verify The App**](#first-run-checklist)
+  Run health checks and open the workspace/admin shells.
+- [**Load Demo Data**](#demo-and-seed-flows)
+  Seed CRM, POS, dashboard, and agent validation scenarios.
+
+</div>
+
+## Prerequisites
+
+Install the following locally:
+
+- Go `1.25`
 - Node.js and npm
-- Docker and Docker Compose if you want PostgreSQL in containers
+- Docker and Docker Compose for PostgreSQL-backed development
+- `psql` if you want to use the schema reset helpers
 
-## Local Runtime Modes
+## Repository Layout
 
-Orbyte supports two main local modes:
+The main directories you will use are:
 
-- in-memory mode
-  - fastest way to explore the platform
-  - no PostgreSQL required
-  - state is process-local and non-persistent
-- PostgreSQL mode
-  - closer to production
-  - uses migrations and persistent repositories
-  - recommended for real feature development
+- `cmd/`
+  - server, migration, contract generation, agentproof tools
+- `internal/platform/`
+  - core runtime services, app construction, HTTP, MCP, ACP
+- `internal/modules/`
+  - profile-driven non-kernel module examples
+- `frontend/`
+  - workspace UI
+- `docs/`
+  - MkDocs site content
 
-## Quick Start
+## Installation
 
-### In-Memory Mode
+### Install Go dependencies
 
 ```bash
-make test
+go mod download
+```
+
+### Install frontend dependencies
+
+```bash
+cd frontend
+npm ci
+```
+
+### Optional docs environment
+
+The repository already includes `.venv-docs/` helpers for docs work. To build docs:
+
+```bash
+make docs-build
+```
+
+## Runtime Modes
+
+> Recommended: use PostgreSQL mode for any serious development, MCP validation, or seeded business-demo work.
+
+### In-memory mode
+
+Use this when you want a fast local session without PostgreSQL.
+
+```bash
 make run
 ```
 
-This starts the platform with:
+Current behavior:
 
-- `APP_AUTH_DEV_MODE=true`
-- an HTTP listener on `:8080`
-- an ephemeral development flow suitable for local exploration
+- binds to `127.0.0.1:18110` by default
+- uses in-memory repositories
+- enables dev auth mode through `APP_AUTH_DEV_MODE=true`
+- seeds the bootstrap admin path so login works locally
 
-### PostgreSQL Mode
+### PostgreSQL mode
+
+Use this when you want persistence, realistic validation, or seeded business demos.
 
 ```bash
 docker compose up -d postgres
-./scripts/dev-postgres.sh
-```
-
-Or use:
-
-```bash
 make migrate-up
 make run-postgres
 ```
 
-## Default Local Addresses
+Or manage it in the background:
 
-- app: `http://localhost:8080`
-- postgres: `localhost:5432`
+```bash
+make app-start-postgres
+make app-status-postgres
+make app-stop-postgres
+```
 
-## Authentication Bootstrap
+## Default Local Values
 
-On startup the platform seeds a bootstrap admin account and core platform data.
+The `Makefile` currently defaults to:
 
-Useful environment variables:
+- app address: `127.0.0.1:18110`
+- base URL: `http://127.0.0.1:18110`
+- PostgreSQL host port: `55432`
+- database URL: `postgres://orbyte:orbyte@127.0.0.1:55432/orbyte?sslmode=disable`
+- bootstrap admin password: `admin123!`
+- JWT secret: `dev-secret`
 
-- `APP_JWT_SECRET`
-- `APP_BOOTSTRAP_ADMIN_PASSWORD`
-- `APP_AUTH_DEV_MODE`
-- `DATABASE_URL`
+## First Run Checklist
 
-For local development:
+### 1. Run tests
 
-- `APP_BOOTSTRAP_ADMIN_PASSWORD` defaults to `admin123!` in the provided helper scripts and `Makefile`
-- when running without PostgreSQL, `APP_AUTH_DEV_MODE=true` allows development bootstrap behavior
+```bash
+make test
+```
 
-## Basic Commands
+### 2. Start the server
+
+```bash
+make run
+```
+
+or
+
+```bash
+make run-postgres
+```
+
+### 3. Verify health
+
+```bash
+curl http://127.0.0.1:18110/healthz
+curl http://127.0.0.1:18110/readyz
+```
+
+### 4. Verify auth/options
+
+```bash
+curl http://127.0.0.1:18110/auth/options
+```
+
+### 5. Open the app
+
+- workspace shell: `http://127.0.0.1:18110/ui`
+- admin shell: `http://127.0.0.1:18110/admin`
+
+## Common Development Commands
 
 ```bash
 make test
 make lint
 make coverage
 make contracts
-go run ./cmd/contractsgen
-make migrate-status
-make run
-make run-postgres
+make frontend-verify
+make docs-build
 ```
 
-## What Gets Bootstrapped
+## At A Glance
 
-At startup Orbyte seeds:
+| Need | Command |
+| --- | --- |
+| quick local run | `make run` |
+| PostgreSQL run | `make run-postgres` |
+| start background app | `make app-start-postgres` |
+| run migrations | `make migrate-up` |
+| rebuild contracts | `make contracts` |
+| validate CRM agent flow | `make validate-crm-agent` |
 
-- built-in kernel module packs
-- business modules resolved from the active domain profile
-- configuration definitions
-- reference data
-- security roles and permissions
-- module manifests
-- baseline workflows and document definitions
-- a bootstrap admin user
+## Demo And Seed Flows
 
-## First Things To Explore
+The repository includes demo seed paths for current business examples:
 
-After startup, inspect:
+```bash
+make seed-pos
+make seed-dashboard
+make seed-crm-demo
+make seed-agent-runtime
+make seed-agent-continuity
+make seed-showcase-demo
+```
 
-- `GET /healthz`
-- `GET /readyz`
-- `GET /platform/context`
-- `GET /auth/options`
-- `GET /metrics`
+These write manifests to `/tmp`, including:
 
-In development mode, OpenAPI is also exposed at:
+- `/tmp/orbyte-pos-seed.json`
+- `/tmp/orbyte-dashboard-seed.json`
+- `/tmp/orbyte-crm-seed.json`
+- `/tmp/agentproof-runtime.json`
 
-- `GET /dev/openapi.json`
-- `GET /dev/swagger`
+## Validation Flows
 
-Generated release artifacts are written to:
+For real MCP and agent validation:
+
+```bash
+make validate-mcp
+make validate-crm-agent
+```
+
+These use the `cmd/agentproof` harness and the current ACP provider configuration.
+
+## Contracts
+
+Generate release-facing artifacts with:
+
+```bash
+make contracts
+```
+
+Current outputs:
 
 - `contracts/openapi/<version>/openapi.json`
 - `contracts/mcp/<version>/catalog.json`
 
-These artifacts are generated from the same profile-aware module set used by the default server runtime.
-
 ## Next Steps
 
-- Read [Concepts](./concepts.md) to understand what Orbyte is and is not.
-- Read [Architecture](./architecture.md) to understand the runtime model.
-- Read [Glossary](./glossary.md) if you want a shared vocabulary before going deeper.
-- Read [Module System](./module-system.md) if you plan to build business modules.
-- Read [Tutorial: Build Your First Module](./tutorial-first-module.md) if you want a guided extension path.
-- Read [Integration](./integration.md) if you plan to connect external systems or AI agents.
+- [Configuration](./configuration.md)
+- [Architecture](./architecture.md)
+- [Features](./features.md)
+- [Modules](./modules.md)
+- [Agent Integration](./agent-integration.md)
+
+## Recommended Next Pages
+
+<div class="next-steps" markdown>
+
+- [Configuration](./configuration.md) for MCP, ACP, auth, and search settings
+- [Architecture](./architecture.md) for the current service graph and startup model
+- [Agent Integration](./agent-integration.md) if you plan to use MCP or ACP
+
+</div>

@@ -131,3 +131,109 @@ func TestRegisterExtensionAndRenderViews(t *testing.T) {
 		t.Fatalf("expected raw view to expose hidden extension, got %+v", got)
 	}
 }
+
+func TestResolveWorkspaceOpenPathUsesSpecializedViewer(t *testing.T) {
+	svc := NewService()
+	svc.RegisterSpecializedViewer(SpecializedViewer{
+		Hint:             "promotion.plan",
+		RequestKinds:     []string{"promotion_plan"},
+		DetailPath:       "/ui/promotion/plans/detail",
+		FormPath:         "/ui/promotion/plans/form",
+		EditableStatuses: []string{"draft"},
+	})
+	record, err := svc.Create("generic_request", "org_default", "loc_hq", "user_admin", map[string]any{
+		"title":        "Plan",
+		"request_kind": "promotion_plan",
+		"viewer_hint":  "promotion.plan",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/promotion/plans/form?id="+record.Header.ID {
+		t.Fatalf("expected specialized form path, got %s", got)
+	}
+	record.Header.Status = "submitted"
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/promotion/plans/detail?id="+record.Header.ID {
+		t.Fatalf("expected specialized detail path, got %s", got)
+	}
+}
+
+func TestResolveWorkspaceOpenPathUsesNativeDocumentViewer(t *testing.T) {
+	svc := NewService()
+	if err := svc.Register(Definition{Type: "purchase_request", DisplayName: "Purchase Request", SchemaVersion: "v1"}); err != nil {
+		t.Fatalf("register definition failed: %v", err)
+	}
+	svc.RegisterNativeDocumentViewer(NativeDocumentViewer{
+		DocumentType:     "purchase_request",
+		DetailPath:       "/ui/procurement/requests/detail",
+		FormPath:         "/ui/procurement/requests/form",
+		EditableStatuses: []string{"draft"},
+	})
+	record, err := svc.Create("purchase_request", "org_default", "loc_hq", "user_admin", map[string]any{
+		"vendor_name": "North Roast",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/procurement/requests/form?id="+record.Header.ID {
+		t.Fatalf("expected native form path, got %s", got)
+	}
+	if got := svc.ResolveWorkspaceEditPath(record); got != "/ui/procurement/requests/form?id="+record.Header.ID {
+		t.Fatalf("expected native edit path, got %s", got)
+	}
+	record.Header.Status = "submitted"
+	if got := svc.ResolveWorkspaceOpenPath(record); got != "/ui/procurement/requests/detail?id="+record.Header.ID {
+		t.Fatalf("expected native detail path, got %s", got)
+	}
+}
+
+func TestNormalizePayloadAssignsStableLineIDs(t *testing.T) {
+	first := NormalizePayload(map[string]any{
+		"lines": []map[string]any{
+			{"item_code": "ITEM-1", "quantity": 2.0},
+			{"item_code": "ITEM-2", "quantity": 1.0},
+		},
+		"estimated_lines": []map[string]any{
+			{"description": "Taxi", "amount": 12.0},
+		},
+	})
+	second := NormalizePayload(first)
+
+	lines := first["lines"].([]map[string]any)
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+	firstID := textValue(lines[0]["line_id"])
+	secondID := textValue(lines[1]["line_id"])
+	if firstID == "" || secondID == "" {
+		t.Fatalf("expected generated line ids, got %+v", lines)
+	}
+	if firstID == secondID {
+		t.Fatalf("expected distinct line ids, got %s", firstID)
+	}
+
+	secondLines := second["lines"].([]map[string]any)
+	if got := textValue(secondLines[0]["line_id"]); got != firstID {
+		t.Fatalf("expected stable first line id %s, got %s", firstID, got)
+	}
+	if got := textValue(secondLines[1]["line_id"]); got != secondID {
+		t.Fatalf("expected stable second line id %s, got %s", secondID, got)
+	}
+
+	estimated := first["estimated_lines"].([]map[string]any)
+	if got := textValue(estimated[0]["line_id"]); got == "" {
+		t.Fatal("expected estimated_lines to receive line_id")
+	}
+}
+
+func TestNormalizePayloadPromotesExistingIDToLineID(t *testing.T) {
+	normalized := NormalizePayload(map[string]any{
+		"lines": []map[string]any{
+			{"id": "row-1", "item_code": "ITEM-1"},
+		},
+	})
+	lines := normalized["lines"].([]map[string]any)
+	if got := textValue(lines[0]["line_id"]); got != "row-1" {
+		t.Fatalf("expected line_id row-1, got %s", got)
+	}
+}

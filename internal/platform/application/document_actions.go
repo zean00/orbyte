@@ -33,6 +33,7 @@ type DocumentActions struct {
 	workflows     *workflow.Service
 	identity      *identity.Service
 	policy        *policy.Service
+	approvalRules *ApprovalPolicyService
 	activity      *activity.Service
 	notifications *notification.Service
 	store         SubmitStore
@@ -77,6 +78,13 @@ func (a *DocumentActions) AttachNotifications(notifications *notification.Servic
 	a.notifications = notifications
 }
 
+func (a *DocumentActions) AttachApprovalPolicies(service *ApprovalPolicyService) {
+	if a == nil {
+		return
+	}
+	a.approvalRules = service
+}
+
 func (a *DocumentActions) Submit(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
 	return a.transitions.Submit(documentID, acting, expectedVersion, expectedETag)
 }
@@ -112,6 +120,10 @@ func (a *DocumentActions) Reopen(documentID string, acting ActingContext, expect
 
 func (a *DocumentActions) Cancel(documentID string, acting ActingContext, expectedVersion int, expectedETag string) (document.Record, error) {
 	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, "cancel", "document.cancelled")
+}
+
+func (a *DocumentActions) Transition(documentID string, acting ActingContext, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
+	return a.transitions.Transition(documentID, acting, expectedVersion, expectedETag, action, eventType)
 }
 
 func (a *DocumentActions) transitionDocument(documentID string, acting ActingContext, expectedVersion int, expectedETag, action, eventType string) (document.Record, error) {
@@ -247,6 +259,179 @@ func mergeWorkflowMutation(dst *workflow.Mutation, src workflow.Mutation) {
 	dst.History = append(dst.History, src.History...)
 }
 
+func (a *DocumentActions) currentPendingApproval(targetID string) (workflow.Approval, bool) {
+	if a == nil || a.workflows == nil || strings.TrimSpace(targetID) == "" {
+		return workflow.Approval{}, false
+	}
+	var current workflow.Approval
+	found := false
+	for _, approval := range a.workflows.ListApprovals() {
+		if approval.TargetID != targetID || approval.Status != "pending" {
+			continue
+		}
+		if !found || metadataInt(approval.Metadata, "approval_stage_sequence", 0) > metadataInt(current.Metadata, "approval_stage_sequence", 0) || approval.RequestedAt.After(current.RequestedAt) {
+			current = approval
+			found = true
+		}
+	}
+	return current, found
+}
+
+func (a *DocumentActions) resolveApprovalProgression(record *document.Record, actorID string, baseTransition workflow.Transition, now time.Time) (*workflow.Mutation, map[string]any, bool, error) {
+	if record == nil {
+		return nil, nil, false, nil
+	}
+	currentApproval, ok := a.currentPendingApproval(record.Header.ID)
+	if !ok || a.approvalRules == nil {
+		return nil, nil, false, nil
+	}
+	policyID := strings.TrimSpace(metadataString(currentApproval.Metadata, "approval_policy_id"))
+	currentSequence := metadataInt(currentApproval.Metadata, "approval_stage_sequence", 0)
+	if policyID == "" || currentSequence <= 0 {
+		return nil, nil, false, nil
+	}
+	stages, err := a.approvalRules.StagesForPolicy(policyID)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	if len(stages) > 0 {
+		var currentStage *ApprovalPolicyStageResolution
+		for i := range stages {
+			if stages[i].Sequence == currentSequence {
+				currentStage = &stages[i]
+				break
+			}
+		}
+		if currentStage != nil && currentStage.RequiredApproverCount > 1 {
+			if stageHasApprover(record.Header.Metadata, currentStage.StageKey, actorID) {
+				return nil, nil, false, shared.Conflict("approval already recorded for the current stage")
+			}
+			stageApprovers := append(uniqueStrings(stageApprovalActors(record.Header.Metadata, currentStage.StageKey)), strings.TrimSpace(actorID))
+			setStageApprovalActors(&record.Header.Metadata, currentStage.StageKey, stageApprovers)
+			payload := map[string]any{
+				"approval_policy_id":       policyID,
+				"current_stage_key":        currentStage.StageKey,
+				"current_stage_sequence":   currentStage.Sequence,
+				"current_stage_total":      currentStage.TotalStages,
+				"required_approver_count":  currentStage.RequiredApproverCount,
+				"current_approver_count":   len(stageApprovers),
+				"recorded_approver_ids":    append([]string(nil), stageApprovers...),
+				"approval_routing_mode":    firstNonEmpty(currentStage.RoutingMode, currentStage.AssignmentStrategy),
+				"requires_different_actor": currentStage.RequiresDifferentActor,
+			}
+			if len(stageApprovers) < currentStage.RequiredApproverCount {
+				payload["quorum_pending"] = true
+				return &workflow.Mutation{}, payload, true, nil
+			}
+		}
+	}
+	if len(stages) == 0 {
+		return nil, nil, false, nil
+	}
+	var nextStage *ApprovalPolicyStageResolution
+	for i := range stages {
+		if stages[i].Sequence == currentSequence+1 {
+			nextStage = &stages[i]
+			break
+		}
+	}
+	if nextStage == nil {
+		return nil, nil, false, nil
+	}
+	nextTransition := baseTransition
+	nextTransition.ToState = record.Header.Status
+	nextTransition.TaskType = firstNonEmpty(metadataString(currentApproval.Metadata, "task_type"), baseTransition.TaskType, "review")
+	nextTransition.CreateApproval = true
+	nextTransition.AssignmentMode = ""
+	nextTransition.AssigneeUserID = ""
+	nextTransition.CandidateUserIDs = nil
+	applyApprovalPolicyResolutionToTransition(&nextTransition, model.Record{ID: policyID}, *nextStage, len(stages))
+	mutation := a.workflows.PlanResolveArtifacts(record.Header.ID, "approved", "completed", actorID, now)
+	created := a.workflows.PlanCreateSideEffects(nextTransition, "document", record.Header.ID, actorID, now)
+	for i := range created.Tasks {
+		created.Tasks[i].ID = fmt.Sprintf("task:%s:stage:%s", record.Header.ID, nextStage.StageKey)
+		if created.Tasks[i].Metadata == nil {
+			created.Tasks[i].Metadata = map[string]any{}
+		}
+		created.Tasks[i].Metadata["task_type"] = nextTransition.TaskType
+	}
+	for i := range created.Approvals {
+		created.Approvals[i].ID = fmt.Sprintf("approval:%s:stage:%s", record.Header.ID, nextStage.StageKey)
+		if created.Approvals[i].Metadata == nil {
+			created.Approvals[i].Metadata = map[string]any{}
+		}
+		created.Approvals[i].Metadata["task_type"] = nextTransition.TaskType
+	}
+	if err := a.applyAssignmentSnapshots(record, &nextTransition, &created, actorID, now); err != nil {
+		return nil, nil, false, err
+	}
+	mergeWorkflowMutation(&mutation, created)
+	payload := map[string]any{
+		"approval_policy_id":        policyID,
+		"current_stage_key":         metadataString(currentApproval.Metadata, "approval_stage_key"),
+		"current_stage_sequence":    currentSequence,
+		"next_stage_key":            nextStage.StageKey,
+		"next_stage_sequence":       nextStage.Sequence,
+		"next_stage_total":          nextStage.TotalStages,
+		"approval_routing_mode":     firstNonEmpty(nextStage.RoutingMode, nextStage.AssignmentStrategy),
+		"requires_different_actor":  nextStage.RequiresDifferentActor,
+		"resolved_assignee_user_id": nextTransition.AssigneeUserID,
+	}
+	if len(nextTransition.CandidateUserIDs) > 0 {
+		payload["resolved_candidate_user_ids"] = append([]string(nil), nextTransition.CandidateUserIDs...)
+	}
+	return &mutation, payload, true, nil
+}
+
+func stageApprovalActors(metadata map[string]any, stageKey string) []string {
+	stageKey = strings.TrimSpace(stageKey)
+	if stageKey == "" || metadata == nil {
+		return nil
+	}
+	raw, ok := metadata["approval_stage_approver_ids"]
+	if !ok {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case map[string][]string:
+		return append([]string(nil), typed[stageKey]...)
+	case map[string]any:
+		return metadataStrings(typed, stageKey)
+	default:
+		return nil
+	}
+}
+
+func stageHasApprover(metadata map[string]any, stageKey, actorID string) bool {
+	actorID = strings.TrimSpace(actorID)
+	if actorID == "" {
+		return false
+	}
+	for _, existing := range stageApprovalActors(metadata, stageKey) {
+		if strings.EqualFold(strings.TrimSpace(existing), actorID) {
+			return true
+		}
+	}
+	return false
+}
+
+func setStageApprovalActors(metadata *map[string]any, stageKey string, actorIDs []string) {
+	stageKey = strings.TrimSpace(stageKey)
+	if metadata == nil || stageKey == "" {
+		return
+	}
+	if *metadata == nil {
+		*metadata = map[string]any{}
+	}
+	raw, ok := (*metadata)["approval_stage_approver_ids"]
+	stageMap, _ := raw.(map[string]any)
+	if !ok || stageMap == nil {
+		stageMap = map[string]any{}
+	}
+	stageMap[stageKey] = append([]string(nil), uniqueStrings(actorIDs)...)
+	(*metadata)["approval_stage_approver_ids"] = stageMap
+}
+
 func (a *DocumentActions) applyAssignmentSnapshots(record *document.Record, transition *workflow.Transition, mutation *workflow.Mutation, actorID string, now time.Time) error {
 	if record == nil || transition == nil || mutation == nil {
 		return nil
@@ -282,8 +467,23 @@ func (a *DocumentActions) resolveAssignment(record *document.Record, transition 
 		Strategy: strings.TrimSpace(transition.AssignmentStrategy),
 		Trace:    []string{},
 	}
+	if transition != nil {
+		if strings.TrimSpace(transition.AssigneeUserID) != "" || len(transition.CandidateUserIDs) > 0 {
+			resolution.AssigneeUserID = strings.TrimSpace(transition.AssigneeUserID)
+			resolution.CandidateUserIDs = append([]string(nil), transition.CandidateUserIDs...)
+			resolution.ResolvedVia = "policy_users"
+			return resolution, nil
+		}
+	}
 	switch resolution.Strategy {
 	case "", "static_user", "static_role":
+		return resolution, nil
+	case "explicit_user":
+		if strings.TrimSpace(transition.AssigneeUserID) == "" {
+			return resolution, shared.Validation("explicit_user assignment requires assignee_user_id")
+		}
+		resolution.AssigneeUserID = strings.TrimSpace(transition.AssigneeUserID)
+		resolution.ResolvedVia = "explicit_user"
 		return resolution, nil
 	case "requester_manager":
 		sourceUserID := strings.TrimSpace(record.Header.CreatedBy)
@@ -299,9 +499,69 @@ func (a *DocumentActions) resolveAssignment(record *document.Record, transition 
 		return a.resolveManagerAssignment(sourceUserID, record, transition, now)
 	case "role_fallback":
 		return a.resolveFallbackCandidates("", record, transition, now)
+	case "role_group":
+		return a.resolveRoleCandidates("", record, transition, now)
+	case "approver_group":
+		if len(transition.CandidateUserIDs) == 1 {
+			resolution.AssigneeUserID = transition.CandidateUserIDs[0]
+			resolution.ResolvedVia = "approver_group"
+			return resolution, nil
+		}
+		if len(transition.CandidateUserIDs) > 1 {
+			resolution.CandidateUserIDs = append([]string(nil), transition.CandidateUserIDs...)
+			resolution.ResolvedVia = "approver_group"
+			return resolution, nil
+		}
+		return resolution, shared.Validation("approver_group assignment could not be resolved")
+	case "hybrid":
+		sourceUserID := strings.TrimSpace(record.Header.CreatedBy)
+		if sourceUserID != "" {
+			managerResolution, err := a.resolveManagerAssignment(sourceUserID, record, transition, now)
+			if err == nil && (managerResolution.AssigneeUserID != "" || len(managerResolution.CandidateUserIDs) > 0) {
+				managerResolution.Strategy = "hybrid"
+				managerResolution.Trace = append(managerResolution.Trace, "hybrid:manager")
+				return managerResolution, nil
+			}
+		}
+		if len(transition.CandidateUserIDs) > 0 || strings.TrimSpace(transition.AssigneeUserID) != "" {
+			resolution.AssigneeUserID = strings.TrimSpace(transition.AssigneeUserID)
+			resolution.CandidateUserIDs = append([]string(nil), transition.CandidateUserIDs...)
+			resolution.ResolvedVia = "hybrid_policy_fallback"
+			resolution.Trace = append(resolution.Trace, "hybrid:policy_users")
+			return resolution, nil
+		}
+		return a.resolveFallbackCandidates(sourceUserID, record, transition, now)
 	default:
 		return resolution, shared.Validation("unsupported workflow assignment strategy")
 	}
+}
+
+func (a *DocumentActions) resolveRoleCandidates(sourceUserID string, record *document.Record, transition *workflow.Transition, now time.Time) (assignmentResolution, error) {
+	resolution := assignmentResolution{Strategy: transition.AssignmentStrategy, SourceUserID: sourceUserID}
+	roleKey := strings.TrimSpace(transition.AssigneeRoleKey)
+	if roleKey == "" {
+		roleKey = strings.TrimSpace(transition.FallbackRoleKey)
+	}
+	if roleKey == "" {
+		return resolution, shared.Validation("role_group assignment requires assignee_role_key")
+	}
+	if a.identity == nil {
+		return resolution, shared.Validation("identity service is required for role assignment")
+	}
+	candidates := a.identity.ResolveRoleCandidates(roleKey, record.Header.OrganizationID, record.Header.LocationID, "", now)
+	if len(candidates) == 0 {
+		return resolution, shared.Validation("workflow assignment could not be resolved")
+	}
+	resolution.ResolvedVia = "role_group"
+	resolution.Trace = append(resolution.Trace, "role_group:"+roleKey)
+	if len(candidates) == 1 {
+		resolution.AssigneeUserID = candidates[0].ID
+		return resolution, nil
+	}
+	for _, candidate := range candidates {
+		resolution.CandidateUserIDs = append(resolution.CandidateUserIDs, candidate.ID)
+	}
+	return resolution, nil
 }
 
 func (a *DocumentActions) resolveManagerAssignment(sourceUserID string, record *document.Record, transition *workflow.Transition, now time.Time) (assignmentResolution, error) {
@@ -357,8 +617,10 @@ func applyTransitionResolution(transition *workflow.Transition, resolution assig
 	switch {
 	case resolution.AssigneeUserID != "":
 		transition.AssignmentMode = "user"
+		transition.AssigneeUserID = resolution.AssigneeUserID
 	case len(resolution.CandidateUserIDs) > 0:
 		transition.AssignmentMode = "user_queue"
+		transition.CandidateUserIDs = append([]string(nil), resolution.CandidateUserIDs...)
 	}
 }
 
@@ -795,9 +1057,9 @@ func (a *DocumentActions) applyWorkflowRuntimeDecisions(record document.Record, 
 	if transition == nil {
 		return policy.Decision{}, policy.Decision{}, policy.Decision{}, shared.Validation("workflow transition is required")
 	}
-	if transition.RequiresDifferentActor && a.workflows != nil {
+	if a.workflows != nil {
 		for _, approval := range a.workflows.ListApprovals() {
-			if approval.TargetID == record.Header.ID && approval.Status == "pending" && approval.RequestedBy != "" && approval.RequestedBy == actorID {
+			if approval.TargetID == record.Header.ID && approval.Status == "pending" && approval.RequestedBy != "" && approval.RequestedBy == actorID && (transition.RequiresDifferentActor || metadataBool(approval.Metadata, "requires_different_actor")) {
 				return policy.Decision{}, policy.Decision{}, policy.Decision{}, shared.Forbidden("workflow transition requires a different actor than the requester")
 			}
 		}
@@ -805,95 +1067,196 @@ func (a *DocumentActions) applyWorkflowRuntimeDecisions(record document.Record, 
 	transitionDecision := policy.Decision{Allowed: true}
 	assignmentDecision := policy.Decision{Allowed: true}
 	slaDecision := policy.Decision{Allowed: true}
-	if a.policy == nil {
-		return transitionDecision, assignmentDecision, slaDecision, nil
+	if a.policy != nil {
+		if err := a.ensureWorkflowPolicyRuntime(record, "documents.workflow.transition", "documents.workflow.assignment", "documents.workflow.sla"); err != nil {
+			return transitionDecision, assignmentDecision, slaDecision, err
+		}
+		transitionDecision = a.policy.Evaluate(policy.Request{
+			HookKey:        "documents.workflow.transition",
+			ActorID:        actorID,
+			OrganizationID: record.Header.OrganizationID,
+			LocationID:     record.Header.LocationID,
+			ScopeID:        record.Header.LocationID,
+			Inputs: map[string]any{
+				"document_id":   record.Header.ID,
+				"document_type": record.Header.Type,
+				"current_state": record.Header.Status,
+				"status":        record.Header.Status,
+				"action":        action,
+			},
+		})
+		if !transitionDecision.Allowed {
+			return transitionDecision, assignmentDecision, slaDecision, shared.Forbidden(firstNonEmpty(transitionDecision.Reason, "workflow transition denied by policy"))
+		}
+		assignmentDecision = a.policy.Evaluate(policy.Request{
+			HookKey:        "documents.workflow.assignment",
+			ActorID:        actorID,
+			OrganizationID: record.Header.OrganizationID,
+			LocationID:     record.Header.LocationID,
+			ScopeID:        record.Header.LocationID,
+			Inputs: map[string]any{
+				"document_id":      record.Header.ID,
+				"document_type":    record.Header.Type,
+				"workflow_key":     transition.WorkflowKey,
+				"workflow_version": transition.WorkflowVersion,
+				"action":           action,
+				"task_type":        transition.TaskType,
+				"current_state":    record.Header.Status,
+			},
+		})
+		if output := assignmentDecision.Output; output != nil {
+			if value, ok := output["assignment_strategy"].(string); ok && strings.TrimSpace(value) != "" {
+				transition.AssignmentStrategy = value
+			}
+			if value, ok := output["assignment_mode"].(string); ok && strings.TrimSpace(value) != "" {
+				transition.AssignmentMode = value
+			}
+			if value, ok := output["assignee_role_key"].(string); ok && strings.TrimSpace(value) != "" {
+				transition.AssigneeRoleKey = value
+			}
+			if value, ok := output["fallback_role_key"].(string); ok && strings.TrimSpace(value) != "" {
+				transition.FallbackRoleKey = value
+			}
+			if value, ok := output["candidate_role_keys"].([]any); ok {
+				transition.CandidateRoleKeys = interfaceSliceToStrings(value)
+			}
+			if value, ok := output["candidate_role_keys"].([]string); ok && len(value) > 0 {
+				transition.CandidateRoleKeys = append([]string(nil), value...)
+			}
+			if value, ok := output["assignee_user_id"].(string); ok && strings.TrimSpace(value) != "" {
+				transition.AssigneeUserID = strings.TrimSpace(value)
+			}
+			if value, ok := output["candidate_user_ids"].([]any); ok {
+				transition.CandidateUserIDs = interfaceSliceToStrings(value)
+			}
+			if value, ok := output["candidate_user_ids"].([]string); ok && len(value) > 0 {
+				transition.CandidateUserIDs = append([]string(nil), value...)
+			}
+			if value, ok := output["requires_different_actor"].(bool); ok {
+				transition.RequiresDifferentActor = value
+			}
+			applyWorkflowDecisionMetadata(transition, output)
+		}
+		slaDecision = a.policy.Evaluate(policy.Request{
+			HookKey:        "documents.workflow.sla",
+			ActorID:        actorID,
+			OrganizationID: record.Header.OrganizationID,
+			LocationID:     record.Header.LocationID,
+			ScopeID:        record.Header.LocationID,
+			Inputs: map[string]any{
+				"document_id":      record.Header.ID,
+				"document_type":    record.Header.Type,
+				"workflow_key":     transition.WorkflowKey,
+				"workflow_version": transition.WorkflowVersion,
+				"action":           action,
+				"current_state":    record.Header.Status,
+			},
+		})
+		if output := slaDecision.Output; output != nil {
+			if value, ok := output["due_after_seconds"].(float64); ok && int(value) > 0 {
+				transition.DueAfterSeconds = int(value)
+			}
+			if value, ok := output["due_after_seconds"].(int); ok && value > 0 {
+				transition.DueAfterSeconds = value
+			}
+			if value, ok := output["escalate_after_seconds"].(float64); ok && int(value) > 0 {
+				transition.EscalateAfterSeconds = int(value)
+			}
+			if value, ok := output["escalate_after_seconds"].(int); ok && value > 0 {
+				transition.EscalateAfterSeconds = value
+			}
+			applyWorkflowDecisionMetadata(transition, output)
+		}
 	}
-	if err := a.ensureWorkflowPolicyRuntime(record, "documents.workflow.transition", "documents.workflow.assignment", "documents.workflow.sla"); err != nil {
-		return transitionDecision, assignmentDecision, slaDecision, err
-	}
-	transitionDecision = a.policy.Evaluate(policy.Request{
-		HookKey:        "documents.workflow.transition",
-		ActorID:        actorID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		ScopeID:        record.Header.LocationID,
-		Inputs: map[string]any{
-			"document_id":   record.Header.ID,
-			"document_type": record.Header.Type,
-			"current_state": record.Header.Status,
-			"status":        record.Header.Status,
-			"action":        action,
-		},
-	})
-	if !transitionDecision.Allowed {
-		return transitionDecision, assignmentDecision, slaDecision, shared.Forbidden(firstNonEmpty(transitionDecision.Reason, "workflow transition denied by policy"))
-	}
-	assignmentDecision = a.policy.Evaluate(policy.Request{
-		HookKey:        "documents.workflow.assignment",
-		ActorID:        actorID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		ScopeID:        record.Header.LocationID,
-		Inputs: map[string]any{
-			"document_id":      record.Header.ID,
-			"document_type":    record.Header.Type,
-			"workflow_key":     transition.WorkflowKey,
-			"workflow_version": transition.WorkflowVersion,
-			"action":           action,
-			"task_type":        transition.TaskType,
-			"current_state":    record.Header.Status,
-		},
-	})
-	if output := assignmentDecision.Output; output != nil {
-		if value, ok := output["assignment_strategy"].(string); ok && strings.TrimSpace(value) != "" {
-			transition.AssignmentStrategy = value
-		}
-		if value, ok := output["assignment_mode"].(string); ok && strings.TrimSpace(value) != "" {
-			transition.AssignmentMode = value
-		}
-		if value, ok := output["assignee_role_key"].(string); ok && strings.TrimSpace(value) != "" {
-			transition.AssigneeRoleKey = value
-		}
-		if value, ok := output["fallback_role_key"].(string); ok && strings.TrimSpace(value) != "" {
-			transition.FallbackRoleKey = value
-		}
-		if value, ok := output["candidate_role_keys"].([]any); ok {
-			transition.CandidateRoleKeys = interfaceSliceToStrings(value)
-		}
-		if value, ok := output["candidate_role_keys"].([]string); ok && len(value) > 0 {
-			transition.CandidateRoleKeys = append([]string(nil), value...)
-		}
-	}
-	slaDecision = a.policy.Evaluate(policy.Request{
-		HookKey:        "documents.workflow.sla",
-		ActorID:        actorID,
-		OrganizationID: record.Header.OrganizationID,
-		LocationID:     record.Header.LocationID,
-		ScopeID:        record.Header.LocationID,
-		Inputs: map[string]any{
-			"document_id":      record.Header.ID,
-			"document_type":    record.Header.Type,
-			"workflow_key":     transition.WorkflowKey,
-			"workflow_version": transition.WorkflowVersion,
-			"action":           action,
-			"current_state":    record.Header.Status,
-		},
-	})
-	if output := slaDecision.Output; output != nil {
-		if value, ok := output["due_after_seconds"].(float64); ok && int(value) > 0 {
-			transition.DueAfterSeconds = int(value)
-		}
-		if value, ok := output["due_after_seconds"].(int); ok && value > 0 {
-			transition.DueAfterSeconds = value
-		}
-		if value, ok := output["escalate_after_seconds"].(float64); ok && int(value) > 0 {
-			transition.EscalateAfterSeconds = int(value)
-		}
-		if value, ok := output["escalate_after_seconds"].(int); ok && value > 0 {
-			transition.EscalateAfterSeconds = value
+	if a.approvalRules != nil && (transition.CreateApproval || transition.TaskType != "") {
+		if resolution, ok, err := a.approvalRules.ResolveDocumentPolicy(record, action, transition.WorkflowKey); err != nil {
+			return transitionDecision, assignmentDecision, slaDecision, err
+		} else if ok && len(resolution.Stages) > 0 {
+			applyApprovalPolicyResolutionToTransition(transition, resolution.Policy, resolution.Stages[0], len(resolution.Stages))
+			mergeDecisionOutput(&assignmentDecision, map[string]any{
+				"assignment_strategy":     transition.AssignmentStrategy,
+				"assignment_mode":         transition.AssignmentMode,
+				"assignee_role_key":       transition.AssigneeRoleKey,
+				"fallback_role_key":       transition.FallbackRoleKey,
+				"candidate_role_keys":     append([]string(nil), transition.CandidateRoleKeys...),
+				"assignee_user_id":        transition.AssigneeUserID,
+				"candidate_user_ids":      append([]string(nil), transition.CandidateUserIDs...),
+				"approval_policy_id":      metadataString(transition.Metadata, "approval_policy_id"),
+				"approval_stage_key":      metadataString(transition.Metadata, "approval_stage_key"),
+				"approval_stage_sequence": metadataInt(transition.Metadata, "approval_stage_sequence", 0),
+				"approval_stage_total":    metadataInt(transition.Metadata, "approval_stage_total", 0),
+				"approval_routing_mode":   metadataString(transition.Metadata, "approval_routing_mode"),
+			})
+			mergeDecisionOutput(&slaDecision, map[string]any{
+				"due_after_seconds":      transition.DueAfterSeconds,
+				"escalate_after_seconds": transition.EscalateAfterSeconds,
+			})
 		}
 	}
 	return transitionDecision, assignmentDecision, slaDecision, nil
+}
+
+func applyApprovalPolicyResolutionToTransition(transition *workflow.Transition, policyRecord model.Record, stage ApprovalPolicyStageResolution, totalStages int) {
+	if transition == nil {
+		return
+	}
+	transition.ApprovalStageKey = firstNonEmpty(stage.StageKey, transition.ApprovalStageKey)
+	transition.AssignmentStrategy = firstNonEmpty(stage.AssignmentStrategy, transition.AssignmentStrategy)
+	transition.AssignmentMode = firstNonEmpty(stage.AssignmentMode, transition.AssignmentMode)
+	transition.AssigneeRoleKey = firstNonEmpty(stage.AssigneeRoleKey, transition.AssigneeRoleKey)
+	transition.FallbackRoleKey = firstNonEmpty(stage.FallbackRoleKey, transition.FallbackRoleKey)
+	if len(stage.CandidateRoleKeys) > 0 {
+		transition.CandidateRoleKeys = append([]string(nil), stage.CandidateRoleKeys...)
+	}
+	transition.AssigneeUserID = firstNonEmpty(stage.AssigneeUserID, stage.ExplicitUserID, transition.AssigneeUserID)
+	if len(stage.CandidateUserIDs) > 0 {
+		transition.CandidateUserIDs = append([]string(nil), stage.CandidateUserIDs...)
+	}
+	if stage.DueAfterSeconds > 0 {
+		transition.DueAfterSeconds = stage.DueAfterSeconds
+	}
+	if stage.EscalateAfterSeconds > 0 {
+		transition.EscalateAfterSeconds = stage.EscalateAfterSeconds
+	}
+	if stage.RequiresDifferentActor {
+		transition.RequiresDifferentActor = true
+	}
+	if transition.Metadata == nil {
+		transition.Metadata = map[string]any{}
+	}
+	transition.Metadata["approval_policy_id"] = policyRecord.ID
+	transition.Metadata["approval_policy_name"] = firstNonEmpty(strings.TrimSpace(stringValue(policyRecord.Values["name"])), strings.TrimSpace(stringValue(policyRecord.Values["code"])), policyRecord.ID)
+	transition.Metadata["approval_stage_key"] = stage.StageKey
+	transition.Metadata["approval_stage_sequence"] = stage.Sequence
+	transition.Metadata["approval_stage_total"] = totalStages
+	transition.Metadata["approval_routing_mode"] = firstNonEmpty(stage.RoutingMode, stage.AssignmentStrategy)
+	transition.Metadata["required_approver_count"] = stage.RequiredApproverCount
+}
+
+func applyWorkflowDecisionMetadata(transition *workflow.Transition, output map[string]any) {
+	if transition == nil || len(output) == 0 {
+		return
+	}
+	if transition.Metadata == nil {
+		transition.Metadata = map[string]any{}
+	}
+	for _, key := range []string{"approval_policy_id", "approval_policy_name", "approval_stage_key", "approval_stage_sequence", "approval_stage_total", "approval_routing_mode", "required_approver_count"} {
+		if value, ok := output[key]; ok {
+			transition.Metadata[key] = value
+		}
+	}
+}
+
+func mergeDecisionOutput(decision *policy.Decision, output map[string]any) {
+	if decision == nil || len(output) == 0 {
+		return
+	}
+	if decision.Output == nil {
+		decision.Output = map[string]any{}
+	}
+	for key, value := range output {
+		decision.Output[key] = value
+	}
 }
 
 func boundWorkflowVersion(record document.Record) int {
@@ -961,14 +1324,19 @@ func buildWorkflowHistoryEvent(record document.Record, transition workflow.Trans
 			"assignment_strategy": transition.AssignmentStrategy,
 			"assignment_mode":     transition.AssignmentMode,
 			"assignee_role_key":   transition.AssigneeRoleKey,
+			"assignee_user_id":    transition.AssigneeUserID,
 			"fallback_role_key":   transition.FallbackRoleKey,
 			"candidate_role_keys": append([]string(nil), transition.CandidateRoleKeys...),
+			"candidate_user_ids":  append([]string(nil), transition.CandidateUserIDs...),
 			"assignment_policy":   decisionSummary(assignmentDecision),
 		},
 		Metadata: map[string]any{
-			"document_type":  record.Header.Type,
-			"status":         record.Header.Status,
-			"correlation_id": correlationID,
+			"document_type":           record.Header.Type,
+			"status":                  record.Header.Status,
+			"correlation_id":          correlationID,
+			"approval_policy_id":      metadataString(transition.Metadata, "approval_policy_id"),
+			"approval_stage_key":      metadataString(transition.Metadata, "approval_stage_key"),
+			"approval_stage_sequence": metadataInt(transition.Metadata, "approval_stage_sequence", 0),
 		},
 	}
 }
@@ -1129,12 +1497,12 @@ func applyWorkflowMutationTx(tx store.Tx, mutation workflow.Mutation) error {
 		}
 	}
 	for _, update := range mutation.ApprovalUpdates {
-		if _, err := tx.ExecContext(context.Background(), `UPDATE workflow_approvals SET status = $1 WHERE approval_id = $2`, update.Status, update.ID); err != nil {
+		if _, err := tx.ExecContext(context.Background(), `UPDATE workflow_approvals SET status = $1, resolved_by = NULLIF($2,''), resolved_at = $3::timestamptz WHERE approval_id = $4`, update.Status, update.ResolvedBy, nullableTime(update.ResolvedAt), update.ID); err != nil {
 			return err
 		}
 	}
 	for _, update := range mutation.TaskUpdates {
-		if _, err := tx.ExecContext(context.Background(), `UPDATE workflow_tasks SET status = $1, metadata_json = COALESCE(metadata_json,'{}'::jsonb) || jsonb_build_object('resolved_by', NULLIF($2,''), 'resolved_at', $3) WHERE task_id = $4`, update.Status, update.ResolvedBy, nullableTime(update.ResolvedAt), update.ID); err != nil {
+		if _, err := tx.ExecContext(context.Background(), `UPDATE workflow_tasks SET status = $1, metadata_json = COALESCE(metadata_json,'{}'::jsonb) || jsonb_strip_nulls(jsonb_build_object('resolved_by', NULLIF($2,''), 'resolved_at', CASE WHEN $3::timestamptz IS NULL THEN NULL ELSE to_jsonb($3::timestamptz) END)) WHERE task_id = $4`, update.Status, update.ResolvedBy, nullableTime(update.ResolvedAt), update.ID); err != nil {
 			return err
 		}
 	}

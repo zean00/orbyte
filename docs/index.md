@@ -1,74 +1,115 @@
-# Orbyte Platform
+# Orbyte Documentation
 
-<div class="hero">
-  <h1>Enterprise application kernel for data, workflow, integration, and AI connectivity.</h1>
-  <p>Orbyte is a foundation platform for ERP, POS, MIS, and vertical operational systems. It gives product teams a governed runtime for business state, workflow, configuration, security, integration, and machine-facing tools without forcing a built-in agent architecture.</p>
-</div>
+<p class="page-intro">
+Orbyte is a modular business application runtime with a metadata-driven kernel, profile-driven modules, generic UI surfaces, MCP/ACP agent connectivity, and a mix of in-memory and PostgreSQL-backed operating modes.
+</p>
 
-<div class="orbyte-note">
-Orbyte is designed to be <strong>agent-ready</strong>, not <strong>agent-dependent</strong>. External AI systems should connect through HTTP, MCP, service principals, policy, and audit controls.
-</div>
+This documentation set is aligned to the current codebase in:
 
-## Why Orbyte
+- `cmd/`
+- `internal/platform/`
+- `internal/modules/`
+- `frontend/`
 
-<div class="grid cards" markdown>
+## What This Repository Currently Implements
 
-- **Governed business runtime**
-
-  Identity, permissions, policy hooks, workflow, and auditability are built into the platform layer.
-
-- **Manifest-driven extensibility**
-
-  Business capabilities are packaged as modules instead of hard-coded one-off applications.
-
-- **Integration-first design**
-
-  External systems, contracts, retries, dead letters, and machine-facing tools are first-class concerns.
-
-- **Enterprise AI connectivity**
-
-  External agents and copilots can consume data and approved actions through MCP and HTTP without bypassing governance.
-
-</div>
+- a Go server runtime with typed platform services
+- manifest-driven kernel packs for core and business capabilities
+- a React workspace frontend under `frontend/`
+- MCP JSON-RPC endpoints and ACP-backed agent sessions
+- scoped runtime configuration and admin configuration APIs
+- contract generation for OpenAPI and MCP catalogs
+- demo and validation tooling through `cmd/agentproof`
 
 ## Start Here
 
-- [Getting Started](./getting-started.md)
-- [Concepts](./concepts.md)
-- [Use Cases](./use-cases.md)
-- [Architecture](./architecture.md)
+<div class="quick-links" markdown>
 
-## Core Product Areas
+- [**Getting Started**](./getting-started.md)
+  Install the project, choose a runtime mode, and verify the server is healthy.
+- [**Architecture**](./architecture.md)
+  Understand the current service graph, module composition, and runtime surfaces.
+- [**Configuration**](./configuration.md)
+  Learn the built-in config keys, scopes, and MCP/ACP runtime settings.
+- [**Agent Integration**](./agent-integration.md)
+  See how ACP sessions, MCP exposure modes, and minimal skill discovery work today.
+
+</div>
+
+## Documentation Map
+
+<div class="orbyte-section">
+<h3>Runtime And Product Surface</h3>
 
 - [Features](./features.md)
-- [Components](./components.md)
-- [Configuration](./configuration.md)
-- [Security and Governance](./security-and-governance.md)
-- [Integration](./integration.md)
-- [Product Packaging](./product-packaging.md)
+- [Modules](./modules.md)
+- [Surfaces](./surfaces.md)
+- [Agent Integration](./agent-integration.md)
+</div>
 
-## Build On The Platform
+<div class="orbyte-section">
+<h3>Build On Orbyte</h3>
 
+- [Module Development](./module-development.md)
 - [Module System](./module-system.md)
+- [Module Generator](./modulegen.md)
 - [First Module Tutorial](./tutorial-first-module.md)
-- [Reference Implementations](./reference-implementations.md)
-- [API and Contracts](./api-and-contracts.md)
-- [Sample Payloads](./sample-payloads.md)
+</div>
 
-## Operate The Platform
+<div class="orbyte-section">
+<h3>Operate And Integrate</h3>
 
+- [Integration](./integration.md)
 - [Deployment](./deployment.md)
 - [Operations](./operations.md)
-- [Walkthroughs](./walkthroughs.md)
+- [API and Contracts](./api-and-contracts.md)
+- [Security and Governance](./security-and-governance.md)
+</div>
 
-## Shared Vocabulary
+## Current Runtime Topology
 
-- [Glossary](./glossary.md)
+```mermaid
+flowchart LR
+    UI[UI Surfaces]
+    MCP[MCP Endpoints]
+    ACP[ACP Session Runtime]
+    Kernel[Platform Kernel]
+    Modules[Module Manifests]
+    Stores[(PostgreSQL / In-Memory)]
+    Ext[External Search / Eventing / Delivery]
 
-## Diagram Preview
+    UI --> Kernel
+    MCP --> Kernel
+    ACP --> Kernel
+    Kernel --> Modules
+    Kernel --> Stores
+    Kernel --> Ext
+```
 
-<div class="diagram-frame">
+## Current Priorities Reflected In Code
 
-![Architecture Overview](./assets/architecture-overview.svg)
+- profile-driven module composition
+- generic UI route/bootstrap contracts
+- governed MCP exposure modes
+- minimal MCP discovery with skills and tool discovery
+- business demo and validation harnesses for retail, inventory, dashboard, POS, and CRM scenarios
+
+## Recommended Reading Order
+
+1. [Getting Started](./getting-started.md)
+2. [Architecture](./architecture.md)
+3. [Configuration](./configuration.md)
+4. [Features](./features.md)
+5. [Modules](./modules.md)
+6. [Agent Integration](./agent-integration.md)
+7. [Module Development](./module-development.md)
+
+## After This Page
+
+<div class="next-steps" markdown>
+
+- [Run the platform locally](./getting-started.md)
+- [See what modules exist today](./modules.md)
+- [Understand the current UI and machine-facing surfaces](./surfaces.md)
 
 </div>

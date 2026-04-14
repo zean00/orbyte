@@ -26,3 +26,10 @@ func (s *Service) Query(filter Query) []Event {
 	}
 	return s.repo.Query(filter)
 }
+
+func (s *Service) Search(filter Query) SearchResult {
+	if s == nil || s.repo == nil {
+		return SearchResult{Items: []Event{}, Total: 0}
+	}
+	return s.repo.Search(filter)
+}

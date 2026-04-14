@@ -40,6 +40,7 @@ const (
 	maxFailedPasswordAttempt = 5
 	passwordLockoutWindow    = 15 * time.Minute
 	minPasswordLength        = 8
+	cashierPINLength         = 6
 )
 
 func NewService(org *organization.Service) *Service {
@@ -108,6 +109,11 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 		Module:   "platform",
 		Action:   "read",
 		Resource: "context",
+	}, {
+		Key:      "agent.workspace.use",
+		Module:   "platform",
+		Action:   "use",
+		Resource: "agent_workspace",
 	}, {
 		Key:      "audit.read",
 		Module:   "audit",
@@ -303,6 +309,9 @@ func defaultBootstrapData(now time.Time, bootstrapPassword string) bootstrapData
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "platform.context.read",
+	}, {
+		RoleID:        "role_admin",
+		PermissionKey: "agent.workspace.use",
 	}, {
 		RoleID:        "role_admin",
 		PermissionKey: "audit.read",
@@ -525,6 +534,41 @@ func (s *Service) DefaultRoute(userID, surface string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Service) ActiveRoleIDsForUser(userID, organizationID, locationID, operatingUnitID string, at time.Time) []string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil
+	}
+	now := resolveTime(at)
+	set := map[string]struct{}{}
+	items := make([]string, 0)
+	for _, binding := range s.repo.RoleBindings() {
+		if binding.UserID != userID || binding.Status != "active" {
+			continue
+		}
+		if binding.EffectiveFrom.After(now) {
+			continue
+		}
+		if !binding.EffectiveTo.IsZero() && binding.EffectiveTo.Before(now) {
+			continue
+		}
+		if !bindingMatchesScope(binding, organizationID, locationID, operatingUnitID) {
+			continue
+		}
+		roleID := strings.TrimSpace(binding.RoleID)
+		if roleID == "" {
+			continue
+		}
+		if _, ok := set[roleID]; ok {
+			continue
+		}
+		set[roleID] = struct{}{}
+		items = append(items, roleID)
+	}
+	sort.Strings(items)
+	return items
 }
 
 func (s *Service) Bindings() []RoleBinding {
@@ -1536,6 +1580,104 @@ func (s *Service) ChangePassword(userID, currentPassword, newPassword string) er
 	return s.ChangePasswordWithPolicy(userID, currentPassword, newPassword, minPasswordLength)
 }
 
+func validateNewCashierPIN(pin string) error {
+	trimmed := strings.TrimSpace(pin)
+	if len(trimmed) != cashierPINLength {
+		return shared.Validation(fmt.Sprintf("cashier PIN must be %d digits", cashierPINLength))
+	}
+	for _, ch := range trimmed {
+		if ch < '0' || ch > '9' {
+			return shared.Validation("cashier PIN must contain digits only")
+		}
+	}
+	return nil
+}
+
+func (s *Service) CashierPINState(userID string) (map[string]any, error) {
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return nil, shared.NotFound("credential not found")
+	}
+	state := map[string]any{
+		"configured":          strings.TrimSpace(credential.CashierPINHash) != "",
+		"pin_length":          cashierPINLength,
+		"password_changed_at": credential.PasswordChangedAt,
+	}
+	if !credential.CashierPINChangedAt.IsZero() {
+		state["changed_at"] = credential.CashierPINChangedAt
+	}
+	return state, nil
+}
+
+func (s *Service) VerifyCashierPIN(userID, pin string) error {
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return shared.NotFound("credential not found")
+	}
+	if strings.TrimSpace(credential.CashierPINHash) == "" {
+		return shared.Forbidden("cashier PIN is not configured")
+	}
+	verified, err := VerifyPassword(credential.CashierPINHash, strings.TrimSpace(pin))
+	if err != nil {
+		return err
+	}
+	if !verified {
+		return shared.Unauthorized("cashier PIN is invalid")
+	}
+	return nil
+}
+
+func (s *Service) SetCashierPIN(userID, pin string) error {
+	if err := validateNewCashierPIN(pin); err != nil {
+		return err
+	}
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return shared.NotFound("credential not found")
+	}
+	if strings.TrimSpace(credential.CashierPINHash) != "" {
+		return shared.Conflict("cashier PIN is already configured")
+	}
+	hashedPIN, err := HashPassword(strings.TrimSpace(pin))
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	credential.CashierPINHash = hashedPIN
+	credential.CashierPINChangedAt = now
+	credential.UpdatedAt = now
+	return s.repo.SaveCredential(credential)
+}
+
+func (s *Service) ChangeCashierPIN(userID, currentPIN, newPIN string) error {
+	if err := validateNewCashierPIN(newPIN); err != nil {
+		return err
+	}
+	credential, ok := s.repo.FindCredentialByUserID(strings.TrimSpace(userID))
+	if !ok {
+		return shared.NotFound("credential not found")
+	}
+	if strings.TrimSpace(credential.CashierPINHash) == "" {
+		return shared.Forbidden("cashier PIN is not configured")
+	}
+	verified, err := VerifyPassword(credential.CashierPINHash, strings.TrimSpace(currentPIN))
+	if err != nil {
+		return err
+	}
+	if !verified {
+		return shared.Unauthorized("current cashier PIN is invalid")
+	}
+	hashedPIN, err := HashPassword(strings.TrimSpace(newPIN))
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	credential.CashierPINHash = hashedPIN
+	credential.CashierPINChangedAt = now
+	credential.UpdatedAt = now
+	return s.repo.SaveCredential(credential)
+}
+
 func (s *Service) ChangePasswordWithPolicy(userID, currentPassword, newPassword string, passwordMinLength int) error {
 	return s.ChangePasswordUsingPolicy(userID, currentPassword, newPassword, PasswordPolicy{MinLength: passwordMinLength})
 }
@@ -1791,12 +1933,6 @@ func (s *Service) RotateSession(sessionID string, ttl time.Duration) (Session, e
 		ttl = defaultSessionTTL
 	}
 	now := time.Now().UTC()
-	session.Status = "revoked"
-	session.RevokedAt = now
-	session.LastSeenAt = now
-	if err := s.repo.SaveSession(session); err != nil {
-		return Session{}, err
-	}
 	rotated := Session{
 		ID:                   shared.NewID("sess"),
 		UserID:               session.UserID,
@@ -1811,7 +1947,25 @@ func (s *Service) RotateSession(sessionID string, ttl time.Duration) (Session, e
 	if err := s.repo.SaveSession(rotated); err != nil {
 		return Session{}, err
 	}
+	session.Status = "revoked"
+	session.RevokedAt = now
+	session.LastSeenAt = now
+	if err := s.repo.SaveSession(session); err != nil {
+		s.deactivateRotatedSession(rotated.ID, now)
+		return Session{}, err
+	}
 	return rotated, nil
+}
+
+func (s *Service) deactivateRotatedSession(sessionID string, when time.Time) {
+	session, ok := s.repo.FindSession(sessionID)
+	if !ok {
+		return
+	}
+	session.Status = "revoked"
+	session.RevokedAt = when
+	session.LastSeenAt = when
+	_ = s.repo.SaveSession(session)
 }
 
 func (s *Service) SetUserStatus(userID, status string) (User, error) {

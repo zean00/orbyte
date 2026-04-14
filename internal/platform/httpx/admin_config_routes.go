@@ -18,6 +18,6 @@ import (
 
 func registerAdminConfigRoutes(mux *http.ServeMux, cfg *config.Service, flags *featureflags.Service, org *organization.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service, health *runtimehealth.Tracker) {
 	registerAdminFeatureFlagRoutes(mux, flags, org, ident, auditSvc)
-	registerAdminSecurityModuleRoutes(mux, ident, modules, auditSvc, policySvc, integrationSvc, referenceSvc, idempotencySvc)
+	registerAdminSecurityModuleRoutes(mux, cfg, ident, modules, auditSvc, policySvc, integrationSvc, referenceSvc, idempotencySvc)
 	registerAdminConfigRuntimeRoutes(mux, cfg, flags, ident, modules, auditSvc, health)
 }

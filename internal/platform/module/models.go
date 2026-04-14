@@ -16,11 +16,14 @@ type Manifest struct {
 	Key                    string                     `json:"key"`
 	Name                   string                     `json:"name"`
 	NameI18n               i18n.LocalizedText         `json:"name_i18n,omitempty"`
+	Description            string                     `json:"description,omitempty"`
+	DescriptionI18n        i18n.LocalizedText         `json:"description_i18n,omitempty"`
 	Version                string                     `json:"version"`
 	Role                   ModuleRole                 `json:"role,omitempty"`
 	LocalExtension         LocalExtensionDefinition   `json:"local_extension,omitempty"`
 	KernelVersionRange     string                     `json:"kernel_version_range,omitempty"`
 	RequiredCapabilities   []string                   `json:"required_capabilities,omitempty"`
+	BusinessCapabilities   []string                   `json:"business_capabilities,omitempty"`
 	DomainFamily           string                     `json:"domain_family"`
 	Category               string                     `json:"category,omitempty"`
 	Dependencies           []string                   `json:"dependencies,omitempty"`
@@ -44,6 +47,7 @@ type Manifest struct {
 	Security               SecurityDefinition         `json:"security,omitempty"`
 	Observability          ObservabilityDefinition    `json:"observability,omitempty"`
 	Frontend               FrontendDefinition         `json:"frontend,omitempty"`
+	AdminConsole           AdminConsoleDefinition     `json:"admin_console,omitempty"`
 	SelfService            SelfServiceDefinition      `json:"self_service,omitempty"`
 	Offline                OfflineDefinition          `json:"offline,omitempty"`
 	MCP                    MCPDefinition              `json:"mcp,omitempty"`
@@ -291,11 +295,107 @@ type DomainEventDefinition struct {
 }
 
 type FrontendDefinition struct {
-	Menus         []MenuDefinition         `json:"menus,omitempty"`
-	Actions       []ActionDefinition       `json:"actions,omitempty"`
-	Views         []ViewDefinition         `json:"views,omitempty"`
-	CustomEntries []CustomEntryDefinition  `json:"custom_entries,omitempty"`
-	DocumentFlows []DocumentFlowDefinition `json:"document_flows,omitempty"`
+	Menus            []MenuDefinition            `json:"menus,omitempty"`
+	Actions          []ActionDefinition          `json:"actions,omitempty"`
+	Views            []ViewDefinition            `json:"views,omitempty"`
+	CustomEntries    []CustomEntryDefinition     `json:"custom_entries,omitempty"`
+	DocumentFlows    []DocumentFlowDefinition    `json:"document_flows,omitempty"`
+	DashboardWidgets []DashboardWidgetDefinition `json:"dashboard_widgets,omitempty"`
+}
+
+type DashboardWidgetDefinition struct {
+	Key                 string               `json:"key"`
+	Title               string               `json:"title"`
+	TitleI18n           i18n.LocalizedText   `json:"title_i18n,omitempty"`
+	Surface             UISurface            `json:"surface,omitempty"`
+	RendererKind        string               `json:"renderer_kind"`
+	RefreshPolicy       string               `json:"refresh_policy,omitempty"`
+	DataPath            string               `json:"data_path"`
+	RequiredPermissions []string             `json:"required_permissions,omitempty"`
+	DefaultWidth        int                  `json:"default_width,omitempty"`
+	DefaultHeight       int                  `json:"default_height,omitempty"`
+	Metric              *DashboardMetricSpec `json:"metric,omitempty"`
+	Table               *DashboardTableSpec  `json:"table,omitempty"`
+	Chart               *DashboardChartSpec  `json:"chart,omitempty"`
+	Gauge               *DashboardGaugeSpec  `json:"gauge,omitempty"`
+	Map                 *DashboardMapSpec    `json:"map,omitempty"`
+}
+
+type DashboardMetricSpec struct {
+	ValuePath  string `json:"value_path"`
+	Format     string `json:"format,omitempty"`
+	Unit       string `json:"unit,omitempty"`
+	DeltaPath  string `json:"delta_path,omitempty"`
+	TargetPath string `json:"target_path,omitempty"`
+}
+
+type DashboardTableSpec struct {
+	RowsPath string             `json:"rows_path"`
+	Columns  []ColumnDefinition `json:"columns,omitempty"`
+}
+
+type DashboardChartSpec struct {
+	SeriesPath string `json:"series_path"`
+	Category   string `json:"category"`
+	Value      string `json:"value"`
+	Series     string `json:"series,omitempty"`
+	Stacked    bool   `json:"stacked,omitempty"`
+	Format     string `json:"format,omitempty"`
+}
+
+type DashboardGaugeSpec struct {
+	ValuePath  string    `json:"value_path"`
+	MinValue   float64   `json:"min_value,omitempty"`
+	MaxValue   float64   `json:"max_value,omitempty"`
+	Thresholds []float64 `json:"thresholds,omitempty"`
+	Format     string    `json:"format,omitempty"`
+}
+
+type DashboardMapSpec struct {
+	PointsPath string `json:"points_path"`
+	Latitude   string `json:"latitude"`
+	Longitude  string `json:"longitude"`
+	Label      string `json:"label,omitempty"`
+	Value      string `json:"value,omitempty"`
+}
+
+type AdminConsoleDefinition struct {
+	Title           string                          `json:"title,omitempty"`
+	TitleI18n       i18n.LocalizedText              `json:"title_i18n,omitempty"`
+	Description     string                          `json:"description,omitempty"`
+	DescriptionI18n i18n.LocalizedText              `json:"description_i18n,omitempty"`
+	Sections        []AdminConsoleSectionDefinition `json:"sections,omitempty"`
+}
+
+type AdminConsoleSectionKind string
+
+const (
+	AdminConsoleSectionSettingsForm  AdminConsoleSectionKind = "settings_form"
+	AdminConsoleSectionResourceLinks AdminConsoleSectionKind = "resource_links"
+	AdminConsoleSectionWorkflowLinks AdminConsoleSectionKind = "workflow_links"
+	AdminConsoleSectionTemplateLinks AdminConsoleSectionKind = "template_links"
+)
+
+type AdminConsoleSectionDefinition struct {
+	Key                 string                       `json:"key"`
+	Title               string                       `json:"title"`
+	TitleI18n           i18n.LocalizedText           `json:"title_i18n,omitempty"`
+	Description         string                       `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText           `json:"description_i18n,omitempty"`
+	Kind                AdminConsoleSectionKind      `json:"kind"`
+	ConfigKey           string                       `json:"config_key,omitempty"`
+	Links               []AdminConsoleLinkDefinition `json:"links,omitempty"`
+	RequiredPermissions []string                     `json:"required_permissions,omitempty"`
+}
+
+type AdminConsoleLinkDefinition struct {
+	Key                 string             `json:"key"`
+	Label               string             `json:"label"`
+	LabelI18n           i18n.LocalizedText `json:"label_i18n,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	DescriptionI18n     i18n.LocalizedText `json:"description_i18n,omitempty"`
+	RoutePath           string             `json:"route_path"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
 }
 
 type UISurface string
@@ -307,7 +407,9 @@ const (
 	UISurfaceBackoffice  UISurface = "backoffice"
 	UISurfaceWorklist    UISurface = "worklist"
 	UISurfaceSelfService UISurface = "self_service"
+	UISurfaceAgent       UISurface = "agent"
 	UISurfacePOS         UISurface = "pos"
+	UISurfaceDashboard   UISurface = "dashboard"
 	UISurfaceMobile      UISurface = "mobile"
 )
 
@@ -383,14 +485,21 @@ type MCPDefinition struct {
 }
 
 type MCPContractMetadata struct {
-	Version         string   `json:"version,omitempty"`
-	Stability       string   `json:"stability,omitempty"`
-	SideEffectClass string   `json:"side_effect_class,omitempty"`
-	Idempotency     string   `json:"idempotency,omitempty"`
-	AuditAction     string   `json:"audit_action,omitempty"`
-	RequiredScopes  []string `json:"required_scopes,omitempty"`
-	Deprecated      bool     `json:"deprecated,omitempty"`
-	DeprecationNote string   `json:"deprecation_note,omitempty"`
+	Version              string   `json:"version,omitempty"`
+	Stability            string   `json:"stability,omitempty"`
+	SideEffectClass      string   `json:"side_effect_class,omitempty"`
+	Idempotency          string   `json:"idempotency,omitempty"`
+	AuditAction          string   `json:"audit_action,omitempty"`
+	ActionClass          string   `json:"action_class,omitempty"`
+	RiskClass            string   `json:"risk_class,omitempty"`
+	DraftOnly            bool     `json:"draft_only,omitempty"`
+	RequiresConfirmation bool     `json:"requires_confirmation,omitempty"`
+	RequiresApproval     bool     `json:"requires_approval,omitempty"`
+	GovernanceTags       []string `json:"governance_tags,omitempty"`
+	BusinessDomains      []string `json:"business_domains,omitempty"`
+	RequiredScopes       []string `json:"required_scopes,omitempty"`
+	Deprecated           bool     `json:"deprecated,omitempty"`
+	DeprecationNote      string   `json:"deprecation_note,omitempty"`
 }
 
 type TemplateDefinition struct {

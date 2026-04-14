@@ -25,9 +25,40 @@ func builtInModulePacks() []modulePack {
 	return []modulePack{
 		staticModulePack{manifests: referenceMasterdataKernelPackManifests},
 		staticModulePack{manifests: masterdataKernelPackManifests},
+		staticModulePack{manifests: organizationStructureKernelPackManifests},
+		staticModulePack{manifests: employeeWorkforceKernelPackManifests},
+		staticModulePack{manifests: workforceAttendanceKernelPackManifests},
 		staticModulePack{manifests: platformCoreKernelPackManifests},
 		staticModulePack{manifests: identityKernelPackManifests},
 		staticModulePack{manifests: documentsKernelPackManifests},
+		staticModulePack{manifests: workflowApprovalPolicyKernelPackManifests},
+		staticModulePack{manifests: commercialCoreKernelPackManifests},
+		staticModulePack{manifests: discountCoreKernelPackManifests},
+		staticModulePack{manifests: promotionCoreKernelPackManifests},
+		staticModulePack{manifests: financeReportingCoreKernelPackManifests},
+		staticModulePack{manifests: financeManualJournalCoreKernelPackManifests},
+		staticModulePack{manifests: financeCollectionsCoreKernelPackManifests},
+		staticModulePack{manifests: financeAssetCoreKernelPackManifests},
+		staticModulePack{manifests: inventoryFinanceCoreKernelPackManifests},
+		staticModulePack{manifests: retailFinanceCoreKernelPackManifests},
+		staticModulePack{manifests: treasuryCoreKernelPackManifests},
+		staticModulePack{manifests: employeeSpendCoreKernelPackManifests},
+		staticModulePack{manifests: employeePayrollCoreKernelPackManifests},
+		staticModulePack{manifests: payrollRemittanceCoreKernelPackManifests},
+		staticModulePack{manifests: leavePolicyCoreKernelPackManifests},
+		staticModulePack{manifests: procurementCoreKernelPackManifests},
+		staticModulePack{manifests: inventoryCoreKernelPackManifests},
+		staticModulePack{manifests: fulfillmentCoreKernelPackManifests},
+		staticModulePack{manifests: deliveryCoreKernelPackManifests},
+		staticModulePack{manifests: returnsCoreKernelPackManifests},
+		staticModulePack{manifests: supplierReturnsCoreKernelPackManifests},
+		staticModulePack{manifests: crmCoreKernelPackManifests},
+		staticModulePack{manifests: planningCoreKernelPackManifests},
+		staticModulePack{manifests: productionCoreKernelPackManifests},
+		staticModulePack{manifests: productionCostingCoreKernelPackManifests},
+		staticModulePack{manifests: posCoreKernelPackManifests},
+		staticModulePack{manifests: traceabilityCoreKernelPackManifests},
+		staticModulePack{manifests: recallCoreKernelPackManifests},
 		staticModulePack{manifests: analyticsKernelPackManifests},
 		staticModulePack{manifests: monitoringKernelPackManifests},
 		staticModulePack{manifests: integrationKernelPackManifests},
@@ -50,8 +81,20 @@ func collectModuleManifests(packs []modulePack) []module.Manifest {
 				panic(fmt.Sprintf("built-in module pack contains duplicate manifest key %q", manifest.Key))
 			}
 			seen[manifest.Key] = struct{}{}
-			manifests = append(manifests, manifest)
+			manifests = append(manifests, applyBuiltInValidationMetadata(manifest))
 		}
 	}
 	return manifests
+}
+
+func requiredModuleDependencies(keys ...string) []module.DependencyRequirement {
+	requirements := make([]module.DependencyRequirement, 0, len(keys))
+	for _, key := range keys {
+		requirements = append(requirements, module.DependencyRequirement{
+			ModuleKey:    key,
+			VersionRange: ">=1.0.0,<2.0.0",
+			Kind:         module.DependencyKindRequired,
+		})
+	}
+	return requirements
 }

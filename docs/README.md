@@ -22,6 +22,11 @@ This documentation describes Orbyte as a product: what it is, how it works, how 
   - data flow
   - extension model
   - rendered diagrams
+- [MCP Target Architecture](./mcp-target-architecture.md)
+  - ACP, MCP, and agent workspace roles
+  - business discovery and analysis capability model
+  - governed machine action model
+  - advisor-pack strategy and roadmap
 - [Features](./features.md)
   - core capabilities
   - enterprise platform functions
@@ -108,13 +113,14 @@ If you are new to the platform:
 2. [Concepts](./concepts.md)
 3. [Use Cases](./use-cases.md)
 4. [Architecture](./architecture.md)
-5. [Features](./features.md)
-6. [Configuration](./configuration.md)
-7. [Glossary](./glossary.md)
-8. [Security and Governance](./security-and-governance.md)
-9. [Module System](./module-system.md)
-10. [Integration](./integration.md)
-11. [Deployment](./deployment.md)
+5. [MCP Target Architecture](./mcp-target-architecture.md)
+6. [Features](./features.md)
+7. [Configuration](./configuration.md)
+8. [Glossary](./glossary.md)
+9. [Security and Governance](./security-and-governance.md)
+10. [Module System](./module-system.md)
+11. [Integration](./integration.md)
+12. [Deployment](./deployment.md)
 
 If you are evaluating Orbyte as a product:
 
@@ -122,9 +128,10 @@ If you are evaluating Orbyte as a product:
 2. [Use Cases](./use-cases.md)
 3. [Features](./features.md)
 4. [Architecture](./architecture.md)
-5. [Security and Governance](./security-and-governance.md)
-6. [Integration](./integration.md)
-7. [Deployment](./deployment.md)
+5. [MCP Target Architecture](./mcp-target-architecture.md)
+6. [Security and Governance](./security-and-governance.md)
+7. [Integration](./integration.md)
+8. [Deployment](./deployment.md)
 
 If you are building on top of Orbyte:
 
@@ -134,5 +141,6 @@ If you are building on top of Orbyte:
 4. [Module System](./module-system.md)
 5. [First Module Tutorial](./tutorial-first-module.md)
 6. [Reference Implementations](./reference-implementations.md)
-7. [API and Contracts](./api-and-contracts.md)
-8. [Operations](./operations.md)
+7. [MCP Target Architecture](./mcp-target-architecture.md)
+8. [API and Contracts](./api-and-contracts.md)
+9. [Operations](./operations.md)

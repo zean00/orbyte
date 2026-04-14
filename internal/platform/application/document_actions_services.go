@@ -397,6 +397,86 @@ func (s *documentTransitionService) Approve(documentID string, acting ActingCont
 	}
 	previousVersion := record.Header.Version
 	now := s.actions.currentTime()
+	if stagedMutation, stagedPayload, staged, err := s.actions.resolveApprovalProgression(&record, acting.EffectiveActorID(), transition, now); err != nil {
+		return document.Record{}, err
+	} else if staged {
+		record.Header.Version++
+		record.Header.ETag = fmt.Sprintf("%s:%d", record.Header.ID, record.Header.Version)
+		record.Header.UpdatedBy = acting.EffectiveActorID()
+		record.Header.UpdatedAt = now
+
+		correlationID := firstNonEmpty(strings.TrimSpace(acting.CorrelationID), fmt.Sprintf("doc-approve-stage:%s:%d", record.Header.ID, record.Header.Version))
+		auditEvent := audit.Event{
+			ID:                fmt.Sprintf("audit:%s", correlationID),
+			Action:            "document.approval.progress",
+			TargetType:        "document",
+			TargetID:          record.Header.ID,
+			ActorID:           acting.ActorID,
+			ActorKind:         "user",
+			OnBehalfOfUserID:  acting.OnBehalfOfUserID,
+			DelegationGrantID: acting.DelegationGrantID,
+			FromState:         transition.FromState,
+			ToState:           record.Header.Status,
+			OrganizationID:    record.Header.OrganizationID,
+			LocationID:        record.Header.LocationID,
+			OccurredAt:        now,
+			CorrelationID:     correlationID,
+			ChangeSummary:     documentChangeSummary(beforeRecord, record),
+			Metadata: map[string]any{
+				"document_type":     record.Header.Type,
+				"version":           record.Header.Version,
+				"workflow_key":      transition.WorkflowKey,
+				"workflow_version":  transition.WorkflowVersion,
+				"policy_code":       transitionDecision.Code,
+				"policy_reason":     transitionDecision.Reason,
+				"assignment_policy": decisionSummary(assignmentDecision),
+				"sla_policy":        decisionSummary(slaDecision),
+				"approval_stage":    stagedPayload,
+			},
+		}
+		domainEvent := eventing.Event{
+			ID:             fmt.Sprintf("event:%s", correlationID),
+			Type:           "document.approval.progressed",
+			Version:        1,
+			AggregateType:  "document",
+			AggregateID:    record.Header.ID,
+			ActorID:        acting.ActorID,
+			CorrelationID:  correlationID,
+			OrganizationID: record.Header.OrganizationID,
+			LocationID:     record.Header.LocationID,
+			OccurredAt:     now,
+			Payload: map[string]any{
+				"document_id":          record.Header.ID,
+				"document_type":        record.Header.Type,
+				"status":               record.Header.Status,
+				"version":              record.Header.Version,
+				"workflow_key":         transition.WorkflowKey,
+				"workflow_version":     transition.WorkflowVersion,
+				"transition_policy":    decisionSummary(transitionDecision),
+				"assignment_policy":    decisionSummary(assignmentDecision),
+				"sla_policy":           decisionSummary(slaDecision),
+				"approval_stage":       stagedPayload,
+				"snapshots":            documentSnapshotEnvelope(beforeRecord, record),
+				"effective_user_id":    acting.EffectiveActorID(),
+				"on_behalf_of_user_id": acting.OnBehalfOfUserID,
+				"delegation_grant_id":  acting.DelegationGrantID,
+			},
+		}
+		outboxRecord := eventing.OutboxRecord{
+			ID:        domainEvent.ID + ":outbox",
+			EventID:   domainEvent.ID,
+			EventType: domainEvent.Type,
+			Status:    "pending",
+			CreatedAt: now,
+		}
+		stageTransition := transition
+		stageTransition.ToState = record.Header.Status
+		appendWorkflowHistory(stagedMutation, buildWorkflowHistoryEvent(record, stageTransition, acting.EffectiveActorID(), correlationID, transitionDecision, assignmentDecision, now))
+		if err := s.actions.persistDocument(previousVersion, record, auditEvent, domainEvent, outboxRecord, *stagedMutation, false); err != nil {
+			return document.Record{}, err
+		}
+		return record, nil
+	}
 	record.Header.Status = transition.ToState
 	ensureWorkflowBinding(&record, transition.WorkflowKey, transition.WorkflowVersion)
 	s.actions.assignNumberIfNeeded(&record, def, acting.EffectiveActorID(), "approve", now)

@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { QRCode } from '@/components/ui/QRCode'
 import { useAuth } from '@/hooks/useAuth'
+import { fetchAuthOptions } from '@/services/bootstrap'
+import type { AuthOptions } from '@/services/generated/types'
 
 type ChallengePayload = {
   status?: string
@@ -33,7 +35,7 @@ type ChallengePayload = {
 }
 
 export default function LoginPage() {
-  const { login, isAuthenticated, hasCheckedAuth } = useAuth()
+  const { setAuthenticatedUser, isAuthenticated, hasCheckedAuth } = useAuth()
   const navigate = useNavigate()
   const nextPath = resolveNextPath()
 
@@ -48,9 +50,26 @@ export default function LoginPage() {
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [authOptions, setAuthOptions] = useState<AuthOptions | null>(null)
   const [challenge, setChallenge] = useState<ChallengePayload | null>(null)
   const [expiredPasswordFlow, setExpiredPasswordFlow] = useState<ChallengePayload | null>(null)
   const [newPassword, setNewPassword] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    async function loadOptions() {
+      try {
+        const options = await fetchAuthOptions()
+        if (mounted) setAuthOptions(options)
+      } catch {
+        // fall back to default local labels and enabled providers
+      }
+    }
+    void loadOptions()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -75,7 +94,7 @@ export default function LoginPage() {
     if (!sessionResponse.ok) throw new Error(`Session check failed: ${sessionResponse.status}`)
     const sessionData = await sessionResponse.json()
     if (!sessionData.authenticated || !sessionData.user_id) throw new Error('Authentication did not complete')
-    login({ id: sessionData.user_id, name: sessionData.user_id, email: '', roles: [] }, sessionData.user_id)
+    setAuthenticatedUser({ id: sessionData.user_id, name: sessionData.user_id, email: '', roles: [] })
     redirectAfterAuthentication(navigate, nextPath)
   }
 
@@ -189,143 +208,244 @@ export default function LoginPage() {
   }
 
   const challengeMode = challenge?.challenge?.purpose === 'totp_enroll'
+  const passwordEnabled = authOptions?.password_enabled !== false
+  const googleEnabled = !!authOptions?.google_enabled
+  const loginTitle = authOptions?.login_title || 'Orbyte'
+  const loginSubtitle = challenge
+    ? 'Two-factor verification is required to continue.'
+    : authOptions?.login_subtitle || 'Sign in to your account'
+  const googleButtonLabel = authOptions?.google_button_label || 'Sign in with Google'
+  const flowLabel = challenge
+    ? challengeMode
+      ? 'Authenticator setup'
+      : 'Identity check'
+    : expiredPasswordFlow
+      ? 'Password reset'
+      : 'Secure sign-in'
+  const shellHints = [
+    'Workspace routes, role context, and locale are restored after session hydration.',
+    'Admin and operator surfaces stay on the same cookie-backed auth model.',
+    'Two-factor enrollment and challenge states are resolved in the same session flow.',
+  ]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-shell dark:bg-ink p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-surface rounded-xl shadow-panel border border-line p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-body font-display">Orbyte</h1>
-            <p className="text-muted mt-1">{challenge ? 'Two-factor verification is required to continue.' : 'Sign in to your account'}</p>
-          </div>
+    <div className="min-h-screen bg-shell px-4 py-4 dark:bg-ink sm:px-6 lg:px-8">
+      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl overflow-hidden rounded-[2rem] border border-line bg-surface shadow-panel lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="relative overflow-hidden border-b border-line bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.18),_transparent_34%),linear-gradient(180deg,color-mix(in_srgb,var(--color-shell)_90%,white_10%),var(--color-surface))] px-6 py-8 sm:px-8 lg:border-b-0 lg:border-r lg:px-10 lg:py-10">
+          <div className="absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(255,255,255,0.28),transparent)] dark:bg-[linear-gradient(180deg,rgba(148,163,184,0.08),transparent)]" />
+          <div className="relative flex h-full flex-col justify-between gap-8">
+            <div className="space-y-8">
+              <div className="inline-flex items-center gap-3 rounded-full border border-line/70 bg-surface/75 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted backdrop-blur">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-accent" />
+                Unified operations shell
+              </div>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
-              {error}
+              <div className="max-w-xl space-y-4">
+                <div className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Orbyte</div>
+                <h1 className="max-w-lg font-display text-4xl font-semibold leading-tight text-body sm:text-5xl">
+                  {loginTitle}
+                </h1>
+                <p className="max-w-md text-base leading-7 text-muted sm:text-lg">
+                  {loginSubtitle}
+                </p>
+              </div>
             </div>
-          )}
 
-          {challenge ? (
-            <div className="space-y-4">
-              {challengeMode ? (
-                <div className="space-y-2 rounded-lg border border-line p-4 text-sm text-body">
-                  <div className="font-semibold">Set up Google Authenticator</div>
-                  {challenge.qr_uri ? (
-                    <div className="rounded-lg border border-line bg-shell/40 p-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Scan QR Code</div>
-                      <QRCode value={challenge.qr_uri} className="mx-auto rounded-lg border border-line bg-white p-3" />
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <MetricCard label="Surface access" value="Workspace + Admin" />
+                  <MetricCard label="Session model" value="Cookie backed" />
+                  <MetricCard label="Step-up auth" value="TOTP ready" />
+                </div>
+
+                <div className="space-y-3 border-t border-line/70 pt-5">
+                  {shellHints.map((hint) => (
+                    <div key={hint} className="flex items-start gap-3 text-sm leading-6 text-muted">
+                      <span className="mt-1 flex h-2.5 w-2.5 rounded-full bg-accent" />
+                      <span>{hint}</span>
                     </div>
-                  ) : null}
-                  {challenge.secret ? <div>Secret: <span className="font-mono">{challenge.secret}</span></div> : null}
-                  {challenge.qr_uri ? <div className="break-all text-xs text-muted">Authenticator URI: {challenge.qr_uri}</div> : null}
-                  <div className="text-muted">Add this secret to Google Authenticator, then enter the 6-digit code below.</div>
+                  ))}
                 </div>
-              ) : (
-                <div className="rounded-lg border border-line p-4 text-sm text-body">
-                  Enter the 6-digit code from Google Authenticator to complete sign-in.
-                </div>
-              )}
-
-              <Input
-                label="Authentication Code"
-                type="text"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                placeholder="123456"
-                autoComplete="one-time-code"
-                required
-              />
-
-              <Button type="button" className="w-full" isLoading={isLoading} onClick={() => void handleChallengeVerify()}>
-                Verify Code
-              </Button>
-            </div>
-          ) : expiredPasswordFlow ? (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-line p-4 text-sm text-body">
-                <div className="font-semibold">Password change required</div>
-                <div className="mt-2 text-muted">Your password has expired. Set a new password to continue signing in.</div>
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-muted">
-                  <li>Minimum length: {expiredPasswordFlow.password_policy?.min_length || 8}</li>
-                  {expiredPasswordFlow.password_policy?.require_uppercase ? <li>Must include an uppercase letter</li> : null}
-                  {expiredPasswordFlow.password_policy?.require_number ? <li>Must include a number</li> : null}
-                  {expiredPasswordFlow.password_policy?.require_special ? <li>Must include a special character</li> : null}
-                </ul>
               </div>
 
-              <Input
-                label="New Password"
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="Enter a new password"
-                autoComplete="new-password"
-                required
-              />
-
-              <Button type="button" className="w-full" isLoading={isLoading} onClick={() => void handleExpiredPasswordChange()}>
-                Change Password
-              </Button>
+              <div className="rounded-[1.6rem] border border-line bg-surface/90 p-5 backdrop-blur">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Current flow</div>
+                <div className="mt-2 text-2xl font-semibold text-body">{flowLabel}</div>
+                <div className="mt-4 space-y-3 text-sm leading-6 text-muted">
+                  <p>Username and route intent are preserved through login, challenge, and post-auth redirection.</p>
+                  <p>Locale and shell context are restored after bootstrap, not guessed from stale local state.</p>
+                </div>
+              </div>
             </div>
-          ) : (
-            <>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          </div>
+        </section>
+
+        <section className="flex items-center px-6 py-8 sm:px-8 lg:px-10">
+          <div className="mx-auto w-full max-w-md">
+            <div className="mb-8 space-y-3">
+              <div className="inline-flex rounded-full border border-line bg-shell/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                {flowLabel}
+              </div>
+              <div>
+                <h2 className="text-3xl font-semibold text-body">Continue to your session</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Complete the active authentication step for the requested workspace or admin route.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+                {error}
+              </div>
+            )}
+
+            {challenge ? (
+              <div className="space-y-5">
+                {challengeMode ? (
+                  <div className="space-y-4 rounded-[1.6rem] border border-line bg-shell/45 p-5 text-sm text-body">
+                    <div>
+                      <div className="text-base font-semibold">Set up Google Authenticator</div>
+                      <div className="mt-1 leading-6 text-muted">
+                        Scan the QR code or copy the secret into your authenticator app, then verify with the current 6-digit code.
+                      </div>
+                    </div>
+                    {challenge.qr_uri ? (
+                      <div className="rounded-[1.3rem] border border-line bg-white p-4">
+                        <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted">Authenticator QR</div>
+                        <QRCode value={challenge.qr_uri} className="mx-auto rounded-xl bg-white p-3" />
+                      </div>
+                    ) : null}
+                    {challenge.secret ? (
+                      <div className="rounded-xl border border-line bg-surface px-3 py-2 font-mono text-xs text-body">
+                        {challenge.secret}
+                      </div>
+                    ) : null}
+                    {challenge.qr_uri ? (
+                      <div className="break-all text-xs leading-5 text-muted">{challenge.qr_uri}</div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-[1.6rem] border border-line bg-shell/45 p-5 text-sm leading-6 text-body">
+                    Enter the 6-digit code from your authenticator app to finish sign-in.
+                  </div>
+                )}
+
                 <Input
-                  label="Username"
+                  label="Authentication Code"
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  autoComplete="username"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  placeholder="123456"
+                  autoComplete="one-time-code"
                   required
+                  className="h-12 rounded-2xl"
                 />
 
-                <Input
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  required
-                />
-
-                <Button type="submit" className="w-full" isLoading={isLoading}>
-                  Sign in
-                </Button>
-              </form>
-
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-line" />
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-surface text-muted">Or continue with</span>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full mt-4"
-                  onClick={handleGoogleLogin}
-                >
-                  <GoogleIcon className="w-5 h-5 mr-2" />
-                  Sign in with Google
+                <Button type="button" className="h-12 w-full rounded-2xl text-sm font-semibold" isLoading={isLoading} onClick={() => void handleChallengeVerify()}>
+                  Verify Code
                 </Button>
               </div>
-            </>
-          )}
-        </div>
+            ) : expiredPasswordFlow ? (
+              <div className="space-y-5">
+                <div className="rounded-[1.6rem] border border-line bg-shell/45 p-5 text-sm text-body">
+                  <div className="text-base font-semibold">Password change required</div>
+                  <div className="mt-2 leading-6 text-muted">
+                    Your current password no longer satisfies policy. Set a compliant password to continue.
+                  </div>
+                  <ul className="mt-4 list-disc space-y-1 pl-5 text-muted">
+                    <li>Minimum length: {expiredPasswordFlow.password_policy?.min_length || 8}</li>
+                    {expiredPasswordFlow.password_policy?.require_uppercase ? <li>Must include an uppercase letter</li> : null}
+                    {expiredPasswordFlow.password_policy?.require_number ? <li>Must include a number</li> : null}
+                    {expiredPasswordFlow.password_policy?.require_special ? <li>Must include a special character</li> : null}
+                  </ul>
+                </div>
 
-        {!challenge ? (
-          <p className="text-center text-sm text-muted mt-4">
-            <a href="/forgot-password" className="text-accent hover:underline">
-              Forgot your password?
-            </a>
-          </p>
-        ) : null}
+                <Input
+                  label="New Password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="Enter a new password"
+                  autoComplete="new-password"
+                  required
+                  className="h-12 rounded-2xl"
+                />
+
+                <Button type="button" className="h-12 w-full rounded-2xl text-sm font-semibold" isLoading={isLoading} onClick={() => void handleExpiredPasswordChange()}>
+                  Change Password
+                </Button>
+              </div>
+            ) : (
+              <>
+                {passwordEnabled ? (
+                  <form onSubmit={handleSubmit} className="space-y-5">
+                    <Input
+                      label="Username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Enter your username"
+                      autoComplete="username"
+                      required
+                      className="h-12 rounded-2xl"
+                    />
+
+                    <Input
+                      label="Password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      autoComplete="current-password"
+                      required
+                      className="h-12 rounded-2xl"
+                    />
+
+                    <Button type="submit" className="h-12 w-full rounded-2xl text-sm font-semibold" isLoading={isLoading}>
+                      Sign in
+                    </Button>
+                  </form>
+                ) : null}
+
+                {googleEnabled ? (
+                  <div className={passwordEnabled ? 'mt-6' : ''}>
+                    {passwordEnabled ? (
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-line" />
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="bg-surface px-3 text-muted">Or continue with</span>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className={passwordEnabled ? 'mt-4 h-12 w-full rounded-2xl text-sm font-semibold' : 'h-12 w-full rounded-2xl text-sm font-semibold'}
+                      onClick={handleGoogleLogin}
+                    >
+                      <GoogleIcon className="mr-2 h-5 w-5" />
+                      {googleButtonLabel}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            )}
+
+            {!challenge ? (
+              <p className="mt-6 text-sm text-muted">
+                Need account recovery?{' '}
+                <a href="/forgot-password" className="font-medium text-accent hover:underline">
+                  Reset or recover access
+                </a>
+              </p>
+            ) : null}
+          </div>
+        </section>
       </div>
     </div>
   )
@@ -376,5 +496,14 @@ function GoogleIcon({ className }: { className?: string }) {
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
       />
     </svg>
+  )
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.35rem] border border-line bg-surface/85 px-4 py-4 backdrop-blur">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{label}</div>
+      <div className="mt-2 text-base font-semibold text-body">{value}</div>
+    </div>
   )
 }

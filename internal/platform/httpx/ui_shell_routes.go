@@ -3,6 +3,7 @@ package httpx
 import (
 	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -127,24 +128,8 @@ func registerUIShellRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /assets/", func(w http.ResponseWriter, r *http.Request) {
 		// URL: /assets/main-BoBfFkGm.js -> embed path: assets/assets/main-BoBfFkGm.js
 		filename := strings.TrimPrefix(r.URL.Path, "/assets/")
-
-		// First try main app assets (in assets/assets/)
 		embedPath := "assets/assets/" + filename
 		file, err := assetsFS.Open(embedPath)
-		if err == nil {
-			defer file.Close()
-			if _, err := file.Stat(); err == nil {
-				contentType := getContentType(embedPath)
-				w.Header().Set("Content-Type", contentType)
-				w.Header().Set("Cache-Control", "public, max-age=31536000")
-				io.Copy(w, file)
-				return
-			}
-		}
-
-		// Try admin assets (in assets/assets/) - admin-*.js, AdminShell-*.js, etc.
-		embedPath = "assets/assets/" + filename
-		file, err = assetsFS.Open(embedPath)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -266,10 +251,17 @@ func isLocalDevHost(host string) bool {
 	if normalized == "" {
 		return false
 	}
-	if idx := strings.Index(normalized, ":"); idx >= 0 {
-		normalized = normalized[:idx]
+	if parsedHost, _, err := net.SplitHostPort(normalized); err == nil {
+		normalized = parsedHost
+	} else if strings.HasPrefix(normalized, "[") && strings.HasSuffix(normalized, "]") {
+		normalized = strings.TrimPrefix(strings.TrimSuffix(normalized, "]"), "[")
+	} else if strings.Count(normalized, ":") == 1 {
+		if idx := strings.Index(normalized, ":"); idx >= 0 {
+			normalized = normalized[:idx]
+		}
 	}
-	return normalized == "localhost" || normalized == "127.0.0.1" || normalized == "[::1]" || normalized == "::1"
+	normalized = strings.TrimPrefix(strings.TrimSuffix(normalized, "]"), "[")
+	return normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
 }
 
 func getContentType(filePath string) string {

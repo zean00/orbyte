@@ -203,9 +203,9 @@ func TestRenderWorkflowTaskLandingPageAndOfflineModelSync(t *testing.T) {
 		authMethod:        "cookie",
 	}
 	baseResult := offline.SyncResultItem{
-		Kind:        "model",
-		ProcessedAt: now,
-		Status:      offline.StatusFailedTerminal,
+		Kind:         "model",
+		ProcessedAt:  now,
+		Status:       offline.StatusFailedTerminal,
 		AttemptCount: 1,
 	}
 
@@ -255,8 +255,8 @@ func TestRenderWorkflowTaskLandingPageAndOfflineModelSync(t *testing.T) {
 	record := document.Record{Header: document.Header{ID: "doc-task-1", Number: "REQ-TASK-1", Status: "submitted"}}
 	task := workflow.Task{ID: "task-1", WorkflowKey: "generic_request_flow", AssigneeUserID: "user_admin"}
 	rr := httptest.NewRecorder()
-	renderWorkflowTaskLandingPage(rr, task, record)
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "REQ-TASK-1") || !strings.Contains(rr.Body.String(), "work_item_id=task-1") {
+	renderWorkflowTaskLandingPage(rr, document.NewService(), task, record)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "REQ-TASK-1") || !strings.Contains(rr.Body.String(), "/ui/documents/detail?id=doc-task-1") {
 		t.Fatalf("unexpected workflow task landing page response: code=%d body=%q", rr.Code, rr.Body.String())
 	}
 

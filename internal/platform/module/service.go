@@ -324,6 +324,34 @@ func (s *Service) CustomEntriesForSurface(surface UISurface) []CustomEntryDefini
 	return items
 }
 
+func (s *Service) DashboardWidgets() []DashboardWidgetDefinition {
+	return s.DashboardWidgetsForSurface(UISurfaceBoth)
+}
+
+func (s *Service) DashboardWidgetsForSurface(surface UISurface) []DashboardWidgetDefinition {
+	items := make([]DashboardWidgetDefinition, 0)
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.Frontend.DashboardWidgets {
+			if matchesSurface(item.Surface, surface) {
+				items = append(items, item)
+			}
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Service) DashboardWidgetForSurface(key string, surface UISurface) (DashboardWidgetDefinition, bool) {
+	for _, manifest := range s.manifests {
+		for _, item := range manifest.Frontend.DashboardWidgets {
+			if item.Key == key && matchesSurface(item.Surface, surface) {
+				return item, true
+			}
+		}
+	}
+	return DashboardWidgetDefinition{}, false
+}
+
 func (s *Service) DocumentFlows() []DocumentFlowDefinition {
 	return s.DocumentFlowsForSurface(UISurfaceBoth)
 }
@@ -828,6 +856,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	flows := map[string]string{}
 	bundles := map[string]string{}
 	menus := map[string]string{}
+	dashboardWidgets := map[string]string{}
 	selfServiceAPIs := map[string]string{}
 	mcpTools := map[string]string{}
 	mcpResources := map[string]string{}
@@ -850,7 +879,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 	documentTypes := map[string]string{}
 
 	for moduleKey, current := range existing {
-		indexFrontendContracts(moduleKey, current, actions, views, customEntries, flows, bundles, menus)
+		indexFrontendContracts(moduleKey, current, actions, views, customEntries, flows, bundles, menus, dashboardWidgets)
 		indexSelfServiceContracts(moduleKey, current, selfServiceAPIs)
 		indexMCPContracts(moduleKey, current, mcpTools, mcpResources, mcpURIs, mcpApps)
 		indexTemplateContracts(moduleKey, current, templates)
@@ -916,7 +945,7 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 		}
 		for _, permissionKey := range role.PermissionKeys {
 			if _, ok := permissions[permissionKey]; !ok {
-				return shared.Validation("role template permission key is not registered")
+				return shared.Validation(fmt.Sprintf("role template permission key %q is not registered for manifest %q role %q", permissionKey, manifest.Key, role.Key))
 			}
 		}
 		roleTemplates[role.Key] = manifest.Key
@@ -1139,6 +1168,15 @@ func validateManifest(existing map[string]Manifest, manifest Manifest) error {
 			return shared.Conflict("frontend view key already registered")
 		}
 		views[view.Key] = manifest.Key
+	}
+	for _, widget := range manifest.Frontend.DashboardWidgets {
+		if strings.TrimSpace(widget.Key) == "" || strings.TrimSpace(widget.Title) == "" || strings.TrimSpace(widget.RendererKind) == "" || strings.TrimSpace(widget.DataPath) == "" {
+			return shared.Validation("dashboard widget key, title, renderer_kind, and data_path are required")
+		}
+		if owner, ok := dashboardWidgets[widget.Key]; ok && owner != manifest.Key {
+			return shared.Conflict("dashboard widget key already registered")
+		}
+		dashboardWidgets[widget.Key] = manifest.Key
 	}
 	for _, entry := range manifest.Frontend.CustomEntries {
 		if strings.TrimSpace(entry.Key) == "" || strings.TrimSpace(entry.RoutePath) == "" || strings.TrimSpace(entry.BundleKey) == "" || strings.TrimSpace(entry.ComponentExport) == "" {
@@ -1651,7 +1689,7 @@ func normalizeLocalExtensionScope(scope, scopeID string) (string, string, error)
 	}
 }
 
-func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views, customEntries, flows, bundles, menus map[string]string) {
+func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views, customEntries, flows, bundles, menus, dashboardWidgets map[string]string) {
 	for _, menu := range manifest.Frontend.Menus {
 		menus[menu.Key] = moduleKey
 	}
@@ -1666,6 +1704,9 @@ func indexFrontendContracts(moduleKey string, manifest Manifest, actions, views,
 	}
 	for _, flow := range manifest.Frontend.DocumentFlows {
 		flows[flow.Key] = moduleKey
+	}
+	for _, item := range manifest.Frontend.DashboardWidgets {
+		dashboardWidgets[item.Key] = moduleKey
 	}
 	for _, bundle := range manifest.Bundles {
 		bundles[bundle.Key] = moduleKey

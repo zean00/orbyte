@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css'
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { fetchJson, formatDateTime, mutateJson } from './adminClient'
+import { fetchAllPagedItems, fetchJson, formatDateTime, mutateJson } from './adminClient'
 
 type WorkflowSummary = {
   key: string
@@ -140,10 +140,10 @@ export function WorkflowDesignerPage() {
     let mounted = true
     async function loadDefinitions() {
       try {
-        const payload = await fetchJson<{ items: WorkflowSummary[] }>('/admin/api/workflows')
+        const items = await fetchAllPagedItems<WorkflowSummary>('/admin/api/workflows')
         if (!mounted) return
-        setDefinitions(payload.items || [])
-        setSelectedKey((current) => current || searchParams.get('key') || payload.items?.[0]?.key || '')
+        setDefinitions(items)
+        setSelectedKey((current) => current || searchParams.get('key') || items[0]?.key || '')
       } catch (error) {
         if (!mounted) return
         setMessage(messageForError(error))

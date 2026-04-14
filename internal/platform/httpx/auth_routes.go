@@ -56,6 +56,15 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type setupCashierPINRequest struct {
+	NewPIN string `json:"new_pin"`
+}
+
+type changeCashierPINRequest struct {
+	CurrentPIN string `json:"current_pin"`
+	NewPIN     string `json:"new_pin"`
+}
+
 type createUserRequest struct {
 	Username          string `json:"username"`
 	Password          string `json:"password"`
@@ -370,6 +379,11 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			case userPrincipal:
 				payload["user_id"] = p.userID
 				payload["effective_user_id"] = p.effectiveUserID
+				if p.authMethod == "cookie" && p.sessionID != "" {
+					if csrfCookie, cookieErr := buildCSRFCookie(p.sessionID); cookieErr == nil {
+						http.SetCookie(w, csrfCookie)
+					}
+				}
 			case servicePrincipal:
 				payload["service_id"] = p.serviceID
 			}
@@ -402,7 +416,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			respondError(w, shared.Validation("password is required"))
 			return
 		}
-		limiterKey := loginLimitKey(r, req.Username)
+		limiterKey := loginLimitKey(r, req.Username, policy.TrustedOrigins)
 		if !limiter.Allow(limiterKey) {
 			respondError(w, shared.Forbidden("login rate limit exceeded"))
 			return
@@ -737,7 +751,7 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 				respondError(w, shared.Unauthorized("authentication required"))
 				return
 			}
-			limiterKey = loginLimitKey(r, username)
+			limiterKey = loginLimitKey(r, username, policy.TrustedOrigins)
 			if !limiter.Allow(limiterKey) {
 				recordAudit(auditSvc, audit.Event{
 					ID:            "audit:auth:password_change:rate_limited:" + time.Now().UTC().Format("20060102150405.000000000"),
@@ -798,6 +812,86 @@ func registerAuthRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity
 			CorrelationID: logging.CorrelationID(r.Context()),
 		})
 		respondJSON(w, http.StatusOK, map[string]any{"status": "password_changed"})
+	})
+
+	mux.HandleFunc("GET /auth/cashier-pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		state, err := ident.CashierPINState(p.userID)
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, state)
+	})
+
+	mux.HandleFunc("POST /auth/cashier-pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req setupCashierPINRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid cashier PIN payload"))
+			return
+		}
+		if err := ident.SetCashierPIN(p.userID, req.NewPIN); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:auth:cashier_pin:set:" + p.userID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "auth.cashier_pin.set",
+			TargetType:    "user",
+			TargetID:      p.userID,
+			ActorID:       p.userID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"status": "cashier_pin_set"})
+	})
+
+	mux.HandleFunc("PUT /auth/cashier-pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := authError(r); err != nil {
+			respondError(w, err)
+			return
+		}
+		p, ok := currentPrincipal(r)
+		if !ok || p.kind != userPrincipal {
+			respondError(w, shared.Unauthorized("authentication required"))
+			return
+		}
+		var req changeCashierPINRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, shared.Validation("invalid cashier PIN payload"))
+			return
+		}
+		if err := ident.ChangeCashierPIN(p.userID, req.CurrentPIN, req.NewPIN); err != nil {
+			respondError(w, err)
+			return
+		}
+		recordAudit(auditSvc, audit.Event{
+			ID:            "audit:auth:cashier_pin:change:" + p.userID + ":" + time.Now().UTC().Format("20060102150405.000000000"),
+			Action:        "auth.cashier_pin.change",
+			TargetType:    "user",
+			TargetID:      p.userID,
+			ActorID:       p.userID,
+			OccurredAt:    time.Now().UTC(),
+			CorrelationID: logging.CorrelationID(r.Context()),
+		})
+		respondJSON(w, http.StatusOK, map[string]any{"status": "cashier_pin_changed"})
 	})
 
 	mux.HandleFunc("POST /auth/refresh", func(w http.ResponseWriter, r *http.Request) {
@@ -1675,15 +1769,16 @@ func buildGoogleOAuthCookie(name, value string, expiresAt time.Time) *http.Cooki
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
+		Secure:   runtimeconfig.Current().CookieSecure(),
 		Expires:  expiresAt,
 		MaxAge:   int(time.Until(expiresAt).Seconds()),
 	}
 }
 
 func clearGoogleOAuthCookies(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: googleOAuthStateCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: googleOAuthNextCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
+	secure := runtimeconfig.Current().CookieSecure()
+	http.SetCookie(w, &http.Cookie{Name: googleOAuthStateCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure, Expires: time.Unix(0, 0), MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: googleOAuthNextCookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure, Expires: time.Unix(0, 0), MaxAge: -1})
 }
 
 func cookieValue(r *http.Request, name string) string {
@@ -1917,20 +2012,106 @@ func principalAuditEvent(p principal, event audit.Event) audit.Event {
 	return event
 }
 
-func loginLimitKey(r *http.Request, username string) string {
-	return strings.ToLower(strings.TrimSpace(username)) + "|" + clientIP(r)
+func loginLimitKey(r *http.Request, username string, trustedOrigins []string) string {
+	return strings.ToLower(strings.TrimSpace(username)) + "|" + clientIP(r, trustedOrigins)
 }
 
-func clientIP(r *http.Request) string {
+func clientIP(r *http.Request, trustedOrigins []string) string {
+	if r == nil {
+		return ""
+	}
 	remoteAddr := strings.TrimSpace(r.RemoteAddr)
 	if remoteAddr == "" {
 		return ""
 	}
-	host, _, err := net.SplitHostPort(remoteAddr)
+	return extractClientIP(r, remoteAddr, trustedOrigins)
+}
+
+func extractClientIP(r *http.Request, fallback string, trustedOrigins []string) string {
+	if r == nil {
+		return fallback
+	}
+	if shouldTrustForwardedHeaders(r, trustedOrigins) {
+		if from := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); from != "" {
+			if host := strings.TrimSpace(strings.Split(from, ",")[0]); host != "" {
+				if ip := strings.TrimSpace(host); ip != "" {
+					return ip
+				}
+			}
+		}
+		if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
+			return ip
+		}
+		if ip := strings.TrimSpace(r.Header.Get("X-Client-IP")); ip != "" {
+			return ip
+		}
+	}
+	host, _, err := net.SplitHostPort(fallback)
 	if err == nil {
 		return host
 	}
-	return remoteAddr
+	return fallback
+}
+
+func shouldTrustForwardedHeaders(r *http.Request, trustedOrigins []string) bool {
+	if r == nil {
+		return false
+	}
+	if len(trustedOrigins) == 0 || strings.TrimSpace(r.Host) == "" {
+		return false
+	}
+	if !isTrustedProxySource(r.RemoteAddr) {
+		return false
+	}
+	requestHost := normalizeHost(r.Host)
+	if requestHost == "" {
+		return false
+	}
+	for _, raw := range trustedOrigins {
+		trustedHost := normalizeHost(raw)
+		if trustedHost == "" {
+			continue
+		}
+		if strings.EqualFold(trustedHost, requestHost) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTrustedProxySource(remoteAddr string) bool {
+	host := strings.TrimSpace(remoteAddr)
+	if host == "" {
+		return false
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = strings.TrimSpace(parsedHost)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+}
+
+func normalizeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.Contains(raw, "://") {
+		parsed, err := url.Parse(raw)
+		if err == nil {
+			raw = parsed.Host
+		}
+	}
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return strings.ToLower(host)
+	}
+	return strings.ToLower(raw)
 }
 
 func recordAudit(auditSvc *audit.Service, event audit.Event) {

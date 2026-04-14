@@ -47,47 +47,76 @@ import (
 )
 
 type serviceGraph struct {
-	config            *config.Service
-	flags             *featureflags.Service
-	secrets           *secretstore.Service
-	organization      *organization.Service
-	identity          *identity.Service
-	modules           *module.Service
-	models            *model.Service
-	activities        *activity.Service
-	reporting         *reporting.Service
-	reference         *reference.Service
-	documents         *document.Service
-	workflows         *workflow.Service
-	audit             *audit.Service
-	logger            *logging.Service
-	observability     *observability.Service
-	policy            *policy.Service
-	fieldSecurity     *securityfields.Service
-	integration       *integration.Service
-	jobs              *jobs.Service
-	eventing          *eventing.Service
-	search            *search.Service
-	analytics         *analytics.Service
-	acp               *acp.Service
-	mcpAnalytics      *mcp.AnalyticsStream
-	mcpServer         *mcp.Server
-	offline           *offline.Service
-	monitoring        *monitoring.Service
-	notifications     *notification.Service
-	templates         *templateoutput.Service
-	dataops           *dataops.Service
-	engagement        *engagement.Service
-	idempotency       *idempotency.Service
-	uiPreferences     *httpx.UIPreferencesService
-	runtimeHealth     *runtimehealth.Tracker
-	docActions        *application.DocumentActions
-	modelActions      *application.ModelActions
-	analyticsRepo     analytics.Repository
-	submitStore       application.SubmitStore
-	queryMonitor      *store.QueryMonitor
-	otel              *otel.Service
-	businessManifests []module.Manifest
+	config              *config.Service
+	flags               *featureflags.Service
+	secrets             *secretstore.Service
+	organization        *organization.Service
+	identity            *identity.Service
+	modules             *module.Service
+	models              *model.Service
+	activities          *activity.Service
+	reporting           *reporting.Service
+	reference           *reference.Service
+	documents           *document.Service
+	workflows           *workflow.Service
+	audit               *audit.Service
+	logger              *logging.Service
+	observability       *observability.Service
+	policy              *policy.Service
+	fieldSecurity       *securityfields.Service
+	integration         *integration.Service
+	jobs                *jobs.Service
+	eventing            *eventing.Service
+	search              *search.Service
+	analytics           *analytics.Service
+	acp                 *acp.Service
+	mcpAnalytics        *mcp.AnalyticsStream
+	mcpServer           *mcp.Server
+	offline             *offline.Service
+	monitoring          *monitoring.Service
+	notifications       *notification.Service
+	templates           *templateoutput.Service
+	dataops             *dataops.Service
+	engagement          *engagement.Service
+	idempotency         *idempotency.Service
+	uiPreferences       *httpx.UIPreferencesService
+	runtimeHealth       *runtimehealth.Tracker
+	docActions          *application.DocumentActions
+	approvalPolicies    *application.ApprovalPolicyService
+	workforceAttendance *application.WorkforceAttendanceCoreService
+	leavePolicies       *application.LeavePolicyCoreService
+	employeeSpend       *application.EmployeeSpendCoreService
+	employeePayroll     *application.EmployeePayrollCoreService
+	payrollRemittance   *application.PayrollRemittanceCoreService
+	modelActions        *application.ModelActions
+	commercialCore      *application.CommercialCoreService
+	procurementCore     *application.ProcurementCoreService
+	crmCore             *application.CRMCoreService
+	inventoryCore       *application.InventoryCoreService
+	fulfillmentCore     *application.FulfillmentCoreService
+	deliveryCore        *application.DeliveryCoreService
+	returnsCore         *application.ReturnsCoreService
+	supplierReturns     *application.SupplierReturnsCoreService
+	planningCore        *application.PlanningCoreService
+	productionCore      *application.ProductionCoreService
+	productionCosting   *application.ProductionCostingCoreService
+	posCore             *application.POSCoreService
+	traceabilityCore    *application.TraceabilityCoreService
+	recallCore          *application.RecallCoreService
+	financeReporting    *application.FinanceReportingCoreService
+	financeReconcile    *application.FinanceReconciliationCoreService
+	financePeriodEnd    *application.FinancePeriodEndCoreService
+	financeManual       *application.FinanceManualJournalCoreService
+	financeCollections  *application.FinanceCollectionsCoreService
+	financeAssets       *application.FinanceAssetCoreService
+	inventoryFinance    *application.InventoryFinanceCoreService
+	retailFinance       *application.RetailFinanceCoreService
+	treasuryCore        *application.TreasuryCoreService
+	analyticsRepo       analytics.Repository
+	submitStore         application.SubmitStore
+	queryMonitor        *store.QueryMonitor
+	otel                *otel.Service
+	businessManifests   []module.Manifest
 }
 
 func constructServiceGraph(postgres *store.Postgres, businessManifests []module.Manifest) *serviceGraph {
@@ -234,9 +263,52 @@ func installPersistence(graph *serviceGraph, postgres *store.Postgres) {
 }
 
 func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
+	graph.approvalPolicies = application.NewApprovalPolicyService(graph.models)
+	graph.workforceAttendance = application.NewWorkforceAttendanceCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models))
+	graph.leavePolicies = application.NewLeavePolicyCoreService(graph.models, application.NewEmployeeWorkforceCoreService(graph.models), graph.workforceAttendance, graph.approvalPolicies)
+	graph.leavePolicies.SetDocuments(graph.documents)
+	graph.employeeSpend = application.NewEmployeeSpendCoreService(graph.documents, graph.models)
+	graph.employeePayroll = application.NewEmployeePayrollCoreService(graph.documents, graph.models, graph.workforceAttendance, graph.employeeSpend)
+	graph.payrollRemittance = application.NewPayrollRemittanceCoreService(graph.documents, graph.models)
 	graph.docActions = application.NewDocumentActions(graph.documents, graph.workflows, graph.identity, graph.policy, graph.submitStore)
+	graph.docActions.AttachApprovalPolicies(graph.approvalPolicies)
 	graph.docActions.AttachActivities(graph.activities)
 	graph.docActions.AttachNotifications(graph.notifications)
+	graph.commercialCore = application.NewCommercialCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.procurementCore = application.NewProcurementCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.crmCore = application.NewCRMCoreService(graph.models)
+	graph.inventoryCore = application.NewInventoryCoreService(graph.documents, graph.config, graph.models, graph.search)
+	graph.fulfillmentCore = application.NewFulfillmentCoreService(graph.documents, graph.search, graph.inventoryCore)
+	graph.deliveryCore = application.NewDeliveryCoreService(graph.documents, graph.search)
+	graph.returnsCore = application.NewReturnsCoreService(graph.documents, graph.search, graph.inventoryCore, graph.commercialCore, graph.fulfillmentCore)
+	graph.supplierReturns = application.NewSupplierReturnsCoreService(graph.documents, graph.search, graph.inventoryCore, graph.procurementCore)
+	graph.planningCore = application.NewPlanningCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.fulfillmentCore, graph.procurementCore)
+	graph.productionCore = application.NewProductionCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore)
+	graph.productionCosting = application.NewProductionCostingCoreService(graph.documents, graph.models, graph.inventoryCore, graph.financeReporting)
+	graph.posCore = application.NewPOSCoreService(graph.documents, graph.models, graph.search, graph.docActions, graph.commercialCore, graph.inventoryCore, graph.fulfillmentCore, graph.returnsCore)
+	graph.posCore.AttachWorkforceAttendance(graph.workforceAttendance)
+	graph.traceabilityCore = application.NewTraceabilityCoreService(graph.documents, graph.models, graph.inventoryCore)
+	graph.recallCore = application.NewRecallCoreService(graph.documents, graph.models, graph.search, graph.inventoryCore, graph.traceabilityCore)
+	graph.financeReporting = application.NewFinanceReportingCoreService(graph.documents, graph.models, graph.config)
+	graph.financeReconcile = application.NewFinanceReconciliationCoreService(graph.documents, graph.models, graph.financeReporting)
+	graph.financePeriodEnd = application.NewFinancePeriodEndCoreService(graph.documents, graph.models, graph.financeReporting)
+	graph.financeManual = application.NewFinanceManualJournalCoreService(graph.documents, graph.financeReporting)
+	graph.financeCollections = application.NewFinanceCollectionsCoreService(graph.documents, graph.models, graph.financeReconcile, graph.commercialCore, graph.procurementCore, graph.financeReporting)
+	graph.financeAssets = application.NewFinanceAssetCoreService(graph.documents, graph.models, graph.config, graph.financeReporting)
+	graph.inventoryFinance = application.NewInventoryFinanceCoreService(graph.documents, graph.models, graph.inventoryCore, graph.financeReporting)
+	graph.retailFinance = application.NewRetailFinanceCoreService(graph.documents, graph.models, graph.config, graph.financeReporting)
+	graph.treasuryCore = application.NewTreasuryCoreService(graph.documents, graph.models, graph.config, graph.financeReporting, graph.retailFinance)
+	graph.commercialCore.SetFinanceReporting(graph.financeReporting)
+	graph.commercialCore.SetPeriodEnd(graph.financePeriodEnd)
+	graph.commercialCore.SetManualJournals(graph.financeManual)
+	graph.commercialCore.SetFinanceAssets(graph.financeAssets)
+	graph.financeManual.SetPeriodEnd(graph.financePeriodEnd)
+	graph.procurementCore.SetFinanceReporting(graph.financeReporting)
+	graph.procurementCore.SetInventoryCore(graph.inventoryCore)
+	graph.inventoryCore.SetFinanceReporting(graph.financeReporting)
+	graph.productionCore.SetFinanceReporting(graph.financeReporting)
+	graph.productionCore.SetCosting(graph.productionCosting)
+	graph.posCore.SetRetailFinance(graph.retailFinance)
 	graph.analytics = analytics.NewServiceWithRepository(graph.documents, graph.workflows, graph.eventing, graph.search, graph.audit, graph.observability, graph.analyticsRepo)
 	graph.mcpAnalytics = mcp.NewAnalyticsStream()
 	graph.analytics.SetCaptureHook(graph.mcpAnalytics.Publish)
@@ -257,8 +329,12 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 		Flags:                     graph.flags,
 		Integration:               graph.integration,
 		Documents:                 graph.documents,
+		DocumentActions:           graph.docActions,
+		Models:                    graph.models,
 		Reference:                 graph.reference,
 		Search:                    graph.search,
+		CRM:                       graph.crmCore,
+		FieldSecurity:             graph.fieldSecurity,
 		Policy:                    graph.policy,
 		Eventing:                  graph.eventing,
 		Jobs:                      graph.jobs,
@@ -268,6 +344,7 @@ func finalizeServiceGraph(graph *serviceGraph, postgres *store.Postgres) {
 		Offline:                   graph.offline,
 		Dataops:                   graph.dataops,
 		Engagement:                graph.engagement,
+		Planning:                  graph.planningCore,
 		AnalyticsStreamPath:       analyticsMCPStreamPath,
 		AnalyticsScopedStreamPath: analyticsScopedMCPStreamPath,
 		OTel:                      graph.otel,

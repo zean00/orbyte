@@ -1,0 +1,423 @@
+package mcp
+
+import (
+	"encoding/json"
+	"sort"
+	"strings"
+)
+
+type ToolInventoryItem struct {
+	Key                  string             `json:"key"`
+	Title                string             `json:"title"`
+	Description          string             `json:"description,omitempty"`
+	ModuleKey            string             `json:"module_key,omitempty"`
+	SourceType           string             `json:"source_type,omitempty"`
+	CapabilityKeys       []string           `json:"capability_keys,omitempty"`
+	CapabilityCategories []string           `json:"capability_categories,omitempty"`
+	CompactEligible      bool               `json:"compact_eligible,omitempty"`
+	BuiltIn              bool               `json:"built_in,omitempty"`
+	Generated            bool               `json:"generated,omitempty"`
+	EndpointScope        string             `json:"endpoint_scope,omitempty"`
+	RequiredPermissions  []string           `json:"required_permissions,omitempty"`
+	Operation            string             `json:"operation,omitempty"`
+	Enabled              bool               `json:"enabled"`
+	ActionClass          string             `json:"action_class,omitempty"`
+	RiskClass            string             `json:"risk_class,omitempty"`
+	DraftOnly            bool               `json:"draft_only,omitempty"`
+	RequiresConfirmation bool               `json:"requires_confirmation,omitempty"`
+	RequiresApproval     bool               `json:"requires_approval,omitempty"`
+	GovernanceTags       []string           `json:"governance_tags,omitempty"`
+	BusinessDomains      []string           `json:"business_domains,omitempty"`
+	PolicyState          string             `json:"policy_state,omitempty"`
+	PolicyReason         string             `json:"policy_reason,omitempty"`
+	EffectiveVisibility  string             `json:"effective_visibility,omitempty"`
+	Contract             ContractDescriptor `json:"contract,omitempty"`
+}
+
+type ResourceInventoryItem struct {
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	Description         string             `json:"description,omitempty"`
+	URI                 string             `json:"uri"`
+	ModuleKey           string             `json:"module_key,omitempty"`
+	EndpointScope       string             `json:"endpoint_scope,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	Contract            ContractDescriptor `json:"contract,omitempty"`
+}
+
+type AppInventoryItem struct {
+	Key                 string             `json:"key"`
+	Title               string             `json:"title"`
+	Description         string             `json:"description,omitempty"`
+	ResourceKey         string             `json:"resource_key,omitempty"`
+	ViewKey             string             `json:"view_key,omitempty"`
+	CustomEntryKey      string             `json:"custom_entry_key,omitempty"`
+	ModuleKey           string             `json:"module_key,omitempty"`
+	EndpointScope       string             `json:"endpoint_scope,omitempty"`
+	RequiredPermissions []string           `json:"required_permissions,omitempty"`
+	Contract            ContractDescriptor `json:"contract,omitempty"`
+}
+
+type runtimeConfig struct {
+	Enabled                    bool
+	ExposureMode               string
+	DiscoveryMode              string
+	ToolDiscoveryMode          string
+	PlaybookDiscoveryMode      string
+	DiscoveryIndexingEnabled   bool
+	ToolStates                 map[string]bool
+	GovernanceEnabled          bool
+	DefaultActionMode          string
+	BlockedActionClasses       []string
+	BlockedToolKeys            []string
+	BlockedDocumentTypes       []string
+	AllowedSubmitDocumentTypes []string
+	DomainOverrides            map[string]domainGovernanceOverride
+	DefaultCapabilities        []string
+	Playbooks                  []PlaybookDefinition
+}
+
+type RuntimeConfigSnapshot struct {
+	Enabled                    bool
+	ExposureMode               string
+	DiscoveryMode              string
+	ToolDiscoveryMode          string
+	PlaybookDiscoveryMode      string
+	DiscoveryIndexingEnabled   bool
+	GovernanceEnabled          bool
+	DefaultActionMode          string
+	BlockedActionClasses       []string
+	BlockedToolKeys            []string
+	BlockedDocumentTypes       []string
+	AllowedSubmitDocumentTypes []string
+}
+
+func (s *Server) MCPEnabled() bool {
+	return s.mcpRuntimeConfig().Enabled
+}
+
+func normalizeDiscoveryModeOverride(mode string) string {
+	if strings.TrimSpace(mode) == "" {
+		return ""
+	}
+	return normalizeDiscoveryMode(mode)
+}
+
+func (s *Server) MCPRuntimeConfig() RuntimeConfigSnapshot {
+	cfg := s.mcpRuntimeConfig()
+	return RuntimeConfigSnapshot{
+		Enabled:                    cfg.Enabled,
+		ExposureMode:               cfg.ExposureMode,
+		DiscoveryMode:              cfg.DiscoveryMode,
+		ToolDiscoveryMode:          cfg.ToolDiscoveryMode,
+		PlaybookDiscoveryMode:      cfg.PlaybookDiscoveryMode,
+		DiscoveryIndexingEnabled:   cfg.DiscoveryIndexingEnabled,
+		GovernanceEnabled:          cfg.GovernanceEnabled,
+		DefaultActionMode:          cfg.DefaultActionMode,
+		BlockedActionClasses:       append([]string(nil), cfg.BlockedActionClasses...),
+		BlockedToolKeys:            append([]string(nil), cfg.BlockedToolKeys...),
+		BlockedDocumentTypes:       append([]string(nil), cfg.BlockedDocumentTypes...),
+		AllowedSubmitDocumentTypes: append([]string(nil), cfg.AllowedSubmitDocumentTypes...),
+	}
+}
+
+func (s *Server) ToolEnabled(key string) bool {
+	cfg := s.mcpRuntimeConfig()
+	if !cfg.Enabled {
+		return false
+	}
+	enabled, ok := cfg.ToolStates[strings.TrimSpace(key)]
+	if !ok {
+		return true
+	}
+	return enabled
+}
+
+func (s *Server) ToolInventory() []ToolInventoryItem {
+	items := make([]ToolInventoryItem, 0)
+	for _, reg := range s.mustBuiltInToolRegistrations() {
+		def := reg.definition
+		contract := builtInToolContract(def.name, def.permission, def.contract)
+		descriptor := s.decorateToolDescriptorWithGovernance(ToolDescriptor{
+			Name:        def.name,
+			Title:       def.title,
+			Description: def.description,
+			ModuleKey:   "platform.core",
+			SourceType:  "built_in",
+			Scope:       builtInToolScope(def.name),
+			Contract:    contract,
+		}, nil)
+		items = append(items, ToolInventoryItem{
+			Key:                  def.name,
+			Title:                def.title,
+			Description:          def.description,
+			ModuleKey:            "platform.core",
+			SourceType:           "built_in",
+			CapabilityKeys:       append([]string(nil), descriptor.CapabilityKeys...),
+			CapabilityCategories: append([]string(nil), descriptor.CapabilityCategories...),
+			CompactEligible:      descriptor.CompactEligible,
+			BuiltIn:              true,
+			EndpointScope:        builtInToolScope(def.name),
+			RequiredPermissions:  []string{def.permission},
+			Enabled:              s.ToolEnabled(def.name),
+			ActionClass:          contract.ActionClass,
+			RiskClass:            contract.RiskClass,
+			DraftOnly:            contract.DraftOnly,
+			RequiresConfirmation: contract.RequiresConfirmation,
+			RequiresApproval:     contract.RequiresApproval,
+			GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
+			BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+			PolicyState:          descriptor.PolicyState,
+			PolicyReason:         descriptor.PolicyReason,
+			EffectiveVisibility:  descriptor.EffectiveVisibility,
+			Contract:             contract,
+		})
+	}
+	for _, def := range s.syntheticToolDefinitions(ActorContext{}) {
+		contract := builtInToolContract(def.Name, firstString(def.RequiredPermissions), ContractDescriptor{
+			RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
+		})
+		descriptor := s.decorateToolDescriptorWithGovernance(ToolDescriptor{
+			Name:        def.Name,
+			Title:       def.Title,
+			Description: def.Description,
+			ModuleKey:   def.ModuleKey,
+			SourceType:  "synthetic",
+			Scope:       scopeForModule(def.ModuleKey),
+			Contract:    contract,
+		}, nil)
+		items = append(items, ToolInventoryItem{
+			Key:                  def.Name,
+			Title:                def.Title,
+			Description:          def.Description,
+			ModuleKey:            def.ModuleKey,
+			SourceType:           "synthetic",
+			CapabilityKeys:       append([]string(nil), descriptor.CapabilityKeys...),
+			CapabilityCategories: append([]string(nil), descriptor.CapabilityCategories...),
+			CompactEligible:      descriptor.CompactEligible,
+			Generated:            true,
+			EndpointScope:        scopeForModule(def.ModuleKey),
+			RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
+			Enabled:              s.ToolEnabled(def.Name),
+			ActionClass:          contract.ActionClass,
+			RiskClass:            contract.RiskClass,
+			DraftOnly:            contract.DraftOnly,
+			RequiresConfirmation: contract.RequiresConfirmation,
+			RequiresApproval:     contract.RequiresApproval,
+			GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
+			BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+			PolicyState:          descriptor.PolicyState,
+			PolicyReason:         descriptor.PolicyReason,
+			EffectiveVisibility:  descriptor.EffectiveVisibility,
+			Contract:             contract,
+		})
+	}
+	if s != nil && s.modules != nil {
+		for _, detail := range s.modules.List() {
+			for _, def := range detail.Manifest.MCP.Tools {
+				contract := contractDescriptorFromModule(
+					def.Contract,
+					def.RequiredPermissions,
+					defaultToolSideEffectClass(def.Key, def.Operation),
+					defaultToolIdempotency(def.Key, def.Operation),
+					"mcp.tool."+strings.TrimSpace(def.Key),
+				)
+				descriptor := s.decorateToolDescriptorWithGovernance(ToolDescriptor{
+					Name:        def.Key,
+					Title:       def.Title,
+					Description: def.Description,
+					ModuleKey:   detail.Manifest.Key,
+					SourceType:  "module",
+					Scope:       scopeForModule(detail.Manifest.Key),
+					Contract:    contract,
+				}, nil)
+				items = append(items, ToolInventoryItem{
+					Key:                  def.Key,
+					Title:                def.Title,
+					Description:          def.Description,
+					ModuleKey:            detail.Manifest.Key,
+					SourceType:           "module",
+					CapabilityKeys:       append([]string(nil), descriptor.CapabilityKeys...),
+					CapabilityCategories: append([]string(nil), descriptor.CapabilityCategories...),
+					CompactEligible:      descriptor.CompactEligible,
+					EndpointScope:        scopeForModule(detail.Manifest.Key),
+					RequiredPermissions:  append([]string(nil), def.RequiredPermissions...),
+					Operation:            def.Operation,
+					Enabled:              s.ToolEnabled(def.Key),
+					ActionClass:          contract.ActionClass,
+					RiskClass:            contract.RiskClass,
+					DraftOnly:            contract.DraftOnly,
+					RequiresConfirmation: contract.RequiresConfirmation,
+					RequiresApproval:     contract.RequiresApproval,
+					GovernanceTags:       append([]string(nil), contract.GovernanceTags...),
+					BusinessDomains:      append([]string(nil), contract.BusinessDomains...),
+					PolicyState:          descriptor.PolicyState,
+					PolicyReason:         descriptor.PolicyReason,
+					EffectiveVisibility:  descriptor.EffectiveVisibility,
+					Contract:             contract,
+				})
+			}
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Server) ResourceInventory() []ResourceInventoryItem {
+	items := make([]ResourceInventoryItem, 0)
+	if s == nil || s.modules == nil {
+		return items
+	}
+	for _, detail := range s.modules.List() {
+		for _, def := range detail.Manifest.MCP.Resources {
+			items = append(items, ResourceInventoryItem{
+				Key:                 def.Key,
+				Title:               def.Title,
+				Description:         def.Description,
+				URI:                 def.URI,
+				ModuleKey:           detail.Manifest.Key,
+				EndpointScope:       scopeForModule(detail.Manifest.Key),
+				RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
+				Contract: contractDescriptorFromModule(
+					def.Contract,
+					def.RequiredPermissions,
+					"read",
+					"read-only",
+					"mcp.resource."+strings.TrimSpace(def.Key),
+				),
+			})
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Server) AppInventory() []AppInventoryItem {
+	items := make([]AppInventoryItem, 0)
+	if s == nil || s.modules == nil {
+		return items
+	}
+	for _, detail := range s.modules.List() {
+		for _, def := range detail.Manifest.MCP.Apps {
+			items = append(items, AppInventoryItem{
+				Key:                 def.Key,
+				Title:               def.Title,
+				Description:         def.Description,
+				ResourceKey:         def.ResourceKey,
+				ViewKey:             def.ViewKey,
+				CustomEntryKey:      def.CustomEntryKey,
+				ModuleKey:           detail.Manifest.Key,
+				EndpointScope:       scopeForModule(detail.Manifest.Key),
+				RequiredPermissions: append([]string(nil), def.RequiredPermissions...),
+				Contract: contractDescriptorFromModule(
+					def.Contract,
+					def.RequiredPermissions,
+					"read",
+					"read-only",
+					"mcp.app."+strings.TrimSpace(def.Key),
+				),
+			})
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	return items
+}
+
+func (s *Server) toolDefined(name string) bool {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return false
+	}
+	if _, ok := s.mustBuiltInToolRegistrationIndex()[trimmed]; ok {
+		return true
+	}
+	if _, ok := s.syntheticToolDefinition(trimmed, ActorContext{}); ok {
+		return true
+	}
+	if s == nil || s.modules == nil {
+		return false
+	}
+	for _, detail := range s.modules.List() {
+		for _, def := range detail.Manifest.MCP.Tools {
+			if strings.TrimSpace(def.Key) == trimmed {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *Server) mcpRuntimeConfig() runtimeConfig {
+	cfg := runtimeConfig{
+		Enabled:                    true,
+		ExposureMode:               MCPExposureModeFull,
+		DiscoveryMode:              DiscoveryModeVector,
+		ToolDiscoveryMode:          "",
+		PlaybookDiscoveryMode:      "",
+		DiscoveryIndexingEnabled:   true,
+		ToolStates:                 map[string]bool{},
+		GovernanceEnabled:          false,
+		DefaultActionMode:          "draft_only",
+		BlockedActionClasses:       []string{},
+		BlockedToolKeys:            []string{},
+		BlockedDocumentTypes:       []string{},
+		AllowedSubmitDocumentTypes: []string{},
+		DomainOverrides:            map[string]domainGovernanceOverride{},
+		Playbooks:                  []PlaybookDefinition{},
+	}
+	if s == nil || s.config == nil {
+		return cfg
+	}
+	value, ok := s.config.Resolve("platform.mcp", "", "")
+	if !ok {
+		return cfg
+	}
+	rawEnabled, ok := value.Value["enabled"].(bool)
+	if ok {
+		cfg.Enabled = rawEnabled
+	}
+	if rawEnabled, ok := value.Value["governance_enabled"].(bool); ok {
+		cfg.GovernanceEnabled = rawEnabled
+	}
+	if rawMode, ok := value.Value["exposure_mode"].(string); ok {
+		cfg.ExposureMode = normalizeExposureMode(rawMode)
+	}
+	if rawMode, ok := value.Value["discovery_mode"].(string); ok {
+		cfg.DiscoveryMode = normalizeDiscoveryMode(rawMode)
+	}
+	if rawMode, ok := value.Value["tool_discovery_mode"].(string); ok {
+		cfg.ToolDiscoveryMode = normalizeDiscoveryModeOverride(rawMode)
+	}
+	if rawMode, ok := value.Value["playbook_discovery_mode"].(string); ok {
+		cfg.PlaybookDiscoveryMode = normalizeDiscoveryModeOverride(rawMode)
+	}
+	if rawEnabled, ok := value.Value["discovery_indexing_enabled"].(bool); ok {
+		cfg.DiscoveryIndexingEnabled = rawEnabled
+	}
+	if rawMode, ok := value.Value["default_action_mode"].(string); ok && strings.TrimSpace(rawMode) != "" {
+		cfg.DefaultActionMode = strings.TrimSpace(rawMode)
+	}
+	switch raw := value.Value["tool_states_json"].(type) {
+	case string:
+		trimmed := strings.TrimSpace(raw)
+		if trimmed != "" {
+			_ = json.Unmarshal([]byte(trimmed), &cfg.ToolStates)
+		}
+	case map[string]any:
+		for key, item := range raw {
+			flag, ok := item.(bool)
+			if !ok {
+				continue
+			}
+			cfg.ToolStates[strings.TrimSpace(key)] = flag
+		}
+	}
+	cfg.BlockedActionClasses = parseStringList(value.Value["blocked_action_classes_json"])
+	cfg.BlockedToolKeys = parseStringList(value.Value["blocked_tool_keys_json"])
+	cfg.BlockedDocumentTypes = parseStringList(value.Value["blocked_document_types_json"])
+	cfg.AllowedSubmitDocumentTypes = parseStringList(value.Value["allowed_submit_document_types_json"])
+	cfg.DomainOverrides = parseDomainOverrides(value.Value["domain_policy_overrides_json"])
+	cfg.DefaultCapabilities = parseStringList(value.Value["default_capabilities_json"])
+	cfg.Playbooks = parsePlaybooks(value.Value["playbooks_json"])
+	return cfg
+}

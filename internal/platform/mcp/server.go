@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"orbyte/internal/platform/analytics"
+	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/dataops"
@@ -21,6 +22,7 @@ import (
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
 	"orbyte/internal/platform/jobs"
+	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
 	"orbyte/internal/platform/observability"
 	"orbyte/internal/platform/offline"
@@ -29,6 +31,7 @@ import (
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/runtimehealth"
 	"orbyte/internal/platform/search"
+	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -94,8 +97,12 @@ type Server struct {
 	flags                     *featureflags.Service
 	integration               *integration.Service
 	documents                 *document.Service
+	documentActions           *application.DocumentActions
+	models                    *model.Service
+	crm                       *application.CRMCoreService
 	reference                 *reference.Service
 	search                    *search.Service
+	fieldSecurity             *securityfields.Service
 	policy                    *policy.Service
 	eventing                  *eventing.Service
 	jobs                      *jobs.Service
@@ -106,6 +113,7 @@ type Server struct {
 	dataops                   *dataops.Service
 	engagement                *engagement.Service
 	implementation            *ImplementationService
+	planning                  *application.PlanningCoreService
 	analyticsStreamPath       string
 	analyticsScopedStreamPath string
 	builtInToolRegistrations  []builtInToolRegistration
@@ -113,6 +121,7 @@ type Server struct {
 	builtInResourceRegistry   []builtInResourceRegistration
 	builtInResourceIndex      map[string]builtInResourceRegistration
 	otelTracer                trace.Tracer
+	discoverySync             *discoverySyncState
 }
 
 type ServerDeps struct {
@@ -125,8 +134,12 @@ type ServerDeps struct {
 	Flags                     *featureflags.Service
 	Integration               *integration.Service
 	Documents                 *document.Service
+	DocumentActions           *application.DocumentActions
+	Models                    *model.Service
+	CRM                       *application.CRMCoreService
 	Reference                 *reference.Service
 	Search                    *search.Service
+	FieldSecurity             *securityfields.Service
 	Policy                    *policy.Service
 	Eventing                  *eventing.Service
 	Jobs                      *jobs.Service
@@ -136,6 +149,7 @@ type ServerDeps struct {
 	Offline                   *offline.Service
 	Dataops                   *dataops.Service
 	Engagement                *engagement.Service
+	Planning                  *application.PlanningCoreService
 	AnalyticsStreamPath       string
 	AnalyticsScopedStreamPath string
 	OTel                      *otel.Service
@@ -152,8 +166,12 @@ func NewServer(deps ServerDeps) *Server {
 		flags:                     deps.Flags,
 		integration:               deps.Integration,
 		documents:                 deps.Documents,
+		documentActions:           deps.DocumentActions,
+		models:                    deps.Models,
+		crm:                       deps.CRM,
 		reference:                 deps.Reference,
 		search:                    deps.Search,
+		fieldSecurity:             deps.FieldSecurity,
 		policy:                    deps.Policy,
 		eventing:                  deps.Eventing,
 		jobs:                      deps.Jobs,
@@ -164,6 +182,7 @@ func NewServer(deps ServerDeps) *Server {
 		dataops:                   deps.Dataops,
 		engagement:                deps.Engagement,
 		implementation:            NewImplementationService(),
+		planning:                  deps.Planning,
 		analyticsStreamPath:       deps.AnalyticsStreamPath,
 		analyticsScopedStreamPath: deps.AnalyticsScopedStreamPath,
 	}
@@ -601,10 +620,243 @@ func (s *Server) analyticsDashboardGet(actor ActorContext, arguments map[string]
 		return nil, true, shared.NotFound("dashboard not found")
 	}
 	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded analytics dashboard %s.", item.Name)}},
-		"structuredContent": item,
-		"_meta":             s.analyticsAppMeta("dashboard", item.ID),
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Loaded analytics dashboard %s.", item.Name)}},
+		"structuredContent": map[string]any{
+			"dashboard": item,
+			"artifact":  s.dashboardBoardArtifactPayload(item, actor),
+		},
+		"_meta": s.analyticsAppMeta("dashboard", item.ID),
 	}, true, nil
+}
+
+func normalizeDashboardToolSurface(surface string) module.UISurface {
+	trimmed := strings.TrimSpace(surface)
+	if trimmed == "" {
+		return module.UISurfaceDashboard
+	}
+	return module.UISurface(trimmed)
+}
+
+func (s *Server) analyticsDashboardWidgetCatalog(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	surface := normalizeDashboardToolSurface(firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard)))
+	items := make([]module.DashboardWidgetDefinition, 0)
+	for _, item := range s.modules.DashboardWidgetsForSurface(surface) {
+		if !allowsAll(actor.PermissionChecker, item.RequiredPermissions) {
+			continue
+		}
+		items = append(items, item)
+	}
+	summary := fmt.Sprintf("Found %d dashboard widgets for %s.", len(items), surface)
+	if len(items) > 0 {
+		lines := make([]string, 0, len(items))
+		for _, item := range items {
+			lines = append(lines, fmt.Sprintf("%s (%s, %s, %s)", item.Key, firstNonEmpty(item.Title, item.Key), firstNonEmpty(item.RendererKind, "metric"), firstNonEmpty(item.DataPath, "-")))
+		}
+		summary = summary + " Available widgets: " + strings.Join(lines, "; ")
+	}
+	return map[string]any{
+		"content":           []ContentBlock{{Type: "text", Text: summary}},
+		"structuredContent": map[string]any{"surface": string(surface), "items": items},
+	}, true, nil
+}
+
+func (s *Server) analyticsDashboardWidgetPreview(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	surface := normalizeDashboardToolSurface(firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard)))
+	title := strings.TrimSpace(stringArg(arguments, "title"))
+	description := strings.TrimSpace(stringArg(arguments, "description"))
+	intent := strings.TrimSpace(stringArg(arguments, "intent"))
+	widgetKey := strings.TrimSpace(stringArg(arguments, "widget_key"))
+	if widgetKey == "" {
+		candidates := s.recommendedDashboardWidgetKeys(actor, surface, title, description, intent, 1)
+		if len(candidates) == 0 {
+			return nil, true, shared.Validation("widget_key is required or the title/description must match at least one dashboard widget")
+		}
+		widgetKey = candidates[0]
+	}
+	definition, ok := s.modules.DashboardWidgetForSurface(widgetKey, surface)
+	if !ok {
+		return nil, true, shared.Validation("dashboard widget not found for the requested surface")
+	}
+	if !allowsAll(actor.PermissionChecker, definition.RequiredPermissions) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	artifact := s.dashboardWidgetArtifactPayload(definition)
+	artifactBlock := dashboardArtifactBlockText(artifact)
+	text := fmt.Sprintf("Prepared dashboard widget preview %s using %s. Artifact emitted successfully. In the final answer, cite the widget title %q and why it matters, but rely on the emitted artifact metadata for rendering.", firstNonEmpty(title, definition.Title, widgetKey), widgetKey, definition.Title)
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"widget":   definition,
+			"artifact": artifact,
+		},
+		"_meta": map[string]any{"compatibility": map[string]any{"artifact_block": artifactBlock}},
+	}, true, nil
+}
+
+func (s *Server) analyticsDashboardWidgetsPreview(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	surface := normalizeDashboardToolSurface(firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard)))
+	title := strings.TrimSpace(stringArg(arguments, "title"))
+	description := strings.TrimSpace(stringArg(arguments, "description"))
+	intent := strings.TrimSpace(stringArg(arguments, "intent"))
+	limit := intArg(arguments, "limit")
+	if limit <= 0 {
+		limit = 3
+	}
+	if limit > 3 {
+		limit = 3
+	}
+	widgetKeys := stringSliceArg(arguments, "widget_keys")
+	if len(widgetKeys) == 0 {
+		widgetKeys = s.recommendedDashboardWidgetKeys(actor, surface, title, description, intent, limit)
+	}
+	selected := make([]module.DashboardWidgetDefinition, 0, limit)
+	for _, key := range widgetKeys {
+		if len(selected) >= limit {
+			break
+		}
+		definition, ok := s.modules.DashboardWidgetForSurface(strings.TrimSpace(key), surface)
+		if !ok || !allowsAll(actor.PermissionChecker, definition.RequiredPermissions) {
+			continue
+		}
+		selected = append(selected, definition)
+	}
+	if len(selected) == 0 {
+		return nil, true, shared.Validation("widget_keys are required or the title/description must match at least one dashboard widget")
+	}
+	artifacts := make([]map[string]any, 0, len(selected))
+	keys := make([]string, 0, len(selected))
+	for _, definition := range selected {
+		artifact := s.dashboardWidgetArtifactPayload(definition)
+		artifacts = append(artifacts, artifact)
+		keys = append(keys, definition.Key)
+	}
+	text := fmt.Sprintf(
+		"Prepared %d focused dashboard widget previews using %s. Artifact emission succeeded. In the final answer, cite the most relevant widget titles and why they matter, but rely on the emitted artifact metadata for rendering.",
+		len(artifacts),
+		strings.Join(keys, ", "),
+	)
+	widgetTitles := make([]string, 0, len(selected))
+	for _, definition := range selected {
+		widgetTitles = append(widgetTitles, firstNonEmpty(definition.Title, definition.Key))
+	}
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"widgets":       selected,
+			"artifacts":     artifacts,
+			"widget_titles": widgetTitles,
+		},
+		"_meta": map[string]any{"compatibility": map[string]any{"artifact_blocks": mapDashboardArtifactBlocks(artifacts)}},
+	}, true, nil
+}
+
+func (s *Server) analyticsDashboardBoardPreview(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.read"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	board, err := s.dashboardBoardFromArguments(actor, arguments, false)
+	if err != nil {
+		return nil, true, err
+	}
+	artifact := s.dashboardBoardArtifactPayload(board, actor)
+	artifactBlock := dashboardArtifactBlockText(artifact)
+	text := fmt.Sprintf("Prepared dashboard board preview %s. Widget keys: %s. Artifact emitted successfully. In the final answer, reference the board name and the most relevant widget titles, but rely on emitted artifact metadata for rendering.", board.Name, dashboardWidgetKeySummary(board.Widgets))
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: text}},
+		"structuredContent": map[string]any{
+			"dashboard": board,
+			"artifact":  artifact,
+		},
+		"_meta": map[string]any{"compatibility": map[string]any{"artifact_block": artifactBlock}},
+	}, true, nil
+}
+
+func (s *Server) analyticsDashboardBoardCreate(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
+	if s == nil || s.analytics == nil || s.modules == nil {
+		return nil, false, nil
+	}
+	if !allowsAll(actor.PermissionChecker, []string{"analytics.author"}) {
+		return nil, true, fmt.Errorf("tool is not allowed")
+	}
+	board, err := s.dashboardBoardFromArguments(actor, arguments, true)
+	if err != nil {
+		return nil, true, err
+	}
+	saved, err := s.analytics.SaveDashboard(board)
+	if err != nil {
+		return nil, true, err
+	}
+	artifact := s.dashboardBoardArtifactPayload(saved, actor)
+	artifactBlock := dashboardArtifactBlockText(artifact)
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Created dashboard board %s. Widget keys: %s. Artifact emitted successfully. In the final answer, reference the board name or open link, but rely on emitted artifact metadata for rendering.", saved.Name, dashboardWidgetKeySummary(saved.Widgets))}},
+		"structuredContent": map[string]any{
+			"dashboard": saved,
+			"artifact":  artifact,
+		},
+		"_meta": mergeMetaMaps(
+			s.analyticsAppMeta("dashboard", saved.ID),
+			map[string]any{"compatibility": map[string]any{"artifact_block": artifactBlock}},
+		),
+	}, true, nil
+}
+
+func dashboardWidgetKeySummary(widgets []analytics.DashboardWidget) string {
+	if len(widgets) == 0 {
+		return "none"
+	}
+	lines := make([]string, 0, len(widgets))
+	for _, widget := range widgets {
+		lines = append(lines, firstNonEmpty(widget.WidgetKey, firstNonEmpty(widget.Title, "widget")))
+	}
+	return strings.Join(lines, ", ")
+}
+
+func mapDashboardArtifactBlocks(artifacts []map[string]any) []string {
+	blocks := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		blocks = append(blocks, dashboardArtifactBlockText(artifact))
+	}
+	return blocks
+}
+
+func dashboardArtifactBlockText(artifact map[string]any) string {
+	body, err := json.Marshal(artifact)
+	if err != nil {
+		return "<orbyte-dashboard-artifact>{}</orbyte-dashboard-artifact>"
+	}
+	return "<orbyte-dashboard-artifact>" + string(body) + "</orbyte-dashboard-artifact>"
+}
+
+func mergeMetaMaps(items ...map[string]any) map[string]any {
+	out := map[string]any{}
+	for _, item := range items {
+		for key, value := range item {
+			out[key] = value
+		}
+	}
+	return out
 }
 
 func (s *Server) analyticsDashboardSave(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
@@ -627,9 +879,12 @@ func (s *Server) analyticsDashboardSave(actor ActorContext, arguments map[string
 		return nil, true, err
 	}
 	return map[string]any{
-		"content":           []ContentBlock{{Type: "text", Text: fmt.Sprintf("Saved analytics dashboard %s.", saved.Name)}},
-		"structuredContent": saved,
-		"_meta":             s.analyticsAppMeta("dashboard", saved.ID),
+		"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Saved analytics dashboard %s.", saved.Name)}},
+		"structuredContent": map[string]any{
+			"dashboard": saved,
+			"artifact":  s.dashboardBoardArtifactPayload(saved, actor),
+		},
+		"_meta": s.analyticsAppMeta("dashboard", saved.ID),
 	}, true, nil
 }
 
@@ -645,6 +900,366 @@ func (s *Server) analyticsDashboardDelete(actor ActorContext, arguments map[stri
 		return nil, true, err
 	}
 	return map[string]any{"content": []ContentBlock{{Type: "text", Text: fmt.Sprintf("Deleted analytics dashboard %s.", id)}}}, true, nil
+}
+
+func (s *Server) dashboardBoardFromArguments(actor ActorContext, arguments map[string]any, requireTitle bool) (analytics.Dashboard, error) {
+	surface := firstNonEmpty(stringArg(arguments, "surface"), string(module.UISurfaceDashboard))
+	widgetKeys := stringArrayArg(arguments, "widget_keys")
+	title := strings.TrimSpace(stringArg(arguments, "title"))
+	if requireTitle && title == "" {
+		return analytics.Dashboard{}, shared.Validation("title is required")
+	}
+	if title == "" {
+		title = "Agent Dashboard Preview"
+	}
+	description := strings.TrimSpace(stringArg(arguments, "description"))
+	if len(widgetKeys) == 0 {
+		widgetKeys = s.recommendedDashboardWidgetKeys(actor, module.UISurface(surface), title, description, "", 6)
+	}
+	if len(widgetKeys) == 0 {
+		return analytics.Dashboard{}, shared.Validation("widget_keys is required when Orbyte cannot infer matching widgets from the title and description")
+	}
+	widgets := make([]analytics.DashboardWidget, 0, len(widgetKeys))
+	for index, key := range widgetKeys {
+		def, ok := s.modules.DashboardWidgetForSurface(key, module.UISurface(surface))
+		if !ok {
+			return analytics.Dashboard{}, shared.NotFound("dashboard widget not found")
+		}
+		if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+			return analytics.Dashboard{}, shared.Forbidden("dashboard widget is not allowed")
+		}
+		widgets = append(widgets, analytics.DashboardWidget{
+			Title:     firstNonEmpty(def.Title, key),
+			Kind:      firstNonEmpty(def.RendererKind, "metric"),
+			WidgetKey: def.Key,
+			Width:     widgetSizeValue(def.DefaultWidth, 3),
+			Height:    widgetSizeValue(def.DefaultHeight, 1),
+			Order:     index + 1,
+		})
+	}
+	return analytics.Dashboard{
+		Name:        title,
+		Description: description,
+		Surface:     surface,
+		Visibility:  "private",
+		IsDefault:   false,
+		Status:      "active",
+		Widgets:     widgets,
+		RuntimeScope: analytics.RuntimeScope{
+			ScopeType:      "user",
+			OwnerUserID:    firstNonEmpty(actor.EffectiveUserID, actor.ActorID),
+			OrganizationID: actor.OrganizationID,
+			LocationID:     actor.LocationID,
+		},
+		UpdatedBy: firstNonEmpty(actor.EffectiveUserID, actor.ActorID),
+	}, nil
+}
+
+func (s *Server) recommendedDashboardWidgetKeys(actor ActorContext, surface module.UISurface, title, description, explicitIntent string, limit int) []string {
+	if s == nil || s.modules == nil {
+		return nil
+	}
+	items := s.modules.DashboardWidgetsForSurface(surface)
+	if len(items) == 0 {
+		return nil
+	}
+	if limit <= 0 {
+		limit = 3
+	}
+	needles := strings.ToLower(strings.TrimSpace(title + " " + description))
+	if needles == "" {
+		return nil
+	}
+	intent := inferDashboardIntent(firstNonEmpty(explicitIntent, needles))
+	selected := make([]string, 0, limit)
+	seen := make(map[string]struct{})
+	add := func(key string) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return
+		}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		selected = append(selected, key)
+	}
+	// Demo-only sales widgets are intentionally never inferred for generic
+	// sales prompts. They should only be selected explicitly through the
+	// catalog or via scenario-specific prompts that pass widget keys.
+	if strings.Contains(needles, "replenishment") ||
+		strings.Contains(needles, "shortage") ||
+		(strings.Contains(needles, "warehouse") &&
+			(strings.Contains(needles, "suggested") ||
+				strings.Contains(needles, "risk") ||
+				strings.Contains(needles, "stock"))) {
+		for _, key := range []string{
+			"planning.replenishment.shortages",
+			"planning.replenishment.items",
+		} {
+			if def, ok := s.modules.DashboardWidgetForSurface(key, surface); ok && allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+				add(key)
+			}
+		}
+		if len(selected) > 0 {
+			return selected
+		}
+	}
+	type scoredWidget struct {
+		def          module.DashboardWidgetDefinition
+		score        int
+		rendererBias int
+	}
+	scored := make([]scoredWidget, 0, len(items))
+	available := make([]module.DashboardWidgetDefinition, 0, len(items))
+	for _, item := range items {
+		if !allowsAll(actor.PermissionChecker, item.RequiredPermissions) {
+			continue
+		}
+		available = append(available, item)
+		text := strings.ToLower(strings.Join([]string{item.Key, item.Title, item.RendererKind, item.DataPath}, " "))
+		score := 0
+		for _, token := range strings.Fields(needles) {
+			if len(token) < 3 {
+				continue
+			}
+			if strings.Contains(text, token) {
+				score++
+			}
+		}
+		if dashboardNeedlesSuggestTargetAttainment(needles) && (strings.Contains(text, "attainment") || strings.Contains(text, "target")) {
+			score += 3
+		}
+		if dashboardNeedlesSuggestComparison(needles) && (strings.Contains(text, "branch") || strings.Contains(text, "mix") || strings.Contains(text, "compare")) {
+			score += 3
+		}
+		if dashboardNeedlesSuggestTrend(needles) && strings.Contains(text, "trend") {
+			score += 3
+		}
+		if score == 0 {
+			continue
+		}
+		scored = append(scored, scoredWidget{
+			def:          item,
+			score:        score,
+			rendererBias: dashboardIntentRendererBias(intent, item.RendererKind),
+		})
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		left := scored[i].score + scored[i].rendererBias
+		right := scored[j].score + scored[j].rendererBias
+		if left == right {
+			return scored[i].def.Key < scored[j].def.Key
+		}
+		return left > right
+	})
+	preferredRenderers := dashboardIntentRendererPreference(intent)
+	if len(scored) == 0 {
+		for _, renderer := range preferredRenderers {
+			for _, item := range available {
+				if len(selected) >= limit {
+					break
+				}
+				if item.RendererKind != renderer || !dashboardRendererAllowedForIntent(intent, renderer, needles) {
+					continue
+				}
+				add(item.Key)
+				break
+			}
+		}
+		if len(selected) > 0 {
+			return selected
+		}
+	}
+	usedRenderers := make(map[string]struct{})
+	for _, renderer := range preferredRenderers {
+		for _, item := range scored {
+			if len(selected) >= limit {
+				break
+			}
+			if item.def.RendererKind != renderer {
+				continue
+			}
+			if dashboardRendererAllowedForIntent(intent, renderer, needles) {
+				add(item.def.Key)
+				usedRenderers[renderer] = struct{}{}
+				break
+			}
+		}
+	}
+	for _, item := range scored {
+		if len(selected) >= limit {
+			break
+		}
+		if !dashboardRendererAllowedForIntent(intent, item.def.RendererKind, needles) {
+			continue
+		}
+		if _, ok := usedRenderers[item.def.RendererKind]; ok && len(selected) < len(preferredRenderers) {
+			continue
+		}
+		add(item.def.Key)
+		usedRenderers[item.def.RendererKind] = struct{}{}
+	}
+	if len(selected) < limit {
+		for _, renderer := range preferredRenderers {
+			if len(selected) >= limit {
+				break
+			}
+			if _, ok := usedRenderers[renderer]; ok {
+				continue
+			}
+			for _, item := range available {
+				if item.RendererKind != renderer || !dashboardRendererAllowedForIntent(intent, renderer, needles) {
+					continue
+				}
+				add(item.Key)
+				if len(selected) > 0 {
+					usedRenderers[renderer] = struct{}{}
+				}
+				break
+			}
+		}
+	}
+	return selected
+}
+
+func inferDashboardIntent(raw string) string {
+	text := strings.ToLower(strings.TrimSpace(raw))
+	switch {
+	case strings.Contains(text, "map") || strings.Contains(text, "location") || strings.Contains(text, "region") || strings.Contains(text, "where"):
+		return "geography"
+	case strings.Contains(text, "table") || strings.Contains(text, "list") || strings.Contains(text, "breakdown") || strings.Contains(text, "rows"):
+		return "detail"
+	case strings.Contains(text, "monitor") || strings.Contains(text, "status") || strings.Contains(text, "risk") || strings.Contains(text, "alert") || strings.Contains(text, "watch"):
+		return "monitoring"
+	case strings.Contains(text, "trend") || strings.Contains(text, "over time") || strings.Contains(text, "daily") || strings.Contains(text, "weekly") || strings.Contains(text, "monthly"):
+		return "trend"
+	case strings.Contains(text, "compare") || strings.Contains(text, "benchmark") || strings.Contains(text, "strongest") || strings.Contains(text, "weakest") || strings.Contains(text, "underperform"):
+		return "comparison"
+	default:
+		return "insight"
+	}
+}
+
+func dashboardIntentRendererPreference(intent string) []string {
+	switch intent {
+	case "geography":
+		return []string{"map", "metric", "chart_bar"}
+	case "detail":
+		return []string{"table", "chart_bar", "metric"}
+	case "monitoring":
+		return []string{"gauge", "metric", "table"}
+	case "trend":
+		return []string{"chart_line", "metric", "chart_bar"}
+	case "comparison":
+		return []string{"chart_bar", "gauge", "chart_line"}
+	default:
+		return []string{"gauge", "chart_bar", "chart_line"}
+	}
+}
+
+func dashboardIntentRendererBias(intent, renderer string) int {
+	for index, candidate := range dashboardIntentRendererPreference(intent) {
+		if candidate == renderer {
+			return (len(dashboardIntentRendererPreference(intent)) - index) * 2
+		}
+	}
+	return 0
+}
+
+func dashboardRendererAllowedForIntent(intent, renderer, needles string) bool {
+	switch renderer {
+	case "map":
+		return intent == "geography" || strings.Contains(needles, "map") || strings.Contains(needles, "location")
+	case "table":
+		return intent == "detail" || intent == "monitoring" || strings.Contains(needles, "table") || strings.Contains(needles, "breakdown")
+	default:
+		return true
+	}
+}
+
+func dashboardNeedlesSuggestTargetAttainment(needles string) bool {
+	return strings.Contains(needles, "target") ||
+		strings.Contains(needles, "attainment") ||
+		strings.Contains(needles, "underperform") ||
+		strings.Contains(needles, "benchmark")
+}
+
+func dashboardNeedlesSuggestComparison(needles string) bool {
+	return strings.Contains(needles, "compare") ||
+		strings.Contains(needles, "versus") ||
+		strings.Contains(needles, "against") ||
+		strings.Contains(needles, "benchmark") ||
+		strings.Contains(needles, "strongest") ||
+		strings.Contains(needles, "weakest") ||
+		strings.Contains(needles, "branch")
+}
+
+func dashboardNeedlesSuggestTrend(needles string) bool {
+	return strings.Contains(needles, "trend") ||
+		strings.Contains(needles, "over time") ||
+		strings.Contains(needles, "daily") ||
+		strings.Contains(needles, "weekly") ||
+		strings.Contains(needles, "monthly")
+}
+
+func (s *Server) dashboardBoardArtifactPayload(item analytics.Dashboard, actor ActorContext) map[string]any {
+	surface := firstNonEmpty(strings.TrimSpace(item.Surface), string(module.UISurfaceDashboard))
+	widgets := make([]map[string]any, 0, len(item.Widgets))
+	for _, widget := range item.Widgets {
+		def, ok := s.modules.DashboardWidgetForSurface(widget.WidgetKey, module.UISurface(surface))
+		if !ok {
+			continue
+		}
+		if !allowsAll(actor.PermissionChecker, def.RequiredPermissions) {
+			continue
+		}
+		widgets = append(widgets, map[string]any{
+			"id":               widget.ID,
+			"title":            firstNonEmpty(widget.Title, def.Title),
+			"kind":             firstNonEmpty(widget.Kind, def.RendererKind),
+			"width":            widgetSizeValue(widget.Width, widgetSizeValue(def.DefaultWidth, 3)),
+			"height":           widgetSizeValue(widget.Height, widgetSizeValue(def.DefaultHeight, 1)),
+			"refresh_override": widget.RefreshOverride,
+			"definition":       def,
+		})
+	}
+	return map[string]any{
+		"id":      firstNonEmpty(item.ID, shared.NewID("artifact")),
+		"kind":    "dashboard_board",
+		"title":   firstNonEmpty(item.Name, "Dashboard board"),
+		"content": "",
+		"metadata": map[string]any{
+			"kind":      "dashboard_board",
+			"title":     firstNonEmpty(item.Name, "Dashboard board"),
+			"surface":   surface,
+			"board_id":  item.ID,
+			"open_path": "/ui/dashboard",
+			"widgets":   widgets,
+		},
+	}
+}
+
+func (s *Server) dashboardWidgetArtifactPayload(def module.DashboardWidgetDefinition) map[string]any {
+	title := firstNonEmpty(def.Title, def.Key, "Dashboard widget")
+	return map[string]any{
+		"id":      shared.NewID("artifact"),
+		"kind":    "dashboard_widget",
+		"title":   title,
+		"content": "",
+		"metadata": map[string]any{
+			"kind":  "dashboard_widget",
+			"title": title,
+			"widget": map[string]any{
+				"id":         shared.NewID("widget"),
+				"title":      title,
+				"kind":       firstNonEmpty(def.RendererKind, "metric"),
+				"width":      widgetSizeValue(def.DefaultWidth, 4),
+				"height":     widgetSizeValue(def.DefaultHeight, 1),
+				"definition": def,
+			},
+		},
+	}
 }
 
 func (s *Server) analyticsMetricList(actor ActorContext, _ map[string]any) (map[string]any, bool, error) {
@@ -1062,6 +1677,27 @@ func boolArg(arguments map[string]any, key string) bool {
 	return typed
 }
 
+func stringArrayArg(arguments map[string]any, key string) []string {
+	value, _ := arguments[key]
+	items, _ := value.([]any)
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		text, _ := item.(string)
+		text = strings.TrimSpace(text)
+		if text != "" {
+			result = append(result, text)
+		}
+	}
+	return result
+}
+
+func widgetSizeValue(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
+}
+
 func encodeBytes(payload []byte) string {
 	if len(payload) == 0 {
 		return ""
@@ -1107,6 +1743,9 @@ func (s *Server) lookupTool(endpointScope, key string) (module.MCPToolDefinition
 			continue
 		}
 		for _, item := range detail.Manifest.MCP.Tools {
+			if !s.ToolEnabled(item.Key) {
+				continue
+			}
 			if item.Key == key {
 				return item, true
 			}

@@ -1,106 +1,213 @@
 # Features
 
-This guide summarizes the major capabilities already present in the Orbyte platform.
+<p class="page-intro">
+This guide summarizes the current feature set reflected in the repository today.
+</p>
 
-## Core Platform Features
+## Read This Page By Area
 
-- modular kernel bootstrapping
-- PostgreSQL and in-memory runtime modes
-- manifest-driven business extensions
-- metadata-driven model definitions and records
-- transactional document lifecycle management
-- configurable workflow and approval routing
-- scoped configuration and feature flags
-- role-based access control
-- service principal support
-- audit events and domain events
-- job execution and asynchronous processing
-- idempotency support
-- runtime health and monitoring
+<div class="quick-links" markdown>
 
-## Enterprise Application Features
+- [**Platform Features**](#platform-features)
+  Kernel, security, data, workflow, search, reporting, and operations.
+- [**MCP Features**](#current-mcp-features)
+  Full vs minimal mode, skill-based discovery, and machine-access behavior.
+- [**Business Areas**](#business-features-by-area)
+  CRM, commercial, inventory, finance, workforce, and POS.
+- [**Current Constraints**](#current-product-constraints)
+  Understand where the runtime is still maturing.
 
-### Identity and Security
+</div>
+
+## Platform Features
+
+### Kernel And Runtime
+
+- modular service graph construction
+- in-memory and PostgreSQL-backed repository modes
+- runtime health, observability, and audit instrumentation
+- scoped runtime configuration with typed definitions
+- profile-driven business manifest loading
+
+### Identity And Security
 
 - users, roles, permissions, sessions
-- service principals for system access
-- delegated execution and acting-context support
-- authentication policy configuration
+- service principals
+- delegated acting-context support
+- configurable auth policy
+- Google sign-in and auto-provisioning support
+- TOTP policy fields in the auth configuration model
 
-### Data and Transactions
+### Data, Documents, And Workflow
 
-- generic model registry and CRUD
-- document records with status, version, links, lines, and attachments
-- reference and master data support
-- scoped configuration values
-- search index definitions
+- generic model registry and CRUD support
+- document definitions and document lifecycle support
+- workflow definitions, approvals, and related flow metadata
+- module-owned datasets and search definitions
+- application-level actions for document/model mutation flows
 
-### Workflow and Governance
+### Search, Analytics, And Reporting
 
-- workflow definitions, drafts, versions, and publish flow
-- runtime workflow tasks and approvals
-- Rego-backed or code-backed policy hooks
+- analytics widgets and dashboard surfaces
+- datasets defined by modules
+- reporting and template output services
+- report delivery adapters:
+  - download
+  - filesystem
+  - webhook
+  - email
+  - object store
+- search service with attachable model/document sources
 
-### Integration
+### Integration And Operations
 
-- external systems and endpoints
-- contracts and mappings
-- submission tracking
-- retries, dead letters, and replay flow
-- HTTP integration adapter boundary
+- external eventing configuration via NATS
+- search integration via Typesense
+- integration service and submission-style boundaries
+- jobs and asynchronous follow-up paths
+- idempotency service
+- admin and operational endpoints
 
-### Analytics and Reporting
+### Agent And Machine Access
 
-- metrics and dashboards
-- saved analytics queries
-- report definitions and delivery
-- report channels including download, filesystem, webhook, email, and object store
+- ACP provider-backed sessions
+- MCP JSON-RPC endpoints
+- switchable MCP exposure modes
+- minimal MCP skill/tool discovery flow
+- service-principal and delegated-user execution
+- generated MCP contract artifacts
 
-### Templates and Output
+<div class="orbyte-note">
+The current platform is agent-ready, not agent-dependent. Agent access goes through ACP sessions and governed MCP tools.
+</div>
 
-- template definitions
-- draft and publish flow
-- preview and render support
-- printable or export-ready output generation
+## Current MCP Features
 
-### Offline and Field Support
+### Full MCP mode
 
-- offline bootstrap and package endpoints
-- offline sync batches
-- conflict tracking
-- projection and reference packaging for disconnected clients
+- exposes the broader direct business tool surface
+- intended for admin/debug and direct-tool use cases
 
-## AI Integration Readiness Features
+### Minimal MCP mode
 
-These are especially important if Orbyte is used as a backend for external AI agents:
+Current primary minimal tools:
 
-- MCP server and tool catalog with domain-specific operations
-- permission-aware tool exposure filtered by actor permissions
-- audit trail for machine-invocated actions
-- service-principal access model for non-human authentication
-- config and policy control plane
-- structured search interfaces including keyword, vector, and hybrid query modes (via direct API)
-- document and model CRUD via MCP tools and HTTP APIs
-- document workflow transitions (submit, approve, reject) via HTTP APIs
+- `skills.find`
+- `skills.describe`
+- `tools.find`
+- `tools.describe`
+- `tools.call`
 
-Note: AI agents interact with Orbyte through governed MCP tools and HTTP APIs. The platform does not include a built-in autonomous agent. All machine access is authenticated, authorized, and audited.
+Current minimal design goals:
 
-## Product Strengths
+- reduce prompt/catalog size
+- encourage workflow-first discovery
+- narrow business tool selection before execution
 
-The strongest current platform qualities are:
+### Skill-based discovery
 
-- a broad kernel surface
-- a serious module model
-- explicit integration concepts
-- governance-aware runtime behavior
-- good automated test coverage across packages
+Current skills/playbooks can express:
 
-## Product Gaps To Close Over Time
+- `use_when`
+- ordered `workflow_steps`
+- `tool_inventory`
+- `required_final_facts`
+- `required_artifacts`
+- `required_draft_outputs`
+- `guardrails`
+- `success_checks`
+- `pitfalls`
 
-As the product matures, typical areas to deepen include:
+## UI Features
 
-- more first-class enterprise business modules
-- more public API documentation and examples
-- richer production deployment guidance
-- stronger tenancy and compliance documentation
-- more ready-made connectors for external systems
+The current workspace model supports:
+
+- surface-aware navigation
+- generic list/detail/form rendering from module metadata
+- dashboard widgets
+- worklist and self-service routes
+- agent workspace shell
+- admin shell
+
+## Business Features By Area
+
+### CRM
+
+- service ticketing
+- queues, SLA policies, assignment rules
+- ticket comments and ticket activities
+- customer 360 payloads
+- lead and opportunity tracking
+- sales/activity summaries and dashboard widgets
+- MCP tools for ticket, customer, lead, and opportunity flows
+
+### Commercial
+
+- catalog and commercial master views
+- document and record search through business tools
+- pricing/promotion related module composition
+- templates and workflow-linked commercial document shapes
+
+### Inventory And Operations
+
+- procurement
+- inventory
+- fulfillment
+- delivery
+- returns and supplier returns
+- planning
+- production and production costing
+- traceability and recall
+- POS
+
+### Finance
+
+- reporting core
+- manual journals
+- collections
+- treasury
+- fixed assets
+- retail finance
+- inventory finance
+
+### Workforce
+
+- employee workforce
+- workforce attendance
+- leave policy
+- payroll
+- payroll remittance
+- employee spend
+
+## Current Product Strengths
+
+- broad kernel-pack coverage for operational business domains
+- serious MCP and ACP integration work
+- strong manifest-driven modeling
+- runtime-configurable machine exposure and governance
+- seeded demo and validation scenarios for real workflows
+
+## Current Product Constraints
+
+The current codebase still has these practical limits:
+
+- some agent/provider runs can stall mid-turn
+- some domains are deeper than others
+- profile modules under `internal/modules` are still sparse compared to built-in kernel packs
+- some advanced enterprise workflows remain metadata-first foundations rather than full productized end-user flows
+
+## Related Guides
+
+- [Architecture](./architecture.md)
+- [Modules](./modules.md)
+- [Agent Integration](./agent-integration.md)
+- [Surfaces](./surfaces.md)
+
+## Recommended Next Pages
+
+<div class="next-steps" markdown>
+
+- [Modules](./modules.md) for the concrete current module inventory
+- [Agent Integration](./agent-integration.md) for ACP/MCP behavior and minimal mode
+
+</div>

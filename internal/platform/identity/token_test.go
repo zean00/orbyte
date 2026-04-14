@@ -3,6 +3,8 @@ package identity
 import (
 	"testing"
 	"time"
+
+	"strings"
 )
 
 func TestTokenManagerIssueAndParseSessionToken(t *testing.T) {
@@ -25,6 +27,36 @@ func TestTokenManagerIssueAndParseSessionToken(t *testing.T) {
 	}
 	if claims.Kind != "session" || claims.SessionID != "s1" || claims.Subject != "u1" {
 		t.Fatalf("unexpected session claims: %+v", claims)
+	}
+}
+
+func TestTokenManagerIssueSessionTokenRejectsMissingSecret(t *testing.T) {
+	manager := &TokenManager{
+		secret: []byte{},
+		issuer: "test-issuer",
+		now:    func() time.Time { return time.Unix(1700000000, 0).UTC() },
+	}
+	if _, err := manager.IssueSessionToken(Session{
+		ID:        "s1",
+		UserID:    "u1",
+		ExpiresAt: time.Unix(1700003600, 0).UTC(),
+	}); err == nil {
+		t.Fatal("expected issue session token to fail when secret is empty")
+	} else if !strings.Contains(err.Error(), "APP_JWT_SECRET") {
+		t.Fatalf("expected secret validation error, got: %v", err)
+	}
+}
+
+func TestTokenManagerParseRejectsMissingSecret(t *testing.T) {
+	manager := &TokenManager{
+		secret: []byte{},
+		issuer: "test-issuer",
+		now:    func() time.Time { return time.Unix(1700000000, 0).UTC() },
+	}
+	if _, err := manager.Parse("a.b.c"); err == nil {
+		t.Fatal("expected parse to fail when secret is empty")
+	} else if !strings.Contains(err.Error(), "APP_JWT_SECRET") {
+		t.Fatalf("expected secret validation error, got: %v", err)
 	}
 }
 

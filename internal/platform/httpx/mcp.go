@@ -3,6 +3,7 @@ package httpx
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"orbyte/internal/platform/audit"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/mcp"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/shared"
 )
 
@@ -33,21 +35,18 @@ func registerMCPJSONRPCRoute(mux *http.ServeMux, pattern string, ident *identity
 			respondError(w, shared.NotFound("mcp server is not configured"))
 			return
 		}
-		if err := authError(r); err != nil {
+		allowDevLoopback := devLoopbackMCPAllowed(r)
+		if err := authError(r); err != nil && !allowDevLoopback {
 			respondError(w, err)
 			return
 		}
 		p, ok := currentPrincipal(r)
-		if !ok {
-			respondError(w, shared.Unauthorized("authentication required"))
-			return
-		}
 		var req mcp.JSONRPCRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, shared.Validation("invalid mcp request payload"))
 			return
 		}
-		actor, actorErr := mcpActorContext(r, ident, p, endpointScope)
+		actor, actorErr := mcpActorForRequest(r, ident, p, ok, endpointScope)
 		if actorErr != nil {
 			respondError(w, actorErr)
 			return
@@ -58,18 +57,49 @@ func registerMCPJSONRPCRoute(mux *http.ServeMux, pattern string, ident *identity
 	})
 }
 
+func mcpActorForRequest(r *http.Request, ident *identity.Service, p principal, authenticated bool, endpointScope string) (mcp.ActorContext, error) {
+	if authenticated {
+		return mcpActorContext(r, ident, p, endpointScope)
+	}
+	if devLoopbackMCPAllowed(r) {
+		return mcp.ActorContext{
+			ActorID:         "user_admin",
+			ActorKind:       "user",
+			EffectiveUserID: "user_admin",
+			EndpointScope:   strings.TrimSpace(endpointScope),
+			PermissionChecker: func(permissionKey string) bool {
+				return true
+			},
+		}, nil
+	}
+	return mcp.ActorContext{}, shared.Unauthorized("authentication required")
+}
+
+func devLoopbackMCPAllowed(r *http.Request) bool {
+	if !runtimeconfig.Current().AuthDevMode() {
+		return false
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(r.RemoteAddr)
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func registerMCPStreamRoute(mux *http.ServeMux, pattern string, ident *identity.Service, analyticsSvc *analytics.Service, stream *mcp.AnalyticsStream, endpointScope string) {
 	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if stream == nil || analyticsSvc == nil {
 			respondError(w, shared.NotFound("mcp analytics stream is not configured"))
 			return
 		}
-		if err := authError(r); err != nil {
+		allowDevLoopback := devLoopbackMCPAllowed(r)
+		if err := authError(r); err != nil && !allowDevLoopback {
 			respondError(w, err)
 			return
 		}
 		p, ok := currentPrincipal(r)
-		if !ok {
+		if !ok && !allowDevLoopback {
 			respondError(w, shared.Unauthorized("authentication required"))
 			return
 		}
@@ -77,7 +107,7 @@ func registerMCPStreamRoute(mux *http.ServeMux, pattern string, ident *identity.
 			respondError(w, shared.Forbidden("stream is not available on this endpoint"))
 			return
 		}
-		if !principalAllowsAll(ident, p, []string{"analytics.read"}) {
+		if !allowDevLoopback && !principalAllowsAll(ident, p, []string{"analytics.read"}) {
 			respondError(w, shared.Forbidden("analytics.read is required"))
 			return
 		}
@@ -86,9 +116,15 @@ func registerMCPStreamRoute(mux *http.ServeMux, pattern string, ident *identity.
 			respondError(w, shared.Conflict("streaming is not supported"))
 			return
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
+		prepareEventStream(w)
+		if err := clearEventStreamWriteDeadline(w); err != nil {
+			respondError(w, shared.Conflict("streaming is not supported"))
+			return
+		}
+		if _, err := fmt.Fprintf(w, ": connected\nretry: 3000\n\n"); err != nil {
+			return
+		}
+		flusher.Flush()
 
 		if latest, ok := stream.Latest(); ok {
 			if err := writeAnalyticsEvent(w, "snapshot", latest); err != nil {
@@ -184,14 +220,20 @@ func recordMCPTrail(auditSvc *audit.Service, server *mcp.Server, req mcp.JSONRPC
 	switch req.Method {
 	case "tools/call":
 		var params struct {
-			Name string `json:"name"`
+			Name           string                 `json:"name"`
+			Arguments      map[string]any         `json:"arguments"`
+			CatalogContext mcp.ToolCatalogOptions `json:"catalog_context"`
 		}
 		_ = json.Unmarshal(req.Params, &params)
 		targetType = "mcp_tool"
 		targetID = strings.TrimSpace(params.Name)
 		metadata["tool_name"] = targetID
+		if strings.TrimSpace(params.CatalogContext.CatalogMode) != "" {
+			metadata["catalog_mode"] = params.CatalogContext.CatalogMode
+			metadata["catalog_capabilities"] = append([]string(nil), params.CatalogContext.Capabilities...)
+		}
 		if server != nil {
-			if descriptor, ok := server.ToolDescriptor(targetID, actor); ok {
+			if descriptor, ok := server.ToolDescriptorForArguments(targetID, actor, params.Arguments); ok {
 				metadata["contract_version"] = descriptor.Contract.Version
 				metadata["side_effect_class"] = descriptor.Contract.SideEffectClass
 				metadata["idempotency"] = descriptor.Contract.Idempotency
@@ -199,6 +241,10 @@ func recordMCPTrail(auditSvc *audit.Service, server *mcp.Server, req mcp.JSONRPC
 				metadata["required_permissions"] = descriptor.Contract.RequiredPermissions
 				metadata["audit_action"] = descriptor.Contract.AuditAction
 				metadata["stability"] = descriptor.Contract.Stability
+				metadata["action_class"] = descriptor.Contract.ActionClass
+				metadata["risk_class"] = descriptor.Contract.RiskClass
+				metadata["policy_state"] = descriptor.PolicyState
+				metadata["policy_reason"] = descriptor.PolicyReason
 			}
 		}
 	case "resources/read":

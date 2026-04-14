@@ -39,12 +39,31 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
-      - name: Install UI dependencies
+      - name: Install root UI dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Build UI assets
         run: make ui-build
+
+      - name: Verify generated frontend client
+        working-directory: frontend
+        run: npm run check:generated
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
 
       - name: Run tests
         run: make test

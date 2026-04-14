@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"orbyte/internal/platform/policy"
 	"orbyte/internal/platform/reference"
 	"orbyte/internal/platform/reporting"
+	"orbyte/internal/platform/runtimeconfig"
 	"orbyte/internal/platform/search"
 	"orbyte/internal/platform/templateoutput"
 	"orbyte/internal/platform/workflow"
@@ -81,8 +83,12 @@ func TestNewAppFailsWhenJWTSecretMissingInDatabaseMode(t *testing.T) {
 	defer func() {
 		_ = os.Setenv("DATABASE_URL", originalOpen)
 	}()
-	if err := ensureJWTSecret(true); err == nil {
+	err := ensureJWTSecret(true)
+	if err == nil {
 		t.Fatal("expected startup error when APP_JWT_SECRET is missing in database mode")
+	}
+	if !strings.Contains(err.Error(), "APP_JWT_SECRET") {
+		t.Fatalf("expected error to mention APP_JWT_SECRET, got: %v", err)
 	}
 }
 
@@ -90,8 +96,12 @@ func TestNewAppFailsWhenJWTSecretMissingWithoutExplicitDevMode(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("APP_JWT_SECRET", "")
 	t.Setenv("APP_AUTH_DEV_MODE", "")
-	if err := ensureJWTSecret(false); err == nil {
+	err := ensureJWTSecret(false)
+	if err == nil {
 		t.Fatal("expected startup error without jwt secret outside explicit dev mode")
+	}
+	if !strings.Contains(err.Error(), "APP_JWT_SECRET") {
+		t.Fatalf("expected error to mention APP_JWT_SECRET, got: %v", err)
 	}
 }
 
@@ -119,6 +129,26 @@ func TestNewAppSeedsRandomDevelopmentJWTSecretWithExplicitDevMode(t *testing.T) 
 	}
 }
 
+func TestApplyRuntimeACPBootstrap(t *testing.T) {
+	cfg := config.NewService()
+	t.Setenv("APP_ACP_ENABLED", "true")
+	t.Setenv("APP_ACP_PROVIDERS_JSON", `[{"key":"opencode","name":"OpenCode ACP","command":"opencode","args":["acp"]}]`)
+
+	if err := applyRuntimeACPBootstrap(cfg, runtimeconfig.NewService()); err != nil {
+		t.Fatalf("apply runtime ACP bootstrap failed: %v", err)
+	}
+	effective, ok := cfg.Resolve("platform.acp", "", "")
+	if !ok {
+		t.Fatal("expected platform.acp to resolve")
+	}
+	if enabled, _ := effective.Value["enabled"].(bool); !enabled {
+		t.Fatalf("expected platform.acp enabled after bootstrap, got %+v", effective.Value)
+	}
+	if got, _ := effective.Value["providers_json"].(string); got == "" {
+		t.Fatalf("expected providers_json to be populated, got %+v", effective.Value)
+	}
+}
+
 func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	org := organization.NewService()
 	cfg := config.NewService()
@@ -133,14 +163,14 @@ func TestSeedPlatformKernelSeedsEmptyServices(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("seed platform kernel failed: %v", err)
 	}
 
 	if _, ok := ident.FindUserByUsername("admin"); !ok {
 		t.Fatal("expected bootstrap admin user")
 	}
-	if _, err := ident.AuthenticatePassword("admin", "bootstrap-123!", "loc_hq", nil, defaultBootstrapSessionTTL()); err != nil {
+	if _, err := ident.AuthenticatePassword("admin", testBootstrapAdminPassword, "loc_hq", nil, defaultBootstrapSessionTTL()); err != nil {
 		t.Fatalf("expected seeded bootstrap admin credential to authenticate: %v", err)
 	}
 	def, err := docs.Definition("generic_request")
@@ -184,10 +214,10 @@ func TestSeedPlatformKernelIsIdempotentForRestart(t *testing.T) {
 	flows := workflow.NewServiceWithRepository(workflow.NewMemoryRepository())
 	policies := policy.NewService()
 
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("first seed failed: %v", err)
 	}
-	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, "bootstrap-123!"); err != nil {
+	if err := seedPlatformKernel(cfg, ident, modules, models, reportingSvc, templateSvc, referenceSvc, searchSvc, docs, flows, policies, nil, testBootstrapAdminPassword); err != nil {
 		t.Fatalf("second seed failed: %v", err)
 	}
 }

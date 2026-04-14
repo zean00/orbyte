@@ -27,6 +27,16 @@ type IndexDefinition struct {
 	VectorFields        []VectorFieldDefinition `json:"vector_fields,omitempty"`
 }
 
+type RuntimeSourceRecord struct {
+	ID             string         `json:"id"`
+	SourceID       string         `json:"source_id,omitempty"`
+	OrganizationID string         `json:"organization_id,omitempty"`
+	LocationID     string         `json:"location_id,omitempty"`
+	Version        int            `json:"version,omitempty"`
+	UpdatedAt      time.Time      `json:"updated_at,omitempty"`
+	Payload        map[string]any `json:"payload,omitempty"`
+}
+
 type BackendCapabilities struct {
 	Keyword            bool   `json:"keyword"`
 	Vector             bool   `json:"vector"`

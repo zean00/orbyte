@@ -337,11 +337,11 @@ func currentChallengeDetails(r *http.Request, ident *identity.Service) (identity
 	if !ok {
 		return identity.AuthChallenge{}, nil, "", shared.NotFound("2FA challenge not found")
 	}
+	if challenge.Status == "expired" || (!challenge.ExpiresAt.IsZero() && !time.Now().UTC().Before(challenge.ExpiresAt)) {
+		return challenge, nil, "", shared.Forbidden("2FA challenge expired")
+	}
 	if challenge.Status != "pending" {
 		return challenge, nil, "", shared.Conflict("2FA challenge is no longer active")
-	}
-	if !challenge.ExpiresAt.IsZero() && !time.Now().UTC().Before(challenge.ExpiresAt) {
-		return challenge, nil, "", shared.Forbidden("2FA challenge expired")
 	}
 	if challenge.Purpose != identity.AuthChallengePurposeTOTPEnroll {
 		return challenge, nil, "", nil

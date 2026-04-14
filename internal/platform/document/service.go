@@ -3,6 +3,7 @@ package document
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,7 +13,10 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo                  Repository
+	specializedViewers    map[string]SpecializedViewer
+	specializedFallback   map[string]string
+	nativeDocumentViewers map[string]NativeDocumentViewer
 }
 
 func NewService() *Service {
@@ -30,7 +34,12 @@ func NewService() *Service {
 }
 
 func NewServiceWithRepository(repo Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{
+		repo:                  repo,
+		specializedViewers:    map[string]SpecializedViewer{},
+		specializedFallback:   map[string]string{},
+		nativeDocumentViewers: map[string]NativeDocumentViewer{},
+	}
 }
 
 func (s *Service) Register(def Definition) error {
@@ -110,11 +119,12 @@ func (s *Service) Create(documentType, organizationID, locationID, actorID strin
 	}
 	now := time.Now().UTC()
 	id := shared.NewID("doc_")
+	normalizedPayload := NormalizePayload(payload)
 	body := Body{
 		DocumentID:    id,
 		SchemaVersion: def.SchemaVersion,
-		Payload:       NormalizePayload(payload),
-		ContentHash:   ContentHash(NormalizePayload(payload)),
+		Payload:       normalizedPayload,
+		ContentHash:   ContentHash(normalizedPayload),
 	}
 	record := Record{
 		Header: Header{
@@ -313,6 +323,7 @@ func NormalizePayload(payload map[string]any) map[string]any {
 	if normalized == nil {
 		normalized = map[string]any{}
 	}
+	normalized = normalizePayloadMap(normalized)
 	extensions := extensionMap(normalized)
 	normalized["extensions"] = extensions
 	return normalized
@@ -371,8 +382,116 @@ func deepClone(value any) any {
 			items[i] = deepClone(item)
 		}
 		return items
+	case []map[string]any:
+		items := make([]map[string]any, len(typed))
+		for i, item := range typed {
+			items[i] = cloneMap(item)
+		}
+		return items
 	default:
 		return typed
+	}
+}
+
+func normalizePayloadMap(input map[string]any) map[string]any {
+	output := make(map[string]any, len(input))
+	for key, value := range input {
+		normalizedValue := normalizePayloadValue(value)
+		if isLineCollectionKey(key) {
+			normalizedValue = normalizeLineCollectionValue(normalizedValue)
+		}
+		output[key] = normalizedValue
+	}
+	return output
+}
+
+func normalizePayloadValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return normalizePayloadMap(cloneMap(typed))
+	case []any:
+		items := make([]any, len(typed))
+		for i, item := range typed {
+			items[i] = normalizePayloadValue(item)
+		}
+		return items
+	case []map[string]any:
+		items := make([]map[string]any, len(typed))
+		for i, item := range typed {
+			items[i] = normalizePayloadMap(cloneMap(item))
+		}
+		return items
+	default:
+		return typed
+	}
+}
+
+func isLineCollectionKey(key string) bool {
+	key = strings.TrimSpace(strings.ToLower(key))
+	return key == "lines" || strings.HasSuffix(key, "_lines")
+}
+
+func normalizeLineCollectionValue(value any) any {
+	switch typed := value.(type) {
+	case []any:
+		items := make([]any, len(typed))
+		for i, item := range typed {
+			row, ok := item.(map[string]any)
+			if !ok {
+				items[i] = item
+				continue
+			}
+			items[i] = ensurePayloadLineID(row, i)
+		}
+		return items
+	case []map[string]any:
+		items := make([]map[string]any, len(typed))
+		for i, item := range typed {
+			items[i] = ensurePayloadLineID(item, i)
+		}
+		return items
+	default:
+		return value
+	}
+}
+
+func ensurePayloadLineID(line map[string]any, index int) map[string]any {
+	next := cloneMap(line)
+	if next == nil {
+		next = map[string]any{}
+	}
+	if lineID := strings.TrimSpace(textValue(next["line_id"])); lineID != "" {
+		next["line_id"] = lineID
+		return next
+	}
+	if genericID := strings.TrimSpace(textValue(next["id"])); genericID != "" {
+		next["line_id"] = genericID
+		return next
+	}
+	next["line_id"] = derivedPayloadLineID(next, index)
+	return next
+}
+
+func derivedPayloadLineID(line map[string]any, index int) string {
+	scrubbed := cloneMap(line)
+	delete(scrubbed, "line_id")
+	payload, err := json.Marshal(scrubbed)
+	if err != nil {
+		payload = []byte(fmt.Sprintf("%v", scrubbed))
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", index, payload)))
+	return "line_" + hex.EncodeToString(sum[:8])
+}
+
+func textValue(value any) string {
+	if value == nil {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return typed
+	default:
+		return fmt.Sprintf("%v", value)
 	}
 }
 

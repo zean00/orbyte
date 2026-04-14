@@ -149,7 +149,7 @@ func (m *TokenManager) IssueDeepLinkStepUpToken(grant DeepLinkGrant, ttl time.Du
 
 func (m *TokenManager) Parse(token string) (TokenClaims, error) {
 	if len(m.secret) == 0 {
-		return TokenClaims{}, errors.New("jwt secret is not configured")
+		return TokenClaims{}, errors.New("APP_JWT_SECRET is required")
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -179,7 +179,7 @@ func (m *TokenManager) Parse(token string) (TokenClaims, error) {
 
 func (m *TokenManager) issue(claims TokenClaims) (string, error) {
 	if len(m.secret) == 0 {
-		return "", errors.New("jwt secret is not configured")
+		return "", errors.New("APP_JWT_SECRET is required")
 	}
 	headerJSON, err := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
 	if err != nil {

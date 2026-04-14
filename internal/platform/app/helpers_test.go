@@ -7,6 +7,8 @@ import (
 	"orbyte/internal/platform/module"
 )
 
+const testBootstrapAdminPassword = "admin123!"
+
 func TestPolicyAndHelperConversions(t *testing.T) {
 	rule := map[string]any{
 		"items":   []any{"a", " ", "b"},

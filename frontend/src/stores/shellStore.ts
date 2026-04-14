@@ -19,8 +19,17 @@ interface AuthContext {
   delegation_grant_id?: string
 }
 
+export type NavigationPendingKind =
+  | 'workspace_data'
+  | 'admin_data'
+  | 'surface'
+  | 'locale'
+  | 'command'
+  | 'shell'
+
 interface ShellState {
   sidebarOpen: boolean
+  mobileNavOpen: boolean
   shellKind: ShellKind
   currentRoute: string
   routes: ShellRoute[]
@@ -40,18 +49,25 @@ interface ShellState {
   customEntries: CustomEntryDefinition[]
   workspaceBootstrap: WorkspaceBootstrapResponse | null
   adminBootstrap: AdminBootstrapResponse | null
+  navigationPending: boolean
+  navigationPendingKind: NavigationPendingKind | null
   toggleSidebar: () => void
+  setSidebarOpen: (open: boolean) => void
+  toggleMobileNav: () => void
+  closeMobileNav: () => void
   setCurrentRoute: (route: string) => void
   setWorkspaceBootstrap: (data: WorkspaceBootstrapResponse) => void
   setAdminBootstrap: (data: AdminBootstrapResponse) => void
   setRoutes: (routes: ShellRoute[]) => void
   setLocale: (locale: string) => void
+  setNavigationPending: (pending: boolean, kind?: NavigationPendingKind) => void
 }
 
 export const useShellStore = create<ShellState>()(
   persist(
     (set) => ({
       sidebarOpen: true,
+      mobileNavOpen: false,
       shellKind: 'workspace',
       currentRoute: '',
       routes: [],
@@ -71,8 +87,13 @@ export const useShellStore = create<ShellState>()(
       customEntries: [],
       workspaceBootstrap: null,
       adminBootstrap: null,
+      navigationPending: false,
+      navigationPendingKind: null,
 
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      toggleMobileNav: () => set((state) => ({ mobileNavOpen: !state.mobileNavOpen })),
+      closeMobileNav: () => set({ mobileNavOpen: false }),
       setCurrentRoute: (route) => set({ currentRoute: route }),
       setWorkspaceBootstrap: (data) =>
         set({
@@ -107,6 +128,11 @@ export const useShellStore = create<ShellState>()(
         }),
       setRoutes: (routes) => set({ routes }),
       setLocale: (locale) => set({ locale }),
+      setNavigationPending: (pending, kind = 'shell') =>
+        set({
+          navigationPending: pending,
+          navigationPendingKind: pending ? kind : null,
+        }),
     }),
     {
       name: 'orbyte-shell',

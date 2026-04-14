@@ -20,6 +20,14 @@ func adminModulePath(path string) (string, bool) {
 	return strings.TrimSpace(parts[3]), parts[3] != ""
 }
 
+func adminModuleConsolePath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 5 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "modules" || parts[4] != "console" {
+		return "", false
+	}
+	return strings.TrimSpace(parts[3]), parts[3] != ""
+}
+
 func adminModuleActionPath(path string) (string, string, bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) != 6 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "modules" || parts[4] != "actions" {

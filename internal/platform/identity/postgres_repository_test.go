@@ -45,9 +45,9 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if len(repo.RolePermissions()) != 1 {
 		t.Fatal("expected role permissions")
 	}
-	credentialRows := sqlmock.NewRows([]string{"user_id", "password_hash", "password_changed_at", "failed_attempt_count", "locked_until", "updated_at"}).
-		AddRow("u1", "$argon2id$example", now, 0, nil, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, password_hash, password_changed_at, failed_attempt_count, locked_until, updated_at")).WillReturnRows(credentialRows)
+	credentialRows := sqlmock.NewRows([]string{"user_id", "password_hash", "password_changed_at", "cashier_pin_hash", "cashier_pin_changed_at", "failed_attempt_count", "locked_until", "updated_at"}).
+		AddRow("u1", "$argon2id$example", now, "", nil, 0, nil, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, password_hash, password_changed_at, COALESCE(cashier_pin_hash, ''), cashier_pin_changed_at, failed_attempt_count, locked_until, updated_at")).WillReturnRows(credentialRows)
 	if len(repo.Credentials()) != 1 {
 		t.Fatal("expected credentials")
 	}
@@ -90,9 +90,9 @@ func TestPostgresIdentityRepository(t *testing.T) {
 	if _, ok := repo.FindUserByAuthenticationSubject("google:sub-1"); !ok {
 		t.Fatal("expected find user by authentication subject")
 	}
-	findCredentialRows := sqlmock.NewRows([]string{"user_id", "password_hash", "password_changed_at", "failed_attempt_count", "locked_until", "updated_at"}).
-		AddRow("u1", "$argon2id$example", now, 0, nil, now)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, password_hash, password_changed_at, failed_attempt_count, locked_until, updated_at")).WithArgs("u1").WillReturnRows(findCredentialRows)
+	findCredentialRows := sqlmock.NewRows([]string{"user_id", "password_hash", "password_changed_at", "cashier_pin_hash", "cashier_pin_changed_at", "failed_attempt_count", "locked_until", "updated_at"}).
+		AddRow("u1", "$argon2id$example", now, "", nil, 0, nil, now)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT user_id, password_hash, password_changed_at, COALESCE(cashier_pin_hash, ''), cashier_pin_changed_at, failed_attempt_count, locked_until, updated_at")).WithArgs("u1").WillReturnRows(findCredentialRows)
 	if _, ok := repo.FindCredentialByUserID("u1"); !ok {
 		t.Fatal("expected find credential by user id")
 	}
@@ -126,7 +126,7 @@ func TestPostgresIdentityRepository(t *testing.T) {
 		t.Fatalf("expected cleanup login failures: %v", err)
 	}
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO user_credentials (")).
-		WithArgs("u1", "$argon2id$example", now, 0, nil, now).
+		WithArgs("u1", "$argon2id$example", now, "", nil, 0, nil, now).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	if err := repo.SaveCredential(Credential{
 		UserID:            "u1",

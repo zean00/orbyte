@@ -18,9 +18,39 @@ func masterdataKernelPackManifests() []module.Manifest {
 	return []module.Manifest{masterdataKernelPackManifest()}
 }
 
+func organizationStructureKernelPackManifests() []module.Manifest {
+	return []module.Manifest{organizationStructureKernelPackManifest()}
+}
+
+func employeeWorkforceKernelPackManifests() []module.Manifest {
+	return []module.Manifest{employeeWorkforceKernelPackManifest()}
+}
+
+func workforceAttendanceKernelPackManifests() []module.Manifest {
+	return []module.Manifest{workforceAttendanceKernelPackManifest()}
+}
+
+func employeeSpendCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{employeeSpendCoreKernelPackManifest()}
+}
+
+func employeePayrollCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{employeePayrollCoreKernelPackManifest()}
+}
+
+func payrollRemittanceCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{payrollRemittanceCoreKernelPackManifest()}
+}
+
+func leavePolicyCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{leavePolicyCoreKernelPackManifest()}
+}
+
 func platformCoreKernelPackManifests() []module.Manifest {
 	httpDefinition, _ := config.NewService().Definition("platform.http")
-	return []module.Manifest{platformCoreKernelPackManifest(httpDefinition)}
+	acpDefinition, _ := config.NewService().Definition("platform.acp")
+	mcpDefinition, _ := config.NewService().Definition("platform.mcp")
+	return []module.Manifest{platformCoreKernelPackManifest(httpDefinition, acpDefinition, mcpDefinition)}
 }
 
 func identityKernelPackManifests() []module.Manifest {
@@ -42,4 +72,20 @@ func monitoringKernelPackManifests() []module.Manifest {
 
 func integrationKernelPackManifests() []module.Manifest {
 	return []module.Manifest{integrationKernelPackManifest()}
+}
+
+func commercialCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{commercialCoreKernelPackManifest()}
+}
+
+func procurementCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{procurementCoreKernelPackManifest()}
+}
+
+func inventoryCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{inventoryCoreKernelPackManifest()}
+}
+
+func planningCoreKernelPackManifests() []module.Manifest {
+	return []module.Manifest{planningCoreKernelPackManifest()}
 }

@@ -20,6 +20,35 @@ func documentsKernelPackManifest() module.Manifest {
 		},
 		OwnedDocumentTypes: []string{"generic_request"},
 		OwnedWorkflowKeys:  []string{"generic_request_flow"},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Documents Console",
+			TitleI18n:       localize("Documents Console", "Konsol Dokumen"),
+			Description:     "Request operations, worklist entry points, workflow controls, and document templates.",
+			DescriptionI18n: localize("Request operations, worklist entry points, workflow controls, and document templates.", "Operasi permintaan, pintu masuk worklist, kontrol workflow, dan template dokumen."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "document_operations",
+					Title:     "Document Operations",
+					TitleI18n: localize("Document Operations", "Operasi Dokumen"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("requests", "Requests", "Permintaan", "/ui/documents", "Open document requests.", "Buka permintaan dokumen.", "document.list"),
+						adminConsoleLink("new_request", "New Request", "Permintaan Baru", "/ui/documents/new", "Create a new request.", "Buat permintaan baru.", "document.create"),
+						adminConsoleLink("worklist", "Worklist", "Antrian Kerja", "/ui/worklist", "Open the worklist.", "Buka antrian kerja.", "document.list"),
+						adminConsoleLink("self_service", "Self-Service Requests", "Permintaan Self-Service", "/ui/self-service/requests", "Open self-service requests.", "Buka permintaan self-service.", "document.list"),
+					},
+				},
+				{
+					Key:       "document_workflows",
+					Title:     "Document Workflows",
+					TitleI18n: localize("Document Workflows", "Workflow Dokumen"),
+					Kind:      module.AdminConsoleSectionWorkflowLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("generic_request_flow", "Generic Request Workflow", "Workflow Permintaan Generik", "/admin/workflows/designer?key=generic_request_flow", "Open the generic request workflow.", "Buka workflow permintaan generik.", "configuration.read"),
+					},
+				},
+			},
+		},
 		Documents: []document.Definition{{
 			Type:                   "generic_request",
 			DisplayName:            "Generic Request",

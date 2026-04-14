@@ -20,7 +20,9 @@ func registerAdminConfigRuntimeRoutes(mux *http.ServeMux, cfg *config.Service, f
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"items": cfg.Definitions()})
+		items := cfg.Definitions()
+		pagedItems, total := paginateSlice(items, intQuery(r, "page", 1), intQuery(r, "page_size", 20))
+		respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
 	})
 
 	mux.HandleFunc("GET /admin/api/config/entries", func(w http.ResponseWriter, r *http.Request) {

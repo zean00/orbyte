@@ -4,7 +4,7 @@ This glossary defines the main terms used across the Orbyte documentation.
 
 ## ACP
 
-Agent connectivity layer for shell-native agent session integration. In Orbyte this is optional and should be treated as an external-facing integration capability, not the core product identity.
+Agent Connectivity Protocol runtime bridge. In Orbyte, ACP is the provider and session layer used to connect external agent runtimes to the platform. It handles provider configuration, session lifecycle, prompt transport, approvals, and streamed interaction. ACP is not the business capability model.
 
 ## Actor
 
@@ -68,7 +68,7 @@ The structured module definition that declares what a module contributes to the 
 
 ## MCP
 
-Model Context Protocol. In Orbyte this is used to expose governed tools and resources to external machine clients such as agents and copilots.
+Model Context Protocol. In Orbyte, MCP is the canonical machine-facing business contract used to expose governed business discovery, analysis, and action capability to external agents and copilots. It should express business semantics, not frontend mechanics.
 
 ## Model
 

@@ -52,12 +52,14 @@ type RolePermission struct {
 }
 
 type Credential struct {
-	UserID             string    `json:"user_id"`
-	PasswordHash       string    `json:"-"`
-	PasswordChangedAt  time.Time `json:"password_changed_at"`
-	FailedAttemptCount int       `json:"failed_attempt_count"`
-	LockedUntil        time.Time `json:"locked_until,omitempty"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	UserID              string    `json:"user_id"`
+	PasswordHash        string    `json:"-"`
+	PasswordChangedAt   time.Time `json:"password_changed_at"`
+	CashierPINHash      string    `json:"-"`
+	CashierPINChangedAt time.Time `json:"cashier_pin_changed_at,omitempty"`
+	FailedAttemptCount  int       `json:"failed_attempt_count"`
+	LockedUntil         time.Time `json:"locked_until,omitempty"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 type Session struct {

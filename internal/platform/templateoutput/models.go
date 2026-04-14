@@ -203,14 +203,26 @@ type VisualSection struct {
 }
 
 type VisualRow struct {
-	ID      string       `json:"id,omitempty"`
-	Columns []VisualCell `json:"columns,omitempty"`
+	ID            string       `json:"id,omitempty"`
+	Width         string       `json:"width,omitempty"`
+	Height        string       `json:"height,omitempty"`
+	AlignX        string       `json:"align_x,omitempty"`
+	AlignY        string       `json:"align_y,omitempty"`
+	ContentAlignX string       `json:"content_align_x,omitempty"`
+	ContentAlignY string       `json:"content_align_y,omitempty"`
+	Columns       []VisualCell `json:"columns,omitempty"`
 }
 
 type VisualCell struct {
-	ID     string        `json:"id,omitempty"`
-	Span   int           `json:"span,omitempty"`
-	Blocks []VisualBlock `json:"blocks,omitempty"`
+	ID            string        `json:"id,omitempty"`
+	Span          int           `json:"span,omitempty"`
+	Width         string        `json:"width,omitempty"`
+	Height        string        `json:"height,omitempty"`
+	AlignX        string        `json:"align_x,omitempty"`
+	AlignY        string        `json:"align_y,omitempty"`
+	ContentAlignX string        `json:"content_align_x,omitempty"`
+	ContentAlignY string        `json:"content_align_y,omitempty"`
+	Blocks        []VisualBlock `json:"blocks,omitempty"`
 }
 
 type VisualBlock struct {

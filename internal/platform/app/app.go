@@ -82,6 +82,7 @@ type App struct {
 	MCP                *mcp.Server
 	DocActions         *application.DocumentActions
 	ModelActions       *application.ModelActions
+	CRM                *application.CRMCoreService
 	Dispatcher         *eventing.Dispatcher
 }
 
@@ -123,7 +124,11 @@ func New(opts Options) (*App, error) {
 		return nil, err
 	}
 	graph := constructServiceGraph(postgres, businessManifests)
+	registerWorkspaceDocumentViewers(graph.documents, append(builtInModuleManifests(), businessManifests...))
 	if err := seedPlatformKernel(graph.config, graph.identity, graph.modules, graph.models, graph.reporting, graph.templates, graph.reference, graph.search, graph.documents, graph.workflows, graph.policy, businessManifests, runtimeSettings.BootstrapAdminPassword()); err != nil {
+		return nil, err
+	}
+	if err := applyRuntimeACPBootstrap(graph.config, runtimeSettings); err != nil {
 		return nil, err
 	}
 	graph.runtimeHealth.SetBootstrapped(true)
@@ -182,8 +187,79 @@ func New(opts Options) (*App, error) {
 		MCP:                graph.mcpServer,
 		DocActions:         graph.docActions,
 		ModelActions:       graph.modelActions,
+		CRM:                graph.crmCore,
 		Dispatcher:         runtime.dispatcher,
 	}, nil
+}
+
+func registerWorkspaceDocumentViewers(docs *document.Service, manifests []module.Manifest) {
+	if docs == nil {
+		return
+	}
+	docs.RegisterSpecializedViewer(document.SpecializedViewer{
+		Hint:             "promotion.plan",
+		RequestKinds:     []string{"promotion_plan"},
+		DetailPath:       "/ui/promotion/plans/detail",
+		FormPath:         "/ui/promotion/plans/form",
+		EditableStatuses: []string{"draft"},
+	})
+	registerNativeDocumentViewers(docs, manifests)
+}
+
+func registerNativeDocumentViewers(docs *document.Service, manifests []module.Manifest) {
+	if docs == nil {
+		return
+	}
+	for _, manifest := range manifests {
+		viewsByKey := make(map[string]module.ViewDefinition, len(manifest.Frontend.Views))
+		for _, view := range manifest.Frontend.Views {
+			if strings.TrimSpace(view.Key) == "" || strings.TrimSpace(view.DocumentType) == "" {
+				continue
+			}
+			viewsByKey[strings.TrimSpace(view.Key)] = view
+		}
+		nativeByDocument := map[string]document.NativeDocumentViewer{}
+		for _, action := range manifest.Frontend.Actions {
+			if action.RenderMode != module.RenderModeGeneric || strings.TrimSpace(action.ViewKey) == "" || strings.TrimSpace(action.RoutePath) == "" {
+				continue
+			}
+			view, ok := viewsByKey[strings.TrimSpace(action.ViewKey)]
+			if !ok || strings.TrimSpace(view.DocumentType) == "" {
+				continue
+			}
+			viewer := nativeByDocument[strings.TrimSpace(view.DocumentType)]
+			viewer.DocumentType = strings.TrimSpace(view.DocumentType)
+			switch strings.TrimSpace(view.Kind) {
+			case "detail":
+				viewer.DetailPath = canonicalWorkspacePath(action.RoutePath)
+			case "form":
+				viewer.FormPath = canonicalWorkspacePath(action.RoutePath)
+			default:
+				continue
+			}
+			nativeByDocument[viewer.DocumentType] = viewer
+		}
+		for _, viewer := range nativeByDocument {
+			if strings.TrimSpace(viewer.DetailPath) == "" && strings.TrimSpace(viewer.FormPath) == "" {
+				continue
+			}
+			docs.RegisterNativeDocumentViewer(viewer)
+		}
+	}
+}
+
+func canonicalWorkspacePath(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "/ui/") || trimmed == "/ui" {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		return "/ui" + trimmed
+	}
+	return "/ui/" + trimmed
 }
 
 func initializeTracing() (func() error, error) {
@@ -220,6 +296,42 @@ func ensureJWTSecret(databaseURLConfigured bool) error {
 	_ = os.Setenv("APP_JWT_SECRET", secret)
 	log.Printf("APP_AUTH_DEV_MODE enabled; seeded ephemeral JWT secret for this process")
 	return nil
+}
+
+func applyRuntimeACPBootstrap(cfg *config.Service, runtime *runtimeconfig.Service) error {
+	if cfg == nil || runtime == nil {
+		return nil
+	}
+	enabled, configured := runtime.ACPBootstrapEnabled()
+	providersJSON := runtime.ACPBootstrapProvidersJSON()
+	if !configured && providersJSON == "" {
+		return nil
+	}
+	def, ok := cfg.Definition("platform.acp")
+	if !ok {
+		return fmt.Errorf("platform.acp configuration definition is not registered")
+	}
+	current, _ := cfg.Resolve("platform.acp", "", "")
+	value := map[string]any{}
+	for key, item := range current.Value {
+		value[key] = item
+	}
+	if configured {
+		value["enabled"] = enabled
+	}
+	if providersJSON != "" {
+		value["providers_json"] = providersJSON
+	}
+	return cfg.Save(config.Entry{
+		Key:         def.Key,
+		ModuleKey:   def.ModuleKey,
+		Category:    def.Category,
+		Scope:       "deployment",
+		Value:       value,
+		UpdatedAt:   time.Now().UTC(),
+		UpdatedBy:   "runtime_bootstrap",
+		Description: def.Description,
+	})
 }
 
 func generateDevelopmentJWTSecret() (string, error) {

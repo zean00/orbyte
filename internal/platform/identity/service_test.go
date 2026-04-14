@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -202,6 +203,48 @@ func TestDefaultRoutePrefersUserOverrideThenHighestPriorityRole(t *testing.T) {
 	}
 }
 
+func TestActiveRoleIDsForUserFiltersInactiveDatesAndScope(t *testing.T) {
+	svc := NewService(organization.NewService())
+	now := time.Now().UTC()
+	for _, role := range []Role{
+		{ID: "role_org", Key: "org", Name: "Org", ScopeType: "organization"},
+		{ID: "role_loc", Key: "loc", Name: "Loc", ScopeType: "location"},
+		{ID: "role_future", Key: "future", Name: "Future", ScopeType: "deployment"},
+		{ID: "role_inactive", Key: "inactive", Name: "Inactive", ScopeType: "deployment"},
+	} {
+		if err := svc.UpsertRole(role); err != nil {
+			t.Fatalf("upsert role %s failed: %v", role.ID, err)
+		}
+	}
+	repo := svc.repo
+	for _, binding := range []RoleBinding{
+		{ID: "rb_org", UserID: "user_admin", RoleID: "role_org", ScopeType: "organization", ScopeID: "org_default", EffectiveFrom: now.Add(-time.Hour), Status: "active"},
+		{ID: "rb_loc", UserID: "user_admin", RoleID: "role_loc", ScopeType: "location", ScopeID: "loc_hq", EffectiveFrom: now.Add(-time.Hour), Status: "active"},
+		{ID: "rb_future", UserID: "user_admin", RoleID: "role_future", ScopeType: "deployment", EffectiveFrom: now.Add(time.Hour), Status: "active"},
+		{ID: "rb_inactive", UserID: "user_admin", RoleID: "role_inactive", ScopeType: "deployment", EffectiveFrom: now.Add(-time.Hour), Status: "inactive"},
+	} {
+		if err := repo.SaveRoleBinding(binding); err != nil {
+			t.Fatalf("save role binding %s failed: %v", binding.ID, err)
+		}
+	}
+
+	got := svc.ActiveRoleIDsForUser("user_admin", "org_default", "loc_hq", "", now)
+	if len(got) != 3 {
+		t.Fatalf("expected bootstrap role plus 2 active scoped roles, got %+v", got)
+	}
+	if got[0] != "role_admin" || got[1] != "role_loc" || got[2] != "role_org" {
+		t.Fatalf("unexpected active role ids: %+v", got)
+	}
+
+	got = svc.ActiveRoleIDsForUser("user_admin", "org_default", "loc_other", "", now)
+	if len(got) != 2 {
+		t.Fatalf("expected bootstrap role plus org role outside location scope, got %+v", got)
+	}
+	if got[0] != "role_admin" || got[1] != "role_org" {
+		t.Fatalf("unexpected scoped role ids: %+v", got)
+	}
+}
+
 func TestRevokeRolePermission(t *testing.T) {
 	svc := NewService(organization.NewService())
 	if err := svc.UpsertRole(Role{ID: "role_ops", Key: "ops", Name: "Ops", ScopeType: "deployment"}); err != nil {
@@ -330,6 +373,45 @@ func TestAuthenticatePasswordAndChangePassword(t *testing.T) {
 	}
 	if _, err := svc.AuthenticatePassword("admin", "better-admin-123", "loc_hq", nil, time.Hour); err != nil {
 		t.Fatalf("expected new password to work: %v", err)
+	}
+}
+
+func TestSetVerifyAndChangeCashierPIN(t *testing.T) {
+	svc := NewService(organization.NewService())
+	state, err := svc.CashierPINState("user_admin")
+	if err != nil {
+		t.Fatalf("cashier PIN state before setup failed: %v", err)
+	}
+	if _, ok := state["changed_at"]; ok {
+		t.Fatalf("expected changed_at to be omitted before setup, got %+v", state)
+	}
+	if err := svc.SetCashierPIN("user_admin", "123456"); err != nil {
+		t.Fatalf("set cashier PIN failed: %v", err)
+	}
+	if err := svc.SetCashierPIN("user_admin", "222222"); err == nil {
+		t.Fatal("expected second cashier PIN setup to be rejected")
+	}
+	state, err = svc.CashierPINState("user_admin")
+	if err != nil {
+		t.Fatalf("cashier PIN state failed: %v", err)
+	}
+	if configured, _ := state["configured"].(bool); !configured {
+		t.Fatalf("expected cashier PIN to be configured, got %+v", state)
+	}
+	if _, ok := state["changed_at"]; !ok {
+		t.Fatalf("expected changed_at after setup, got %+v", state)
+	}
+	if err := svc.VerifyCashierPIN("user_admin", "123456"); err != nil {
+		t.Fatalf("verify cashier PIN failed: %v", err)
+	}
+	if err := svc.ChangeCashierPIN("user_admin", "123456", "654321"); err != nil {
+		t.Fatalf("change cashier PIN failed: %v", err)
+	}
+	if err := svc.VerifyCashierPIN("user_admin", "123456"); err == nil {
+		t.Fatal("expected old cashier PIN to stop working")
+	}
+	if err := svc.VerifyCashierPIN("user_admin", "654321"); err != nil {
+		t.Fatalf("expected new cashier PIN to work: %v", err)
 	}
 }
 
@@ -622,6 +704,60 @@ func TestEnsureBootstrapAdminCredentialRefreshRotateAndReviewSession(t *testing.
 	}
 	if len(review.Flags) == 0 {
 		t.Fatalf("expected anomaly flags, got %+v", review)
+	}
+}
+
+type failingSaveSessionRepository struct {
+	Repository
+	callCount  int
+	failOnCall int
+	failErr    error
+}
+
+func (r *failingSaveSessionRepository) SaveSession(session Session) error {
+	if r.callCount == r.failOnCall {
+		r.callCount++
+		return r.failErr
+	}
+	r.callCount++
+	return r.Repository.SaveSession(session)
+}
+
+func TestRefreshSessionRollbackWhenUpdatingOriginalSessionFails(t *testing.T) {
+	svc := NewService(organization.NewService())
+	original, err := svc.StartSession("admin", "loc_hq", "password", map[string]any{}, time.Hour)
+	if err != nil {
+		t.Fatalf("start session failed: %v", err)
+	}
+	repo := &failingSaveSessionRepository{
+		Repository: svc.repo,
+		failOnCall: 1,
+		failErr:    errors.New("forced rollback test failure"),
+	}
+	svc.repo = repo
+
+	if _, err := svc.RefreshSession(original.ID, time.Hour); err == nil {
+		t.Fatal("expected refresh failure")
+	}
+	afterRefreshOriginal, ok := svc.FindSession(original.ID)
+	if !ok {
+		t.Fatal("expected original session to remain in repository")
+	}
+	if afterRefreshOriginal.Status != "active" {
+		t.Fatalf("expected original session to remain active after rollback, got %+v", afterRefreshOriginal)
+	}
+	if !afterRefreshOriginal.RevokedAt.IsZero() {
+		t.Fatalf("expected original session revoke timestamp to remain empty after rollback, got %+v", afterRefreshOriginal)
+	}
+	foundRotatedRevoked := false
+	for _, session := range svc.Sessions() {
+		if session.UserID == original.UserID && session.ID != original.ID && session.Status == "revoked" {
+			foundRotatedRevoked = true
+			break
+		}
+	}
+	if !foundRotatedRevoked {
+		t.Fatal("expected rotated session to be revoked during rollback")
 	}
 }
 

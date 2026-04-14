@@ -1,6 +1,99 @@
 package mcp
 
 func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegistration) []builtInToolRegistration {
+	registry = append(registry,
+		mustBuiltInToolRegistration((*Server).toolsFindMeta, builtInTool{
+			name:        "tools.find",
+			title:       "Find Tools",
+			description: "Fallback step only when no skill matches. Find discoverable MCP tools by title, description, domains, module, and labels. With a query, search matching tools. Without a query, browse available tools. Pass ALL candidate IDs to tools.describe in a single call.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsListMeta, builtInTool{
+			name:        "tools.list",
+			title:       "List Available Tools",
+			description: "Compatibility alias for tools.find. Browse discoverable MCP tools when no skill matches.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsSearchMeta, builtInTool{
+			name:        "tools.search",
+			title:       "Search Tools",
+			description: "Compatibility alias for tools.find. Search discoverable MCP tools when no skill matches.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsDescribeMeta, builtInTool{
+			name:        "tools.describe",
+			title:       "Describe Tools",
+			description: "Only use when no skill matches your use case. Get detailed tool descriptions, schemas, and contracts in bulk. Always pass ALL candidate tool IDs from tools.find in a single call — do not describe tools one at a time.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"tool_ids"}},
+		}),
+		mustBuiltInToolRegistration((*Server).toolsCallMeta, builtInTool{
+			name:        "tools.call",
+			title:       "Call Tool",
+			description: "Call a discoverable MCP tool by id using a dynamic payload.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_id": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "catalog_context": map[string]any{"type": "object"}}, "required": []string{"tool_id"}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksFindMeta, builtInTool{
+			name:        "skills.find",
+			title:       "Find Skills",
+			description: "Required first step for workflow-like business tasks in minimal mode. Find workflow skills by use case or intent. With a query, search matching skills. Without a query, browse available skills. Then call skills.describe and follow the matched workflow.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksListMeta, builtInTool{
+			name:        "skills.list",
+			title:       "List Skills",
+			description: "Compatibility alias for skills.find. Browse workflow skills before looking for individual tools.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksSearchMeta, builtInTool{
+			name:        "skills.search",
+			title:       "Search Skills",
+			description: "Compatibility alias for skills.find. Search workflow skills by use case or intent before looking for individual tools.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksDescribeMeta, builtInTool{
+			name:        "skills.describe",
+			title:       "Describe Skill",
+			description: "Get one or more full skill workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched skill ids in one bulk call.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"skill_id": map[string]any{"type": "string"}, "skill_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"skill_id"}}, {"required": []string{"skill_ids"}}, {"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksFindMeta, builtInTool{
+			name:        "playbooks.find",
+			title:       "Find Playbooks",
+			description: "Compatibility alias for skills.find.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksListMeta, builtInTool{
+			name:        "playbooks.list",
+			title:       "List Playbooks",
+			description: "Compatibility alias for skills.find.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksSearchMeta, builtInTool{
+			name:        "playbooks.search",
+			title:       "Search Playbooks",
+			description: "Compatibility alias for skills.find.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+		}),
+		mustBuiltInToolRegistration((*Server).playbooksDescribeMeta, builtInTool{
+			name:        "playbooks.describe",
+			title:       "Describe Playbook",
+			description: "Get one or more full playbook workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched playbook ids in one bulk call.",
+			permission:  "module.read",
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}},
+		}),
+	)
 	if s != nil && s.templates != nil {
 		registry = append(registry,
 			mustBuiltInToolRegistration(func(s *Server, actor ActorContext, _ map[string]any) (map[string]any, bool, error) {
@@ -45,6 +138,11 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 		registry = append(registry,
 			mustBuiltInToolRegistration((*Server).analyticsDashboardList, builtInTool{name: "analytics.dashboard.list", title: "List Dashboards", description: "List runtime analytics dashboards.", permission: "analytics.read"}),
 			mustBuiltInToolRegistration((*Server).analyticsDashboardGet, builtInTool{name: "analytics.dashboard.get", title: "Get Dashboard", description: "Get one runtime analytics dashboard.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dashboard_id": map[string]any{"type": "string"}}, "required": []string{"dashboard_id"}}}),
+			mustBuiltInToolRegistration((*Server).analyticsDashboardWidgetCatalog, builtInTool{name: "analytics.dashboard.widget_catalog", title: "List Dashboard Widgets", description: "List registered dashboard widget definitions available to the actor for a dashboard surface.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"surface": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).analyticsDashboardWidgetPreview, builtInTool{name: "analytics.dashboard.widget.preview", title: "Preview Dashboard Widget", description: "Build a live preview dashboard widget artifact from one selected widget key without saving it. Use this for focused insight answers where only one widget is needed. If widget_key is omitted, Orbyte will infer the best widget from the title and description.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"}, "widget_key": map[string]any{"type": "string"}, "description": map[string]any{"type": "string"}, "intent": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).analyticsDashboardWidgetsPreview, builtInTool{name: "analytics.dashboard.widgets.preview", title: "Preview Dashboard Widgets", description: "Build 2-3 live preview dashboard widget artifacts for a focused insight answer without saving a full board. Prefer omitting widget_keys for general insight requests so Orbyte can infer a balanced KPI/comparison/trend set from the title, description, and intent. Supply widget_keys only when the user explicitly asked for specific widgets.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"}, "widget_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "description": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}, "intent": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).analyticsDashboardBoardPreview, builtInTool{name: "analytics.dashboard.board.preview", title: "Preview Dashboard Board", description: "Build a live preview full dashboard board artifact from selected widget keys without saving it. Use this only when the user explicitly asks for a full dashboard or board preview. If widget_keys are omitted, Orbyte will choose relevant registered widgets from the title and description.", permission: "analytics.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"}, "widget_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "description": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).analyticsDashboardBoardCreate, builtInTool{name: "analytics.dashboard.board.create", title: "Create Dashboard Board", description: "Create a saved dashboard board from selected widget keys. If widget_keys are omitted, Orbyte will choose relevant registered widgets from the title and description.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"}, "widget_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "description": map[string]any{"type": "string"}}, "required": []string{"title"}}}),
 			mustBuiltInToolRegistration((*Server).analyticsDashboardSave, builtInTool{name: "analytics.dashboard.save", title: "Save Dashboard", description: "Create or update a runtime analytics dashboard.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dashboard": map[string]any{"type": "object"}}, "required": []string{"dashboard"}}}),
 			mustBuiltInToolRegistration((*Server).analyticsDashboardDelete, builtInTool{name: "analytics.dashboard.delete", title: "Delete Dashboard", description: "Delete a runtime analytics dashboard.", permission: "analytics.author", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"dashboard_id": map[string]any{"type": "string"}}, "required": []string{"dashboard_id"}}}),
 			mustBuiltInToolRegistration((*Server).analyticsMetricList, builtInTool{name: "analytics.metric.list", title: "List Saved Metrics", description: "List runtime analytics saved metrics.", permission: "analytics.read"}),
@@ -120,6 +218,12 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 			mustBuiltInToolRegistration((*Server).moduleCompatibilityList, builtInTool{name: "module.compatibility.list", title: "List Module Compatibility", description: "List module compatibility diagnostics.", permission: "configuration.read"}),
 			mustBuiltInToolRegistration((*Server).moduleEnable, builtInTool{name: "module.enable", title: "Enable Module", description: "Enable one module. Requires confirmation.", permission: "module.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"module_key", "confirm_apply"}}}),
 			mustBuiltInToolRegistration((*Server).moduleDisable, builtInTool{name: "module.disable", title: "Disable Module", description: "Disable one module. Requires confirmation.", permission: "module.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"module_key", "confirm_apply"}}}),
+			mustBuiltInToolRegistration((*Server).businessModuleList, builtInTool{name: "business.module.list", title: "List Business Modules", description: "List enabled business modules with descriptions, capabilities, documents, models, and dependencies.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "query": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).businessModuleGet, builtInTool{name: "business.module.get", title: "Get Business Module", description: "Get one module's business metadata and owned artifacts.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"module_key"}}}),
+			mustBuiltInToolRegistration((*Server).businessCapabilitySearch, builtInTool{name: "business.capability.search", title: "Search Business Capabilities", description: "Search business capabilities across enabled modules.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"query"}}}),
+			mustBuiltInToolRegistration((*Server).businessTopologyMap, builtInTool{name: "business.topology.map", title: "Map Business Topology", description: "Map enabled business modules, capabilities, and dependencies in one topology view.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).businessHealthSummary, builtInTool{name: "business.health.summary", title: "Get Business Health Summary", description: "Summarize module, workflow, document, audit, and analytics health across the business.", permission: "module.read", contract: ContractDescriptor{BusinessDomains: []string{"cross-domain", "operations", "finance"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).businessExceptionSearch, builtInTool{name: "business.exception.search", title: "Search Business Exceptions", description: "List pending approvals, open workflow tasks, and unresolved business exceptions.", permission: "module.read", contract: ContractDescriptor{BusinessDomains: []string{"cross-domain", "operations"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"status": map[string]any{"type": "string"}, "page": map[string]any{"type": "integer"}, "page_size": map[string]any{"type": "integer"}}}}),
 		)
 	}
 	if s != nil && s.search != nil {
@@ -156,6 +260,8 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 			mustBuiltInToolRegistration((*Server).referenceRecordList, builtInTool{name: "reference.record.list", title: "List Reference Records", description: "List records for one reference type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}}, "required": []string{"type_key"}}}),
 			mustBuiltInToolRegistration((*Server).referenceResolve, builtInTool{name: "reference.resolve", title: "Resolve Reference Records", description: "Resolve effective records for one reference type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"type_key"}}}),
 			mustBuiltInToolRegistration((*Server).referenceRecordUpsert, builtInTool{name: "reference.record.upsert", title: "Upsert Reference Record", description: "Create or update a reference record. Requires confirmation.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"record": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"record", "confirm_apply"}}}),
+			mustBuiltInToolRegistration((*Server).businessReferenceTypeList, builtInTool{name: "business.reference.type.list", title: "List Business Reference Types", description: "List business reference types across modules.", permission: "configuration.read"}),
+			mustBuiltInToolRegistration((*Server).businessReferenceResolve, builtInTool{name: "business.reference.resolve", title: "Resolve Business Reference Records", description: "Resolve effective business reference records for one type.", permission: "configuration.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"type_key": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"type_key"}}}),
 		)
 	}
 	if s != nil && s.integration != nil {
@@ -183,6 +289,170 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 			mustBuiltInToolRegistration((*Server).documentCreate, builtInTool{name: "document.create", title: "Create Document", description: "Create a new document.", permission: "document.create", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"document_type": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}, "required": []string{"document_type"}}}),
 			mustBuiltInToolRegistration((*Server).documentUpdate, builtInTool{name: "document.update", title: "Update Document", description: "Update an existing document.", permission: "document.update_draft", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"document_id": map[string]any{"type": "string"}, "document": map[string]any{"type": "object"}}, "required": []string{"document_id", "document"}}}),
 			mustBuiltInToolRegistration((*Server).documentDelete, builtInTool{name: "document.delete", title: "Delete Document", description: "Delete a document by ID.", permission: "configuration.manage", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"document_id": map[string]any{"type": "string"}}, "required": []string{"document_id"}}}),
+			mustBuiltInToolRegistration((*Server).businessDocumentTypeList, builtInTool{name: "business.document.type.list", title: "List Business Document Types", description: "List business document types and owning modules.", permission: "document.list", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).businessDocumentSearch, builtInTool{name: "business.document.search", title: "Search Business Documents", description: "Search business documents by module, type, status, scope, and keyword.", permission: "document.list", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "document_type": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "query": map[string]any{"type": "string"}, "page": map[string]any{"type": "integer"}, "page_size": map[string]any{"type": "integer"}}}}),
+			mustBuiltInToolRegistration((*Server).businessDocumentGet, builtInTool{name: "business.document.get", title: "Get Business Document", description: "Get one business document with filtered or full sanitized payload.", permission: "document.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"document_id": map[string]any{"type": "string"}, "module_key": map[string]any{"type": "string"}, "include_full_payload": map[string]any{"type": "boolean"}}, "required": []string{"document_id"}}}),
+			mustBuiltInToolRegistration((*Server).businessDocumentDraftCreate, builtInTool{name: "business.document.draft.create", title: "Create Business Draft Document", description: "Create a business draft document after explicit confirmation.", permission: "document.create", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "document_type": map[string]any{"type": "string"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"document_type", "payload", "confirm_apply"}}}),
+			mustBuiltInToolRegistration((*Server).businessDocumentDraftUpdate, builtInTool{name: "business.document.draft.update", title: "Update Business Draft Document", description: "Update an existing business draft document after explicit confirmation.", permission: "document.update_draft", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}, "document_id": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "expected_version": map[string]any{"type": "integer"}, "expected_etag": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"document_id", "payload", "confirm_apply"}}}),
+			mustBuiltInToolRegistration((*Server).businessRecordSearch, builtInTool{name: "business.record.search", title: "Search Business Records", description: "Search business documents and models in one generic MCP view.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"resource_kind": map[string]any{"type": "string"}, "module_key": map[string]any{"type": "string"}, "document_type": map[string]any{"type": "string"}, "model_key": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}, "filters": map[string]any{"type": "object"}, "organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}, "query": map[string]any{"type": "string"}, "page": map[string]any{"type": "integer"}, "page_size": map[string]any{"type": "integer"}, "include_full_payload": map[string]any{"type": "boolean"}}}}),
+			mustBuiltInToolRegistration((*Server).businessRecordGet, builtInTool{name: "business.record.get", title: "Get Business Record", description: "Get one business document or model record.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"resource_kind": map[string]any{"type": "string"}, "document_id": map[string]any{"type": "string"}, "model_key": map[string]any{"type": "string"}, "record_id": map[string]any{"type": "string"}, "include_full_payload": map[string]any{"type": "boolean"}}, "required": []string{"resource_kind"}}}),
+			mustBuiltInToolRegistration((*Server).businessRecordRelated, builtInTool{name: "business.record.related", title: "Get Related Business Records", description: "Follow business document links or model relations.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"resource_kind": map[string]any{"type": "string"}, "document_id": map[string]any{"type": "string"}, "model_key": map[string]any{"type": "string"}, "record_id": map[string]any{"type": "string"}, "relation_key": map[string]any{"type": "string"}, "filters": map[string]any{"type": "object"}, "sort_key": map[string]any{"type": "string"}, "desc": map[string]any{"type": "boolean"}, "page": map[string]any{"type": "integer"}, "page_size": map[string]any{"type": "integer"}}, "required": []string{"resource_kind"}}}),
+			mustBuiltInToolRegistration((*Server).businessTimelineGet, builtInTool{name: "business.timeline.get", title: "Get Business Timeline", description: "Load audit and workflow history for a business document or model record.", permission: "module.read", contract: ContractDescriptor{BusinessDomains: []string{"cross-domain", "workflow"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"resource_kind": map[string]any{"type": "string"}, "document_id": map[string]any{"type": "string"}, "model_key": map[string]any{"type": "string"}, "record_id": map[string]any{"type": "string"}}, "required": []string{"resource_kind"}}}),
+			mustBuiltInToolRegistration((*Server).businessRelationshipsGet, builtInTool{name: "business.relationships.get", title: "Get Business Relationships", description: "Inspect a business record together with its direct linked relationships.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"resource_kind": map[string]any{"type": "string"}, "document_id": map[string]any{"type": "string"}, "model_key": map[string]any{"type": "string"}, "record_id": map[string]any{"type": "string"}, "relation_key": map[string]any{"type": "string"}, "filters": map[string]any{"type": "object"}, "sort_key": map[string]any{"type": "string"}, "desc": map[string]any{"type": "boolean"}, "page": map[string]any{"type": "integer"}, "page_size": map[string]any{"type": "integer"}}, "required": []string{"resource_kind"}}}),
+			mustBuiltInToolRegistration((*Server).businessDatasetList, builtInTool{name: "business.dataset.list", title: "List Business Datasets", description: "List business datasets exposed by enabled modules.", permission: "module.read", inputSchema: map[string]any{"type": "object", "properties": map[string]any{"module_key": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).pricingPromotionAdvisorReview, builtInTool{name: "pricing.promotion.advisor.review", title: "Review Pricing and Promotion Setup", description: "Analyze pricing and promotion coverage, owned artifacts, and draft paths for recommendations.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"pricing", "commercial"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).taxStructureAdvisorReview, builtInTool{name: "tax.structure.advisor.review", title: "Review Tax Structure", description: "Analyze tax-related module coverage, records, and recommended draft paths.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"tax", "finance"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).treasuryReconciliationAdvisorReview, builtInTool{name: "treasury.reconciliation.advisor.review", title: "Review Treasury and Reconciliation", description: "Analyze treasury and reconciliation coverage, exceptions, and follow-up investigation tools.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"treasury", "finance"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).inventoryHealthAdvisorReview, builtInTool{name: "inventory.health.advisor.review", title: "Review Inventory Health", description: "Analyze inventory, warehouse, and production-oriented business coverage and health signals.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"inventory", "operations"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).partyMasterAdvisorReview, builtInTool{name: "party.master.advisor.review", title: "Review Party Master", description: "Analyze customer, vendor, contact, and address master coverage and data quality follow-up paths.", permission: "module.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"advisor-pack", "business-comprehension"}, BusinessDomains: []string{"party", "masterdata"}}, inputSchema: map[string]any{"type": "object", "properties": map[string]any{"organization_id": map[string]any{"type": "string"}, "location_id": map[string]any{"type": "string"}}}}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsOverview, builtInTool{
+				name:        "business.analytics.overview",
+				title:       "Get Cross-Domain Analytics Overview",
+				description: "Return a scoped cross-domain analytical summary with KPI cards, anomalies, exceptions, and drilldowns.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"operating_unit_id": map[string]any{"type": "string"},
+						"domain":            map[string]any{"type": "string"},
+					},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsAnomalySearch, builtInTool{
+				name:        "business.analytics.anomaly.search",
+				title:       "Search Analytical Anomalies",
+				description: "Identify cross-domain anomaly signals such as backlog spikes, rejection pressure, audit gaps, or master-data issues.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"operating_unit_id": map[string]any{"type": "string"},
+						"domain":            map[string]any{"type": "string"},
+						"page":              map[string]any{"type": "integer"},
+						"page_size":         map[string]any{"type": "integer"},
+					},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsExceptionCluster, builtInTool{
+				name:        "business.analytics.exception.cluster",
+				title:       "Cluster Business Exceptions",
+				description: "Group open business exceptions by area, status, severity, and aging for cross-domain investigation.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"status":   map[string]any{"type": "string"},
+						"group_by": map[string]any{"type": "string"},
+					},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsDrilldown, builtInTool{
+				name:        "business.analytics.drilldown",
+				title:       "Resolve Analytical Drilldown",
+				description: "Resolve a stable analytical drilldown handle into the next MCP tool and arguments.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"handle": map[string]any{"type": "string"},
+					},
+					"required": []string{"handle"},
+				},
+			}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsDomainSummary, builtInTool{
+				name:        "business.analytics.domain.summary",
+				title:       "Get Domain Analytics Summary",
+				description: "Return a scoped analytical summary for one business domain with KPI cards and investigation drilldowns.",
+				permission:  "module.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"domain":            map[string]any{"type": "string"},
+						"organization_id":   map[string]any{"type": "string"},
+						"location_id":       map[string]any{"type": "string"},
+						"operating_unit_id": map[string]any{"type": "string"},
+					},
+					"required": []string{"domain"},
+				},
+			}),
+		)
+	}
+	if s != nil && s.analytics != nil {
+		registry = append(registry,
+			mustBuiltInToolRegistration((*Server).businessAnalyticsKPISummary, builtInTool{name: "business.analytics.kpi.summary", title: "Get Business KPI Summary", description: "Return current and recent analytics KPIs for business investigation.", permission: "analytics.read", contract: ContractDescriptor{ActionClass: "analyze", RiskClass: "low", GovernanceTags: []string{"business-comprehension"}, BusinessDomains: []string{"cross-domain", "analytics"}}}),
+			mustBuiltInToolRegistration((*Server).businessAnalyticsTrend, builtInTool{
+				name:        "business.analytics.trend",
+				title:       "Get Business Analytics Trend",
+				description: "Return scoped time-series analytics with grouped trend points and drilldowns.",
+				permission:  "analytics.read",
+				contract: ContractDescriptor{
+					ActionClass:    "analyze",
+					RiskClass:      "low",
+					GovernanceTags: []string{"business-comprehension", "analytics"},
+					BusinessDomains: []string{
+						"cross-domain",
+						"analytics",
+					},
+				},
+				inputSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"date_from": map[string]any{"type": "string"},
+						"date_to":   map[string]any{"type": "string"},
+						"bucket":    map[string]any{"type": "string"},
+						"limit":     map[string]any{"type": "integer"},
+					},
+				},
+			}),
 		)
 	}
 	return registry

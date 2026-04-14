@@ -30,6 +30,12 @@ type EnrollmentPayload = {
   qr_uri?: string
 }
 
+type CashierPINState = {
+  configured: boolean
+  pin_length: number
+  changed_at?: string
+}
+
 export default function SettingsPage() {
   const { addToast } = useToast()
   const navigate = useNavigate()
@@ -40,14 +46,25 @@ export default function SettingsPage() {
   const [qrURI, setQrURI] = useState('')
   const [loginEnabled, setLoginEnabled] = useState(false)
   const [approvalEnabled, setApprovalEnabled] = useState(false)
+  const [cashierPIN, setCashierPIN] = useState<CashierPINState | null>(null)
+  const [cashierPINBusy, setCashierPINBusy] = useState(false)
+  const [newCashierPIN, setNewCashierPIN] = useState('')
+  const [currentCashierPIN, setCurrentCashierPIN] = useState('')
+  const clearAuth = useAuthStore((state) => state.clearAuth)
 
   async function load() {
     setLoading(true)
     try {
-      const response = await fetch('/auth/2fa', { credentials: 'include' })
-      if (!response.ok) throw new Error(`Failed to load settings: ${response.status}`)
-      const payload = (await response.json()) as TwoFactorState
+      const [twoFactorResponse, cashierPINResponse] = await Promise.all([
+        fetch('/auth/2fa', { credentials: 'include' }),
+        fetch('/auth/cashier-pin', { credentials: 'include' }),
+      ])
+      if (!twoFactorResponse.ok) throw new Error(`Failed to load settings: ${twoFactorResponse.status}`)
+      if (!cashierPINResponse.ok) throw new Error(`Failed to load cashier PIN settings: ${cashierPINResponse.status}`)
+      const payload = (await twoFactorResponse.json()) as TwoFactorState
+      const pinPayload = (await cashierPINResponse.json()) as CashierPINState
       setState(payload)
+      setCashierPIN(pinPayload)
       setLoginEnabled(!!payload.enrollment?.login_enabled || payload.login_mode === 'required')
       setApprovalEnabled(!!payload.enrollment?.approval_enabled || payload.approval_mode === 'required')
     } catch (error) {
@@ -122,17 +139,44 @@ export default function SettingsPage() {
     setQrURI('')
     setVerifyCode('')
     if (payload.logged_out) {
-      useAuthStore.setState({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        hasCheckedAuth: true,
-      })
+      clearAuth()
       navigate('/login', { replace: true })
       return
     }
     await load()
+  }
+
+  async function saveCashierPIN() {
+    setCashierPINBusy(true)
+    try {
+      const response = await fetch('/auth/cashier-pin', {
+        method: cashierPIN?.configured ? 'PUT' : 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': readCookie('orbyte_csrf'),
+        },
+        body: JSON.stringify(
+          cashierPIN?.configured
+            ? { current_pin: currentCashierPIN, new_pin: newCashierPIN }
+            : { new_pin: newCashierPIN },
+        ),
+      })
+      if (!response.ok) {
+        let message = `Failed to save cashier PIN: ${response.status}`
+        try {
+          const payload = await response.json()
+          message = payload?.error?.message || message
+        } catch (_) {}
+        throw new Error(message)
+      }
+      addToast({ message: cashierPIN?.configured ? 'Cashier PIN updated.' : 'Cashier PIN created.', variant: 'success' })
+      setCurrentCashierPIN('')
+      setNewCashierPIN('')
+      await load()
+    } finally {
+      setCashierPINBusy(false)
+    }
   }
 
   if (loading) {
@@ -247,6 +291,48 @@ export default function SettingsPage() {
           </button>
         </section>
       ) : null}
+
+      <section id="cashier-pin" className="rounded-xl border border-line p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Cashier PIN</h2>
+        <div className="mt-3 space-y-3 text-sm text-body">
+          <div>Status: {cashierPIN?.configured ? 'Configured' : 'Not configured'}</div>
+          <div>Terminal unlock uses a dedicated cashier PIN for POS, separate from your normal password.</div>
+          {cashierPIN?.changed_at ? <div>Last changed: {new Date(cashierPIN.changed_at).toLocaleString()}</div> : null}
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {cashierPIN?.configured ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Current PIN</span>
+              <input
+                value={currentCashierPIN}
+                onChange={(event) => setCurrentCashierPIN(event.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="h-10 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-body"
+                placeholder="Current cashier PIN"
+              />
+            </label>
+          ) : null}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">{cashierPIN?.configured ? 'New PIN' : 'Create PIN'}</span>
+            <input
+              value={newCashierPIN}
+              onChange={(event) => setNewCashierPIN(event.target.value)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="h-10 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-body"
+              placeholder={`${cashierPIN?.pin_length || 6}-digit cashier PIN`}
+            />
+          </label>
+        </div>
+        <button
+          onClick={() => void saveCashierPIN().catch((error) => addToast({ message: error instanceof Error ? normalizeErrorText(error.message) : 'Cashier PIN update failed', variant: 'error' }))}
+          disabled={cashierPINBusy}
+          className="mt-4 rounded-lg bg-accent px-4 py-2 text-white disabled:opacity-50"
+        >
+          {cashierPINBusy ? 'Saving…' : cashierPIN?.configured ? 'Change Cashier PIN' : 'Create Cashier PIN'}
+        </button>
+      </section>
     </section>
   )
 }

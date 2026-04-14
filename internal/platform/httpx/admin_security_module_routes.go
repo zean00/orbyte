@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/idempotency"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/integration"
@@ -16,7 +17,7 @@ import (
 	"orbyte/internal/platform/shared"
 )
 
-func registerAdminSecurityModuleRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service) {
+func registerAdminSecurityModuleRoutes(mux *http.ServeMux, cfg *config.Service, ident *identity.Service, modules *module.Service, auditSvc *audit.Service, policySvc *policy.Service, integrationSvc *integration.Service, referenceSvc *reference.Service, idempotencySvc *idempotency.Service) {
 	mux.HandleFunc("GET /admin/api/idempotency/records", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthorization(w, r, ident, "configuration.read", "", "configuration.read"); !ok {
 			return
@@ -71,6 +72,68 @@ func registerAdminSecurityModuleRoutes(mux *http.ServeMux, ident *identity.Servi
 	})
 
 	mux.HandleFunc("GET /admin/api/modules/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/dependency-graph") {
+			moduleKey := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/admin/api/modules/"), "/dependency-graph"))
+			if moduleKey == "" {
+				respondError(w, shared.NotFound("module not found"))
+				return
+			}
+			if _, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read"); !ok {
+				return
+			}
+			if _, found := modules.GetForScope(
+				moduleKey,
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			); !found {
+				respondError(w, shared.NotFound("module not found"))
+				return
+			}
+			items := modules.ListForScope(
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			)
+			respondJSON(w, http.StatusOK, buildFocusedAdminModuleDependencyGraph(items, moduleKey))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/console") {
+			moduleKey := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/admin/api/modules/"), "/console"))
+			if moduleKey == "" {
+				respondError(w, shared.NotFound("module not found"))
+				return
+			}
+			p, ok := requireAuthorization(w, r, ident, "module.read", "", "module.read")
+			if !ok {
+				return
+			}
+			item, found := modules.GetForScope(
+				moduleKey,
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			)
+			if !found {
+				respondError(w, shared.NotFound("module not found"))
+				return
+			}
+			allItems := modules.ListForScope(
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				strings.TrimSpace(r.URL.Query().Get("operating_unit_id")),
+			)
+			respondJSON(w, http.StatusOK, buildAdminModuleConsolePayload(
+				cfg,
+				ident,
+				p,
+				item,
+				strings.TrimSpace(r.URL.Query().Get("organization_id")),
+				strings.TrimSpace(r.URL.Query().Get("location_id")),
+				buildFocusedAdminModuleDependencyGraph(allItems, moduleKey),
+			))
+			return
+		}
 		moduleKey, ok := adminModulePath(r.URL.Path)
 		if !ok {
 			respondError(w, shared.NotFound("module not found"))

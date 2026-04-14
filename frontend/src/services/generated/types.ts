@@ -1,19 +1,181 @@
-// Auto-generated types from OpenAPI spec
-// This file should be regenerated when the OpenAPI spec changes
+// Auto-generated types from OpenAPI spec.
+// This file is intentionally kept in sync with contracts/openapi/latest/openapi.json.
 
-export interface AdminBootstrapResponse {
-  actions: UIActionDefinition[]
-  custom_entries: UICustomEntryDefinition[]
-  default_path?: string
-  locale?: string
-  locations: Location[]
-  menus: UIMenuDefinition[]
-  organization: Organization
-  roles: Role[]
-  supported_locales: string[]
-  ui_access?: boolean
-  ui_path?: string
-  views: UIViewDefinition[]
+export interface LocalizedText {
+  en?: string
+  id?: string
+  [key: string]: string | undefined
+}
+
+export interface MenuDefinition {
+  key: string
+  label: string
+  label_i18n?: LocalizedText
+  icon?: string
+  action_key: string
+  parent_key?: string
+  order?: number
+}
+
+export interface ColumnDefinition {
+  key: string
+  label: string
+  label_i18n?: LocalizedText
+  path: string
+}
+
+export interface FilterDefinition {
+  key: string
+  label: string
+  label_i18n?: LocalizedText
+  type: string
+  options?: string[]
+}
+
+export interface FieldDefinition {
+  key: string
+  label: string
+  label_i18n?: LocalizedText
+  path: string
+  type: string
+  widget?: string
+  placeholder?: string
+  placeholder_i18n?: LocalizedText
+  help_text?: string
+  help_text_i18n?: LocalizedText
+  options?: string[]
+  required?: boolean
+  min_length?: number
+  max_length?: number
+  pattern?: string
+  min_value?: number
+  max_value?: number
+  read_only?: boolean
+}
+
+export interface SectionDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  fields?: FieldDefinition[]
+}
+
+export interface TabDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  sections?: SectionDefinition[]
+}
+
+export interface CardDefinition {
+  key: string
+  label: string
+  label_i18n?: LocalizedText
+  path: string
+  widget?: string
+  action_key?: string
+}
+
+export interface RelatedViewDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  source: string
+  empty_state?: string
+  empty_state_i18n?: LocalizedText
+}
+
+export interface ActionPlacementDefinition {
+  action_key: string
+  zone: string
+}
+
+export interface ViewDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  kind: string
+  document_type?: string
+  model_key?: string
+  projection_key?: string
+  dataset_key?: string
+  printable?: boolean
+  print_purpose?: string
+  print_channel?: string
+  allowed_actions?: string[]
+  columns?: ColumnDefinition[]
+  filters?: FilterDefinition[]
+  sections?: SectionDefinition[]
+  tabs?: TabDefinition[]
+  fields?: FieldDefinition[]
+  cards?: CardDefinition[]
+  related_views?: RelatedViewDefinition[]
+  action_placements?: ActionPlacementDefinition[]
+  empty_state?: string
+  empty_state_i18n?: LocalizedText
+  default_page_size?: number
+}
+
+export interface CustomEntryDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  route_path: string
+  bundle_key: string
+  component_export: string
+  printable?: boolean
+  print_target_kind?: string
+  print_target_key?: string
+  print_purpose?: string
+  print_channel?: string
+}
+
+export interface DocumentFlowDocumentDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  document_type: string
+  tabs?: TabDefinition[]
+  sections?: SectionDefinition[]
+  fields?: FieldDefinition[]
+}
+
+export interface DocumentFlowBranchRule {
+  path: string
+  equals?: string
+  in?: string[]
+  truthy?: boolean
+  next_step_key: string
+}
+
+export interface DocumentFlowStepDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  documents?: DocumentFlowDocumentDefinition[]
+  next_rules?: DocumentFlowBranchRule[]
+  next_step_key?: string
+}
+
+export interface DocumentFlowDefinition {
+  key: string
+  title: string
+  title_i18n?: LocalizedText
+  route_path: string
+  primary_document_type: string
+  steps?: DocumentFlowStepDefinition[]
+}
+
+export interface ActionDefinition {
+  key: string
+  label: string
+  label_i18n?: LocalizedText
+  kind: string
+  route_path: string
+  view_key?: string
+  custom_entry_key?: string
+  flow_key?: string
+  render_mode: 'generic' | 'custom' | 'flow'
 }
 
 export interface AuthOptions {
@@ -22,172 +184,52 @@ export interface AuthOptions {
   login_subtitle?: string
   login_title?: string
   password_enabled?: boolean
+  totp_enabled?: boolean
 }
 
-export interface CreateDocumentRequest {
-  location_id?: string
-  organization_id: string
-  payload: Record<string, unknown>
-  type: 'clinic_encounter' | 'clinic_registration' | 'generic_request'
+export interface UIBootstrapResponse {
+  shell_kind: 'workspace'
+  surface: string
+  available_surfaces: string[]
+  menus: MenuDefinition[]
+  actions: ActionDefinition[]
+  views: ViewDefinition[]
+  flows: DocumentFlowDefinition[]
+  default_path: string
+  preferred_path?: string
+  fallback_paths?: Record<string, string>
+  admin_access: boolean
+  admin_path: string
+  locale: string
+  supported_locales: string[]
+  auth_context: {
+    actor_user_id: string
+    effective_user_id: string
+    delegation_active: boolean
+    delegation_grant_id?: string
+  }
+  capabilities?: Record<string, unknown>
 }
 
-export interface DocumentActionRequest {
-  action: 'submit' | 'approve' | 'reject' | 'reopen' | 'cancel'
-  expected_etag?: string
-  expected_version?: number
+export interface AdminBootstrapResponse {
+  shell_kind: 'admin'
+  menus: MenuDefinition[]
+  actions: ActionDefinition[]
+  views: ViewDefinition[]
+  custom_entries: CustomEntryDefinition[]
+  default_path: string
+  preferred_path?: string
+  ui_access: boolean
+  ui_path: string
+  current_user_id: string
+  organization?: Record<string, unknown>
+  locations?: Array<Record<string, unknown>>
+  operating_units?: Array<Record<string, unknown>>
+  roles?: Array<Record<string, unknown>>
+  locale: string
+  supported_locales: string[]
 }
 
-export interface DocumentAttachment {
-  attachment_type?: string
-  content_type?: string
-  created_at?: string
-  document_id?: string
-  file_name?: string
-  id?: string
-  size_bytes?: number
-  storage_key?: string
-}
-
-export interface DocumentBody {
-  content_hash?: string
-  document_id?: string
-  payload?: Record<string, unknown>
-  schema_version?: string
-}
-
-export interface DocumentHeader {
-  created_at?: string
-  created_by?: string
-  etag?: string
-  id?: string
-  location_id?: string
-  organization_id?: string
-  status?: DocumentStatus
-  type?: string
-  updated_at?: string
-  updated_by?: string
-  version?: number
-}
-
-export type DocumentStatus =
-  | 'draft'
-  | 'pending'
-  | 'submitted'
-  | 'approved'
-  | 'rejected'
-  | 'cancelled'
-  | 'closed'
-
-export interface UIActionDefinition {
-  action: string
-  handler?: string
-  label?: string
-  target?: string
-}
-
-export interface UICustomEntryDefinition {
-  content_type?: string
-  file_name?: string
-  handler?: string
-  icon?: string
-  id?: string
-  label?: string
-  location_id?: string
-  location_path?: string
-  payload?: Record<string, unknown>
-  type: string
-}
-
-export interface UIMenuDefinition {
-  entries?: UIMenuEntry[]
-  id?: string
-  label?: string
-  location_id?: string
-  location_path?: string
-}
-
-export interface UIMenuEntry {
-  action?: string
-  badge?: string
-  icon?: string
-  id?: string
-  label?: string
-  location_id?: string
-  location_path?: string
-  target?: string
-  url?: string
-}
-
-export interface UIViewDefinition {
-  columns?: UIViewColumn[]
-  filters?: Record<string, unknown>
-  id?: string
-  label?: string
-  location_id?: string
-  location_path?: string
-  type?: string
-}
-
-export interface UIViewColumn {
-  field?: string
-  format?: string
-  label?: string
-  type?: string
-  width?: number
-}
-
-export interface Location {
-  children?: Location[]
-  id?: string
-  name?: string
-  type?: string
-}
-
-export interface Organization {
-  id?: string
-  name?: string
-  slug?: string
-}
-
-export interface Role {
-  description?: string
-  id?: string
-  name?: string
-  permissions?: string[]
-}
-
-export interface Workitem {
-  id?: string
-  document_id?: string
-  document_type?: string
-  status?: string
-  assigned_to?: string
-  due_date?: string
-  priority?: string
-  created_at?: string
-  updated_at?: string
-}
-
-export interface Workflow {
-  id?: string
-  name?: string
-  description?: string
-  status?: string
-  version?: number
-  created_at?: string
-  updated_at?: string
-}
-
-export interface User {
-  id?: string
-  email?: string
-  name?: string
-  avatar_url?: string
-  roles?: string[]
-  organization_id?: string
-}
-
-// OpenAPI paths interface for openapi-fetch
 export interface paths {
   '/auth/options': {
     get: {
@@ -200,249 +242,28 @@ export interface paths {
       }
     }
   }
-  '/bootstrap/ui': {
+  '/ui/bootstrap': {
+    get: {
+      parameters: {
+        query?: {
+          surface?: string
+        }
+      }
+      responses: {
+        200: {
+          content: {
+            'application/json': UIBootstrapResponse
+          }
+        }
+      }
+    }
+  }
+  '/admin/api/bootstrap': {
     get: {
       responses: {
         200: {
           content: {
             'application/json': AdminBootstrapResponse
-          }
-        }
-      }
-    }
-  }
-  '/bootstrap/admin': {
-    get: {
-      responses: {
-        200: {
-          content: {
-            'application/json': AdminBootstrapResponse
-          }
-        }
-      }
-    }
-  }
-  '/documents': {
-    get: {
-      parameters: {
-        query?: {
-          location_id?: string
-          status?: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: DocumentHeader[]
-            }
-          }
-        }
-      }
-    }
-    post: {
-      requestBody: {
-        content: {
-          'application/json': CreateDocumentRequest
-        }
-      }
-      responses: {
-        201: {
-          content: {
-            'application/json': DocumentHeader
-          }
-        }
-      }
-    }
-  }
-  '/documents/{id}': {
-    get: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: DocumentHeader
-            }
-          }
-        }
-      }
-    }
-  }
-  '/documents/{id}/body': {
-    get: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: DocumentBody
-            }
-          }
-        }
-      }
-    }
-    put: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      requestBody: {
-        content: {
-          'application/json': {
-            payload: Record<string, unknown>
-          }
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': DocumentBody
-          }
-        }
-      }
-    }
-  }
-  '/documents/{id}/actions': {
-    post: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      requestBody: {
-        content: {
-          'application/json': DocumentActionRequest
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': DocumentHeader
-          }
-        }
-      }
-    }
-  }
-  '/documents/{id}/attachments': {
-    get: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: DocumentAttachment[]
-            }
-          }
-        }
-      }
-    }
-  }
-  '/workitems': {
-    get: {
-      parameters: {
-        query?: {
-          assigned_to?: string
-          status?: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: Workitem[]
-            }
-          }
-        }
-      }
-    }
-  }
-  '/workitems/{id}': {
-    get: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: Workitem
-            }
-          }
-        }
-      }
-    }
-  }
-  '/workitems/{id}/complete': {
-    post: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': Workitem
-          }
-        }
-      }
-    }
-  }
-  '/workflows': {
-    get: {
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: Workflow[]
-            }
-          }
-        }
-      }
-    }
-  }
-  '/workflows/{id}': {
-    get: {
-      parameters: {
-        path: {
-          id: string
-        }
-      }
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: Workflow
-            }
-          }
-        }
-      }
-    }
-  }
-  '/users/me': {
-    get: {
-      responses: {
-        200: {
-          content: {
-            'application/json': {
-              data: User
-            }
           }
         }
       }

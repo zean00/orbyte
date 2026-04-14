@@ -17,6 +17,25 @@ func referenceMasterdataKernelPackManifest(seededAt time.Time) module.Manifest {
 		DependencyRequirements: []module.DependencyRequirement{
 			{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired},
 		},
+		AdminConsole: module.AdminConsoleDefinition{
+			Title:           "Reference Data Console",
+			TitleI18n:       localize("Reference Data Console", "Konsol Data Referensi"),
+			Description:     "Reference types and supporting definition entry points.",
+			DescriptionI18n: localize("Reference types and supporting definition entry points.", "Tipe referensi dan pintu masuk definisi pendukung."),
+			Sections: []module.AdminConsoleSectionDefinition{
+				{
+					Key:       "reference_operations",
+					Title:     "Reference Operations",
+					TitleI18n: localize("Reference Operations", "Operasi Referensi"),
+					Kind:      module.AdminConsoleSectionResourceLinks,
+					Links: []module.AdminConsoleLinkDefinition{
+						adminConsoleLink("definitions", "Definitions", "Definisi", "/admin/definitions", "Open platform definitions for reference-backed features.", "Buka definisi platform untuk fitur berbasis referensi.", "configuration.read"),
+						adminConsoleLink("masterdata", "Master Data", "Data Master", "/ui/masterdata/parties", "Open master data that consumes reference types.", "Buka data master yang memakai tipe referensi.", "party.list"),
+						adminConsoleLink("catalog", "Catalog", "Katalog", "/ui/commercial/catalog", "Open commercial catalog records that use reference units and categories.", "Buka catatan katalog komersial yang memakai satuan dan kategori referensi.", "item.list"),
+					},
+				},
+			},
+		},
 		ReferenceTypes: []reference.TypeDefinition{
 			{Key: "currency", DisplayName: "Currency", DisplayNameI18n: localize("Currency", "Mata Uang"), OwnerModuleKey: "reference_masterdata"},
 			{Key: "uom", DisplayName: "Unit of Measure", DisplayNameI18n: localize("Unit of Measure", "Satuan Ukur"), OwnerModuleKey: "reference_masterdata"},

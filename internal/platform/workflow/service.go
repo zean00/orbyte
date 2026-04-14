@@ -219,6 +219,11 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 		escalateAt = now.Add(time.Duration(transition.EscalateAfterSeconds) * time.Second)
 	}
 	if transition.TaskType != "" {
+		taskMetadata := map[string]any{"action": transition.Action}
+		mergeMetadata(taskMetadata, transition.Metadata)
+		if len(transition.CandidateUserIDs) > 0 {
+			taskMetadata["candidate_user_ids"] = append([]string(nil), transition.CandidateUserIDs...)
+		}
 		mutation.Tasks = append(mutation.Tasks, Task{
 			ID:                fmt.Sprintf("task:%s:%s", targetID, transition.Action),
 			WorkflowKey:       transition.WorkflowKey,
@@ -228,19 +233,40 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 			TaskType:          transition.TaskType,
 			Status:            "open",
 			AssignmentMode:    transition.AssignmentMode,
+			AssigneeUserID:    transition.AssigneeUserID,
 			AssigneeRoleKey:   transition.AssigneeRoleKey,
 			CandidateRoleKeys: append([]string(nil), transition.CandidateRoleKeys...),
 			CreatedBy:         actorID,
 			CreatedAt:         now,
 			DueAt:             dueAt,
 			EscalateAt:        escalateAt,
-			Metadata:          map[string]any{"action": transition.Action},
+			Metadata:          taskMetadata,
 		})
 	}
 	if transition.CreateApproval {
 		allowedActions := append([]string(nil), transition.LinkAllowedActions...)
 		if len(allowedActions) == 0 && !transition.LinkReviewOnly {
 			allowedActions = []string{"approve", "reject"}
+		}
+		approvalMetadata := map[string]any{
+			"action":                   transition.Action,
+			"requires_different_actor": transition.RequiresDifferentActor,
+			"step_up_required":         transition.StepUpRequired,
+			"link_mode":                strings.TrimSpace(transition.LinkMode),
+			"link_ttl_seconds":         transition.LinkTTLSeconds,
+			"link_review_only":         transition.LinkReviewOnly,
+			"link_require_step_up":     transition.LinkRequireStepUp,
+			"link_allowed_actions":     allowedActions,
+		}
+		if transition.TaskType != "" {
+			approvalMetadata["task_type"] = transition.TaskType
+		}
+		mergeMetadata(approvalMetadata, transition.Metadata)
+		if transition.AssigneeUserID != "" {
+			approvalMetadata["assignee_user_id"] = transition.AssigneeUserID
+		}
+		if len(transition.CandidateUserIDs) > 0 {
+			approvalMetadata["candidate_user_ids"] = append([]string(nil), transition.CandidateUserIDs...)
 		}
 		mutation.Approvals = append(mutation.Approvals, Approval{
 			ID:                fmt.Sprintf("approval:%s:%s", targetID, transition.Action),
@@ -254,19 +280,19 @@ func (s *Service) PlanCreateSideEffects(transition Transition, targetType, targe
 			RequestedAt:       now,
 			CandidateRoleKeys: append([]string(nil), transition.CandidateRoleKeys...),
 			DueAt:             dueAt,
-			Metadata: map[string]any{
-				"action":                   transition.Action,
-				"requires_different_actor": transition.RequiresDifferentActor,
-				"step_up_required":         transition.StepUpRequired,
-				"link_mode":                strings.TrimSpace(transition.LinkMode),
-				"link_ttl_seconds":         transition.LinkTTLSeconds,
-				"link_review_only":         transition.LinkReviewOnly,
-				"link_require_step_up":     transition.LinkRequireStepUp,
-				"link_allowed_actions":     allowedActions,
-			},
+			Metadata:          approvalMetadata,
 		})
 	}
 	return mutation
+}
+
+func mergeMetadata(dst map[string]any, src map[string]any) {
+	if dst == nil || len(src) == 0 {
+		return
+	}
+	for key, value := range src {
+		dst[key] = value
+	}
 }
 
 func (s *Service) PlanResolveArtifacts(targetID, approvalStatus, taskStatus, actorID string, now time.Time) Mutation {
@@ -381,6 +407,7 @@ func transitionForDefinition(def Definition, currentState, action string) (Trans
 				LinkReviewOnly:         rule.LinkReviewOnly,
 				LinkRequireStepUp:      rule.LinkRequireStepUp,
 				LinkAllowedActions:     append([]string(nil), rule.LinkAllowedActions...),
+				Metadata:               cloneMap(rule.Metadata),
 			}, nil
 		}
 	}

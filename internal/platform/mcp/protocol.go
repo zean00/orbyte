@@ -28,24 +28,39 @@ type JSONRPCError struct {
 }
 
 type ContractDescriptor struct {
-	Version             string   `json:"version,omitempty"`
-	Stability           string   `json:"stability,omitempty"`
-	SideEffectClass     string   `json:"sideEffectClass,omitempty"`
-	Idempotency         string   `json:"idempotency,omitempty"`
-	AuditAction         string   `json:"auditAction,omitempty"`
-	RequiredScopes      []string `json:"requiredScopes,omitempty"`
-	RequiredPermissions []string `json:"requiredPermissions,omitempty"`
-	Deprecated          bool     `json:"deprecated,omitempty"`
-	DeprecationNote     string   `json:"deprecationNote,omitempty"`
+	Version              string   `json:"version,omitempty"`
+	Stability            string   `json:"stability,omitempty"`
+	SideEffectClass      string   `json:"sideEffectClass,omitempty"`
+	Idempotency          string   `json:"idempotency,omitempty"`
+	AuditAction          string   `json:"auditAction,omitempty"`
+	ActionClass          string   `json:"actionClass,omitempty"`
+	RiskClass            string   `json:"riskClass,omitempty"`
+	DraftOnly            bool     `json:"draftOnly,omitempty"`
+	RequiresConfirmation bool     `json:"requiresConfirmation,omitempty"`
+	RequiresApproval     bool     `json:"requiresApproval,omitempty"`
+	GovernanceTags       []string `json:"governanceTags,omitempty"`
+	BusinessDomains      []string `json:"businessDomains,omitempty"`
+	RequiredScopes       []string `json:"requiredScopes,omitempty"`
+	RequiredPermissions  []string `json:"requiredPermissions,omitempty"`
+	Deprecated           bool     `json:"deprecated,omitempty"`
+	DeprecationNote      string   `json:"deprecationNote,omitempty"`
 }
 
 type ToolDescriptor struct {
-	Name        string             `json:"name"`
-	Title       string             `json:"title,omitempty"`
-	Description string             `json:"description,omitempty"`
-	Scope       string             `json:"scope,omitempty"`
-	InputSchema map[string]any     `json:"inputSchema,omitempty"`
-	Contract    ContractDescriptor `json:"contract,omitempty"`
+	Name                 string             `json:"name"`
+	Title                string             `json:"title,omitempty"`
+	Description          string             `json:"description,omitempty"`
+	ModuleKey            string             `json:"moduleKey,omitempty"`
+	SourceType           string             `json:"sourceType,omitempty"`
+	CapabilityKeys       []string           `json:"capabilityKeys,omitempty"`
+	CapabilityCategories []string           `json:"capabilityCategories,omitempty"`
+	CompactEligible      bool               `json:"compactEligible,omitempty"`
+	Scope                string             `json:"scope,omitempty"`
+	PolicyState          string             `json:"policyState,omitempty"`
+	PolicyReason         string             `json:"policyReason,omitempty"`
+	EffectiveVisibility  string             `json:"effectiveVisibility,omitempty"`
+	InputSchema          map[string]any     `json:"inputSchema,omitempty"`
+	Contract             ContractDescriptor `json:"contract,omitempty"`
 }
 
 type ResourceDescriptor struct {
@@ -89,18 +104,50 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 					"supportedEndpointScopes": []string{EndpointScopeAll, EndpointScopeAnalytics},
 					"capabilityResourceURI":   mcpCatalogResourceURI,
 					"errorSemanticsVersion":   "2026-03-23",
+					"activeCapabilities":      s.activeCapabilitiesForInit(),
 					"supportedMethods": []string{
 						"initialize",
 						"tools/list",
+						"tools/search",
+						"tools/find",
+						"tools/describe",
 						"tools/call",
+						"skills/list",
+						"skills/search",
+						"skills/find",
+						"skills/describe",
+						"playbooks/list",
+						"playbooks/search",
+						"playbooks/find",
+						"playbooks/describe",
 						"resources/list",
 						"resources/read",
 					},
 				},
 			},
 		}}
+	case "notifications/initialized", "initialized", "ping":
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{}}
 	case "tools/list":
-		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"tools": s.listTools(actor)}}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: s.toolsListResult(actor, parseToolCatalogOptions(req.Params))}
+	case "tools/search":
+		fallthrough
+	case "tools/find":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.toolsFindMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "tools/describe":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.toolsDescribeMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 	case "resources/list":
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"resources": s.listResources(actor)}}
 	case "resources/read":
@@ -115,11 +162,64 @@ func (s *Server) Handle(ctx context.Context, req JSONRPCRequest, actor ActorCont
 		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"contents": contents}}
 	case "tools/call":
 		var params struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments"`
+			Name           string             `json:"name"`
+			Arguments      map[string]any     `json:"arguments"`
+			CatalogContext ToolCatalogOptions `json:"catalog_context"`
 		}
 		_ = json.Unmarshal(req.Params, &params)
-		result, err := s.callTool(ctx, actor, params.Name, params.Arguments)
+		result, err := s.callTool(ctx, actor, params.Name, params.Arguments, params.CatalogContext)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "playbooks/list":
+		fallthrough
+	case "playbooks/find":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksFindMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "playbooks/search":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksFindMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "playbooks/describe":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksDescribeMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "skills/list":
+		fallthrough
+	case "skills/find":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksFindMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "skills/search":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksFindMeta(actor, params)
+		if err != nil {
+			return errorResponse(req.ID, http.StatusBadRequest, err)
+		}
+		return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
+	case "skills/describe":
+		var params map[string]any
+		_ = json.Unmarshal(req.Params, &params)
+		result, _, err := s.playbooksDescribeMeta(actor, params)
 		if err != nil {
 			return errorResponse(req.ID, http.StatusBadRequest, err)
 		}

@@ -305,7 +305,15 @@ func (a ObjectStoreAdapter) writeLocalObject(artifact ReportArtifact, recipient 
 		}
 		root = tempDir
 	}
-	fullPath := filepath.Join(root, recipient)
+	root = filepath.Clean(root)
+	fullPath := filepath.Join(root, filepath.FromSlash(recipient))
+	relativePath, err := filepath.Rel(root, fullPath)
+	if err != nil {
+		return err
+	}
+	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("object_store recipient escapes root")
+	}
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return err
 	}

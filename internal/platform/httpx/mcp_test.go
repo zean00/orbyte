@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/audit"
+	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/identity"
 )
 
@@ -136,8 +138,38 @@ func TestMCPScopedAnalyticsRouteFiltersSurface(t *testing.T) {
 	}
 }
 
+func TestDevLoopbackMCPAllowed(t *testing.T) {
+	t.Setenv("APP_AUTH_DEV_MODE", "true")
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.RemoteAddr = net.JoinHostPort("127.0.0.1", "12345")
+	if !devLoopbackMCPAllowed(req) {
+		t.Fatal("expected loopback request to be allowed in dev mode")
+	}
+	req.RemoteAddr = net.JoinHostPort("192.168.1.10", "12345")
+	if devLoopbackMCPAllowed(req) {
+		t.Fatal("expected non-loopback request to be rejected")
+	}
+}
+
 func TestMCPRouteListsWorkflowToolsAndRejectsPublishWithoutConfirmation(t *testing.T) {
 	h := newTestHarness(t)
+	if err := h.cfg.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 false,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
 
 	reqBody, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
@@ -184,6 +216,130 @@ func TestMCPRouteListsWorkflowToolsAndRejectsPublishWithoutConfirmation(t *testi
 	rr = h.request("POST", "/mcp", reqBody, true)
 	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "confirm_publish") {
 		t.Fatalf("expected publish confirmation rejection, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMCPRouteAppliesGovernancePolicyMetadataAndBlocksMutation(t *testing.T) {
+	h := newTestHarness(t)
+	if err := h.cfg.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 true,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        "[]",
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/list",
+	})
+	rr := h.request("POST", "/mcp", reqBody, true)
+	if rr.Code != 200 {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var listResp struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				PolicyState string `json:"policyState"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	foundBlocked := false
+	for _, tool := range listResp.Result.Tools {
+		if tool.Name == "module.enable" {
+			foundBlocked = true
+			if tool.PolicyState != "blocked" {
+				t.Fatalf("expected blocked policy state, got %+v", tool)
+			}
+		}
+	}
+	if !foundBlocked {
+		t.Fatalf("expected module.enable in tools/list, got %+v", listResp.Result.Tools)
+	}
+
+	reqBody, _ = json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "module.enable",
+			"arguments": map[string]any{
+				"module_key":    "analytics",
+				"confirm_apply": true,
+			},
+		},
+	})
+	rr = h.request("POST", "/mcp", reqBody, true)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "blocked by policy") {
+		t.Fatalf("expected governance policy rejection, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMCPRouteAuditsCallTimeGovernanceStateFromArguments(t *testing.T) {
+	h := newTestHarness(t)
+	if err := h.cfg.Save(config.Entry{
+		Key:   "platform.mcp",
+		Scope: "deployment",
+		Value: map[string]any{
+			"enabled":                            true,
+			"governance_enabled":                 true,
+			"default_action_mode":                "draft_only",
+			"tool_states_json":                   "{}",
+			"blocked_action_classes_json":        "[]",
+			"blocked_tool_keys_json":             "[]",
+			"blocked_document_types_json":        `["promotion_plan"]`,
+			"allowed_submit_document_types_json": "[]",
+			"domain_policy_overrides_json":       "{}",
+		},
+	}); err != nil {
+		t.Fatalf("save platform.mcp config failed: %v", err)
+	}
+
+	reqBody, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "business.document.draft.create",
+			"arguments": map[string]any{
+				"document_type": "promotion_plan",
+				"confirm_apply": true,
+				"payload":       map[string]any{"name": "Spring Promo"},
+			},
+		},
+	})
+	rr := h.request("POST", "/mcp", reqBody, true)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "blocked by policy") {
+		t.Fatalf("expected governance policy rejection, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	found := false
+	for _, event := range h.audit.Query(audit.Query{TargetType: "mcp_tool", TargetID: "business.document.draft.create"}) {
+		if state, _ := event.Metadata["policy_state"].(string); state == "blocked" {
+			reason, _ := event.Metadata["policy_reason"].(string)
+			if strings.Contains(reason, "promotion_plan") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected MCP audit event to record execution-time blocked policy state for document_type")
 	}
 }
 

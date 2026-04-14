@@ -7,3 +7,6 @@ server
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+.qwen
+.run/
+site/

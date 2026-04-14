@@ -66,7 +66,7 @@ Current contract areas include:
 - integration submission schemas
 - MCP tool and resource contracts
 
-See [API and Contracts](./api-and-contracts.md) and [External Contract Governance](./contracts.md).
+See [API and Contracts](./api-and-contracts.md), [MCP Target Architecture](./mcp-target-architecture.md), and [External Contract Governance](./contracts.md).
 
 ## MCP and AI Agents
 
@@ -82,15 +82,24 @@ Orbyte can expose:
 
 This lets an external agent use Orbyte as an enterprise system of action and context without embedding the agent directly into the kernel.
 
+The target engineering model is:
+
+- ACP as the runtime bridge to external providers and sessions
+- MCP as the canonical business contract for machine discovery, analysis, and governed action
+- agent workspace as the human-facing orchestration surface
+
+See [MCP Target Architecture](./mcp-target-architecture.md) for the normative target-state model.
+
 ## Recommended AI Integration Pattern
 
 For most teams:
 
 1. keep the agent runtime outside Orbyte
-2. authenticate through service principals or delegated machine access
-3. expose only approved HTTP and MCP capabilities
-4. enforce permission checks and policy hooks
-5. capture audit trails for machine actions
+2. treat MCP as the primary business interface for agentic tools
+3. authenticate through service principals or delegated machine access
+4. expose only approved HTTP and MCP capabilities
+5. enforce permission checks and policy hooks
+6. capture audit trails for machine actions
 
 ### Example: Copilot For Purchase Requests
 

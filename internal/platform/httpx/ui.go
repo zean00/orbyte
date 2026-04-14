@@ -6,6 +6,7 @@ import (
 	"orbyte/internal/platform/acp"
 	"orbyte/internal/platform/activity"
 	"orbyte/internal/platform/analytics"
+	"orbyte/internal/platform/application"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
 	"orbyte/internal/platform/model"
@@ -18,10 +19,10 @@ import (
 	"orbyte/internal/platform/workflow"
 )
 
-func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
+func registerUIRoutes(mux *http.ServeMux, ident *identity.Service, modules *module.Service, models *model.Service, activities *activity.Service, reportingSvc *reporting.Service, docs *document.Service, workflowSvc *workflow.Service, searchSvc *search.Service, analyticsSvc *analytics.Service, monitoringSvc *monitoring.Service, commercialSvc *application.CommercialCoreService, procurementSvc *application.ProcurementCoreService, crmSvc *application.CRMCoreService, inventorySvc *application.InventoryCoreService, fulfillmentSvc *application.FulfillmentCoreService, planningSvc *application.PlanningCoreService, productionSvc *application.ProductionCoreService, posSvc *application.POSCoreService, leavePolicySvc *application.LeavePolicyCoreService, traceabilitySvc *application.TraceabilityCoreService, recallSvc *application.RecallCoreService, financeSvc *application.FinanceReportingCoreService, reconciliationSvc *application.FinanceReconciliationCoreService, periodEndSvc *application.FinancePeriodEndCoreService, manualJournalSvc *application.FinanceManualJournalCoreService, collectionsSvc *application.FinanceCollectionsCoreService, financeAssetSvc *application.FinanceAssetCoreService, inventoryFinanceSvc *application.InventoryFinanceCoreService, retailFinanceSvc *application.RetailFinanceCoreService, treasurySvc *application.TreasuryCoreService, productionCostingSvc *application.ProductionCostingCoreService, policySvc *policy.Service, fieldSecurity *securityfields.Service, uiPrefs *UIPreferencesService, acpSvc *acp.Service) {
 	registerUIShellRoutes(mux)
-	registerUISurfaceRoutes(mux, ident, modules, docs, policySvc, uiPrefs, acpSvc)
-	registerUIDataRoutes(mux, ident, modules, models, activities, reportingSvc, docs, workflowSvc, searchSvc, analyticsSvc, monitoringSvc, policySvc, fieldSecurity)
+	registerUISurfaceRoutes(mux, ident, modules, docs, leavePolicySvc, policySvc, uiPrefs, acpSvc)
+	registerUIDataRoutes(mux, ident, modules, models, activities, reportingSvc, docs, workflowSvc, searchSvc, analyticsSvc, monitoringSvc, commercialSvc, procurementSvc, crmSvc, inventorySvc, fulfillmentSvc, planningSvc, productionSvc, posSvc, traceabilitySvc, recallSvc, financeSvc, reconciliationSvc, periodEndSvc, manualJournalSvc, collectionsSvc, financeAssetSvc, inventoryFinanceSvc, retailFinanceSvc, treasurySvc, productionCostingSvc, policySvc, fieldSecurity)
 }
 
 func relatedModelItems(models *model.Service, def model.Definition, recordID, relationKey string) []model.Record {

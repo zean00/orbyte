@@ -122,7 +122,10 @@ func (r *TxRepository) ListRecords(modelKey string) []Record {
 }
 
 func (r *TxRepository) QueryRecords(def Definition, query Query) ([]Record, int, error) {
-	listQuery, countQuery, args := buildPostgresRecordQuery(def, query, true)
+	listQuery, countQuery, args, err := buildPostgresRecordQuery(def, query, true)
+	if err != nil {
+		return nil, 0, err
+	}
 	countArgs := args[:len(args)-2]
 	var total int
 	if err := r.tx.QueryRowContext(context.Background(), countQuery, countArgs...).Scan(&total); err != nil {

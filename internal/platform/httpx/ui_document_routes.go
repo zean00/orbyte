@@ -27,9 +27,43 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 		}
 		documentType := strings.TrimSpace(r.URL.Query().Get("type"))
 		statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+		receivableState := strings.TrimSpace(r.URL.Query().Get("receivable_state"))
+		payableState := strings.TrimSpace(r.URL.Query().Get("payable_state"))
+		includePayload := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_payload")), "1") || strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_payload")), "true")
 		sortKey := strings.TrimSpace(r.URL.Query().Get("sort"))
+		page := intQuery(r, "page", 1)
+		pageSize := intQuery(r, "page_size", 20)
+		today := time.Now().UTC().Format("2006-01-02")
 		items := searchSvc.ListDocuments()
 		filtered := make([]map[string]any, 0, len(items))
+		if !includePayload && receivableState == "" && payableState == "" {
+			for _, item := range items {
+				if documentType != "" && item.DocumentType != documentType {
+					continue
+				}
+				if statusFilter != "" && item.Status != statusFilter {
+					continue
+				}
+				if organizationID := organizationIDForPrincipal(p); organizationID != "" && item.OrganizationID != "" && item.OrganizationID != organizationID {
+					continue
+				}
+				if p.currentLocationID != "" && item.LocationID != "" && item.LocationID != p.currentLocationID {
+					continue
+				}
+				record, err := docs.Get(item.DocumentID)
+				if err != nil {
+					continue
+				}
+				if manualJournalReadBlocked(ident, p, record) {
+					continue
+				}
+				filtered = append(filtered, documentListProjectionItem(item, record, docs))
+			}
+			sortDocumentProjectionItems(filtered, sortKey)
+			pagedItems, total := paginateSlice(filtered, page, pageSize)
+			respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
+			return
+		}
 		for _, item := range items {
 			if documentType != "" && item.DocumentType != documentType {
 				continue
@@ -37,35 +71,52 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			if statusFilter != "" && item.Status != statusFilter {
 				continue
 			}
+			if organizationID := organizationIDForPrincipal(p); organizationID != "" && item.OrganizationID != "" && item.OrganizationID != organizationID {
+				continue
+			}
 			if p.currentLocationID != "" && item.LocationID != "" && item.LocationID != p.currentLocationID {
+				continue
+			}
+			record, err := docs.Get(item.DocumentID)
+			if err != nil {
+				continue
+			}
+			if manualJournalReadBlocked(ident, p, record) {
+				continue
+			}
+			rendered := docs.Render(record, document.ViewNormal, modules.EnabledMap())
+			rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "ui")
+			if !matchesReceivableStateFilter(receivableState, rendered, today) {
+				continue
+			}
+			if !matchesPayableStateFilter(payableState, rendered, today) {
 				continue
 			}
 			filtered = append(filtered, map[string]any{
 				"header": map[string]any{
-					"id":              item.DocumentID,
-					"type":            item.DocumentType,
-					"status":          item.Status,
-					"version":         item.Version,
-					"etag":            item.ETag,
-					"organization_id": item.OrganizationID,
-					"location_id":     item.LocationID,
-					"updated_at":      item.UpdatedAt,
+					"id":              rendered.Header.ID,
+					"type":            rendered.Header.Type,
+					"status":          rendered.Header.Status,
+					"version":         rendered.Header.Version,
+					"etag":            rendered.Header.ETag,
+					"organization_id": rendered.Header.OrganizationID,
+					"location_id":     rendered.Header.LocationID,
+					"number":          rendered.Header.Number,
+					"created_at":      rendered.Header.CreatedAt,
+					"updated_at":      rendered.Header.UpdatedAt,
+				},
+				"open_path": docs.ResolveWorkspaceOpenPath(rendered),
+				"edit_path": docs.ResolveWorkspaceEditPath(rendered),
+				"body": map[string]any{
+					"schema_version": rendered.Body.SchemaVersion,
+					"payload":        rendered.Body.Payload,
+					"content_hash":   rendered.Body.ContentHash,
 				},
 			})
 		}
-		sort.Slice(filtered, func(i, j int) bool {
-			left := filtered[i]["header"].(map[string]any)
-			right := filtered[j]["header"].(map[string]any)
-			switch sortKey {
-			case "status":
-				return left["status"].(string) < right["status"].(string)
-			case "updated_at":
-				return left["updated_at"].(time.Time).After(right["updated_at"].(time.Time))
-			default:
-				return left["id"].(string) < right["id"].(string)
-			}
-		})
-		respondJSON(w, http.StatusOK, map[string]any{"items": filtered})
+		sortDocumentProjectionItems(filtered, sortKey)
+		pagedItems, total := paginateSlice(filtered, page, pageSize)
+		respondJSON(w, http.StatusOK, map[string]any{"items": pagedItems, "total": total})
 	})
 
 	mux.HandleFunc("GET /ui/data/documents/", func(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +142,10 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			respondError(w, shared.Forbidden("document is not visible"))
 			return
 		}
+		if manualJournalReadBlocked(ident, p, record) {
+			respondError(w, shared.Forbidden("document is not visible"))
+			return
+		}
 		rendered := docs.Render(record, document.ViewExpanded, modules.EnabledMap())
 		rendered = filterDocumentExtensionsForPrincipal(rendered, modules, ident, policySvc, p)
 		rendered = sanitizeDocumentRecord(fieldSecurity, ident, p, rendered, "ui")
@@ -110,6 +165,8 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			"links":         record.Links,
 			"attachments":   record.Attachments,
 			"documentType":  record.Header.Type,
+			"open_path":     docs.ResolveWorkspaceOpenPath(rendered),
+			"edit_path":     docs.ResolveWorkspaceEditPath(rendered),
 			"flow_instance": flowInstance,
 		})
 	})
@@ -129,6 +186,13 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 			if p.currentLocationID != "" && item.LocationID != "" && item.LocationID != p.currentLocationID {
 				continue
 			}
+			record, err := docs.Get(item.DocumentID)
+			if err != nil {
+				continue
+			}
+			if manualJournalReadBlocked(ident, p, record) {
+				continue
+			}
 			filtered = append(filtered, map[string]any{
 				"header": map[string]any{
 					"id":              item.DocumentID,
@@ -145,4 +209,110 @@ func registerUIDocumentRoutes(mux *http.ServeMux, ident *identity.Service, modul
 		respondJSON(w, http.StatusOK, map[string]any{"items": filtered})
 	})
 
+}
+
+func documentListProjectionItem(item search.DocumentSummary, record document.Record, docs *document.Service) map[string]any {
+	return map[string]any{
+		"header": map[string]any{
+			"id":              item.DocumentID,
+			"type":            item.DocumentType,
+			"status":          item.Status,
+			"version":         item.Version,
+			"etag":            item.ETag,
+			"organization_id": item.OrganizationID,
+			"location_id":     item.LocationID,
+			"updated_at":      item.UpdatedAt,
+		},
+		"open_path": docs.ResolveWorkspaceOpenPath(record),
+		"edit_path": docs.ResolveWorkspaceEditPath(record),
+	}
+}
+
+func sortDocumentProjectionItems(filtered []map[string]any, sortKey string) {
+	sort.Slice(filtered, func(i, j int) bool {
+		left := filtered[i]["header"].(map[string]any)
+		right := filtered[j]["header"].(map[string]any)
+		switch sortKey {
+		case "status":
+			return left["status"].(string) < right["status"].(string)
+		case "updated_at":
+			return left["updated_at"].(time.Time).After(right["updated_at"].(time.Time))
+		default:
+			return left["id"].(string) < right["id"].(string)
+		}
+	})
+}
+
+func matchesReceivableStateFilter(filter string, record document.Record, today string) bool {
+	if strings.TrimSpace(filter) == "" {
+		return true
+	}
+	if record.Header.Type != "invoice" {
+		return false
+	}
+	payload := record.Body.Payload
+	balance := recordNumberValue(payload["balance_due_amount"])
+	dueDate := strings.TrimSpace(recordStringValue(payload["due_date"]))
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "open":
+		return balance > 0 && (record.Header.Status == "issued" || record.Header.Status == "partially_paid")
+	case "due_today":
+		return balance > 0 && dueDate == today
+	case "overdue":
+		return balance > 0 && dueDate != "" && dueDate < today
+	case "current":
+		return balance > 0 && (dueDate == "" || dueDate > today)
+	case "paid":
+		return record.Header.Status == "paid" || balance <= 0
+	default:
+		return true
+	}
+}
+
+func matchesPayableStateFilter(filter string, record document.Record, today string) bool {
+	if strings.TrimSpace(filter) == "" {
+		return true
+	}
+	if record.Header.Type != "vendor_bill" {
+		return false
+	}
+	payload := record.Body.Payload
+	balance := recordNumberValue(payload["balance_due_amount"])
+	dueDate := strings.TrimSpace(recordStringValue(payload["due_date"]))
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "open":
+		return balance > 0 && (record.Header.Status == "issued" || record.Header.Status == "partially_paid")
+	case "due_today":
+		return balance > 0 && dueDate == today
+	case "overdue":
+		return balance > 0 && dueDate != "" && dueDate < today
+	case "current":
+		return balance > 0 && (dueDate == "" || dueDate > today)
+	case "paid":
+		return record.Header.Status == "paid" || balance <= 0
+	default:
+		return true
+	}
+}
+
+func recordStringValue(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
+func recordNumberValue(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case int32:
+		return float64(typed)
+	default:
+		return 0
+	}
 }

@@ -60,18 +60,21 @@ import (
 )
 
 type testHarness struct {
-	router    http.Handler
-	cookie    *http.Cookie
-	csrf      *http.Cookie
-	ident     *identity.Service
-	identRepo identity.Repository
-	audit     *audit.Service
-	cfg       *config.Service
-	modules   *module.Service
-	policy    *policy.Service
-	search    *search.Service
-	workflows *workflow.Service
-	analytics *analytics.Service
+	router     http.Handler
+	cookie     *http.Cookie
+	csrf       *http.Cookie
+	ident      *identity.Service
+	identRepo  identity.Repository
+	audit      *audit.Service
+	cfg        *config.Service
+	modules    *module.Service
+	models     *model.Service
+	policy     *policy.Service
+	search     *search.Service
+	docs       *document.Service
+	docActions *application.DocumentActions
+	workflows  *workflow.Service
+	analytics  *analytics.Service
 }
 
 func newTestHarness(t *testing.T) testHarness {
@@ -96,6 +99,11 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 	if analyticsSvc != nil {
 		analyticsSvc.SetCaptureHook(analyticsStream.Publish)
 	}
+	workforceSvc := application.NewEmployeeWorkforceCoreService(models)
+	attendanceSvc := application.NewWorkforceAttendanceCoreService(models, workforceSvc)
+	approvalPolicySvc := application.NewApprovalPolicyService(models)
+	leavePolicySvc := application.NewLeavePolicyCoreService(models, workforceSvc, attendanceSvc, approvalPolicySvc)
+	leavePolicySvc.SetDocuments(docs)
 	modelDeps := ModelDeps{
 		Identity:      ident,
 		Models:        models,
@@ -132,6 +140,7 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 		FieldSecurity: fieldSecurity,
 		UIPreferences: uiPreferences,
 		ACP:           acpSvc,
+		LeavePolicies: leavePolicySvc,
 		Notifications: notificationSvc,
 	}
 	return BuildRouter(RouterConfig{
@@ -188,8 +197,11 @@ func newTestRouter(cfg *config.Service, flags *featureflags.Service, org *organi
 					Flags:                     flags,
 					Integration:               integrationSvc,
 					Documents:                 docs,
+					DocumentActions:           docActions,
+					Models:                    models,
 					Reference:                 referenceSvc,
 					Search:                    searchSvc,
+					FieldSecurity:             fieldSecurity,
 					Policy:                    policySvc,
 					Eventing:                  eventingSvc,
 					Jobs:                      jobSvc,
@@ -473,18 +485,21 @@ func newTestHarnessWithConfig(t *testing.T, entries []config.Entry) testHarness 
 		t.Fatalf("register dataset failed: %v", err)
 	}
 	return testHarness{
-		router:    newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions, nil),
-		cookie:    &http.Cookie{Name: sessionCookieName, Value: token},
-		csrf:      csrfCookie,
-		ident:     ident,
-		identRepo: identRepo,
-		audit:     auditSvc,
-		cfg:       cfg,
-		modules:   modules,
-		policy:    policySvc,
-		search:    searchSvc,
-		workflows: flows,
-		analytics: analyticsSvc,
+		router:     newTestRouter(cfg, flags, org, ident, modules, models, activities, reportingSvc, referenceSvc, docs, flows, auditSvc, eventingSvc, searchSvc, loggerSvc, analyticsSvc, monitoringSvc, obsSvc, policySvc, integrationSvc, idempotencySvc, jobSvc, health, actions, modelActions, nil),
+		cookie:     &http.Cookie{Name: sessionCookieName, Value: token},
+		csrf:       csrfCookie,
+		ident:      ident,
+		identRepo:  identRepo,
+		audit:      auditSvc,
+		cfg:        cfg,
+		modules:    modules,
+		models:     models,
+		policy:     policySvc,
+		search:     searchSvc,
+		docs:       docs,
+		docActions: actions,
+		workflows:  flows,
+		analytics:  analyticsSvc,
 	}
 }
 
@@ -572,6 +587,7 @@ func builtInTestModuleManifests() []module.Manifest {
 	cfg := config.NewService()
 	httpDef, _ := cfg.Definition("platform.http")
 	authDef, _ := cfg.Definition("identity.auth")
+	commercialPostingDef, _ := cfg.Definition("commercial.posting")
 	searchTypesenseDef, _ := cfg.Definition("search.typesense")
 	searchEmbeddingDef, _ := cfg.Definition("search.embedding")
 	return []module.Manifest{
@@ -621,6 +637,51 @@ func builtInTestModuleManifests() []module.Manifest {
 			},
 		},
 		{Key: "identity", Name: "Identity", Version: "1.0.0", DomainFamily: "platform", DependencyRequirements: []module.DependencyRequirement{{ModuleKey: "platform.core", VersionRange: ">=1.0.0,<2.0.0", Kind: module.DependencyKindRequired}}, ConfigDefinitions: []config.Definition{authDef}},
+		{
+			Key:               "commercial_core",
+			Name:              "Commercial Core",
+			Version:           "1.0.0",
+			DomainFamily:      "business",
+			ConfigDefinitions: []config.Definition{commercialPostingDef},
+			Documents: []document.Definition{{
+				Type:           "invoice",
+				DisplayName:    "Invoice",
+				SchemaVersion:  "v1",
+				WorkflowKey:    "invoice_flow",
+				NumberingKey:   "invoice_number",
+				OwnerModuleKey: "commercial_core",
+			}},
+			Workflows: []workflow.Definition{{
+				Key:    "invoice_flow",
+				States: []string{"draft", "submitted", "issued", "cancelled"},
+				Actions: []workflow.ActionRule{
+					{Action: "submit", FromState: "draft", ToState: "submitted", PermissionKey: "document.submit"},
+					{Action: "approve", FromState: "submitted", ToState: "issued", PermissionKey: "document.approve"},
+					{Action: "cancel", FromState: "issued", ToState: "cancelled", PermissionKey: "document.cancel"},
+				},
+			}},
+			AdminConsole: module.AdminConsoleDefinition{
+				Title:       "Commercial Console",
+				Description: "Commercial setup and shortcuts.",
+				Sections: []module.AdminConsoleSectionDefinition{
+					{
+						Key:                 "posting_defaults",
+						Title:               "Posting Defaults",
+						Kind:                module.AdminConsoleSectionSettingsForm,
+						ConfigKey:           "commercial.posting",
+						RequiredPermissions: []string{"configuration.read"},
+					},
+					{
+						Key:   "catalog_setup",
+						Title: "Catalog Setup",
+						Kind:  module.AdminConsoleSectionResourceLinks,
+						Links: []module.AdminConsoleLinkDefinition{
+							{Key: "catalog", Label: "Catalog", RoutePath: "/ui/commercial/catalog", RequiredPermissions: []string{"item.list"}},
+						},
+					},
+				},
+			},
+		},
 		{
 			Key:          "documents",
 			Name:         "Documents",
@@ -1883,6 +1944,43 @@ func TestACPBootstrapAndProviders(t *testing.T) {
 	}
 }
 
+func TestACPProvidersRequireAgentWorkspacePermission(t *testing.T) {
+	providersJSON := `[{"key":"codex","name":"Codex ACP","command":"/bin/echo","args":["ok"]}]`
+	h := newTestHarnessWithConfig(t, []config.Entry{{
+		Key:       "platform.acp",
+		ModuleKey: "platform.core",
+		Category:  "platform",
+		Scope:     "deployment",
+		Value: map[string]any{
+			"enabled":        true,
+			"providers_json": providersJSON,
+		},
+	}})
+
+	if err := h.ident.RevokeRolePermission("role_admin", "agent.workspace.use"); err != nil {
+		t.Fatalf("revoke agent workspace permission failed: %v", err)
+	}
+
+	rr := h.request(http.MethodGet, "/agent/api/providers", nil, true)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected agent providers to be forbidden without agent.workspace.use, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = h.request(http.MethodGet, "/ui/bootstrap", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected ui bootstrap to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode ui bootstrap: %v", err)
+	}
+	for _, item := range payload["available_surfaces"].([]any) {
+		if item == string(module.UISurfaceAgent) {
+			t.Fatalf("expected agent surface to be hidden without agent.workspace.use, got %+v", payload["available_surfaces"])
+		}
+	}
+}
+
 func TestUIPreferencesRoundTrip(t *testing.T) {
 	h := newTestHarness(t)
 
@@ -3133,6 +3231,25 @@ func TestAuditQueryAndTimelineRoutes(t *testing.T) {
 	timeline := h.request(http.MethodGet, "/ops/audit-events/document/"+record.Header.ID, nil, true)
 	if list.Code != http.StatusOK || timeline.Code != http.StatusOK {
 		t.Fatalf("expected audit routes to succeed, got %d and %d", list.Code, timeline.Code)
+	}
+
+	adminList := h.request(http.MethodGet, "/admin/api/audit-events?target_type=document&target_id="+record.Header.ID+"&action=document.update&page=1&page_size=20&sort=occurred_at&direction=desc", nil, true)
+	if adminList.Code != http.StatusOK {
+		t.Fatalf("expected admin audit route to succeed, got %d body=%s", adminList.Code, adminList.Body.String())
+	}
+	if !strings.Contains(adminList.Body.String(), `"total":1`) || !strings.Contains(adminList.Body.String(), `"document.update"`) {
+		t.Fatalf("expected admin audit payload to include matching update event, got %s", adminList.Body.String())
+	}
+	invalidSort := h.request(http.MethodGet, "/admin/api/audit-events?sort=unknown", nil, true)
+	if invalidSort.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid sort to fail, got %d body=%s", invalidSort.Code, invalidSort.Body.String())
+	}
+	exported := h.request(http.MethodGet, "/admin/api/audit-events/export?target_type=document&target_id="+record.Header.ID+"&format=csv", nil, true)
+	if exported.Code != http.StatusOK {
+		t.Fatalf("expected admin audit export to succeed, got %d body=%s", exported.Code, exported.Body.String())
+	}
+	if exported.Header().Get("Content-Type") != "text/csv" {
+		t.Fatalf("expected csv export content type, got %s", exported.Header().Get("Content-Type"))
 	}
 }
 
@@ -4591,6 +4708,95 @@ func TestAdminRoutesHandleFailureCases(t *testing.T) {
 	}
 }
 
+func TestAdminModuleConsolePayload(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/modules/commercial_core/console", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected module console to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode module console: %v", err)
+	}
+	modulePayload, _ := payload["module"].(map[string]any)
+	manifest, _ := modulePayload["manifest"].(map[string]any)
+	if manifest["key"] != "commercial_core" {
+		t.Fatalf("expected commercial_core manifest, got %+v", manifest["key"])
+	}
+	consolePayload, _ := payload["console"].(map[string]any)
+	sections, _ := consolePayload["sections"].([]any)
+	if len(sections) == 0 {
+		t.Fatalf("expected module console sections, got %+v", consolePayload)
+	}
+	first, _ := sections[0].(map[string]any)
+	if first["kind"] != "settings_form" {
+		t.Fatalf("expected settings form first section, got %+v", first["kind"])
+	}
+	if first["config_key"] != "commercial.posting" {
+		t.Fatalf("expected commercial.posting config binding, got %+v", first["config_key"])
+	}
+	if _, ok := first["definition"].(map[string]any); !ok {
+		t.Fatalf("expected config definition in first section, got %+v", first["definition"])
+	}
+	if _, ok := first["entry"].(map[string]any); !ok {
+		t.Fatalf("expected resolved config entry in first section, got %+v", first["entry"])
+	}
+	if _, ok := payload["dependency_graph"].(map[string]any); !ok {
+		t.Fatalf("expected dependency graph in module console payload, got %+v", payload["dependency_graph"])
+	}
+}
+
+func TestAdminModuleDependencyGraphPayload(t *testing.T) {
+	h := newTestHarness(t)
+
+	rr := h.request(http.MethodGet, "/admin/api/modules", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected module list to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode module payload: %v", err)
+	}
+	graph, ok := payload["dependency_graph"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected dependency graph in module list payload, got %+v", payload)
+	}
+	nodes, _ := graph["nodes"].([]any)
+	edges, _ := graph["edges"].([]any)
+	if len(nodes) == 0 || len(edges) == 0 {
+		t.Fatalf("expected dependency graph nodes and edges, got %+v", graph)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/modules/commercial_core/dependency-graph", nil, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected focused dependency graph to succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	graph = map[string]any{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &graph); err != nil {
+		t.Fatalf("decode focused dependency graph: %v", err)
+	}
+	nodes, _ = graph["nodes"].([]any)
+	found := false
+	for _, item := range nodes {
+		node, _ := item.(map[string]any)
+		if node["module_key"] == "commercial_core" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected focused dependency graph to contain commercial_core, got %+v", graph)
+	}
+
+	rr = h.request(http.MethodGet, "/admin/api/modules/does-not-exist/dependency-graph", nil, true)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected missing focused dependency graph to return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestAdminModuleLocalExtensionAPIs(t *testing.T) {
 	h := newTestHarness(t)
 	if err := h.modules.Register(module.Manifest{
@@ -5505,6 +5711,27 @@ func TestUIDocumentListProjectionAndNotFoundBranches(t *testing.T) {
 		if header["type"] != "generic_request" {
 			t.Fatalf("expected only generic_request items, got %+v", payload.Items)
 		}
+		if _, ok := item["body"]; ok {
+			t.Fatalf("expected projection-only list payload by default, got %+v", item)
+		}
+	}
+
+	expanded := h.request(http.MethodGet, "/ui/data/documents?type=generic_request&include_payload=1", nil, true)
+	if expanded.Code != http.StatusOK {
+		t.Fatalf("expected expanded ui document list to succeed, got %d body=%s", expanded.Code, expanded.Body.String())
+	}
+	if err := json.Unmarshal(expanded.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode expanded documents failed: %v", err)
+	}
+	for _, item := range payload.Items {
+		body, ok := item["body"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected expanded list payload body, got %+v", item)
+		}
+		recordPayload, ok := body["payload"].(map[string]any)
+		if !ok || recordPayload["title"] == nil {
+			t.Fatalf("expected expanded list payload title, got %+v", item)
+		}
 	}
 
 	projections := h.request(http.MethodGet, "/ui/data/projections/documents", nil, true)
@@ -5976,6 +6203,126 @@ func TestDocumentRoutesAndOps(t *testing.T) {
 	rr = h.request(http.MethodGet, "/ops/projections/documents", nil, true)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for projections, got %d", rr.Code)
+	}
+}
+
+func TestUIDocumentRoutesHideManualJournalsWithoutFinanceJournalRead(t *testing.T) {
+	h := newTestHarness(t)
+	if err := h.docs.Register(document.Definition{Type: "ledger_posting", DisplayName: "Ledger Posting", SchemaVersion: "v1", AllowedLinkTypes: []string{"posting_for"}}); err != nil {
+		t.Fatalf("register ledger_posting: %v", err)
+	}
+	record, err := h.docs.Create("ledger_posting", "org_default", "loc_hq", "user_admin", map[string]any{
+		"posting_date":        "2099-03-31",
+		"currency_code":       "IDR",
+		"journal_source_kind": "manual",
+		"manual_journal_type": "adjusting",
+		"journal_lines": []map[string]any{
+			{"account_code": "6100-EXP", "debit": 100.0, "credit": 0.0},
+			{"account_code": "2100-ACC", "debit": 0.0, "credit": 100.0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create manual journal: %v", err)
+	}
+
+	detail := h.request(http.MethodGet, "/ui/data/documents/"+record.Header.ID, nil, true)
+	if detail.Code != http.StatusForbidden {
+		t.Fatalf("expected manual journal detail to be forbidden without finance.journal.read, got %d body=%s", detail.Code, detail.Body.String())
+	}
+
+	list := h.request(http.MethodGet, "/ui/data/documents?type=ledger_posting", nil, true)
+	if list.Code != http.StatusOK {
+		t.Fatalf("expected ui document list to succeed, got %d body=%s", list.Code, list.Body.String())
+	}
+	if strings.Contains(list.Body.String(), record.Header.ID) {
+		t.Fatalf("expected manual journal to be filtered from ui document list, body=%s", list.Body.String())
+	}
+
+	projections := h.request(http.MethodGet, "/ui/data/projections/documents", nil, true)
+	if projections.Code != http.StatusOK {
+		t.Fatalf("expected ui document projections to succeed, got %d body=%s", projections.Code, projections.Body.String())
+	}
+	if strings.Contains(projections.Body.String(), record.Header.ID) {
+		t.Fatalf("expected manual journal to be filtered from ui document projections, body=%s", projections.Body.String())
+	}
+}
+
+func TestUIFinanceAssetLifecycleRoutesRejectMalformedJSON(t *testing.T) {
+	h := newTestHarness(t)
+	for _, permissionKey := range []string{
+		"finance.asset.manage",
+		"fixed_asset.read",
+		"asset_disposal.create",
+		"asset_transfer.create",
+		"asset_impairment.create",
+		"asset_revaluation.create",
+		"document.create",
+	} {
+		if err := h.ident.UpsertPermission(identity.Permission{Key: permissionKey, Module: "finance_asset_core", Action: "manage", Resource: "fixed_asset"}); err != nil {
+			t.Fatalf("upsert finance asset permission failed: %v", err)
+		}
+		if err := h.ident.GrantRolePermission(identity.RolePermission{RoleID: "role_admin", PermissionKey: permissionKey}); err != nil {
+			t.Fatalf("grant finance asset permission failed: %v", err)
+		}
+	}
+	mux := http.NewServeMux()
+	registerUIFinanceRoutes(
+		mux,
+		h.ident,
+		&application.FinanceReportingCoreService{},
+		nil,
+		nil,
+		nil,
+		nil,
+		&application.FinanceAssetCoreService{},
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	for _, route := range []string{
+		"/ui/data/finance/fixed-assets/fixed_asset_test/dispose",
+		"/ui/data/finance/fixed-assets/fixed_asset_test/transfer",
+		"/ui/data/finance/fixed-assets/fixed_asset_test/impair",
+		"/ui/data/finance/fixed-assets/fixed_asset_test/revalue",
+	} {
+		req := httptest.NewRequest(http.MethodPost, route, bytes.NewReader([]byte("{")))
+		req.RemoteAddr = "192.0.2.10:1234"
+		req = req.WithContext(context.WithValue(req.Context(), principalContextKey, principal{
+			kind:              userPrincipal,
+			userID:            "user_admin",
+			effectiveUserID:   "user_admin",
+			sessionID:         h.ident.Sessions()[0].ID,
+			currentLocationID: h.ident.Sessions()[0].CurrentLocationID,
+		}))
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for malformed lifecycle json on %s, got %d body=%s", route, rr.Code, rr.Body.String())
+		}
+	}
+}
+
+func TestCommercialDocumentsRejectUpdateOutsideDraft(t *testing.T) {
+	cases := []struct {
+		documentType string
+		status       string
+		locked       bool
+	}{
+		{documentType: "sales_order", status: "draft", locked: false},
+		{documentType: "sales_order", status: "rejected", locked: false},
+		{documentType: "sales_order", status: "confirmed", locked: true},
+		{documentType: "invoice", status: "issued", locked: true},
+		{documentType: "invoice", status: "paid", locked: true},
+		{documentType: "payment_receipt", status: "received", locked: true},
+		{documentType: "ledger_posting", status: "posted", locked: true},
+		{documentType: "generic_request", status: "approved", locked: false},
+	}
+	for _, tc := range cases {
+		if got := commercialDocumentUpdateLocked(tc.documentType, tc.status); got != tc.locked {
+			t.Fatalf("commercialDocumentUpdateLocked(%q, %q) = %v, want %v", tc.documentType, tc.status, got, tc.locked)
+		}
 	}
 }
 

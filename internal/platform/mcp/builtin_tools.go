@@ -1,6 +1,9 @@
 package mcp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type builtInTool struct {
 	name        string
@@ -23,20 +26,25 @@ func (s *Server) listBuiltInTools(actor ActorContext) []ToolDescriptor {
 	items := make([]ToolDescriptor, 0, len(registry))
 	for _, reg := range registry {
 		def := reg.definition
+		if !s.ToolEnabled(def.name) {
+			continue
+		}
 		if !scopeMatches(actor.EndpointScope, builtInToolScope(def.name)) {
 			continue
 		}
-		if !allowsAll(actor.PermissionChecker, []string{def.permission}) {
+		if !s.builtInToolAllowed(actor, def) {
 			continue
 		}
-		items = append(items, ToolDescriptor{
+		items = append(items, s.decorateToolDescriptorWithGovernance(ToolDescriptor{
 			Name:        def.name,
 			Title:       def.title,
 			Description: def.description,
+			ModuleKey:   "platform.core",
+			SourceType:  "built_in",
 			Scope:       builtInToolScope(def.name),
 			InputSchema: cloneMap(def.inputSchema),
 			Contract:    builtInToolContract(def.name, def.permission, def.contract),
-		})
+		}, nil))
 	}
 	return items
 }
@@ -50,10 +58,32 @@ func (s *Server) callBuiltInTool(actor ActorContext, name string, arguments map[
 	if !scopeMatches(actor.EndpointScope, builtInToolScope(name)) && builtInToolScope(name) != "" {
 		return nil, true, fmt.Errorf("tool is not available on this endpoint")
 	}
-	if !allowsAll(actor.PermissionChecker, []string{reg.definition.permission}) {
+	if !s.ToolEnabled(name) {
+		return nil, true, fmt.Errorf("tool is disabled")
+	}
+	if !s.builtInToolAllowed(actor, reg.definition) {
 		return nil, true, fmt.Errorf("tool is not allowed")
 	}
 	return reg.handler(s, actor, arguments)
+}
+
+func (s *Server) builtInToolAllowed(actor ActorContext, def builtInTool) bool {
+	switch strings.TrimSpace(def.name) {
+	case "business.timeline.get":
+		if allowsAll(actor.PermissionChecker, []string{"document.read"}) {
+			return true
+		}
+		if s != nil && s.models != nil {
+			for _, item := range s.models.Definitions() {
+				if allowsAll(actor.PermissionChecker, []string{item.ReadPermissionKey}) {
+					return true
+				}
+			}
+		}
+		return false
+	default:
+		return allowsAll(actor.PermissionChecker, []string{def.permission})
+	}
 }
 
 func (s *Server) mustBuiltInToolRegistrations() []builtInToolRegistration {

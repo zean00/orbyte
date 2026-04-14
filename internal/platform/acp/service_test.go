@@ -2,9 +2,13 @@ package acp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,7 +49,12 @@ func testClientWithResponses(t *testing.T, handler func(message map[string]any, 
 }
 
 func TestProvidersAndEnabled(t *testing.T) {
-	svc := newACPService(t, true, `[{"key":"codex","name":"Codex","description":"ACP","command":"/bin/echo"}]`)
+	svc := newACPService(t, true, `[{"key":"opencode","name":"OpenCode ACP","description":"ACP","command":"opencode"}]`)
+	original := providerModelCatalogResolver
+	providerModelCatalogResolver = func(provider Provider) ([]ModelInfo, error) {
+		return []ModelInfo{{ID: "opencode/default", Label: "Default", ProviderKey: provider.Key, Selectable: true, Default: true}}, nil
+	}
+	defer func() { providerModelCatalogResolver = original }()
 	if !svc.Enabled() {
 		t.Fatal("expected service enabled")
 	}
@@ -53,8 +62,14 @@ func TestProvidersAndEnabled(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected one provider, got %d", len(items))
 	}
-	if items[0].Key != "codex" || !items[0].Available {
+	if items[0].Key != "opencode" || !items[0].Available {
 		t.Fatalf("unexpected provider info: %#v", items[0])
+	}
+	if !items[0].SupportsModelListing || !items[0].SupportsModelSelection {
+		t.Fatalf("unexpected model capability flags: %#v", items[0])
+	}
+	if items[0].SupportsPlanUpdates {
+		t.Fatalf("expected opencode provider to report no structured plan support: %#v", items[0])
 	}
 }
 
@@ -77,6 +92,33 @@ func TestProviderConfigsDefaultsAndTrims(t *testing.T) {
 	}
 	if items[0].Key != "codex" || items[0].Name != "codex" || items[0].Command != "/bin/echo" {
 		t.Fatalf("unexpected normalized provider: %#v", items[0])
+	}
+}
+
+func TestProviderConfigsModelPolicyValidation(t *testing.T) {
+	svc := newACPService(t, true, `[{"key":"codex","name":"Codex","command":"/bin/echo","default_model":"codex/default","allowed_models":["codex/other"]}]`)
+	if _, err := svc.providerConfigs(); err == nil {
+		t.Fatal("expected invalid default model policy")
+	}
+}
+
+func TestProviderModelsReturnsCatalog(t *testing.T) {
+	svc := newACPService(t, true, `[{"key":"opencode","name":"OpenCode ACP","command":"opencode","allowed_models":["opencode/default","opencode/nano"],"default_model":"opencode/default"}]`)
+	original := providerModelCatalogResolver
+	providerModelCatalogResolver = func(provider Provider) ([]ModelInfo, error) {
+		return []ModelInfo{
+			{ID: "opencode/default", Label: "Default", ProviderKey: provider.Key, Selectable: true, Default: true},
+			{ID: "opencode/nano", Label: "Nano", ProviderKey: provider.Key, Selectable: true},
+		}, nil
+	}
+	defer func() { providerModelCatalogResolver = original }()
+
+	items, err := svc.ProviderModels("opencode")
+	if err != nil {
+		t.Fatalf("ProviderModels failed: %v", err)
+	}
+	if len(items) != 2 || items[0].ID != "opencode/default" || !items[0].Selectable {
+		t.Fatalf("unexpected provider models: %#v", items)
 	}
 }
 
@@ -108,6 +150,56 @@ func TestStartSessionValidationAndDisabled(t *testing.T) {
 	}
 	if _, err := svc.StartSession(StartSessionRequest{ProviderKey: "codex"}); err == nil {
 		t.Fatal("expected missing user error")
+	}
+	if _, err := svc.StartSession(StartSessionRequest{ProviderKey: "codex", UserID: "user-1", Model: "codex/default"}); err == nil {
+		t.Fatal("expected unsupported model selection error")
+	}
+}
+
+func TestStartSessionAppliesSelectedModelForOpenCode(t *testing.T) {
+	svc := newACPService(t, true, `[{"key":"opencode","name":"OpenCode ACP","command":"opencode"}]`)
+	originalCatalog := providerModelCatalogResolver
+	originalStarter := acpClientStarter
+	providerModelCatalogResolver = func(provider Provider) ([]ModelInfo, error) {
+		return []ModelInfo{{ID: "opencode/minimax-m2.5-free", Label: "MiniMax M2.5", ProviderKey: provider.Key, Selectable: true}}, nil
+	}
+	acpClientStarter = func(ctx context.Context, provider Provider, onNotification func(method string, params json.RawMessage), onRequest func(id int64, method string, params json.RawMessage)) (*acpClient, error) {
+		client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+			id := int64(message["id"].(float64))
+			method := message["method"].(string)
+			c.mu.Lock()
+			ch := c.pending[id]
+			c.mu.Unlock()
+			switch method {
+			case "initialize":
+				ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"protocolVersion":1}`)}
+			case "session/new":
+				ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"sessionId":"remote-1","models":{"currentModelId":"opencode/big-pickle"}}`)}
+			case "session/set_model":
+				params := message["params"].(map[string]any)
+				if params["modelId"] != "opencode/minimax-m2.5-free" {
+					t.Fatalf("unexpected requested model: %#v", params)
+				}
+				ch <- rpcResponse{ID: id, Result: json.RawMessage(`{"_meta":{"opencode":{"modelId":"opencode/minimax-m2.5-free"}}}`)}
+			default:
+				t.Fatalf("unexpected method: %s", method)
+			}
+			close(ch)
+			return nil
+		})
+		return client, nil
+	}
+	defer func() {
+		providerModelCatalogResolver = originalCatalog
+		acpClientStarter = originalStarter
+	}()
+
+	session, err := svc.StartSession(StartSessionRequest{ProviderKey: "opencode", UserID: "user-1", Model: "opencode/minimax-m2.5-free"})
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+	if session.RequestedModel != "opencode/minimax-m2.5-free" || session.CurrentModel != "opencode/minimax-m2.5-free" {
+		t.Fatalf("unexpected session models: %#v", session)
 	}
 }
 
@@ -178,6 +270,362 @@ func TestSendPromptValidationNotFoundAndSuccess(t *testing.T) {
 	}
 }
 
+func TestSendPromptSetsModeBeforePrompt(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	session := &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	svc.sessions["session-1"] = session
+	calls := make([]string, 0, 2)
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		calls = append(calls, method)
+		switch method {
+		case "session/set_mode":
+			params := message["params"].(map[string]any)
+			if params["sessionId"] != "remote-1" || params["modeId"] != "plan" {
+				t.Fatalf("unexpected set_mode params: %#v", params)
+			}
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/prompt":
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "hello", Mode: "plan"}); err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(calls) != 2 || calls[0] != "session/set_mode" || calls[1] != "session/prompt" {
+		t.Fatalf("unexpected method order: %#v", calls)
+	}
+}
+
+func TestSendPromptSkipsModeSwitchForAsk(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	session := &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	svc.sessions["session-1"] = session
+	calls := make([]string, 0, 2)
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		calls = append(calls, method)
+		if method != "session/prompt" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "hello", Mode: "ask"}); err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(calls) != 1 || calls[0] != "session/prompt" {
+		t.Fatalf("unexpected method order: %#v", calls)
+	}
+}
+
+func TestSendPromptResetsModeToBuildAfterPlan(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	session := &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	svc.sessions["session-1"] = session
+	calls := make([]string, 0, 4)
+	modes := make([]string, 0, 2)
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		calls = append(calls, method)
+		switch method {
+		case "session/set_mode":
+			params := message["params"].(map[string]any)
+			modeID, _ := params["modeId"].(string)
+			modes = append(modes, modeID)
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/prompt":
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "plan it", Mode: "plan"}); err != nil {
+		t.Fatalf("plan SendPrompt failed: %v", err)
+	}
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "execute it", Mode: "execute"}); err != nil {
+		t.Fatalf("execute SendPrompt failed: %v", err)
+	}
+	if len(modes) != 2 || modes[0] != "plan" || modes[1] != "build" {
+		t.Fatalf("unexpected mode sequence: %#v", modes)
+	}
+	if got := svc.sessions["session-1"].remoteMode; got != "build" {
+		t.Fatalf("expected remoteMode build after reset, got %q", got)
+	}
+}
+
+func TestSendPromptPromotesClarificationToAwaitingInput(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+		Status:        "ready",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+			"text": "Clarification Needed\n\n1. What defines underperforming for your branches?\n2. Should I search all branches first or use specific branch codes?\n3. What's the timeframe for recovery?",
+		})
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Create a recovery plan."})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if updated.Status != "awaiting_input" {
+		t.Fatalf("expected awaiting_input status, got %#v", updated.Status)
+	}
+	if updated.AwaitingInputKind != "clarification" {
+		t.Fatalf("expected clarification kind, got %#v", updated.AwaitingInputKind)
+	}
+	if len(updated.PendingQuestions) != 3 {
+		t.Fatalf("expected three clarification questions, got %#v", updated.PendingQuestions)
+	}
+	if updated.PendingQuestionSetID == "" {
+		t.Fatal("expected pending question set id")
+	}
+}
+
+func TestSendPromptPromotesPlanConfirmationToAwaitingInput(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+		Status:        "ready",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		switch method {
+		case "session/set_mode":
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		case "session/prompt":
+			svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+				"text": "Plan:\n\n1. Validate the branch signal.\n2. Draft the recovery request.\n\nWould you like me to proceed with creating the draft?",
+			})
+			ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Create a recovery plan.", Mode: "plan"})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if updated.Status != "awaiting_input" {
+		t.Fatalf("expected awaiting_input status, got %#v", updated.Status)
+	}
+	if updated.AwaitingInputKind != "confirmation" {
+		t.Fatalf("expected confirmation kind, got %#v", updated.AwaitingInputKind)
+	}
+	if len(updated.PendingQuestions) != 1 || !strings.Contains(updated.PendingQuestions[0].Content, "proceed") {
+		t.Fatalf("expected confirmation question, got %#v", updated.PendingQuestions)
+	}
+}
+
+func TestSendPromptClearsPendingClarificationOnReply(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:                   "session-1",
+		UserID:               "user-1",
+		RemoteSession:        "remote-1",
+		Status:               "awaiting_input",
+		AwaitingInputKind:    "clarification",
+		PendingQuestionSetID: "clarification-1",
+		PendingQuestions: []ClarificationQuestion{{
+			ID:      "question-1",
+			Content: "What defines underperforming for your branches?",
+		}},
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+			"text": "1. Compare all branches over the last 30 days.\n2. Benchmark against the top branch.\n3. Recommend a recovery sequence.",
+		})
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Use sales volume, search all branches, and plan for 30 days."})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if updated.Status != "ready" {
+		t.Fatalf("expected ready status, got %#v", updated.Status)
+	}
+	if updated.AwaitingInputKind != "" || updated.PendingQuestionSetID != "" || len(updated.PendingQuestions) != 0 {
+		t.Fatalf("expected clarification state cleared, got %#v", updated)
+	}
+}
+
+func TestSendPromptPreservesPendingClarificationWhenFollowupFails(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:                   "session-1",
+		UserID:               "user-1",
+		RemoteSession:        "remote-1",
+		Status:               "awaiting_input",
+		AwaitingInputKind:    "clarification",
+		PendingQuestionSetID: "clarification-1",
+		PendingQuestions: []ClarificationQuestion{{
+			ID:      "question-1",
+			Content: "What defines underperforming for your branches?",
+		}},
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		return errors.New("write failed")
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	if _, err := svc.SendPrompt("session-1", PromptRequest{Content: "Use sales volume over 30 days."}); err == nil {
+		t.Fatal("expected prompt error")
+	}
+	session, _ := svc.GetSession("session-1")
+	if session.Status != "awaiting_input" {
+		t.Fatalf("expected awaiting_input status, got %#v", session.Status)
+	}
+	if session.PendingQuestionSetID != "clarification-1" || session.AwaitingInputKind != "clarification" {
+		t.Fatalf("expected clarification metadata preserved, got %#v", session)
+	}
+	if len(session.PendingQuestions) != 1 || session.PendingQuestions[0].Content != "What defines underperforming for your branches?" {
+		t.Fatalf("expected pending questions preserved, got %#v", session.PendingQuestions)
+	}
+}
+
+func TestExtractClarificationQuestionsRequiresExplicitMarker(t *testing.T) {
+	questions := extractClarificationQuestions(`Final recommendation:
+
+- What changed?
+- Why now?
+
+We should proceed with the branch reset.`, "msg-1")
+	if len(questions) != 0 {
+		t.Fatalf("expected no clarification questions without explicit marker, got %#v", questions)
+	}
+
+	questions = extractClarificationQuestions(`Clarification Needed
+
+1. What changed?
+2. Why now?`, "msg-1")
+	if len(questions) != 2 {
+		t.Fatalf("expected clarification questions with explicit marker, got %#v", questions)
+	}
+
+	questions = extractClarificationQuestions(`Clarifying Questions
+
+Do you have specific sales targets?
+Should I pull detailed branch sales figures from the analytics dashboard?
+What time period should I measure recovery over?`, "msg-1")
+	if len(questions) != 3 {
+		t.Fatalf("expected clarifying questions heading to be detected, got %#v", questions)
+	}
+}
+
+func TestSendPromptStoresDisplayContentSeparately(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		UserID:        "user-1",
+		RemoteSession: "remote-1",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			return errors.New("unexpected method: " + method)
+		}
+		params := message["params"].(map[string]any)
+		parts := params["prompt"].([]any)
+		if len(parts) == 0 || parts[0].(map[string]any)["text"] != "Use Orbyte MCP tools as the source of truth.\n\nhello" {
+			return errors.New("unexpected prompt payload")
+		}
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{
+		Content:        "Use Orbyte MCP tools as the source of truth.\n\nhello",
+		DisplayContent: "hello",
+	})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(updated.Messages) != 1 || updated.Messages[0].Content != "hello" {
+		t.Fatalf("expected stored display content only, got %#v", updated.Messages)
+	}
+}
+
 func TestSendPromptFailureMarksSessionError(t *testing.T) {
 	svc := NewService(config.NewService(), nil)
 	svc.sessions["session-1"] = &Session{ID: "session-1", RemoteSession: "remote-1"}
@@ -192,6 +640,158 @@ func TestSendPromptFailureMarksSessionError(t *testing.T) {
 	session, _ := svc.GetSession("session-1")
 	if session.Status != "error" || session.LastError == "" {
 		t.Fatalf("expected error session state, got %#v", session)
+	}
+}
+
+func TestSendPromptIgnoresRapidDuplicateReplay(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	turnID := "acp-turn:existing"
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		RemoteSession: "remote-1",
+		Status:        "ready",
+		Messages: []Message{{
+			ID:        "msg-1",
+			Role:      "user",
+			Content:   "hello",
+			Format:    "markdown",
+			CreatedAt: time.Now().UTC(),
+			Meta:      map[string]any{"turn_id": turnID},
+		}},
+	}
+	called := false
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		called = true
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "hello"})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if called {
+		t.Fatal("expected duplicate replay to skip remote prompt")
+	}
+	if len(updated.Messages) != 1 {
+		t.Fatalf("expected existing messages only, got %#v", updated.Messages)
+	}
+}
+
+func TestSendPromptIgnoresRapidDuplicateReplayWithDisplayContent(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	turnID := "acp-turn:existing"
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		RemoteSession: "remote-1",
+		Status:        "ready",
+		Messages: []Message{{
+			ID:        "msg-1",
+			Role:      "user",
+			Content:   "hello",
+			Format:    "markdown",
+			CreatedAt: time.Now().UTC(),
+			Meta:      map[string]any{"turn_id": turnID},
+		}},
+	}
+	called := false
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		called = true
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{
+		Content:        "Use Orbyte MCP tools as the source of truth for this answer.\n\nhello",
+		DisplayContent: "hello",
+	})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if called {
+		t.Fatal("expected duplicate replay with display content to skip remote prompt")
+	}
+	if len(updated.Messages) != 1 {
+		t.Fatalf("expected existing messages only, got %#v", updated.Messages)
+	}
+}
+
+func TestSendPromptIgnoresDuplicateClientRequestID(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		RemoteSession: "remote-1",
+		CurrentModel:  "opencode/default",
+		Status:        "ready",
+	}
+	callCount := 0
+	client := testClientWithResponses(t, func(message map[string]any, c *acpClient) error {
+		callCount += 1
+		id := int64(message["id"].(float64))
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	req := PromptRequest{
+		Content:         "Use Orbyte MCP tools as the source of truth for this answer.\n\nhello",
+		DisplayContent:  "hello",
+		ClientRequestID: "req-1",
+	}
+	if _, err := svc.SendPrompt("session-1", req); err != nil {
+		t.Fatalf("first SendPrompt failed: %v", err)
+	}
+	if _, err := svc.SendPrompt("session-1", req); err != nil {
+		t.Fatalf("second SendPrompt failed: %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected one remote prompt call, got %d", callCount)
+	}
+}
+
+func TestResolveWorkingDirUsesIsolatedAgentSurfaceDir(t *testing.T) {
+	dir, err := resolveWorkingDir("agent_surface", "", "", "acp-session:test")
+	if err != nil {
+		t.Fatalf("resolveWorkingDir failed: %v", err)
+	}
+	expected := filepath.Join(os.TempDir(), "orbyte-agent-surface", "acp-session_test")
+	if dir != expected {
+		t.Fatalf("expected %q, got %q", expected, dir)
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		t.Fatalf("expected isolated working dir to exist, err=%v", err)
+	}
+}
+
+func TestOpencodeDBPathFallsBackToProcessHome(t *testing.T) {
+	temp := t.TempDir()
+	t.Setenv("HOME", temp)
+	got := opencodeDBPath(Provider{})
+	expected := filepath.Join(temp, ".local", "share", "opencode", "opencode.db")
+	if got != expected {
+		t.Fatalf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestDefaultContextBlocksAddsAgentWorkspaceGuidance(t *testing.T) {
+	blocks := defaultContextBlocks("agent_surface", "/agent/workspace", nil)
+	if len(blocks) != 1 {
+		t.Fatalf("expected one default block, got %#v", blocks)
+	}
+	if blocks[0].Key != "agent_workspace_guidance" || !blocks[0].Selected {
+		t.Fatalf("unexpected guidance block: %#v", blocks[0])
+	}
+	value := blocks[0].Value
+	if value["route_path"] != "/agent/workspace" {
+		t.Fatalf("expected route path in guidance block, got %#v", value)
+	}
+	instructions, ok := value["instructions"].([]string)
+	if !ok || len(instructions) < 3 {
+		t.Fatalf("expected instructions slice, got %#v", value["instructions"])
 	}
 }
 
@@ -236,22 +836,313 @@ func TestCloseCancelsRuntimeAndClearsMap(t *testing.T) {
 	}
 }
 
+func TestDeleteSessionRemovesOwnedSessionAndClosesRuntime(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	cancelled := false
+	svc.sessions["session-1"] = &Session{
+		ID:        "session-1",
+		UserID:    "user-1",
+		CreatedAt: time.Now().UTC().Add(-time.Minute),
+	}
+	svc.runtimes["session-1"] = &sessionRuntime{
+		cancel: func() { cancelled = true },
+	}
+	ch, _ := svc.Subscribe("session-1")
+
+	if err := svc.DeleteSession("session-1", "user-1"); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+	if !cancelled {
+		t.Fatal("expected runtime cancel")
+	}
+	if _, ok := svc.GetSession("session-1"); ok {
+		t.Fatal("expected deleted session to be gone")
+	}
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("expected subscription channel to be closed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected subscription channel close")
+	}
+}
+
+func TestDeleteSessionRejectsOtherUsers(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{ID: "session-1", UserID: "user-1"}
+	if err := svc.DeleteSession("session-1", "user-2"); err == nil {
+		t.Fatal("expected ownership enforcement")
+	}
+}
+
 func TestHandleNotificationAndSessionUpdate(t *testing.T) {
 	svc := NewService(config.NewService(), nil)
-	svc.sessions["session-1"] = &Session{ID: "session-1"}
+	svc.sessions["session-1"] = &Session{ID: "session-1", CurrentTurnID: "turn-1"}
 
 	svc.handleNotification("session-1", "session/update", json.RawMessage(`{"sessionId":"remote","update":{"sessionUpdate":"agent_message_chunk","content":{"text":"hello"}}}`))
 	svc.handleNotification("session-1", "other/event", json.RawMessage(`{}`))
 	svc.handleSessionUpdate("session-1", "plan", map[string]any{"text": "step 1"})
+	svc.handleSessionUpdate("session-1", "artifact", map[string]any{
+		"kind":  "dashboard_board",
+		"title": "Sales Dashboard",
+		"metadata": map[string]any{
+			"kind":    "dashboard_board",
+			"title":   "Sales Dashboard",
+			"widgets": []map[string]any{{"id": "w1"}},
+		},
+	})
 	svc.handleSessionUpdate("session-1", "user_message_chunk", map[string]any{"text": "user"})
 	svc.handleSessionUpdate("session-1", "unknown", map[string]any{"text": "system"})
+	svc.handleSessionUpdate("session-1", "tool_call_started", map[string]any{"tool_name": "orbyte_module_list", "status": "running", "text": "listing modules"})
 
 	session, _ := svc.GetSession("session-1")
-	if len(session.Messages) < 3 {
+	if len(session.Messages) < 2 {
 		t.Fatalf("expected accumulated messages, got %#v", session.Messages)
+	}
+	for _, item := range session.Messages {
+		if item.Role == "user" {
+			t.Fatalf("expected user chunks to stay out of stored messages, got %#v", session.Messages)
+		}
 	}
 	if len(session.CurrentPlan) != 1 || session.CurrentPlan[0].Content != "step 1" {
 		t.Fatalf("unexpected plan entries: %#v", session.CurrentPlan)
+	}
+	if len(session.Artifacts) != 1 || session.Artifacts[0].Kind != "dashboard_board" {
+		t.Fatalf("expected dashboard artifact, got %#v", session.Artifacts)
+	}
+	var foundToolEvent bool
+	for _, item := range session.Trace {
+		if item.Kind == "tool_call_started" {
+			foundToolEvent = true
+			if got := item.Payload["tool_name"]; got != "orbyte_module_list" {
+				t.Fatalf("unexpected tool payload: %#v", item.Payload)
+			}
+		}
+	}
+	if !foundToolEvent {
+		t.Fatal("expected tool_call_started event in trace")
+	}
+}
+
+func TestHandleSessionUpdatePromotesDashboardArtifactsFromToolCompletion(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{ID: "session-1", CurrentTurnID: "turn-1"}
+
+	svc.handleSessionUpdate("session-1", "tool_call_completed", map[string]any{
+		"tool_name": "orbyte_analytics_dashboard_widgets_preview",
+		"status":    "completed",
+		"rawOutput": map[string]any{
+			"structuredContent": map[string]any{
+				"artifacts": []any{
+					map[string]any{
+						"id":    "artifact-widget-1",
+						"kind":  "dashboard_widget",
+						"title": "Open Tickets",
+						"metadata": map[string]any{
+							"kind":  "dashboard_widget",
+							"title": "Open Tickets",
+							"widget": map[string]any{
+								"id":         "widget-1",
+								"title":      "Open Tickets",
+								"definition": map[string]any{"key": "crm.ticketing.open_tickets"},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	session, _ := svc.GetSession("session-1")
+	if len(session.Artifacts) != 1 || session.Artifacts[0].ID != "artifact-widget-1" {
+		t.Fatalf("expected promoted tool artifact, got %#v", session.Artifacts)
+	}
+	artifactUpdates := 0
+	for _, item := range session.Trace {
+		if item.Kind == "session_update" && stringValue(item.Payload["update_kind"]) == "artifact" {
+			artifactUpdates++
+		}
+	}
+	if artifactUpdates != 1 {
+		t.Fatalf("expected one artifact session update, got %#v", session.Trace)
+	}
+}
+
+func TestSendPromptPromotesDashboardArtifactsFromAssistantMessage(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		RemoteSession: "remote-1",
+	}
+	client := testClientWithResponses(t, func(message map[string]any, _ *acpClient) error {
+		id := int64(message["id"].(float64))
+		method := message["method"].(string)
+		if method != "session/prompt" {
+			return errors.New("unexpected method")
+		}
+		session := svc.sessions["session-1"]
+		appendChunkMessage(session, "assistant", `Here is the dashboard.
+<orbyte-dashboard-artifact>{"kind":"dashboard_board","title":"Sales Dashboard","metadata":{"kind":"dashboard_board","title":"Sales Dashboard","widgets":[{"id":"w1","title":"Net Sales","kind":"metric","width":3,"height":1,"definition":{"key":"analytics.sales.net_sales","title":"Net Sales","renderer_kind":"metric","data_path":"/ui/data/dashboard/sales-demo","metric":{"value_path":"overview.net_sales"}}}]}}</orbyte-dashboard-artifact>`, map[string]any{"turn_id": session.CurrentTurnID})
+		client := svc.runtimes["session-1"].client
+		client.mu.Lock()
+		ch := client.pending[id]
+		client.mu.Unlock()
+		ch <- rpcResponse{ID: id, Result: json.RawMessage(`{}`)}
+		close(ch)
+		return nil
+	})
+	svc.runtimes["session-1"] = &sessionRuntime{client: client}
+
+	updated, err := svc.SendPrompt("session-1", PromptRequest{Content: "Create dashboard"})
+	if err != nil {
+		t.Fatalf("SendPrompt failed: %v", err)
+	}
+	if len(updated.Artifacts) != 1 || updated.Artifacts[0].Kind != "dashboard_board" {
+		t.Fatalf("expected promoted dashboard artifact, got %#v", updated.Artifacts)
+	}
+}
+
+func TestHandleSessionUpdatePersistsCurrentModel(t *testing.T) {
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{ID: "session-1", CurrentTurnID: "turn-1"}
+
+	svc.handleSessionUpdate("session-1", "agent_message_chunk", map[string]any{
+		"text":    "hello",
+		"modelID": "minimax-m2.7",
+	})
+
+	session, _ := svc.GetSession("session-1")
+	if session.CurrentModel != "minimax-m2.7" {
+		t.Fatalf("expected current model to persist, got %q", session.CurrentModel)
+	}
+}
+
+func TestGetSessionHydratesCurrentModelFromResolver(t *testing.T) {
+	previousResolver := currentModelResolver
+	currentModelResolver = func(provider Provider, remoteSessionID string) (string, error) {
+		if provider.Key != "opencode" || remoteSessionID != "remote-1" {
+			t.Fatalf("unexpected resolver inputs: %#v %q", provider, remoteSessionID)
+		}
+		return "minimax-m2.7", nil
+	}
+	defer func() { currentModelResolver = previousResolver }()
+
+	svc := NewService(config.NewService(), nil)
+	svc.sessions["session-1"] = &Session{
+		ID:            "session-1",
+		ProviderKey:   "opencode",
+		RemoteSession: "remote-1",
+	}
+	svc.runtimes["session-1"] = &sessionRuntime{provider: Provider{Key: "opencode"}}
+
+	session, ok := svc.GetSession("session-1")
+	if !ok {
+		t.Fatal("expected session")
+	}
+	if session.CurrentModel != "minimax-m2.7" {
+		t.Fatalf("expected hydrated current model, got %q", session.CurrentModel)
+	}
+}
+
+func TestExtractToolActivity(t *testing.T) {
+	payload, ok := extractToolActivity("tool_call_completed", map[string]any{
+		"tool_call": map[string]any{"id": "call-1", "name": "orbyte_module_list"},
+		"status":    "completed",
+		"text":      "finished listing modules",
+	})
+	if !ok {
+		t.Fatal("expected tool activity extraction")
+	}
+	if payload["tool_call_id"] != "call-1" || payload["tool_name"] != "orbyte_module_list" {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+	if got := toolActivityEventKind("tool_call_completed", payload); got != "tool_call_completed" {
+		t.Fatalf("unexpected tool event kind: %s", got)
+	}
+}
+
+func TestExtractToolActivitySynthesizesDraftOpenPath(t *testing.T) {
+	payload, ok := extractToolActivity("tool_call_update", map[string]any{
+		"title":      "orbyte-agentproof-promotion_core_strategy_plan_draft_create",
+		"toolCallId": "call-draft-1",
+		"status":     "completed",
+		"rawInput": map[string]any{
+			"title": "Promotion Plan 20260404-002446",
+		},
+		"rawOutput": map[string]any{
+			"output": "Created promotion strategy draft doc_01KNAY520Q98F95WCV2YQ6CSCB as generic_request.",
+		},
+	})
+	if !ok {
+		t.Fatal("expected tool activity extraction")
+	}
+	if payload["document_id"] != "doc_01KNAY520Q98F95WCV2YQ6CSCB" {
+		t.Fatalf("expected synthesized document_id, got %#v", payload)
+	}
+	if payload["title"] != "Promotion Plan 20260404-002446" {
+		t.Fatalf("expected synthesized title, got %#v", payload)
+	}
+	if payload["open_path"] != "/ui/documents/detail?id=doc_01KNAY520Q98F95WCV2YQ6CSCB" {
+		t.Fatalf("expected synthesized open_path, got %#v", payload)
+	}
+}
+
+func TestExtractToolActivitySynthesizesDraftOpenPathFromRawOutput(t *testing.T) {
+	payload, ok := extractToolActivity("tool_call_update", map[string]any{
+		"kind":       "other",
+		"toolCallId": "call-draft-2",
+		"status":     "completed",
+		"rawInput": map[string]any{
+			"title": "Promotion Plan 20260404-002446",
+		},
+		"rawOutput": map[string]any{
+			"output": "Created promotion strategy draft doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y as generic_request. Open draft: /ui/promotion/plans/form?id=doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y",
+		},
+	})
+	if !ok {
+		t.Fatal("expected tool activity extraction")
+	}
+	if payload["document_id"] != "doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y" {
+		t.Fatalf("expected raw output document_id, got %#v", payload)
+	}
+	if payload["open_path"] != "/ui/promotion/plans/form?id=doc_01KNAZ7YCDRQV22YWXQ4KS9M9Y" {
+		t.Fatalf("expected raw output open_path, got %#v", payload)
+	}
+}
+
+func TestExtractToolActivityPrefersTitleOverGenericKind(t *testing.T) {
+	payload, ok := extractToolActivity("tool_call_update", map[string]any{
+		"kind":       "other",
+		"title":      "orbyte-agentproof-employee_spend_core_business_records_search",
+		"toolCallId": "call-2",
+		"status":     "failed",
+	})
+	if !ok {
+		t.Fatal("expected tool activity extraction")
+	}
+	if payload["tool_name"] != "orbyte-agentproof-employee_spend_core_business_records_search" {
+		t.Fatalf("unexpected tool name payload: %#v", payload)
+	}
+}
+
+func TestNormalizeSessionUpdatePreservesToolMetadata(t *testing.T) {
+	update := normalizeSessionUpdate(map[string]any{
+		"sessionUpdate": "tool_call_update",
+		"content":       nil,
+		"toolCallId":    "call-42",
+		"toolName":      "orbyte_document_read",
+		"status":        "running",
+		"title":         "Reading reimbursement payment",
+		"arguments": map[string]any{
+			"document_id": "doc_123",
+		},
+	})
+	if update["toolCallId"] != "call-42" || update["toolName"] != "orbyte_document_read" {
+		t.Fatalf("expected tool metadata preserved, got %#v", update)
+	}
+	if update["content"] != nil {
+		t.Fatalf("expected explicit nil content preserved, got %#v", update["content"])
 	}
 }
 
@@ -375,22 +1266,47 @@ func TestAppendChunkMessageMergesRecentRole(t *testing.T) {
 	}
 }
 
+func TestAppendChunkMessageMergesByTurnAcrossInterleavedUpdates(t *testing.T) {
+	session := &Session{}
+	appendChunkMessage(session, "user", "hello", map[string]any{"turn_id": "turn-1"})
+	appendChunkMessage(session, "system", "thinking", map[string]any{"turn_id": "turn-1"})
+	appendChunkMessage(session, "assistant", "Part 1", map[string]any{"turn_id": "turn-1"})
+	appendChunkMessage(session, "system", "tool", map[string]any{"turn_id": "turn-1"})
+	appendChunkMessage(session, "assistant", " + part 2", map[string]any{"turn_id": "turn-1"})
+	appendChunkMessage(session, "user", "hello", map[string]any{"turn_id": "turn-1"})
+
+	if len(session.Messages) != 4 {
+		t.Fatalf("expected user, two system, and assistant messages only, got %#v", session.Messages)
+	}
+	if session.Messages[0].Content != "hello" {
+		t.Fatalf("expected single user message, got %#v", session.Messages[0])
+	}
+	if session.Messages[2].Content != "Part 1 + part 2" {
+		t.Fatalf("expected merged assistant message, got %#v", session.Messages[2])
+	}
+}
+
 func TestCloneMapSessionAndStringValue(t *testing.T) {
 	original := &Session{
-		ID:            "session-1",
-		Messages:      []Message{{ID: "msg"}},
-		ContextBlocks: []ContextBlock{{Key: "ctx"}},
-		Approvals:     []Approval{{ID: "appr"}},
-		Artifacts:     []Artifact{{ID: "art"}},
-		Trace:         []Event{{ID: "evt"}},
-		CurrentPlan:   []PlanEntry{{Content: "step"}},
-		ProviderInfo:  map[string]any{"agent": "codex"},
+		ID:               "session-1",
+		Messages:         []Message{{ID: "msg"}},
+		ContextBlocks:    []ContextBlock{{Key: "ctx"}},
+		Approvals:        []Approval{{ID: "appr"}},
+		Artifacts:        []Artifact{{ID: "art"}},
+		Trace:            []Event{{ID: "evt"}},
+		CurrentPlan:      []PlanEntry{{Content: "step"}},
+		PendingQuestions: []ClarificationQuestion{{ID: "q1", Content: "Need more detail?"}},
+		ProviderInfo:     map[string]any{"agent": "codex"},
 	}
 	cloned := cloneSession(original)
 	cloned.Messages[0].ID = "changed"
 	cloned.ProviderInfo["agent"] = "other"
+	cloned.PendingQuestions[0].Content = "changed"
 	if original.Messages[0].ID != "msg" || original.ProviderInfo["agent"] != "codex" {
 		t.Fatalf("expected deep clone, got %#v", original)
+	}
+	if original.PendingQuestions[0].Content != "Need more detail?" {
+		t.Fatalf("expected clarification questions cloned, got %#v", original.PendingQuestions)
 	}
 	if cloneMap(nil) != nil {
 		t.Fatal("expected nil cloneMap for nil input")
@@ -414,3 +1330,20 @@ func TestClientWriteMessageUsesFraming(t *testing.T) {
 type nopWriteCloser struct{ io.Writer }
 
 func (nopWriteCloser) Close() error { return nil }
+
+func TestClientWriteMessageUsesJSONLTransport(t *testing.T) {
+	var buf bytes.Buffer
+	client := &acpClient{
+		stdin:     nopWriteCloser{Writer: &buf},
+		transport: rpcTransportJSONL,
+	}
+	if err := client.writeMessage(map[string]any{"jsonrpc": "2.0", "id": 1}); err != nil {
+		t.Fatalf("writeMessage failed: %v", err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("Content-Length:")) {
+		t.Fatalf("expected jsonl rpc payload, got %q", buf.String())
+	}
+	if !bytes.HasSuffix(buf.Bytes(), []byte("\n")) || !bytes.Contains(buf.Bytes(), []byte(`"jsonrpc":"2.0"`)) {
+		t.Fatalf("expected newline-delimited json payload, got %q", buf.String())
+	}
+}

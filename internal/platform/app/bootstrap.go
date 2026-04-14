@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"orbyte/internal/platform/analytics"
+	application "orbyte/internal/platform/application"
 	"orbyte/internal/platform/config"
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/identity"
@@ -595,6 +596,20 @@ func brokerTopic(prefix, topic string) string {
 }
 
 func seedModelRules(modelSvc *model.Service) {
+	application.RegisterCommercialModelRules(modelSvc)
+	application.RegisterCRMModelRules(modelSvc)
+	modelSvc.SetDefaultEvaluator("crm.ticket_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMTicketNumber(time.Now().UTC()), nil
+	})
+	modelSvc.SetDefaultEvaluator("crm.lead_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMLeadNumber(time.Now().UTC()), nil
+	})
+	modelSvc.SetDefaultEvaluator("crm.opportunity_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMOpportunityNumber(time.Now().UTC()), nil
+	})
+	modelSvc.SetDefaultEvaluator("crm.activity_number.default", func(_ model.RuleInput) (any, error) {
+		return application.GenerateCRMActivityNumber(time.Now().UTC()), nil
+	})
 	modelSvc.SetDefaultEvaluator("party.status.default", func(_ model.RuleInput) (any, error) {
 		return "active", nil
 	})
@@ -608,6 +623,14 @@ func seedModelRules(modelSvc *model.Service) {
 		default:
 			return shared.Validation("party status must be active, inactive, or blocked")
 		}
+	})
+	modelSvc.SetConstraintEvaluator("accounting_period.date_range", func(input model.RuleInput) error {
+		startDate := strings.TrimSpace(stringValue(input.Values["start_date"]))
+		endDate := strings.TrimSpace(stringValue(input.Values["end_date"]))
+		if startDate != "" && endDate != "" && startDate > endDate {
+			return shared.Validation("accounting period start_date cannot be after end_date")
+		}
+		return nil
 	})
 }
 

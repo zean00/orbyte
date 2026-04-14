@@ -1,7 +1,7 @@
 import createClient from 'openapi-fetch'
 import type { paths } from './generated/types'
 
-const baseUrl = '/api/v1'
+const baseUrl = ''
 
 export const apiClient = createClient<paths>({
   baseUrl,
