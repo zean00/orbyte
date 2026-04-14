@@ -183,6 +183,9 @@ func installPersistence(graph *serviceGraph, postgres *store.Postgres) {
 	if postgres == nil || postgres.DB == nil {
 		return
 	}
+	if err := ensureDatabaseMigrations(postgres.DB); err != nil {
+		panic(err)
+	}
 	acpInstr := acp.NewInstrumentation(graph.observability, graph.otel.Tracer())
 	graph.secrets = secretstore.NewServiceWithRepository(secretstore.NewPostgresRepository(postgres.DB))
 	graph.config = config.NewServiceWithRepositoryAndSecrets(config.NewPostgresRepository(postgres.DB), graph.secrets)
