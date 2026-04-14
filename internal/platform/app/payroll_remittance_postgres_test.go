@@ -28,7 +28,6 @@ func TestPayrollRemittancePostgresValidation(t *testing.T) {
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_remittance_"+suffix, "Remittance Party "+suffix)
-	ensureLocationRecord(t, graph.models, "user_admin", locID)
 	unitID := "ou_remittance_" + suffix
 	departmentID := "dept_remittance_" + suffix
 	costCenterID := "cc_remittance_" + suffix

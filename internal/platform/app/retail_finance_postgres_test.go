@@ -25,7 +25,6 @@ func TestRetailFinancePostgresShiftReconciliationAndGiftCard(t *testing.T) {
 	}
 
 	suffix := time.Now().UTC().Format("20060102150405")
-	ensureLocationRecord(t, graph.models, "user_admin", "loc_hq")
 	ensureWarehouseRecord(t, graph.models, "user_admin", "MAIN", "org_default", "loc_hq")
 	ensureFinanceAccountRecord(t, graph.models, "user_admin", "1000-CASH", "Cash", "asset", "cash_and_bank", "debit")
 	ensureFinanceAccountRecord(t, graph.models, "user_admin", "1010-CARD", "Card Clearing", "asset", "cash_and_bank", "debit")

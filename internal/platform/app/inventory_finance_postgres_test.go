@@ -29,6 +29,7 @@ func TestInventoryFinancePostgresCountAdjustmentAndReconciliation(t *testing.T) 
 	actorID := "user_admin"
 	ensureCommercialUOMRecord(t, graph.models, actorID, "EA")
 	ensureFinanceAccountRecord(t, graph.models, actorID, "1200-INV-"+suffix, "Inventory Asset "+suffix, "asset", "inventory", "debit")
+	ensureWarehouseRecord(t, graph.models, actorID, "MAIN", orgID, locID)
 	approver, err := graph.identity.CreateUser("inventory-finance-"+suffix, "Complex12!", locID, "role_admin", "deployment", "")
 	if err != nil {
 		t.Fatalf("create approver: %v", err)

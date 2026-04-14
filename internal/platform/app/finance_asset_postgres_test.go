@@ -171,7 +171,6 @@ func TestFinanceAssetPostgresLifecycleEvents(t *testing.T) {
 	suffix := time.Now().UTC().Format("20060102150405")
 	orgID := "org_default"
 	locID := "loc_hq"
-	ensureLocationRecord(t, graph.models, "user_admin", locID)
 	assetResult, err := graph.financeAssets.CreateFixedAsset(orgID, locID, "user_admin", map[string]any{
 		"code":             "FA-LIFE-" + suffix,
 		"name":             "Lifecycle " + suffix,

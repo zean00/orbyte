@@ -33,19 +33,6 @@ func ensureWarehouseRecord(t *testing.T, models *model.Service, actorID, code, o
 	}, actorID)
 }
 
-func ensureLocationRecord(t *testing.T, models *model.Service, actorID, locationID string) model.Record {
-	t.Helper()
-	if record, err := models.Get("location", locationID); err == nil {
-		return record
-	}
-	return ensureModelByCode(t, models, "location", "code", locationID, map[string]any{
-		"id":     locationID,
-		"code":   locationID,
-		"name":   "Location " + locationID,
-		"status": "active",
-	}, actorID)
-}
-
 func ensureOrganizationUnitRecord(t *testing.T, models *model.Service, actorID, unitID, organizationID, locationID string) model.Record {
 	t.Helper()
 	if record, err := models.Get("organization_unit", unitID); err == nil {

@@ -28,7 +28,6 @@ func TestEmployeeSpendPostgresTravelAdvanceClaimLiquidationAndReimbursement(t *t
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_emp_"+suffix, "Employee Spend Party "+suffix)
-	ensureLocationRecord(t, graph.models, "user_admin", locID)
 	unitID := "ou_spend_" + suffix
 	departmentID := "dept_spend_" + suffix
 	costCenterID := "cc_spend_" + suffix

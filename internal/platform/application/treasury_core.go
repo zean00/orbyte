@@ -347,6 +347,7 @@ func (s *TreasuryCoreService) MatchStatementLine(reconciliationID, lineID, actor
 	if sourceType == "" || sourceID == "" {
 		return nil, shared.Validation("source_type and source_id are required")
 	}
+	sourceType = normalizeMatchedSourceType(sourceType)
 	match, err := s.models.Create("bank_reconciliation_match", actorID, map[string]any{
 		"organization_id":        textValue(reconciliation.Values["organization_id"]),
 		"location_id":            textValue(reconciliation.Values["location_id"]),
@@ -1149,6 +1150,23 @@ func (s *TreasuryCoreService) statementLineDuplicateExists(treasuryAccountID str
 		return true
 	}
 	return false
+}
+
+func normalizeMatchedSourceType(sourceType string) string {
+	switch strings.TrimSpace(sourceType) {
+	case "payment_receipt", "receipt":
+		return "receipt"
+	case "payment_refund", "payment_out", "payment":
+		return "payment"
+	case "treasury_transfer", "transfer":
+		return "transfer"
+	case "ledger_posting", "journal":
+		return "journal"
+	case "pos_tender_settlement", "settlement":
+		return "settlement"
+	default:
+		return "other"
+	}
 }
 
 func (s *TreasuryCoreService) classifyStatementException(line model.Record) string {

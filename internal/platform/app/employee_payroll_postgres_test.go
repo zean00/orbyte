@@ -28,7 +28,6 @@ func TestEmployeePayrollPostgresValidation(t *testing.T) {
 	locID := "loc_hq"
 	suffix := time.Now().UTC().Format("20060102150405")
 	party := ensurePartyRecord(t, graph.models, "user_admin", "party_payroll_"+suffix, "Payroll Party "+suffix)
-	ensureLocationRecord(t, graph.models, "user_admin", locID)
 	unitID := "ou_payroll_" + suffix
 	departmentID := "dept_payroll_" + suffix
 	costCenterID := "cc_payroll_" + suffix
