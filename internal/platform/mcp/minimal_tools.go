@@ -584,24 +584,24 @@ func (s *Server) playbooksDescribeMeta(actor ActorContext, arguments map[string]
 		}
 		toolsByPlaybook[item.ID] = describedTools
 	}
-	content := fmt.Sprintf("Loaded %d playbook workflow contract(s).", len(items))
 	structured := map[string]any{
 		"items":             items,
 		"tools_by_playbook": toolsByPlaybook,
 	}
+	var content string
 	if len(items) == 1 {
 		content = playbookDescribeChecklist(items[0], toolsByPlaybook[items[0].ID])
 		structured["playbook"] = items[0]
 		structured["tools"] = toolsByPlaybook[items[0].ID]
 		structured["checklist"] = map[string]any{
-			"required_final_facts":    items[0].RequiredFinalFacts,
-			"required_artifacts":      items[0].RequiredArtifacts,
-			"required_draft_outputs":  items[0].RequiredDraftOutputs,
-			"success_checks":          items[0].SuccessChecks,
-			"guardrails":              items[0].Guardrails,
-			"pitfalls":                items[0].Pitfalls,
-			"workflow_steps":          items[0].WorkflowSteps,
-			"tool_inventory":          items[0].ToolInventory,
+			"required_final_facts":   items[0].RequiredFinalFacts,
+			"required_artifacts":     items[0].RequiredArtifacts,
+			"required_draft_outputs": items[0].RequiredDraftOutputs,
+			"success_checks":         items[0].SuccessChecks,
+			"guardrails":             items[0].Guardrails,
+			"pitfalls":               items[0].Pitfalls,
+			"workflow_steps":         items[0].WorkflowSteps,
+			"tool_inventory":         items[0].ToolInventory,
 		}
 	} else {
 		lines := []string{fmt.Sprintf("Loaded %d skill workflow contracts.", len(items))}

@@ -851,8 +851,7 @@ func TestLeavePolicyCarryForwardConsumptionUsesLeaveStartDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensure account: %v", err)
 	}
-	account, err = service.applyAnnualCarryForward(account, profile, policy, rule, "user_admin", parseDateOnly("2099-01-01"), "")
-	if err != nil {
+	if _, err = service.applyAnnualCarryForward(account, profile, policy, rule, "user_admin", parseDateOnly("2099-01-01"), ""); err != nil {
 		t.Fatalf("apply annual carry forward: %v", err)
 	}
 	record, err := service.CreateSelfServiceLeaveRequest("leave_user", map[string]any{

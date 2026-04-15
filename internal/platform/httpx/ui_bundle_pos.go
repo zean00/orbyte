@@ -317,7 +317,7 @@ func POSTerminalBundle() string {
           footerText: String(pickValue(registerValues.receipt_footer_text, storeValues.receipt_footer_text, text("Thanks for shopping with Orbyte.", "Terima kasih sudah berbelanja dengan Orbyte."))),
           supportText: String(pickValue(registerValues.receipt_support_text, storeValues.receipt_support_text, text("Please keep this receipt for exchange or support.", "Simpan struk ini untuk penukaran atau bantuan."))),
           serviceText: String(pickValue(registerValues.receipt_service_text, storeValues.receipt_service_text, text("Present the lookup code at the register for faster assistance.", "Tunjukkan kode lookup di kasir untuk bantuan lebih cepat."))),
-          merchantNote: String(pickValue(registerValues.receipt_merchant_note, storeValues.receipt_merchant_note, text("Retain this copy for register balancing and operational support.", "Simpan salinan ini untuk balancing register dan dukungan operasional."))),
+          merchantNote: String(pickValue(registerValues.receipt_merchant_note, storeValues.receipt_merchant_note, text("Retain this copy for register balancing and operational support.", "Simpan salinan ini untuk balancing register dan dukungan operasi."))),
           showQRCode: truthy(pickValue(registerValues.receipt_show_qr, storeValues.receipt_show_qr, true)),
           variants: variants.length ? variants : ["customer", "merchant"],
         };
@@ -1744,7 +1744,7 @@ func POSTerminalBundle() string {
           +       '<div>' + escapeHTML(config.footerText) + '</div>'
           +       '<div class="pos-terminal__receipt-policy"><div>' + escapeHTML(policyTitle) + '</div><div>' + escapeHTML(policyDetail) + '</div></div>'
           +       '<div class="pos-terminal__receipt-divider"></div>'
-          +       '<div>' + escapeHTML(text("Operational copy only. Taxes and payments are recorded in Orbyte.", "Salinan operasional. Pajak dan pembayaran tercatat di Orbyte.")) + '</div>'
+          +       '<div>' + escapeHTML(text("Operational copy only. Taxes and payments are recorded in Orbyte.", "Salinan operasi. Pajak dan pembayaran tercatat di Orbyte.")) + '</div>'
           +       '<div>' + escapeHTML(text("Register", "Register")) + ': ' + escapeHTML(compactLabel(registerLabel || state.registerCode || "—", 28)) + '</div>'
           +       '<div>' + escapeHTML(text("Served by", "Dilayani oleh")) + ': ' + escapeHTML(compactLabel(cashierName || "—", 28)) + '</div>'
           +       '<div class="pos-terminal__receipt-cutline">' + escapeHTML(badgeLabel) + '</div>'

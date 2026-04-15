@@ -342,7 +342,7 @@ func parseToolCatalogOptions(raw json.RawMessage) ToolCatalogOptions {
 func (s *Server) toolsListResult(actor ActorContext, options ToolCatalogOptions) map[string]any {
 	exposureMode := s.effectiveExposureMode(options)
 	discoverable := s.nonMetaToolDescriptors(actor)
-	full := s.listTools(actor)
+	var full []ToolDescriptor
 	if exposureMode == MCPExposureModeMinimal {
 		full = s.minimalExposedTools(actor)
 	} else {
@@ -374,7 +374,7 @@ func (s *Server) FilterToolCatalogForPreview(options ToolCatalogOptions) ([]Tool
 		PermissionChecker: func(string) bool { return true },
 	}
 	discoverable := s.nonMetaToolDescriptors(actor)
-	items := s.listTools(actor)
+	var items []ToolDescriptor
 	if s.effectiveExposureMode(options) == MCPExposureModeMinimal {
 		items = s.minimalExposedTools(actor)
 	} else {

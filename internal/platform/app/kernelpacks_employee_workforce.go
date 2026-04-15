@@ -35,7 +35,7 @@ func employeeWorkforceKernelPackManifest() module.Manifest {
 					Links: []module.AdminConsoleLinkDefinition{
 						adminConsoleLink("employees", "Employees", "Karyawan", "/ui/workforce/employees", "Open employee master records.", "Buka data master karyawan.", "employee.list"),
 						adminConsoleLink("assignments", "Employee Assignments", "Penugasan Karyawan", "/ui/workforce/assignments", "Open effective-dated workforce assignments.", "Buka penugasan tenaga kerja efektif.", "employee.read"),
-						adminConsoleLink("eligibility", "Role Eligibility", "Kelayakan Peran", "/ui/workforce/eligibility", "Open operational role eligibility records.", "Buka data kelayakan peran operasional.", "employee.read"),
+						adminConsoleLink("eligibility", "Role Eligibility", "Kelayakan Peran", "/ui/workforce/eligibility", "Open operational role eligibility records.", "Buka data kelayakan peran operasi.", "employee.read"),
 						adminConsoleLink("compensation", "Compensation Profiles", "Profil Kompensasi", "/ui/workforce/compensation", "Open labor cost and payroll hook profiles.", "Buka profil biaya tenaga kerja dan kait payroll.", "employee.read"),
 					},
 				},

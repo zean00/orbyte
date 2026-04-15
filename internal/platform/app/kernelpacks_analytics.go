@@ -21,7 +21,7 @@ func analyticsKernelPackManifest() module.Manifest {
 			Title:           "Analytics Console",
 			TitleI18n:       localize("Analytics Console", "Konsol Analitik"),
 			Description:     "Analytics cockpit, reporting templates, and operational shortcuts.",
-			DescriptionI18n: localize("Analytics cockpit, reporting templates, and operational shortcuts.", "Kokpit analitik, template pelaporan, dan pintasan operasional."),
+			DescriptionI18n: localize("Analytics cockpit, reporting templates, and operational shortcuts.", "Kokpit analitik, template pelaporan, dan pintasan operasi."),
 			Sections: []module.AdminConsoleSectionDefinition{
 				{
 					Key:       "analytics_operations",

@@ -814,7 +814,7 @@ func (s *TreasuryCoreService) CreateExceptionJournal(exceptionID, actorID string
 		}
 	}
 	currencyCode := firstNonEmptyString(textValue(payload["currency_code"]), "IDR")
-	journalLines := []map[string]any{}
+	var journalLines []map[string]any
 	if journalKind == "bank_fee" {
 		journalLines = []map[string]any{
 			{"account_code": firstNonEmptyString(textValue(payload["expense_account_code"]), postingConfig["bank_fee_expense_account_code"]), "debit": statementAmount, "credit": 0.0, "description": "Bank fee"},

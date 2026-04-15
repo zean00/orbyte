@@ -1219,7 +1219,6 @@ func (s *LeavePolicyCoreService) projectAvailableDays(record, account model.Reco
 	expiryDate := parseDateOnly(account.Values["carry_forward_expiry_date"])
 	if !expiryDate.IsZero() && startDate.After(expiryDate) {
 		current -= carryForward
-		carryForward = 0
 	}
 	available := roundAttendanceHours(current - reserved)
 	if available < 0 {
