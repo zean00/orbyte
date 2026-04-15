@@ -1,6 +1,20 @@
 # Orbyte Platform
 
-Orbyte is a modular business application platform for operational systems, backoffice workflows, analytics, and governed agent connectivity. It combines a metadata-driven kernel, profile-driven business modules, generic UI surfaces, and machine-facing HTTP/MCP contracts in one runtime.
+Orbyte is an agentic-ready modular business application platform for operational systems, backoffice workflows, analytics, machine-facing APIs, and agent-driven execution.
+
+It combines a metadata-driven kernel, profile-driven business modules, generic UI surfaces, ACP-backed agent sessions, and machine-facing HTTP/MCP contracts in a single runtime.
+
+The agentic-ready claim is grounded in two built-in integration layers:
+
+- ACP for governed agent session connectivity and provider-backed runtime access
+- MCP for structured tools, resources, skills, and workflows that improve agent tool orchestration
+
+The platform is built around:
+
+- modular business capabilities assembled through kernel packs and manifests
+- generic UI, HTTP, and admin surfaces running on the same runtime
+- MCP-exposed tools, resources, skills, and workflows for agent orchestration
+- ACP-backed agent connectivity with governed access into platform capabilities
 
 This repository contains:
 
@@ -186,12 +200,13 @@ Key routes:
 
 See [docs/surfaces.md](docs/surfaces.md) for the current surface model.
 
-## Agent Integration
+## Agent Runtime
 
-Current agent support:
+Current agent-facing runtime capabilities:
 
 - ACP provider-backed agent sessions
 - MCP JSON-RPC endpoints
+- MCP skills and workflow/playbook discovery for better tool orchestration
 - switchable MCP exposure modes
 - minimal MCP discovery with:
   - `skills.find`
@@ -202,7 +217,9 @@ Current agent support:
 - dashboard artifact promotion into ACP sessions
 - service-principal and delegated-user agent access
 
-See [docs/agent-integration.md](docs/agent-integration.md) for the current agent integration model.
+In practice, ACP gives Orbyte a controlled way to connect agents to the platform runtime, while MCP exposes the business capabilities, skills, and workflows agents can discover and orchestrate.
+
+See [docs/agent-integration.md](docs/agent-integration.md) for the current agent runtime and integration model.
 
 ## Module Development
 
