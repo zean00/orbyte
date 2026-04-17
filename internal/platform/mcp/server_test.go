@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -2634,6 +2635,685 @@ func TestBusinessDocumentGetIncludesReadableSummaryText(t *testing.T) {
 		if !strings.Contains(text, fragment) {
 			t.Fatalf("expected %q in %q", fragment, text)
 		}
+	}
+}
+
+func TestBusinessRecordsSearchFindsExactModelMatchBeyondDefaultPage(t *testing.T) {
+	server := newTestServer(t)
+	def := model.Definition{
+		Key:                 "commercial_item",
+		DisplayName:         "Commercial Item",
+		OwnerModuleKey:      "pos_core",
+		ListPermissionKey:   "commercial_item.list",
+		ReadPermissionKey:   "commercial_item.read",
+		CreatePermissionKey: "commercial_item.create",
+		Fields: []model.FieldDefinition{
+			{Key: "sku", Type: "string"},
+			{Key: "name", Type: "string"},
+			{Key: "product_code", Type: "string"},
+			{Key: "status", Type: "string"},
+		},
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:    "pos_core",
+		Name:   "POS Core",
+		Models: []model.Definition{def},
+	}, "system"); err != nil {
+		t.Fatalf("register pos_core failed: %v", err)
+	}
+	if err := server.models.Register(def); err != nil {
+		t.Fatalf("register commercial_item failed: %v", err)
+	}
+	for i := 0; i < 24; i++ {
+		if _, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+			"sku":          fmt.Sprintf("SKU-%03d", i),
+			"name":         fmt.Sprintf("Background Item %03d", i),
+			"product_code": fmt.Sprintf("ITEM-%03d", i),
+			"status":       "active",
+		}); err != nil {
+			t.Fatalf("create background item %d failed: %v", i, err)
+		}
+	}
+	const suffix = "20260417-999"
+	target, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":          "ESP-" + suffix,
+		"name":         "Espresso Double " + suffix,
+		"product_code": "PROD-" + suffix,
+		"status":       "active",
+	})
+	if err != nil {
+		t.Fatalf("create target item failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "module.read" || permissionKey == "commercial_item.list"
+		},
+	}
+	search := func(query string) []businessRecordSummary {
+		t.Helper()
+		resp := server.Handle(context.Background(), JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+			Params: mustJSON(t, map[string]any{
+				"name": "pos_core.business.records.search",
+				"arguments": map[string]any{
+					"resource_kind": "model",
+					"model_key":     "commercial_item",
+					"query":         query,
+				},
+			}),
+		}, actor)
+		if resp.Error != nil {
+			t.Fatalf("business.records.search(%q) failed: %+v", query, resp.Error)
+		}
+		return resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]businessRecordSummary)
+	}
+	for _, query := range []string{
+		"Espresso Double " + suffix,
+		"ESP-" + suffix,
+		"PROD-" + suffix,
+		suffix,
+	} {
+		items := search(query)
+		if len(items) == 0 {
+			t.Fatalf("expected items for query %q", query)
+		}
+		if items[0].RecordID != target.ID {
+			t.Fatalf("expected query %q to return target %s, got %+v", query, target.ID, items)
+		}
+	}
+}
+
+func registerCommercialCRMProductToolFixtures(t *testing.T, server *Server) {
+	t.Helper()
+	commercialItemDef := model.Definition{
+		Key:                 "commercial_item",
+		DisplayName:         "Commercial Item",
+		OwnerModuleKey:      "commercial_core",
+		ListPermissionKey:   "item.list",
+		ReadPermissionKey:   "item.read",
+		CreatePermissionKey: "item.create",
+		UpdatePermissionKey: "item.update",
+		Fields: []model.FieldDefinition{
+			{Key: "sku", Type: "string"},
+			{Key: "name", Type: "string"},
+			{Key: "description", Type: "string"},
+			{Key: "product_code", Type: "string"},
+			{Key: "variant_label", Type: "string"},
+			{Key: "item_type", Type: "string"},
+			{Key: "category_code", Type: "string"},
+			{Key: "is_sellable", Type: "bool"},
+			{Key: "uom_code", Type: "string"},
+			{Key: "base_price", Type: "number"},
+			{Key: "currency_code", Type: "string"},
+			{Key: "inventory_enabled", Type: "bool"},
+			{Key: "inventory_tracking_mode", Type: "string"},
+			{Key: "replenishment_enabled", Type: "bool"},
+			{Key: "replenishment_mode", Type: "string"},
+			{Key: "target_stock_quantity", Type: "number"},
+			{Key: "status", Type: "string"},
+		},
+	}
+	partyDef := model.Definition{
+		Key:                 "party",
+		DisplayName:         "Party",
+		OwnerModuleKey:      "masterdata",
+		ListPermissionKey:   "party.list",
+		ReadPermissionKey:   "party.read",
+		CreatePermissionKey: "party.create",
+		UpdatePermissionKey: "party.update",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string"},
+		},
+	}
+	crmLeadDef := model.Definition{
+		Key:                 "crm_lead",
+		DisplayName:         "CRM Lead",
+		OwnerModuleKey:      "crm_core",
+		ListPermissionKey:   "crm_lead.list",
+		ReadPermissionKey:   "crm_lead.read",
+		CreatePermissionKey: "crm_lead.create",
+		UpdatePermissionKey: "crm_lead.update",
+		Fields: []model.FieldDefinition{
+			{Key: "lead_number", Type: "string"},
+			{Key: "title", Type: "string"},
+			{Key: "party_id", Type: "string"},
+			{Key: "party_name", Type: "string"},
+			{Key: "product_record_id", Type: "string"},
+			{Key: "product_code", Type: "string"},
+			{Key: "product_name", Type: "string"},
+			{Key: "owner_user_id", Type: "string"},
+			{Key: "source_channel", Type: "string"},
+			{Key: "status", Type: "string"},
+			{Key: "rating", Type: "string"},
+			{Key: "estimated_value", Type: "number"},
+			{Key: "expected_close_date", Type: "string"},
+			{Key: "next_action_at", Type: "string"},
+			{Key: "notes", Type: "string"},
+		},
+	}
+	crmActivityDef := model.Definition{
+		Key:                 "crm_activity",
+		DisplayName:         "CRM Activity",
+		OwnerModuleKey:      "crm_core",
+		ListPermissionKey:   "crm_activity.list",
+		ReadPermissionKey:   "crm_activity.read",
+		CreatePermissionKey: "crm_activity.create",
+		UpdatePermissionKey: "crm_activity.update",
+		Fields: []model.FieldDefinition{
+			{Key: "activity_number", Type: "string"},
+			{Key: "activity_type", Type: "string"},
+			{Key: "subject", Type: "string"},
+			{Key: "related_kind", Type: "string"},
+			{Key: "related_id", Type: "string"},
+			{Key: "party_id", Type: "string"},
+			{Key: "owner_user_id", Type: "string"},
+			{Key: "status", Type: "string"},
+			{Key: "completed_at", Type: "string"},
+			{Key: "note", Type: "string"},
+		},
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:    "commercial_core",
+		Name:   "Commercial Core",
+		Models: []model.Definition{commercialItemDef},
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{
+				{Key: "commercial_core.item.search", Title: "Search Commercial Items", Operation: "commercial_core.item.search", RequiredPermissions: []string{"item.list"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}}},
+				{Key: "commercial_core.item.get", Title: "Get Commercial Item", Operation: "commercial_core.item.get", RequiredPermissions: []string{"item.list", "item.read"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}}},
+			},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register commercial_core manifest failed: %v", err)
+	}
+	if err := server.modules.Register(module.Manifest{
+		Key:    "crm_core",
+		Name:   "CRM Core",
+		Models: []model.Definition{crmLeadDef, crmActivityDef},
+		MCP: module.MCPDefinition{
+			Tools: []module.MCPToolDefinition{
+				{Key: "crm.lead.find_or_create_for_product_interest", Title: "Find Or Create CRM Lead For Product Interest", Operation: "crm.lead.find_or_create_for_product_interest", RequiredPermissions: []string{"crm_lead.list", "crm_lead.create", "item.list", "item.read"}, Contract: module.MCPContractMetadata{ActionClass: "create", RequiresConfirmation: true, BusinessDomains: []string{"crm", "sales"}}},
+			},
+		},
+	}, "system"); err != nil {
+		t.Fatalf("register crm_core manifest failed: %v", err)
+	}
+	for _, def := range []model.Definition{commercialItemDef, partyDef, crmLeadDef, crmActivityDef} {
+		if err := server.models.Register(def); err != nil {
+			t.Fatalf("register model %s failed: %v", def.Key, err)
+		}
+	}
+	server.crm = application.NewCRMCoreService(server.models)
+}
+
+func TestCommercialItemToolsAppearInFullCatalogAndCompactCatalogLoads(t *testing.T) {
+	server := newTestServer(t)
+	registerCommercialCRMProductToolFixtures(t, server)
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+	fullResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params:  mustJSON(t, map[string]any{"exposure_mode": "full"}),
+	}, actor)
+	if fullResp.Error != nil {
+		t.Fatalf("full tools/list failed: %+v", fullResp.Error)
+	}
+	fullTools := fullResp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	for _, toolName := range []string{"commercial_core.item.search", "commercial_core.item.get", "crm.lead.find_or_create_for_product_interest"} {
+		if !containsToolNamed(fullTools, toolName) {
+			t.Fatalf("expected %s in full tool catalog", toolName)
+		}
+	}
+	compactResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/list",
+		Params: mustJSON(t, map[string]any{
+			"exposure_mode": "compact",
+			"catalog_mode":  "compact",
+			"domain":        "commercial",
+			"max_tools":     100,
+		}),
+	}, actor)
+	if compactResp.Error != nil {
+		t.Fatalf("compact tools/list failed: %+v", compactResp.Error)
+	}
+	compactPayload := compactResp.Result.(map[string]any)
+	catalog, ok := compactPayload["catalog"].(map[string]any)
+	if !ok || anyString(catalog["mode"]) != "compact" {
+		t.Fatalf("expected compact catalog metadata, got %+v", compactPayload)
+	}
+}
+
+func TestCommercialItemSearchAndGetTools(t *testing.T) {
+	server := newTestServer(t)
+	registerCommercialCRMProductToolFixtures(t, server)
+	for i := 0; i < 24; i++ {
+		if _, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+			"sku":                     fmt.Sprintf("SKU-%03d", i),
+			"name":                    fmt.Sprintf("Background Item %03d", i),
+			"description":             "Background item",
+			"product_code":            fmt.Sprintf("ITEM-%03d", i),
+			"item_type":               "product",
+			"category_code":           "coffee",
+			"is_sellable":             true,
+			"uom_code":                "ea",
+			"base_price":              10000,
+			"currency_code":           "IDR",
+			"inventory_enabled":       false,
+			"inventory_tracking_mode": "none",
+			"replenishment_enabled":   true,
+			"replenishment_mode":      "manual",
+			"target_stock_quantity":   10,
+			"status":                  "active",
+		}); err != nil {
+			t.Fatalf("create background item %d failed: %v", i, err)
+		}
+	}
+	const suffix = "20260417-232500"
+	target, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":                     "ESP-" + suffix,
+		"name":                    "Espresso Double " + suffix,
+		"description":             "Compact two-shot espresso pack.",
+		"product_code":            "PROD-" + suffix,
+		"variant_label":           "Double",
+		"item_type":               "product",
+		"category_code":           "coffee",
+		"is_sellable":             true,
+		"uom_code":                "ea",
+		"base_price":              28000,
+		"currency_code":           "IDR",
+		"inventory_enabled":       false,
+		"inventory_tracking_mode": "none",
+		"replenishment_enabled":   true,
+		"replenishment_mode":      "manual",
+		"target_stock_quantity":   12,
+		"status":                  "active",
+	})
+	if err != nil {
+		t.Fatalf("create target item failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		LocationID:      "loc_hq",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "item.list" || permissionKey == "item.read"
+		},
+	}
+	for query, wantMatchKind := range map[string]string{
+		"Espresso Double " + suffix: "exact_name",
+		"ESP-" + suffix:             "exact_sku",
+		"PROD-" + suffix:            "exact_product_code",
+	} {
+		args := map[string]any{}
+		switch wantMatchKind {
+		case "exact_sku":
+			args["sku"] = query
+		case "exact_product_code":
+			args["product_code"] = query
+		default:
+			args["query"] = query
+		}
+		resp := server.Handle(context.Background(), JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+			Params: mustJSON(t, map[string]any{
+				"name":      "commercial_core.item.search",
+				"arguments": args,
+			}),
+		}, actor)
+		if resp.Error != nil {
+			t.Fatalf("item.search(%q) failed: %+v", query, resp.Error)
+		}
+		items := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]map[string]any)
+		if len(items) == 0 {
+			t.Fatalf("expected items for query %q", query)
+		}
+		if anyString(items[0]["record_id"]) != target.ID {
+			t.Fatalf("expected top item for %q to be %s, got %+v", query, target.ID, items[0])
+		}
+		if anyString(items[0]["match_kind"]) != wantMatchKind {
+			t.Fatalf("expected match kind %q for %q, got %+v", wantMatchKind, query, items[0])
+		}
+	}
+	getResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "commercial_core.item.get",
+			"arguments": map[string]any{
+				"sku": "ESP-" + suffix,
+			},
+		}),
+	}, actor)
+	if getResp.Error != nil {
+		t.Fatalf("item.get failed: %+v", getResp.Error)
+	}
+	item := getResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(item["record_id"]) != target.ID {
+		t.Fatalf("expected item.get to load %s, got %+v", target.ID, item)
+	}
+	if anyString(item["name"]) != "Espresso Double "+suffix {
+		t.Fatalf("expected item.get name, got %+v", item)
+	}
+	if anyString(item["replenishment_mode"]) != "manual" {
+		t.Fatalf("expected replenishment mode to be manual, got %+v", item)
+	}
+	if anyString(item["inventory_tracking_mode"]) != "none" {
+		t.Fatalf("expected inventory tracking mode none, got %+v", item)
+	}
+	if _, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":          "ESP-" + suffix + "-ALT",
+		"name":         "Espresso Double " + suffix,
+		"product_code": "PROD-" + suffix + "-ALT",
+		"item_type":    "product",
+		"is_sellable":  true,
+		"status":       "active",
+	}); err != nil {
+		t.Fatalf("create duplicate item failed: %v", err)
+	}
+	ambiguousResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "commercial_core.item.get",
+			"arguments": map[string]any{
+				"name": "Espresso Double " + suffix,
+			},
+		}),
+	}, actor)
+	if ambiguousResp.Error == nil || !strings.Contains(strings.ToLower(ambiguousResp.Error.Message), "ambiguous") {
+		t.Fatalf("expected ambiguous-name validation error, got %+v", ambiguousResp.Error)
+	}
+}
+
+func TestCRMLeadFindOrCreateForProductInterestTool(t *testing.T) {
+	server := newTestServer(t)
+	registerCommercialCRMProductToolFixtures(t, server)
+	party, err := server.models.Create("party", "user_admin", map[string]any{"name": "Rina Hartono"})
+	if err != nil {
+		t.Fatalf("create party failed: %v", err)
+	}
+	product, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":           "ESP-LEAD-001",
+		"name":          "Espresso Double",
+		"description":   "Compact espresso product",
+		"product_code":  "PROD-ESP-001",
+		"item_type":     "product",
+		"is_sellable":   true,
+		"status":        "active",
+		"currency_code": "IDR",
+		"base_price":    28000,
+	})
+	if err != nil {
+		t.Fatalf("create product failed: %v", err)
+	}
+	if _, err := server.models.Create("crm_lead", "user_admin", map[string]any{
+		"lead_number":       "LEAD-CLOSED-001",
+		"title":             "Closed interest",
+		"party_id":          party.ID,
+		"party_name":        "Rina Hartono",
+		"product_record_id": product.ID,
+		"product_code":      "PROD-ESP-001",
+		"product_name":      "Espresso Double",
+		"status":            "closed",
+	}); err != nil {
+		t.Fatalf("create closed lead failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+	previewResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "crm.lead.find_or_create_for_product_interest",
+			"arguments": map[string]any{
+				"party_id":      party.ID,
+				"product_code":  "PROD-ESP-001",
+				"confirm_apply": false,
+			},
+		}),
+	}, actor)
+	if previewResp.Error != nil {
+		t.Fatalf("preview failed: %+v", previewResp.Error)
+	}
+	preview := previewResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(preview["action"]) != "would_create" {
+		t.Fatalf("expected would_create preview, got %+v", preview)
+	}
+	createResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "crm.lead.find_or_create_for_product_interest",
+			"arguments": map[string]any{
+				"party_id":       party.ID,
+				"party_name":     "Rina Hartono",
+				"product_name":   "Espresso Double",
+				"source_channel": "chat",
+				"confirm_apply":  true,
+			},
+		}),
+	}, actor)
+	if createResp.Error != nil {
+		t.Fatalf("create failed: %+v", createResp.Error)
+	}
+	created := createResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(created["action"]) != "created" {
+		t.Fatalf("expected created action, got %+v", created)
+	}
+	lead := created["lead"].(model.Record)
+	if crmToolTextValue(lead.Values["product_record_id"]) != product.ID {
+		t.Fatalf("expected created lead to bind product %s, got %+v", product.ID, lead.Values)
+	}
+	foundResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "crm.lead.find_or_create_for_product_interest",
+			"arguments": map[string]any{
+				"party_id":          party.ID,
+				"product_record_id": product.ID,
+				"confirm_apply":     false,
+			},
+		}),
+	}, actor)
+	if foundResp.Error != nil {
+		t.Fatalf("find existing failed: %+v", foundResp.Error)
+	}
+	found := foundResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(found["action"]) != "found_existing" {
+		t.Fatalf("expected found_existing action, got %+v", found)
+	}
+}
+
+func TestCRMLeadFindOrCreateForProductInterestToolPagesExistingLeads(t *testing.T) {
+	server := newTestServer(t)
+	registerCommercialCRMProductToolFixtures(t, server)
+	party, err := server.models.Create("party", "user_admin", map[string]any{"name": "Paged Customer"})
+	if err != nil {
+		t.Fatalf("create party failed: %v", err)
+	}
+	product, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":           "ESP-PAGED-001",
+		"name":          "Espresso Reserve",
+		"description":   "Paged lookup product",
+		"product_code":  "PROD-PAGED-001",
+		"item_type":     "product",
+		"is_sellable":   true,
+		"status":        "active",
+		"currency_code": "IDR",
+		"base_price":    42000,
+	})
+	if err != nil {
+		t.Fatalf("create product failed: %v", err)
+	}
+	targetLead, err := server.models.Create("crm_lead", "user_admin", map[string]any{
+		"lead_number":       "LEAD-PAGED-TARGET",
+		"title":             "Existing target lead",
+		"party_id":          party.ID,
+		"party_name":        "Paged Customer",
+		"product_record_id": product.ID,
+		"product_code":      "PROD-PAGED-001",
+		"product_name":      "Espresso Reserve",
+		"status":            "qualified",
+	})
+	if err != nil {
+		t.Fatalf("create target lead failed: %v", err)
+	}
+	for i := 0; i < model.MaxPageSize; i++ {
+		if _, err := server.models.Create("crm_lead", "user_admin", map[string]any{
+			"lead_number":  fmt.Sprintf("LEAD-PAGED-%03d", i),
+			"title":        fmt.Sprintf("Noise lead %03d", i),
+			"party_id":     party.ID,
+			"party_name":   "Paged Customer",
+			"product_code": fmt.Sprintf("OTHER-%03d", i),
+			"product_name": fmt.Sprintf("Other Product %03d", i),
+			"status":       "qualified",
+		}); err != nil {
+			t.Fatalf("create noise lead %d failed: %v", i, err)
+		}
+	}
+	firstPage, total, err := server.crm.SearchLeads(map[string]string{"party_id": party.ID}, "", 1, model.MaxPageSize)
+	if err != nil {
+		t.Fatalf("search leads failed: %v", err)
+	}
+	if total != model.MaxPageSize+1 {
+		t.Fatalf("expected %d total leads, got %d", model.MaxPageSize+1, total)
+	}
+	for _, lead := range firstPage {
+		if lead.ID == targetLead.ID {
+			t.Fatalf("expected target lead %s to fall beyond page 1", targetLead.ID)
+		}
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "crm.lead.find_or_create_for_product_interest",
+			"arguments": map[string]any{
+				"party_id":          party.ID,
+				"product_record_id": product.ID,
+				"confirm_apply":     true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("find existing failed: %+v", resp.Error)
+	}
+	found := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(found["action"]) != "found_existing" {
+		t.Fatalf("expected found_existing action, got %+v", found)
+	}
+	lead := found["lead"].(model.Record)
+	if lead.ID != targetLead.ID {
+		t.Fatalf("expected target lead %s, got %+v", targetLead.ID, lead)
+	}
+	if got := anyInt(found["total"]); got != total {
+		t.Fatalf("expected total %d, got %d", model.MaxPageSize+1, got)
+	}
+}
+
+func TestCRMLeadFindOrCreateForProductInterestToolReusesLegacyProductMatch(t *testing.T) {
+	server := newTestServer(t)
+	registerCommercialCRMProductToolFixtures(t, server)
+	party, err := server.models.Create("party", "user_admin", map[string]any{"name": "Legacy Customer"})
+	if err != nil {
+		t.Fatalf("create party failed: %v", err)
+	}
+	product, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":           "ESP-LEGACY-001",
+		"name":          "Espresso Legacy",
+		"description":   "Legacy lookup product",
+		"product_code":  "PROD-LEGACY-001",
+		"item_type":     "product",
+		"is_sellable":   true,
+		"status":        "active",
+		"currency_code": "IDR",
+		"base_price":    31000,
+	})
+	if err != nil {
+		t.Fatalf("create product failed: %v", err)
+	}
+	existingLead, err := server.models.Create("crm_lead", "user_admin", map[string]any{
+		"lead_number":  "LEAD-LEGACY-001",
+		"title":        "Legacy product match",
+		"party_id":     party.ID,
+		"party_name":   "Legacy Customer",
+		"product_code": "prod-legacy-001",
+		"product_name": "  Espresso Legacy  ",
+		"status":       "contacted",
+	})
+	if err != nil {
+		t.Fatalf("create legacy lead failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_admin",
+		EffectiveUserID: "user_admin",
+		PermissionChecker: func(string) bool {
+			return true
+		},
+	}
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "crm.lead.find_or_create_for_product_interest",
+			"arguments": map[string]any{
+				"party_id":      party.ID,
+				"product_code":  "PROD-LEGACY-001",
+				"confirm_apply": true,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("find legacy existing failed: %+v", resp.Error)
+	}
+	found := resp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(found["action"]) != "found_existing" {
+		t.Fatalf("expected found_existing action, got %+v", found)
+	}
+	lead := found["lead"].(model.Record)
+	if lead.ID != existingLead.ID {
+		t.Fatalf("expected legacy lead %s, got %+v", existingLead.ID, lead)
+	}
+	if _, ok := lead.Values["product_record_id"]; ok {
+		t.Fatalf("expected legacy lead without product_record_id, got %+v", lead.Values)
+	}
+	if product.ID == "" {
+		t.Fatalf("expected product ID to be populated")
 	}
 }
 

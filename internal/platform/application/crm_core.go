@@ -50,7 +50,7 @@ func (s *CRMCoreService) SearchLeads(filters map[string]string, query string, pa
 	needle := strings.ToLower(strings.TrimSpace(query))
 	filtered := make([]model.Record, 0, len(items))
 	for _, item := range items {
-		if needle != "" && !recordMatchesNeedle(item, needle, "lead_number", "title", "party_name", "status", "rating", "owner_user_id", "source_channel") {
+		if needle != "" && !recordMatchesNeedle(item, needle, "lead_number", "title", "party_name", "product_name", "product_code", "status", "rating", "owner_user_id", "source_channel") {
 			continue
 		}
 		filtered = append(filtered, item)
@@ -944,15 +944,23 @@ func (s *CRMCoreService) listRecords(modelKey string, filters map[string]string)
 	if err := s.ensureConfigured(); err != nil {
 		return nil, err
 	}
-	items, _, err := s.models.List(modelKey, model.Query{
+	query := model.Query{
 		Filters:  cloneStringMap(filters),
 		Page:     1,
 		PageSize: model.MaxPageSize,
-	})
-	if err != nil {
-		return nil, err
 	}
-	return items, nil
+	items := make([]model.Record, 0, model.MaxPageSize)
+	for {
+		pageItems, total, err := s.models.List(modelKey, query)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, pageItems...)
+		if len(pageItems) == 0 || len(items) >= total {
+			return items, nil
+		}
+		query.Page++
+	}
 }
 
 func (s *CRMCoreService) applyAssignmentDefaults(values map[string]any) {

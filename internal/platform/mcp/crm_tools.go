@@ -62,9 +62,9 @@ func (s *Server) crmTicketSearch(actor ActorContext, arguments map[string]any) (
 		return nil, err
 	}
 	summary := fmt.Sprintf("Found %d CRM tickets.", total)
-	if top := crmTopRecordSummary(anySlice(items), 3, func(record map[string]any) string {
+	if top := crmTopRecordSummary(items, 3, func(record any) string {
 		values := crmRecordValues(record)
-		return fmt.Sprintf("%s (%s, %s, queue %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["party_name"]), crmToolTextValue(values["status"]), crmToolTextValue(values["queue_code"]), crmRecordID(record))
+		return fmt.Sprintf("%s [%s] (%s, %s, queue %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["ticket_number"]), crmToolTextValue(values["party_name"]), crmToolTextValue(values["status"]), crmToolTextValue(values["queue_code"]), crmRecordID(record))
 	}); top != "" {
 		summary += " Top matches: " + top
 	}
@@ -317,7 +317,7 @@ func (s *Server) crmLeadSearch(actor ActorContext, arguments map[string]any) (ma
 		return nil, err
 	}
 	summary := fmt.Sprintf("Found %d CRM leads.", total)
-	if top := crmTopRecordSummary(anySlice(items), 3, func(record map[string]any) string {
+	if top := crmTopRecordSummary(items, 3, func(record any) string {
 		values := crmRecordValues(record)
 		return fmt.Sprintf("%s (%s, rating %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["status"]), crmToolTextValue(values["rating"]), crmRecordID(record))
 	}); top != "" {
@@ -365,6 +365,116 @@ func (s *Server) crmLeadCreate(actor ActorContext, arguments map[string]any) (ma
 	}, nil
 }
 
+func (s *Server) crmLeadFindOrCreateForProductInterest(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.crm == nil {
+		return nil, fmt.Errorf("crm is unavailable")
+	}
+	partyID := strings.TrimSpace(stringArg(arguments, "party_id"))
+	partyName := strings.TrimSpace(stringArg(arguments, "party_name"))
+	if partyID == "" && partyName != "" {
+		partyID = s.crm.ResolveCustomerPartyID(partyName)
+	}
+	if partyID == "" {
+		return nil, shared.Validation("party_id or party_name is required")
+	}
+	_, product, err := s.resolveCommercialItem(actor, map[string]any{
+		"record_id":    strings.TrimSpace(stringArg(arguments, "product_record_id")),
+		"product_code": strings.TrimSpace(stringArg(arguments, "product_code")),
+		"sku":          strings.TrimSpace(stringArg(arguments, "sku")),
+		"name":         strings.TrimSpace(stringArg(arguments, "product_name")),
+	})
+	if err != nil {
+		return nil, err
+	}
+	lead, total, err := s.findReusableLeadForProductInterest(partyID, product)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(lead.ID) != "" {
+		return map[string]any{
+			"content": []ContentBlock{{
+				Type: "text",
+				Text: fmt.Sprintf("Found existing CRM lead %s for %s.", crmToolTextValue(lead.Values["lead_number"]), crmToolTextValue(product.Values["name"])),
+			}},
+			"structuredContent": map[string]any{
+				"action":  "found_existing",
+				"lead":    lead,
+				"product": commercialItemDetailPayload(product),
+				"total":   total,
+			},
+		}, nil
+	}
+
+	leadValues := map[string]any{
+		"title":               firstNonEmpty(strings.TrimSpace(stringArg(arguments, "title")), "Interest in "+firstNonEmpty(stringValue(product.Values["name"]), product.ID)),
+		"party_id":            partyID,
+		"party_name":          partyName,
+		"owner_user_id":       strings.TrimSpace(stringArg(arguments, "owner_user_id")),
+		"source_channel":      strings.TrimSpace(stringArg(arguments, "source_channel")),
+		"estimated_value":     strings.TrimSpace(stringArg(arguments, "estimated_value")),
+		"expected_close_date": strings.TrimSpace(stringArg(arguments, "expected_close_date")),
+		"next_action_at":      strings.TrimSpace(stringArg(arguments, "next_action_at")),
+		"notes":               strings.TrimSpace(stringArg(arguments, "notes")),
+		"product_record_id":   product.ID,
+		"product_code":        firstNonEmpty(stringValue(product.Values["product_code"]), strings.TrimSpace(stringArg(arguments, "product_code"))),
+		"product_name":        firstNonEmpty(stringValue(product.Values["name"]), strings.TrimSpace(stringArg(arguments, "product_name"))),
+	}
+	if !boolArg(arguments, "confirm_apply") {
+		return map[string]any{
+			"content": []ContentBlock{{
+				Type: "text",
+				Text: fmt.Sprintf("Prepared a CRM lead preview for %s about %s.", firstNonEmpty(partyName, partyID), crmToolTextValue(product.Values["name"])),
+			}},
+			"structuredContent": map[string]any{
+				"action":  "would_create",
+				"preview": leadValues,
+				"product": commercialItemDetailPayload(product),
+			},
+		}, nil
+	}
+	item, err := s.crm.CreateLead(actor.EffectiveUserID, leadValues)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"content": []ContentBlock{{
+			Type: "text",
+			Text: fmt.Sprintf("Created CRM lead %s for %s.", crmToolTextValue(item.Values["lead_number"]), crmToolTextValue(product.Values["name"])),
+		}},
+		"structuredContent": map[string]any{
+			"action":  "created",
+			"lead":    item,
+			"product": commercialItemDetailPayload(product),
+		},
+	}, nil
+}
+
+func (s *Server) findReusableLeadForProductInterest(partyID string, product model.Record) (model.Record, int, error) {
+	page := 1
+	total := 0
+	for {
+		leads, searchTotal, err := s.crm.SearchLeads(map[string]string{"party_id": partyID}, "", page, model.MaxPageSize)
+		if err != nil {
+			return model.Record{}, 0, err
+		}
+		if total == 0 {
+			total = searchTotal
+		}
+		for _, lead := range leads {
+			if !crmLeadReusableStatus(crmToolTextValue(lead.Values["status"])) {
+				continue
+			}
+			if crmLeadMatchesProductInterest(lead, product) {
+				return lead, total, nil
+			}
+		}
+		if len(leads) == 0 || page*model.MaxPageSize >= searchTotal {
+			return model.Record{}, total, nil
+		}
+		page++
+	}
+}
+
 func (s *Server) crmLeadUpdate(actor ActorContext, arguments map[string]any) (map[string]any, error) {
 	if s == nil || s.crm == nil {
 		return nil, fmt.Errorf("crm is unavailable")
@@ -387,6 +497,35 @@ func (s *Server) crmLeadUpdate(actor ActorContext, arguments map[string]any) (ma
 	}, nil
 }
 
+func crmLeadReusableStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "new", "contacted", "qualified":
+		return true
+	default:
+		return false
+	}
+}
+
+func crmLeadMatchesProductInterest(lead model.Record, product model.Record) bool {
+	leadProductRecordID := strings.TrimSpace(crmToolTextValue(lead.Values["product_record_id"]))
+	productRecordID := strings.TrimSpace(product.ID)
+	if leadProductRecordID != "" && productRecordID != "" && leadProductRecordID == productRecordID {
+		return true
+	}
+	leadProductCode := normalizeCRMLeadProductMatchValue(lead.Values["product_code"])
+	productCode := normalizeCRMLeadProductMatchValue(product.Values["product_code"])
+	if leadProductCode != "" && productCode != "" && leadProductCode == productCode {
+		return true
+	}
+	leadProductName := normalizeCRMLeadProductMatchValue(lead.Values["product_name"])
+	productName := normalizeCRMLeadProductMatchValue(product.Values["name"])
+	return leadProductName != "" && productName != "" && leadProductName == productName
+}
+
+func normalizeCRMLeadProductMatchValue(value any) string {
+	return strings.ToLower(strings.TrimSpace(crmToolTextValue(value)))
+}
+
 func (s *Server) crmOpportunitySearch(actor ActorContext, arguments map[string]any) (map[string]any, error) {
 	if s == nil || s.crm == nil {
 		return nil, fmt.Errorf("crm is unavailable")
@@ -404,7 +543,7 @@ func (s *Server) crmOpportunitySearch(actor ActorContext, arguments map[string]a
 		return nil, err
 	}
 	summary := fmt.Sprintf("Found %d CRM opportunities.", total)
-	if top := crmTopRecordSummary(anySlice(items), 5, func(record map[string]any) string {
+	if top := crmTopRecordSummary(items, 5, func(record any) string {
 		values := crmRecordValues(record)
 		return fmt.Sprintf("%s (%s, %s, value %s, id %s)", crmToolTextValue(values["title"]), crmToolTextValue(values["party_name"]), crmToolTextValue(values["stage"]), crmToolTextValue(values["estimated_value"]), crmRecordID(record))
 	}); top != "" {
@@ -602,23 +741,42 @@ func crmResolvePartyID(s *Server, arguments map[string]any) string {
 	return s.crm.ResolveCustomerPartyID(query)
 }
 
-func crmTopRecordSummary(items []any, limit int, builder func(map[string]any) string) string {
+func crmTopRecordSummary(items any, limit int, builder func(any) string) string {
 	parts := make([]string, 0, limit)
-	for _, item := range items {
+	for _, item := range crmTopRecordItems(items) {
 		if len(parts) >= limit {
 			break
 		}
-		record, _ := item.(map[string]any)
-		if len(record) == 0 {
-			continue
-		}
-		part := strings.TrimSpace(builder(record))
+		part := strings.TrimSpace(builder(item))
 		if part == "" {
 			continue
 		}
 		parts = append(parts, part)
 	}
 	return strings.Join(parts, "; ")
+}
+
+func crmTopRecordItems(items any) []any {
+	switch typed := items.(type) {
+	case []any:
+		return typed
+	case []model.Record:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, item)
+		}
+		return out
+	case []*model.Record:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			if item != nil {
+				out = append(out, item)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func crmPreferredCurrentTicket(items []model.Record, now time.Time) model.Record {
