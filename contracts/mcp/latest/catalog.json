@@ -3056,6 +3056,102 @@
       }
     },
     {
+      "name": "commercial_core.item.get",
+      "title": "Get Commercial Item",
+      "description": "Load one commercial item by record id, SKU, product code, or exact name with structured product facts for direct customer answers.",
+      "moduleKey": "commercial_core",
+      "sourceType": "module",
+      "scope": "commercial_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "product_code": {
+            "type": "string"
+          },
+          "record_id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "read",
+        "idempotency": "read-only",
+        "auditAction": "mcp.tool.commercial_core.item.get",
+        "actionClass": "read",
+        "riskClass": "low",
+        "businessDomains": [
+          "catalog",
+          "commercial",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "item.read"
+        ]
+      }
+    },
+    {
+      "name": "commercial_core.item.search",
+      "title": "Search Commercial Items",
+      "description": "Search active sellable commercial items by exact or partial name, SKU, or product code for customer-facing product inquiry.",
+      "moduleKey": "commercial_core",
+      "sourceType": "module",
+      "scope": "commercial_core",
+      "policyState": "allowed",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "product_code": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.commercial_core.item.search",
+        "actionClass": "analyze",
+        "riskClass": "low",
+        "governanceTags": [
+          "business-comprehension"
+        ],
+        "businessDomains": [
+          "catalog",
+          "commercial",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "item.list"
+        ]
+      }
+    },
+    {
       "name": "config.bundle.apply",
       "title": "Apply Config Bundle",
       "description": "Apply a validated configuration bundle. Requires explicit confirmation.",
@@ -3424,23 +3520,13 @@
       "policyState": "allowed",
       "effectiveVisibility": "listed",
       "inputSchema": {
-        "anyOf": [
-          {
-            "required": [
-              "party_id"
-            ]
-          },
-          {
-            "required": [
-              "query"
-            ]
-          }
-        ],
         "properties": {
           "party_id": {
+            "description": "Preferred exact customer party id.",
             "type": "string"
           },
           "query": {
+            "description": "Fallback customer lookup query when party_id is not available.",
             "type": "string"
           }
         },
@@ -3483,23 +3569,13 @@
       "policyState": "allowed",
       "effectiveVisibility": "listed",
       "inputSchema": {
-        "anyOf": [
-          {
-            "required": [
-              "party_id"
-            ]
-          },
-          {
-            "required": [
-              "query"
-            ]
-          }
-        ],
         "properties": {
           "party_id": {
+            "description": "Preferred exact customer party id.",
             "type": "string"
           },
           "query": {
+            "description": "Fallback customer lookup query when party_id is not available.",
             "type": "string"
           }
         },
@@ -3607,6 +3683,87 @@
         ],
         "requiredPermissions": [
           "crm_lead.create"
+        ]
+      }
+    },
+    {
+      "name": "crm.lead.find_or_create_for_product_interest",
+      "title": "Find Or Create CRM Lead For Product Interest",
+      "description": "Resolve product interest into a reusable open lead preview or a confirmed lead creation with a product-specific link.",
+      "moduleKey": "crm_core",
+      "sourceType": "module",
+      "scope": "crm_core",
+      "policyState": "confirmation_required",
+      "effectiveVisibility": "listed",
+      "inputSchema": {
+        "properties": {
+          "confirm_apply": {
+            "type": "boolean"
+          },
+          "estimated_value": {
+            "type": "string"
+          },
+          "expected_close_date": {
+            "type": "string"
+          },
+          "next_action_at": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "party_name": {
+            "type": "string"
+          },
+          "product_code": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "product_record_id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "source_channel": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_apply"
+        ],
+        "type": "object"
+      },
+      "contract": {
+        "version": "2026-03-23",
+        "stability": "stable",
+        "sideEffectClass": "operation",
+        "idempotency": "best-effort",
+        "auditAction": "mcp.tool.crm.lead.find_or_create_for_product_interest",
+        "actionClass": "create",
+        "riskClass": "low",
+        "requiresConfirmation": true,
+        "businessDomains": [
+          "crm",
+          "platform",
+          "sales"
+        ],
+        "requiredPermissions": [
+          "crm_lead.list",
+          "crm_lead.create",
+          "item.list",
+          "item.read"
         ]
       }
     },
