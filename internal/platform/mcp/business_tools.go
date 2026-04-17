@@ -11,6 +11,7 @@ import (
 	"orbyte/internal/platform/document"
 	"orbyte/internal/platform/model"
 	"orbyte/internal/platform/module"
+	platformsearch "orbyte/internal/platform/search"
 	"orbyte/internal/platform/securityfields"
 	"orbyte/internal/platform/shared"
 )
@@ -754,6 +755,112 @@ func (s *Server) businessModelGet(actor ActorContext, arguments map[string]any) 
 	}, true, nil
 }
 
+func (s *Server) commercialItemSearch(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.models == nil {
+		return nil, fmt.Errorf("models are unavailable")
+	}
+	query := strings.TrimSpace(stringArg(arguments, "query"))
+	sku := strings.TrimSpace(stringArg(arguments, "sku"))
+	productCode := strings.TrimSpace(stringArg(arguments, "product_code"))
+	if query == "" && sku == "" && productCode == "" {
+		return nil, shared.Validation("query, sku, or product_code is required")
+	}
+	def, items, err := s.listCommercialItems(actor)
+	if err != nil {
+		return nil, err
+	}
+	indexRanks, indexScores := s.commercialItemSearchIndex(actor, query)
+	type match struct {
+		record     model.Record
+		matchKind  string
+		rank       int
+		indexScore float64
+	}
+	matches := make([]match, 0, len(items))
+	for _, item := range items {
+		if !commercialItemIsActiveSellable(item) {
+			continue
+		}
+		matchKind, rank := commercialItemSearchMatch(item, query, sku, productCode)
+		if matchKind == "" {
+			if hitRank, ok := indexRanks[item.ID]; ok {
+				matchKind = "index"
+				rank = 300 - hitRank
+			} else if query != "" && commercialItemContainsQuery(item, query) {
+				matchKind = "contains"
+				rank = 200
+			} else {
+				continue
+			}
+		}
+		matches = append(matches, match{
+			record:     item,
+			matchKind:  matchKind,
+			rank:       rank,
+			indexScore: indexScores[item.ID],
+		})
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].rank != matches[j].rank {
+			return matches[i].rank > matches[j].rank
+		}
+		if matches[i].indexScore != matches[j].indexScore {
+			return matches[i].indexScore > matches[j].indexScore
+		}
+		return matches[i].record.UpdatedAt.After(matches[j].record.UpdatedAt)
+	})
+	page := positiveIntArg(arguments, "page", 1)
+	pageSize := positiveIntArg(arguments, "page_size", 10)
+	if pageSize > 25 {
+		pageSize = 25
+	}
+	total := len(matches)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	resultItems := make([]map[string]any, 0, end-start)
+	for _, item := range matches[start:end] {
+		resultItems = append(resultItems, commercialItemSearchPayload(item.record, item.matchKind))
+	}
+	summary := fmt.Sprintf("Found %d commercial items.", total)
+	if len(resultItems) > 0 {
+		summary += " Top matches: " + strings.Join(commercialItemNames(resultItems, 3), "; ")
+	}
+	_ = def
+	return map[string]any{
+		"content": []ContentBlock{{Type: "text", Text: summary}},
+		"structuredContent": map[string]any{
+			"items":     resultItems,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+	}, nil
+}
+
+func (s *Server) commercialItemGet(actor ActorContext, arguments map[string]any) (map[string]any, error) {
+	if s == nil || s.models == nil {
+		return nil, fmt.Errorf("models are unavailable")
+	}
+	_, item, err := s.resolveCommercialItem(actor, arguments)
+	if err != nil {
+		return nil, err
+	}
+	payload := commercialItemDetailPayload(item)
+	return map[string]any{
+		"content": []ContentBlock{{
+			Type: "text",
+			Text: fmt.Sprintf("Loaded commercial item %s.", firstNonEmpty(stringValue(item.Values["name"]), item.ID)),
+		}},
+		"structuredContent": payload,
+	}, nil
+}
+
 func (s *Server) businessModelRelated(actor ActorContext, arguments map[string]any) (map[string]any, bool, error) {
 	if s == nil || s.models == nil {
 		return nil, false, nil
@@ -994,6 +1101,245 @@ func (s *Server) filteredModelSummaries(actor ActorContext, arguments map[string
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
 	return paginateBusinessRecordSummaries(items, intArg(arguments, "page"), intArg(arguments, "page_size")), nil
+}
+
+func (s *Server) listModelRecordsForQueryText(modelKey string, query model.Query) ([]model.Record, error) {
+	if s == nil || s.models == nil {
+		return nil, nil
+	}
+	pageSize := query.PageSize
+	if pageSize <= 0 || pageSize > model.MaxPageSize {
+		pageSize = model.MaxPageSize
+	}
+	page := 1
+	var records []model.Record
+	for {
+		pagedQuery := query
+		pagedQuery.Page = page
+		pagedQuery.PageSize = pageSize
+		items, total, err := s.models.List(modelKey, pagedQuery)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, items...)
+		if len(items) == 0 || len(records) >= total || len(items) < pageSize {
+			break
+		}
+		page++
+	}
+	return records, nil
+}
+
+func (s *Server) listCommercialItems(actor ActorContext) (model.Definition, []model.Record, error) {
+	if s == nil || s.models == nil {
+		return model.Definition{}, nil, fmt.Errorf("models are unavailable")
+	}
+	def, ok := s.models.Definition("commercial_item")
+	if !ok {
+		return model.Definition{}, nil, shared.NotFound("commercial_item definition not found")
+	}
+	if !allowsAll(actor.PermissionChecker, []string{def.ListPermissionKey}) {
+		return model.Definition{}, nil, fmt.Errorf("tool is not allowed")
+	}
+	items, err := s.listModelRecordsForQueryText(def.Key, model.Query{Page: 1, PageSize: model.MaxPageSize})
+	if err != nil {
+		return model.Definition{}, nil, err
+	}
+	return def, s.sanitizeModelRecords(actor, def, items), nil
+}
+
+func (s *Server) resolveCommercialItem(actor ActorContext, arguments map[string]any) (model.Definition, model.Record, error) {
+	if s == nil || s.models == nil {
+		return model.Definition{}, model.Record{}, fmt.Errorf("models are unavailable")
+	}
+	recordID := strings.TrimSpace(stringArg(arguments, "record_id"))
+	sku := strings.TrimSpace(stringArg(arguments, "sku"))
+	productCode := strings.TrimSpace(stringArg(arguments, "product_code"))
+	name := strings.TrimSpace(stringArg(arguments, "name"))
+	selectors := 0
+	for _, value := range []string{recordID, sku, productCode, name} {
+		if value != "" {
+			selectors++
+		}
+	}
+	if selectors != 1 {
+		return model.Definition{}, model.Record{}, shared.Validation("exactly one of record_id, sku, product_code, or name is required")
+	}
+	def, ok := s.models.Definition("commercial_item")
+	if !ok {
+		return model.Definition{}, model.Record{}, shared.NotFound("commercial_item definition not found")
+	}
+	if recordID != "" {
+		if !allowsAll(actor.PermissionChecker, []string{def.ReadPermissionKey}) {
+			return model.Definition{}, model.Record{}, fmt.Errorf("tool is not allowed")
+		}
+		record, err := s.models.Get(def.Key, recordID)
+		if err != nil {
+			return model.Definition{}, model.Record{}, err
+		}
+		return def, s.sanitizeModelRecord(actor, def, record), nil
+	}
+	_, items, err := s.listCommercialItems(actor)
+	if err != nil {
+		return model.Definition{}, model.Record{}, err
+	}
+	matches := make([]model.Record, 0, 1)
+	for _, item := range items {
+		if !commercialItemIsActiveSellable(item) {
+			continue
+		}
+		switch {
+		case sku != "" && strings.EqualFold(stringValue(item.Values["sku"]), sku):
+			matches = append(matches, item)
+		case productCode != "" && strings.EqualFold(stringValue(item.Values["product_code"]), productCode):
+			matches = append(matches, item)
+		case name != "" && strings.EqualFold(stringValue(item.Values["name"]), name):
+			matches = append(matches, item)
+		}
+	}
+	if len(matches) == 0 {
+		return model.Definition{}, model.Record{}, shared.NotFound("commercial item not found")
+	}
+	if len(matches) > 1 {
+		selectorName := "name"
+		if sku != "" {
+			selectorName = "sku"
+		} else if productCode != "" {
+			selectorName = "product_code"
+		}
+		return model.Definition{}, model.Record{}, shared.Validation("commercial item " + selectorName + " is ambiguous")
+	}
+	return def, matches[0], nil
+}
+
+func (s *Server) commercialItemSearchIndex(actor ActorContext, query string) (map[string]int, map[string]float64) {
+	ranks := map[string]int{}
+	scores := map[string]float64{}
+	query = strings.TrimSpace(query)
+	if s == nil || s.search == nil || query == "" {
+		return ranks, scores
+	}
+	result, err := s.search.Query("commercial.items.search", strings.TrimSpace(actor.OrganizationID), strings.TrimSpace(actor.LocationID), platformsearch.QueryRequest{
+		Query:    query,
+		Page:     1,
+		PageSize: 50,
+	})
+	if err != nil {
+		return ranks, scores
+	}
+	for index, hit := range result.Hits {
+		ranks[hit.SourceID] = index
+		scores[hit.SourceID] = hit.Score
+	}
+	return ranks, scores
+}
+
+func commercialItemSearchMatch(record model.Record, query, sku, productCode string) (string, int) {
+	itemSKU := stringValue(record.Values["sku"])
+	itemProductCode := stringValue(record.Values["product_code"])
+	itemName := stringValue(record.Values["name"])
+	switch {
+	case sku != "" && strings.EqualFold(itemSKU, sku):
+		return "exact_sku", 1000
+	case productCode != "" && strings.EqualFold(itemProductCode, productCode):
+		return "exact_product_code", 950
+	case query != "" && strings.EqualFold(itemName, query):
+		return "exact_name", 900
+	case sku != "" && strings.HasPrefix(strings.ToLower(itemSKU), strings.ToLower(sku)):
+		return "prefix_sku", 850
+	case productCode != "" && strings.HasPrefix(strings.ToLower(itemProductCode), strings.ToLower(productCode)):
+		return "prefix_product_code", 800
+	case query != "" && strings.HasPrefix(strings.ToLower(itemName), strings.ToLower(query)):
+		return "prefix_name", 750
+	default:
+		return "", 0
+	}
+}
+
+func commercialItemContainsQuery(record model.Record, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return false
+	}
+	for _, candidate := range []string{
+		stringValue(record.Values["sku"]),
+		stringValue(record.Values["product_code"]),
+		stringValue(record.Values["name"]),
+		stringValue(record.Values["description"]),
+		stringValue(record.Values["variant_label"]),
+	} {
+		if strings.Contains(strings.ToLower(candidate), query) {
+			return true
+		}
+	}
+	return false
+}
+
+func commercialItemIsActiveSellable(record model.Record) bool {
+	if !boolValue(record.Values["is_sellable"]) {
+		return false
+	}
+	status := strings.TrimSpace(stringValue(record.Values["status"]))
+	return status == "" || strings.EqualFold(status, "active")
+}
+
+func commercialItemSearchPayload(record model.Record, matchKind string) map[string]any {
+	return map[string]any{
+		"record_id":     record.ID,
+		"product_code":  stringValue(record.Values["product_code"]),
+		"sku":           stringValue(record.Values["sku"]),
+		"name":          stringValue(record.Values["name"]),
+		"description":   stringValue(record.Values["description"]),
+		"item_type":     stringValue(record.Values["item_type"]),
+		"category_code": stringValue(record.Values["category_code"]),
+		"base_price":    record.Values["base_price"],
+		"currency_code": stringValue(record.Values["currency_code"]),
+		"status":        stringValue(record.Values["status"]),
+		"match_kind":    matchKind,
+	}
+}
+
+func commercialItemDetailPayload(record model.Record) map[string]any {
+	return map[string]any{
+		"record_id":               record.ID,
+		"product_code":            stringValue(record.Values["product_code"]),
+		"sku":                     stringValue(record.Values["sku"]),
+		"name":                    stringValue(record.Values["name"]),
+		"description":             stringValue(record.Values["description"]),
+		"item_type":               stringValue(record.Values["item_type"]),
+		"category_code":           stringValue(record.Values["category_code"]),
+		"variant_label":           stringValue(record.Values["variant_label"]),
+		"is_sellable":             boolValue(record.Values["is_sellable"]),
+		"uom_code":                stringValue(record.Values["uom_code"]),
+		"base_price":              record.Values["base_price"],
+		"currency_code":           stringValue(record.Values["currency_code"]),
+		"inventory_enabled":       boolValue(record.Values["inventory_enabled"]),
+		"inventory_tracking_mode": stringValue(record.Values["inventory_tracking_mode"]),
+		"replenishment_enabled":   boolValue(record.Values["replenishment_enabled"]),
+		"replenishment_mode":      stringValue(record.Values["replenishment_mode"]),
+		"target_stock_quantity":   record.Values["target_stock_quantity"],
+		"status":                  stringValue(record.Values["status"]),
+		"record":                  record,
+	}
+}
+
+func commercialItemNames(items []map[string]any, limit int) []string {
+	names := make([]string, 0, limit)
+	for _, item := range items {
+		if len(names) >= limit {
+			break
+		}
+		name := strings.TrimSpace(anyString(item["name"]))
+		if name == "" {
+			continue
+		}
+		matchKind := strings.TrimSpace(anyString(item["match_kind"]))
+		if matchKind != "" {
+			name += " [" + matchKind + "]"
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 func (s *Server) documentSummary(record document.Record, includeFull bool) businessRecordSummary {

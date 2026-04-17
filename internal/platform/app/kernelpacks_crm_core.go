@@ -34,7 +34,7 @@ func crmCoreKernelPackManifest() module.Manifest {
 		NameI18n:               localize("CRM Core", "Inti CRM"),
 		Version:                "1.0.0",
 		DomainFamily:           "business",
-		DependencyRequirements: requiredModuleDependencies("platform.core", "masterdata", "analytics"),
+		DependencyRequirements: requiredModuleDependencies("platform.core", "masterdata", "analytics", "commercial_core"),
 		AdminConsole: module.AdminConsoleDefinition{
 			Title:           "CRM Console",
 			TitleI18n:       localize("CRM Console", "Konsol CRM"),
@@ -85,7 +85,7 @@ func crmCoreKernelPackManifest() module.Manifest {
 			commercialModelSearchIndex("crm.tickets.search", "CRM Ticket Search", "crm_ticket", "crm.tickets.list", []string{"ticket_number", "title", "party_name", "queue_code", "status", "priority"}),
 			commercialModelSearchIndex("crm.ticket_comments.search", "CRM Ticket Comment Search", "crm_ticket_comment", "crm.ticket_comments.list", []string{"ticket_number", "body", "comment_type"}),
 			commercialModelSearchIndex("crm.ticket_activity.search", "CRM Ticket Activity Search", "crm_ticket_activity", "crm.ticket_activity.list", []string{"ticket_number", "activity_type", "party_name"}),
-			commercialModelSearchIndex("crm.leads.search", "CRM Lead Search", "crm_lead", "crm.leads.list", []string{"lead_number", "title", "party_name", "status", "rating"}),
+			commercialModelSearchIndex("crm.leads.search", "CRM Lead Search", "crm_lead", "crm.leads.list", []string{"lead_number", "title", "party_name", "product_name", "product_code", "status", "rating"}),
 			commercialModelSearchIndex("crm.opportunities.search", "CRM Opportunity Search", "crm_opportunity", "crm.opportunities.list", []string{"opportunity_number", "title", "party_name", "stage", "status"}),
 			commercialModelSearchIndex("crm.activities.search", "CRM Activity Search", "crm_activity", "crm.activities.list", []string{"activity_number", "subject", "activity_type", "status"}),
 		},
@@ -243,6 +243,7 @@ func crmMCPTools() []module.MCPToolDefinition {
 		{Key: "crm.lead.search", Title: "Search CRM Leads", TitleI18n: localize("Search CRM Leads", "Cari Lead CRM"), Description: "Search internal CRM sales leads by owner, customer, status, rating, and next step.", DescriptionI18n: localize("Search internal CRM sales leads by owner, customer, status, rating, and next step.", "Cari lead penjualan CRM internal berdasarkan owner, pelanggan, status, rating, dan langkah berikutnya."), Operation: "crm.lead.search", RequiredPermissions: []string{"crm_lead.list"}, InputSchema: crmSearchSchema("status", "rating", "party_id", "owner_user_id"), Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "sales"}}},
 		{Key: "crm.lead.get", Title: "Get CRM Lead", TitleI18n: localize("Get CRM Lead", "Ambil Lead CRM"), Description: "Get one CRM sales lead.", DescriptionI18n: localize("Get one CRM sales lead.", "Ambil satu lead penjualan CRM."), Operation: "crm.lead.get", RequiredPermissions: []string{"crm_lead.read"}, InputSchema: crmIDSchema("lead_id"), Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "sales"}}},
 		{Key: "crm.lead.create", Title: "Create CRM Lead", TitleI18n: localize("Create CRM Lead", "Buat Lead CRM"), Description: "Create a CRM lead after explicit confirmation.", DescriptionI18n: localize("Create a CRM lead after explicit confirmation.", "Buat lead CRM setelah konfirmasi eksplisit."), Operation: "crm.lead.create", RequiredPermissions: []string{"crm_lead.create"}, InputSchema: crmMutationSchema("title", "party_id", "party_name", "contact_id", "owner_user_id", "source_channel", "status", "rating", "estimated_value", "expected_close_date", "next_action_at", "notes"), Contract: module.MCPContractMetadata{ActionClass: "create", RequiresConfirmation: true, BusinessDomains: []string{"crm", "sales"}}},
+		{Key: "crm.lead.find_or_create_for_product_interest", Title: "Find Or Create CRM Lead For Product Interest", TitleI18n: localize("Find Or Create CRM Lead For Product Interest", "Cari Atau Buat Lead CRM Untuk Minat Produk"), Description: "Resolve product interest into a reusable open lead preview or a confirmed lead creation with a product-specific link.", DescriptionI18n: localize("Resolve product interest into a reusable open lead preview or a confirmed lead creation with a product-specific link.", "Ubah minat produk menjadi preview lead terbuka yang bisa dipakai ulang atau pembuatan lead terkonfirmasi dengan tautan produk spesifik."), Operation: "crm.lead.find_or_create_for_product_interest", RequiredPermissions: []string{"crm_lead.list", "crm_lead.create", "item.list", "item.read"}, InputSchema: map[string]any{"type": "object", "properties": map[string]any{"party_id": map[string]any{"type": "string"}, "party_name": map[string]any{"type": "string"}, "product_record_id": map[string]any{"type": "string"}, "product_code": map[string]any{"type": "string"}, "sku": map[string]any{"type": "string"}, "product_name": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}, "owner_user_id": map[string]any{"type": "string"}, "source_channel": map[string]any{"type": "string"}, "estimated_value": map[string]any{"type": "string"}, "expected_close_date": map[string]any{"type": "string"}, "next_action_at": map[string]any{"type": "string"}, "notes": map[string]any{"type": "string"}, "confirm_apply": map[string]any{"type": "boolean"}}, "required": []string{"confirm_apply"}}, Contract: module.MCPContractMetadata{ActionClass: "create", RequiresConfirmation: true, BusinessDomains: []string{"crm", "sales"}}},
 		{Key: "crm.lead.update", Title: "Update CRM Lead", TitleI18n: localize("Update CRM Lead", "Perbarui Lead CRM"), Description: "Update a CRM lead after explicit confirmation.", DescriptionI18n: localize("Update a CRM lead after explicit confirmation.", "Perbarui lead CRM setelah konfirmasi eksplisit."), Operation: "crm.lead.update", RequiredPermissions: []string{"crm_lead.update"}, InputSchema: crmMutationSchema("lead_id", "title", "party_id", "party_name", "contact_id", "owner_user_id", "source_channel", "status", "rating", "estimated_value", "expected_close_date", "next_action_at", "notes", "expected_version"), Contract: module.MCPContractMetadata{ActionClass: "update", RequiresConfirmation: true, BusinessDomains: []string{"crm", "sales"}}},
 		{Key: "crm.opportunity.search", Title: "Search CRM Opportunities", TitleI18n: localize("Search CRM Opportunities", "Cari Peluang CRM"), Description: "Search internal CRM sales opportunities by stage, status, customer, owner, and pipeline context.", DescriptionI18n: localize("Search internal CRM sales opportunities by stage, status, customer, owner, and pipeline context.", "Cari peluang penjualan CRM internal berdasarkan stage, status, pelanggan, owner, dan konteks pipeline."), Operation: "crm.opportunity.search", RequiredPermissions: []string{"crm_opportunity.list"}, InputSchema: crmSearchSchema("stage", "status", "party_id", "owner_user_id"), Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "sales"}}},
 		{Key: "crm.opportunity.get", Title: "Get CRM Opportunity", TitleI18n: localize("Get CRM Opportunity", "Ambil Peluang CRM"), Description: "Get one CRM sales opportunity.", DescriptionI18n: localize("Get one CRM sales opportunity.", "Ambil satu peluang penjualan CRM."), Operation: "crm.opportunity.get", RequiredPermissions: []string{"crm_opportunity.read"}, InputSchema: crmIDSchema("opportunity_id"), Contract: module.MCPContractMetadata{BusinessDomains: []string{"crm", "sales"}}},
@@ -269,7 +270,13 @@ func crmIDSchema(idKey string) map[string]any {
 }
 
 func crmPartyLookupSchema() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"party_id": map[string]any{"type": "string"}, "query": map[string]any{"type": "string"}}, "anyOf": []map[string]any{{"required": []string{"party_id"}}, {"required": []string{"query"}}}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"party_id": map[string]any{"type": "string", "description": "Preferred exact customer party id."},
+			"query":    map[string]any{"type": "string", "description": "Fallback customer lookup query when party_id is not available."},
+		},
+	}
 }
 
 func crmMutationSchema(keys ...string) map[string]any {
@@ -497,6 +504,9 @@ func crmLeadModelDefinition() model.Definition {
 			{Key: "party_id", Label: "Customer", LabelI18n: localize("Customer", "Pelanggan"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party"}},
 			{Key: "party_name", Label: "Customer Name", LabelI18n: localize("Customer Name", "Nama Pelanggan"), Type: "string"},
 			{Key: "contact_id", Label: "Contact", LabelI18n: localize("Contact", "Kontak"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "party_contact"}, ConstraintRuleKeys: []string{"crm.contact.party_link"}},
+			{Key: "product_record_id", Label: "Product Record", LabelI18n: localize("Product Record", "Record Produk"), Type: "string", Reference: &model.ReferenceDefinition{ModelKey: "commercial_item"}},
+			{Key: "product_code", Label: "Product Code", LabelI18n: localize("Product Code", "Kode Produk"), Type: "string"},
+			{Key: "product_name", Label: "Product Name", LabelI18n: localize("Product Name", "Nama Produk"), Type: "string"},
 			{Key: "owner_user_id", Label: "Owner User", LabelI18n: localize("Owner User", "User Pemilik"), Type: "string"},
 			{Key: "source_channel", Label: "Source Channel", LabelI18n: localize("Source Channel", "Kanal Sumber"), Type: "string", AllowedValues: []string{"web", "email", "phone", "chat", "partner", "referral", "walk_in"}},
 			{Key: "status", Label: "Status", LabelI18n: localize("Status", "Status"), Type: "string", DefaultValue: "new", AllowedValues: []string{"new", "contacted", "qualified", "disqualified", "converted", "closed"}, ConstraintRuleKeys: []string{"crm.lead.lifecycle"}},

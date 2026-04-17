@@ -24,7 +24,7 @@ type toolSummary struct {
 func minimalToolDescriptors(actor ActorContext) []ToolDescriptor {
 	return []ToolDescriptor{
 		{Name: "skills.find", Title: "Find Skills", Description: "Required first step for workflow-like business tasks in minimal mode. Find workflow skills by use case or intent. With a query, search matching skills. Without a query, browse available skills. Then call skills.describe and follow the matched workflow.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
-		{Name: "skills.describe", Title: "Describe Skill", Description: "Get one or more full skill workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched skill ids in one bulk call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"skill_id": map[string]any{"type": "string"}, "skill_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"skill_id"}}, {"required": []string{"skill_ids"}}, {"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}}},
+		{Name: "skills.describe", Title: "Describe Skill", Description: "Get one or more full skill workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched skill ids in one bulk call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"skill_id": map[string]any{"type": "string", "description": "Single skill id."}, "skill_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Bulk skill ids."}, "playbook_id": map[string]any{"type": "string", "description": "Single playbook id."}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Bulk playbook ids."}}}},
 		{Name: "tools.find", Title: "Find Tools", Description: "Fallback step only when no skill matches. Find discoverable MCP tools by title, description, business domain, module, and labels. With a query, search matching tools. Without a query, browse available tools. Pass ALL candidate IDs to tools.describe in a single call.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "domain": map[string]any{"type": "string"}, "domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "module_key": map[string]any{"type": "string"}, "module_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "label": map[string]any{"type": "string"}, "labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "source_type": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}},
 		{Name: "tools.describe", Title: "Describe Tools", Description: "Get detailed descriptions, schemas, and governance metadata for one or more tools. Always pass ALL candidate tool IDs from tools.find in a single call — do not describe tools one at a time.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"tool_ids"}}},
 		{Name: "tools.call", Title: "Call Tool", Description: "Call one discoverable MCP tool by id with a validated payload.", ModuleKey: "platform.core", SourceType: "built_in", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"tool_id": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}, "catalog_context": map[string]any{"type": "object"}}, "required": []string{"tool_id"}}},
@@ -36,6 +36,20 @@ func (s *Server) minimalExposedTools(actor ActorContext) []ToolDescriptor {
 	out := make([]ToolDescriptor, 0, len(items))
 	for _, item := range items {
 		out = append(out, s.decorateToolDescriptorWithGovernance(item, nil))
+	}
+	// Minimal mode keeps the general business surface hidden, but complaint-driven
+	// integrations still need durable ticket status retrieval and resolution.
+	for _, item := range s.listTools(actor) {
+		switch strings.TrimSpace(item.Name) {
+		case "crm.customer.summary",
+			"crm.ticket.search",
+			"crm.ticket.create",
+			"crm.ticket.assign",
+			"crm.ticket.comment.create",
+			"crm.ticket.get",
+			"crm.ticket.resolve":
+			out = append(out, s.decorateToolDescriptorWithGovernance(item, nil))
+		}
 	}
 	return out
 }

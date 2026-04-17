@@ -1688,6 +1688,58 @@ func TestBusinessRecordSearchValidationSuggestsStrategyTools(t *testing.T) {
 	}
 }
 
+func TestBusinessRecordSearchQueryRemainsBoundedToRequestedPage(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.models.Register(model.Definition{
+		Key:               "discount_policy",
+		DisplayName:       "Discount Policy",
+		OwnerModuleKey:    "pricing",
+		ListPermissionKey: "pricing.policy.list",
+		ReadPermissionKey: "pricing.policy.read",
+		DefaultSort:       "name",
+		Fields: []model.FieldDefinition{
+			{Key: "name", Type: "string", Label: "Name"},
+		},
+	}); err != nil {
+		t.Fatalf("register model failed: %v", err)
+	}
+	for _, name := range []string{"Alpha Policy", "Zulu Match"} {
+		if _, err := server.models.Create("discount_policy", "user_admin", map[string]any{"name": name}); err != nil {
+			t.Fatalf("create model record %q failed: %v", name, err)
+		}
+	}
+	actor := ActorContext{
+		ActorID: "user_admin",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "module.read" || permissionKey == "pricing.policy.list"
+		},
+	}
+
+	resp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "business.record.search",
+			"arguments": map[string]any{
+				"resource_kind": "model",
+				"model_key":     "discount_policy",
+				"query":         "Zulu Match",
+				"sort_key":      "name",
+				"page":          1,
+				"page_size":     1,
+			},
+		}),
+	}, actor)
+	if resp.Error != nil {
+		t.Fatalf("business.record.search failed: %+v", resp.Error)
+	}
+	items := resp.Result.(map[string]any)["structuredContent"].(map[string]any)["items"].([]businessRecordSummary)
+	if len(items) != 0 {
+		t.Fatalf("expected query search to stay within the requested page, got %+v", items)
+	}
+}
+
 func TestBusinessTimelineGetReturnsModelAuditEvents(t *testing.T) {
 	server := newTestServer(t)
 	if err := server.models.Register(model.Definition{
@@ -2638,7 +2690,7 @@ func TestBusinessDocumentGetIncludesReadableSummaryText(t *testing.T) {
 	}
 }
 
-func TestBusinessRecordsSearchFindsExactModelMatchBeyondDefaultPage(t *testing.T) {
+func TestBusinessRecordsSearchFindsExactModelMatchWithinRequestedPage(t *testing.T) {
 	server := newTestServer(t)
 	def := model.Definition{
 		Key:                 "commercial_item",
@@ -2704,6 +2756,7 @@ func TestBusinessRecordsSearchFindsExactModelMatchBeyondDefaultPage(t *testing.T
 					"resource_kind": "model",
 					"model_key":     "commercial_item",
 					"query":         query,
+					"page_size":     50,
 				},
 			}),
 		}, actor)
@@ -2824,16 +2877,17 @@ func registerCommercialCRMProductToolFixtures(t *testing.T, server *Server) {
 		MCP: module.MCPDefinition{
 			Tools: []module.MCPToolDefinition{
 				{Key: "commercial_core.item.search", Title: "Search Commercial Items", Operation: "commercial_core.item.search", RequiredPermissions: []string{"item.list"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}}},
-				{Key: "commercial_core.item.get", Title: "Get Commercial Item", Operation: "commercial_core.item.get", RequiredPermissions: []string{"item.list", "item.read"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}}},
+				{Key: "commercial_core.item.get", Title: "Get Commercial Item", Operation: "commercial_core.item.get", RequiredPermissions: []string{"item.read"}, Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}}},
 			},
 		},
 	}, "system"); err != nil {
 		t.Fatalf("register commercial_core manifest failed: %v", err)
 	}
 	if err := server.modules.Register(module.Manifest{
-		Key:    "crm_core",
-		Name:   "CRM Core",
-		Models: []model.Definition{crmLeadDef, crmActivityDef},
+		Key:                    "crm_core",
+		Name:                   "CRM Core",
+		DependencyRequirements: []module.DependencyRequirement{{ModuleKey: "commercial_core", Kind: module.DependencyKindRequired}},
+		Models:                 []model.Definition{crmLeadDef, crmActivityDef},
 		MCP: module.MCPDefinition{
 			Tools: []module.MCPToolDefinition{
 				{Key: "crm.lead.find_or_create_for_product_interest", Title: "Find Or Create CRM Lead For Product Interest", Operation: "crm.lead.find_or_create_for_product_interest", RequiredPermissions: []string{"crm_lead.list", "crm_lead.create", "item.list", "item.read"}, Contract: module.MCPContractMetadata{ActionClass: "create", RequiresConfirmation: true, BusinessDomains: []string{"crm", "sales"}}},
@@ -3039,6 +3093,80 @@ func TestCommercialItemSearchAndGetTools(t *testing.T) {
 	}, actor)
 	if ambiguousResp.Error == nil || !strings.Contains(strings.ToLower(ambiguousResp.Error.Message), "ambiguous") {
 		t.Fatalf("expected ambiguous-name validation error, got %+v", ambiguousResp.Error)
+	}
+}
+
+func TestCommercialItemGetToolAllowsDirectReadWithoutList(t *testing.T) {
+	server := newTestServer(t)
+	registerCommercialCRMProductToolFixtures(t, server)
+	target, err := server.models.Create("commercial_item", "user_admin", map[string]any{
+		"sku":          "READ-ONLY-001",
+		"name":         "Read Only Item",
+		"product_code": "READ-ONLY-CODE",
+		"item_type":    "product",
+		"is_sellable":  true,
+		"status":       "active",
+	})
+	if err != nil {
+		t.Fatalf("create target item failed: %v", err)
+	}
+	actor := ActorContext{
+		ActorID:         "user_reader",
+		EffectiveUserID: "user_reader",
+		PermissionChecker: func(permissionKey string) bool {
+			return permissionKey == "item.read"
+		},
+	}
+
+	toolsResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+		Params:  mustJSON(t, map[string]any{"exposure_mode": "full"}),
+	}, actor)
+	if toolsResp.Error != nil {
+		t.Fatalf("tools/list failed: %+v", toolsResp.Error)
+	}
+	tools := toolsResp.Result.(map[string]any)["tools"].([]ToolDescriptor)
+	if !containsToolNamed(tools, "commercial_core.item.get") {
+		t.Fatalf("expected commercial_core.item.get in tool catalog for read-only actor")
+	}
+	if containsToolNamed(tools, "commercial_core.item.search") {
+		t.Fatalf("did not expect commercial_core.item.search in tool catalog without item.list")
+	}
+
+	getResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      2,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "commercial_core.item.get",
+			"arguments": map[string]any{
+				"record_id": target.ID,
+			},
+		}),
+	}, actor)
+	if getResp.Error != nil {
+		t.Fatalf("item.get by record_id failed: %+v", getResp.Error)
+	}
+	item := getResp.Result.(map[string]any)["structuredContent"].(map[string]any)
+	if anyString(item["record_id"]) != target.ID {
+		t.Fatalf("expected item.get to load %s, got %+v", target.ID, item)
+	}
+
+	skuResp := server.Handle(context.Background(), JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      3,
+		Method:  "tools/call",
+		Params: mustJSON(t, map[string]any{
+			"name": "commercial_core.item.get",
+			"arguments": map[string]any{
+				"sku": "READ-ONLY-001",
+			},
+		}),
+	}, actor)
+	if skuResp.Error == nil || !strings.Contains(strings.ToLower(skuResp.Error.Message), "not allowed") {
+		t.Fatalf("expected sku lookup to require item.list, got %+v", skuResp.Error)
 	}
 }
 

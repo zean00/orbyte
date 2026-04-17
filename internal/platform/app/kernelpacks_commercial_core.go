@@ -546,6 +546,9 @@ func commercialCoreKernelPackManifest() module.Manifest {
 				},
 			},
 		},
+		MCP: module.MCPDefinition{
+			Tools: commercialCoreMCPTools(),
+		},
 		Templates: []module.TemplateDefinition{
 			commercialTemplateDefinition("commercial.sales_order.print.default", "Sales Order Print", "sales_order", "Sales Order", []string{"party_name", "order_date", "currency_code", "total_amount", "lines"}),
 			commercialTemplateDefinition("commercial.invoice.print.default", "Invoice Print", "invoice", "Invoice", []string{"party_name", "invoice_date", "due_date", "currency_code", "total_amount", "lines"}),
@@ -553,6 +556,50 @@ func commercialCoreKernelPackManifest() module.Manifest {
 			commercialTemplateDefinition("commercial.payment_receipt.print.default", "Payment Receipt Print", "payment_receipt", "Payment Receipt", []string{"party_name", "receipt_date", "payment_method_code", "amount_received", "allocations"}),
 			commercialTemplateDefinition("commercial.payment_refund.print.default", "Payment Refund Print", "payment_refund", "Payment Refund", []string{"party_name", "refund_date", "payment_method_code", "amount_refunded", "source_credit_note_number", "refund_allocations"}),
 			commercialTemplateDefinition("commercial.ledger_posting.print.default", "Ledger Posting Print", "ledger_posting", "Ledger Posting", []string{"source_document_type", "source_document_id", "posting_date", "posting_rule_key", "journal_lines"}),
+		},
+	}
+}
+
+func commercialCoreMCPTools() []module.MCPToolDefinition {
+	return []module.MCPToolDefinition{
+		{
+			Key:                 "commercial_core.item.search",
+			Title:               "Search Commercial Items",
+			TitleI18n:           localize("Search Commercial Items", "Cari Item Komersial"),
+			Description:         "Search active sellable commercial items by exact or partial name, SKU, or product code for customer-facing product inquiry.",
+			DescriptionI18n:     localize("Search active sellable commercial items by exact or partial name, SKU, or product code for customer-facing product inquiry.", "Cari item komersial aktif yang bisa dijual berdasarkan nama, SKU, atau kode produk untuk kebutuhan inquiry pelanggan."),
+			Operation:           "commercial_core.item.search",
+			RequiredPermissions: []string{"item.list"},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query":        map[string]any{"type": "string"},
+					"sku":          map[string]any{"type": "string"},
+					"product_code": map[string]any{"type": "string"},
+					"page":         map[string]any{"type": "integer"},
+					"page_size":    map[string]any{"type": "integer"},
+				},
+			},
+			Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}},
+		},
+		{
+			Key:                 "commercial_core.item.get",
+			Title:               "Get Commercial Item",
+			TitleI18n:           localize("Get Commercial Item", "Ambil Item Komersial"),
+			Description:         "Load one commercial item by record id, SKU, product code, or exact name with structured product facts for direct customer answers.",
+			DescriptionI18n:     localize("Load one commercial item by record id, SKU, product code, or exact name with structured product facts for direct customer answers.", "Muat satu item komersial berdasarkan record id, SKU, kode produk, atau nama persis dengan fakta produk terstruktur untuk jawaban langsung ke pelanggan."),
+			Operation:           "commercial_core.item.get",
+			RequiredPermissions: []string{"item.read"},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"record_id":    map[string]any{"type": "string"},
+					"sku":          map[string]any{"type": "string"},
+					"product_code": map[string]any{"type": "string"},
+					"name":         map[string]any{"type": "string"},
+				},
+			},
+			Contract: module.MCPContractMetadata{BusinessDomains: []string{"commercial", "catalog", "sales"}},
 		},
 	}
 }

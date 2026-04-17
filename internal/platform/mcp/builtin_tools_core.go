@@ -63,7 +63,7 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 			title:       "Describe Skill",
 			description: "Get one or more full skill workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched skill ids in one bulk call.",
 			permission:  "module.read",
-			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"skill_id": map[string]any{"type": "string"}, "skill_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"skill_id"}}, {"required": []string{"skill_ids"}}, {"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}},
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"skill_id": map[string]any{"type": "string", "description": "Single skill id."}, "skill_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Bulk skill ids."}, "playbook_id": map[string]any{"type": "string", "description": "Single playbook id."}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Bulk playbook ids."}}},
 		}),
 		mustBuiltInToolRegistration((*Server).playbooksFindMeta, builtInTool{
 			name:        "playbooks.find",
@@ -91,7 +91,7 @@ func (s *Server) appendBuiltInCoreToolRegistrations(registry []builtInToolRegist
 			title:       "Describe Playbook",
 			description: "Get one or more full playbook workflow contracts with ordered tool sequences, guardrails, and success checks. Prefer passing all matched playbook ids in one bulk call.",
 			permission:  "module.read",
-			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string"}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "anyOf": []map[string]any{{"required": []string{"playbook_id"}}, {"required": []string{"playbook_ids"}}}},
+			inputSchema: map[string]any{"type": "object", "properties": map[string]any{"playbook_id": map[string]any{"type": "string", "description": "Single playbook id."}, "playbook_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Bulk playbook ids."}}},
 		}),
 	)
 	if s != nil && s.templates != nil {

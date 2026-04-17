@@ -284,12 +284,18 @@ func (s *Server) executeTool(ctx context.Context, actor ActorContext, name strin
 		return s.crmCustomerTimeline(actor, arguments)
 	case "crm.customer.health":
 		return s.crmCustomerHealth(actor)
+	case "commercial_core.item.search":
+		return s.commercialItemSearch(actor, arguments)
+	case "commercial_core.item.get":
+		return s.commercialItemGet(actor, arguments)
 	case "crm.lead.search":
 		return s.crmLeadSearch(actor, arguments)
 	case "crm.lead.get":
 		return s.crmLeadGet(actor, arguments)
 	case "crm.lead.create":
 		return s.crmLeadCreate(actor, arguments)
+	case "crm.lead.find_or_create_for_product_interest":
+		return s.crmLeadFindOrCreateForProductInterest(actor, arguments)
 	case "crm.lead.update":
 		return s.crmLeadUpdate(actor, arguments)
 	case "crm.opportunity.search":
